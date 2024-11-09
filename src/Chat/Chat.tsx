@@ -9,15 +9,21 @@ import { MessageList } from "@/Chat/MessageList";
 import { Message } from "@/Chat/Message";
 import { Id } from "../../convex/_generated/dataModel";
 
-export function Chat({ viewer }: { viewer: Id<"users"> }) {
+export function Chat({ 
+  viewer, 
+  channelId
+}: { 
+  viewer: Id<"users">;
+  channelId: Id<"channels">
+}) {
   const [newMessageText, setNewMessageText] = useState("");
-  const messages = useQuery(api.messages.list);
+  const messages = useQuery(api.messages.list, { channelId });
   const sendMessage = useMutation(api.messages.send);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setNewMessageText("");
-    sendMessage({ body: newMessageText }).catch((error) => {
+    sendMessage({ body: newMessageText, channelId }).catch((error) => {
       console.error("Failed to send message:", error);
     });
   };
