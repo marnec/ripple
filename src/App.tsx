@@ -5,14 +5,27 @@ import { SignInForm } from "@/SignInForm";
 import { UserMenu } from "@/components/UserMenu";
 import { Authenticated, Unauthenticated, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Id } from "../convex/_generated/dataModel";
 import { Sidebar } from "@/components/Sidebar";
+import { useNavigate, useParams } from "react-router-dom";
 
 export default function App() {
   const user = useQuery(api.users.viewer);
-  const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
+  const { workspaceId } = useParams();
+  const navigate = useNavigate();
   const [currentChannel, setCurrentChannel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (workspaceId) {
+      // Validate that workspace exists and user has access
+      // This could be done with a separate query
+    }
+  }, [workspaceId]);
+
+  const handleWorkspaceSelect = (id: string) => {
+    navigate(`/workspaces/${id}`);
+  };
 
   return (
     <Layout
@@ -26,17 +39,14 @@ export default function App() {
         <Authenticated>
           <div className="flex h-full">
             <Sidebar
-              currentWorkspace={currentWorkspace ?? undefined}
+              currentWorkspace={workspaceId ?? undefined}
               currentChannel={currentChannel ?? undefined}
-              onWorkspaceSelect={(workspaceId) => {
-                setCurrentWorkspace(workspaceId);
-                setCurrentChannel(null);
-              }}
+              onWorkspaceSelect={handleWorkspaceSelect}
               onChannelSelect={setCurrentChannel}
             />
             <div className="flex-1 flex flex-col">
               <ChatIntro
-                workspaceId={currentWorkspace ?? undefined}
+                workspaceId={workspaceId ?? undefined}
                 channelId={currentChannel ?? undefined}
               />
               {currentChannel ? (

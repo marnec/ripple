@@ -3,6 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { ThemeProvider } from "next-themes";
 import { ConvexReactClient } from "convex/react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.tsx";
 import "./index.css";
 
@@ -12,7 +13,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ThemeProvider attribute="class">
       <ConvexAuthProvider client={convex}>
-        <App />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<App />} />
+            <Route path="/workspaces/:workspaceId" element={<App />} />
+          </Routes>
+        </BrowserRouter>
       </ConvexAuthProvider>
     </ThemeProvider>
   </React.StrictMode>,
