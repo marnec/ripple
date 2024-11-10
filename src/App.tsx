@@ -32,7 +32,7 @@ export default function App() {
               onChannelSelect={setCurrentChannel}
             />
             <div className="flex-1 flex flex-col">
-              <ChatIntro />
+              <ChatIntro workspaceName={currentWorkspace ?? undefined} />
               {currentChannel ? (
                 <Chat
                   viewer={(user ?? {})._id!}

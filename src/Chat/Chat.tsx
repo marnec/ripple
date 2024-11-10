@@ -8,14 +8,14 @@ import { api } from "../../convex/_generated/api";
 import { MessageList } from "@/Chat/MessageList";
 import { Message } from "@/Chat/Message";
 import { Id } from "../../convex/_generated/dataModel";
+import { Schema } from "@shared/enums/schema";
 
-export function Chat({ 
-  viewer, 
-  channelId
-}: { 
-  viewer: Id<"users">;
-  channelId: Id<"channels">
-}) {
+export type ChatProps = {
+  viewer: Id<typeof Schema.users>;
+  channelId: Id<typeof Schema.channels>;
+};
+
+export function Chat({ viewer, channelId }: ChatProps) {
   const [newMessageText, setNewMessageText] = useState("");
   const messages = useQuery(api.messages.list, { channelId });
   const sendMessage = useMutation(api.messages.send);

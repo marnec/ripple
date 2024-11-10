@@ -1,7 +1,9 @@
-import { defineSchema, defineTable } from "convex/server";
+import { defineSchema, defineTable, TableDefinition } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 import { WorkspaceRole } from "shared/enums/roles";
+import { InviteStatus } from "shared/enums/inviteStatus";
+import { Schema } from "shared/enums/schema";
 
 // The schema is normally optional, but Convex Auth
 // requires indexes defined on `authTables`.
@@ -36,4 +38,17 @@ export default defineSchema({
     name: v.string(),
     workspaceId: v.id("workspaces"),
   }).index("by_workspace", ["workspaceId"]),
-});
+
+  workspaceInvites: defineTable({
+    workspaceId: v.id("workspaces"),
+    email: v.string(),
+    invitedBy: v.id("users"),
+    status: v.union(
+      v.literal(InviteStatus.PENDING),
+      v.literal(InviteStatus.ACCEPTED),
+      v.literal(InviteStatus.DECLINED),
+    ),
+  })
+    .index("by_email", ["email"])
+    .index("by_workspace", ["workspaceId"]),
+} satisfies Record<keyof typeof Schema, TableDefinition>);
