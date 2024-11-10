@@ -28,11 +28,17 @@ export default function App() {
             <Sidebar
               currentWorkspace={currentWorkspace ?? undefined}
               currentChannel={currentChannel ?? undefined}
-              onWorkspaceSelect={setCurrentWorkspace}
+              onWorkspaceSelect={(workspaceId) => {
+                setCurrentWorkspace(workspaceId);
+                setCurrentChannel(null);
+              }}
               onChannelSelect={setCurrentChannel}
             />
             <div className="flex-1 flex flex-col">
-              <ChatIntro workspaceName={currentWorkspace ?? undefined} />
+              <ChatIntro
+                workspaceId={currentWorkspace ?? undefined}
+                channelId={currentChannel ?? undefined}
+              />
               {currentChannel ? (
                 <Chat
                   viewer={(user ?? {})._id!}

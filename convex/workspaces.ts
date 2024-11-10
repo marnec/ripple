@@ -49,3 +49,10 @@ export const list = query({
     );
   },
 });
+
+export const get = query({
+  args: { id: v.id("workspaces") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id);
+  },
+});

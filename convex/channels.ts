@@ -52,3 +52,10 @@ export const list = query({
       .collect();
   },
 });
+
+export const get = query({
+  args: { id: v.id("channels") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id);
+  },
+});
