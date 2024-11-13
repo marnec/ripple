@@ -1,8 +1,9 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { WorkspaceRole } from "shared/enums/roles";
-import { InviteStatus } from "shared/enums/inviteStatus";
+import { WorkspaceRole } from "@shared/enums/roles";
+import { InviteStatus } from "@shared/enums/inviteStatus";
+import { internal } from "./_generated/api";
 
 export const create = mutation({
   args: {
@@ -55,12 +56,27 @@ export const create = mutation({
       if (isMember) throw new Error("User is already a member");
     }
 
-    return await ctx.db.insert("workspaceInvites", {
+    // Get workspace details for the email
+    const workspace = await ctx.db.get(workspaceId);
+    const inviter = await ctx.db.get(userId);
+
+    // Create the invite
+    const inviteId = await ctx.db.insert("workspaceInvites", {
       workspaceId,
       email,
       invitedBy: userId,
       status: InviteStatus.PENDING,
     });
+
+    // Send invite email
+    await ctx.scheduler.runAfter(0, internal.emails.sendWorkspaceInvite, {
+      inviteId,
+      workspaceName: workspace!.name,
+      inviterName: inviter!.email!,
+      recipientEmail: email,
+    });
+
+    return inviteId;
   },
 });
 

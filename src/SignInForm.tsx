@@ -69,6 +69,7 @@ function SignInWithMagicLink({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
+        
         signIn("resend", formData)
           .then(handleLinkSent)
           .catch((error) => {

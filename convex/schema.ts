@@ -1,9 +1,9 @@
 import { defineSchema, defineTable, TableDefinition } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
-import { WorkspaceRole } from "shared/enums/roles";
-import { InviteStatus } from "shared/enums/inviteStatus";
-import { Schema } from "shared/enums/schema";
+import { WorkspaceRole } from "@shared/enums/roles";
+import { InviteStatus } from "@shared/enums/inviteStatus";
+import { Schema } from "@shared/enums/schema";
 
 // The schema is normally optional, but Convex Auth
 // requires indexes defined on `authTables`.

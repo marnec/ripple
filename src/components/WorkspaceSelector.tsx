@@ -35,29 +35,31 @@ export function WorkspaceSelector({
       </div>
 
       <div className="flex flex-col gap-1">
-        {workspaces?.map((workspace) => (
-          <div key={workspace._id} className="flex items-center gap-2">
-            <Button
-              variant={
-                workspace._id === currentWorkspace ? "secondary" : "ghost"
-              }
-              className="flex-1 justify-start"
-              onClick={() => onWorkspaceSelect(workspace._id)}
-            >
-              {workspace.name}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setSelectedWorkspaceForInvite(workspace._id);
-                setShowInviteDialog(true);
-              }}
-            >
-              <PersonIcon className="h-4 w-4" />
-            </Button>
-          </div>
-        ))}
+        {workspaces?.map((workspace) => 
+          workspace && (
+            <div key={workspace._id} className="flex items-center gap-2">
+              <Button
+                variant={
+                  workspace._id === currentWorkspace ? "secondary" : "ghost"
+                }
+                className="flex-1 justify-start"
+                onClick={() => onWorkspaceSelect(workspace._id)}
+              >
+                {workspace.name}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setSelectedWorkspaceForInvite(workspace._id);
+                  setShowInviteDialog(true);
+                }}
+              >
+                <PersonIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          )
+        )}
       </div>
 
       <CreateWorkspaceDialog
