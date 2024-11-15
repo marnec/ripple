@@ -27,6 +27,7 @@ export const sendWorkspaceInvite = internalMutation({
     `;
 
     const resendKey = process.env.AUTH_RESEND_KEY;
+
     if (!resendKey) {
       throw new Error("Missing Resend API key");
     }
@@ -41,6 +42,7 @@ export const sendWorkspaceInvite = internalMutation({
     })
       .then((sent) => {
         if (sent.error) {
+          console.error(sent.error);
           throw new Error(`Failed to send email: ${sent.error.message}`);
         }
         return sent;
