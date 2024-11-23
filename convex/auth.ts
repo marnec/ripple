@@ -13,5 +13,5 @@ export const {
   signOut: any;
   store: any;
 } = convexAuth({
-  providers: [GitHub, Resend],
+  providers: [GitHub, Resend({ from: "noreply@email.conduits.space" })],
 });

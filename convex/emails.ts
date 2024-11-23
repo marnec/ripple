@@ -1,8 +1,8 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 import { Resend } from "resend";
 
-export const sendWorkspaceInvite = internalMutation({
+export const sendWorkspaceInvite = internalAction({
   args: {
     inviteId: v.id("workspaceInvites"),
     workspaceName: v.string(),
@@ -10,7 +10,7 @@ export const sendWorkspaceInvite = internalMutation({
     recipientEmail: v.string(),
   },
   handler: async (_, { inviteId, workspaceName, inviterName, recipientEmail }) => {
-    const url = `${process.env.CONVEX_SITE_URL}/invite/${inviteId}`;
+    const url = `${process.env.SITE_URL}/invite/${inviteId}`;
 
     const emailContent = `
       Hi there!
@@ -35,14 +35,13 @@ export const sendWorkspaceInvite = internalMutation({
     const resend = new Resend(resendKey);
 
     return resend.emails.send({
-      from: "Ripple <noreply@email.conduits.space>",
+      from: "noreply@email.conduits.space",
       to: recipientEmail,
       subject: `Invitation to join ${workspaceName} on Ripple`,
-      text: emailContent,
+      html: emailContent,
     })
       .then((sent) => {
         if (sent.error) {
-          console.error(sent.error);
           throw new Error(`Failed to send email: ${sent.error.message}`);
         }
         return sent;
