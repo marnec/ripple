@@ -23,6 +23,12 @@ export default function App() {
     }
   }, [workspaceId]);
 
+  useEffect(() => {
+    if (!user) return;
+    const storedInviteId = localStorage.getItem("inviteId");
+    if (storedInviteId) navigate(`/invite/${storedInviteId}`);
+  }, [user]);
+
   const handleWorkspaceSelect = (id: string) => {
     navigate(`/workspaces/${id}`);
   };

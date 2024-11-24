@@ -125,6 +125,19 @@ export const accept = mutation({
       throw new Error("Not authorized to accept this invite");
     }
 
+    // Check if the user is already a member of the workspace
+    const existingMembership = await ctx.db
+      .query("workspaceMembers")
+      .filter(q => q.and(
+        q.eq(q.field("userId"), userId),
+        q.eq(q.field("workspaceId"), invite.workspaceId)
+      ))
+      .first();
+
+    if (existingMembership) {
+      throw new Error("User is already a member of this workspace");
+    }
+
     // Add user to workspace members
     await ctx.db.insert("workspaceMembers", {
       userId,
