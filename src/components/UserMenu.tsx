@@ -11,6 +11,7 @@ import {
 import { useAuthActions } from "@convex-dev/auth/react";
 import { PersonIcon } from "@radix-ui/react-icons";
 import { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 export function UserMenu({ children }: { children: ReactNode }) {
   return (
@@ -30,6 +31,9 @@ export function UserMenu({ children }: { children: ReactNode }) {
             Theme
             <ThemeToggle />
           </DropdownMenuLabel>
+          <DropdownMenuItem asChild>
+            <Link to="/profile">Profile</Link>
+          </DropdownMenuItem>
           <SignOutButton />
         </DropdownMenuContent>
       </DropdownMenu>

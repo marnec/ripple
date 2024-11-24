@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App.tsx";
 import "./index.css";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage.tsx";
+import { UserProfilePage } from "./pages/UserProfilePage.tsx";
 
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
@@ -20,6 +21,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/" element={<App />} />
             <Route path="/workspaces/:workspaceId" element={<App />} />
             <Route path="/invite/:inviteId" element={<InviteAcceptPage />} />
+            <Route path="/profile" element={<UserProfilePage />} />
           </Routes>
         </BrowserRouter>
       </ConvexAuthProvider>
