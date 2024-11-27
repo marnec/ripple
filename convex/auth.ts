@@ -4,6 +4,7 @@ import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 import { ResendOTP } from "./otp";
 import { ResendOTPPasswordReset } from "./passwordReset";
+import { APP_NAME, EMAIL_DOMAIN } from "@shared/constants";
 
 export const {
   auth,
@@ -18,7 +19,7 @@ export const {
 } = convexAuth({
   providers: [
     GitHub,
-    Resend({ from: "noreply@email.conduits.space" }),
+    Resend({ from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>` }),
     Password({ reset: ResendOTPPasswordReset, verify: ResendOTP }),
   ],
 });

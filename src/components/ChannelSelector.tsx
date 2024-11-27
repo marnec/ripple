@@ -5,19 +5,19 @@ import { PlusIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { Id } from "../../convex/_generated/dataModel";
 import { CreateChannelDialog } from "./CreateChannelDialog";
-
+import { useParams } from "react-router-dom";
 
 export function ChannelSelector({ 
   workspaceId,
-  currentChannel,
   onChannelSelect 
 }: { 
   workspaceId: Id<"workspaces">,
-  currentChannel?: string,
   onChannelSelect: (id: string) => void 
 }) {
+  const {channelId} = useParams();
   const channels = useQuery(api.channels.list, { workspaceId });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+
 
   return (
     <div className="flex flex-col gap-2 p-4 border-t">
@@ -36,7 +36,7 @@ export function ChannelSelector({
         {channels?.map((channel) => (
           <Button
             key={channel._id}
-            variant={channel._id === currentChannel ? "secondary" : "ghost"}
+            variant={channel._id ===  channelId ? "secondary" : "ghost"}
             className="justify-start"
             onClick={() => onChannelSelect(channel._id)}
           >

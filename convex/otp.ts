@@ -1,6 +1,7 @@
 import Resend from "@auth/core/providers/resend";
 import { Resend as ResendAPI } from "resend";
 import { alphabet, generateRandomString } from "oslo/crypto";
+import { EMAIL_DOMAIN } from "@shared/constants";
  
 export const ResendOTP = Resend({
   id: "resend-otp",
@@ -11,7 +12,7 @@ export const ResendOTP = Resend({
   async sendVerificationRequest({ identifier: email, provider, token }) {
     const resend = new ResendAPI(provider.apiKey);
     const { error } = await resend.emails.send({
-      from: "My App <onboarding@email.conduits.space>",
+      from: `My App <onboarding@${EMAIL_DOMAIN}>`,
       to: [email],
       subject: `Sign in to My App`,
       text: "Your code is " + token,

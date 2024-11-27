@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { Resend } from "resend";
+import { APP_NAME, EMAIL_DOMAIN } from "@shared/constants"
 
 export const sendWorkspaceInvite = internalAction({
   args: {
@@ -15,7 +16,7 @@ export const sendWorkspaceInvite = internalAction({
     const emailContent = `
       Hi there!
 
-      ${inviterName} has invited you to join the workspace "${workspaceName}" on Ripple.
+      ${inviterName} has invited you to join the workspace "${workspaceName}" on ${APP_NAME}.
       
       Click the link below to accept the invitation:
       ${url}
@@ -23,7 +24,7 @@ export const sendWorkspaceInvite = internalAction({
       If you didn't expect this invitation, you can safely ignore this email.
 
       Best regards,
-      The Ripple Team
+      The ${APP_NAME} Team
     `;
 
     const resendKey = process.env.AUTH_RESEND_KEY;
@@ -35,9 +36,9 @@ export const sendWorkspaceInvite = internalAction({
     const resend = new Resend(resendKey);
 
     return resend.emails.send({
-      from: "noreply@email.conduits.space",
+      from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
       to: recipientEmail,
-      subject: `Invitation to join ${workspaceName} on Ripple`,
+      subject: `Invitation to join ${workspaceName} on ${APP_NAME}`,
       html: emailContent,
     })
       .then((sent) => {

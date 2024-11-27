@@ -56,3 +56,21 @@ export const get = query({
     return await ctx.db.get(id);
   },
 });
+
+export const update = mutation({
+  args: { 
+    id: v.id("workspaces"),
+    name: v.string(),
+    description: v.optional(v.string()) 
+  },
+  handler: async (ctx, { id, name, description }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    
+    await ctx.db.patch(id, {
+      name,
+      description,
+      ownerId: userId,
+    });
+  },
+});

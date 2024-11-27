@@ -1,11 +1,13 @@
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "./ui/button";
-import { PlusIcon, PersonIcon } from "@radix-ui/react-icons";
+import { PlusIcon, PersonIcon, GearIcon, CaretDownIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { InviteUserDialog } from "./InviteUserDialog";
 import { Id } from "../../convex/_generated/dataModel";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { useNavigate } from "react-router-dom";
 
 export function WorkspaceSelector({
   currentWorkspace,
@@ -20,6 +22,7 @@ export function WorkspaceSelector({
   const [selectedWorkspaceForInvite, setSelectedWorkspaceForInvite] = useState<
     string | null
   >(null);
+  const navigate = useNavigate();
 
   return (
     <div className="flex flex-col gap-2 p-4">
@@ -35,7 +38,7 @@ export function WorkspaceSelector({
       </div>
 
       <div className="flex flex-col gap-1">
-        {workspaces?.map((workspace) => 
+        {workspaces?.map((workspace) =>
           workspace && (
             <div key={workspace._id} className="flex items-center gap-2">
               <Button
@@ -47,16 +50,34 @@ export function WorkspaceSelector({
               >
                 {workspace.name}
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  setSelectedWorkspaceForInvite(workspace._id);
-                  setShowInviteDialog(true);
-                }}
-              >
-                <PersonIcon className="h-4 w-4" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <CaretDownIcon className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSelectedWorkspaceForInvite(workspace._id);
+                      setShowInviteDialog(true);
+                    }}
+                  >
+                    
+                      <PersonIcon className="h-4 w-4 mr-2"/>
+                      Invite User
+                    
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      navigate(`/workspaces/${workspace._id}/settings`);
+                    }}
+                  >
+                    <GearIcon className="h-4 w-4 mr-2" />
+                    Settings
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )
         )}
