@@ -17,42 +17,9 @@ export function SignInForm() {
     <div className="container my-auto">
       <div className="max-w-[384px] mx-auto flex flex-col my-auto gap-4 pb-8">
         {step === "signIn" ? (
-          <>
-            <h2 className="font-semibold text-2xl tracking-tight">
-              Sign in or create an account
-            </h2>
-            <SignInWithGitHub />
-            <SignInMethodDivider />
-
-            <Tabs defaultValue="password">
-              <TabsList>
-                <TabsTrigger value="password">Password</TabsTrigger>
-                <TabsTrigger value="magic-link">Magic Link</TabsTrigger>
-              </TabsList>
-              <TabsContent value="password">
-                <SignInWithPassword setStep={setStep} />
-              </TabsContent>
-              <TabsContent value="magic-link">
-                <SignInWithMagicLink
-                  handleLinkSent={() => setStep("linkSent")}
-                />
-              </TabsContent>
-            </Tabs>
-          </>
+          <SignInStep setStep={setStep} />
         ) : step === "linkSent" ? (
-          <>
-            <h2 className="font-semibold text-2xl tracking-tight">
-              Check your email
-            </h2>
-            <p>A sign-in link has been sent to your email address.</p>
-            <Button
-              className="p-0 self-start"
-              variant="link"
-              onClick={() => setStep("signIn")}
-            >
-              Cancel
-            </Button>
-          </>
+          <LinkSentStep setStep={setStep} />
         ) : (
           <EmailVerification email={step.email} />
         )}
@@ -61,53 +28,78 @@ export function SignInForm() {
   );
 }
 
-export function SignInWithGitHub() {
+function SignInStep({ setStep }: { setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>> }) {
+  return (
+    <>
+      <h2 className="font-semibold text-2xl tracking-tight">Sign in or create an account</h2>
+      <SignInWithGitHub />
+      <SignInMethodDivider />
+      <Tabs defaultValue="password">
+        <TabsList>
+          <TabsTrigger value="password">Password</TabsTrigger>
+          <TabsTrigger value="magic-link">Magic Link</TabsTrigger>
+        </TabsList>
+        <TabsContent value="password">
+          <SignInWithPassword setStep={setStep} />
+        </TabsContent>
+        <TabsContent value="magic-link">
+          <SignInWithMagicLink handleLinkSent={() => setStep("linkSent")} />
+        </TabsContent>
+      </Tabs>
+    </>
+  );
+}
+
+function LinkSentStep({ setStep }: { setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>> }) {
+  return (
+    <>
+      <h2 className="font-semibold text-2xl tracking-tight">Check your email</h2>
+      <p>A sign-in link has been sent to your email address.</p>
+      <Button className="p-0 self-start" variant="link" onClick={() => setStep("signIn")}>
+        Cancel
+      </Button>
+    </>
+  );
+}
+
+function SignInWithGitHub() {
   const { signIn } = useAuthActions();
   return (
-    <Button
-      className="flex-1"
-      variant="outline"
-      type="button"
-      onClick={() => void signIn("github")}
-    >
-      <GitHubLogoIcon className="mr-2 h-4 w-4"/> GitHub
+    <Button className="flex-1" variant="outline" type="button" onClick={() => void signIn("github")}>
+      <GitHubLogoIcon className="mr-2 h-4 w-4" /> GitHub
     </Button>
   );
 }
 
-function SignInWithMagicLink({
-  handleLinkSent,
-}: {
-  handleLinkSent: () => void;
-}) {
+function SignInWithMagicLink({ handleLinkSent }: { handleLinkSent: () => void }) {
   const { signIn } = useAuthActions();
   const { toast } = useToast();
-  return (
-    <form
-      className="flex flex-col"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const formData = new FormData(event.currentTarget as HTMLFormElement);
 
-        signIn("resend", formData)
-          .then(handleLinkSent)
-          .catch((error) => {
-            toast({
-              title: `Could not send sign-in link ${error.message}`,
-              variant: "destructive",
-            });
-          });
-      }}
-    >
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget as HTMLFormElement);
+    try {
+      await signIn("resend", formData);
+      handleLinkSent();
+    } catch (error) {
+      toast({
+        title: `Could not send sign-in link ${error}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <form className="flex flex-col" onSubmit={handleSubmit}>
       <label htmlFor="email">Email</label>
-      <Input name="email" id="email" className="mb-4" autoComplete="email" />
+      <Input name="email" id="email" className="mb-4" autoComplete="email" required />
       <Button type="submit">Send sign-in link</Button>
       <Toaster />
     </form>
   );
 }
 
-export function SignInWithPassword({ setStep }: { setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>> }) {
+function SignInWithPassword({ setStep }: { setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>> }) {
   const { signIn } = useAuthActions();
   const [flow, setFlow] = useState<"signUp" | "signIn" | "forgot">("signIn");
 
@@ -116,7 +108,6 @@ export function SignInWithPassword({ setStep }: { setStep: React.Dispatch<React.
     const formData = new FormData(event.currentTarget as HTMLFormElement);
     try {
       await signIn("password", formData);
-      // If the user needs to verify their email, set the step
       setStep({ email: formData.get("email") as string });
     } catch (error) {
       // Handle error (e.g., show a toast notification)
@@ -129,7 +120,7 @@ export function SignInWithPassword({ setStep }: { setStep: React.Dispatch<React.
         <form onSubmit={handleSubmit}>
           <input name="flow" type="hidden" value={flow} />
           <label htmlFor="email">Email</label>
-          <Input name="email" type="text" autoComplete="email" className="mb-4" />
+          <Input name="email" type="text" autoComplete="email" className="mb-4" required />
           <div className="flex items-center justify-between">
             <label htmlFor="password">Password</label>
             {flow === "signIn" && (
@@ -138,7 +129,7 @@ export function SignInWithPassword({ setStep }: { setStep: React.Dispatch<React.
               </Button>
             )}
           </div>
-          <Input name="password" type="password" className="mb-4" />
+          <Input name="password" type="password" className="mb-4" required />
           <div className="flex flex-row flex-1 gap-2">
             <Button type="submit">{flow === "signIn" ? "Sign in" : "Sign up"}</Button>
             <Button type="button" onClick={() => setFlow(flow === "signIn" ? "signUp" : "signIn")}>
