@@ -1,11 +1,11 @@
 import { useQuery, useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import { useToast } from "./ui/use-toast";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { useState, useEffect } from "react";
-import { Id } from "../../convex/_generated/dataModel";
 import { useParams } from "react-router-dom";
+import { Id } from "../../../convex/_generated/dataModel";
+import { api } from "../../../convex/_generated/api";
+import { useToast } from "../ui/use-toast";
+import { useEffect, useState } from "react";
+import { Input, TextArea } from "../ui/input";
+import { Button } from "../ui/button";
 
 export function WorkspaceSettings() {
     const { workspaceId } = useParams()
@@ -30,6 +30,7 @@ export function WorkspaceSettings() {
             toast({
                 title: "Workspace updated",
                 description: "Workspace settings have been updated successfully.",
+                variant: 'default'
             });
         } catch (error) {
             toast({
@@ -41,7 +42,7 @@ export function WorkspaceSettings() {
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 w-full p-4">
             <div>
                 <label htmlFor="name" className="block text-sm font-medium">Workspace Name</label>
                 <Input
@@ -53,12 +54,11 @@ export function WorkspaceSettings() {
             </div>
             <div>
                 <label htmlFor="description" className="block text-sm font-medium">Description</label>
-                <textarea
+                <TextArea
                     id="description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={3}
-                    className="w-full border rounded-md p-2"
                 />
             </div>
             <Button type="submit">Save Changes</Button>

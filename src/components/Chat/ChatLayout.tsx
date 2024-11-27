@@ -1,8 +1,8 @@
 import { useParams } from "react-router-dom";
-import { Id } from "../../convex/_generated/dataModel";
+import { Id } from "../../../convex/_generated/dataModel";
 import { Chat } from "./Chat";
 import { ChatIntro } from "./ChatIntro";
-import { api } from "../../convex/_generated/api";
+import { api } from "../../../convex/_generated/api";
 import { useQuery } from "convex/react";
 
 export function ChatLayout() {

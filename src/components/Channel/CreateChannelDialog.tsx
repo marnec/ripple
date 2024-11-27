@@ -1,4 +1,4 @@
-import { Button } from "./ui/button";
+import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
@@ -6,13 +6,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
-import { useToast } from "./ui/use-toast";
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { useToast } from "../ui/use-toast";
 import { useMutation } from "convex/react";
 import { FormEvent, useState } from "react";
-import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 
 export function CreateChannelDialog({
   workspaceId,
@@ -41,7 +41,7 @@ export function CreateChannelDialog({
       toast({
         title: "Error creating channel",
         description: "Please try again later",
-        variant: "destructive",
+        variant: "destructive",        
       });
     }
   };

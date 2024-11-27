@@ -24,10 +24,6 @@ export default function App() {
     if (storedInviteId) navigate(`/invite/${storedInviteId}`);
   }, [user]);
 
-  const handleWorkspaceSelect = (id: string) => {
-    navigate(`/workspaces/${id}`);
-  };
-
   return (
     <Layout
       menu={
@@ -39,10 +35,7 @@ export default function App() {
       <>
         <Authenticated>
           <div className="flex h-full">
-            <Sidebar
-              currentWorkspace={workspaceId ?? undefined}
-              onWorkspaceSelect={handleWorkspaceSelect}
-            />
+            <Sidebar/>
             <Outlet />
           </div>
         </Authenticated>

@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMutation, useQuery } from "convex/react";
 import { FormEvent, useState } from "react";
-import { api } from "../../convex/_generated/api";
-import { MessageList } from "@/Chat/MessageList";
-import { Message } from "@/Chat/Message";
-import { Id } from "../../convex/_generated/dataModel";
+import { api } from "../../../convex/_generated/api";
+import { MessageList } from "@/components/Chat/MessageList";
+import { Message } from "@/components/Chat/Message";
+import { Id } from "../../../convex/_generated/dataModel";
 import { Schema } from "@shared/enums/schema";
 
 export type ChatProps = {

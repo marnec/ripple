@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useMutation } from "convex/react";
 import { FormEvent, useState } from "react";
-import { api } from "../../convex/_generated/api";
+import { api } from "../../../convex/_generated/api";
 
 export function CreateWorkspaceDialog({
   open,

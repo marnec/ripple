@@ -1,33 +1,31 @@
-import { WorkspaceSelector } from "./WorkspaceSelector";
+import { WorkspaceSelector } from "./Workspace/WorkspaceSelector";
 import { Id } from "../../convex/_generated/dataModel";
-import { ChannelSelector } from "./ChannelSelector";
-import { useNavigate } from "react-router-dom";
+import { ChannelSelector } from "./Channel/ChannelSelector";
+import { useNavigate, useParams } from "react-router-dom";
 
-export function Sidebar({ 
-  currentWorkspace,
-  onWorkspaceSelect,
-}: { 
-  currentWorkspace?: string,
-  onWorkspaceSelect: (id: string) => void
-}) {
+export function Sidebar() {
+  const { workspaceId } = useParams();
   const navigate = useNavigate();
 
   const handleChannelSelect = (id: string) => {
     navigate(`channel/${id}`);
   };
 
+  const handleWorkspaceSelect = (id: string) => {
+    navigate(`/workspaces/${id}`);
+  };
+
   return (
     <div className="flex flex-col w-64 border-r h-full">
       <WorkspaceSelector
-        currentWorkspace={currentWorkspace}
-        onWorkspaceSelect={onWorkspaceSelect}
+        onWorkspaceSelect={handleWorkspaceSelect}
       />
-      {currentWorkspace && (
+      {workspaceId && (
         <ChannelSelector
-          workspaceId={currentWorkspace as Id<"workspaces">}
+          workspaceId={workspaceId as Id<"workspaces">}
           onChannelSelect={handleChannelSelect}
         />
       )}
     </div>
   );
-} 
+}

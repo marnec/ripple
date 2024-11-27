@@ -22,6 +22,7 @@ import type * as otp from "../otp.js";
 import type * as passwordReset from "../passwordReset.js";
 import type * as users from "../users.js";
 import type * as workspaceInvites from "../workspaceInvites.js";
+import type * as workspaceMembers from "../workspaceMembers.js";
 import type * as workspaces from "../workspaces.js";
 
 /**
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   passwordReset: typeof passwordReset;
   users: typeof users;
   workspaceInvites: typeof workspaceInvites;
+  workspaceMembers: typeof workspaceMembers;
   workspaces: typeof workspaces;
 }>;
 export declare const api: FilterApi<

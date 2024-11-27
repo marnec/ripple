@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Id } from "../../convex/_generated/dataModel";
+import { Id } from "../../../convex/_generated/dataModel";
 import { ReactNode } from "react";
 
 export function Message({
