@@ -1,9 +1,9 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums/roles";
 import { InviteStatus } from "@shared/enums/inviteStatus";
 import { internal } from "./_generated/api";
+import { mutation, query } from "./_generated/server";
 
 export const create = mutation({
   args: {
