@@ -18,8 +18,6 @@ import type * as channels from "../channels.js";
 import type * as emails from "../emails.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
-import type * as otp from "../otp.js";
-import type * as passwordReset from "../passwordReset.js";
 import type * as users from "../users.js";
 import type * as workspaceInvites from "../workspaceInvites.js";
 import type * as workspaceMembers from "../workspaceMembers.js";
@@ -39,8 +37,6 @@ declare const fullApi: ApiFromModules<{
   emails: typeof emails;
   http: typeof http;
   messages: typeof messages;
-  otp: typeof otp;
-  passwordReset: typeof passwordReset;
   users: typeof users;
   workspaceInvites: typeof workspaceInvites;
   workspaceMembers: typeof workspaceMembers;

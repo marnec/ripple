@@ -11,6 +11,8 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { Schema } from "@shared/enums/schema";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
+import { useTheme } from "next-themes";
+import { FontBoldIcon } from "@radix-ui/react-icons";
 
 export type ChatProps = {
   viewer: Id<typeof Schema.users>;
@@ -21,7 +23,10 @@ export function Chat({ viewer, channelId }: ChatProps) {
   const [newMessageText, setNewMessageText] = useState("");
   const messages = useQuery(api.messages.list, { channelId });
   const sendMessage = useMutation(api.messages.send);
-  const editor = useCreateBlockNote();
+  const editor = useCreateBlockNote({
+    domAttributes: { editor: { class: "border-1 rounded-md border-black" } },
+  });
+  const { resolvedTheme } = useTheme();
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -47,7 +52,14 @@ export function Chat({ viewer, channelId }: ChatProps) {
       </MessageList>
       <div className="border-t">
         <form onSubmit={handleSubmit} className="container flex gap-2 py-4">
-          <BlockNoteView editor={editor} />
+          <BlockNoteView
+            editor={editor}
+            className="w-full overflow-y-auto h-20"
+            theme={resolvedTheme === "dark" ? "dark" : "light"}
+            sideMenu={false}
+            filePanel={false}
+            emojiPicker={false}
+          />
           {/* <Input
             value={newMessageText}
             onChange={(event) => setNewMessageText(event.target.value)}
