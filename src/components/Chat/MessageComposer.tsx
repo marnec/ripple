@@ -1,3 +1,4 @@
+import { BlockNoteEditor } from "@blocknote/core";
 import {
   useCreateBlockNote,
   useEditorContentOrSelectionChange,
@@ -12,21 +13,22 @@ import {
   UnderlineIcon,
 } from "@radix-ui/react-icons";
 import { useTheme } from "next-themes";
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
-import { BlockNoteEditor } from "@blocknote/core";
 
 interface MessageComposerProps {
-  handleSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  handleSubmit: (content: string) => void;
 }
 
 const editorIsEmpty = (editor: BlockNoteEditor) =>
   !editor._tiptapEditor.state.doc.textContent.trim().length;
 
-export const MessageComposer: React.FunctionComponent<
-  MessageComposerProps & React.HTMLAttributes<HTMLDivElement>
-> = ({ handleSubmit }: MessageComposerProps) => {
+const editorClear = (editor: BlockNoteEditor) => {
+  editor.removeBlocks(editor.document.map(b => b.id))
+}
+
+export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({ handleSubmit }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
 
   const editor = useCreateBlockNote({
@@ -41,6 +43,12 @@ export const MessageComposer: React.FunctionComponent<
     editor.getActiveStyles().underline,
   );
   const [isEmpty, setIsEmpty] = useState(editorIsEmpty(editor));
+
+  const sendMessage = () => {
+    if (isEmpty) return
+    handleSubmit(JSON.stringify(editor.document));
+    editorClear(editor);
+  }
 
   useEditorContentOrSelectionChange(() => {
     const { bold, italic, underline, strike, code } = editor.getActiveStyles();
@@ -135,7 +143,7 @@ export const MessageComposer: React.FunctionComponent<
           <Link1Icon />
         </Button>
       </div>
-      <form onSubmit={handleSubmit} className="flex gap-2 py-4">
+      <div className="flex gap-2 py-4">
         <BlockNoteView
           editor={editor}
           className="w-full max-w-full border rounded-md px-2"
@@ -145,11 +153,30 @@ export const MessageComposer: React.FunctionComponent<
           emojiPicker={false}
           slashMenu={true}
           formattingToolbar={false}
+          onKeyDownCapture={(event) => {
+            if (!editor.getSelectedText()) {
+              if (event.key === "b" && event.ctrlKey) setIsBold(!isBold)
+              if (event.key === 'i' && event.ctrlKey) setIsItalic(!isItalic)
+              if (event.key === 'u' && event.ctrlKey) setIsUnderline(!isUnderline)
+              if (event.key === 's' && event.ctrlKey && event.shiftKey) setIsStrike(!isStrike)
+            }
+
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              sendMessage()
+            }
+
+            if (event.key === 'Enter' && event.shiftKey) {
+              let lastBlock = editor.document.at(-1)
+              if (!lastBlock) return
+              editor.insertBlocks([], lastBlock.id, 'after')
+            }
+          }}
         />
-        <Button type="submit" disabled={isEmpty}>
+        <Button disabled={isEmpty} onClick={sendMessage}>
           Send
         </Button>
-      </form>
+      </div>
     </div>
   );
 };

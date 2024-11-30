@@ -9,7 +9,7 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import "./chat-composer.css";
 import { MessageComposer } from "./MessageComposer";
-import { FormEvent, useState } from "react";
+import { toast } from "../ui/use-toast";
 
 export type ChatProps = {
   viewer: Id<typeof Schema.users>;
@@ -19,14 +19,13 @@ export type ChatProps = {
 export function Chat({ viewer, channelId }: ChatProps) {
   const messages = useQuery(api.messages.list, { channelId });
   const sendMessage = useMutation(api.messages.send);
-  const [newMessageText, setNewMessageText] = useState("");
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setNewMessageText("");
-    sendMessage({ body: newMessageText, channelId }).catch((error) => {
-      console.error("Failed to send message:", error);
-    });
+  const handleSubmit = (content: string) => {
+
+    sendMessage({ body: content, channelId })
+      .catch((error) => {
+        toast({ variant: 'destructive', title: 'could not send message', content: error })
+      });
   };
 
   return (
@@ -38,8 +37,8 @@ export function Chat({ viewer, channelId }: ChatProps) {
             author={message.userId}
             authorName={message.author}
             viewer={viewer}
+            content={message.body}
           >
-            {message.body}
           </Message>
         ))}
       </MessageList>
