@@ -31,15 +31,15 @@ const editorClear = (editor: BlockNoteEditor<any>) => {
 export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({ handleSubmit }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
 
-
-  const locale = locales["en"];
   const { audio, image, heading, ...remainingBlockSpecs } = defaultBlockSpecs;
   const schema = BlockNoteSchema.create({blockSpecs: {...remainingBlockSpecs}})
 
+  const dictionary = locales.en
+  dictionary.placeholders.default = 'Enter for newline; Ctrl+Enter to send' 
   const editor = useCreateBlockNote({
     schema,
     trailingBlock: false,
-    dictionary: { ...locale, placeholders: { ...locale.placeholders, default: 'Press Enter to send; Shift+Enter for a line-break' } },
+    dictionary
   });
 
   const [isBold, setIsBold] = useState(editor.getActiveStyles().bold);
@@ -168,17 +168,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
               else if (event.key === 's' && event.ctrlKey && event.shiftKey) setIsStrike(!isStrike)
             }
 
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              sendMessage()
-            }
+            
 
             if (event.key === 'Enter' && event.ctrlKey) {
               event.preventDefault();
-              let lastBlock = editor.document.at(-1)
-              if (!lastBlock) return
-              editor.insertBlocks([{ type: 'paragraph' }], lastBlock.id, 'after')
-              editor._tiptapEditor.commands.focus("end")
+              sendMessage()
             }
           }}
         />
