@@ -1,4 +1,4 @@
-import { BlockNoteEditor, BlockNoteSchema, BlockSchema, defaultBlockSpecs, InlineContentSchema } from "@blocknote/core";
+import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, locales } from "@blocknote/core";
 import {
   useCreateBlockNote,
   useEditorContentOrSelectionChange,
@@ -16,7 +16,6 @@ import { useTheme } from "next-themes";
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
-import { locales } from "@blocknote/core";
 
 interface MessageComposerProps {
   handleSubmit: (content: string) => void;
