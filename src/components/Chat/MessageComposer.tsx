@@ -1,4 +1,4 @@
-import { BlockNoteEditor } from "@blocknote/core";
+import { BlockNoteEditor, BlockNoteSchema, BlockSchema, defaultBlockSpecs, InlineContentSchema } from "@blocknote/core";
 import {
   useCreateBlockNote,
   useEditorContentOrSelectionChange,
@@ -16,23 +16,31 @@ import { useTheme } from "next-themes";
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
+import { locales } from "@blocknote/core";
 
 interface MessageComposerProps {
   handleSubmit: (content: string) => void;
 }
 
-const editorIsEmpty = (editor: BlockNoteEditor) =>
+const editorIsEmpty = (editor: BlockNoteEditor<any>) =>
   !editor._tiptapEditor.state.doc.textContent.trim().length;
 
-const editorClear = (editor: BlockNoteEditor) => {
+const editorClear = (editor: BlockNoteEditor<any>) => {
   editor.removeBlocks(editor.document.map(b => b.id))
 }
 
 export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({ handleSubmit }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
 
+
+  const locale = locales["en"];
+  const { audio, image, heading, ...remainingBlockSpecs } = defaultBlockSpecs;
+  const schema = BlockNoteSchema.create({blockSpecs: {...remainingBlockSpecs}})
+
   const editor = useCreateBlockNote({
+    schema,
     trailingBlock: false,
+    dictionary: { ...locale, placeholders: { ...locale.placeholders, default: 'Press Enter to send; Shift+Enter for a line-break' } },
   });
 
   const [isBold, setIsBold] = useState(editor.getActiveStyles().bold);
@@ -151,14 +159,14 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           sideMenu={false}
           filePanel={false}
           emojiPicker={false}
-          slashMenu={true}
+          slashMenu={false}
           formattingToolbar={false}
           onKeyDownCapture={(event) => {
             if (!editor.getSelectedText()) {
               if (event.key === "b" && event.ctrlKey) setIsBold(!isBold)
-              if (event.key === 'i' && event.ctrlKey) setIsItalic(!isItalic)
-              if (event.key === 'u' && event.ctrlKey) setIsUnderline(!isUnderline)
-              if (event.key === 's' && event.ctrlKey && event.shiftKey) setIsStrike(!isStrike)
+              else if (event.key === 'i' && event.ctrlKey) setIsItalic(!isItalic)
+              else if (event.key === 'u' && event.ctrlKey) setIsUnderline(!isUnderline)
+              else if (event.key === 's' && event.ctrlKey && event.shiftKey) setIsStrike(!isStrike)
             }
 
             if (event.key === 'Enter' && !event.shiftKey) {
@@ -166,10 +174,12 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
               sendMessage()
             }
 
-            if (event.key === 'Enter' && event.shiftKey) {
+            if (event.key === 'Enter' && event.ctrlKey) {
+              event.preventDefault();
               let lastBlock = editor.document.at(-1)
               if (!lastBlock) return
-              editor.insertBlocks([], lastBlock.id, 'after')
+              editor.insertBlocks([{ type: 'paragraph' }], lastBlock.id, 'after')
+              editor._tiptapEditor.commands.focus("end")
             }
           }}
         />
