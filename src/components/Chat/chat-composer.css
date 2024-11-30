@@ -1,3 +1,24 @@
 .bn-shadcn.dark {
-    --background: rgba(196, 119, 119, 0);
+  --background: rgba(196, 119, 119, 0);
+}
+
+.bn-shadcn .bn-suggestion-menu {
+  height: fit-content;
+  max-height: inherit;
+}
+
+.bn-shadcn .bn-grid-suggestion-menu {
+  max-height: inherit;
+}
+
+.slash-menu {
+  max-height: inherit;
+}
+
+.emoji-picker {
+  max-height: inherit;
+}
+
+.bn-editor {
+  padding-inline: 0;
 }

@@ -6,6 +6,7 @@ import { Authenticated, Unauthenticated, useQuery } from "convex/react";
 import { useEffect } from "react";
 import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { api } from "../convex/_generated/api";
+import { TooltipProvider } from "./components/ui/tooltip";
 
 export default function App() {
   const user = useQuery(api.users.viewer);
@@ -25,24 +26,26 @@ export default function App() {
   }, [user]);
 
   return (
-    <Layout
-      menu={
-        <Authenticated>
-          <UserMenu>{user?.name ?? user?.email}</UserMenu>
-        </Authenticated>
-      }
-    >
-      <>
-        <Authenticated>
-          <div className="flex h-full">
-            <Sidebar/>
-            <Outlet />
-          </div>
-        </Authenticated>
-        <Unauthenticated>
-          <SignInForm />
-        </Unauthenticated>
-      </>
-    </Layout>
+    <TooltipProvider>
+      <Layout
+        menu={
+          <Authenticated>
+            <UserMenu>{user?.name ?? user?.email}</UserMenu>
+          </Authenticated>
+        }
+      >
+        <>
+          <Authenticated>
+            <div className="flex h-full">
+              <Sidebar />
+              <Outlet />
+            </div>
+          </Authenticated>
+          <Unauthenticated>
+            <SignInForm />
+          </Unauthenticated>
+        </>
+      </Layout>
+    </TooltipProvider>
   );
 }
