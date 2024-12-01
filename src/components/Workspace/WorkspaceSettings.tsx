@@ -4,8 +4,9 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { api } from "../../../convex/_generated/api";
 import { useToast } from "../ui/use-toast";
 import { useEffect, useState } from "react";
-import { Input, TextArea } from "../ui/input";
+import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { Textarea } from "../ui/textarea";
 
 export function WorkspaceSettings() {
     const { workspaceId } = useParams()
@@ -54,7 +55,7 @@ export function WorkspaceSettings() {
             </div>
             <div>
                 <label htmlFor="description" className="block text-sm font-medium">Description</label>
-                <TextArea
+                <Textarea
                     id="description"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}

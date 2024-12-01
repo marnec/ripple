@@ -15,9 +15,9 @@ const ResendOTP = Resend({
   async sendVerificationRequest({ identifier: email, provider, token }) {
     const resend = new ResendAPI(provider.apiKey);
     const { error } = await resend.emails.send({
-      from: `My App <onboarding@${EMAIL_DOMAIN}>`,
+      from: `My ${APP_NAME} <onboarding@${EMAIL_DOMAIN}>`,
       to: [email],
-      subject: `Sign in to My App`,
+      subject: `Sign in to ${APP_NAME}`,
       text: "Your code is " + token,
     });
  

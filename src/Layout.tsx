@@ -1,52 +1,57 @@
+import { Separator } from "@radix-ui/react-separator";
 import { ReactNode } from "react";
-import { GetStartedDialog } from "@/GetStarted/GetStartedDialog";
+import { AppSidebar } from "./components/AppSidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "./components/ui/sidebar";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+} from "./components/ui/breadcrumb";
 import { APP_NAME } from "@shared/constants";
+import { Authenticated } from "convex/react";
 
 export function Layout({
-  menu,
   children,
 }: {
   menu?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-screen w-full flex-col">
-      <header className="sticky top-0 z-10 flex min-h-20 border-b bg-background/80 backdrop-blur">
-        <nav className="container w-full justify-between flex flex-row items-center gap-6">
-          <div className="flex items-center gap-6 md:gap-10">
-            <a href="/">
-              <h1 className="text-base font-semibold">{APP_NAME}</h1>
-            </a>
-            <div className="flex items-center gap-4 text-sm">
-              <GetStartedDialog>
-                <button className="text-muted-foreground transition-colors hover:text-foreground">
-                  Help
-                </button>
-              </GetStartedDialog>
-              <a
-                href="https://docs.convex.dev"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-                target="_blank"
-              >
-                Docs
-              </a>
-            </div>
+    <SidebarProvider>
+      <Authenticated>
+        <AppSidebar />
+      </Authenticated>
+      <SidebarInset>
+        <header className="flex sticky top-0 z-10 bg-background/80 min-h-16 shrink-0 items-center border-b backdrop-blur px-4">
+          <Authenticated>
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+          </Authenticated>
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink href="#">{APP_NAME}</BreadcrumbLink>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
+        <main className="flex grow flex-col overflow-hidden">{children}</main>
+
+        <footer className="border-t hidden sm:block">
+          <div className="container py-4 text-sm leading-loose">
+            Built with ❤️ by Marco Necci. Powered by Convex,{" "}
+            <FooterLink href="https://vitejs.dev">Vite</FooterLink>,{" "}
+            <FooterLink href="https://react.dev/">React</FooterLink> and{" "}
+            <FooterLink href="https://ui.shadcn.com/">shadcn/ui</FooterLink>.
           </div>
-          {menu}
-        </nav>
-      </header>
-      <main className="flex grow flex-col overflow-hidden">{children}</main>
-      <footer className="border-t hidden sm:block">
-        <div className="container py-4 text-sm leading-loose">
-          Built with ❤️ at{" "}
-          <FooterLink href="https://www.convex.dev/">Convex</FooterLink>.
-          Powered by Convex,{" "}
-          <FooterLink href="https://vitejs.dev">Vite</FooterLink>,{" "}
-          <FooterLink href="https://react.dev/">React</FooterLink> and{" "}
-          <FooterLink href="https://ui.shadcn.com/">shadcn/ui</FooterLink>.
-        </div>
-      </footer>
-    </div>
+        </footer>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 

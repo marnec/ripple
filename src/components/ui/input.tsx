@@ -22,19 +22,4 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 );
 Input.displayName = "Input";
 
-export interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
-
-const TextArea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, ...props }, ref) => {
-    return (
-      <textarea
-        className={cn("w-full border rounded-md p-2", className)}
-        ref={ref}
-        {...props}
-      ></textarea>
-    );
-  },
-);
-
-export { Input, TextArea };
+export { Input }

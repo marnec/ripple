@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useMutation } from "convex/react";
 import { FormEvent, useState } from "react";
 import { api } from "../../../convex/_generated/api";
+import { Textarea } from "../ui/textarea";
 
 export function CreateWorkspaceDialog({
   open,
@@ -71,7 +72,7 @@ export function CreateWorkspaceDialog({
             <label htmlFor="description" className="text-sm font-medium">
               Description
             </label>
-            <textarea
+            <Textarea
               id="description"
               value={description}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}

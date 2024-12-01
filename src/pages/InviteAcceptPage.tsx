@@ -1,18 +1,18 @@
-import { useNavigate, useParams } from "react-router-dom";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import { SignInForm } from "@/SignInForm";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { UserContext } from "@/App";
 import { useToast } from "@/components/ui/use-toast";
+import { SignInForm } from "@/SignInForm";
+import { Authenticated, Unauthenticated, useMutation } from "convex/react";
+import { useContext, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useEffect } from "react";
 
 export function InviteAcceptPage() {
   const { inviteId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const acceptInvite = useMutation(api.workspaceInvites.accept);
-  const user = useQuery(api.users.viewer);
+  const user = useContext(UserContext)
 
   const storeInviteId = () => {
     if (inviteId) {

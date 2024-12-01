@@ -1,12 +1,14 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { UserContext } from "@/App";
 import { useToast } from "@/components/ui/use-toast";
-import { useEffect, useState } from "react";
+import { useMutation } from "convex/react";
+import { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 
 
 export function UserProfilePage() {
-  const user = useQuery(api.users.viewer);
+  const user = useContext(UserContext);
   const updateUser = useMutation(api.users.update);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -22,13 +24,13 @@ export function UserProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!user?._id) {
+    if (!user?.id) {
         navigate("/");
         return;
     }
     
     try {
-      await updateUser({ userId: user?._id, name });
+      await updateUser({ userId: user?.id as Id<"users">, name });
       toast({
         title: "Profile updated",
         description: "Your profile information has been updated successfully.",
