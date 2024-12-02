@@ -1,4 +1,3 @@
-import { Separator } from "@radix-ui/react-separator";
 import { ReactNode } from "react";
 import { AppSidebar } from "./components/AppSidebar";
 import {
@@ -14,6 +13,7 @@ import {
 } from "./components/ui/breadcrumb";
 import { APP_NAME } from "@shared/constants";
 import { Authenticated } from "convex/react";
+import { Separator } from "./components/ui/separator";
 
 export function Layout({
   children,

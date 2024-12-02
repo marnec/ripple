@@ -40,7 +40,8 @@ export function InviteUserDialog({
     } catch (error) {
       toast({
         title: "Error sending invitation",
-        description: error instanceof Error ? error.message : "Please try again later",
+        description:
+          error instanceof Error ? error.message : "Please try again later",
         variant: "destructive",
       });
     }
@@ -78,4 +79,4 @@ export function InviteUserDialog({
       </DialogContent>
     </Dialog>
   );
-} 
+}

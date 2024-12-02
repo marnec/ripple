@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, Plus } from "lucide-react";
+import { ChevronsUpDown, Plus, UserPlus } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -17,7 +17,10 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useState } from "react";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
+import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { InviteUserDialog } from "../InviteUserDialog";
 
 export interface WorkspaceSwitcherProps {
   workspaces: Doc<"workspaces">[];
@@ -31,6 +34,8 @@ export function WorkspaceSwitcher({
   handleWorkspaceSelect,
 }: WorkspaceSwitcherProps) {
   const { isMobile } = useSidebar();
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   return (
     <SidebarMenu>
@@ -72,7 +77,7 @@ export function WorkspaceSwitcher({
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Teams
+              Workspaces
             </DropdownMenuLabel>
             {workspaces.map((workspace, index) => (
               <DropdownMenuItem
@@ -88,15 +93,45 @@ export function WorkspaceSwitcher({
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 p-2">
+
+            <DropdownMenuItem
+              className="gap-2 p-2"
+              onClick={() => setShowInviteDialog(true)}
+              disabled={!activeWorkspace}
+            >
+              <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+                <UserPlus className="size-4" />
+              </div>
+              <div className="font-medium text-muted-foreground">
+                Invite a user
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              className="gap-2 p-2"
+              onClick={() => setShowCreateDialog(true)}
+            >
               <div className="flex size-6 items-center justify-center rounded-md border bg-background">
                 <Plus className="size-4" />
               </div>
-              <div className="font-medium text-muted-foreground">Add team</div>
+              <div className="font-medium text-muted-foreground">
+                Create a workspace
+              </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
+      <CreateWorkspaceDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
+      {activeWorkspace && (
+        <InviteUserDialog
+          workspaceId={activeWorkspace!._id}
+          open={showInviteDialog}
+          onOpenChange={setShowInviteDialog}
+        />
+      )}
     </SidebarMenu>
   );
 }

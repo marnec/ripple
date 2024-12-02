@@ -14,7 +14,7 @@ import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 
 export function AppSidebar() {
-  const { workspaceId } = useParams<QueryParams>();
+  const { workspaceId, channelId } = useParams<QueryParams>();
   const navigate = useNavigate();
 
   // Get all workspaces
@@ -48,6 +48,7 @@ export function AppSidebar() {
         <SidebarGroup>
           {workspaceId && (
             <ChannelSelector
+              channelId={channelId}
               workspaceId={workspaceId}
               onChannelSelect={handleChannelSelect}
             />

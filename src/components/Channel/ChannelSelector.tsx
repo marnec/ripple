@@ -1,53 +1,81 @@
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex/react";
+import { Folder, Hash, MoreHorizontal, Trash2 } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
-import { Button } from "../ui/button";
-import { PlusIcon } from "@radix-ui/react-icons";
-import { useState } from "react";
 import { Id } from "../../../convex/_generated/dataModel";
-import { CreateChannelDialog } from "./CreateChannelDialog";
-import { useParams } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import {
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "../ui/sidebar";
+
+export interface ChannelSelectorProps {
+  workspaceId: Id<"workspaces">;
+  channelId: Id<"channels"> | undefined;
+  onChannelSelect: (id: string) => void;
+}
 
 export function ChannelSelector({
+  workspaceId,
+  channelId,
   onChannelSelect,
-}: {
-  workspaceId: Id<"workspaces">;
-  onChannelSelect: (id: string) => void;
-}) {
-  const { channelId, workspaceId } = useParams();
-  const channels = useQuery(api.channels.list, { workspaceId: workspaceId as Id<"workspaces"> });
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+}: ChannelSelectorProps) {
+  const isMobile = useIsMobile();
+  const channels = useQuery(api.channels.list, {
+    workspaceId: workspaceId as Id<"workspaces">,
+  });
 
   return (
-    <div className="flex flex-col gap-2 p-4 border-t">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="font-semibold">Channels</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setShowCreateDialog(true)}
-        >
-          <PlusIcon className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="flex flex-col gap-1">
+    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+      <SidebarGroupLabel>Channels</SidebarGroupLabel>
+      <SidebarMenu>
         {channels?.map((channel) => (
-          <Button
-            key={channel._id}
-            variant={channel._id === channelId ? "secondary" : "ghost"}
-            className="justify-start"
-            onClick={() => onChannelSelect(channel._id)}
-          >
-            # {channel.name}
-          </Button>
+          <SidebarMenuItem key={channel.name}>
+            <SidebarMenuButton
+              asChild
+              variant={channel._id === channelId ? "outline" : "default"}
+              onClick={() => onChannelSelect(channel._id)}
+            >
+              <div>
+                <Hash /> {channel.name}
+              </div>
+            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuAction showOnHover>
+                  <MoreHorizontal />
+                  <span className="sr-only">More</span>
+                </SidebarMenuAction>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-48 rounded-lg"
+                side={isMobile ? "bottom" : "right"}
+                align={isMobile ? "end" : "start"}
+              >
+                <DropdownMenuItem>
+                  <Folder className="text-muted-foreground" />
+                  <span>Manage channel (Coming soon)</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>
+                  <Trash2 className="text-muted-foreground" />
+                  <span>Delete channel (Coming soon)</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
         ))}
-      </div>
-
-      <CreateChannelDialog
-        workspaceId={workspaceId as Id<"workspaces">}
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-      />
-    </div>
+      </SidebarMenu>
+    </SidebarGroup>
   );
 }
