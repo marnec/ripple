@@ -3,17 +3,16 @@ import { Message } from "@/components/Chat/Message";
 import { MessageList } from "@/components/Chat/MessageList";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { Schema } from "@shared/enums/schema";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { toast } from "../ui/use-toast";
 import "./chat-composer.css";
 import { MessageComposer } from "./MessageComposer";
-import { toast } from "../ui/use-toast";
 
 export type ChatProps = {
-  viewer: Id<typeof Schema.users>;
-  channelId: Id<typeof Schema.channels>;
+  viewer: Id<"users">;
+  channelId: Id<"channels">;
 };
 
 export function Chat({ viewer, channelId }: ChatProps) {
