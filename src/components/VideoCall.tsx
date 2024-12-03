@@ -15,11 +15,21 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
 
   useEffect(() => {
     const initLocalStream = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
+      let mediaRequests: MediaStreamConstraints = {};
+
+      let devices = await navigator.mediaDevices.enumerateDevices();
+
+      devices.forEach(({ kind }) => {
+        if (kind === "videoinput") mediaRequests.video = true;
+        if (kind === "audioinput") mediaRequests.audio = true;
       });
+
+      const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
+
+      console.log(stream);
+
       setLocalStream(stream);
+
       if (peerConnectionRef.current) {
         stream
           .getTracks()
@@ -29,7 +39,7 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
       }
     };
 
-    initLocalStream();
+    initLocalStream().catch((error) => console.error(error));
   }, []);
 
   useEffect(() => {
