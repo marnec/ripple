@@ -50,4 +50,12 @@ export default defineSchema({
   })
     .index("by_email", ["email"])
     .index("by_workspace", ["workspaceId"]),
+
+  signals: defineTable({
+    roomId: v.string(),
+    signal: v.object({
+      type: v.string(),
+      data: v.any(),
+    }),
+  }),
 });

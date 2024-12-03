@@ -29,5 +29,5 @@
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["src", "shared"]
+  "include": ["src", "shared", "convex/signaling.ts"]
 }
