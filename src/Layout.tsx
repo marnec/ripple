@@ -5,14 +5,10 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "./components/ui/sidebar";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-} from "./components/ui/breadcrumb";
-import { APP_NAME } from "@shared/constants";
+
+
 import { Authenticated } from "convex/react";
+import { DynamicBreadcrumb } from "./components/Breadcrumb";
 import { Separator } from "./components/ui/separator";
 
 export function Layout({
@@ -32,13 +28,7 @@ export function Layout({
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
           </Authenticated>
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink href="#">{APP_NAME}</BreadcrumbLink>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+          <DynamicBreadcrumb />
         </header>
         <main className="flex grow flex-col overflow-hidden">{children}</main>
 

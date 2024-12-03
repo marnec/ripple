@@ -30,7 +30,7 @@ export function AppSidebar() {
   };
 
   const handleWorkspaceSelect = (id: string) => {
-    navigate(`/workspaces/${id}`);
+    navigate(`/workspace/${id}`);
   };
 
   return (

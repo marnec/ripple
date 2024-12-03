@@ -25,7 +25,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<App />} />
-            <Route path="/workspaces/:workspaceId/" element={<App />} >
+            <Route path="/workspace/:workspaceId/" element={<App />} >
               <Route index element={<WorkspaceDetails/>} />
               <Route path="settings" element={<WorkspaceSettings />} />
               <Route path="channel/:channelId" element={<ChatLayout />} />
