@@ -22,7 +22,7 @@ export function MessageList({
   return (
     <ol
       ref={messageListRef}
-      className="container flex grow flex-col-reverse gap-4 overflow-y-auto px-8 py-4"
+      className="flex grow flex-col-reverse gap-4 overflow-y-scroll px-8 py-4"
     >
       {children}
     </ol>
