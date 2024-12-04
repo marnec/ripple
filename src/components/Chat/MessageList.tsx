@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useRef } from "react";
+import { ScrollArea } from "../ui/scroll-area";
 
 export function MessageList({
   messages,
@@ -20,11 +21,13 @@ export function MessageList({
     }
   }, [messages]);
   return (
-    <ol
-      ref={messageListRef}
-      className="flex grow flex-col-reverse gap-4 overflow-y-scroll px-8 py-4"
-    >
-      {children}
-    </ol>
+    <ScrollArea>
+      <ol
+        ref={messageListRef}
+        className="flex grow flex-col-reverse gap-4 px-8 py-4"
+      >
+        {children}
+      </ol>
+    </ScrollArea>
   );
 }
