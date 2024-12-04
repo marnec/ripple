@@ -25,20 +25,20 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
       });
 
       const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
-
       setLocalStream(stream);
 
       if (peerConnectionRef.current) {
-        stream
-          .getTracks()
-          .forEach((track) =>
-            peerConnectionRef.current?.addTrack(track, stream),
-          );
+        stream.getTracks().forEach((track) =>
+          peerConnectionRef.current?.addTrack(track, stream),
+        );
       }
+
+      const offer = { type: 'offer', data: '' };
+      await sendSignal({ roomId, signal: offer });
     };
 
     initLocalStream().catch((error) => console.error(error));
-  }, []);
+  }, [roomId, sendSignal]);
 
   useEffect(() => {
     const handleSignal = async () => {
@@ -101,6 +101,14 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
     }
   };
 
+  const answerCall = async () => {
+    if (peerConnectionRef.current) {
+      const answer = await peerConnectionRef.current.createAnswer();
+      await peerConnectionRef.current.setLocalDescription(answer);
+      await sendSignal({ roomId, signal: { type: "answer", data: answer } });
+    }
+  };
+
   return (
     <div>
       <h2>Video Call</h2>
@@ -113,6 +121,7 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
         autoPlay
         ref={(video) => video && (video.srcObject = remoteStream)}
       />
+      <button onClick={answerCall}>Answer Call</button>
     </div>
   );
 };
