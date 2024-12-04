@@ -15,10 +15,12 @@ export const list = query({
     // Check workspace membership
     const membership = await ctx.db
       .query("workspaceMembers")
-      .filter(q => q.and(
-        q.eq(q.field("userId"), userId),
-        q.eq(q.field("workspaceId"), channel.workspaceId)
-      ))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("userId"), userId),
+          q.eq(q.field("workspaceId"), channel.workspaceId),
+        ),
+      )
       .first();
 
     if (!membership) return [];
@@ -26,7 +28,7 @@ export const list = query({
     // Grab the most recent messages
     const messages = await ctx.db
       .query("messages")
-      .filter(q => q.eq(q.field("channelId"), channelId))
+      .filter((q) => q.eq(q.field("channelId"), channelId))
       .order("desc")
       .take(100);
 
@@ -56,10 +58,12 @@ export const send = mutation({
     // Check workspace membership
     const membership = await ctx.db
       .query("workspaceMembers")
-      .filter(q => q.and(
-        q.eq(q.field("userId"), userId),
-        q.eq(q.field("workspaceId"), channel.workspaceId)
-      ))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("userId"), userId),
+          q.eq(q.field("workspaceId"), channel.workspaceId),
+        ),
+      )
       .first();
 
     if (!membership) throw new Error("Not a member of this workspace");
