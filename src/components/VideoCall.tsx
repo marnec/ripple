@@ -26,8 +26,6 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
 
       const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
 
-      console.log(stream);
-
       setLocalStream(stream);
 
       if (peerConnectionRef.current) {
@@ -61,20 +59,30 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
   }, [roomId, roomSignals]);
 
   const handleOffer = async (offer: any) => {
-    if (!peerConnectionRef.current) {
-      peerConnectionRef.current = new RTCPeerConnection();
-      localStream
-        ?.getTracks()
-        .forEach((track) =>
-          peerConnectionRef.current?.addTrack(track, localStream),
-        );
-    }
-    await peerConnectionRef.current.setRemoteDescription(
-      new RTCSessionDescription(offer),
-    );
-    const answer = await peerConnectionRef.current.createAnswer();
-    await peerConnectionRef.current.setLocalDescription(answer);
+    const peerConnection = new RTCPeerConnection();
+    peerConnectionRef.current = peerConnection;
+
+    localStream?.getTracks().forEach((track) => {
+      peerConnection.addTrack(track, localStream);
+    });
+
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
     await sendSignal({ roomId, signal: { type: "answer", data: answer } });
+
+    peerConnection.ontrack = (event) => {
+      setRemoteStream(event.streams[0]);
+    };
+
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendSignal({
+          roomId,
+          signal: { type: "ice-candidate", data: event.candidate },
+        });
+      }
+    };
   };
 
   const handleAnswer = async (answer: any) => {
@@ -92,23 +100,6 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
       );
     }
   };
-
-  useEffect(() => {
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.onicecandidate = (event) => {
-        if (event.candidate) {
-          sendSignal({
-            roomId,
-            signal: { type: "ice-candidate", data: event.candidate },
-          });
-        }
-      };
-
-      peerConnectionRef.current.ontrack = (event) => {
-        setRemoteStream(event.streams[0]);
-      };
-    }
-  }, [sendSignal]);
 
   return (
     <div>
