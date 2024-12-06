@@ -54,8 +54,8 @@ export default defineSchema({
   signals: defineTable({
     roomId: v.optional(v.string()),
     userId: v.id("users"),
-    type: v.string(),
-    sdp: v.string(),
-    candidates: v.array(v.any()),
+    type: v.optional(v.string()),
+    sdp: v.optional(v.string()),
+    candidate: v.optional(v.any()),
   }),
 });

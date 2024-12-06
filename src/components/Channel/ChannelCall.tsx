@@ -1,6 +1,6 @@
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { useParams } from "react-router-dom";
-import VideoCall from "../VideoCall";
+import GroupVideoCall from "../GroupVideoCall/GroupVideoCall";
 
 export const ChannelVideoCall = () => {
   const { channelId } = useParams();
@@ -12,5 +12,5 @@ export const ChannelVideoCall = () => {
     return <SomethingWentWrong />;
   }
 
-  return <VideoCall roomId={channelId} />;
+  return <GroupVideoCall channelId={channelId} />;
 };

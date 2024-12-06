@@ -6,83 +6,60 @@ export const sendRoomSignal = mutation({
   args: {
     roomId: v.string(),
     userId: v.id("users"),
-    type: v.string(),
-    sdp: v.any(),
-    candidates: v.array(v.string()),
+    type: v.optional(v.string()),
+    sdp: v.optional(v.any()),
+    candidate: v.optional(v.any()),
   },
-  handler: async (ctx, { roomId, userId, type, sdp, candidates }) => {
+  handler: async (ctx, { roomId, userId, type, sdp, candidate }) => {
     return ctx.db.insert("signals", {
       roomId,
       userId,
       type,
       sdp,
-      candidates,
+      candidate,
     });
   },
 });
 
 export const deleteRoomSignal = mutation({
-  args: { roomId: v.string(), userId: v.id("users"), type: v.string() },
-  handler: async (ctx, { roomId, userId, type }) => {
+  args: { roomId: v.string(), userId: v.id("users") },
+  handler: async (ctx, { roomId, userId }) => {
     const signal = await ctx.db
       .query("signals")
       .filter((q) =>
-        q.and(
-          q.eq(q.field("roomId"), roomId),
-          q.eq(q.field("userId"), userId),
-          q.eq(q.field("type"), type),
-        ),
+        q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("userId"), userId)),
       )
       .first();
 
     if (!signal)
       throw new Error(
-        `Signal of type=${type} not found for room=${roomId} and user=${userId}`,
+        `Signal not found for room=${roomId} and user=${userId}`,
       );
 
     await ctx.db.delete(signal._id);
   },
 });
 
-export const sendCandidate = mutation({
-  args: {
-    id: v.id("signals"),
-    candidate: v.any(),
-  },
-  handler: async (ctx, { id, candidate }) => {
-    const signal = await ctx.db.get(id);
-
-    if (!signal) throw new Error(`Signal not found with id ${id}`);
-
-    let candidates = [...signal.candidates, candidate];
-
-    ctx.db.patch(id, { candidates });
-  },
-});
-
-export const getSignals = query({
+export const getPeersSignals = query({
   args: {
     roomId: v.string(),
     type: v.string(),
   },
   handler: async (ctx, { roomId, type }) => {
+    let myself = await ctx.auth.getUserIdentity();
+
+    if (!myself) throw new Error("User not authenticated");
+
     return await ctx.db
       .query("signals")
-      .filter((q) => q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("type"), type)))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("roomId"), roomId),
+          q.eq(q.field("type"), type),
+          q.neq(q.field("userId"), myself.id),
+        ),
+      )
       .order("desc")
       .collect();
   },
 });
-
-export const getAnswerCandidates = query({
-  args: { roomId: v.string() },
-  handler: async (ctx, { roomId }) => {
-    const answerSignal = await ctx.db.query("signals")
-      .filter((q) => q.and(q.
-        eq(q.field("roomId"), roomId),
-        q.eq(q.field("type"), "answer"))
-      ).first()
-
-    return answerSignal?.candidates
-  }
-})
