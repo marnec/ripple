@@ -26,6 +26,9 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
     roomId,
     type: "answer",
   });
+  const answerCandidates = useQuery(api.signaling.getAnswerCandidates, {
+    roomId
+  })
 
   const initLocalStream = async () => {
     let mediaRequests: MediaStreamConstraints = {};
@@ -94,22 +97,29 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
         peerConnection.setRemoteDescription({ type, sdp });
       }
 
-      // here I'm adding all candidates in answer.candidates each time something here changes
-      // I don't have a way to track what candidates are new and neither what type of change
-      // has happened, so I'll need to get creative here to avoid adding many duplicate candidates
-      for (let candidate of answer.candidates) {
-        let iceCandidate = new RTCIceCandidate(candidate);
-        peerConnection.addIceCandidate(iceCandidate);
-      }
 
-      setRemoteStream(new MediaStream());
-      peerConnection.ontrack = (event) => {
-        event.streams[0].getTracks().forEach((track) => {
-          remoteStream?.addTrack(track);
-        });
-      };
     }
   }, [answerSignals]);
+
+  useEffect(() => {
+    console.log('answerCandidatges changed', answerCandidates)
+    if (!answerCandidates) return
+    
+    // here I'm adding all candidates in answer.candidates each time something here changes
+    // I don't have a way to track what candidates are new and neither what type of change
+    // has happened, so I'll need to get creative here to avoid adding many duplicate candidates
+    for (let candidate of answerCandidates) {
+      // let iceCandidate = new RTCIceCandidate(candidate);
+      // peerConnection.addIceCandidate(iceCandidate);
+    }
+
+    setRemoteStream(new MediaStream());
+    peerConnection.ontrack = (event) => {
+      event.streams[0].getTracks().forEach((track) => {
+        remoteStream?.addTrack(track);
+      });
+    };
+  }, [answerCandidates])
 
   const answerOffer = async (signal: Doc<"signals">) => {
     peerConnection.onicecandidate = (event) => {
@@ -182,9 +192,7 @@ const VideoCall = ({ roomId }: VideoCallProps) => {
       </div>
 
       <Button onClick={initLocalStream}>Start webcam</Button>
-      <h2>2. Create a new Call</h2>
       <Button onClick={createRoomOffer}>Create Call (offer)</Button>
-
       <Button
         onClick={joinPopulatedRoom}
         disabled={!offerSignals?.length || joined}

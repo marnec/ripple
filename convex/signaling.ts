@@ -68,9 +68,21 @@ export const getSignals = query({
   handler: async (ctx, { roomId, type }) => {
     return await ctx.db
       .query("signals")
-      .filter((q) => q.eq(q.field("roomId"), roomId))
-      .filter((q) => q.eq(q.field("type"), type))
+      .filter((q) => q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("type"), type)))
       .order("desc")
       .collect();
   },
 });
+
+export const getAnswerCandidates = query({
+  args: { roomId: v.string() },
+  handler: async (ctx, { roomId }) => {
+    const answerSignal = await ctx.db.query("signals")
+      .filter((q) => q.and(q.
+        eq(q.field("roomId"), roomId),
+        q.eq(q.field("type"), "answer"))
+      ).first()
+
+    return answerSignal?.candidates
+  }
+})
