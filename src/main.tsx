@@ -17,7 +17,7 @@ import { ChannelVideoCall } from "./components/Channel/ChannelCall.tsx";
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  // <React.StrictMode>
     <ThemeProvider attribute="class">
       <Toaster />
       <ConvexAuthProvider client={convex}>
@@ -40,5 +40,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </BrowserRouter>
       </ConvexAuthProvider>
     </ThemeProvider>
-  </React.StrictMode>,
+  // </React.StrictMode>,
 );

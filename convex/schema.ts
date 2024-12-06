@@ -52,10 +52,10 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"]),
 
   signals: defineTable({
-    roomId: v.string(),
-    signal: v.object({
-      type: v.string(),
-      data: v.any(),
-    }),
+    roomId: v.optional(v.string()),
+    userId: v.id("users"),
+    type: v.string(),
+    sdp: v.string(),
+    candidates: v.array(v.any()),
   }),
 });
