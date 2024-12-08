@@ -38,23 +38,18 @@ export const deleteRoomSignal = mutation({
   },
 });
 
-export const getPeersSignals = query({
+export const getSignals = query({
   args: {
     roomId: v.string(),
     type: v.string(),
   },
   handler: async (ctx, { roomId, type }) => {
-    let myself = await ctx.auth.getUserIdentity();
-
-    if (!myself) throw new Error("User not authenticated");
-
     return await ctx.db
       .query("signals")
       .filter((q) =>
         q.and(
           q.eq(q.field("roomId"), roomId),
-          q.eq(q.field("type"), type),
-          q.neq(q.field("userId"), myself.id),
+          q.eq(q.field("type"), type)
         ),
       )
       .order("desc")

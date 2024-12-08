@@ -20,7 +20,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     Record<string, MediaStream>
   >({});
   const sendSignal = useMutation(api.signaling.sendRoomSignal);
-  const answerSignals = useQuery(api.signaling.getPeersSignals, {
+  const answerSignals = useQuery(api.signaling.getSignals, {
     roomId: channelId,
     type: "answer",
   });
