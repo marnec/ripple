@@ -12,7 +12,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
   const user = useQuery(api.users.viewer);
 
-  const [_, setPeerConnections] = useState<
+  const [peerConnectionPerUser, setPeerConnections] = useState<
     Record<string, RTCPeerConnection>
   >({});
 
@@ -23,6 +23,10 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const answerSignals = useQuery(api.signaling.getSignals, {
     roomId: channelId,
     type: "answer",
+  });
+  const offerSignals = useQuery(api.signaling.getSignals, {
+    roomId: channelId,
+    type: "offer",
   });
   const smotherSignal = useMutation(api.signaling.deleteRoomSignal);
 
@@ -100,30 +104,38 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   }, []);
 
   useEffect(() => {
-    if (answerSignals) {
-      answerSignals.forEach(async (signal) => {
-        const peerConnection = createPeerConnection(signal.userId);
-        setPeerConnections((prev) => ({
-          ...prev,
-          [signal.userId]: peerConnection,
-        }));
-        await peerConnection.setRemoteDescription(
-          new RTCSessionDescription({
-            type: signal.type as RTCSdpType,
-            sdp: signal.sdp,
-          }),
-        );
-        const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
-        await sendSignal({
-          roomId: channelId,
-          userId: signal.userId,
-          sdp: answer.sdp,
-          type: "answer",
-        });
-      });
-    }
+    if (!answerSignals) return;
+
+    answerSignals.forEach(async (signal) => {
+      let peerConnection = peerConnectionPerUser[signal.userId];
+      await peerConnection.setRemoteDescription(
+        new RTCSessionDescription({
+          type: signal.type as RTCSdpType,
+          sdp: signal.sdp,
+        }),
+      );
+    });
   }, [answerSignals]);
+
+  useEffect(() => {
+    if (!offerSignals) return;
+
+    offerSignals.forEach(async (offer) => {
+      const peerConnection = createPeerConnection(offer.userId);
+      setPeerConnections((prev) => ({
+        ...prev,
+        [offer.userId]: peerConnection,
+      }));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      await sendSignal({
+        roomId: channelId,
+        userId: offer.userId,
+        sdp: answer.sdp,
+        type: "answer",
+      });
+    });
+  }, [offerSignals]);
 
   return (
     <div>
