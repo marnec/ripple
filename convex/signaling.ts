@@ -24,19 +24,17 @@ export const sendRoomSignal = mutation({
 export const deleteRoomSignal = mutation({
   args: { roomId: v.string(), userId: v.id("users") },
   handler: async (ctx, { roomId, userId }) => {
-    const signal = await ctx.db
+    const signals = await ctx.db
       .query("signals")
       .filter((q) =>
         q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("userId"), userId)),
       )
-      .first();
+      .collect();
 
-    if (!signal)
-      throw new Error(
-        `Signal not found for room=${roomId} and user=${userId}`,
-      );
+    if (!signals?.length)
+      throw new Error(`No signals found for room=${roomId} and user=${userId}`);
 
-    await ctx.db.delete(signal._id);
+    return Promise.all(signals.map(({ _id }) => ctx.db.delete(_id)));
   },
 });
 
