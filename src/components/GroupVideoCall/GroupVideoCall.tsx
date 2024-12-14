@@ -117,37 +117,61 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   }, [answerSignals]);
 
   useEffect(() => {
-    if (!offerSignals) return;
-
-    offerSignals.forEach(async (offer) => {
-      // Ensure we don't create a peer connection if it already exists
-      if (peerConnectionPerUser[offer.userId]) return;
-
-      const peerConnection = createPeerConnection(offer.userId);
-      setPeerConnections((prev) => ({
-        ...prev,
-        [offer.userId]: peerConnection,
-      }));
-
-      // First, set the remote description (the offer)
-      await peerConnection.setRemoteDescription(
-        new RTCSessionDescription({
-          type: "offer",
-          sdp: offer.sdp,
-        }),
-      );
-
-      // Then create and set the answer
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      await sendSignal({
-        roomId: channelId,
-        userId: offer.userId,
-        sdp: answer.sdp,
-        type: "answer",
-      });
-    });
-  }, [offerSignals, peerConnectionPerUser]);
+    if (!offerSignals || !offerSignals.length) return;
+  
+    const handleOfferSignals = async () => {
+      for (const offer of offerSignals) {
+        try {
+          // Skip if we already have a peer connection for this user
+          if (peerConnectionPerUser[offer.userId]) continue;
+  
+          // Create a new peer connection
+          const peerConnection = createPeerConnection(offer.userId);
+          setPeerConnections((prev) => ({
+            ...prev,
+            [offer.userId]: peerConnection,
+          }));
+  
+          // Validate peer connection state before setting remote description
+          if (peerConnection.signalingState !== 'stable') {
+            console.warn(`Skipping offer from ${offer.userId}, connection not in stable state`);
+            continue;
+          }
+  
+          // Set the remote description (the offer)
+          await peerConnection.setRemoteDescription(
+            new RTCSessionDescription({
+              type: 'offer',
+              sdp: offer.sdp,
+            })
+          );
+  
+          // Create and set the answer
+          const answer = await peerConnection.createAnswer();
+          await peerConnection.setLocalDescription(answer);
+          
+          // Send the answer signal
+          await sendSignal({
+            roomId: channelId,
+            userId: offer.userId,
+            sdp: answer.sdp,
+            type: "answer",
+          });
+        } catch (error) {
+          console.error(`Error processing offer from ${offer.userId}:`, error);
+          
+          // Optional: toast or other error handling
+          toast({
+            variant: "destructive",
+            title: "Call Connection Error",
+            description: `Failed to process call from ${offer.userId}`,
+          });
+        }
+      }
+    };
+  
+    handleOfferSignals();
+  }, [offerSignals, channelId, peerConnectionPerUser, sendSignal, toast]);
 
   return (
     <div>
