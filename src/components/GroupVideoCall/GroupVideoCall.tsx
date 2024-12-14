@@ -42,7 +42,6 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
     const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
     setLocalStream(stream);
-    setLocalStream(stream);
   };
 
   const createPeerConnection = (userId: Id<"users">) => {
@@ -121,11 +120,24 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     if (!offerSignals) return;
 
     offerSignals.forEach(async (offer) => {
+      // Ensure we don't create a peer connection if it already exists
+      if (peerConnectionPerUser[offer.userId]) return;
+
       const peerConnection = createPeerConnection(offer.userId);
       setPeerConnections((prev) => ({
         ...prev,
         [offer.userId]: peerConnection,
       }));
+
+      // First, set the remote description (the offer)
+      await peerConnection.setRemoteDescription(
+        new RTCSessionDescription({
+          type: "offer",
+          sdp: offer.sdp,
+        }),
+      );
+
+      // Then create and set the answer
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
       await sendSignal({
@@ -135,7 +147,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         type: "answer",
       });
     });
-  }, [offerSignals]);
+  }, [offerSignals, peerConnectionPerUser]);
 
   return (
     <div>
