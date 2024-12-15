@@ -90,7 +90,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const leaveCall = async () => {
     console.log("leaving call");
     sethasJoined(false);
-    let deleted = await smotherSignal({ roomId: channelId, userId: user!._id });
+    let deleted = await smotherSignal({ roomId: channelId, peerId: peerId });
     for (let user in peerConnectionPerUser) {
       peerConnectionPerUser[user].close();
     }

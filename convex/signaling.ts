@@ -24,12 +24,12 @@ export const sendRoomSignal = mutation({
 });
 
 export const deleteRoomSignal = mutation({
-  args: { roomId: v.string(), userId: v.id("users") },
-  handler: async (ctx, { roomId, userId }) => {
+  args: { roomId: v.string(), peerId: v.string() },
+  handler: async (ctx, { roomId, peerId }) => {
     const signals = ctx.db
       .query("signals")
       .filter((q) =>
-        q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("userId"), userId)),
+        q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("peerId"), peerId)),
       );
 
     let deleted = 0;
