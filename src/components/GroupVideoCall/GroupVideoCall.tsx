@@ -130,6 +130,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       await sendSignal({
         type: "answer",
         roomId: channelId,
+        sdp: answer.sdp,
         peerId,
         userId,
         candidate: offererId,
