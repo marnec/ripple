@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { ICE_SERVERS } from "@shared/constants";
 import uuid4 from "uuid4";
 import { api } from "../../../convex/_generated/api";
-import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "../ui/button";
 
 const peerId = uuid4();
@@ -15,7 +14,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [hasJoined, sethasJoined] = useState<boolean>(false);
 
-  const [peerConnectionPerUser] = useState<Record<string, RTCPeerConnection>>(
+  const [peerConnectionPerPeer] = useState<Record<string, RTCPeerConnection>>(
     {},
   );
 
@@ -57,8 +56,8 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     setLocalStream(stream);
   };
 
-  const createPeerConnection = (userId: Id<"users">) => {
-    console.log(`creating peer connection for local peer=${userId}`);
+  const createPeerConnection = (peerId: string) => {
+    console.log(`creating peer connection for local peer=${peerId}`);
 
     const peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
@@ -68,7 +67,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       sendSignal({
         roomId: channelId,
         peerId,
-        userId,
+        userId: user?._id!,
         candidate: event.candidate.toJSON(),
         type: "ice-candidate",
       });
@@ -81,7 +80,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     peerConnection.ontrack = (event) => {
       const remoteStream = new MediaStream();
       remoteStream.addTrack(event.track);
-      setRemoteStreams((prev) => ({ ...prev, [userId]: remoteStream }));
+      setRemoteStreams((prev) => ({ ...prev, [peerId]: remoteStream }));
     };
 
     return peerConnection;
@@ -91,8 +90,8 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     console.log("leaving call");
     sethasJoined(false);
     let deleted = await smotherSignal({ roomId: channelId, peerId: peerId });
-    for (let user in peerConnectionPerUser) {
-      peerConnectionPerUser[user].close();
+    for (let user in peerConnectionPerPeer) {
+      peerConnectionPerPeer[user].close();
     }
     console.log(`deleted=${deleted} signals`);
   };
@@ -102,7 +101,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     const userId = user?._id;
     if (!userId) return;
 
-    for (let { sdp, userId: offererId } of offerSignals || []) {
+    for (let { sdp, peerId: offererId } of offerSignals || []) {
       console.log(`offer from ${offererId}`);
       let offeredPeerConnection = createPeerConnection(offererId);
 
@@ -136,7 +135,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         candidate: offererId,
       });
 
-      peerConnectionPerUser[offererId] = offeredPeerConnection;
+      peerConnectionPerPeer[offererId] = offeredPeerConnection;
     }
 
     let clientPeerConnection = createPeerConnection(userId);
@@ -170,31 +169,35 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     const connectToAnswerer = async () => {
       console.log("listening for answers to my offer");
 
-      for (let answer of answerSignals) {
-        console.log(`answer recevide from ${answer.userId}`);
+      for (let { peerId: answererId, sdp } of answerSignals) {
+        console.log(`answer recevide from ${answererId}`);
 
-        if (answer.userId in peerConnectionPerUser) return;
+        if (answererId in peerConnectionPerPeer) return;
 
-        let answeredPeerConnection = createPeerConnection(answer.userId);
+        let answeredPeerConnection = createPeerConnection(answererId);
 
         let remoteDescription = new RTCSessionDescription({
           type: "answer",
-          sdp: answer.sdp,
+          sdp: sdp,
         });
 
         await answeredPeerConnection.setRemoteDescription(remoteDescription);
 
+        console.log(`answered peer connection ready with remote description`);
+
         answeredPeerConnection.onconnectionstatechange = (state) => {
           console.log(
-            `peer connection offered by ${answer.userId} is in state ${state}`,
+            `peer connection offered by ${answererId} is in state ${state}`,
           );
         };
 
-        for (let iceCandidate of iceCandidateQueue[answer.userId] || []) {
+        console.log(iceCandidateQueue[answererId]);
+
+        for (let iceCandidate of iceCandidateQueue[answererId] || []) {
           answeredPeerConnection.addIceCandidate(iceCandidate);
         }
 
-        peerConnectionPerUser[answer.userId] = answeredPeerConnection;
+        peerConnectionPerPeer[answererId] = answeredPeerConnection;
       }
     };
 
@@ -207,19 +210,19 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     iceCandidateSignals.forEach((signal) => {
       // Find the correct peer connection
       let iceCandidate = new RTCIceCandidate(signal.candidate);
-      const targetPeerConnection = peerConnectionPerUser[signal.userId];
+      const targetPeerConnection = peerConnectionPerPeer[signal.peerId];
 
       if (!targetPeerConnection?.remoteDescription) {
-        if (!(signal.userId in iceCandidateQueue)) {
-          console.log(`queueing ice candidate for ${signal.userId}`);
-          iceCandidateQueue[signal.userId] = [];
+        if (!(signal.peerId in iceCandidateQueue)) {
+          console.log(`queueing ice candidate for ${signal.peerId}`);
+          iceCandidateQueue[signal.peerId] = [];
         }
 
-        iceCandidateQueue[signal.userId].push(iceCandidate);
+        iceCandidateQueue[signal.peerId].push(iceCandidate);
         return;
       }
 
-      console.log(`adding ice candidate to ${signal.userId} peer connection`);
+      console.log(`adding ice candidate to ${signal.peerId} peer connection`);
       targetPeerConnection.addIceCandidate(iceCandidate);
     });
   }, [iceCandidateSignals]);
@@ -236,14 +239,14 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
             if (video) video.srcObject = localStream;
           }}
         />
-        {Object.keys(remoteStreams).map((userId) => (
-          <div key={userId}>
-            <h3>Remote Stream - {userId}</h3>
+        {Object.keys(remoteStreams).map((peerId) => (
+          <div key={peerId}>
+            <h3>Remote Stream - {peerId}</h3>
             <video
               autoPlay
               playsInline
               ref={(video) => {
-                if (video) video.srcObject = remoteStreams[userId];
+                if (video) video.srcObject = remoteStreams[peerId];
               }}
             />
           </div>
