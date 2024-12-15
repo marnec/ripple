@@ -53,6 +53,7 @@ export default defineSchema({
 
   signals: defineTable({
     roomId: v.optional(v.string()),
+    peerId: v.string(),
     userId: v.id("users"),
     type: v.optional(v.string()),
     sdp: v.optional(v.string()),

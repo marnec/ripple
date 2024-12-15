@@ -5,14 +5,16 @@ import { mutation, query } from "./_generated/server";
 export const sendRoomSignal = mutation({
   args: {
     roomId: v.string(),
+    peerId: v.string(),
     userId: v.id("users"),
     type: v.optional(v.string()),
     sdp: v.optional(v.any()),
     candidate: v.optional(v.any()),
   },
-  handler: async (ctx, { roomId, userId, type, sdp, candidate }) => {
+  handler: async (ctx, { roomId, peerId, userId, type, sdp, candidate }) => {
     return ctx.db.insert("signals", {
       roomId,
+      peerId,
       userId,
       type,
       sdp,
@@ -56,11 +58,17 @@ export const getOffers = query({
 });
 
 export const getIceCandidates = query({
-  args: { roomId: v.string() },
-  handler: async (ctx, { roomId }) => {
+  args: { roomId: v.string(), excludePeer: v.string() },
+  handler: async (ctx, { roomId, excludePeer }) => {
     return ctx.db
       .query("signals")
-      .filter((q) => q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("type"), "ice-candidate")))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("type"), "ice-candidate"),
+          q.eq(q.field("roomId"), roomId),
+          q.neq(q.field("peerId"), excludePeer),
+        ),
+      )
       .collect();
   },
 });

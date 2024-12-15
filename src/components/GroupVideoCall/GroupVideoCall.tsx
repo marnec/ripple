@@ -2,9 +2,12 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 
 import { ICE_SERVERS } from "@shared/constants";
+import uuid4 from "uuid4";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "../ui/button";
+
+const peerId = uuid4();
 
 const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const user = useQuery(api.users.viewer);
@@ -24,6 +27,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
   const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, {
     roomId: channelId,
+    excludePeer: peerId,
   });
 
   const sendSignal = useMutation(api.signaling.sendRoomSignal);
@@ -63,6 +67,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
       sendSignal({
         roomId: channelId,
+        peerId,
         userId,
         candidate: event.candidate.toJSON(),
         type: "ice-candidate",
@@ -125,6 +130,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       await sendSignal({
         type: "answer",
         roomId: channelId,
+        peerId,
         userId,
         candidate: offererId,
       });
@@ -139,6 +145,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
     await sendSignal({
       roomId: channelId,
+      peerId,
       userId,
       sdp: offer.sdp,
       type: "offer",
