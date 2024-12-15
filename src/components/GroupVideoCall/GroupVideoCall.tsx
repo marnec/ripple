@@ -95,6 +95,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     if (!userId) return;
 
     for (let { sdp, userId: offererId } of offerSignals || []) {
+      console.log(`offer from ${offererId}`);
       let offeredPeerConnection = createPeerConnection(offererId);
 
       let remoteDescription = new RTCSessionDescription({
@@ -104,7 +105,14 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
       await offeredPeerConnection.setRemoteDescription(remoteDescription);
 
+      offeredPeerConnection.onconnectionstatechange = (state) => {
+        console.log(
+          `peer connection offered by ${offererId} is in state ${state}`,
+        );
+      };
+
       for (let iceCandidate of iceCandidateQueue[offererId] || []) {
+        console.log(`dequeuing iceCandidate for offerer ${offererId}`);
         offeredPeerConnection.addIceCandidate(iceCandidate);
       }
 
@@ -150,7 +158,11 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     if (!answerSignals) return;
 
     const connectToAnswerer = async () => {
+      console.log("listening for answers to my offer");
+
       for (let answer of answerSignals) {
+        console.log(`answer recevide from ${answer.userId}`);
+
         if (answer.userId in peerConnectionPerUser) return;
 
         let answeredPeerConnection = createPeerConnection(answer.userId);
@@ -161,6 +173,12 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         });
 
         await answeredPeerConnection.setRemoteDescription(remoteDescription);
+
+        answeredPeerConnection.onconnectionstatechange = (state) => {
+          console.log(
+            `peer connection offered by ${answer.userId} is in state ${state}`,
+          );
+        };
 
         for (let iceCandidate of iceCandidateQueue[answer.userId] || []) {
           answeredPeerConnection.addIceCandidate(iceCandidate);
@@ -183,6 +201,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
       if (!targetPeerConnection?.remoteDescription) {
         if (!(signal.userId in iceCandidateQueue)) {
+          console.log(`queueing ice candidate for ${signal.userId}`)
           iceCandidateQueue[signal.userId] = [];
         }
 
@@ -190,6 +209,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         return;
       }
 
+      console.log(`adding ice candidate to ${signal.userId} peer connection`)
       targetPeerConnection.addIceCandidate(iceCandidate);
     });
   }, [iceCandidateSignals]);
