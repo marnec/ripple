@@ -24,32 +24,61 @@ export const sendRoomSignal = mutation({
 export const deleteRoomSignal = mutation({
   args: { roomId: v.string(), userId: v.id("users") },
   handler: async (ctx, { roomId, userId }) => {
-    const signals = await ctx.db
+    const signals = ctx.db
       .query("signals")
       .filter((q) =>
         q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("userId"), userId)),
-      )
-      .collect();
+      );
 
-    if (!signals?.length)
-      throw new Error(`No signals found for room=${roomId} and user=${userId}`);
+    let deleted = 0;
+    for await (let signal of signals) {
+      ctx.db.delete(signal._id);
+      deleted += 1;
+    }
 
-    return Promise.all(signals.map(({ _id }) => ctx.db.delete(_id)));
+    return deleted;
   },
 });
 
-export const getSignals = query({
+export const getOffers = query({
   args: {
     roomId: v.string(),
-    type: v.string(),
   },
-  handler: async (ctx, { roomId, type }) => {
+  handler: async (ctx, { roomId }) => {
     return await ctx.db
+      .query("signals")
+      .filter((q) =>
+        q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("type"), "offer")),
+      )
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getIceCandidates = query({
+  args: { roomId: v.string() },
+  handler: async (ctx, { roomId }) => {
+    return ctx.db
+      .query("signals")
+      .filter((q) => q.and(q.eq(q.field("roomId"), roomId), q.eq(q.field("type"), "ice-candidate")))
+      .collect();
+  },
+});
+
+export const getAnswers = query({
+  args: {
+    roomId: v.string(),
+  },
+  handler: async (ctx, { roomId }) => {
+    let userId = await ctx.auth.getUserIdentity();
+
+    return ctx.db
       .query("signals")
       .filter((q) =>
         q.and(
           q.eq(q.field("roomId"), roomId),
-          q.eq(q.field("type"), type)
+          q.eq(q.field("type"), "answers"),
+          q.eq(q.field("candidate"), userId),
         ),
       )
       .order("desc")

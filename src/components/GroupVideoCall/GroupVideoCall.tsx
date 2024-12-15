@@ -5,30 +5,37 @@ import { ICE_SERVERS } from "@shared/constants";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "../ui/button";
-import { toast } from "../ui/use-toast";
 
 const GroupVideoCall = ({ channelId }: { channelId: string }) => {
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [hasJoined, sethasJoined] = useState<boolean>(false)
-
   const user = useQuery(api.users.viewer);
 
-  const [peerConnectionPerUser, setPeerConnections] = useState<
-    Record<string, RTCPeerConnection>
-  >({});
-  const [remoteStreams, setRemoteStreams] = useState<
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [hasJoined, sethasJoined] = useState<boolean>(false);
 
+  const [peerConnectionPerUser] = useState<Record<string, RTCPeerConnection>>(
+    {},
+  );
+
+  const [remoteStreams, setRemoteStreams] = useState<
     Record<string, MediaStream>
   >({});
+
+  const iceCandidateQueue: Record<string, RTCIceCandidate[]> = {};
+
+  const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, {
+    roomId: channelId,
+  });
+
   const sendSignal = useMutation(api.signaling.sendRoomSignal);
-  const answerSignals = useQuery(api.signaling.getSignals, {
+
+  const answerSignals = useQuery(api.signaling.getAnswers, {
     roomId: channelId,
-    type: "answer",
   });
-  const offerSignals = useQuery(api.signaling.getSignals, {
+
+  const offerSignals = useQuery(api.signaling.getOffers, {
     roomId: channelId,
-    type: "offer",
   });
+
   const smotherSignal = useMutation(api.signaling.deleteRoomSignal);
 
   const initLocalStream = async () => {
@@ -42,24 +49,29 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     });
 
     const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
+
     setLocalStream(stream);
   };
 
   const createPeerConnection = (userId: Id<"users">) => {
+    console.log(`creating peer connection for local peer=${userId}`);
+
     const peerConnection = new RTCPeerConnection(ICE_SERVERS);
+
+    peerConnection.onicecandidate = (event) => {
+      if (!event.candidate) return;
+
+      sendSignal({
+        roomId: channelId,
+        userId,
+        candidate: event.candidate.toJSON(),
+        type: "ice-candidate",
+      });
+    };
+
     localStream
       ?.getTracks()
       .forEach((track) => peerConnection.addTrack(track, localStream));
-
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        sendSignal({
-          roomId: channelId,
-          userId,
-          candidate: event.candidate.toJSON(),
-        });
-      }
-    };
 
     peerConnection.ontrack = (event) => {
       const remoteStream = new MediaStream();
@@ -70,88 +82,117 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     return peerConnection;
   };
 
-  const handleJoinCall = async () => {
-    sethasJoined(true)
-    const userId = user?._id;
+  const leaveCall = async () => {
+    console.log("leaving call");
+    sethasJoined(false);
+    let deleted = await smotherSignal({ roomId: channelId, userId: user!._id });
+    console.log(`deleted=${deleted} signals`);
+  };
 
-    if (!userId) {
-      toast({
-        variant: "destructive",
-        title: "Not authenticated",
-        description: "how did you get here?",
+  const joinCall = async () => {
+    console.log("joininig call");
+    const userId = user?._id;
+    if (!userId) return;
+
+    for (let { sdp, userId: offererId } of offerSignals || []) {
+      let offeredPeerConnection = createPeerConnection(offererId);
+
+      let remoteDescription = new RTCSessionDescription({
+        type: "offer",
+        sdp,
       });
-      return;
+
+      await offeredPeerConnection.setRemoteDescription(remoteDescription);
+
+      for (let iceCandidate of iceCandidateQueue[offererId] || []) {
+        offeredPeerConnection.addIceCandidate(iceCandidate);
+      }
+
+      let answer = await offeredPeerConnection.createAnswer();
+      await offeredPeerConnection.setLocalDescription(answer);
+
+      await sendSignal({
+        type: "answer",
+        roomId: channelId,
+        userId,
+        candidate: offererId,
+      });
+
+      peerConnectionPerUser[offererId] = offeredPeerConnection;
     }
 
-    const peerConnection = createPeerConnection(userId);
-    setPeerConnections((prev) => ({ ...prev, [userId]: peerConnection }));
+    let clientPeerConnection = createPeerConnection(userId);
 
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
+    const offer = await clientPeerConnection.createOffer();
+    await clientPeerConnection.setLocalDescription(offer);
+    peerConnectionPerUser[userId] = clientPeerConnection;
+
     await sendSignal({
       roomId: channelId,
-      userId: userId as Id<"users">,
+      userId,
       sdp: offer.sdp,
       type: "offer",
     });
+
+    sethasJoined(true);
   };
 
   useEffect(() => {
     initLocalStream();
 
     return () => {
-      smotherSignal({ roomId: channelId, userId: user!._id });
+      leaveCall();
     };
   }, []);
 
   useEffect(() => {
-    if (!hasJoined) return
+    if (!hasJoined) return;
     if (!answerSignals) return;
 
-    answerSignals.forEach(async (signal) => {
-      let peerConnection = peerConnectionPerUser[signal.userId];
-      await peerConnection.setRemoteDescription(
-        new RTCSessionDescription({
-          type: signal.type as RTCSdpType,
-          sdp: signal.sdp,
-        }),
-      );
-    });
+    const connectToAnswerer = async () => {
+      for (let answer of answerSignals) {
+        if (answer.userId in peerConnectionPerUser) return;
+
+        let answeredPeerConnection = createPeerConnection(answer.userId);
+
+        let remoteDescription = new RTCSessionDescription({
+          type: "answer",
+          sdp: answer.sdp,
+        });
+
+        await answeredPeerConnection.setRemoteDescription(remoteDescription);
+
+        for (let iceCandidate of iceCandidateQueue[answer.userId] || []) {
+          answeredPeerConnection.addIceCandidate(iceCandidate);
+        }
+
+        peerConnectionPerUser[answer.userId] = answeredPeerConnection;
+      }
+    };
+
+    connectToAnswerer();
   }, [answerSignals]);
 
   useEffect(() => {
-    if (!hasJoined) return
-    if (!offerSignals) return;
+    if (!iceCandidateSignals) return;
 
-    offerSignals.forEach(async (offer) => {
-      // Ensure we don't create a peer connection if it already exists
-      if (peerConnectionPerUser[offer.userId]) return;
+    iceCandidateSignals.forEach((signal) => {
+      // Find the correct peer connection
+      let iceCandidate = new RTCIceCandidate(signal.candidate);
+      const targetPeerConnection = peerConnectionPerUser[signal.userId];
 
-      const peerConnection = createPeerConnection(offer.userId);
-      setPeerConnections((prev) => ({
-        ...prev,
-        [offer.userId]: peerConnection,
-      }));
+      if (!targetPeerConnection?.remoteDescription) {
+        if (!(signal.userId in iceCandidateQueue)) {
+          iceCandidateQueue[signal.userId] = [];
+        }
 
-      // First, set the remote description (the offer)
-      await peerConnection.setRemoteDescription(
-        new RTCSessionDescription({
-          type: "offer",
-          sdp: offer.sdp,
-        }),
-      );
+        iceCandidateQueue[signal.userId].push(iceCandidate);
+        return;
+      }
 
-      // Then create and set the answer
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      await sendSignal({
-        roomId: channelId,
-        userId: offer.userId,
-        sdp: answer.sdp,
-        type: "answer",
-      });
+      targetPeerConnection.addIceCandidate(iceCandidate);
     });
-  }, [offerSignals]);
+  }, [iceCandidateSignals]);
 
   return (
     <div>
@@ -178,7 +219,12 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           </div>
         ))}
       </div>
-      <Button onClick={handleJoinCall}>Join Call</Button>
+      <Button onClick={joinCall} disabled={hasJoined}>
+        Join Call
+      </Button>
+      <Button onClick={leaveCall} disabled={!hasJoined}>
+        Leave Call
+      </Button>
     </div>
   );
 };
