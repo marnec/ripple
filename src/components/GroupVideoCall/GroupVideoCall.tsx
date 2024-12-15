@@ -86,6 +86,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     console.log("leaving call");
     sethasJoined(false);
     let deleted = await smotherSignal({ roomId: channelId, userId: user!._id });
+    for (let user in peerConnectionPerUser) {
+      peerConnectionPerUser[user].close();
+    }
     console.log(`deleted=${deleted} signals`);
   };
 
@@ -200,7 +203,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
       if (!targetPeerConnection?.remoteDescription) {
         if (!(signal.userId in iceCandidateQueue)) {
-          console.log(`queueing ice candidate for ${signal.userId}`)
+          console.log(`queueing ice candidate for ${signal.userId}`);
           iceCandidateQueue[signal.userId] = [];
         }
 
@@ -208,7 +211,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         return;
       }
 
-      console.log(`adding ice candidate to ${signal.userId} peer connection`)
+      console.log(`adding ice candidate to ${signal.userId} peer connection`);
       targetPeerConnection.addIceCandidate(iceCandidate);
     });
   }, [iceCandidateSignals]);
