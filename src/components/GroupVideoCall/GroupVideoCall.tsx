@@ -105,9 +105,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
       await offeredPeerConnection.setRemoteDescription(remoteDescription);
 
-      offeredPeerConnection.onconnectionstatechange = (state) => {
+      offeredPeerConnection.onconnectionstatechange = (event) => {
         console.log(
-          `peer connection offered by ${offererId} is in state ${state}`,
+          `peer connection offered by ${offererId} is in state ${JSON.stringify(event)}`,
         );
       };
 
@@ -133,7 +133,6 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
     const offer = await clientPeerConnection.createOffer();
     await clientPeerConnection.setLocalDescription(offer);
-    peerConnectionPerUser[userId] = clientPeerConnection;
 
     await sendSignal({
       roomId: channelId,
