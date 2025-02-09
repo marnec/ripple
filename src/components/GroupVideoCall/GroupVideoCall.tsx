@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ICE_SERVERS } from "@shared/constants";
 import uuid4 from "uuid4";
@@ -14,15 +14,13 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [hasJoined, sethasJoined] = useState<boolean>(false);
 
-  const [peerConnectionPerPeer] = useState<Record<string, RTCPeerConnection>>(
-    {},
-  );
+  const peerConnectionPerPeer = useRef<Record<string, RTCPeerConnection>>({});
 
   const [remoteStreams, setRemoteStreams] = useState<
     Record<string, MediaStream>
   >({});
 
-  const iceCandidateQueue: Record<string, RTCIceCandidate[]> = {};
+  const iceCandidateQueue = useRef<Record<string, RTCIceCandidate[]>>({});
 
   const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, {
     roomId: channelId,
@@ -90,14 +88,14 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     console.log("leaving call");
     sethasJoined(false);
     let deleted = await smotherSignal({ roomId: channelId, peerId: peerId });
-    for (let user in peerConnectionPerPeer) {
-      peerConnectionPerPeer[user].close();
+    for (let user in peerConnectionPerPeer.current) {
+      peerConnectionPerPeer.current[user].close();
     }
     console.log(`deleted=${deleted} signals`);
   };
 
   const joinCall = async () => {
-    console.log("joininig call");
+    console.log("joining call");
     const userId = user?._id;
     if (!userId) return;
 
@@ -114,11 +112,11 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
       offeredPeerConnection.onconnectionstatechange = (event) => {
         console.log(
-          `peer connection offered by ${offererId} is in state ${JSON.stringify(event)}`,
+          `peer connection offered by ${offererId} is in state ${(event.target as RTCPeerConnection)?.connectionState}`,
         );
       };
 
-      for (let iceCandidate of iceCandidateQueue[offererId] || []) {
+      for (let iceCandidate of iceCandidateQueue.current[offererId] || []) {
         console.log(`dequeuing iceCandidate for offerer ${offererId}`);
         offeredPeerConnection.addIceCandidate(iceCandidate);
       }
@@ -135,7 +133,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         candidate: offererId,
       });
 
-      peerConnectionPerPeer[offererId] = offeredPeerConnection;
+      peerConnectionPerPeer.current[offererId] = offeredPeerConnection;
     }
 
     let clientPeerConnection = createPeerConnection(userId);
@@ -170,9 +168,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       console.log("listening for answers to my offer");
 
       for (let { peerId: answererId, sdp } of answerSignals) {
-        console.log(`answer recevide from ${answererId}`);
+        console.log(`answer received from ${answererId}`);
 
-        if (answererId in peerConnectionPerPeer) return;
+        if (answererId in peerConnectionPerPeer.current) return;
 
         let answeredPeerConnection = createPeerConnection(answererId);
 
@@ -185,24 +183,22 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
         console.log(`answered peer connection ready with remote description`);
 
-        answeredPeerConnection.onconnectionstatechange = (state) => {
+        answeredPeerConnection.onconnectionstatechange = (event) => {
           console.log(
-            `peer connection offered by ${answererId} is in state ${state}`,
+            `peer connection offered by ${answererId} is in state ${(event.target as RTCPeerConnection).connectionState}`,
           );
         };
 
-        console.log(iceCandidateQueue[answererId]);
-
-        for (let iceCandidate of iceCandidateQueue[answererId] || []) {
+        for (let iceCandidate of iceCandidateQueue.current[answererId] || []) {
           answeredPeerConnection.addIceCandidate(iceCandidate);
         }
 
-        peerConnectionPerPeer[answererId] = answeredPeerConnection;
+        peerConnectionPerPeer.current[answererId] = answeredPeerConnection;
       }
     };
 
     connectToAnswerer();
-  }, [answerSignals]);
+  }, [answerSignals, hasJoined]);
 
   useEffect(() => {
     if (!iceCandidateSignals) return;
@@ -210,15 +206,15 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     iceCandidateSignals.forEach((signal) => {
       // Find the correct peer connection
       let iceCandidate = new RTCIceCandidate(signal.candidate);
-      const targetPeerConnection = peerConnectionPerPeer[signal.peerId];
+      const targetPeerConnection = peerConnectionPerPeer.current[signal.peerId];
 
       if (!targetPeerConnection?.remoteDescription) {
-        if (!(signal.peerId in iceCandidateQueue)) {
+        if (!(signal.peerId in iceCandidateQueue.current)) {
           console.log(`queueing ice candidate for ${signal.peerId}`);
-          iceCandidateQueue[signal.peerId] = [];
+          iceCandidateQueue.current[signal.peerId] = [];
         }
 
-        iceCandidateQueue[signal.peerId].push(iceCandidate);
+        iceCandidateQueue.current[signal.peerId].push(iceCandidate);
         return;
       }
 
