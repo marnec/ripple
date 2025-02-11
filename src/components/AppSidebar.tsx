@@ -10,16 +10,18 @@ import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { ChannelSelector } from "./Channel/ChannelSelector";
+import { DocumentSelector } from "./Document/DocumentSelector";
 import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 
 export function AppSidebar() {
-  const { workspaceId, channelId } = useParams<QueryParams>();
+  const { workspaceId, channelId, documentId } = useParams<QueryParams>();
+
   const navigate = useNavigate();
 
-  // Get all workspaces
+  
   const workspaces = useQuery(api.workspaces.list);
-  // Get active workspace details
+  
   const activeWorkspace = useQuery(
     api.workspaces.get,
     workspaceId ? { id: workspaceId } : "skip",
@@ -27,6 +29,10 @@ export function AppSidebar() {
 
   const handleChannelSelect = (id: string) => {
     navigate(`channel/${id}`);
+  };
+
+  const handleDocumentSelect = (id: string) => {
+    navigate(`document/${id}`);
   };
 
   const handleWorkspaceSelect = (id: string) => {
@@ -47,11 +53,18 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           {workspaceId && (
-            <ChannelSelector
-              channelId={channelId}
-              workspaceId={workspaceId}
-              onChannelSelect={handleChannelSelect}
-            />
+            <>
+              <ChannelSelector
+                channelId={channelId}
+                workspaceId={workspaceId}
+                onChannelSelect={handleChannelSelect}
+              />
+              <DocumentSelector
+                workspaceId={workspaceId}
+                documentId={documentId}
+                onDocumentSelect={handleDocumentSelect}
+              />
+            </>
           )}
         </SidebarGroup>
         <SidebarGroup />

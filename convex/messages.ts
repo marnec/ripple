@@ -8,29 +8,26 @@ export const list = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
 
-    // Get channel to check workspace membership
     const channel = await ctx.db.get(channelId);
-    if (!channel) return [];
+    if (!channel) throw Error(`Channel not found with id="${channelId}"`);
 
     // Check workspace membership
     const membership = await ctx.db
       .query("workspaceMembers")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), userId),
-          q.eq(q.field("workspaceId"), channel.workspaceId),
-        ),
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", channel.workspaceId).eq("userId", userId),
       )
       .first();
 
-    if (!membership) return [];
+    if (!membership)
+      throw Error(`User="${userId}" is not a member of workspace="${channel.workspaceId}"`);
 
     // Grab the most recent messages
     const messages = await ctx.db
       .query("messages")
-      .filter((q) => q.eq(q.field("channelId"), channelId))
+      .withIndex("by_channel", (q) => q.eq("channelId", channelId))
       .order("desc")
-      .take(100);
+      .take(25);
 
     // Add the author's name to each message
     return Promise.all(
@@ -58,11 +55,8 @@ export const send = mutation({
     // Check workspace membership
     const membership = await ctx.db
       .query("workspaceMembers")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("userId"), userId),
-          q.eq(q.field("workspaceId"), channel.workspaceId),
-        ),
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", channel.workspaceId).eq("userId", userId),
       )
       .first();
 

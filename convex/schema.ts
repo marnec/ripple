@@ -59,4 +59,12 @@ export default defineSchema({
     sdp: v.optional(v.string()),
     candidate: v.optional(v.any()),
   }),
+
+  documents: defineTable({
+    workspaceId: v.id("workspaces"),
+    name: v.string(),
+    tags: v.optional(v.array(v.string())),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .searchIndex('by_name', { searchField: 'name', filterFields: ['workspaceId'] }),
 });

@@ -1,6 +1,7 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex/react";
-import { Folder, Hash, MoreHorizontal, Trash2 } from "lucide-react";
+import { Folder, Hash, MessageSquarePlusIcon, MoreHorizontal, Trash2 } from "lucide-react";
+import { useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import {
@@ -12,12 +13,14 @@ import {
 } from "../ui/dropdown-menu";
 import {
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "../ui/sidebar";
+import { CreateChannelDialog } from "./CreateChannelDialog";
 
 export interface ChannelSelectorProps {
   workspaceId: Id<"workspaces">;
@@ -28,8 +31,9 @@ export interface ChannelSelectorProps {
 export function ChannelSelector({
   workspaceId,
   channelId,
-  onChannelSelect,
+  onChannelSelect
 }: ChannelSelectorProps) {
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
   const isMobile = useIsMobile();
   const channels = useQuery(api.channels.list, {
     workspaceId: workspaceId as Id<"workspaces">,
@@ -37,7 +41,12 @@ export function ChannelSelector({
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Channels</SidebarGroupLabel>
+        <SidebarGroupLabel>Channels</SidebarGroupLabel>
+        <SidebarGroupAction
+         title="Create channel"  onClick={() => setShowCreateChannel(true)}>
+          <MessageSquarePlusIcon /> 
+          <span className="sr-only">Create channel</span>
+        </SidebarGroupAction>
       <SidebarMenu>
         {channels?.map((channel) => (
           <SidebarMenuItem key={channel.name}>
@@ -76,6 +85,7 @@ export function ChannelSelector({
           </SidebarMenuItem>
         ))}
       </SidebarMenu>
+      <CreateChannelDialog workspaceId={workspaceId} open={showCreateChannel} onOpenChange={setShowCreateChannel} /> 
     </SidebarGroup>
   );
 }
