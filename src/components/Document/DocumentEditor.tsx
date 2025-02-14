@@ -16,7 +16,7 @@ export function DocumentEditorContainer() {
     return <p className="p-20">No document selected</p>;
   }
 
-  return <DocumentEditor documentId={documentId} />;
+  return <DocumentEditor documentId={documentId} key={documentId} />;
 }
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
@@ -36,16 +36,16 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     };
 
     setUpEditor();
-  }, [documentId, sync]);
+  }, [sync, documentId]);
 
-  if (!editor) {
-    return <LoadingSpinner />;
-  }
+
 
   return (
-    <div className="px-20 flex-1">
+    <>
+    {editor && <div className="px-20 flex-1 animate-fade-in">
       <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
       <BlockNoteView editor={editor} />
-    </div>
+    </div>}
+    </>
   );
 }

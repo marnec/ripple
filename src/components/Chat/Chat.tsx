@@ -33,7 +33,7 @@ export function Chat({ viewer, channelId }: ChatProps) {
 
   return (
     <>
-      <MessageList messages={messages}>
+      <MessageList messages={messages} >
         {isPending && <LoadingSpinner className="h-12 w-12 self-center" />}
         {isSuccess &&
           messages?.map((message) => (

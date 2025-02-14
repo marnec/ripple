@@ -40,6 +40,7 @@ export function DocumentSelector({
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
   const createNewDocument = useMutation(api.documents.create);
+  const deleteDocument = useMutation(api.documents.remove);
 
   const handleDocumentCreate = async () => {
     if (!workspaceId) return;
@@ -85,9 +86,9 @@ export function DocumentSelector({
                   <span>Rename</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => deleteDocument({ id: document._id })}>
                   <Trash2 className="text-muted-foreground" />
-                  <span>Delete (Coming soon)</span>
+                  <span>Delete</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

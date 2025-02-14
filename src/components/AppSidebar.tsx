@@ -9,7 +9,7 @@ import { QueryParams } from "@/types";
 import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { ChannelSelector } from "./Channel/ChannelSelector";
+import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DocumentSelector } from "./Document/DocumentSelector";
 import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
@@ -54,7 +54,7 @@ export function AppSidebar() {
         <SidebarGroup>
           {workspaceId && (
             <>
-              <ChannelSelector
+              <ChannelSelectorList
                 channelId={channelId}
                 workspaceId={workspaceId}
                 onChannelSelect={handleChannelSelect}
