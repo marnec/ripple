@@ -10,7 +10,7 @@ import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
-import { DocumentSelector } from "./Document/DocumentSelector";
+import { DocumentSelector } from "./Document/DocumentSelectorList";
 import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 
@@ -19,20 +19,20 @@ export function AppSidebar() {
 
   const navigate = useNavigate();
 
-  
   const workspaces = useQuery(api.workspaces.list);
-  
-  const activeWorkspace = useQuery(
-    api.workspaces.get,
-    workspaceId ? { id: workspaceId } : "skip",
-  );
+
+  const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
 
   const handleChannelSelect = (id: string) => {
     navigate(`channel/${id}`);
   };
 
-  const handleDocumentSelect = (id: string) => {
-    navigate(`document/${id}`);
+  const handleDocumentSelect = (id: string | null) => {
+    if (!id) {
+      navigate("document");
+    } else {
+      navigate(`document/${id}`);
+    }
   };
 
   const handleWorkspaceSelect = (id: string) => {

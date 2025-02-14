@@ -15,6 +15,7 @@ import { WorkspaceSettings } from "./components/Workspace/WorkspaceSettings.tsx"
 import "./index.css";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage.tsx";
 import { UserProfilePage } from "./pages/UserProfilePage.tsx";
+import { Documents } from "./components/Document/Documents.tsx";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
@@ -33,6 +34,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <Route path="settings" element={<WorkspaceSettings />} />
               <Route path="channel/:channelId" element={<ChatLayout />} />
               <Route path="channel/:channelId/videocall" element={<ChannelVideoCall />} />
+              <Route path="document" element={<Documents />} />
               <Route path="document/:documentId" element={<DocumentEditorContainer />} />
             </Route>
 

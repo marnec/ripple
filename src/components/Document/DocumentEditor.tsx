@@ -1,13 +1,12 @@
+import { QueryParams } from "@/types";
+import { BlockNoteEditor } from "@blocknote/core";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useBlockNoteSync } from "@convex-dev/prosemirror-sync/blocknote";
-import { api } from "../../../convex/_generated/api";
-import { useParams } from "react-router-dom";
-import { QueryParams } from "@/types";
-import { useEffect, useState } from "react";
-import { BlockNoteEditor } from "@blocknote/core";
 import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
-import { LoadingSpinner } from "../ui/loading-spinner";
 
 export function DocumentEditorContainer() {
   const { documentId } = useParams<QueryParams>();
