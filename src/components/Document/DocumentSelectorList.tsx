@@ -13,7 +13,7 @@ export type DocumentSelectorProps = {
   onDocumentSelect: (id: string | null) => void;
 };
 
-export function DocumentSelector({
+export function DocumentSelectorList({
   workspaceId,
   documentId,
   onDocumentSelect,
