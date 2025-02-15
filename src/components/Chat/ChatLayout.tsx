@@ -9,7 +9,7 @@ export function ChatLayout() {
     const user = useQuery(api.users.viewer);
 
     return (
-        <div className="flex-1 flex flex-col justify-between">
+        <div className="flex w-full flex-col justify-between">
             <Chat viewer={user?._id!} channelId={channelId as Id<"channels">} />
         </div>
     );
