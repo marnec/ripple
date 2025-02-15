@@ -1,13 +1,5 @@
-import {
-  BlockNoteEditor,
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  locales,
-} from "@blocknote/core";
-import {
-  useCreateBlockNote,
-  useEditorContentOrSelectionChange,
-} from "@blocknote/react";
+import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, locales } from "@blocknote/core";
+import { useCreateBlockNote, useEditorContentOrSelectionChange } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import {
   CodeIcon,
@@ -21,7 +13,6 @@ import { useTheme } from "next-themes";
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
-import { useNavigate } from "react-router-dom";
 
 interface MessageComposerProps {
   handleSubmit: (content: string) => void;
@@ -38,7 +29,6 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
-  const navigate = useNavigate();
 
   const { audio, image, heading, ...remainingBlockSpecs } = defaultBlockSpecs;
   const schema = BlockNoteSchema.create({
@@ -46,20 +36,23 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   });
 
   const dictionary = locales.en;
-  dictionary.placeholders.default = "Enter for newline; Ctrl+Enter to send";
   const editor = useCreateBlockNote({
     schema,
     trailingBlock: false,
-    dictionary,
+    dictionary: {
+      ...dictionary,
+      placeholders: {
+        ...dictionary.placeholders,
+        default: "Enter for newline; Ctrl+Enter to send",
+      },
+    },
   });
 
   const [isBold, setIsBold] = useState(editor.getActiveStyles().bold);
   const [isItalic, setIsItalic] = useState(editor.getActiveStyles().italic);
   const [isStrike, setIsStrike] = useState(editor.getActiveStyles().strike);
   const [isCode, setIsCode] = useState(editor.getActiveStyles().code);
-  const [isUnderline, setIsUnderline] = useState(
-    editor.getActiveStyles().underline,
-  );
+  const [isUnderline, setIsUnderline] = useState(editor.getActiveStyles().underline);
   const [isEmpty, setIsEmpty] = useState(editorIsEmpty(editor));
 
   const sendMessage = () => {
@@ -80,7 +73,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, editor);
 
   return (
-    <div className="flex flex-col p-2">
+    <div className="flex flex-col p-2 w-svw">
       <div className="flex justify-between items-start">
         <div className="flex flex-row gap-2">
           <Toggle
@@ -162,12 +155,12 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             <Link1Icon />
           </Button>
         </div>
-        <Button onClick={() => navigate("videocall")}>Call</Button>
+        {/* <Button onClick={() => navigate("videocall")}>Call</Button> */}
       </div>
       <div className="flex gap-2 py-4">
         <BlockNoteView
           editor={editor}
-          className="w-full max-w-full border rounded-md px-2"
+          className="w-full flex-grow min-w-0 box-border border rounded-md px-2"
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
           filePanel={false}
@@ -177,12 +170,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           onKeyDownCapture={(event) => {
             if (!editor.getSelectedText()) {
               if (event.key === "b" && event.ctrlKey) setIsBold(!isBold);
-              else if (event.key === "i" && event.ctrlKey)
-                setIsItalic(!isItalic);
-              else if (event.key === "u" && event.ctrlKey)
-                setIsUnderline(!isUnderline);
-              else if (event.key === "s" && event.ctrlKey && event.shiftKey)
-                setIsStrike(!isStrike);
+              else if (event.key === "i" && event.ctrlKey) setIsItalic(!isItalic);
+              else if (event.key === "u" && event.ctrlKey) setIsUnderline(!isUnderline);
+              else if (event.key === "s" && event.ctrlKey && event.shiftKey) setIsStrike(!isStrike);
             }
 
             if (event.key === "Enter" && event.ctrlKey) {
@@ -191,7 +181,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             }
           }}
         />
-        <Button disabled={isEmpty} onClick={sendMessage}>
+        <Button disabled={isEmpty} onClick={sendMessage} className="flex-shrink-0">
           Send
         </Button>
       </div>
