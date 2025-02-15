@@ -23,6 +23,7 @@ export function Chat({ viewer, channelId }: ChatProps) {
     isPending,
     isSuccess,
   } = useQueryWithStatus(api.messages.list, { channelId });
+
   const sendMessage = useMutation(api.messages.send);
 
   const handleSubmit = (content: string) => {

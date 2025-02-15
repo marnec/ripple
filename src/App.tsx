@@ -11,7 +11,7 @@ export const UserContext = React.createContext<User | null | undefined>(undefine
 
 export default function App() {
   const user = useQuery(api.users.viewer);
-  
+
   const { workspaceId } = useParams();
   const navigate = useNavigate();
 

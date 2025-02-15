@@ -3,21 +3,21 @@ import { ScrollArea } from "../ui/scroll-area";
 
 export function MessageList({ messages, children }: { messages: unknown; children: ReactNode }) {
   const messageListRef = useRef<HTMLOListElement>(null);
-  const lastMessageRef = useRef<HTMLLIElement | undefined>((children as HTMLLIElement[]).at(-1));
 
-  // Scrolls the list down when new messages
-  // are received or sent.
   useEffect(() => {
-    if (lastMessageRef?.current) {
-      lastMessageRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-    // if (messageListRef.current) {
-
-    //   messageListRef.current.scrollTo({
-    //     top: messageListRef.current.scrollHeight,
-    //     behavior: "smooth",
-    //   });
-    // }
+    if (!messageListRef?.current) return;
+    
+    // Put at the end of call-stack so that children are rendered.
+    // Otherwise scroll happens before children are completely rendered and
+    // the size of the element is miscalculated. 
+    // Probably due to BlockNoteView rendering late.
+    setTimeout(() => {
+      messageListRef?.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+        inline: "end",
+      });
+    });
   }, [messages]);
 
   return (

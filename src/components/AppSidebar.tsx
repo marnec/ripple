@@ -5,6 +5,7 @@ import {
   SidebarGroup,
   SidebarHeader,
 } from "@/components/ui/sidebar";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@/types";
 import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -14,16 +15,18 @@ import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 
-export function AppSidebar() {
+export function AppSidebar({ setSidebarOpen }: { setSidebarOpen: (val: boolean) => void }) {
   const { workspaceId, channelId, documentId } = useParams<QueryParams>();
+  const isMobile = useIsMobile();
 
   const navigate = useNavigate();
 
   const workspaces = useQuery(api.workspaces.list);
-
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
 
   const handleChannelSelect = (id: string) => {
+    if (isMobile) setSidebarOpen(false);
+
     navigate(`channel/${id}`);
   };
 
