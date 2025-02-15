@@ -21,7 +21,7 @@ export function Layout({ children }: { menu?: ReactNode; children: ReactNode }) 
           </Authenticated>
           <DynamicBreadcrumb />
         </header>
-        <div className="h-[calc(100vh-64px)]">{children}</div>
+        <div className="h-[calc(100dvh-64px)]">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );
