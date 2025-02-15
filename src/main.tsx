@@ -23,6 +23,7 @@ export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <ThemeProvider attribute="class">
       <Toaster />
       <ConvexAuthProvider client={convex}>
