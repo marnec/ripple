@@ -41,7 +41,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   return (
     <>
-    {editor && <div className="px-20 flex-1 animate-fade-in">
+    {editor && <div className="px-20 max-w-full flex-1 animate-fade-in">
       <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
       <BlockNoteView editor={editor} />
     </div>}
