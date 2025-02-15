@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import { AppSidebar } from "./components/AppSidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 
@@ -7,12 +7,11 @@ import { DynamicBreadcrumb } from "./components/Breadcrumb";
 import { Separator } from "./components/ui/separator";
 
 export function Layout({ children }: { menu?: ReactNode; children: ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   
   return (
     <SidebarProvider >
       <Authenticated>
-        <AppSidebar setSidebarOpen={setSidebarOpen} />
+        <AppSidebar />
       </Authenticated>
       <SidebarInset>
         <header className="flex sticky top-0 z-10 bg-background/80 h-16 shrink-0 items-center border-b backdrop-blur px-4">
