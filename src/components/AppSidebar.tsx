@@ -4,6 +4,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { QueryParams } from "@/types";
 import { useQuery } from "convex/react";
@@ -16,6 +17,7 @@ import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 
 export function AppSidebar() {
   const navigate = useNavigate();
+  const { setOpenMobile } = useSidebar()
   
   const { workspaceId, channelId, documentId } = useParams<QueryParams>();
 
@@ -23,10 +25,14 @@ export function AppSidebar() {
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
 
   const handleChannelSelect = (id: string) => {
+    setOpenMobile(false);
+
     navigate(`channel/${id}`);
   };
 
   const handleDocumentSelect = (id: string | null) => {
+    setOpenMobile(false);
+    
     if (!id) {
       navigate("document");
     } else {
