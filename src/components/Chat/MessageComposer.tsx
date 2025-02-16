@@ -10,7 +10,7 @@ import {
   UnderlineIcon,
 } from "@radix-ui/react-icons";
 import { useTheme } from "next-themes";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
 
@@ -25,43 +25,57 @@ const editorClear = (editor: BlockNoteEditor<any>) => {
   editor.removeBlocks(editor.document.map((b) => b.id));
 };
 
+const { audio, image, heading, ...remainingBlockSpecs } = defaultBlockSpecs;
+const schema = BlockNoteSchema.create({
+  blockSpecs: { ...remainingBlockSpecs },
+});
+
+const dictionary = {
+  ...locales.en,
+  placeholders: {
+    ...locales.en.placeholders,
+    default: "Ctrl+Enter to send",
+  },
+};
+
 export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
 
-  const { audio, image, heading, ...remainingBlockSpecs } = defaultBlockSpecs;
-  const schema = BlockNoteSchema.create({
-    blockSpecs: { ...remainingBlockSpecs },
+  const editorConfig = useMemo(
+    () => ({
+      schema,
+      trailingBlock: false,
+      dictionary,
+    }),
+    [],
+  );
+
+  const editor = useCreateBlockNote(editorConfig);
+  
+  setTimeout(() => {
+    editor.setTextCursorPosition(editor.document[0]);
+    editor.focus();
   });
 
-  const dictionary = locales.en;
-  const editor = useCreateBlockNote({
-    schema,
-    trailingBlock: false,
-    dictionary: {
-      ...dictionary,
-      placeholders: {
-        ...dictionary.placeholders,
-        default: "Enter for newline; Ctrl+Enter to send",
-      },
-    },
-  });
+  const { bold, italic, strike, code, underline } = editor.getActiveStyles();
 
-  const [isBold, setIsBold] = useState(editor.getActiveStyles().bold);
-  const [isItalic, setIsItalic] = useState(editor.getActiveStyles().italic);
-  const [isStrike, setIsStrike] = useState(editor.getActiveStyles().strike);
-  const [isCode, setIsCode] = useState(editor.getActiveStyles().code);
-  const [isUnderline, setIsUnderline] = useState(editor.getActiveStyles().underline);
+  const [isBold, setIsBold] = useState(bold);
+  const [isItalic, setIsItalic] = useState(italic);
+  const [isStrike, setIsStrike] = useState(strike);
+  const [isCode, setIsCode] = useState(code);
+  const [isUnderline, setIsUnderline] = useState(underline);
   const [isEmpty, setIsEmpty] = useState(editorIsEmpty(editor));
 
   const sendMessage = () => {
-    if (isEmpty) return;
+    if (isEmpty || !editor) return;
     handleSubmit(JSON.stringify(editor.document));
     editorClear(editor);
   };
 
   useEditorContentOrSelectionChange(() => {
+    if (!editor) return;
     const { bold, italic, underline, strike, code } = editor.getActiveStyles();
 
     setIsBold(!!bold);
@@ -73,7 +87,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, editor);
 
   return (
-    <div className="flex sm:flex-col flex-col-reverse p-2 max-w-full"> 
+    <div className="flex sm:flex-col flex-col-reverse p-2 max-w-full border-t">
       <div className="flex justify-between items-start">
         <div className="flex flex-row gap-2">
           <Toggle
@@ -159,6 +173,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       </div>
       <div className="flex gap-2 py-4">
         <BlockNoteView
+          id="message-composer"
           editor={editor}
           className="w-full flex-grow min-w-0 box-border border rounded-md px-2"
           theme={resolvedTheme === "dark" ? "dark" : "light"}

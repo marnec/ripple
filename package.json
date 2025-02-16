@@ -45,7 +45,9 @@
     "resend": "^4.1.2",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "uuid4": "^2.0.3"
+    "uuid4": "^2.0.3",
+    "dompurify": "3.2.4",
+    "usehooks-ts": "3.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",

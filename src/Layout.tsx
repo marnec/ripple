@@ -21,6 +21,7 @@ export function Layout() {
             <Separator orientation="vertical" className="mr-2 h-4" />
             <DynamicBreadcrumb />
           </header>
+          {/* this solution is from https://github.com/shadcn-ui/ui/issues/5545 */}
           <div
             className={cn("flex h-[calc(100svh-4rem)]", {
               "w-svw": isMobile,

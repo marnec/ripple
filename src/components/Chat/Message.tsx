@@ -1,20 +1,33 @@
 import { cn } from "@/lib/utils";
 import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteView } from "@blocknote/shadcn";
+import { useEffect, useState } from "react";
 import { Id } from "../../../convex/_generated/dataModel";
+import { useSanitize } from "@/hooks/use-sanitize";
 
 export function Message({
   author,
   authorName,
   viewer,
-  content
+  content,
 }: {
   author: Id<"users">;
   authorName: string;
   viewer: Id<"users">;
   content: string;
 }) {
-  const messageRenderer = useCreateBlockNote({ initialContent: JSON.parse(content) })
+  const [html, setHTML] = useState<string>("");
+
+  const sanitize = useSanitize();
+
+  const editor = useCreateBlockNote({ initialContent: JSON.parse(content) });
+
+  useEffect(() => {
+    const onChange = async () => {
+      const html = await editor.blocksToFullHTML(editor.document);
+      setHTML(html);
+    };
+    onChange();
+  }, []);
 
   return (
     <li
@@ -29,9 +42,8 @@ export function Message({
           "rounded-xl bg-muted px-3 py-2",
           author === viewer ? "rounded-tr-none" : "rounded-tl-none",
         )}
-      >
-        <BlockNoteView editor={messageRenderer} editable={false} />
-      </div>
+        dangerouslySetInnerHTML={{ __html: sanitize(html) }}
+      ></div>
     </li>
   );
 }

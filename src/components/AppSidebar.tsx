@@ -7,13 +7,16 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { QueryParams } from "@/types";
-import { useQuery } from "convex/react";
+import { useQueries, useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
+import { makeUseQueryWithStatus } from "convex-helpers/react";
+
+export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
 
 export function AppSidebar() {
   const navigate = useNavigate();

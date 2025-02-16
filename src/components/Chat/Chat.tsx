@@ -1,7 +1,7 @@
 "use client";
 import { Message } from "@/components/Chat/Message";
 import { MessageList } from "@/components/Chat/MessageList";
-import { useQueryWithStatus } from "@/main";
+
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { useMutation } from "convex/react";
@@ -9,8 +9,9 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { LoadingSpinner } from "../ui/loading-spinner";
 import { toast } from "../ui/use-toast";
-import "./chat-composer.css";
+import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
+import { useQueryWithStatus } from "../AppSidebar";
 
 export type ChatProps = {
   viewer: Id<"users">;
@@ -34,7 +35,7 @@ export function Chat({ viewer, channelId }: ChatProps) {
 
   return (
     <>
-      <MessageList messages={messages} >
+      <MessageList messages={messages}>
         {isPending && <LoadingSpinner className="h-12 w-12 self-center" />}
         {isSuccess &&
           messages?.map((message) => (
@@ -47,9 +48,8 @@ export function Chat({ viewer, channelId }: ChatProps) {
             ></Message>
           ))}
       </MessageList>
-      <div className="border-t">
-        <MessageComposer handleSubmit={handleSubmit}></MessageComposer>
-      </div>
+
+      <MessageComposer handleSubmit={handleSubmit}></MessageComposer>
     </>
   );
 }
