@@ -2,14 +2,20 @@ import { AppSidebar } from "./components/AppSidebar";
 import { SidebarInset, SidebarTrigger, useSidebar } from "./components/ui/sidebar";
 
 import { Authenticated, Unauthenticated } from "convex/react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation, useRoutes } from "react-router-dom";
 import { DynamicBreadcrumb } from "./components/Breadcrumb";
 import { Separator } from "./components/ui/separator";
-import { SignInForm } from "./SignInForm";
 import { cn } from "./lib/utils";
+import { SignInForm } from "./SignInForm";
+import { useEffect } from "react";
 
 export function Layout() {
-  const { isMobile, state } = useSidebar();
+  const { pathname } = useLocation()
+  const { isMobile, state, setOpenMobile } = useSidebar();
+
+  useEffect(() => {
+    if (pathname === '/') setOpenMobile(true)
+  }, [pathname])
 
   return (
     <>
