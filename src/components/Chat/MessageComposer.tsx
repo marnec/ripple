@@ -53,11 +53,6 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   );
 
   const editor = useCreateBlockNote(editorConfig);
-  
-  setTimeout(() => {
-    editor.setTextCursorPosition(editor.document[0]);
-    editor.focus();
-  });
 
   const { bold, italic, strike, code, underline } = editor.getActiveStyles();
 
