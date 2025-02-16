@@ -6,10 +6,12 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../convex/_generated/api";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { useScript } from "usehooks-ts";
 
 export const UserContext = React.createContext<User | null | undefined>(undefined);
 
 export default function App() {
+  useScript('/service-worker.js');
   const user = useQuery(api.users.viewer);
 
   const navigate = useNavigate();
