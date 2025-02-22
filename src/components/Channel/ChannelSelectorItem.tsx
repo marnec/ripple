@@ -1,5 +1,8 @@
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useMutation } from "convex/react";
 import { Folder, Hash, MoreHorizontal, Trash2 } from "lucide-react";
-import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
+import { api } from "../../../convex/_generated/api";
+import { Doc, Id } from "../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,10 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Id, Doc } from "../../../convex/_generated/dataModel";
-import { useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 
 export interface ChannelSelectorItemProps {
   channel: Doc<"channels">;
@@ -29,7 +29,7 @@ export function ChannelSelectorItem({
   const deleteChannel = useMutation(api.channels.remove);
 
   const handleChannelDelete = async (id: Id<"channels">) =>  {
-    deleteChannel({ id: channel._id })
+    deleteChannel({ id })
 
     onChannelSelect(null)
     

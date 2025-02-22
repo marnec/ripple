@@ -1,6 +1,6 @@
 import { authTables } from "@convex-dev/auth/server";
 import { InviteStatus } from "@shared/enums/inviteStatus";
-import { WorkspaceRole } from "@shared/enums/roles";
+import { ChannelRole, WorkspaceRole } from "@shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -25,7 +25,7 @@ export default defineSchema({
   workspaceMembers: defineTable({
     userId: v.id("users"),
     workspaceId: v.id("workspaces"),
-    role: v.union(v.literal(WorkspaceRole.ADMIN), v.literal(WorkspaceRole.MEMBER)),
+    role: v.union(...Object.values(WorkspaceRole).map((role) => v.literal(role))),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_user", ["userId"])
@@ -36,11 +36,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     email: v.string(),
     invitedBy: v.id("users"),
-    status: v.union(
-      v.literal(InviteStatus.PENDING),
-      v.literal(InviteStatus.ACCEPTED),
-      v.literal(InviteStatus.DECLINED),
-    ),
+    status: v.union(...Object.values(InviteStatus).map((status) => v.literal(status))),
   })
     .index("by_email", ["email"])
     .index("by_workspace", ["workspaceId"])
@@ -54,7 +50,8 @@ export default defineSchema({
 
   channelMembers: defineTable({
     channelId: v.id("channels"),
-    userId: v.id("users")
+    userId: v.id("users"),
+    role: v.union(...Object.values(ChannelRole).map((role) => v.literal(role))),
   }).index("by_channel", ["channelId"]),
 
   signals: defineTable({

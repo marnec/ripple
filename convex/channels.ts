@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { ChannelRole } from "@shared/enums";
 
 export const create = mutation({
   args: {
@@ -19,10 +20,14 @@ export const create = mutation({
 
     if (!membership) throw new Error("Not a member of this workspace");
 
-    return await ctx.db.insert("channels", {
+    const channelId = await ctx.db.insert("channels", {
       name,
       workspaceId,
     });
+
+    await ctx.db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN })
+
+    return channelId
   },
 });
 

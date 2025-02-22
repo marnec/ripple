@@ -10,7 +10,8 @@
     "predev": "convex dev --until-success && node setup.mjs --once && convex dashboard",
     "build": "tsc -b && vite build",
     "lint": "tsc && eslint .  --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && git push origin main:main && npx convex deploy"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",

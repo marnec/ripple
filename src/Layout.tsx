@@ -2,12 +2,12 @@ import { AppSidebar } from "./components/AppSidebar";
 import { SidebarInset, SidebarTrigger, useSidebar } from "./components/ui/sidebar";
 
 import { Authenticated, Unauthenticated } from "convex/react";
-import { Outlet, useLocation, useRoutes } from "react-router-dom";
+import { useEffect } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { DynamicBreadcrumb } from "./components/Breadcrumb";
 import { Separator } from "./components/ui/separator";
 import { cn } from "./lib/utils";
 import { SignInForm } from "./SignInForm";
-import { useEffect } from "react";
 
 export function Layout() {
   const { pathname } = useLocation()

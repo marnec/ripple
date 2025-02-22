@@ -66,7 +66,7 @@ export const sendPushNotification = action({
 
         return webpush
           .sendNotification({ endpoint, expirationTime, keys }, notification, notificationOptions)
-          .then((result) => {
+          .then(() => {
             console.log(`Successfully sent notification to endpoint ID=${id}`);
           })
           .catch((error) => {

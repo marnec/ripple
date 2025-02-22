@@ -4,14 +4,14 @@ import { MessageList } from "@/components/Chat/MessageList";
 
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { useAction, useMutation } from "convex/react";
+import { useAction } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { useQueryWithStatus } from "../AppSidebar";
 import { LoadingSpinner } from "../ui/loading-spinner";
 import { toast } from "../ui/use-toast";
 import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
-import { useQueryWithStatus } from "../AppSidebar";
 
 export type ChatProps = {
   viewer: Id<"users">;
