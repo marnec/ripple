@@ -6,7 +6,7 @@ export const list = query({
   handler: async (ctx, { workspaceId }) => {
     return ctx.db
       .query("workspaceMembers")
-      .filter((q) => q.eq(q.field("workspaceId"), workspaceId))
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .collect();
   },
 });

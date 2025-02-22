@@ -15,7 +15,7 @@ import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
 
 interface MessageComposerProps {
-  handleSubmit: (content: string) => void;
+  handleSubmit: (content: string, plainText: string) => void;
 }
 
 const editorIsEmpty = (editor: BlockNoteEditor<any>) =>
@@ -65,7 +65,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   const sendMessage = () => {
     if (isEmpty || !editor) return;
-    handleSubmit(JSON.stringify(editor.document));
+    handleSubmit(JSON.stringify(editor.document), editor._tiptapEditor.getText());
     editorClear(editor);
   };
 

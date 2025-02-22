@@ -25,18 +25,12 @@ export default defineSchema({
   workspaceMembers: defineTable({
     userId: v.id("users"),
     workspaceId: v.id("workspaces"),
-    role: v.union(
-      v.literal(WorkspaceRole.ADMIN),
-      v.literal(WorkspaceRole.MEMBER),
-    ),
+    role: v.union(v.literal(WorkspaceRole.ADMIN), v.literal(WorkspaceRole.MEMBER)),
   })
+    .index("by_workspace", ["workspaceId"])
     .index("by_user", ["userId"])
-    .index("by_workspace_user", ["workspaceId", "userId"]),
-
-  channels: defineTable({
-    name: v.string(),
-    workspaceId: v.id("workspaces"),
-  }).index("by_workspace", ["workspaceId"]),
+    .index("by_workspace_user", ["workspaceId", "userId"])
+    .index("by_workspace_user_and_role", ["workspaceId", "userId", "role"]),
 
   workspaceInvites: defineTable({
     workspaceId: v.id("workspaces"),
@@ -49,7 +43,19 @@ export default defineSchema({
     ),
   })
     .index("by_email", ["email"])
-    .index("by_workspace", ["workspaceId"]),
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_by_email_by_status", ["workspaceId", "email", "status"])
+    .index("by_email_and_status", ["email", "status"]),
+
+  channels: defineTable({
+    name: v.string(),
+    workspaceId: v.id("workspaces"),
+  }).index("by_workspace", ["workspaceId"]),
+
+  channelMembers: defineTable({
+    channelId: v.id("channels"),
+    userId: v.id("users")
+  }).index("by_channel", ["channelId"]),
 
   signals: defineTable({
     roomId: v.optional(v.string()),
@@ -66,5 +72,18 @@ export default defineSchema({
     tags: v.optional(v.array(v.string())),
   })
     .index("by_workspace", ["workspaceId"])
-    .searchIndex('by_name', { searchField: 'name', filterFields: ['workspaceId'] }),
+    .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
+
+  pushSubscriptions: defineTable({
+    userId: v.id("users"),
+    device: v.string(),
+    endpoint: v.string(),
+    expirationTime: v.union(v.number(), v.null()),
+    keys: v.object({
+      p256dh: v.string(),
+      auth: v.string(),
+    }),
+  })
+    .index("by_endpoint", ["endpoint"])
+    .index("by_user", ["userId"]),
 });

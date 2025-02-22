@@ -1,12 +1,15 @@
-if ('serviceWorker' in navigator && 'PushManager' in window) {
-    navigator.serviceWorker.register('./service-worker.js').then(serviceWorkerRegistration => {
-      console.info('Service worker was registered.');
-      console.info({serviceWorkerRegistration});
-    }).catch(error => {
-      console.error('An error occurred while registering the service worker.');
-      console.error(error);
-    });
+// Push Event - Display Push Notification
+self.addEventListener('push', (event) => {
   
-  } else {
-    console.error('Browser does not support service workers or push messages.');
-  }
+  const data = event.data ? JSON.parse(event.data.text()) : { title: 'Default Title', body: 'Default Body' };
+
+  const options = {
+    body: data.body,
+    icon: '/icons/icon-192x192.png',
+    badge: '/icons/icon-72x72.png'
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});

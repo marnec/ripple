@@ -10,7 +10,7 @@ import { CreateChannelDialog } from "./CreateChannelDialog";
 export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
   channelId: Id<"channels"> | undefined;
-  onChannelSelect: (id: string) => void;
+  onChannelSelect: (id: string | null) => void;
 }
 
 export function ChannelSelectorList({

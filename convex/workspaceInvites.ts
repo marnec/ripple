@@ -17,11 +17,9 @@ export const create = mutation({
     // Check if user is admin of workspace
     const membership = await ctx.db
       .query("workspaceMembers")
-      .filter(q => q.and(
-        q.eq(q.field("workspaceId"), workspaceId),
-        q.eq(q.field("userId"), userId),
-        q.eq(q.field("role"), WorkspaceRole.ADMIN)
-      ))
+      .withIndex("by_workspace_user_and_role", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId).eq("role", WorkspaceRole.ADMIN),
+      )
       .first();
 
     if (!membership) throw new Error("Not authorized to invite users");
@@ -29,11 +27,9 @@ export const create = mutation({
     // Check if invite already exists
     const existingInvite = await ctx.db
       .query("workspaceInvites")
-      .filter(q => q.and(
-        q.eq(q.field("workspaceId"), workspaceId),
-        q.eq(q.field("email"), email),
-        q.eq(q.field("status"), InviteStatus.PENDING)
-      ))
+      .withIndex("by_workspace_by_email_by_status", (q) =>
+        q.eq("workspaceId", workspaceId).eq("email", email).eq("status", InviteStatus.PENDING),
+      )
       .first();
 
     if (existingInvite) throw new Error("Invite already sent");
@@ -41,16 +37,15 @@ export const create = mutation({
     // Check if user is already a member
     const existingMember = await ctx.db
       .query("users")
-      .filter(q => q.eq(q.field("email"), email))
+      .withIndex("email", (q) => q.eq("email", email))
       .first();
 
     if (existingMember) {
       const isMember = await ctx.db
         .query("workspaceMembers")
-        .filter(q => q.and(
-          q.eq(q.field("workspaceId"), workspaceId),
-          q.eq(q.field("userId"), existingMember._id)
-        ))
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", workspaceId).eq("userId", existingMember._id),
+        )
         .first();
 
       if (isMember) throw new Error("User is already a member");
@@ -87,14 +82,18 @@ export const listByEmail = query({
     if (!userId) return [];
 
     const user = await ctx.db.get(userId);
-    if (!user?.email) return [];
+    if (!user) return [];
+
+    const { email } = user;
+
+    if (!email) return [];
 
     const invites = await ctx.db
       .query("workspaceInvites")
-      .filter(q => q.and(
-        q.eq(q.field("email"), user.email),
-        q.eq(q.field("status"), InviteStatus.PENDING)
-      ))
+      .withIndex("by_email_and_status", (q) =>
+        q.eq("email", email).eq("status", InviteStatus.PENDING),
+      )
+
       .collect();
 
     return Promise.all(
@@ -102,16 +101,16 @@ export const listByEmail = query({
         const workspace = await ctx.db.get(invite.workspaceId);
         return {
           ...invite,
-          workspace
+          workspace,
         };
-      })
+      }),
     );
   },
 });
 
 export const accept = mutation({
   args: {
-    inviteId: v.id("workspaceInvites")
+    inviteId: v.id("workspaceInvites"),
   },
   handler: async (ctx, { inviteId }) => {
     const userId = await getAuthUserId(ctx);
@@ -128,10 +127,9 @@ export const accept = mutation({
     // Check if the user is already a member of the workspace
     const existingMembership = await ctx.db
       .query("workspaceMembers")
-      .filter(q => q.and(
-        q.eq(q.field("userId"), userId),
-        q.eq(q.field("workspaceId"), invite.workspaceId)
-      ))
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", invite.workspaceId).eq("userId", userId),
+      )
       .first();
 
     if (existingMembership) {
@@ -150,4 +148,4 @@ export const accept = mutation({
       status: InviteStatus.ACCEPTED,
     });
   },
-}); 
+});

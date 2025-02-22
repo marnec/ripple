@@ -1,6 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { action, mutation, query } from "./_generated/server";
+import { api } from "./_generated/api";
+import { Doc } from "./_generated/dataModel";
 
 export const list = query({
   args: { channelId: v.id("channels") },
@@ -63,5 +65,26 @@ export const send = mutation({
     if (!membership) throw new Error("Not a member of this workspace");
 
     await ctx.db.insert("messages", { body, userId, channelId });
+  },
+});
+
+export const sendMessage = action({
+  args: {
+    body: v.string(),
+    plainText: v.string(),
+    channelId: v.id("channels"),
+  },
+  handler: async (ctx, { body, channelId, plainText }) => {
+    const user: Doc<"users"> | null = await ctx.runQuery(api.users.viewer);
+
+    if (!user) {
+      throw new ConvexError("No user found for current auth id. That's weird");
+    }
+    await ctx.runMutation(api.messages.send, { body, channelId });
+    await ctx.runAction(api.pushNotifications.sendPushNotification, {
+      channelId,
+      body: plainText,
+      author: user.name || user.email || user._id,
+    });
   },
 });

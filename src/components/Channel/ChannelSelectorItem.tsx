@@ -9,12 +9,16 @@ import {
 } from "../ui/dropdown-menu";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Id, Doc } from "../../../convex/_generated/dataModel";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
 export interface ChannelSelectorItemProps {
   channel: Doc<"channels">;
   channelId: Id<"channels"> | undefined;
-  onChannelSelect: (id: string) => void;
+  onChannelSelect: (id: string | null) => void;
 }
+
+
 
 export function ChannelSelectorItem({
   channelId,
@@ -22,6 +26,14 @@ export function ChannelSelectorItem({
   onChannelSelect,
 }: ChannelSelectorItemProps) {
   const isMobile = useIsMobile();
+  const deleteChannel = useMutation(api.channels.remove);
+
+  const handleChannelDelete = async (id: Id<"channels">) =>  {
+    deleteChannel({ id: channel._id })
+
+    onChannelSelect(null)
+    
+  }
 
   return (
     <SidebarMenuItem>
@@ -51,9 +63,9 @@ export function ChannelSelectorItem({
             <span>Manage channel (Coming soon)</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleChannelDelete(channel._id)}>
             <Trash2 className="text-muted-foreground" />
-            <span>Delete channel (Coming soon)</span>
+            <span>Delete channel</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

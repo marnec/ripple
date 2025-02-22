@@ -15,6 +15,8 @@ import type * as emails from "../emails.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
 import type * as prosemirror from "../prosemirror.js";
+import type * as pushNotifications from "../pushNotifications.js";
+import type * as pushSubscription from "../pushSubscription.js";
 import type * as signaling from "../signaling.js";
 import type * as users from "../users.js";
 import type * as workspaceInvites from "../workspaceInvites.js";
@@ -42,6 +44,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   messages: typeof messages;
   prosemirror: typeof prosemirror;
+  pushNotifications: typeof pushNotifications;
+  pushSubscription: typeof pushSubscription;
   signaling: typeof signaling;
   users: typeof users;
   workspaceInvites: typeof workspaceInvites;

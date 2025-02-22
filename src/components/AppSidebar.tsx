@@ -15,27 +15,34 @@ import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { makeUseQueryWithStatus } from "convex-helpers/react";
+import usePushNotifications from "@/hooks/use-push-notifications";
 
 export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
 
 export function AppSidebar() {
   const navigate = useNavigate();
-  const { setOpenMobile } = useSidebar()
-  
+  const { setOpenMobile } = useSidebar();
+
   const { workspaceId, channelId, documentId } = useParams<QueryParams>();
+
+  const { subscribeUser } = usePushNotifications();
 
   const workspaces = useQuery(api.workspaces.list);
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
 
-  const handleChannelSelect = (id: string) => {
-    setOpenMobile(false);
-
-    navigate(`channel/${id}`);
+  const handleChannelSelect = (id: string | null) => {
+    if (!id) {
+      navigate(`/workspace/${workspaceId}`);
+    } else {
+      navigate(`channel/${id}`);
+      setOpenMobile(false);
+      subscribeUser();
+    }
   };
 
   const handleDocumentSelect = (id: string | null) => {
     setOpenMobile(false);
-    
+
     if (!id) {
       navigate("document");
     } else {
