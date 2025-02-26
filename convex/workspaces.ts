@@ -41,7 +41,7 @@ export const list = query({
 
     const workspaceIds = memberships.map((m) => m.workspaceId);
 
-    return await Promise.all(
+    return Promise.all(
       workspaceIds.map(async (id) => {
         const workspace = await ctx.db.get(id);
         return workspace!;

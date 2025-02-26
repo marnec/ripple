@@ -6,7 +6,9 @@ import {
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { QueryParams } from "@/types";
+import usePushNotifications from "@/hooks/use-push-notifications";
+import { QueryParams } from "@shared/types/routes";
+import { makeUseQueryWithStatus } from "convex-helpers/react";
 import { useQueries, useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
@@ -14,8 +16,6 @@ import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { NavUser } from "./UserMenu";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
-import { makeUseQueryWithStatus } from "convex-helpers/react";
-import usePushNotifications from "@/hooks/use-push-notifications";
 
 export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
 
@@ -39,6 +39,10 @@ export function AppSidebar() {
       subscribeUser();
     }
   };
+
+  const handleManageChannel = (id: string) => {
+    navigate(`channel/${id}/settings`)
+  }
 
   const handleDocumentSelect = (id: string | null) => {
     setOpenMobile(false);
@@ -73,6 +77,7 @@ export function AppSidebar() {
                 channelId={channelId}
                 workspaceId={workspaceId}
                 onChannelSelect={handleChannelSelect}
+                onManageChannel={handleManageChannel}
               />
               <DocumentSelectorList
                 workspaceId={workspaceId}

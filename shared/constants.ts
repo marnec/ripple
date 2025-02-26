@@ -8,4 +8,5 @@ export const ICE_SERVERS = {
   ],
   iceCandidatePoolSize: 10,
 };
-export const DEFAULT_DOC_NAME = `Untitled` as  const
+export const DEFAULT_DOC_NAME = `Untitled` as const;
+

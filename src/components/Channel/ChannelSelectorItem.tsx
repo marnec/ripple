@@ -16,6 +16,7 @@ export interface ChannelSelectorItemProps {
   channel: Doc<"channels">;
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
+  onManageChannel: (id: string) =>  void
 }
 
 
@@ -24,6 +25,7 @@ export function ChannelSelectorItem({
   channelId,
   channel,
   onChannelSelect,
+  onManageChannel
 }: ChannelSelectorItemProps) {
   const isMobile = useIsMobile();
   const deleteChannel = useMutation(api.channels.remove);
@@ -58,9 +60,9 @@ export function ChannelSelectorItem({
           side={isMobile ? "bottom" : "right"}
           align={isMobile ? "end" : "start"}
         >
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onManageChannel(channel._id)}>
             <Folder className="text-muted-foreground" />
-            <span>Manage channel (Coming soon)</span>
+            <span>Manage channel</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => handleChannelDelete(channel._id)}>

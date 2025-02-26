@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ChannelRole } from "@shared/enums";
 
@@ -23,11 +23,15 @@ export const create = mutation({
     const channelId = await ctx.db.insert("channels", {
       name,
       workspaceId,
+      roleCount: {
+        [ChannelRole.MEMBER]: 0,
+        [ChannelRole.ADMIN]: 1,
+      },
     });
 
-    await ctx.db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN })
+    await ctx.db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN });
 
-    return channelId
+    return channelId;
   },
 });
 
@@ -70,5 +74,27 @@ export const remove = mutation({
     await Promise.all(channelMessages.map((message) => ctx.db.delete(message._id)));
 
     await ctx.db.delete(id);
+  },
+});
+
+export const listByUserMembership = query({
+  args: { workspaceId: v.id("workspaces") },
+  handler: async (ctx, { workspaceId }) => {
+    const userId = await getAuthUserId(ctx);
+
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    return ctx.db
+      .query("channelMembers")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect()
+      .then((channelMembers) =>
+        Promise.all(channelMembers.map(({ channelId }) => ctx.db.get(channelId))),
+      )
+      .then((channels) =>
+        channels
+          .filter((c) => c !== null)
+          .filter((channel) => channel.workspaceId === workspaceId),
+      );
   },
 });

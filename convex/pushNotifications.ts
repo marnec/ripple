@@ -5,19 +5,19 @@ import { api } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import * as webpush from "web-push";
-import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const sendPushNotification = action({
-  args: { channelId: v.id("channels"), body: v.string(), author: v.string() },
+  args: {
+    channelId: v.id("channels"),
+    body: v.string(),
+    author: v.object({
+      name: v.string(),
+      id: v.id("users"),
+    }),
+  },
   handler: async (ctx, { author, body, channelId }) => {
-    const currentUserId = await getAuthUserId(ctx);
-
-    if (!currentUserId) {
-      throw new ConvexError("Not authenticated");
-    }
-
     const notification = JSON.stringify({
-      title: author,
+      title: author.name,
       body,
     });
 
@@ -46,7 +46,7 @@ export const sendPushNotification = action({
 
     if (!channel) throw new ConvexError(`Could not find channel=${channelId}`);
 
-    const workspaceUsers = await ctx.runQuery(api.workspaceMembers.list, {
+    const workspaceUsers = await ctx.runQuery(api.workspaceMembers.byWorkspace, {
       workspaceId: channel?.workspaceId,
     });
 
@@ -55,7 +55,7 @@ export const sendPushNotification = action({
       {
         usersIds: workspaceUsers
           .map(({ userId }) => userId)
-          .filter((userId) => userId !== currentUserId),
+          .filter((userId) => userId !== author.id),
       },
     );
 

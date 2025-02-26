@@ -43,12 +43,19 @@ export const list = query({
 
 export const send = mutation({
   args: {
+    isomorphicId: v.string(),
     body: v.string(),
+    plainText: v.string(),
     channelId: v.id("channels"),
   },
-  handler: async (ctx, { body, channelId }) => {
+  handler: async (ctx, { body, channelId, plainText, isomorphicId }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const user: Doc<"users"> | null = await ctx.db.get(userId);
+
+    if (!user) throw new ConvexError(`No users found with id=${userId}`);
 
     // Get channel to check workspace membership
     const channel = await ctx.db.get(channelId);
@@ -64,27 +71,15 @@ export const send = mutation({
 
     if (!membership) throw new Error("Not a member of this workspace");
 
-    await ctx.db.insert("messages", { body, userId, channelId });
-  },
-});
+    await ctx.db.insert("messages", { body, userId, channelId, plainText, isomorphicId });
 
-export const sendMessage = action({
-  args: {
-    body: v.string(),
-    plainText: v.string(),
-    channelId: v.id("channels"),
-  },
-  handler: async (ctx, { body, channelId, plainText }) => {
-    const user: Doc<"users"> | null = await ctx.runQuery(api.users.viewer);
-
-    if (!user) {
-      throw new ConvexError("No user found for current auth id. That's weird");
-    }
-    await ctx.runMutation(api.messages.send, { body, channelId });
-    await ctx.runAction(api.pushNotifications.sendPushNotification, {
+    ctx.scheduler.runAfter(0, api.pushNotifications.sendPushNotification, {
       channelId,
       body: plainText,
-      author: user.name || user.email || user._id,
+      author: {
+        name: user.name || user.email || user._id,
+        id: user._id,
+      },
     });
   },
 });

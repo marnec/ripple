@@ -2,7 +2,11 @@ import { authTables } from "@convex-dev/auth/server";
 import { InviteStatus } from "@shared/enums/inviteStatus";
 import { ChannelRole, WorkspaceRole } from "@shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { v, VFloat64 } from "convex/values";
+
+export const channelRoleSchema = v.union(
+  ...Object.values(ChannelRole).map((role) => v.literal(role)),
+);
 
 // The schema is normally optional, but Convex Auth
 // requires indexes defined on `authTables`.
@@ -12,9 +16,13 @@ export default defineSchema({
 
   messages: defineTable({
     userId: v.id("users"),
+    isomorphicId: v.string(), // to use as key in react (client generated, same in optimistic update and db)
     body: v.string(),
+    plainText: v.string(), // to filter messages
     channelId: v.id("channels"),
-  }).index("by_channel", ["channelId"]),
+  })
+    .index("by_channel", ["channelId"])
+    .searchIndex("by_text", { searchField: "plainText", filterFields: ["channelId"] }),
 
   workspaces: defineTable({
     name: v.string(),
@@ -46,13 +54,24 @@ export default defineSchema({
   channels: defineTable({
     name: v.string(),
     workspaceId: v.id("workspaces"),
+    roleCount: v.object({
+      [ChannelRole.ADMIN]: v.number(),
+      [ChannelRole.MEMBER]: v.number(),
+    } satisfies Record<
+      (typeof ChannelRole)[keyof typeof ChannelRole],
+      VFloat64<number, "required">
+    >),
   }).index("by_workspace", ["workspaceId"]),
 
   channelMembers: defineTable({
     channelId: v.id("channels"),
     userId: v.id("users"),
-    role: v.union(...Object.values(ChannelRole).map((role) => v.literal(role))),
-  }).index("by_channel", ["channelId"]),
+    role: channelRoleSchema,
+  })
+    .index("by_user", ["userId"])
+    .index("by_channel", ["channelId"])
+    .index("by_channel_user", ["channelId", "userId"])
+    .index("by_channel_role", ["channelId", "role"]),
 
   signals: defineTable({
     roomId: v.optional(v.string()),

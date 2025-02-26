@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as channelMembers from "../channelMembers.js";
 import type * as channels from "../channels.js";
 import type * as documents from "../documents.js";
 import type * as emails from "../emails.js";
@@ -38,6 +39,7 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  channelMembers: typeof channelMembers;
   channels: typeof channels;
   documents: typeof documents;
   emails: typeof emails;

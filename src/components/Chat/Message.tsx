@@ -39,7 +39,7 @@ export function Message({
       <div className="mb-1 text-sm font-medium">{authorName}</div>
       <div
         className={cn(
-          "rounded-xl bg-muted px-3 py-2",
+          "rounded-xl bg-muted px-3 py-2 transition-all",
           author === viewer ? "rounded-tr-none" : "rounded-tl-none",
         )}
         dangerouslySetInnerHTML={{ __html: sanitize(html) }}

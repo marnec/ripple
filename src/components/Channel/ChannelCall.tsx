@@ -1,9 +1,10 @@
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { useParams } from "react-router-dom";
 import GroupVideoCall from "../GroupVideoCall/GroupVideoCall";
+import { QueryParams } from "@shared/types/routes";
 
 export const ChannelVideoCall = () => {
-  const { channelId } = useParams();
+  const { channelId } = useParams<QueryParams>();
 
   if (!channelId) {
     console.error(

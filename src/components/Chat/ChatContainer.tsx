@@ -3,9 +3,10 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useQueryWithStatus } from "../AppSidebar";
 import { Chat } from "./Chat";
+import { QueryParams } from "@shared/types/routes";
 
 export function ChatContainer() {
-  const { channelId } = useParams();
+  const { channelId } = useParams<QueryParams>();
   const { data: user, isSuccess, isError } = useQueryWithStatus(api.users.viewer);
 
   return (

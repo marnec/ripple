@@ -15,17 +15,16 @@ import { WorkspaceSettings } from "./components/Workspace/WorkspaceSettings.tsx"
 import "./index.css";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage.tsx";
 import { UserProfilePage } from "./pages/UserProfilePage.tsx";
+import { ChannelSettings } from "./components/Channel/ChannelSettings.tsx";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 window.addEventListener("load", () => {
   if ("serviceWorker" in navigator && "PushManager" in window) {
-    navigator.serviceWorker
-      .register("/service-worker.js")
-      .catch((error) => {
-        console.error("An error occurred while registering the service worker.");
-        console.error(error);
-      });
+    navigator.serviceWorker.register("/service-worker.js").catch((error) => {
+      console.error("An error occurred while registering the service worker.");
+      console.error(error);
+    });
   } else {
     console.error("Browser does not support service workers or push messages.");
   }
@@ -46,8 +45,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/workspace/:workspaceId/" element={<App />}>
               <Route index element={<WorkspaceDetails />} />
               <Route path="settings" element={<WorkspaceSettings />} />
-              <Route path="channel/:channelId" element={<ChatContainer />} />
-              <Route path="channel/:channelId/videocall" element={<ChannelVideoCall />} />
+
+              <Route path="channel">
+                <Route path=":channelId" element={<ChatContainer />} />
+                <Route path=":channelId/videocall" element={<ChannelVideoCall />} />
+                <Route path=":channelId/settings" element={<ChannelSettings />} />
+              </Route>
+
               <Route path="document" element={<Documents />} />
               <Route path="document/:documentId" element={<DocumentEditorContainer />} />
             </Route>

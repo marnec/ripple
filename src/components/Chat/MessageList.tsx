@@ -1,20 +1,25 @@
-import { ReactNode, useEffect, useRef } from "react";
-import { ScrollArea } from "../ui/scroll-area";
+import { Children, ReactNode, useLayoutEffect, useRef } from "react";
 import { useResizeObserver } from "usehooks-ts";
+import { ScrollArea } from "../ui/scroll-area";
 
-export function MessageList({ children }: { messages: unknown; children: ReactNode }) {
+export function MessageList({ children }: { children: ReactNode }) {
   const messageListRef = useRef<HTMLOListElement>(null);
   const { height = 0 } = useResizeObserver({ ref: messageListRef, box: "border-box" });
+  const prevChildrenCountRef = useRef(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!messageListRef?.current) return;
 
-    messageListRef?.current?.scrollIntoView({
+    const childrenCount = Children.count(children);
+
+    messageListRef.current.scrollIntoView({
       behavior: "smooth",
       block: "end",
       inline: "end",
     });
-  }, [height]);
+
+    prevChildrenCountRef.current = childrenCount;
+  }, [height, children]);
 
   return (
     <ScrollArea className="h-full">

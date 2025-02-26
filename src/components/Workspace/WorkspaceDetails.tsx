@@ -2,9 +2,10 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useParams } from "react-router-dom";
+import { QueryParams } from "@shared/types/routes";
 
 export function WorkspaceDetails() {
-  const { workspaceId } = useParams();
+  const { workspaceId } = useParams<QueryParams>();
 
   // Fetch workspace details
   const workspace = useQuery(api.workspaces.get, {
@@ -12,7 +13,7 @@ export function WorkspaceDetails() {
   });
 
   // Fetch members of the workspace
-  const members = useQuery(api.workspaceMembers.list, {
+  const members = useQuery(api.workspaceMembers.byWorkspace, {
     workspaceId: workspaceId as Id<"workspaces">,
   });
 
