@@ -42,25 +42,25 @@ const optimisticallyAddMemberToChannel: OptimisticUpdate<
   ]);
 };
 
-const optimisticallyRemoveFromChannel: OptimisticUpdate<
-  FunctionArgs<typeof api.channelMembers.removeFromChannel>
-> = (lqs, { channelId, userId }) => {
-  const existingChannelMembers = lqs.getQuery(api.channelMembers.membersByChannel, {
-    channelId,
-  });
+// const optimisticallyRemoveFromChannel: OptimisticUpdate<
+//   FunctionArgs<typeof api.channelMembers.removeFromChannel>
+// > = (lqs, { channelId, userId }) => {
+//   const existingChannelMembers = lqs.getQuery(api.channelMembers.membersByChannel, {
+//     channelId,
+//   });
 
-  if (existingChannelMembers === undefined) return;
+//   if (existingChannelMembers === undefined) return;
 
-  const indexOfItemToRemove = existingChannelMembers.findIndex(
-    (member) => member.userId === userId,
-  );
+//   const indexOfItemToRemove = existingChannelMembers.findIndex(
+//     (member) => member.userId === userId,
+//   );
 
-  if (indexOfItemToRemove === -1) return;
+//   if (indexOfItemToRemove === -1) return;
 
-  existingChannelMembers.splice(indexOfItemToRemove, 1);
+//   existingChannelMembers.splice(indexOfItemToRemove, 1);
 
-  lqs.setQuery(api.channelMembers.membersByChannel, { channelId }, existingChannelMembers);
-};
+//   lqs.setQuery(api.channelMembers.membersByChannel, { channelId }, existingChannelMembers);
+// };
 
 type ChannelMembershipSelectionProps = {
   workspaceMembers: Doc<"users">[];

@@ -1,8 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { action, mutation, query } from "./_generated/server";
 import { api } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
+import { mutation, query } from "./_generated/server";
 
 export const list = query({
   args: { channelId: v.id("channels") },

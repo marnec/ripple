@@ -1,4 +1,3 @@
-import { QueryParams } from "@/types";
 import { BlockNoteEditor } from "@blocknote/core";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useBlockNoteSync } from "@convex-dev/prosemirror-sync/blocknote";
@@ -7,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { QueryParams } from "@shared/types/routes";
 
 export function DocumentEditorContainer() {
   const { documentId } = useParams<QueryParams>();
@@ -37,14 +37,14 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     setUpEditor();
   }, [sync, documentId]);
 
-
-
   return (
     <>
-    {editor && <div className="px-20 max-w-full flex-1 animate-fade-in">
-      <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
-      <BlockNoteView editor={editor} />
-    </div>}
+      {editor && (
+        <div className="px-20 max-w-full flex-1 animate-fade-in">
+          <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
+          <BlockNoteView editor={editor} />
+        </div>
+      )}
     </>
   );
 }
