@@ -3,15 +3,16 @@ import { Message } from "@/components/Chat/Message";
 import { MessageList } from "@/components/Chat/MessageList";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
+import { Button } from "../ui/button";
 import { LoadingSpinner } from "../ui/loading-spinner";
 import { toast } from "../ui/use-toast";
 import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
-import { useContext } from "react";
-import { UserContext } from "@/App";
+import { MessageWithAuthor } from "@shared/types/channel";
+import { Separator } from "../ui/separator";
 
 export type ChatProps = {
   viewer: Id<"users">;
@@ -19,56 +20,68 @@ export type ChatProps = {
 };
 
 export function Chat({ viewer, channelId }: ChatProps) {
-  const messages = useQuery(api.messages.list, { channelId });
-  const currentUser = useContext(UserContext);
+  const {
+    results: messages,
+    status,
+    isLoading,
+    loadMore,
+  } = usePaginatedQuery(api.messages.list, { channelId }, { initialNumItems: 25 });
 
-  const sendMessage = useMutation(api.messages.send).withOptimisticUpdate(
-    (localStore, { channelId, body, isomorphicId, plainText }) => {
-      const messages = localStore.getQuery(api.messages.list, { channelId });
+  const sendMessage = useMutation(api.messages.send);
 
-      if (messages === undefined) {
-        console.warn("Could not run optimistic update since api.messages.list is undefined");
-        return;
-      }
+  const handleLoadMore = () => {
+    if (!isLoading) {
+      loadMore(25);
+    }
+  };
 
-      localStore.setQuery(api.messages.list, { channelId }, [
-        {
-          _id: `optimistic-${isomorphicId}` as Id<"messages">,
-          _creationTime: +new Date(),
-          isomorphicId,
-          plainText,
-          author: currentUser?.name ?? currentUser?.email ?? "...",
-          body,
-          channelId,
-          userId: viewer,
-        },
-        ...messages,
-      ]);
-    },
-  );
-
-  const handleSubmit = (body: string, plainText: string) => {
+  const handleSubmit = async (body: string, plainText: string) => {
     const isomorphicId = crypto.randomUUID();
 
-    sendMessage({ body, plainText, channelId, isomorphicId }).catch((error) => {
+    await sendMessage({ body, plainText, channelId, isomorphicId }).catch((error) => {
       toast({ variant: "destructive", title: "could not send message", content: error });
     });
   };
 
+  const wereSentInDifferentDays = (
+    message1: MessageWithAuthor,
+    message2: MessageWithAuthor,
+  ): boolean => {
+    return (
+      new Date(message1._creationTime).toDateString() !==
+      new Date(message2._creationTime).toDateString()
+    );
+  };
+
   return (
     <>
-      <MessageList>
+      <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
         {!messages && <LoadingSpinner className="h-12 w-12 self-center" />}
+
         {messages &&
-          messages.map((message) => (
-            <Message
-              key={message.isomorphicId}
-              author={message.userId}
-              authorName={message.author}
-              viewer={viewer}
-              content={message.body}
-            ></Message>
+          messages.map((message, index) => (
+            <>
+              {index && wereSentInDifferentDays(message, messages[index - 1]) && (
+                <>
+                  <Separator orientation="horizontal" className="-mt-7" />
+                  <div className="self-center text-muted px-2 z-10">
+                    {new Date(message._creationTime).toDateString()}
+                  </div>
+                </>
+              )}
+              <Message key={message.isomorphicId} message={message}></Message>
+            </>
           ))}
+        {messages && (
+          <Button
+            variant="outline"
+            className="self-center sm:w-fit w-full"
+            disabled={status === "Exhausted"}
+            onClick={() => loadMore(25)}
+          >
+            Load more...
+          </Button>
+        )}
       </MessageList>
 
       <MessageComposer handleSubmit={handleSubmit}></MessageComposer>
