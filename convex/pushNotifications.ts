@@ -69,7 +69,7 @@ export const sendPushNotification = action({
           .then(() => {
             console.log(`Successfully sent notification to endpoint ID=${id}`);
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             console.log(
               `An error occurred while sending notification to endpoint=${id}, err=${error}`,
             );

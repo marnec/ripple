@@ -35,7 +35,7 @@ export function Message({ message }: MessageProps) {
       <div
         className={cn("flex items-center gap-3", userId === user?._id ? "flex-row" : "flex-row-reverse")}
       >
-        <div className="mb-1 text-xs text-muted">{new Date(_creationTime).toLocaleTimeString()}</div>
+        <div className="mb-1 text-xs text-muted">{new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' })}</div>
         <div className="mb-1 text-sm font-medium">{author}</div>
       </div>
       <div

@@ -61,10 +61,10 @@ export function Chat({ viewer, channelId }: ChatProps) {
         {messages &&
           messages.map((message, index) => (
             <>
-              {index && wereSentInDifferentDays(message, messages[index - 1]) && (
+              {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
                 <>
                   <Separator orientation="horizontal" className="-mt-7" />
-                  <div className="self-center text-muted px-2 z-10">
+                  <div className="self-center text-muted px-2 z-10 bg-card">
                     {new Date(message._creationTime).toDateString()}
                   </div>
                 </>
