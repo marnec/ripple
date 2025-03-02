@@ -1,4 +1,4 @@
-import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, locales } from "@blocknote/core";
+import { BlockIdentifier, BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, locales } from "@blocknote/core";
 import { useCreateBlockNote, useEditorContentOrSelectionChange } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import {
@@ -10,9 +10,10 @@ import {
   UnderlineIcon,
 } from "@radix-ui/react-icons";
 import { useTheme } from "next-themes";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../ui/button";
 import { Toggle } from "../ui/toggle";
+import { useChatContext } from "./Chat";
 
 interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
@@ -42,6 +43,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
+  const { editingMessage } = useChatContext();
 
   const editorConfig = useMemo(
     () => ({
@@ -51,6 +53,16 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     }),
     [],
   );
+
+  useEffect(() => {
+    if (!editor || !editingMessage.body || !editingMessage.id) return;
+
+    
+    editor._tiptapEditor.commands.clearContent()
+
+
+    editor.replaceBlocks([editor.document[0].id], JSON.parse(editingMessage.body))
+  }, [editingMessage])
 
   const editor = useCreateBlockNote(editorConfig);
 
@@ -71,6 +83,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   useEditorContentOrSelectionChange(() => {
     if (!editor) return;
+
+
     const { bold, italic, underline, strike, code } = editor.getActiveStyles();
 
     setIsBold(!!bold);

@@ -91,3 +91,9 @@ export const send = mutation({
     });
   },
 });
+
+export const update = mutation({
+  args: { id: v.id("messages"), body: v.string() }, handler: (ctx, { id, body }) => {
+    return ctx.db.patch(id, { body })
+  }
+})

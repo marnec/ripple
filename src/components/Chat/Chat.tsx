@@ -3,23 +3,41 @@ import { Message } from "@/components/Chat/Message";
 import { MessageList } from "@/components/Chat/MessageList";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
+import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery } from "convex/react";
+import { createContext, useContext, useState } from "react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "../ui/button";
 import { LoadingSpinner } from "../ui/loading-spinner";
+import { Separator } from "../ui/separator";
 import { toast } from "../ui/use-toast";
 import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
-import { MessageWithAuthor } from "@shared/types/channel";
-import { Separator } from "../ui/separator";
+
+export const useChatContext = () => {
+  const context = useContext(ChatContext);
+  if (!context) throw new Error("useChatContext must be used within ChatProvider");
+  return context;
+}
+
+
+type EditingMessage = { body: Id<"messages"> | null, id: string | null }
+
+type EditingMessageContext = {
+  editingMessage: EditingMessage
+  setEditingMessage: (msg: EditingMessage) => void
+}
+
+export const ChatContext = createContext<EditingMessageContext | null>(null);
 
 export type ChatProps = {
   viewer: Id<"users">;
   channelId: Id<"channels">;
 };
 
-export function Chat({ viewer, channelId }: ChatProps) {
+export function Chat({ channelId }: ChatProps) {
+  const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null })
   const {
     results: messages,
     status,
@@ -28,6 +46,7 @@ export function Chat({ viewer, channelId }: ChatProps) {
   } = usePaginatedQuery(api.messages.list, { channelId }, { initialNumItems: 25 });
 
   const sendMessage = useMutation(api.messages.send);
+  const editMessage = useMutation(api.messages.update);
 
   const handleLoadMore = () => {
     if (!isLoading) {
@@ -36,11 +55,20 @@ export function Chat({ viewer, channelId }: ChatProps) {
   };
 
   const handleSubmit = async (body: string, plainText: string) => {
-    const isomorphicId = crypto.randomUUID();
+    if (editingMessage.id) {
 
-    await sendMessage({ body, plainText, channelId, isomorphicId }).catch((error) => {
-      toast({ variant: "destructive", title: "could not send message", content: error });
-    });
+      await editMessage(editingMessage)
+
+      setEditingMessage({ id: null, body: null })
+    } else {
+
+      const isomorphicId = crypto.randomUUID();
+
+      await sendMessage({ body, plainText, channelId, isomorphicId }).catch((error) => {
+        toast({ variant: "destructive", title: "could not send message", content: error });
+      });
+    }
+
   };
 
   const wereSentInDifferentDays = (
@@ -54,7 +82,7 @@ export function Chat({ viewer, channelId }: ChatProps) {
   };
 
   return (
-    <>
+    <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
       <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
         {!messages && <LoadingSpinner className="h-12 w-12 self-center" />}
 
@@ -85,6 +113,6 @@ export function Chat({ viewer, channelId }: ChatProps) {
       </MessageList>
 
       <MessageComposer handleSubmit={handleSubmit}></MessageComposer>
-    </>
+    </ ChatContext.Provider>
   );
 }
