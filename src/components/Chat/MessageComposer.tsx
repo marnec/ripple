@@ -1,4 +1,4 @@
-import { BlockIdentifier, BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, locales } from "@blocknote/core";
+import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, locales } from "@blocknote/core";
 import { useCreateBlockNote, useEditorContentOrSelectionChange } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import {
@@ -55,14 +55,16 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   );
 
   useEffect(() => {
-    if (!editor || !editingMessage.body || !editingMessage.id) return;
+    if (!editor?._tiptapEditor?.isInitialized) return;
 
-    
-    editor._tiptapEditor.commands.clearContent()
+    editor._tiptapEditor.commands.clearContent();
 
-
-    editor.replaceBlocks([editor.document[0].id], JSON.parse(editingMessage.body))
-  }, [editingMessage])
+    if (editingMessage.id && editingMessage.body) {
+      editor.tryParseHTMLToBlocks(editingMessage.body).then((document) => {
+        editor.replaceBlocks([editor.document[0].id], document);
+      });
+    }
+  }, [editingMessage]);
 
   const editor = useCreateBlockNote(editorConfig);
 
@@ -75,15 +77,17 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const [isUnderline, setIsUnderline] = useState(underline);
   const [isEmpty, setIsEmpty] = useState(editorIsEmpty(editor));
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (isEmpty || !editor) return;
-    handleSubmit(JSON.stringify(editor.document), editor._tiptapEditor.getText());
+    const body = await editor.blocksToFullHTML(editor.document);
+    const plainText = editor._tiptapEditor.getText();
+
+    handleSubmit(body, plainText);
     editorClear(editor);
   };
 
   useEditorContentOrSelectionChange(() => {
     if (!editor) return;
-
 
     const { bold, italic, underline, strike, code } = editor.getActiveStyles();
 

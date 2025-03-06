@@ -24,13 +24,13 @@ export function UserProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!user?.id) {
+    if (!user?._id) {
         navigate("/");
         return;
     }
     
     try {
-      await updateUser({ userId: user?.id as Id<"users">, name });
+      await updateUser({ userId: user?._id as Id<"users">, name });
       toast({
         title: "Profile updated",
         description: "Your profile information has been updated successfully.",

@@ -1,11 +1,11 @@
 import { UserContext } from "@/App";
 import { useSanitize } from "@/hooks/use-sanitize";
 import { cn } from "@/lib/utils";
-import { useCreateBlockNote } from "@blocknote/react";
-import { ContextMenuTrigger } from "@radix-ui/react-context-menu";
 import { MessageWithAuthor } from "@shared/types/channel";
-import { useContext, useEffect, useState } from "react";
-import { ContextMenu, ContextMenuContent, ContextMenuItem } from "../ui/context-menu";
+import { useMutation } from "convex/react";
+import { useCallback, useContext } from "react";
+import { api } from "../../../convex/_generated/api";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../ui/context-menu";
 import { useChatContext } from "./Chat";
 
 type MessageProps = {
@@ -14,51 +14,48 @@ type MessageProps = {
 
 export function Message({ message }: MessageProps) {
   const { author, body, userId, _creationTime } = message;
-  const [html, setHTML] = useState<string>("");
   const user = useContext(UserContext);
   const sanitize = useSanitize();
+  
+  const userIsAuthor = userId === user?._id;
 
-  const editor = useCreateBlockNote({ initialContent: JSON.parse(body) });
   const { setEditingMessage } = useChatContext()
+  const deleteMessage = useMutation(api.messages.remove)
 
-  useEffect(() => {
-    const onChange = async () => {
-      const html = await editor.blocksToFullHTML(editor.document);
-      setHTML(html);
-    };
-    onChange();
-  }, []);
+  const handleEdit = useCallback(() => setEditingMessage({ id: message._id, body: message.body }), [message])
+  const handleDelete = useCallback(() => deleteMessage({ id: message._id }), [message])
 
   return (
     <ContextMenu>
       <li
         className={cn(
           "flex flex-col text-sm",
-          userId === user?._id ? "items-end self-end" : "items-start self-start",
+          userIsAuthor ? "items-end self-end" : "items-start self-start",
         )}
       >
         <div
-          className={cn("flex items-center gap-3", userId === user?._id ? "flex-row" : "flex-row-reverse")}
+          className={cn("flex items-center gap-3", userIsAuthor ? "flex-row" : "flex-row-reverse")}
         >
           <div className="mb-1 text-xs text-muted">{new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' })}</div>
           <div className="mb-1 text-sm font-medium">{author}</div>
         </div>
 
-        <ContextMenuTrigger >
+        <ContextMenuTrigger disabled={userId !== user?._id}>
           <div
             className={cn(
               "rounded-xl bg-muted px-3 py-2 transition-all",
-              userId === user?._id ? "rounded-tr-none" : "rounded-tl-none",
+              userIsAuthor ? "rounded-tr-none" : "rounded-tl-none",
             )}
-            dangerouslySetInnerHTML={{ __html: sanitize(html) }}
-          ></div>
+            dangerouslySetInnerHTML={{ __html: sanitize(body) }}
+          >
+          </div>
         </ContextMenuTrigger>
       </li>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => setEditingMessage({ id: message._id, body: message.body })}>Edit</ContextMenuItem>
-        <ContextMenuItem>Delete (coming soon)</ContextMenuItem>
+        <ContextMenuItem onClick={handleEdit}>Edit</ContextMenuItem>
+        <ContextMenuItem onClick={handleDelete}>Delete</ContextMenuItem>
       </ContextMenuContent>
-    </ContextMenu>
+    </ContextMenu> 
 
   );
 }

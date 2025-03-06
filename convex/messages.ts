@@ -30,7 +30,7 @@ export const list = query({
     // Grab the most recent messages
     const messagesPage = await ctx.db
       .query("messages")
-      .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+      .withIndex("undeleted_by_channel", (q) => q.eq("channelId", channelId).eq("deleted", false))
       .order("desc")
       .paginate(paginationOpts);
 
@@ -77,9 +77,16 @@ export const send = mutation({
       )
       .first();
 
-    if (!membership) throw new Error("Not a member of this workspace");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
-    await ctx.db.insert("messages", { body, userId, channelId, plainText, isomorphicId });
+    await ctx.db.insert("messages", {
+      body,
+      userId,
+      channelId,
+      plainText,
+      isomorphicId,
+      deleted: false,
+    });
 
     ctx.scheduler.runAfter(0, api.pushNotifications.sendPushNotification, {
       channelId,
@@ -93,7 +100,23 @@ export const send = mutation({
 });
 
 export const update = mutation({
-  args: { id: v.id("messages"), body: v.string() }, handler: (ctx, { id, body }) => {
-    return ctx.db.patch(id, { body })
-  }
-})
+  args: { id: v.id("messages"), body: v.string(), plainText: v.string() },
+  handler: async (ctx, { id, body, plainText }) => {
+    const userId = await getAuthUserId(ctx);
+
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    return ctx.db.patch(id, { body, plainText });
+  },
+});
+
+export const remove = mutation({
+  args: { id: v.id("messages") },
+  handler: async (ctx, { id }) => {
+    const userId = await getAuthUserId(ctx);
+
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    return ctx.db.patch(id, { deleted: true });
+  },
+});
