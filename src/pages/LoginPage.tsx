@@ -1,4 +1,4 @@
-import { SignInForm } from "@/components/Authentication/SignInForm";
+import { SignInForm } from "@/pages/Authentication/SignInForm";
 import { Authenticated } from "convex/react";
 import { Navigate } from "react-router-dom";
 

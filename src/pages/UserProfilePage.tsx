@@ -1,4 +1,4 @@
-import { UserContext } from "@/components/App";
+import { UserContext } from "@/pages/App/App";
 import { useToast } from "@/components/ui/use-toast";
 import { useMutation } from "convex/react";
 import { useContext, useEffect, useState } from "react";
