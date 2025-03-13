@@ -67,7 +67,7 @@ export const send = mutation({
 
     // Get channel to check workspace membership
     const channel = await ctx.db.get(channelId);
-    if (!channel) throw new Error("Channel not found");
+    if (!channel) throw new ConvexError("Channel not found");
 
     // Check workspace membership
     const membership = await ctx.db

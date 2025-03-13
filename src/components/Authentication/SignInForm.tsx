@@ -2,7 +2,7 @@ import { SignInMethodDivider } from "@/components/SignInMethodDivider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/toaster";
-import { useToast } from "@/components/ui/use-toast";
+import { toast, useToast } from "@/components/ui/use-toast";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
@@ -28,12 +28,17 @@ export function SignInForm() {
   );
 }
 
-function SignInStep({ setStep }: { setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>> }) {
+function SignInStep({
+  setStep,
+}: {
+  setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>>;
+}) {
   return (
     <>
-      <h2 className="font-semibold text-2xl tracking-tight">Sign in or create an account</h2>
-      <SignInWithGitHub />
-      <SignInMethodDivider />
+      <h1 className="text-2xl font-bold">Login to your account</h1>
+      <p className="text-balance text-sm text-muted-foreground">
+        Enter your email below to login to your account
+      </p>
       <Tabs defaultValue="password">
         <TabsList>
           <TabsTrigger value="password">Password</TabsTrigger>
@@ -50,7 +55,11 @@ function SignInStep({ setStep }: { setStep: React.Dispatch<React.SetStateAction<
   );
 }
 
-function LinkSentStep({ setStep }: { setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>> }) {
+function LinkSentStep({
+  setStep,
+}: {
+  setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>>;
+}) {
   return (
     <>
       <h2 className="font-semibold text-2xl tracking-tight">Check your email</h2>
@@ -65,7 +74,12 @@ function LinkSentStep({ setStep }: { setStep: React.Dispatch<React.SetStateActio
 function SignInWithGitHub() {
   const { signIn } = useAuthActions();
   return (
-    <Button className="flex-1" variant="outline" type="button" onClick={() => void signIn("github")}>
+    <Button
+      className="flex-1 w-full"
+      variant="outline"
+      type="button"
+      onClick={() => void signIn("github")}
+    >
       <GitHubLogoIcon className="mr-2 h-4 w-4" /> GitHub
     </Button>
   );
@@ -99,7 +113,11 @@ function SignInWithMagicLink({ handleLinkSent }: { handleLinkSent: () => void })
   );
 }
 
-function SignInWithPassword({ setStep }: { setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>> }) {
+function SignInWithPassword({
+  setStep,
+}: {
+  setStep: React.Dispatch<React.SetStateAction<"signIn" | "linkSent" | { email: string }>>;
+}) {
   const { signIn } = useAuthActions();
   const [flow, setFlow] = useState<"signUp" | "signIn" | "forgot">("signIn");
 
@@ -107,34 +125,59 @@ function SignInWithPassword({ setStep }: { setStep: React.Dispatch<React.SetStat
     event.preventDefault();
     const formData = new FormData(event.currentTarget as HTMLFormElement);
     try {
-      await signIn("password", formData);
-      setStep({ email: formData.get("email") as string });
+      const { signingIn } = await signIn("password", formData);
+      if (!signingIn) {
+        setStep({ email: formData.get("email") as string });
+      }
     } catch (error) {
-      // Handle error (e.g., show a toast notification)
+      toast({
+        variant: "destructive",
+        title: "Authentication failed",
+        description: "Wrong email or password",
+      });
     }
   };
 
   return (
     <>
       {flow !== "forgot" ? (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <input name="flow" type="hidden" value={flow} />
-          <label htmlFor="email">Email</label>
-          <Input name="email" type="text" autoComplete="email" className="mb-4" required />
-          <div className="flex items-center justify-between">
-            <label htmlFor="password">Password</label>
-            {flow === "signIn" && (
-              <Button type="button" variant="link" className="p-0 h-auto" onClick={() => setFlow("forgot")}>
-                Forgot your password?
-              </Button>
-            )}
+          <div>
+            <label htmlFor="email">Email</label>
+            <Input name="email" type="text" autoComplete="email" required />
           </div>
-          <Input name="password" type="password" className="mb-4" required />
-          <div className="flex flex-row flex-1 gap-2">
-            <Button type="submit">{flow === "signIn" ? "Sign in" : "Sign up"}</Button>
-            <Button type="button" onClick={() => setFlow(flow === "signIn" ? "signUp" : "signIn")}>
-              {flow === "signIn" ? "Sign up instead" : "Sign in instead"}
-            </Button>
+          <div>
+            <div className="flex items-center justify-between">
+              <label htmlFor="password">Password</label>
+              {flow === "signIn" && (
+                <Button
+                  type="button"
+                  variant="link"
+                  className="p-0 h-auto"
+                  onClick={() => setFlow("forgot")}
+                >
+                  Forgot your password?
+                </Button>
+              )}
+            </div>
+            <Input name="password" type="password" required />
+          </div>
+
+          <Button type="submit" className="w-full">
+            {flow === "signIn" ? "Sign in" : "Sign up"}
+          </Button>
+          <SignInMethodDivider />
+          <SignInWithGitHub />
+          <div className="text-center">
+            <span>Don't have an account? </span>
+            <a
+              href="#"
+              className="underline underline-offset-4"
+              onClick={() => setFlow(flow === "signIn" ? "signUp" : "signIn")}
+            >
+              Sign {flow === "signIn" ? "up" : "in"}
+            </a>
           </div>
         </form>
       ) : (

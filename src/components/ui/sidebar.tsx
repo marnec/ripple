@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ViewVerticalIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
+import { ConvexError } from "convex/values";
 
 const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -33,7 +34,7 @@ const SidebarContext = React.createContext<SidebarContext | null>(null);
 function useSidebar() {
   const context = React.useContext(SidebarContext);
   if (!context) {
-    throw new Error("useSidebar must be used within a SidebarProvider.");
+    throw new ConvexError("useSidebar must be used within a SidebarProvider.");
   }
 
   return context;

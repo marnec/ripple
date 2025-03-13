@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { DEFAULT_DOC_NAME } from "@shared/constants";
@@ -10,7 +10,7 @@ export const create = mutation({
   handler: async (ctx, { workspaceId }) => {
     const userId = await getAuthUserId(ctx);
 
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const match = await ctx.db
       .query("documents")
@@ -41,11 +41,11 @@ export const rename = mutation({
   handler: async (ctx, { id, name }) => {
     const userId = await getAuthUserId(ctx);
 
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const document = await ctx.db.get(id);
 
-    if (!document) throw new Error("Document not found");
+    if (!document) throw new ConvexError("Document not found");
 
     const match = await ctx.db
       .query("documents")
@@ -54,7 +54,7 @@ export const rename = mutation({
       )
       .collect();
 
-    if (match.length) throw new Error("Document name already exists");
+    if (match.length) throw new ConvexError("Document name already exists");
 
     return ctx.db.patch(id, { name });
   },
@@ -64,7 +64,7 @@ export const list = query({
   args: { workspaceId: v.id("workspaces") },
   handler: async (ctx, { workspaceId }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     return ctx.db
       .query("documents")
@@ -74,26 +74,26 @@ export const list = query({
 });
 
 export const get = query({
-  args: {id: v.id("documents")},
+  args: { id: v.id("documents") },
   handler: async (ctx, { id }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     return ctx.db.get(id);
-  }
-})
+  },
+});
 
 export const remove = mutation({
   args: { id: v.id("documents") },
   handler: async (ctx, { id }) => {
     const userId = await getAuthUserId(ctx);
 
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const document = await ctx.db.get(id);
 
-    if (!document) throw new Error("Document not found");
+    if (!document) throw new ConvexError("Document not found");
 
-    return ctx.db.delete(id);  
+    return ctx.db.delete(id);
   },
 });

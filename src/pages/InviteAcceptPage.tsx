@@ -1,11 +1,11 @@
-import { UserContext } from "@/App";
+import { UserContext } from "@/components/App";
 import { useToast } from "@/components/ui/use-toast";
-import { SignInForm } from "@/SignInForm";
 import { Authenticated, Unauthenticated, useMutation } from "convex/react";
 import { useContext, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
+import { SignInForm } from "@/components/Authentication/SignInForm";
 
 export function InviteAcceptPage() {
   const { inviteId } = useParams();

@@ -1,4 +1,4 @@
-import { UserContext } from "@/App";
+import { UserContext } from "@/components/App";
 import { useSanitize } from "@/hooks/use-sanitize";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";

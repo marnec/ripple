@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums/roles";
 
@@ -10,7 +10,7 @@ export const create = mutation({
   },
   handler: async (ctx, { name, description }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const workspaceId = await ctx.db.insert("workspaces", {
       name,
@@ -65,7 +65,7 @@ export const update = mutation({
   },
   handler: async (ctx, { id, name, description }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     await ctx.db.patch(id, {
       name,

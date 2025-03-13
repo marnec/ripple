@@ -13,10 +13,11 @@ import { toast } from "../ui/use-toast";
 import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
 import { Separator } from "../ui/separator";
+import { ConvexError } from "convex/values";
 
 export const useChatContext = () => {
   const context = useContext(ChatContext);
-  if (!context) throw new Error("useChatContext must be used within ChatProvider");
+  if (!context) throw new ConvexError("useChatContext must be used within ChatProvider");
   return context;
 };
 
@@ -46,16 +47,14 @@ export function Chat({ channelId }: ChatProps) {
   const editMessage = useMutation(api.messages.update);
 
   useEffect(() => {
-    console.log(messages)
-  }, [messages])
+    console.log(messages);
+  }, [messages]);
 
   const handleLoadMore = () => {
     if (!isLoading) {
       loadMore(25);
     }
   };
-
-  
 
   const handleSubmit = async (body: string, plainText: string) => {
     if (editingMessage.id) {
@@ -83,24 +82,22 @@ export function Chat({ channelId }: ChatProps) {
 
   return (
     <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
-      
       <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
         {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
         {(messages || []).map((message, index) => (
           <>
             {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
-                <>
-                  <Separator orientation="horizontal" className="-mt-7" />
-                  <div className="self-center text-muted px-2 z-10 bg-card">
-                    {new Date(message._creationTime).toDateString()}
-                  </div>
-                </>
-              )}
+              <>
+                <Separator orientation="horizontal" className="-mt-7" />
+                <div className="self-center text-muted px-2 z-10 bg-card">
+                  {new Date(message._creationTime).toDateString()}
+                </div>
+              </>
+            )}
             <Message key={message.isomorphicId} message={message}></Message>
           </>
-        )
-        )}
+        ))}
         {messages && (
           <Button
             variant="outline"

@@ -20,7 +20,7 @@ import {
 import { useState } from "react";
 import { Doc, Id } from "../../../convex/_generated/dataModel";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
-import { InviteUserDialog } from "../InviteUserDialog";
+import { InviteUserDialog } from "./InviteUserDialog";
 
 export interface WorkspaceSwitcherProps {
   workspaces: Doc<"workspaces">[];

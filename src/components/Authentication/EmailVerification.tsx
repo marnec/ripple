@@ -1,9 +1,9 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
-import { Button } from "./components/ui/button";
-import { Input } from "./components/ui/input";
 import { useNavigate } from "react-router-dom";
-import { toast } from "./components/ui/use-toast";
+import { toast } from "../ui/use-toast";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 
 export function EmailVerification({ email }: { email: string }) {
   const { signIn } = useAuthActions();

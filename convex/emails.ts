@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { Resend } from "resend";
 import { APP_NAME, EMAIL_DOMAIN } from "@shared/constants"
@@ -30,7 +30,7 @@ export const sendWorkspaceInvite = internalAction({
     const resendKey = process.env.AUTH_RESEND_KEY;
 
     if (!resendKey) {
-      throw new Error("Missing Resend API key");
+      throw new ConvexError("Missing Resend API key");
     }
 
     const resend = new Resend(resendKey);
@@ -43,7 +43,7 @@ export const sendWorkspaceInvite = internalAction({
     })
       .then((sent) => {
         if (sent.error) {
-          throw new Error(`Failed to send email: ${sent.error.message}`);
+          throw new ConvexError(`Failed to send email: ${sent.error.message}`);
         }
         return sent;
       })

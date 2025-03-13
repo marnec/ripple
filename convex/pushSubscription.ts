@@ -48,7 +48,7 @@ export const listNonSelfSubscriptions = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     ctx.db.query("workspaces");
 

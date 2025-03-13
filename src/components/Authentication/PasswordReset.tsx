@@ -1,7 +1,8 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
-import { Input } from "./components/ui/input";
-import { Button } from "./components/ui/button";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { toast } from "../ui/use-toast";
 
 export function PasswordReset({ handleCancel }: { handleCancel: () => void }) {
   const { signIn } = useAuthActions();
@@ -13,10 +14,19 @@ export function PasswordReset({ handleCancel }: { handleCancel: () => void }) {
     const formData = new FormData(event.currentTarget as HTMLFormElement);
     const email = formData.get("email") as string;
 
-    // Call the signIn function to send the reset code
-    await signIn("password", { email, flow: 'reset' });
-    setEmail(email);
-    setStep("verification");
+    try {
+      await signIn("password", { email, flow: "reset" });
+      setEmail(email);
+      setStep("verification");
+    } catch (err) {
+      if (err instanceof Error) {
+        toast({
+          variant: "destructive",
+          title: "Could not retrieve password",
+          description: 'Check your email is correct'
+        });
+      }
+    }
   };
 
   const handleVerificationSubmit = async (event: React.FormEvent) => {
@@ -25,9 +35,16 @@ export function PasswordReset({ handleCancel }: { handleCancel: () => void }) {
     const code = formData.get("code") as string;
     const newPassword = formData.get("newPassword") as string;
 
-    // Call the signIn function to reset the password
-    await signIn("password", { email, code, newPassword, flow: 'reset-verification' });
-    handleCancel(); // Call the cancel handler after successful reset
+    try {
+      await signIn("password", { email, code, newPassword, flow: "reset-verification" });
+      handleCancel(); // Call the cancel handler after successful reset
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Something went wrong",
+        description: "Check the code is correct",
+      });
+    }
   };
 
   return step === "forgot" ? (
@@ -36,16 +53,26 @@ export function PasswordReset({ handleCancel }: { handleCancel: () => void }) {
       <Input name="email" placeholder="Email" type="text" className="mb-4" required />
       <div className="flex flex-row gap-2">
         <Button type="submit">Send code</Button>
-        <Button type="button" onClick={handleCancel}>Cancel</Button>
+        <Button type="button" onClick={handleCancel}>
+          Cancel
+        </Button>
       </div>
     </form>
   ) : (
     <form onSubmit={handleVerificationSubmit}>
       <Input name="code" placeholder="Code" type="text" className="mb-4" required />
-      <Input name="newPassword" placeholder="New password" type="password" className="mb-4" required />
+      <Input
+        name="newPassword"
+        placeholder="New password"
+        type="password"
+        className="mb-4"
+        required
+      />
       <div className="flex flex-row gap-2">
         <Button type="submit">Continue</Button>
-        <Button type="button" onClick={handleCancel}>Cancel</Button>
+        <Button type="button" onClick={handleCancel}>
+          Cancel
+        </Button>
       </div>
     </form>
   );

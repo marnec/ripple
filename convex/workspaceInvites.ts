@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { WorkspaceRole } from "@shared/enums/roles";
 import { InviteStatus } from "@shared/enums/inviteStatus";
 import { internal } from "./_generated/api";
@@ -12,7 +12,7 @@ export const create = mutation({
   },
   handler: async (ctx, { workspaceId, email }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Check if user is admin of workspace
     const membership = await ctx.db
@@ -22,7 +22,7 @@ export const create = mutation({
       )
       .first();
 
-    if (!membership) throw new Error("Not authorized to invite users");
+    if (!membership) throw new ConvexError("Not authorized to invite users");
 
     // Check if invite already exists
     const existingInvite = await ctx.db
@@ -32,7 +32,7 @@ export const create = mutation({
       )
       .first();
 
-    if (existingInvite) throw new Error("Invite already sent");
+    if (existingInvite) throw new ConvexError("Invite already sent");
 
     // Check if user is already a member
     const existingMember = await ctx.db
@@ -48,7 +48,7 @@ export const create = mutation({
         )
         .first();
 
-      if (isMember) throw new Error("User is already a member");
+      if (isMember) throw new ConvexError("User is already a member");
     }
 
     // Get workspace details for the email
@@ -114,14 +114,14 @@ export const accept = mutation({
   },
   handler: async (ctx, { inviteId }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const invite = await ctx.db.get(inviteId);
-    if (!invite) throw new Error("Invite not found");
+    if (!invite) throw new ConvexError("Invite not found");
 
     const user = await ctx.db.get(userId);
     if (!user?.email || user.email !== invite.email) {
-      throw new Error("Not authorized to accept this invite");
+      throw new ConvexError("Not authorized to accept this invite");
     }
 
     // Check if the user is already a member of the workspace
@@ -133,7 +133,7 @@ export const accept = mutation({
       .first();
 
     if (existingMembership) {
-      throw new Error("User is already a member of this workspace");
+      throw new ConvexError("User is already a member of this workspace");
     }
 
     // Add user to workspace members

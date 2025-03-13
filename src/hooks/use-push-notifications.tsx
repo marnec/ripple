@@ -2,6 +2,7 @@ import { useMutation } from "convex/react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { useDeviceId } from "./use-device-id";
+import { ConvexError } from "convex/values";
 
 interface PushSubscriptionJSON {
   endpoint: string;
@@ -61,7 +62,7 @@ export const usePushNotifications = () => {
       const subscription = pushSubscription.toJSON();
 
       if (!subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
-        throw new Error("The pushManager subscription is malformed");
+        throw new ConvexError("The pushManager subscription is malformed");
       }
 
       await registerSubscription({ ...(subscription as PushSubscriptionJSON), device: deviceId });
@@ -92,7 +93,7 @@ export const usePushNotifications = () => {
     const registration = await navigator.serviceWorker.getRegistration();
 
     if (!registration) {
-      throw new Error("No service worker registration found.");
+      throw new ConvexError("No service worker registration found.");
     }
 
     const subscription = await registration.pushManager.getSubscription();
@@ -109,7 +110,7 @@ export const usePushNotifications = () => {
     const registration = await navigator.serviceWorker.getRegistration();
 
     if (!registration) {
-      throw new Error("No service worker registration found.");
+      throw new ConvexError("No service worker registration found.");
     }
 
     const subscription = await registration.pushManager.subscribe({
@@ -118,7 +119,7 @@ export const usePushNotifications = () => {
     });
 
     if (!subscription) {
-      throw new Error("Could not create a subscription");
+      throw new ConvexError("Could not create a subscription");
     }
 
     return subscription;

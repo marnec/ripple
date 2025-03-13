@@ -1,38 +1,20 @@
-
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { ThemeProvider } from "next-themes";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import App from "./App.tsx";
-import { ChannelVideoCall } from "./components/Channel/ChannelCall.tsx";
-import { ChatContainer } from "./components/Chat/ChatContainer.tsx";
-import { DocumentEditorContainer } from "./components/Document/DocumentEditor.tsx";
-import { Documents } from "./components/Document/Documents.tsx";
+import { RouterProvider } from "react-router-dom";
 import { Toaster } from "./components/ui/toaster.tsx";
-import { WorkspaceDetails } from "./components/Workspace/WorkspaceDetails.tsx";
-import { WorkspaceSettings } from "./components/Workspace/WorkspaceSettings.tsx";
+import "./events.ts";
 import "./index.css";
-import { InviteAcceptPage } from "./pages/InviteAcceptPage.tsx";
-import { UserProfilePage } from "./pages/UserProfilePage.tsx";
-import { ChannelSettings } from "./components/Channel/ChannelSettings.tsx";
+import { router } from "./routes.tsx";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
-window.addEventListener("load", () => {
-  if ("serviceWorker" in navigator && "PushManager" in window) {
-    navigator.serviceWorker.register("/service-worker.js").catch((error) => {
-      console.error("An error occurred while registering the service worker.");
-      console.error(error);
-    });
-  } else {
-    console.error("Browser does not support service workers or push messages.");
-  }
-});
-
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    {/* this metadata tag allows correct resizing of the viewport when the elements
+     on mobile device browsers (top bar, virtual keyboard) are visible */}
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
@@ -40,27 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ThemeProvider attribute="class">
       <Toaster />
       <ConvexAuthProvider client={convex}>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<App />} />
-            <Route path="/workspace/:workspaceId/" element={<App />}>
-              <Route index element={<WorkspaceDetails />} />
-              <Route path="settings" element={<WorkspaceSettings />} />
-
-              <Route path="channel">
-                <Route path=":channelId" element={<ChatContainer />} />
-                <Route path=":channelId/videocall" element={<ChannelVideoCall />} />
-                <Route path=":channelId/settings" element={<ChannelSettings />} />
-              </Route>
-
-              <Route path="document" element={<Documents />} />
-              <Route path="document/:documentId" element={<DocumentEditorContainer />} />
-            </Route>
-
-            <Route path="/invite/:inviteId" element={<InviteAcceptPage />} />
-            <Route path="/profile" element={<UserProfilePage />} />
-          </Routes>
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </ConvexAuthProvider>
     </ThemeProvider>
   </React.StrictMode>,

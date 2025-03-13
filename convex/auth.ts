@@ -3,6 +3,7 @@ import Resend from "@auth/core/providers/resend";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 import { APP_NAME, EMAIL_DOMAIN } from "@shared/constants";
+import { ConvexError } from "convex/values";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import { Resend as ResendAPI } from "resend";
 
@@ -20,9 +21,9 @@ const ResendOTP = Resend({
       subject: `Sign in to ${APP_NAME}`,
       text: "Your code is " + token,
     });
- 
+
     if (error) {
-      throw new Error("Could not send");
+      throw new ConvexError("Could not send");
     }
   },
 });
@@ -41,9 +42,9 @@ const ResendOTPPasswordReset = Resend({
       subject: `Reset your password in ${APP_NAME}`,
       text: "Your password reset code is " + token,
     });
- 
+
     if (error) {
-      throw new Error("Could not send");
+      throw new ConvexError("Could not send");
     }
   },
 });
@@ -62,8 +63,6 @@ export const {
   providers: [
     GitHub,
     Resend({ from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>` }),
-    Password({ reset: ResendOTPPasswordReset, verify: ResendOTP })
+    Password({ reset: ResendOTPPasswordReset, verify: ResendOTP }),
   ],
 });
-
- 

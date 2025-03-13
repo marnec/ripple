@@ -10,7 +10,7 @@ export const create = mutation({
   },
   handler: async (ctx, { name, workspaceId }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Check if user is a member of the workspace
     const membership = await ctx.db
@@ -18,7 +18,7 @@ export const create = mutation({
       .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
       .first();
 
-    if (!membership) throw new Error("Not a member of this workspace");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
     const channelId = await ctx.db.insert("channels", {
       name,
