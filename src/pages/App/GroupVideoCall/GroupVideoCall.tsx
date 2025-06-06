@@ -25,25 +25,51 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
   const iceCandidateQueue = useRef<Record<string, RTCIceCandidate[]>>({});
 
+  // Refs for video elements to ensure proper srcObject assignment
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRefs = useRef<Record<string, HTMLVideoElement>>({});
+
   // Memoize query parameters to prevent unnecessary re-renders
   const queryParams = useMemo(() => ({
     roomId: channelId,
     excludePeer: peerId,
   }), [channelId, peerId]);
 
+  // Memoize all query parameters to reduce re-renders
+  const roomQueryParams = useMemo(() => ({
+    roomId: channelId,
+  }), [channelId]);
+
   const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, queryParams);
+  const answerSignals = useQuery(api.signaling.getAnswers, roomQueryParams);
+  const offerSignals = useQuery(api.signaling.getOffers, roomQueryParams);
 
   const sendSignal = useMutation(api.signaling.sendRoomSignal);
-
-  const answerSignals = useQuery(api.signaling.getAnswers, {
-    roomId: channelId,
-  });
-
-  const offerSignals = useQuery(api.signaling.getOffers, {
-    roomId: channelId,
-  });
-
   const smotherSignal = useMutation(api.signaling.deleteRoomSignal);
+
+  // Effect to update local video srcObject
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
+  // Effect to update remote video srcObjects
+  useEffect(() => {
+    Object.entries(remoteStreams).forEach(([remotePeerId, stream]) => {
+      const videoElement = remoteVideoRefs.current[remotePeerId];
+      if (videoElement && stream) {
+        videoElement.srcObject = stream;
+        // Ensure video plays
+        const playPromise = videoElement.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => {
+            console.log(`Auto-play prevented for remote peer ${remotePeerId}:`, error);
+          });
+        }
+      }
+    });
+  }, [remoteStreams]);
 
   const initLocalStream = useCallback(async () => {
     try {
@@ -88,9 +114,10 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     }
 
     peerConnection.ontrack = (event) => {
-      console.log(`Received track from ${remotePeerId}`);
+      console.log(`Received track from ${remotePeerId}`, event);
       const [remoteStream] = event.streams;
-      if (remoteStream) {
+      if (remoteStream && remoteStream.getTracks().length > 0) {
+        console.log(`Setting remote stream for ${remotePeerId}, tracks:`, remoteStream.getTracks().length);
         setRemoteStreams((prev) => ({ ...prev, [remotePeerId]: remoteStream }));
       }
     };
@@ -108,6 +135,8 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           delete newStreams[remotePeerId];
           return newStreams;
         });
+        // Clean up video ref
+        delete remoteVideoRefs.current[remotePeerId];
       }
     };
 
@@ -127,6 +156,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       
       // Clear remote streams
       setRemoteStreams({});
+      
+      // Clear video refs
+      remoteVideoRefs.current = {};
       
       // Clear processed signals
       processedSignals.current.clear();
@@ -298,7 +330,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
   // Memoize connected peers count to prevent unnecessary re-renders
   const connectedPeersCount = useMemo(() => {
-    return Object.keys(peerConnectionPerPeer.current).length;
+    return Object.keys(remoteStreams).length;
   }, [remoteStreams]);
 
   return (
@@ -307,6 +339,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       <div className="video-container" style={{ marginBottom: '20px' }}>
         <h3>Local Stream</h3>
         <video
+          ref={localVideoRef}
           autoPlay
           playsInline
           muted
@@ -318,14 +351,16 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
             border: '1px solid #ccc',
             borderRadius: '8px'
           }}
-          ref={(video) => {
-            if (video && localStream) video.srcObject = localStream;
-          }}
         />
-        {Object.entries(remoteStreams).map(([peerId, stream]) => (
-          <div key={peerId} style={{ marginTop: '16px' }}>
-            <h3>Remote Stream - {peerId}</h3>
+        {Object.entries(remoteStreams).map(([remotePeerId, stream]) => (
+          <div key={remotePeerId} style={{ marginTop: '16px' }}>
+            <h3>Remote Stream - {remotePeerId.slice(0, 8)}...</h3>
             <video
+              ref={(video) => {
+                if (video) {
+                  remoteVideoRefs.current[remotePeerId] = video;
+                }
+              }}
               autoPlay
               playsInline
               style={{ 
@@ -335,9 +370,6 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
                 aspectRatio: '4/3',
                 border: '1px solid #ccc',
                 borderRadius: '8px'
-              }}
-              ref={(video) => {
-                if (video && stream) video.srcObject = stream;
               }}
             />
           </div>
