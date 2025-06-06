@@ -53,10 +53,10 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   // Initialize local media stream
   const initLocalStream = useCallback(async () => {
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      console.log("Available devices:", devices);
+      console.log("Starting media initialization...");
       
-      const mediaRequests: MediaStreamConstraints = {
+      // First, try to get both video and audio
+      let mediaRequests: MediaStreamConstraints = {
         video: {
           width: { ideal: 640 },
           height: { ideal: 480 },
@@ -65,20 +65,27 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         audio: true
       };
 
-      // Check if we have video/audio devices
-      const hasVideo = devices.some(device => device.kind === "videoinput");
-      const hasAudio = devices.some(device => device.kind === "audioinput");
-      
-      if (!hasVideo) mediaRequests.video = false;
-      if (!hasAudio) mediaRequests.audio = false;
-
       console.log("Requesting media with constraints:", mediaRequests);
-      const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
+      
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
+      } catch (videoError) {
+        console.warn("Failed to get video, trying audio only:", videoError);
+        // If video fails, try audio only
+        mediaRequests = { audio: true };
+        stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
+      }
       
       console.log("Got local stream with tracks:", {
         video: stream.getVideoTracks().length,
         audio: stream.getAudioTracks().length,
-        tracks: stream.getTracks().map(track => ({ kind: track.kind, enabled: track.enabled, readyState: track.readyState }))
+        tracks: stream.getTracks().map(track => ({ 
+          kind: track.kind, 
+          enabled: track.enabled, 
+          readyState: track.readyState,
+          label: track.label 
+        }))
       });
       
       setLocalStream(stream);
@@ -87,7 +94,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         localVideoRef.current.srcObject = stream;
       }
     } catch (error) {
-      console.error("Failed to get user media:", error);
+      console.error("Failed to get any media:", error);
     }
   }, []);
 
@@ -154,15 +161,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           // Update state
           setRemoteStreams(prev => ({ ...prev, [remotePeerId]: remoteStream }));
           
-          // Update video element
-          const videoElement = remoteVideoRefsRef.current[remotePeerId];
-          if (videoElement) {
-            console.log(`Assigning remote stream to video element for ${remotePeerId}`);
-            videoElement.srcObject = remoteStream;
-            videoElement.play().catch(err => 
-              console.log(`Auto-play prevented for ${remotePeerId}:`, err)
-            );
-          }
+                  // Video element will be updated via the ref callback when component re-renders
         } else {
           console.warn(`Remote stream from ${remotePeerId} has no tracks`);
         }
@@ -470,9 +469,10 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
             <h3>Remote Stream - {remotePeerId.slice(0, 8)}...</h3>
             <video
               ref={(video) => {
-                if (video) {
+                if (video && !remoteVideoRefsRef.current[remotePeerId]) {
                   remoteVideoRefsRef.current[remotePeerId] = video;
                   video.srcObject = stream;
+                  // Only try to play once when element is first created
                   video.play().catch(err => 
                     console.log(`Auto-play prevented for ${remotePeerId}:`, err)
                   );
@@ -480,13 +480,15 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
               }}
               autoPlay
               playsInline
+              muted={false}
               style={{ 
                 width: '100%', 
                 maxWidth: '300px', 
                 height: 'auto',
                 aspectRatio: '4/3',
                 border: '1px solid #ccc',
-                borderRadius: '8px'
+                borderRadius: '8px',
+                backgroundColor: '#f0f0f0'
               }}
             />
           </div>
@@ -499,6 +501,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         marginBottom: '16px',
         flexWrap: 'wrap'
       }}>
+        <Button onClick={initLocalStream} disabled={!!localStream}>
+          Request Camera/Mic
+        </Button>
         <Button onClick={joinCall} disabled={hasJoined || !localStream}>
           Join Call
         </Button>
@@ -519,6 +524,12 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         <div><strong>Connected peers:</strong> {Object.keys(remoteStreams).length}</div>
         <div><strong>Status:</strong> {hasJoined ? '🟢 Joined' : '🔴 Not joined'}</div>
         <div><strong>Local stream:</strong> {localStream ? '✅ Ready' : '❌ Not ready'}</div>
+        {localStream && (
+          <div><strong>Local tracks:</strong> 
+            🎥 {localStream.getVideoTracks().length} video, 
+            🎤 {localStream.getAudioTracks().length} audio
+          </div>
+        )}
       </div>
     </div>
   );
