@@ -115,10 +115,6 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       });
       
       setLocalStream(stream!);
-      
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream!;
-      }
     } catch (error) {
       console.error("Failed to get any media:", error);
       alert(`Camera/microphone access failed: ${error instanceof Error ? error.message : String(error)}\nPlease check permissions and try again.`);
@@ -457,6 +453,19 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
+      
+      // Handle the play promise properly for local video too
+      const playPromise = localVideoRef.current.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log("✅ Local video playback started");
+          })
+          .catch(error => {
+            console.log("⚠️ Local video auto-play prevented:", error);
+          });
+      }
     }
   }, [localStream]);
 
@@ -530,11 +539,23 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
               ref={(video) => {
                 if (video && !remoteVideoRefsRef.current[remotePeerId]) {
                   remoteVideoRefsRef.current[remotePeerId] = video;
+                  
+                  // Set srcObject and handle play promise properly
                   video.srcObject = stream;
-                  // Only try to play once when element is first created
-                  video.play().catch(err => 
-                    console.log(`Auto-play prevented for ${remotePeerId}:`, err)
-                  );
+                  
+                  // Handle the play promise as recommended by Chrome
+                  const playPromise = video.play();
+                  
+                  if (playPromise !== undefined) {
+                    playPromise
+                      .then(() => {
+                        console.log(`✅ Video playback started for ${remotePeerId}`);
+                      })
+                      .catch(error => {
+                        console.log(`⚠️ Auto-play prevented for ${remotePeerId}:`, error);
+                        // Auto-play was prevented, show that the video is ready but needs user interaction
+                      });
+                  }
                 }
               }}
               autoPlay
