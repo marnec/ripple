@@ -6,6 +6,11 @@ import uuid4 from "uuid4";
 import { api } from "../../../../convex/_generated/api";
 import { Button } from "../../../components/ui/button";
 
+interface PeerData {
+  connection: RTCPeerConnection;
+  stream?: MediaStream;
+}
+
 const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const user = useQuery(api.users.viewer);
   
@@ -14,69 +19,43 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const peerId = peerIdRef.current;
 
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [hasJoined, sethasJoined] = useState<boolean>(false);
+  const [hasJoined, setHasJoined] = useState<boolean>(false);
+  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
 
-  const peerConnectionPerPeer = useRef<Record<string, RTCPeerConnection>>({});
-  const processedSignals = useRef<Set<string>>(new Set());
+  // Store peer connections and processed signals
+  const peersRef = useRef<Record<string, PeerData>>({});
+  const processedSignalsRef = useRef<Set<string>>(new Set());
+  const iceCandidateQueueRef = useRef<Record<string, RTCIceCandidate[]>>({});
 
-  const [remoteStreams, setRemoteStreams] = useState<
-    Record<string, MediaStream>
-  >({});
-
-  const iceCandidateQueue = useRef<Record<string, RTCIceCandidate[]>>({});
-
-  // Refs for video elements to ensure proper srcObject assignment
+  // Video element refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRefs = useRef<Record<string, HTMLVideoElement>>({});
+  const remoteVideoRefsRef = useRef<Record<string, HTMLVideoElement>>({});
 
-  // Memoize query parameters to prevent unnecessary re-renders
+  // Memoized query parameters
   const queryParams = useMemo(() => ({
     roomId: channelId,
     excludePeer: peerId,
   }), [channelId, peerId]);
 
-  // Memoize all query parameters to reduce re-renders
   const roomQueryParams = useMemo(() => ({
     roomId: channelId,
   }), [channelId]);
 
-  const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, queryParams);
-  const answerSignals = useQuery(api.signaling.getAnswers, roomQueryParams);
+  // Convex queries
   const offerSignals = useQuery(api.signaling.getOffers, roomQueryParams);
+  const answerSignals = useQuery(api.signaling.getAnswers, roomQueryParams);
+  const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, queryParams);
 
+  // Convex mutations
   const sendSignal = useMutation(api.signaling.sendRoomSignal);
-  const smotherSignal = useMutation(api.signaling.deleteRoomSignal);
+  const deleteSignal = useMutation(api.signaling.deleteRoomSignal);
 
-  // Effect to update local video srcObject
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream]);
-
-  // Effect to update remote video srcObjects
-  useEffect(() => {
-    Object.entries(remoteStreams).forEach(([remotePeerId, stream]) => {
-      const videoElement = remoteVideoRefs.current[remotePeerId];
-      if (videoElement && stream) {
-        videoElement.srcObject = stream;
-        // Ensure video plays
-        const playPromise = videoElement.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(error => {
-            console.log(`Auto-play prevented for remote peer ${remotePeerId}:`, error);
-          });
-        }
-      }
-    });
-  }, [remoteStreams]);
-
+  // Initialize local media stream
   const initLocalStream = useCallback(async () => {
     try {
-      let mediaRequests: MediaStreamConstraints = {};
-
-      let devices = await navigator.mediaDevices.enumerateDevices();
-
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      
+      const mediaRequests: MediaStreamConstraints = {};
       devices.forEach(({ kind }) => {
         if (kind === "videoinput") mediaRequests.video = true;
         if (kind === "audioinput") mediaRequests.audio = true;
@@ -84,281 +63,340 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
       const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
       setLocalStream(stream);
+      
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
     } catch (error) {
       console.error("Failed to get user media:", error);
     }
   }, []);
 
-  const createPeerConnection = useCallback((remotePeerId: string) => {
-    console.log(`creating peer connection for remote peer=${remotePeerId}`);
-
+  // Create peer connection
+  const createPeerConnection = useCallback((remotePeerId: string): RTCPeerConnection => {
+    console.log(`Creating peer connection for ${remotePeerId}`);
+    
     const peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
-    peerConnection.onicecandidate = (event) => {
-      if (!event.candidate) return;
-
-      sendSignal({
-        roomId: channelId,
-        peerId,
-        userId: user?._id!,
-        candidate: event.candidate.toJSON(),
-        type: "ice-candidate",
-      });
-    };
-
-    // Add local stream tracks to the peer connection
+    // Add local stream tracks
     if (localStream) {
       localStream.getTracks().forEach((track) => {
         peerConnection.addTrack(track, localStream);
       });
     }
 
-    peerConnection.ontrack = (event) => {
-      console.log(`Received track from ${remotePeerId}`, event);
-      const [remoteStream] = event.streams;
-      if (remoteStream && remoteStream.getTracks().length > 0) {
-        console.log(`Setting remote stream for ${remotePeerId}, tracks:`, remoteStream.getTracks().length);
-        setRemoteStreams((prev) => ({ ...prev, [remotePeerId]: remoteStream }));
+    // Handle ICE candidates
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate && user?._id) {
+        sendSignal({
+          roomId: channelId,
+          peerId,
+          userId: user._id,
+          candidate: event.candidate.toJSON(),
+          type: "ice-candidate",
+        });
       }
     };
 
-    peerConnection.onconnectionstatechange = () => {
-      console.log(
-        `Peer connection with ${remotePeerId} state: ${peerConnection.connectionState}`
-      );
+    // Handle incoming media tracks
+    peerConnection.ontrack = (event) => {
+      console.log(`Received track from ${remotePeerId}`, event);
+      const [remoteStream] = event.streams;
       
-      if (peerConnection.connectionState === 'failed' || 
-          peerConnection.connectionState === 'disconnected') {
-        // Remove remote stream if connection fails
-        setRemoteStreams((prev) => {
+      if (remoteStream && remoteStream.getTracks().length > 0) {
+        console.log(`Setting remote stream for ${remotePeerId}`);
+        
+        // Update peer data
+        if (peersRef.current[remotePeerId]) {
+          peersRef.current[remotePeerId].stream = remoteStream;
+        }
+        
+        // Update state
+        setRemoteStreams(prev => ({ ...prev, [remotePeerId]: remoteStream }));
+        
+        // Update video element
+        const videoElement = remoteVideoRefsRef.current[remotePeerId];
+        if (videoElement) {
+          videoElement.srcObject = remoteStream;
+          videoElement.play().catch(err => 
+            console.log(`Auto-play prevented for ${remotePeerId}:`, err)
+          );
+        }
+      }
+    };
+
+    // Handle connection state changes
+    peerConnection.onconnectionstatechange = () => {
+      console.log(`Peer ${remotePeerId} connection state: ${peerConnection.connectionState}`);
+      
+      if (['failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
+        // Clean up
+        delete peersRef.current[remotePeerId];
+        setRemoteStreams(prev => {
           const newStreams = { ...prev };
           delete newStreams[remotePeerId];
           return newStreams;
         });
-        // Clean up video ref
-        delete remoteVideoRefs.current[remotePeerId];
+        delete remoteVideoRefsRef.current[remotePeerId];
       }
     };
 
     return peerConnection;
   }, [localStream, channelId, peerId, user?._id, sendSignal]);
 
-  const leaveCall = useCallback(async () => {
-    console.log("leaving call");
-    sethasJoined(false);
+  // Process queued ICE candidates
+  const processQueuedIceCandidates = useCallback(async (remotePeerId: string) => {
+    const peerConnection = peersRef.current[remotePeerId]?.connection;
+    const queuedCandidates = iceCandidateQueueRef.current[remotePeerId] || [];
+    
+    if (peerConnection && peerConnection.remoteDescription && queuedCandidates.length > 0) {
+      console.log(`Processing ${queuedCandidates.length} queued ICE candidates for ${remotePeerId}`);
+      
+      for (const candidate of queuedCandidates) {
+        try {
+          await peerConnection.addIceCandidate(candidate);
+        } catch (error) {
+          console.error(`Error adding ICE candidate for ${remotePeerId}:`, error);
+        }
+      }
+      
+      iceCandidateQueueRef.current[remotePeerId] = [];
+    }
+  }, []);
+
+  // Handle incoming offers (when someone else creates an offer, we need to answer)
+  useEffect(() => {
+    if (!hasJoined || !offerSignals || !user?._id) return;
+
+    offerSignals.forEach(async ({ sdp, peerId: offererId }) => {
+      const signalId = `offer-${offererId}-${sdp?.substring(0, 50) || ''}`;
+      
+      if (processedSignalsRef.current.has(signalId) || offererId === peerId) return;
+      processedSignalsRef.current.add(signalId);
+
+      console.log(`Processing offer from ${offererId}`);
+
+      try {
+        // Create peer connection if it doesn't exist
+        if (!peersRef.current[offererId]) {
+          const peerConnection = createPeerConnection(offererId);
+          peersRef.current[offererId] = { connection: peerConnection };
+        }
+
+        const peerConnection = peersRef.current[offererId].connection;
+        
+        // Set remote description
+        await peerConnection.setRemoteDescription(new RTCSessionDescription({
+          type: "offer",
+          sdp,
+        }));
+
+        // Process queued ICE candidates
+        await processQueuedIceCandidates(offererId);
+
+        // Create and send answer
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        if (answer.sdp) {
+          await sendSignal({
+            type: "answer",
+            roomId: channelId,
+            sdp: answer.sdp,
+            peerId,
+            userId: user._id,
+            candidate: offererId,
+          });
+        }
+
+        console.log(`Sent answer to ${offererId}`);
+      } catch (error) {
+        console.error(`Error processing offer from ${offererId}:`, error);
+      }
+    });
+  }, [hasJoined, offerSignals, user?._id, peerId, channelId, createPeerConnection, processQueuedIceCandidates, sendSignal]);
+
+  // Handle incoming answers (when someone answers our offer)
+  useEffect(() => {
+    if (!hasJoined || !answerSignals) return;
+
+    answerSignals.forEach(async ({ peerId: answererId, sdp, candidate }) => {
+      const signalId = `answer-${answererId}-${sdp?.substring(0, 50) || ''}`;
+      
+      if (processedSignalsRef.current.has(signalId) || candidate !== user?._id) return;
+      processedSignalsRef.current.add(signalId);
+
+      console.log(`Processing answer from ${answererId}`);
+
+      try {
+        const peerData = peersRef.current[answererId];
+        if (!peerData) {
+          console.warn(`No peer connection found for ${answererId}`);
+          return;
+        }
+
+        // Set remote description
+        await peerData.connection.setRemoteDescription(new RTCSessionDescription({
+          type: "answer",
+          sdp,
+        }));
+
+        // Process queued ICE candidates
+        await processQueuedIceCandidates(answererId);
+
+        console.log(`Processed answer from ${answererId}`);
+      } catch (error) {
+        console.error(`Error processing answer from ${answererId}:`, error);
+      }
+    });
+  }, [hasJoined, answerSignals, user?._id, processQueuedIceCandidates]);
+
+  // Handle ICE candidates
+  useEffect(() => {
+    if (!iceCandidateSignals) return;
+
+    iceCandidateSignals.forEach(({ peerId: candidatePeerId, candidate }) => {
+      const signalId = `ice-${candidatePeerId}-${JSON.stringify(candidate)}`;
+      
+      if (processedSignalsRef.current.has(signalId)) return;
+      processedSignalsRef.current.add(signalId);
+
+      try {
+        const iceCandidate = new RTCIceCandidate(candidate);
+        const peerConnection = peersRef.current[candidatePeerId]?.connection;
+
+        if (!peerConnection || !peerConnection.remoteDescription) {
+          // Queue the candidate
+          console.log(`Queueing ICE candidate for ${candidatePeerId}`);
+          if (!iceCandidateQueueRef.current[candidatePeerId]) {
+            iceCandidateQueueRef.current[candidatePeerId] = [];
+          }
+          iceCandidateQueueRef.current[candidatePeerId].push(iceCandidate);
+          return;
+        }
+
+        console.log(`Adding ICE candidate for ${candidatePeerId}`);
+        peerConnection.addIceCandidate(iceCandidate);
+      } catch (error) {
+        console.error(`Error processing ICE candidate from ${candidatePeerId}:`, error);
+      }
+    });
+  }, [iceCandidateSignals]);
+
+  // Join call
+  const joinCall = useCallback(async () => {
+    if (!user?._id || !localStream) {
+      console.error("Missing user ID or local stream");
+      return;
+    }
+
+    console.log("Joining call");
     
     try {
-      // Close all peer connections
-      Object.values(peerConnectionPerPeer.current).forEach(pc => {
-        pc.close();
-      });
-      peerConnectionPerPeer.current = {};
+      setHasJoined(true);
+
+      // Small delay to ensure state is updated before processing
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Create and send offer to initiate connections
+      const myPeerConnection = createPeerConnection(user._id);
+      const offer = await myPeerConnection.createOffer();
+      await myPeerConnection.setLocalDescription(offer);
+
+      if (offer.sdp) {
+        await sendSignal({
+          roomId: channelId,
+          peerId,
+          userId: user._id,
+          sdp: offer.sdp,
+          type: "offer",
+        });
+      }
+
+      console.log("Successfully joined call and sent offer");
+    } catch (error) {
+      console.error("Error joining call:", error);
+      setHasJoined(false);
+    }
+  }, [user?._id, localStream, createPeerConnection, channelId, peerId, sendSignal]);
+
+  // Leave call
+  const leaveCall = useCallback(async () => {
+    console.log("Leaving call");
+    
+    try {
+      setHasJoined(false);
       
-      // Clear remote streams
+      // Close all peer connections
+      Object.values(peersRef.current).forEach(({ connection }) => {
+        connection.close();
+      });
+      
+      // Clear all refs and state
+      peersRef.current = {};
+      processedSignalsRef.current.clear();
+      iceCandidateQueueRef.current = {};
+      remoteVideoRefsRef.current = {};
       setRemoteStreams({});
       
-      // Clear video refs
-      remoteVideoRefs.current = {};
-      
-      // Clear processed signals
-      processedSignals.current.clear();
-      
-      // Delete signals from server
-      await smotherSignal({ roomId: channelId, peerId: peerId });
+      // Delete our signals from server
+      await deleteSignal({ roomId: channelId, peerId });
       
       console.log("Successfully left call");
     } catch (error) {
       console.error("Error leaving call:", error);
     }
-  }, [channelId, peerId, smotherSignal]);
+  }, [channelId, peerId, deleteSignal]);
 
-  const joinCall = useCallback(async () => {
-    console.log("joining call");
-    const userId = user?._id;
-    if (!userId || !localStream) {
-      console.error("Missing user ID or local stream");
-      return;
-    }
-
-    try {
-      // Process existing offers
-      for (let { sdp, peerId: offererId } of offerSignals || []) {
-        const signalId = `offer-${offererId}-${sdp}`;
-        if (processedSignals.current.has(signalId)) continue;
-        
-        console.log(`Processing offer from ${offererId}`);
-        processedSignals.current.add(signalId);
-        
-        let offeredPeerConnection = createPeerConnection(offererId);
-
-        let remoteDescription = new RTCSessionDescription({
-          type: "offer",
-          sdp,
-        });
-
-        await offeredPeerConnection.setRemoteDescription(remoteDescription);
-
-        // Process queued ICE candidates
-        const queuedCandidates = iceCandidateQueue.current[offererId] || [];
-        for (let iceCandidate of queuedCandidates) {
-          console.log(`Adding queued ICE candidate for ${offererId}`);
-          await offeredPeerConnection.addIceCandidate(iceCandidate);
-        }
-        iceCandidateQueue.current[offererId] = [];
-
-        let answer = await offeredPeerConnection.createAnswer();
-        await offeredPeerConnection.setLocalDescription(answer);
-
-        await sendSignal({
-          type: "answer",
-          roomId: channelId,
-          sdp: answer.sdp,
-          peerId,
-          userId,
-          candidate: offererId,
-        });
-
-        peerConnectionPerPeer.current[offererId] = offeredPeerConnection;
-      }
-
-      // Create and send our own offer
-      let clientPeerConnection = createPeerConnection(userId);
-
-      const offer = await clientPeerConnection.createOffer();
-      await clientPeerConnection.setLocalDescription(offer);
-
-      await sendSignal({
-        roomId: channelId,
-        peerId,
-        userId,
-        sdp: offer.sdp,
-        type: "offer",
-      });
-
-      sethasJoined(true);
-      console.log("Successfully joined call");
-    } catch (error) {
-      console.error("Error joining call:", error);
-    }
-  }, [user?._id, localStream, offerSignals, createPeerConnection, channelId, peerId, sendSignal]);
-
+  // Initialize on mount
   useEffect(() => {
     initLocalStream();
-
     return () => {
       leaveCall();
     };
   }, [initLocalStream, leaveCall]);
 
+  // Update local video when stream changes
   useEffect(() => {
-    if (!hasJoined || !answerSignals) return;
-
-    const connectToAnswerer = async () => {
-      console.log("Processing answers to my offer");
-
-      for (let { peerId: answererId, sdp } of answerSignals) {
-        const signalId = `answer-${answererId}-${sdp}`;
-        if (processedSignals.current.has(signalId)) continue;
-        
-        console.log(`Processing answer from ${answererId}`);
-        processedSignals.current.add(signalId);
-
-        if (answererId in peerConnectionPerPeer.current) {
-          console.log(`Peer connection already exists for ${answererId}`);
-          continue;
-        }
-
-        try {
-          let answeredPeerConnection = createPeerConnection(answererId);
-
-          let remoteDescription = new RTCSessionDescription({
-            type: "answer",
-            sdp: sdp,
-          });
-
-          await answeredPeerConnection.setRemoteDescription(remoteDescription);
-
-          console.log(`Set remote description for ${answererId}`);
-
-          // Process queued ICE candidates
-          const queuedCandidates = iceCandidateQueue.current[answererId] || [];
-          for (let iceCandidate of queuedCandidates) {
-            console.log(`Adding queued ICE candidate for ${answererId}`);
-            await answeredPeerConnection.addIceCandidate(iceCandidate);
-          }
-          iceCandidateQueue.current[answererId] = [];
-
-          peerConnectionPerPeer.current[answererId] = answeredPeerConnection;
-        } catch (error) {
-          console.error(`Error processing answer from ${answererId}:`, error);
-        }
-      }
-    };
-
-    connectToAnswerer();
-  }, [answerSignals, hasJoined, createPeerConnection]);
-
-  useEffect(() => {
-    if (!iceCandidateSignals) return;
-
-    iceCandidateSignals.forEach((signal) => {
-      const signalId = `ice-${signal.peerId}-${JSON.stringify(signal.candidate)}`;
-      if (processedSignals.current.has(signalId)) return;
-      
-      processedSignals.current.add(signalId);
-      
-      try {
-        let iceCandidate = new RTCIceCandidate(signal.candidate);
-        const targetPeerConnection = peerConnectionPerPeer.current[signal.peerId];
-
-        if (!targetPeerConnection?.remoteDescription) {
-          console.log(`Queueing ICE candidate for ${signal.peerId}`);
-          if (!(signal.peerId in iceCandidateQueue.current)) {
-            iceCandidateQueue.current[signal.peerId] = [];
-          }
-          iceCandidateQueue.current[signal.peerId].push(iceCandidate);
-          return;
-        }
-
-        console.log(`Adding ICE candidate to ${signal.peerId} peer connection`);
-        targetPeerConnection.addIceCandidate(iceCandidate);
-      } catch (error) {
-        console.error(`Error processing ICE candidate from ${signal.peerId}:`, error);
-      }
-    });
-  }, [iceCandidateSignals]);
-
-  // Memoize connected peers count to prevent unnecessary re-renders
-  const connectedPeersCount = useMemo(() => {
-    return Object.keys(remoteStreams).length;
-  }, [remoteStreams]);
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
 
   return (
     <div style={{ padding: '16px' }}>
       <h1 style={{ marginBottom: '20px' }}>Group Video Call</h1>
+      
       <div className="video-container" style={{ marginBottom: '20px' }}>
-        <h3>Local Stream</h3>
-        <video
-          ref={localVideoRef}
-          autoPlay
-          playsInline
-          muted
-          style={{ 
-            width: '100%', 
-            maxWidth: '300px', 
-            height: 'auto',
-            aspectRatio: '4/3',
-            border: '1px solid #ccc',
-            borderRadius: '8px'
-          }}
-        />
-        {Object.entries(remoteStreams).map(([remotePeerId]) => (
-          <div key={remotePeerId} style={{ marginTop: '16px' }}>
+        <div style={{ marginBottom: '16px' }}>
+          <h3>Local Stream</h3>
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{ 
+              width: '100%', 
+              maxWidth: '300px', 
+              height: 'auto',
+              aspectRatio: '4/3',
+              border: '1px solid #ccc',
+              borderRadius: '8px'
+            }}
+          />
+        </div>
+        
+        {Object.entries(remoteStreams).map(([remotePeerId, stream]) => (
+          <div key={remotePeerId} style={{ marginBottom: '16px' }}>
             <h3>Remote Stream - {remotePeerId.slice(0, 8)}...</h3>
             <video
               ref={(video) => {
                 if (video) {
-                  remoteVideoRefs.current[remotePeerId] = video;
+                  remoteVideoRefsRef.current[remotePeerId] = video;
+                  video.srcObject = stream;
+                  video.play().catch(err => 
+                    console.log(`Auto-play prevented for ${remotePeerId}:`, err)
+                  );
                 }
               }}
               autoPlay
@@ -375,6 +413,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           </div>
         ))}
       </div>
+      
       <div style={{ 
         display: 'flex', 
         gap: '12px', 
@@ -388,6 +427,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           Leave Call
         </Button>
       </div>
+      
       <div style={{ 
         fontSize: '14px', 
         color: '#666',
@@ -397,8 +437,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         lineHeight: '1.4'
       }}>
         <div><strong>Peer ID:</strong> {peerId.slice(0, 8)}...</div>
-        <div><strong>Connected peers:</strong> {connectedPeersCount}</div>
+        <div><strong>Connected peers:</strong> {Object.keys(remoteStreams).length}</div>
         <div><strong>Status:</strong> {hasJoined ? '🟢 Joined' : '🔴 Not joined'}</div>
+        <div><strong>Local stream:</strong> {localStream ? '✅ Ready' : '❌ Not ready'}</div>
       </div>
     </div>
   );
