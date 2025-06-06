@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 import { ICE_SERVERS } from "@shared/constants";
 import uuid4 from "uuid4";
@@ -25,10 +25,13 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
   const iceCandidateQueue = useRef<Record<string, RTCIceCandidate[]>>({});
 
-  const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, {
+  // Memoize query parameters to prevent unnecessary re-renders
+  const queryParams = useMemo(() => ({
     roomId: channelId,
     excludePeer: peerId,
-  });
+  }), [channelId, peerId]);
+
+  const iceCandidateSignals = useQuery(api.signaling.getIceCandidates, queryParams);
 
   const sendSignal = useMutation(api.signaling.sendRoomSignal);
 
@@ -42,7 +45,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
   const smotherSignal = useMutation(api.signaling.deleteRoomSignal);
 
-  const initLocalStream = async () => {
+  const initLocalStream = useCallback(async () => {
     try {
       let mediaRequests: MediaStreamConstraints = {};
 
@@ -58,7 +61,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     } catch (error) {
       console.error("Failed to get user media:", error);
     }
-  };
+  }, []);
 
   const createPeerConnection = useCallback((remotePeerId: string) => {
     console.log(`creating peer connection for remote peer=${remotePeerId}`);
@@ -111,7 +114,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     return peerConnection;
   }, [localStream, channelId, peerId, user?._id, sendSignal]);
 
-  const leaveCall = async () => {
+  const leaveCall = useCallback(async () => {
     console.log("leaving call");
     sethasJoined(false);
     
@@ -135,9 +138,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     } catch (error) {
       console.error("Error leaving call:", error);
     }
-  };
+  }, [channelId, peerId, smotherSignal]);
 
-  const joinCall = async () => {
+  const joinCall = useCallback(async () => {
     console.log("joining call");
     const userId = user?._id;
     if (!userId || !localStream) {
@@ -205,7 +208,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     } catch (error) {
       console.error("Error joining call:", error);
     }
-  };
+  }, [user?._id, localStream, offerSignals, createPeerConnection, channelId, peerId, sendSignal]);
 
   useEffect(() => {
     initLocalStream();
@@ -213,7 +216,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     return () => {
       leaveCall();
     };
-  }, []);
+  }, [initLocalStream, leaveCall]);
 
   useEffect(() => {
     if (!hasJoined || !answerSignals) return;
@@ -293,27 +296,46 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     });
   }, [iceCandidateSignals]);
 
+  // Memoize connected peers count to prevent unnecessary re-renders
+  const connectedPeersCount = useMemo(() => {
+    return Object.keys(peerConnectionPerPeer.current).length;
+  }, [remoteStreams]);
+
   return (
-    <div>
-      <h1>Group Video Call</h1>
-      <div className="video-container">
+    <div style={{ padding: '16px' }}>
+      <h1 style={{ marginBottom: '20px' }}>Group Video Call</h1>
+      <div className="video-container" style={{ marginBottom: '20px' }}>
         <h3>Local Stream</h3>
         <video
           autoPlay
           playsInline
           muted
-          style={{ width: '300px', height: '200px' }}
+          style={{ 
+            width: '100%', 
+            maxWidth: '300px', 
+            height: 'auto',
+            aspectRatio: '4/3',
+            border: '1px solid #ccc',
+            borderRadius: '8px'
+          }}
           ref={(video) => {
             if (video && localStream) video.srcObject = localStream;
           }}
         />
         {Object.entries(remoteStreams).map(([peerId, stream]) => (
-          <div key={peerId}>
+          <div key={peerId} style={{ marginTop: '16px' }}>
             <h3>Remote Stream - {peerId}</h3>
             <video
               autoPlay
               playsInline
-              style={{ width: '300px', height: '200px' }}
+              style={{ 
+                width: '100%', 
+                maxWidth: '300px', 
+                height: 'auto',
+                aspectRatio: '4/3',
+                border: '1px solid #ccc',
+                borderRadius: '8px'
+              }}
               ref={(video) => {
                 if (video && stream) video.srcObject = stream;
               }}
@@ -321,18 +343,30 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           </div>
         ))}
       </div>
-      <div style={{ marginTop: '20px' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: '12px', 
+        marginBottom: '16px',
+        flexWrap: 'wrap'
+      }}>
         <Button onClick={joinCall} disabled={hasJoined || !localStream}>
           Join Call
         </Button>
-        <Button onClick={leaveCall} disabled={!hasJoined} style={{ marginLeft: '10px' }}>
+        <Button onClick={leaveCall} disabled={!hasJoined}>
           Leave Call
         </Button>
       </div>
-      <div style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-        Peer ID: {peerId}
-        <br />
-        Connected peers: {Object.keys(peerConnectionPerPeer.current).length}
+      <div style={{ 
+        fontSize: '14px', 
+        color: '#666',
+        backgroundColor: '#f5f5f5',
+        padding: '12px',
+        borderRadius: '6px',
+        lineHeight: '1.4'
+      }}>
+        <div><strong>Peer ID:</strong> {peerId.slice(0, 8)}...</div>
+        <div><strong>Connected peers:</strong> {connectedPeersCount}</div>
+        <div><strong>Status:</strong> {hasJoined ? '🟢 Joined' : '🔴 Not joined'}</div>
       </div>
     </div>
   );
