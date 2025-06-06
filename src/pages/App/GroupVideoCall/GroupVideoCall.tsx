@@ -54,14 +54,33 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const initLocalStream = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
+      console.log("Available devices:", devices);
       
-      const mediaRequests: MediaStreamConstraints = {};
-      devices.forEach(({ kind }) => {
-        if (kind === "videoinput") mediaRequests.video = true;
-        if (kind === "audioinput") mediaRequests.audio = true;
-      });
+      const mediaRequests: MediaStreamConstraints = {
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
+        audio: true
+      };
 
+      // Check if we have video/audio devices
+      const hasVideo = devices.some(device => device.kind === "videoinput");
+      const hasAudio = devices.some(device => device.kind === "audioinput");
+      
+      if (!hasVideo) mediaRequests.video = false;
+      if (!hasAudio) mediaRequests.audio = false;
+
+      console.log("Requesting media with constraints:", mediaRequests);
       const stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
+      
+      console.log("Got local stream with tracks:", {
+        video: stream.getVideoTracks().length,
+        audio: stream.getAudioTracks().length,
+        tracks: stream.getTracks().map(track => ({ kind: track.kind, enabled: track.enabled, readyState: track.readyState }))
+      });
+      
       setLocalStream(stream);
       
       if (localVideoRef.current) {
@@ -80,9 +99,17 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
     // Add local stream tracks
     if (localStream) {
-      localStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, localStream);
+      const tracks = localStream.getTracks();
+      console.log(`Adding ${tracks.length} tracks to peer connection for ${remotePeerId}:`, 
+        tracks.map(track => ({ kind: track.kind, enabled: track.enabled, readyState: track.readyState }))
+      );
+      
+      tracks.forEach((track) => {
+        const sender = peerConnection.addTrack(track, localStream);
+        console.log(`Added ${track.kind} track, sender:`, sender);
       });
+    } else {
+      console.warn(`No local stream available when creating peer connection for ${remotePeerId}`);
     }
 
     // Handle ICE candidates
@@ -100,28 +127,47 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
 
     // Handle incoming media tracks
     peerConnection.ontrack = (event) => {
-      console.log(`Received track from ${remotePeerId}`, event);
+      console.log(`Received track from ${remotePeerId}`, {
+        track: event.track,
+        streams: event.streams,
+        trackKind: event.track.kind,
+        trackEnabled: event.track.enabled,
+        trackReadyState: event.track.readyState
+      });
+      
       const [remoteStream] = event.streams;
       
-      if (remoteStream && remoteStream.getTracks().length > 0) {
-        console.log(`Setting remote stream for ${remotePeerId}`);
+      if (remoteStream) {
+        const tracks = remoteStream.getTracks();
+        console.log(`Remote stream from ${remotePeerId} has ${tracks.length} tracks:`, 
+          tracks.map(track => ({ kind: track.kind, enabled: track.enabled, readyState: track.readyState }))
+        );
         
-        // Update peer data
-        if (peersRef.current[remotePeerId]) {
-          peersRef.current[remotePeerId].stream = remoteStream;
+        if (tracks.length > 0) {
+          console.log(`Setting remote stream for ${remotePeerId}`);
+          
+          // Update peer data
+          if (peersRef.current[remotePeerId]) {
+            peersRef.current[remotePeerId].stream = remoteStream;
+          }
+          
+          // Update state
+          setRemoteStreams(prev => ({ ...prev, [remotePeerId]: remoteStream }));
+          
+          // Update video element
+          const videoElement = remoteVideoRefsRef.current[remotePeerId];
+          if (videoElement) {
+            console.log(`Assigning remote stream to video element for ${remotePeerId}`);
+            videoElement.srcObject = remoteStream;
+            videoElement.play().catch(err => 
+              console.log(`Auto-play prevented for ${remotePeerId}:`, err)
+            );
+          }
+        } else {
+          console.warn(`Remote stream from ${remotePeerId} has no tracks`);
         }
-        
-        // Update state
-        setRemoteStreams(prev => ({ ...prev, [remotePeerId]: remoteStream }));
-        
-        // Update video element
-        const videoElement = remoteVideoRefsRef.current[remotePeerId];
-        if (videoElement) {
-          videoElement.srcObject = remoteStream;
-          videoElement.play().catch(err => 
-            console.log(`Auto-play prevented for ${remotePeerId}:`, err)
-          );
-        }
+      } else {
+        console.warn(`No remote stream received from ${remotePeerId}`);
       }
     };
 
@@ -181,6 +227,14 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         if (!peersRef.current[offererId]) {
           const peerConnection = createPeerConnection(offererId);
           peersRef.current[offererId] = { connection: peerConnection };
+          
+          // If local stream is available but wasn't added during creation, add it now
+          if (localStream && peerConnection.getSenders().length === 0) {
+            console.log(`Adding local stream tracks to newly created peer connection for ${offererId}`);
+            localStream.getTracks().forEach((track) => {
+              peerConnection.addTrack(track, localStream);
+            });
+          }
         }
 
         const peerConnection = peersRef.current[offererId].connection;
@@ -361,6 +415,31 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
     }
+  }, [localStream]);
+
+  // Re-add tracks to existing peer connections when local stream changes
+  useEffect(() => {
+    if (!localStream) return;
+
+    console.log("Local stream updated, checking existing peer connections...");
+    
+    Object.entries(peersRef.current).forEach(([remotePeerId, peerData]) => {
+      const senders = peerData.connection.getSenders();
+      console.log(`Peer ${remotePeerId} has ${senders.length} senders`);
+      
+      // Check if we need to add tracks
+      const localTracks = localStream.getTracks();
+      localTracks.forEach(track => {
+        const existingSender = senders.find(sender => 
+          sender.track && sender.track.kind === track.kind
+        );
+        
+        if (!existingSender) {
+          console.log(`Adding missing ${track.kind} track to peer ${remotePeerId}`);
+          peerData.connection.addTrack(track, localStream);
+        }
+      });
+    });
   }, [localStream]);
 
   return (
