@@ -21,6 +21,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [hasJoined, setHasJoined] = useState<boolean>(false);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+  const [videoEnabled, setVideoEnabled] = useState<boolean>(true);
 
   // Store peer connections and processed signals
   const peersRef = useRef<Record<string, PeerData>>({});
@@ -55,32 +56,57 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     try {
       console.log("Starting media initialization...");
       
-      // First, try to get both video and audio
+      // Always try to get both video and audio with more permissive constraints
+      const videoConstraints = {
+        width: { min: 320, ideal: 640, max: 1280 },
+        height: { min: 240, ideal: 480, max: 720 },
+        frameRate: { min: 10, ideal: 15, max: 30 }
+      };
+
       let mediaRequests: MediaStreamConstraints = {
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: "user"
-        },
-        audio: true
+        video: videoConstraints,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
       };
 
       console.log("Requesting media with constraints:", mediaRequests);
       
       let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
-      } catch (videoError) {
-        console.warn("Failed to get video, trying audio only:", videoError);
-        // If video fails, try audio only
-        mediaRequests = { audio: true };
-        stream = await navigator.mediaDevices.getUserMedia(mediaRequests);
+      let attempts = [
+        // Try with ideal constraints
+        mediaRequests,
+        // Try with basic video constraints
+        { video: true, audio: true },
+        // Try with just user-facing camera
+        { video: { facingMode: "user" }, audio: true },
+        // Try any video source
+        { video: { facingMode: { ideal: "user" } }, audio: true },
+        // Last resort: audio only
+        { audio: true }
+      ];
+
+      let lastError: any;
+      for (let i = 0; i < attempts.length; i++) {
+        try {
+          console.log(`Attempt ${i + 1}:`, attempts[i]);
+          stream = await navigator.mediaDevices.getUserMedia(attempts[i]);
+          break;
+        } catch (error) {
+          console.warn(`Attempt ${i + 1} failed:`, error);
+          lastError = error;
+          if (i === attempts.length - 1) {
+            throw error;
+          }
+        }
       }
       
       console.log("Got local stream with tracks:", {
-        video: stream.getVideoTracks().length,
-        audio: stream.getAudioTracks().length,
-        tracks: stream.getTracks().map(track => ({ 
+        video: stream!.getVideoTracks().length,
+        audio: stream!.getAudioTracks().length,
+        tracks: stream!.getTracks().map(track => ({ 
           kind: track.kind, 
           enabled: track.enabled, 
           readyState: track.readyState,
@@ -88,13 +114,14 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         }))
       });
       
-      setLocalStream(stream);
+      setLocalStream(stream!);
       
       if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.srcObject = stream!;
       }
     } catch (error) {
       console.error("Failed to get any media:", error);
+      alert(`Camera/microphone access failed: ${error instanceof Error ? error.message : String(error)}\nPlease check permissions and try again.`);
     }
   }, []);
 
@@ -174,8 +201,23 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     peerConnection.onconnectionstatechange = () => {
       console.log(`Peer ${remotePeerId} connection state: ${peerConnection.connectionState}`);
       
-      if (['failed', 'disconnected', 'closed'].includes(peerConnection.connectionState)) {
-        // Clean up
+      if (peerConnection.connectionState === 'failed') {
+        console.warn(`Connection failed for ${remotePeerId}, will retry...`);
+        // Don't immediately clean up on first failure, let ICE candidates try to recover
+        setTimeout(() => {
+          if (peerConnection.connectionState === 'failed') {
+            console.error(`Connection permanently failed for ${remotePeerId}, cleaning up`);
+            delete peersRef.current[remotePeerId];
+            setRemoteStreams(prev => {
+              const newStreams = { ...prev };
+              delete newStreams[remotePeerId];
+              return newStreams;
+            });
+            delete remoteVideoRefsRef.current[remotePeerId];
+          }
+        }, 5000); // Give 5 seconds for recovery
+      } else if (['disconnected', 'closed'].includes(peerConnection.connectionState)) {
+        // Clean up immediately for these states
         delete peersRef.current[remotePeerId];
         setRemoteStreams(prev => {
           const newStreams = { ...prev };
@@ -183,6 +225,8 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           return newStreams;
         });
         delete remoteVideoRefsRef.current[remotePeerId];
+      } else if (peerConnection.connectionState === 'connected') {
+        console.log(`✅ Successfully connected to ${remotePeerId}`);
       }
     };
 
@@ -441,6 +485,21 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
     });
   }, [localStream]);
 
+  // Toggle video track
+  const toggleVideo = useCallback(() => {
+    if (localStream) {
+      const videoTracks = localStream.getVideoTracks();
+      if (videoTracks.length > 0) {
+        const newEnabled = !videoEnabled;
+        videoTracks.forEach(track => {
+          track.enabled = newEnabled;
+        });
+        setVideoEnabled(newEnabled);
+        console.log(`Video ${newEnabled ? 'enabled' : 'disabled'}`);
+      }
+    }
+  }, [localStream, videoEnabled]);
+
   return (
     <div style={{ padding: '16px' }}>
       <h1 style={{ marginBottom: '20px' }}>Group Video Call</h1>
@@ -503,6 +562,9 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       }}>
         <Button onClick={initLocalStream} disabled={!!localStream}>
           Request Camera/Mic
+        </Button>
+        <Button onClick={toggleVideo} disabled={!localStream || localStream.getVideoTracks().length === 0}>
+          {videoEnabled ? '📹 Video On' : '📹 Video Off'}
         </Button>
         <Button onClick={joinCall} disabled={hasJoined || !localStream}>
           Join Call
