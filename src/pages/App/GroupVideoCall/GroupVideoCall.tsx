@@ -352,7 +352,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
             borderRadius: '8px'
           }}
         />
-        {Object.entries(remoteStreams).map(([remotePeerId, stream]) => (
+        {Object.entries(remoteStreams).map(([remotePeerId]) => (
           <div key={remotePeerId} style={{ marginTop: '16px' }}>
             <h3>Remote Stream - {remotePeerId.slice(0, 8)}...</h3>
             <video
