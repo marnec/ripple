@@ -11,7 +11,8 @@
     "build": "tsc -b && vite build",
     "lint": "tsc && eslint .  --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "deploy": "npm run build && git push origin main:main && npx convex deploy"
+    "deploy:convex": "npx convex deploy",
+    "deploy": "git push origin main:main"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
