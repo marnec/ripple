@@ -1,4 +1,4 @@
-import { BlockNoteEditor } from "@blocknote/core";
+import { BlockNoteEditor, BlockSchemaFromSpecs, defaultBlockSpecs } from "@blocknote/core";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useBlockNoteSync } from "@convex-dev/prosemirror-sync/blocknote";
 import { useQuery } from "convex/react";
@@ -19,7 +19,8 @@ export function DocumentEditorContainer() {
 }
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
-  const [editor, setEditor] = useState<BlockNoteEditor | null>(null);
+  type EditorType = BlockNoteEditor<BlockSchemaFromSpecs<typeof defaultBlockSpecs>>;
+  const [editor, setEditor] = useState<EditorType | null>(null);
   const sync = useBlockNoteSync(api.prosemirror, documentId);
   const document = useQuery(api.documents.get, { id: documentId });
 
@@ -29,9 +30,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
       if (!sync.editor) {
         await sync.create({ type: "doc", content: [] });
+        return;
       }
 
-      setEditor(sync.editor);
+      setEditor(sync.editor as EditorType);
     };
 
     setUpEditor();
