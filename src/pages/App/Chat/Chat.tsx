@@ -14,6 +14,10 @@ import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
 import { Separator } from "../../../components/ui/separator";
 import { ConvexError } from "convex/values";
+import { SearchDialog } from "./SearchDialog";
+import { MessageContext } from "./MessageContext";
+import { SearchIcon } from "lucide-react";
+import { Input } from "../../../components/ui/input";
 
 export const useChatContext = () => {
   const context = useContext(ChatContext);
@@ -36,6 +40,11 @@ export type ChatProps = {
 
 export function Chat({ channelId }: ChatProps) {
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
+  const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');
+  const [contextMessageId, setContextMessageId] = useState<Id<"messages"> | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
+  const [searchDialogTerm, setSearchDialogTerm] = useState("");
   const {
     results: messages,
     status,
@@ -80,8 +89,74 @@ export function Chat({ channelId }: ChatProps) {
     );
   };
 
+  const handleJumpToMessage = (messageId: Id<"messages">) => {
+    setContextMessageId(messageId);
+    setViewMode('context');
+  };
+
+  const handleBackToChat = () => {
+    setViewMode('chat');
+    setContextMessageId(null);
+  };
+
+  const handleSearchSubmit = () => {
+    if (searchInput.trim()) {
+      setSearchDialogTerm(searchInput.trim());
+      setIsSearchDialogOpen(true);
+    }
+  };
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearchSubmit();
+    }
+  };
+
+  // Show message context view when jumping to a specific message
+  if (viewMode === 'context' && contextMessageId) {
+    return (
+      <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
+        <MessageContext
+          messageId={contextMessageId}
+          onClose={handleBackToChat}
+          onBackToChat={handleBackToChat}
+        />
+      </ChatContext.Provider>
+    );
+  }
+
   return (
     <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
+      {/* Inline Search */}
+      <div className="flex items-center gap-2 p-2 border-b">
+        <div className="relative flex-1">
+          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search messages..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            onKeyPress={handleSearchKeyPress}
+            className="pl-10 pr-12"
+          />
+        </div>
+        <SearchDialog 
+          channelId={channelId} 
+          onJumpToMessage={handleJumpToMessage}
+          initialSearchTerm={searchDialogTerm}
+          isOpen={isSearchDialogOpen}
+          onOpenChange={setIsSearchDialogOpen}
+        >
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSearchSubmit}
+            disabled={!searchInput.trim()}
+          >
+            <SearchIcon className="h-4 w-4" />
+          </Button>
+        </SearchDialog>
+      </div>
+
       <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
         {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 

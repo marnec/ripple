@@ -1,4 +1,5 @@
-import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, locales } from "@blocknote/core";
+import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs} from "@blocknote/core";
+import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote, useEditorContentOrSelectionChange } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import {
@@ -32,9 +33,9 @@ const schema = BlockNoteSchema.create({
 });
 
 const dictionary = {
-  ...locales.en,
+  ...en,
   placeholders: {
-    ...locales.en.placeholders,
+    ...en.placeholders,
     default: "Ctrl+Enter to send",
   },
 };

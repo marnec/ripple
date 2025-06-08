@@ -10,9 +10,6 @@ export function ChatContainer() {
     <div className="flex w-full flex-col justify-between">
       {channelId && (
         <>
-          <div className="p-2">
-            <Input placeholder="Search..." />
-          </div>
           <Chat channelId={channelId} />
         </>
       )}

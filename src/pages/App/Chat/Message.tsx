@@ -1,5 +1,4 @@
 import { UserContext } from "@/pages/App/App";
-import { useSanitize } from "@/hooks/use-sanitize";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
@@ -7,6 +6,7 @@ import { useCallback, useContext } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../../../components/ui/context-menu";
 import { useChatContext } from "./Chat";
+import { SafeHtml } from "@/components/ui/safe-html";
 
 type MessageProps = {
   message: MessageWithAuthor;
@@ -15,7 +15,6 @@ type MessageProps = {
 export function Message({ message }: MessageProps) {
   const { author, body, userId, _creationTime } = message;
   const user = useContext(UserContext);
-  const sanitize = useSanitize();
   
   const userIsAuthor = userId === user?._id;
 
@@ -41,14 +40,13 @@ export function Message({ message }: MessageProps) {
         </div>
 
         <ContextMenuTrigger disabled={userId !== user?._id}>
-          <div
+          <SafeHtml
+            html={body}
             className={cn(
               "rounded-xl bg-muted px-3 py-2 transition-all",
-              userIsAuthor ? "rounded-tr-none" : "rounded-tl-none",
+              userIsAuthor ? "rounded-tr-none" : "rounded-tl-none"
             )}
-            dangerouslySetInnerHTML={{ __html: sanitize(body) }}
-          >
-          </div>
+          />
         </ContextMenuTrigger>
       </li>
       <ContextMenuContent>
