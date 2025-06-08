@@ -4,7 +4,6 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { Message } from "./Message";
 import { Button } from "../../../components/ui/button";
 import { ArrowLeftIcon, XIcon } from "lucide-react";
-import { Separator } from "../../../components/ui/separator";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 
 interface MessageContextProps {
@@ -25,16 +24,6 @@ export function MessageContext({ messageId, onClose, onBackToChat }: MessageCont
   }
 
   const { messages, targetMessageId, targetIndex } = contextData;
-
-  const wereSentInDifferentDays = (
-    message1: typeof messages[0],
-    message2: typeof messages[0],
-  ): boolean => {
-    return (
-      new Date(message1._creationTime).toDateString() !==
-      new Date(message2._creationTime).toDateString()
-    );
-  };
 
   return (
     <div className="flex flex-col h-full">
@@ -64,16 +53,6 @@ export function MessageContext({ messageId, onClose, onBackToChat }: MessageCont
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message, index) => (
             <div key={message.isomorphicId}>
-              {/* Date separator */}
-              {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
-                <>
-                  <Separator orientation="horizontal" className="-mt-7" />
-                  <div className="self-center text-muted px-2 z-10 bg-card">
-                    {new Date(message._creationTime).toDateString()}
-                  </div>
-                </>
-              )}
-              
               {/* Highlight the target message */}
               <div 
                 className={

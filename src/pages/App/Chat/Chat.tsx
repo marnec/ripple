@@ -112,21 +112,18 @@ export function Chat({ channelId }: ChatProps) {
     }
   };
 
-  // Show message context view when jumping to a specific message
-  if (viewMode === 'context' && contextMessageId) {
-    return (
-      <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
+  return (
+    <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
+      {/* Show message context view when jumping to a specific message */}
+      {viewMode === 'context' && contextMessageId ? (
         <MessageContext
           messageId={contextMessageId}
           onClose={handleBackToChat}
           onBackToChat={handleBackToChat}
         />
-      </ChatContext.Provider>
-    );
-  }
-
-  return (
-    <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
+      ) : (
+        <>
+          {/* Main Chat View */}
       {/* Inline Search */}
       <div className="flex items-center gap-2 p-2 border-b">
         <div className="relative flex-1">
@@ -185,7 +182,9 @@ export function Chat({ channelId }: ChatProps) {
         )}
       </MessageList>
 
-      <MessageComposer handleSubmit={handleSubmit}></MessageComposer>
+          <MessageComposer handleSubmit={handleSubmit}></MessageComposer>
+        </>
+      )}
     </ChatContext.Provider>
   );
 }
