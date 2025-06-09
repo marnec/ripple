@@ -5,19 +5,19 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery } from "convex/react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { ConvexError } from "convex/values";
+import { SearchIcon } from "lucide-react";
+import { createContext, Fragment, useContext, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
+import { Input } from "../../../components/ui/input";
+import { Separator } from "../../../components/ui/separator";
 import { toast } from "../../../components/ui/use-toast";
 import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
-import { Separator } from "../../../components/ui/separator";
-import { ConvexError } from "convex/values";
-import { SearchDialog } from "./SearchDialog";
 import { MessageContext } from "./MessageContext";
-import { SearchIcon } from "lucide-react";
-import { Input } from "../../../components/ui/input";
+import { SearchDialog } from "./SearchDialog";
 
 export const useChatContext = () => {
   const context = useContext(ChatContext);
@@ -154,7 +154,7 @@ export function Chat({ channelId }: ChatProps) {
         {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
         {(messages || []).map((message, index) => (
-          <>
+          <Fragment key={message.isomorphicId}>
             {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
               <>
                 <Separator orientation="horizontal" className="-mt-7" />
@@ -163,8 +163,8 @@ export function Chat({ channelId }: ChatProps) {
                 </div>
               </>
             )}
-            <Message key={message.isomorphicId} message={message}></Message>
-          </>
+            <Message message={message}></Message>
+          </Fragment>
         ))}
         {messages && (
           <Button
