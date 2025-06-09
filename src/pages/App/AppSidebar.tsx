@@ -33,30 +33,30 @@ export function AppSidebar() {
 
   const handleChannelSelect = (id: string | null) => {
     if (!id) {
-      navigate(`/workspace/${workspaceId}`);
+      navigate(`/workspaces/${workspaceId}`);
     } else {
-      navigate(`/workspace/${workspaceId}/channel/${id}`);
+              navigate(`/workspaces/${workspaceId}/channels/${id}`);
       setOpenMobile(false);
       subscribeUser();
     }
   };
 
   const handleManageChannel = (id: string) => {
-    navigate(`/workspace/${workspaceId}/channel/${id}/settings`);
+    navigate(`/workspaces/${workspaceId}/channels/${id}/settings`);
   };
 
   const handleDocumentSelect = (id: string | null) => {
     setOpenMobile(false);
 
     if (!id) {
-      navigate(`/workspace/${workspaceId}/document`);
+      navigate(`/workspaces/${workspaceId}/documents`);
     } else {
-      navigate(`/workspace/${workspaceId}/document/${id}`);
+                              navigate(`/workspaces/${workspaceId}/documents/${id}`);
     }
   };
 
   const handleWorkspaceSelect = (id: string) => {
-    navigate(`/workspace/${id}`);
+    navigate(`/workspaces/${id}`);
   };
 
   return (

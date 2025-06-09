@@ -21,11 +21,11 @@ export const router = createBrowserRouter(
       element: <App />,
       children: [
         {
-          path: "/workspace",
+          path: "/workspaces",
           element: <div>hellop</div>,
         },
         {
-          path: "/workspace/:workspaceId",
+          path: "/workspaces/:workspaceId",
           children: [
             {
               index: true,
@@ -36,7 +36,7 @@ export const router = createBrowserRouter(
               element: <WorkspaceSettings />,
             },
             {
-              path: "channel",
+              path: "channels",
               children: [
                 {
                   path: ":channelId",
@@ -53,7 +53,7 @@ export const router = createBrowserRouter(
               ],
             },
             {
-              path: "document",
+              path: "documents",
               children: [
                 {
                   index: true,
