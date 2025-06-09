@@ -55,10 +55,6 @@ export function Chat({ channelId }: ChatProps) {
   const sendMessage = useMutation(api.messages.send);
   const editMessage = useMutation(api.messages.update);
 
-  useEffect(() => {
-    console.log(messages);
-  }, [messages]);
-
   const handleLoadMore = () => {
     if (!isLoading) {
       loadMore(25);

@@ -32,7 +32,6 @@ export function AppSidebar() {
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
 
   const handleChannelSelect = (id: string | null) => {
-    console.log(location);
     if (!id) {
       navigate(`/workspace/${workspaceId}`);
     } else {

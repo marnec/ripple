@@ -28,7 +28,6 @@ export function InviteAcceptPage() {
 
   useEffect(() => {
     storeInviteId();
-    console.log("Invite ID stored:", inviteId, user);
   }, [inviteId]);
 
   const handleAcceptInvite = async () => {

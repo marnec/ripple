@@ -67,10 +67,10 @@ export const sendPushNotification = action({
         return webpush
           .sendNotification({ endpoint, expirationTime, keys }, notification, notificationOptions)
           .then(() => {
-            console.log(`Successfully sent notification to endpoint ID=${id}`);
+            console.info(`Successfully sent notification to endpoint ID=${id}`);
           })
           .catch((error: unknown) => {
-            console.log(
+            console.info(
               `An error occurred while sending notification to endpoint=${id}, err=${error}`,
             );
           });
