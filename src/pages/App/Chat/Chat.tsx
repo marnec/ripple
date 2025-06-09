@@ -170,7 +170,7 @@ export function Chat({ channelId }: ChatProps) {
           <Button
             variant="outline"
             className="self-center sm:w-fit w-full"
-            disabled={status === "Exhausted"}
+            disabled={status === "Exhausted" || isLoading || !messages?.length}
             onClick={() => loadMore(25)}
           >
             Load more...
