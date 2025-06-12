@@ -15,6 +15,7 @@ import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DocumentSelectorList } from "./Document/DocumentSelectorList";
+import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 
 export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
@@ -24,7 +25,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { setOpenMobile } = useSidebar();
 
-  const { workspaceId, channelId, documentId } = useParams<QueryParams>();
+  const { workspaceId, channelId, documentId, diagramId } = useParams<QueryParams>();
 
   const { subscribeUser } = usePushNotifications();
 
@@ -52,6 +53,16 @@ export function AppSidebar() {
       navigate(`/workspaces/${workspaceId}/documents`);
     } else {
                               navigate(`/workspaces/${workspaceId}/documents/${id}`);
+    }
+  };
+
+  const handleDiagramSelect = (id: string | null) => {
+    setOpenMobile(false);
+
+    if (!id) {
+      navigate(`/workspaces/${workspaceId}/diagrams`);
+    } else {
+      navigate(`/workspaces/${workspaceId}/diagrams/${id}`);
     }
   };
 
@@ -84,6 +95,11 @@ export function AppSidebar() {
                 workspaceId={workspaceId}
                 documentId={documentId}
                 onDocumentSelect={handleDocumentSelect}
+              />
+              <DiagramSelectorList
+                workspaceId={workspaceId}
+                diagramId={diagramId}
+                onDiagramSelect={handleDiagramSelect}
               />
             </>
           )}

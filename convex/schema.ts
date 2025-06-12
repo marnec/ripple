@@ -20,7 +20,7 @@ export default defineSchema({
     body: v.string(),
     plainText: v.string(), // to filter messages
     channelId: v.id("channels"),
-    deleted: v.boolean()
+    deleted: v.boolean(),
   })
     .index("by_channel", ["channelId"])
     .index("undeleted_by_channel", ["channelId", "deleted"])
@@ -88,6 +88,15 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     tags: v.optional(v.array(v.string())),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
+
+  diagrams: defineTable({
+    workspaceId: v.id("workspaces"),
+    name: v.string(),
+    tags: v.optional(v.array(v.string())),
+    content: v.optional(v.string()), // Excalidraw diagram data as JSON string
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),

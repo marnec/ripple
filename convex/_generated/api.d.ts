@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as breadcrumb from "../breadcrumb.js";
 import type * as channelMembers from "../channelMembers.js";
 import type * as channels from "../channels.js";
+import type * as diagrams from "../diagrams.js";
 import type * as documents from "../documents.js";
 import type * as emails from "../emails.js";
 import type * as http from "../http.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   breadcrumb: typeof breadcrumb;
   channelMembers: typeof channelMembers;
   channels: typeof channels;
+  diagrams: typeof diagrams;
   documents: typeof documents;
   emails: typeof emails;
   http: typeof http;

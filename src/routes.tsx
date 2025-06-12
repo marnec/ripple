@@ -5,11 +5,14 @@ import { ChannelSettings } from "./pages/App/Channel/ChannelSettings";
 import { ChatContainer } from "./pages/App/Chat/ChatContainer";
 import { DocumentEditorContainer } from "./pages/App/Document/DocumentEditor";
 import { Documents } from "./pages/App/Document/Documents";
+import { ExcalidrawEditor } from "./pages/App/Diagram/ExcalidrawEditor";
+import { Diagrams } from "./pages/App/Diagram/Diagrams";
 import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
 import { WorkspaceSettings } from "./pages/App/Workspace/WorkspaceSettings";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 import { LoginPage } from "./pages/LoginPage";
 import { UserProfilePage } from "./pages/UserProfilePage";
+import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
 
 export const router = createBrowserRouter(
   [
@@ -62,6 +65,19 @@ export const router = createBrowserRouter(
                 {
                   path: ":documentId",
                   element: <DocumentEditorContainer />,
+                },
+              ],
+            },
+            {
+              path: "diagrams",
+              children: [
+                {
+                  index: true,
+                  element: <Diagrams />,
+                },
+                {
+                  path: ":diagramId",
+                  element: <DiagramPage />,
                 },
               ],
             },
