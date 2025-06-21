@@ -96,7 +96,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     tags: v.optional(v.array(v.string())),
-    content: v.optional(v.string()), // Excalidraw diagram data as JSON string
+    content: v.optional(v.string()),
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
