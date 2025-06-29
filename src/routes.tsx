@@ -14,6 +14,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { UserProfilePage } from "./pages/UserProfilePage";
 import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
 import { Workspaces } from "./pages/App/Workspace/Workspaces";
+import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
 
 export const router = createBrowserRouter(
   [
@@ -42,6 +43,10 @@ export const router = createBrowserRouter(
             {
               path: "channels",
               children: [
+                {
+                  index: true, 
+                  element: <ChannelDetails />
+                },
                 {
                   path: ":channelId",
                   element: <ChatContainer />,
