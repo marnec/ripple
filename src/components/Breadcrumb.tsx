@@ -30,13 +30,19 @@ function NamedBreadcrumbItem({ item, onClick }: BreadcrumbLinkWithResourceProps)
   );
 
   const handleClick = () => {
-    // Call with resource ID if defined, else use label
-    const identifier = item.resourceId || item.label;
-    console.log('Breadcrumb clicked with identifier:', identifier);
     onClick(item.href);
   };
 
-  const displayName = resourceName ? `${resourceName} [${item.label}]` :  item.label;
+  let displayName;
+  if (item.resourceId) {
+    if (resourceName === undefined) {
+      displayName = "...";
+    } else {
+      displayName = resourceName ?? item.label;
+    }
+  } else {
+    displayName = item.label;
+  }
 
   return (
     <BreadcrumbLink onClick={handleClick}>
@@ -50,15 +56,21 @@ export function DynamicBreadcrumb() {
   const location = useLocation();
   const pathSegments = location.pathname.split("/").filter(Boolean);
 
-  let items: BreadcrumbItemData[] = [];
+  const items: BreadcrumbItemData[] = [];
   for (let i = 0; i < pathSegments.length; i++) {
-    if (i % 2 !== 0) continue;
+    const segment = pathSegments[i];
+    const href = `/${pathSegments.slice(0, i + 1).join("/")}`;
+    const isResource = i % 2 !== 0;
 
-    const href = `/${pathSegments.slice(0, i + 2).join("/")}`;
-    const label = pathSegments[i];
-    const resourceId = i + 1 < pathSegments.length ? pathSegments[i + 1] : undefined;
-
-    items.push({ href, label, resourceId });
+    if (isResource) {
+      items.push({ href, label: segment, resourceId: segment });
+    } else {
+      items.push({
+        href,
+        label: segment.charAt(0).toUpperCase() + segment.slice(1),
+        resourceId: undefined,
+      });
+    }
   }
 
   return (
