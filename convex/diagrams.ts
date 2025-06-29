@@ -158,7 +158,38 @@ export const updateContent = mutation({
         `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
       );
 
-    return ctx.db.patch(id, { content });
+    const newScene = JSON.parse(content);
+    const existingScene = JSON.parse(
+      diagram.content || '{"elements": [], "appState": {}}',
+    );
+
+    const existingElements = Array.isArray(existingScene.elements)
+      ? existingScene.elements
+      : [];
+
+    const existingElementsMap = new Map(
+      existingElements.map((el: any) => [el.id, el]),
+    );
+
+    const newElements = Array.isArray(newScene.elements)
+      ? newScene.elements
+      : [];
+
+    for (const element of newElements) {
+      existingElementsMap.set(element.id, element);
+    }
+
+    const mergedElements = Array.from(existingElementsMap.values());
+
+    const mergedScene = {
+      elements: mergedElements,
+      appState: {
+        ...(existingScene.appState || {}),
+        ...(newScene.appState || {}),
+      },
+    };
+
+    return ctx.db.patch(id, { content: JSON.stringify(mergedScene) });
   },
 });
 

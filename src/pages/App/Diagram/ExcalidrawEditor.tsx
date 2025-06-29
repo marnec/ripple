@@ -1,90 +1,113 @@
 "use client";
 
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, reconcileElements } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
-import { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
+import {
+  AppState,
+  ExcalidrawImperativeAPI,
+} from "@excalidraw/excalidraw/types";
+import {
+  ExcalidrawElement,
+  OrderedExcalidrawElement,
+  Theme,
+} from "@excalidraw/excalidraw/element/types";
 import { useTheme } from "next-themes";
-import { Reducer, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDebounceCallback } from "usehooks-ts";
-
-import { OrderedExcalidrawElement, Theme } from "@excalidraw/excalidraw/element/types";
 import { Doc } from "../../../../convex/_generated/dataModel";
 
-type DiagramState = "Initial" | "Ready" | "Saving" | "Syncing";
-
-type DiagramEvent = "LoadInitialData" | "Save" | "Sync" | "OperationComplete";
-
-const diagramStateMachine: Reducer<DiagramState, DiagramEvent> = (state, event) => {
-  switch (state) {
-    case "Initial":
-      if (event === "LoadInitialData") return "Ready";
-      break;
-    case "Ready":
-      if (event === "Save") return "Saving";
-      if (event === "Sync") return "Syncing";
-      break;
-    case "Saving":
-    case "Syncing":
-      if (event === "OperationComplete") return "Ready";
-      break;
-  }
-
-  return state;
-};
-
 type DiagramPageProps = {
-  onSave: (elements: readonly OrderedExcalidrawElement[]) => Promise<null>;
+  onSave: (
+    elements: readonly OrderedExcalidrawElement[],
+    appState: Partial<AppState>,
+  ) => Promise<null>;
   diagram: Doc<"diagrams">;
 };
 
 export function ExcalidrawEditor({ onSave, diagram }: DiagramPageProps) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI>();
-
   const { resolvedTheme } = useTheme();
-
-  const [state, dispatch] = useReducer(diagramStateMachine, "Initial");
-
-  const previousContent = useRef<string>(diagram?.content || "");
+  const isSaving = useRef(false);
+  const elementsRef = useRef<readonly ExcalidrawElement[]>();
 
   useEffect(() => {
-    if (!excalidrawAPI) return;
-    if (state !== "Ready") return;
+    if (!diagram.content) return;
+    try {
+      const scene = JSON.parse(diagram.content);
+      elementsRef.current = scene.elements || [];
+    } catch (e) {
+      console.error("Failed to parse diagram content in useEffect", e);
+    }
+  }, [diagram.content]);
 
-    dispatch("Sync");
-    excalidrawAPI.updateScene({ elements: JSON.parse(diagram?.content || "null") || [] });
-    dispatch("OperationComplete");
-  }, [diagram, excalidrawAPI]);
+  useEffect(() => {
+    if (!excalidrawAPI || !diagram.content) return;
 
-  const debouncedSave = useDebounceCallback(async (elements) => {
-    dispatch("Save");
-    await onSave(elements);
-    dispatch("OperationComplete");
-  }, 200);
+    try {
+      const remoteScene = JSON.parse(diagram.content);
+      if (!remoteScene) return;
+
+      const localElements = excalidrawAPI.getSceneElementsIncludingDeleted();
+      const remoteElements = remoteScene.elements as RemoteExcalidrawElement[];
+
+      if (JSON.stringify(localElements) === JSON.stringify(remoteElements)) {
+        return;
+      }
+
+      const reconciledElements = reconcileElements(
+        localElements,
+        remoteElements,
+        excalidrawAPI.getAppState(),
+      );
+      excalidrawAPI.updateScene({ elements: reconciledElements });
+    } catch (e) {
+      console.error("Failed to parse or sync diagram content", e);
+    }
+  }, [diagram.content, excalidrawAPI]);
+
+  const debouncedSave = useDebounceCallback(
+    async (
+      elements: readonly OrderedExcalidrawElement[],
+      appState: AppState,
+    ) => {
+      if (isSaving.current) return;
+      isSaving.current = true;
+      elementsRef.current = elements;
+      await onSave(elements, {
+        viewBackgroundColor: appState.viewBackgroundColor,
+      });
+      isSaving.current = false;
+    },
+    100,
+  );
 
   return (
-    <div className="h-full w-full relative">
-      {state === "Saving" && (
-        <div className="absolute top-4 right-4 z-[9999] text-white p-2 rounded-md shadow-lg flex items-center gap-2">
-          <span className="text-sm">Saving...</span>
-        </div>
-      )}
+    <div className="relative h-full w-full">
       <div className="h-full">
         <Excalidraw
           excalidrawAPI={setExcalidrawAPI}
           theme={resolvedTheme as Theme}
           initialData={() => {
-            dispatch("LoadInitialData");
-            const data = { elements: JSON.parse(diagram.content || "null") || [] };
-            return data;
+            if (!diagram.content) return { elements: [] };
+            try {
+              const scene = JSON.parse(diagram.content);
+              elementsRef.current = scene.elements || [];
+              return scene;
+            } catch (e) {
+              console.error("Failed to parse initial diagram content", e);
+              return { elements: [] };
+            }
           }}
-          onChange={(elements) => {
-            if (JSON.stringify(elements) === previousContent.current) return;
-
-            previousContent.current = JSON.stringify(elements);
-
-            if (state !== "Ready") return;
-
-            debouncedSave(elements);
+          onChange={(elements, appState) => {
+            if (
+              JSON.stringify(elements) !== JSON.stringify(elementsRef.current)
+            ) {
+              if (isSaving.current) {
+                return;
+              }
+              debouncedSave(elements, appState);
+            }
           }}
           zenModeEnabled={true}
           UIOptions={{

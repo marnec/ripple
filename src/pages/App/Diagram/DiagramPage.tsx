@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useCallback } from "react";
 import { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { AppState } from "@excalidraw/excalidraw/types";
 
 export function DiagramPage() {
   const { diagramId } = useParams<{ diagramId: Id<"diagrams"> }>();
@@ -12,10 +13,23 @@ export function DiagramPage() {
   const updateDiagramContent = useMutation(api.diagrams.updateContent);
 
   const onSave = useCallback(
-    async (elements: readonly OrderedExcalidrawElement[]) =>
-      updateDiagramContent({ id: diagramId!, content: JSON.stringify(elements) }),
-    [diagramId],
+    async (
+      elements: readonly OrderedExcalidrawElement[],
+      appState: Partial<AppState>,
+    ) => {
+      if (!diagramId) return null;
+      console.log("Saving")
+      await updateDiagramContent({
+        id: diagramId,
+        content: JSON.stringify({
+          elements,
+          appState,
+        }),
+      });
+      return null;
+    },
+    [diagramId, updateDiagramContent],
   );
 
-  return diagram && <ExcalidrawEditor onSave={onSave} diagram={diagram || ""} />;
+  return diagram && <ExcalidrawEditor onSave={onSave} diagram={diagram} />;
 }
