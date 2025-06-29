@@ -13,6 +13,7 @@ import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 import { LoginPage } from "./pages/LoginPage";
 import { UserProfilePage } from "./pages/UserProfilePage";
 import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
+import { Workspaces } from "./pages/App/Workspace/Workspaces";
 
 export const router = createBrowserRouter(
   [
@@ -25,7 +26,7 @@ export const router = createBrowserRouter(
       children: [
         {
           path: "/workspaces",
-          element: <div>hellop</div>,
+          element: <Workspaces />,
         },
         {
           path: "/workspaces/:workspaceId",
