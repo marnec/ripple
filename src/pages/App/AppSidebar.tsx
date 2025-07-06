@@ -23,7 +23,7 @@ export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, onSidebarClose } = useSidebar();
 
   const { workspaceId, channelId, documentId, diagramId } = useParams<QueryParams>();
 
@@ -70,6 +70,12 @@ export function AppSidebar() {
     navigate(`/workspaces/${id}`);
   };
 
+  const handleChannelDetails = (id: string) => {
+    if (!workspaceId) return;
+    if (isMobile) onSidebarClose?.();
+    navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
+  };
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -90,6 +96,7 @@ export function AppSidebar() {
                 workspaceId={workspaceId}
                 onChannelSelect={handleChannelSelect}
                 onManageChannel={handleManageChannel}
+                onChannelDetails={handleChannelDetails}
               />
               <DocumentSelectorList
                 workspaceId={workspaceId}

@@ -15,6 +15,7 @@ import { UserProfilePage } from "./pages/UserProfilePage";
 import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
 import { Workspaces } from "./pages/App/Workspace/Workspaces";
 import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
+import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
 
 export const router = createBrowserRouter(
   [
@@ -44,8 +45,8 @@ export const router = createBrowserRouter(
               path: "channels",
               children: [
                 {
-                  index: true, 
-                  element: <ChannelDetails />
+                  index: true,
+                  element: <ChannelDetails />,
                 },
                 {
                   path: ":channelId",
@@ -71,6 +72,10 @@ export const router = createBrowserRouter(
                 {
                   path: ":documentId",
                   element: <DocumentEditorContainer />,
+                },
+                {
+                  path: ":documentId/settings",
+                  element: <DocumentSettings />,
                 },
               ],
             },

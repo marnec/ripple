@@ -1,6 +1,8 @@
 import { BlockNoteEditor } from "@blocknote/core";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useBlockNoteSync } from "@convex-dev/prosemirror-sync/blocknote";
+import FacePile from "@convex-dev/presence/facepile";
+import usePresence from "@convex-dev/presence/react";
 import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -22,6 +24,8 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const [editor, setEditor] = useState<BlockNoteEditor | null>(null);
   const sync = useBlockNoteSync(api.prosemirror, documentId);
   const document = useQuery(api.documents.get, { id: documentId });
+  const viewer = useQuery(api.users.viewer);
+  const presenceState = usePresence(api.presence, documentId, viewer?.name ?? "Anonymous");
 
   useEffect(() => {
     const setUpEditor = async () => {
@@ -41,7 +45,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   return (
     <>
       {editor && (
-        <div className="px-20 max-w-full flex-1 animate-fade-in">
+        <div className="px-20 max-w-full flex-1 animate-fade-in relative">
+          <div className="absolute top-12 right-20 z-10">
+            <FacePile presenceState={presenceState ?? []} />
+          </div>
           <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
           <BlockNoteView editor={editor} />
         </div>
