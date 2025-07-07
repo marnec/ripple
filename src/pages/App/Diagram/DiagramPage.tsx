@@ -6,17 +6,12 @@ import { api } from "../../../../convex/_generated/api";
 import { useCallback } from "react";
 import { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { AppState } from "@excalidraw/excalidraw/types";
-import usePresence from "@convex-dev/presence/react";
-import FacePile from "@convex-dev/presence/facepile";
+import { useEnhancedPresence } from "../../../hooks/use-enhanced-presence";
+import { FacePile } from "../../../components/ui/facepile";
 
 function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
-  const viewer = useQuery(api.users.viewer);
-  const presenceState = usePresence(
-    api.presence,
-    diagramId,
-    viewer?.name ?? "Anonymous",
-  );
+  const enhancedPresence = useEnhancedPresence(diagramId);
   const updateDiagramContent = useMutation(api.diagrams.updateContent);
 
   const onSave = useCallback(
@@ -41,7 +36,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
     <div className="relative h-full w-full">
       {diagram && <ExcalidrawEditor onSave={onSave} diagram={diagram} />}
       <div className="absolute top-2 right-10 z-50">
-        <FacePile presenceState={presenceState ?? []} />
+        <FacePile users={enhancedPresence} />
       </div>
     </div>
   );
