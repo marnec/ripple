@@ -35,7 +35,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         return;
       }
 
-      setEditor(sync.editor as unknown as BlockNoteEditor);
+      setEditor(sync.editor);
     };
 
     setUpEditor();

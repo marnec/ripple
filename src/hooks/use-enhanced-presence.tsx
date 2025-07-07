@@ -22,7 +22,8 @@ export function useEnhancedPresence(
   const presenceState = usePresence(
     api.presence,
     roomId,
-    viewer?.name ?? "Anonymous"
+    viewer?.name ?? "Anonymous",
+    2000
   );
 
   // Enhance presence data with user information
