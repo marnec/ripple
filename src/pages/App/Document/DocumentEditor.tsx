@@ -45,7 +45,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     <>
       {editor && (
         <div className="px-20 max-w-full flex-1 animate-fade-in relative">
-          <div className="absolute top-12 right-20 z-10">
+          <div className="absolute top-5 right-10 z-10">
             <FacePile users={enhancedPresence} hideInactive={true} />
           </div>
           <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
