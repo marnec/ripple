@@ -14,6 +14,7 @@ interface FacePileProps {
   users: UserPresence[];
   max?: number;
   className?: string;
+  hideInactive?: boolean;
 }
 
 const getInitials = (name: string) => {
@@ -38,9 +39,11 @@ const formatLastSeen = (lastDisconnected: number) => {
   return "just now";
 };
 
-export function FacePile({ users, max = 5, className }: FacePileProps) {
-  const visibleUsers = users.slice(0, max);
-  const remainingCount = users.length - max;
+export function FacePile({ users, max = 5, className, hideInactive = false }: FacePileProps) {
+  // Filter users based on hideInactive prop
+  const filteredUsers = hideInactive ? users.filter(user => user.online) : users;
+  const visibleUsers = filteredUsers.slice(0, max);
+  const remainingCount = filteredUsers.length - max;
 
   return (
     <div className={cn("flex -space-x-2", className)}>

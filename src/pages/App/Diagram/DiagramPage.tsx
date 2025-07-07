@@ -35,8 +35,8 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
   return (
     <div className="relative h-full w-full">
       {diagram && <ExcalidrawEditor onSave={onSave} diagram={diagram} />}
-      <div className="absolute top-2 right-10 z-50">
-        <FacePile users={enhancedPresence} />
+      <div className="absolute top-5 right-10 z-50">
+        <FacePile users={enhancedPresence} hideInactive={true} />
       </div>
     </div>
   );
