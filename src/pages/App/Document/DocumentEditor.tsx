@@ -2,6 +2,7 @@ import {
   BlockNoteEditor,
   BlockNoteSchema,
   defaultBlockSpecs,
+  defaultInlineContentSpecs,
 } from "@blocknote/core";
 import {
   SuggestionMenuController,
@@ -18,7 +19,13 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { QueryParams } from "@shared/types/routes";
 import { useEnhancedPresence } from "../../../hooks/use-enhanced-presence";
 import { FacePile } from "../../../components/ui/facepile";
-import { DiagramBlock } from "./DiagramBlock";
+import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
+import { User } from "./CustomBlocks/UserBlock";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "../../../components/ui/avatar";
 
 export function DocumentEditorContainer() {
   const { documentId } = useParams<QueryParams>();
@@ -35,9 +42,13 @@ const schema = BlockNoteSchema.create({
     ...defaultBlockSpecs,
     diagram: DiagramBlock,
   },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    mention: User,
+  },
 });
 
-type Editor = BlockNoteEditor<typeof schema.blockSchema>;
+type Editor = BlockNoteEditor<typeof schema.blockSchema, typeof schema.inlineContentSchema>;
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -49,6 +60,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const document = useQuery(api.documents.get, { id: documentId });
   const diagrams = useQuery(
     api.diagrams.list,
+    document ? { workspaceId: document.workspaceId } : "skip"
+  );
+  const workspaceMembers = useQuery(
+    api.workspaceMembers.membersByWorkspace,
     document ? { workspaceId: document.workspaceId } : "skip"
   );
   const enhancedPresence = useEnhancedPresence(documentId);
@@ -105,6 +120,40 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
                   .filter((item) =>
                     item.title.toLowerCase().includes(query.toLowerCase())
                   );
+              }}
+            />
+            <SuggestionMenuController
+              triggerCharacter={"@"}
+              getItems={async (query: string) => {
+                if (!workspaceMembers) return [];
+                return workspaceMembers
+                  .filter((member) =>
+                    member.name?.toLowerCase().includes(query.toLowerCase())
+                  )
+                  .map((member) => ({
+                    title: member.name ?? "Unknown User",
+                    onItemClick: () => {
+                      editor.insertInlineContent([
+                        {
+                          type: "mention",
+                          props: {
+                            userId: member._id,
+                          },
+                        },
+                        " ",
+                      ]);
+                    },
+                    icon: (
+                      <Avatar className="h-5 w-5">
+                        <AvatarImage src={member.image} />
+                        <AvatarFallback>
+                          {member.name?.charAt(0).toLocaleUpperCase() || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                    ),
+                    group: "Workspace members",
+                    key: member._id,
+                  }));
               }}
             />
           </BlockNoteView>

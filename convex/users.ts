@@ -13,6 +13,13 @@ export const viewer = query({
   },
 });
 
+export const get = query({
+  args: { id: v.id("users") },
+  handler: async (ctx, args) => {
+    return ctx.db.get(args.id);
+  },
+});
+
 export const update = mutation({
   args: {
     userId: v.id("users"),

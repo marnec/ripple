@@ -1,7 +1,7 @@
 import { createReactBlockSpec } from "@blocknote/react";
 import { useQuery } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { api } from "../../../../../convex/_generated/api";
+import { Id } from "../../../../../convex/_generated/dataModel";
 import { exportToSvg } from "@excalidraw/excalidraw";
 import { useEffect, useState } from "react";
 import {
@@ -9,8 +9,8 @@ import {
   NonDeleted,
 } from "@excalidraw/excalidraw/element/types";
 import { AppState } from "@excalidraw/excalidraw/types";
-import { useSanitize } from "../../../hooks/use-sanitize";
-import { Skeleton } from "../../../components/ui/skeleton";
+import { useSanitize } from "../../../../hooks/use-sanitize";
+import { Skeleton } from "../../../../components/ui/skeleton";
 import { useTheme } from "next-themes";
 
 const DiagramView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
