@@ -35,11 +35,11 @@ export const get = query({
   handler: async (ctx, { id }) => {
     const userId = await getAuthUserId(ctx);
 
-    if (!userId) throw new ConvexError("Not authenticated");
+    if (!userId) return null;
 
     const diagram = await ctx.db.get(id);
 
-    if (!diagram) throw new ConvexError("Diagram not found");
+    if (!diagram) return null;
 
     // Check workspace membership
     const workspaceMembership = await ctx.db
@@ -49,10 +49,7 @@ export const get = query({
       )
       .first();
 
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
-      );
+    if (!workspaceMembership) return null;
 
     return diagram;
   },
