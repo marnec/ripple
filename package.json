@@ -16,9 +16,9 @@
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
-    "@blocknote/core": "^0.31.1",
-    "@blocknote/react": "^0.31.1",
-    "@blocknote/shadcn": "^0.31.1",
+    "@blocknote/core": "^0.33",
+    "@blocknote/react": "^0.33",
+    "@blocknote/shadcn": "^0.33",
     "@convex-dev/auth": "^0.0.87",
     "@convex-dev/presence": "^0.1.5",
     "@convex-dev/prosemirror-sync": "^0.1.22",
