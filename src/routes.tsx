@@ -1,21 +1,20 @@
 import { createBrowserRouter } from "react-router-dom";
 import App from "./pages/App/App";
 import { ChannelVideoCall } from "./pages/App/Channel/ChannelCall";
+import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
 import { ChannelSettings } from "./pages/App/Channel/ChannelSettings";
 import { ChatContainer } from "./pages/App/Chat/ChatContainer";
+import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
+import { Diagrams } from "./pages/App/Diagram/Diagrams";
 import { DocumentEditorContainer } from "./pages/App/Document/DocumentEditor";
 import { Documents } from "./pages/App/Document/Documents";
-import { ExcalidrawEditor } from "./pages/App/Diagram/ExcalidrawEditor";
-import { Diagrams } from "./pages/App/Diagram/Diagrams";
+import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
 import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
+import { Workspaces } from "./pages/App/Workspace/Workspaces";
 import { WorkspaceSettings } from "./pages/App/Workspace/WorkspaceSettings";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 import { LoginPage } from "./pages/LoginPage";
 import { UserProfilePage } from "./pages/UserProfilePage";
-import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
-import { Workspaces } from "./pages/App/Workspace/Workspaces";
-import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
-import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
 
 export const router = createBrowserRouter(
   [

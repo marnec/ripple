@@ -12,6 +12,7 @@ export interface ChannelSelectorListProps {
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
   onManageChannel: (id: string) => void;
+  onChannelDetails: (id: string) => void;
 }
 
 export function ChannelSelectorList({
@@ -19,11 +20,12 @@ export function ChannelSelectorList({
   channelId,
   onChannelSelect,
   onManageChannel,
+  onChannelDetails,
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
 
   const channels = useQuery(api.channels.listByUserMembership, {
-    workspaceId: workspaceId as Id<"workspaces">,
+    workspaceId: workspaceId,
   });
 
   return (
@@ -41,6 +43,7 @@ export function ChannelSelectorList({
             channelId={channelId}
             onChannelSelect={onChannelSelect}
             onManageChannel={onManageChannel}
+            onChannelDetails={onChannelDetails}
           />
         ))}
       </SidebarMenu>

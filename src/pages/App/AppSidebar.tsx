@@ -7,6 +7,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import usePushNotifications from "@/hooks/use-push-notifications";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@shared/types/routes";
 import { makeUseQueryWithStatus } from "convex-helpers/react";
 import { useQueries, useQuery } from "convex/react";
@@ -22,8 +23,8 @@ export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
 
 export function AppSidebar() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { setOpenMobile, onSidebarClose } = useSidebar();
+  const { setOpenMobile } = useSidebar();
+  const isMobile = useIsMobile();
 
   const { workspaceId, channelId, documentId, diagramId } = useParams<QueryParams>();
 
@@ -36,7 +37,7 @@ export function AppSidebar() {
     if (!id) {
       navigate(`/workspaces/${workspaceId}`);
     } else {
-              navigate(`/workspaces/${workspaceId}/channels/${id}`);
+      navigate(`/workspaces/${workspaceId}/channels/${id}`);
       setOpenMobile(false);
       subscribeUser();
     }
@@ -52,7 +53,7 @@ export function AppSidebar() {
     if (!id) {
       navigate(`/workspaces/${workspaceId}/documents`);
     } else {
-                              navigate(`/workspaces/${workspaceId}/documents/${id}`);
+      navigate(`/workspaces/${workspaceId}/documents/${id}`);
     }
   };
 
@@ -72,7 +73,7 @@ export function AppSidebar() {
 
   const handleChannelDetails = (id: string) => {
     if (!workspaceId) return;
-    if (isMobile) onSidebarClose?.();
+    if (isMobile) setOpenMobile(false);
     navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
   };
 

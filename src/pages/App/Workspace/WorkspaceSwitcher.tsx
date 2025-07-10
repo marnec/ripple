@@ -127,7 +127,7 @@ export function WorkspaceSwitcher({
       />
       {activeWorkspace && (
         <InviteUserDialog
-          workspaceId={activeWorkspace!._id}
+          workspaceId={activeWorkspace._id}
           open={showInviteDialog}
           onOpenChange={setShowInviteDialog}
         />

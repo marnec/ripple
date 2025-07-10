@@ -33,8 +33,8 @@ export const deleteRoomSignal = mutation({
       );
 
     let deleted = 0;
-    for await (let signal of signals) {
-      ctx.db.delete(signal._id);
+    for await (const signal of signals) {
+      void ctx.db.delete(signal._id);
       deleted += 1;
     }
 
@@ -78,7 +78,7 @@ export const getAnswers = query({
     roomId: v.string(),
   },
   handler: async (ctx, { roomId }) => {
-    let userId = await ctx.auth.getUserIdentity();
+    const userId = await ctx.auth.getUserIdentity();
 
     return ctx.db
       .query("signals")

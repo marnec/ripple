@@ -1,32 +1,30 @@
-import { UserContext } from "@/pages/App/App";
 import { useToast } from "@/components/ui/use-toast";
+import { SignInForm } from "@/pages/Authentication/SignInForm";
 import { Authenticated, Unauthenticated, useMutation } from "convex/react";
-import { useContext, useEffect } from "react";
+import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { SignInForm } from "@/pages/Authentication/SignInForm";
 
 export function InviteAcceptPage() {
   const { inviteId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const acceptInvite = useMutation(api.workspaceInvites.accept);
-  const user = useContext(UserContext)
-
-  const storeInviteId = () => {
-    if (inviteId) {
-      localStorage.setItem("inviteId", inviteId);
-    }
-  };
-
+  
   const removeInviteId = () => {
     if (inviteId) {
       localStorage.removeItem("inviteId");
     }
   };
-
+  
   useEffect(() => {
+    const storeInviteId = () => {
+      if (inviteId) {
+        localStorage.setItem("inviteId", inviteId);
+      }
+    };
+
     storeInviteId();
   }, [inviteId]);
 

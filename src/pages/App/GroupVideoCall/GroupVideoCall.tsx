@@ -63,7 +63,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         frameRate: { min: 10, ideal: 15, max: 30 }
       };
 
-      let mediaRequests: MediaStreamConstraints = {
+      const mediaRequests: MediaStreamConstraints = {
         video: videoConstraints,
         audio: {
           echoCancellation: true,
@@ -75,7 +75,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
       console.log("Requesting media with constraints:", mediaRequests);
       
       let stream: MediaStream;
-      let attempts = [
+      const attempts = [
         // Try with ideal constraints
         mediaRequests,
         // Try with basic video constraints

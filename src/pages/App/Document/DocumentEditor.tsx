@@ -77,10 +77,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         return;
       }
 
-      setEditor(sync.editor as Editor);
+      setEditor(sync.editor);
     };
 
-    setUpEditor();
+    void setUpEditor();
   }, [sync, documentId]);
 
   return (

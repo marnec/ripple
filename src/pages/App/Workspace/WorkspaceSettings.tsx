@@ -10,7 +10,7 @@ import { Textarea } from "../../../components/ui/textarea";
 
 export function WorkspaceSettings() {
     const { workspaceId } = useParams()
-    let id = workspaceId as Id<"workspaces">
+    const id = workspaceId as Id<"workspaces">
     const workspace = useQuery(api.workspaces.get, { id});
     const updateWorkspace = useMutation(api.workspaces.update);
     const { toast } = useToast();
