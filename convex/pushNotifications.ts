@@ -15,10 +15,18 @@ export const sendPushNotification = action({
       id: v.id("users"),
     }),
   },
+  returns: v.null(),
   handler: async (ctx, { author, body, channelId }) => {
+    const channel = await ctx.runQuery(api.channels.get, { id: channelId });
+
+    if (!channel) throw new ConvexError(`Could not find channel=${channelId}`);
+
     const notification = JSON.stringify({
       title: author.name,
       body,
+      data: {
+        url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
+      },
     });
 
     const subject = process.env.VAPID_SUBJECT;
@@ -42,13 +50,12 @@ export const sendPushNotification = action({
 
     // when channelMembers will be done, I'll need to filter users by channel
     // for now I'll filter them by workspace
-    const channel = await ctx.runQuery(api.channels.get, { id: channelId });
-
-    if (!channel) throw new ConvexError(`Could not find channel=${channelId}`);
-
-    const workspaceUsers = await ctx.runQuery(api.workspaceMembers.byWorkspace, {
-      workspaceId: channel?.workspaceId,
-    });
+    const workspaceUsers: { userId: Doc<"users">["_id"] }[] = await ctx.runQuery(
+      api.workspaceMembers.byWorkspace,
+      {
+        workspaceId: channel?.workspaceId,
+      },
+    );
 
     const workspaceSubscriptions: Doc<"pushSubscriptions">[] = await ctx.runQuery(
       api.pushSubscription.usersSubscriptions,
@@ -59,7 +66,7 @@ export const sendPushNotification = action({
       },
     );
 
-    return Promise.allSettled(
+    await Promise.allSettled(
       workspaceSubscriptions.map(async (subscription) => {
         const { endpoint, expirationTime, keys } = subscription;
         const id = endpoint.split("/").at(-1);
@@ -69,12 +76,13 @@ export const sendPushNotification = action({
           .then(() => {
             console.info(`Successfully sent notification to endpoint ID=${id}`);
           })
-          .catch((error: unknown) => {
+          .catch((error: { message: string }) => {
             console.info(
-              `An error occurred while sending notification to endpoint=${id}, err=${error}`,
+              `An error occurred while sending notification to endpoint=${id}, err=${error.message}`,
             );
           });
       }),
     );
+    return null;
   },
 });
