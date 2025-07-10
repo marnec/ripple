@@ -76,6 +76,9 @@ export function ExcalidrawEditor({ onSave, diagram }: DiagramPageProps) {
       elementsRef.current = elements;
       await onSave(elements, {
         viewBackgroundColor: appState.viewBackgroundColor,
+        scrollX: appState.scrollX, 
+        scrollY: appState.scrollY,
+        editingFrame: appState.editingFrame
       });
       isSaving.current = false;
     },
@@ -106,7 +109,7 @@ export function ExcalidrawEditor({ onSave, diagram }: DiagramPageProps) {
               if (isSaving.current) {
                 return;
               }
-              debouncedSave(elements, appState);
+              void debouncedSave(elements, appState);
             }
           }}
           zenModeEnabled={true}

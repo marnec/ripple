@@ -35,15 +35,16 @@ const DiagramView = ({
     if (diagram && diagram.content) {
       try {
         const scene = JSON.parse(diagram.content);
-        const elements = scene.elements as NonDeleted<ExcalidrawElement>[];
+        
+        const elements = (scene.elements as NonDeleted<ExcalidrawElement>[])
+          .filter((e) => e.isDeleted !== true);
+
         if (!elements || elements.length === 0) {
           setSvg(""); // Mark as empty
           return;
         }
-        const savedAppState = scene.appState || {};
         const isDarkMode = resolvedTheme === "dark";
         const appState: Partial<AppState> = {
-          ...savedAppState,
           theme: isDarkMode ? "dark" : "light",
           exportBackground: false,
           exportWithDarkMode: isDarkMode,
@@ -54,6 +55,7 @@ const DiagramView = ({
           elements,
           appState,
           files: {},
+          exportingFrame: null,
         }).then((svgElement: SVGSVGElement) => {
           const svgWidth = parseFloat(svgElement.getAttribute("width") || "0");
           const svgHeight = parseFloat(svgElement.getAttribute("height") || "0");
@@ -77,7 +79,7 @@ const DiagramView = ({
     } else if (diagram) {
       setSvg(""); // Mark as empty
     }
-  }, [diagram, resolvedTheme]);
+  }, [diagram, resolvedTheme, onAspectRatioChange]);
 
   if (diagram === undefined) {
     return <Skeleton className="h-40 w-full" />;

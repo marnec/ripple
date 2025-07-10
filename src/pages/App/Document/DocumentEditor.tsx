@@ -5,27 +5,26 @@ import {
   defaultInlineContentSpecs,
 } from "@blocknote/core";
 import {
-  SuggestionMenuController,
-  getDefaultReactSlashMenuItems,
+  SuggestionMenuController
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useBlockNoteSync } from "@convex-dev/prosemirror-sync/blocknote";
+import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
-import { CircleSlashed, PenTool } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import { PenTool } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { QueryParams } from "@shared/types/routes";
-import { useEnhancedPresence } from "../../../hooks/use-enhanced-presence";
-import { FacePile } from "../../../components/ui/facepile";
-import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
-import { User } from "./CustomBlocks/UserBlock";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "../../../components/ui/avatar";
+import { FacePile } from "../../../components/ui/facepile";
+import { useEnhancedPresence } from "../../../hooks/use-enhanced-presence";
+import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
+import { User } from "./CustomBlocks/UserBlock";
 
 export function DocumentEditorContainer() {
   const { documentId } = useParams<QueryParams>();
