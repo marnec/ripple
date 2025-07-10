@@ -18,7 +18,7 @@ const VAPID_PUBLIC_KEY =
 
 function urlB64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/\-/g, "+").replace(/_/g, "/");
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
 
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
@@ -32,13 +32,18 @@ function urlB64ToUint8Array(base64String: string) {
 export const usePushNotifications = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [permission, setPermission] = useState(Notification.permission);
+  const [permission, setPermission] = useState(
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "denied",
+  );
   const registerSubscription = useMutation(api.pushSubscription.registerSubscription);
   const unregisterSubscription = useMutation(api.pushSubscription.unregisterSubscription);
   const deviceId = useDeviceId();
 
   const subscribeUser = async () => {
     try {
+      if (typeof window === "undefined" || !("Notification" in window)) {
+        throw new Error("Push notifications are not supported in this browser.");
+      }
       const result = await Notification.requestPermission();
       setPermission(result);
 
