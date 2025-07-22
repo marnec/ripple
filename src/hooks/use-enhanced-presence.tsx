@@ -5,7 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
 interface EnhancedUserPresence {
-  userId: string;
+  userId: Id<"users">;
   online: boolean;
   name?: string;
   image?: string;
@@ -13,63 +13,38 @@ interface EnhancedUserPresence {
   lastDisconnected?: number;
 }
 
-export function useEnhancedPresence(
-  roomId: Id<"documents"> | Id<"diagrams">
-) {
+export function useEnhancedPresence(roomId: string) {
   const viewer = useQuery(api.users.viewer);
-  
-  // Get the raw presence data - pass the user's name as expected
+
   const presenceState = usePresence(
     api.presence,
     roomId,
-    viewer?.name ?? "Anonymous",
-    2000
+    viewer?._id ?? "Anonymous", // Pass user ID as presence data
+    2000,
   );
 
-  // Enhance presence data with user information
-  const enhancedPresence = useMemo(() => {
+  const userIds = useMemo(() => {
     if (!presenceState || !Array.isArray(presenceState)) return [];
+    return presenceState.map((p: any) => p.user);
+  }, [presenceState]);
+
+  const users = useQuery(api.users.getByIds, { ids: userIds as Id<"users">[] });
+
+  const enhancedPresence = useMemo(() => {
+    if (!presenceState || !users) return [];
 
     return presenceState.map((presence: any) => {
-      // Handle different presence data formats
-      let userId: string;
-      let online: boolean = true;
-      let lastDisconnected: number | undefined;
-
-      if (typeof presence === 'string') {
-        userId = presence;
-      } else if (typeof presence === 'object') {
-        userId = presence.userId || presence.user || presence;
-        online = presence.online ?? true;
-        lastDisconnected = presence.lastDisconnected;
-      } else {
-        userId = String(presence);
-      }
-
-      // For the current user, use the viewer data
-      if (userId === viewer?._id || userId === viewer?.name) {
-        return {
-          userId: viewer._id,
-          online,
-          name: viewer.name,
-          image: viewer.image,
-          email: viewer.email,
-          lastDisconnected,
-        } as EnhancedUserPresence;
-      }
-
-      // For other users, we'll show what information we have
-      // In a real app, you might want to fetch user data for other users too
+      const user = users[presence.user as Id<"users">];
       return {
-        userId,
-        online,
-        name: userId,
-        image: undefined,
-        email: undefined,
-        lastDisconnected,
+        userId: presence.user,
+        online: presence.online,
+        name: user?.name,
+        image: user?.image,
+        email: user?.email,
+        lastDisconnected: presence.lastDisconnected,
       } as EnhancedUserPresence;
     });
-  }, [presenceState, viewer]);
+  }, [presenceState, users]);
 
   return enhancedPresence;
 } 

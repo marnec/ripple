@@ -7,7 +7,7 @@ const generateDeviceId = () => {
 export const useDeviceId = () => {
   const [deviceId, setDeviceId] = useState(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("device_id") || "";
+      return sessionStorage.getItem("device_id") || "";
     }
     return "";
   });
@@ -16,7 +16,7 @@ export const useDeviceId = () => {
     if (!deviceId) {
       const newId = generateDeviceId();
       setDeviceId(newId);
-      localStorage.setItem("device_id", newId);
+      sessionStorage.setItem("device_id", newId);
     }
   }, [deviceId]);
 

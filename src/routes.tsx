@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 import App from "./pages/App/App";
 import { ChannelVideoCall } from "./pages/App/Channel/ChannelCall";
 import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
@@ -21,16 +21,17 @@ export const router = createBrowserRouter(
     {
       path: "/",
       element: <App />,
-    },
-    {
-      element: <App />,
       children: [
         {
-          path: "/workspaces",
+          index: true,
+          element: <Navigate to="/workspaces" replace />,
+        },
+        {
+          path: "workspaces",
           element: <Workspaces />,
         },
         {
-          path: "/workspaces/:workspaceId",
+          path: "workspaces/:workspaceId",
           children: [
             {
               index: true,
@@ -94,14 +95,14 @@ export const router = createBrowserRouter(
           ],
         },
         {
-          path: "invite",
-          element: <InviteAcceptPage />,
-        },
-        {
           path: "profile",
           element: <UserProfilePage />,
         },
       ],
+    },
+    {
+      path: "/invite/:inviteId",
+      element: <InviteAcceptPage />,
     },
     {
       path: "/auth",
