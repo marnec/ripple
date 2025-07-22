@@ -1,6 +1,6 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation } from "convex/react";
-import { Folder, Hash, MoreHorizontal, Info, Trash2 } from "lucide-react";
+import { Folder, Info, MoreHorizontal, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -12,9 +12,9 @@ import {
 } from "../../../components/ui/dropdown-menu";
 import {
   SidebarMenuAction,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarMenuItem
 } from "../../../components/ui/sidebar";
+import { ChannelSelectorButton } from "./ChannelSelectorButton";
 
 export interface ChannelSelectorItemProps {
   channel: Doc<"channels">;
@@ -35,22 +35,14 @@ export function ChannelSelectorItem({
   const deleteChannel = useMutation(api.channels.remove);
 
   const handleChannelDelete = async (id: Id<"channels">) => {
-    deleteChannel({ id });
+    await deleteChannel({ id });
 
     onChannelSelect(null);
   };
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton
-        asChild
-        variant={channel._id === channelId ? "outline" : "default"}
-        onClick={() => onChannelSelect(channel._id)}
-      >
-        <div>
-          <Hash /> {channel.name}
-        </div>
-      </SidebarMenuButton>
+      <ChannelSelectorButton channelId={channelId} channel={channel} onClick={onChannelSelect} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <SidebarMenuAction showOnHover>
@@ -72,7 +64,7 @@ export function ChannelSelectorItem({
             <span>Manage channel</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => handleChannelDelete(channel._id)}>
+          <DropdownMenuItem onClick={() => void handleChannelDelete(channel._id)}>
             <Trash2 className="text-muted-foreground" />
             <span>Delete channel</span>
           </DropdownMenuItem>

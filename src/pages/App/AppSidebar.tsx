@@ -11,7 +11,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@shared/types/routes";
 import { makeUseQueryWithStatus } from "convex-helpers/react";
 import { useQueries, useQuery } from "convex/react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
@@ -39,7 +39,7 @@ export function AppSidebar() {
     } else {
       navigate(`/workspaces/${workspaceId}/channels/${id}`);
       setOpenMobile(false);
-      subscribeUser();
+      void subscribeUser();
     }
   };
 

@@ -35,6 +35,7 @@ const optimisticallyAddMemberToChannel: OptimisticUpdate<
       _id: crypto.randomUUID() as Id<"channelMembers">,
       _creationTime: +new Date(),
       channelId,
+      workspaceId: undefined as unknown as Id<"workspaces">,
       userId,
       role: ChannelRole.MEMBER,
       name: "...",
@@ -42,25 +43,6 @@ const optimisticallyAddMemberToChannel: OptimisticUpdate<
   ]);
 };
 
-// const optimisticallyRemoveFromChannel: OptimisticUpdate<
-//   FunctionArgs<typeof api.channelMembers.removeFromChannel>
-// > = (lqs, { channelId, userId }) => {
-//   const existingChannelMembers = lqs.getQuery(api.channelMembers.membersByChannel, {
-//     channelId,
-//   });
-
-//   if (existingChannelMembers === undefined) return;
-
-//   const indexOfItemToRemove = existingChannelMembers.findIndex(
-//     (member) => member.userId === userId,
-//   );
-
-//   if (indexOfItemToRemove === -1) return;
-
-//   existingChannelMembers.splice(indexOfItemToRemove, 1);
-
-//   lqs.setQuery(api.channelMembers.membersByChannel, { channelId }, existingChannelMembers);
-// };
 
 type ChannelMembershipSelectionProps = {
   workspaceMembers: Doc<"users">[];
@@ -79,8 +61,7 @@ export const ChannelMembershipSelection = ({
     optimisticallyAddMemberToChannel,
   );
 
-  const removeFromChannel = useMutation(api.channelMembers.removeFromChannel); //
-  // .withOptimisticUpdate(optimisticallyRemoveFromChannel);
+  const removeFromChannel = useMutation(api.channelMembers.removeFromChannel); 
 
   const { toast } = useToast();
 

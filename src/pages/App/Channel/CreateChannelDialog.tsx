@@ -1,3 +1,19 @@
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "convex/react";
+import { useForm } from "react-hook-form";
+import * as z from "zod";
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import {
   Dialog,
@@ -9,10 +25,13 @@ import {
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
 import { useToast } from "../../../components/ui/use-toast";
-import { useMutation } from "convex/react";
-import { FormEvent, useState } from "react";
-import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+
+const formSchema = z.object({
+  name: z.string().min(1, { message: "Channel name is required" }),
+  isPublic: z.boolean().default(true),
+});
 
 export function CreateChannelDialog({
   workspaceId,
@@ -23,25 +42,40 @@ export function CreateChannelDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [name, setName] = useState("");
   const createChannel = useMutation(api.channels.create);
+  const navigate = useNavigate()
   const { toast } = useToast();
+  const channelNameInput = useRef<HTMLInputElement | null>(null)
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    channelNameInput.current?.focus();
+  }, [])
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+      isPublic: true,
+    },
+  });
+
+
+  const createNewChannel = async (values: z.infer<typeof formSchema>) => {
     try {
-      await createChannel({ name, workspaceId });
+      const newChannelId = await createChannel({ ...values, workspaceId });
       toast({
         title: "Channel created",
-        description: `Successfully created channel "#${name}"`,
+        description: `Successfully created channel "#${values.name}"`,
       });
-      setName("");
+      form.reset();
+      navigate(`/workspaces/${workspaceId}/channels/${newChannelId}${values.isPublic ? '' : '/settings'}`)
+
       onOpenChange(false);
     } catch (error) {
       toast({
         title: "Error creating channel",
         description: "Please try again later",
-        variant: "destructive",        
+        variant: "destructive",
       });
     }
   };
@@ -55,25 +89,56 @@ export function CreateChannelDialog({
             Create a new channel in this workspace
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium">
-              Channel Name
-            </label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter channel name"
-              required
+        <Form {...form}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void form.handleSubmit(createNewChannel)(e);
+            }}
+            className="space-y-4"
+          >
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Channel Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      ref={channelNameInput}
+                      placeholder="Enter channel name"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={!name}>
-              Create Channel
-            </Button>
-          </DialogFooter>
-        </form>
+            <FormField
+              control={form.control}
+              name="isPublic"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Public</FormLabel>
+                    <FormDescription>
+                      Anyone in the workspace can view and join this channel.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+            <DialogFooter>
+              <Button type="submit">Create Channel</Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

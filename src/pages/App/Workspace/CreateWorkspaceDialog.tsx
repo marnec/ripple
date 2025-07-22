@@ -55,7 +55,7 @@ export function CreateWorkspaceDialog({
             Create a new workspace to start chatting with your team
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={void handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="name" className="text-sm font-medium">
               Name

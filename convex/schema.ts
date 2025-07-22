@@ -60,6 +60,7 @@ export default defineSchema({
   channels: defineTable({
     name: v.string(),
     workspaceId: v.id("workspaces"),
+    isPublic: v.boolean(),
     roleCount: v.object({
       [ChannelRole.ADMIN]: v.number(),
       [ChannelRole.MEMBER]: v.number(),
@@ -67,16 +68,21 @@ export default defineSchema({
       (typeof ChannelRole)[keyof typeof ChannelRole],
       VFloat64<number, "required">
     >),
-  }).index("by_workspace", ["workspaceId"]),
+  })
+  .index("by_workspace", ["workspaceId"])
+  .index("by_isPublicInWorkspace", ["isPublic", "workspaceId"]),
+
 
   channelMembers: defineTable({
     channelId: v.id("channels"),
+    workspaceId: v.id("workspaces"),
     userId: v.id("users"),
     role: channelRoleSchema,
   })
     .index("by_user", ["userId"])
     .index("by_channel", ["channelId"])
     .index("by_channel_user", ["channelId", "userId"])
+    .index("by_workspace_user", ["workspaceId", "userId"])
     .index("by_channel_role", ["channelId", "role"]),
 
   signals: defineTable({

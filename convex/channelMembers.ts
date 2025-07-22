@@ -8,7 +8,7 @@ import { channelRoleSchema } from "./schema";
 export const byChannel = query({
   args: { channelId: v.id("channels") },
   handler: async (ctx, { channelId }) => {
-    const userId = getAuthUserId(ctx);
+    const userId = await getAuthUserId(ctx);
 
     if (!userId) throw new ConvexError("Unauthenticated");
 
@@ -22,7 +22,7 @@ export const byChannel = query({
 export const membersByChannel = query({
   args: { channelId: v.id("channels") },
   handler: async (ctx, { channelId }) => {
-    const userId = getAuthUserId(ctx);
+    const userId = await getAuthUserId(ctx);
 
     if (!userId) throw new ConvexError("Unauthenticated");
 
@@ -43,7 +43,7 @@ export const membersByChannel = query({
 });
 
 export const addToChannel = mutation({
-  args: { userId: v.id("users"), channelId: v.id("channels") },
+  args: { userId: v.id("users"), channelId: v.id("channels")},
   handler: async (ctx, { userId, channelId }) => {
     const channelMemberExists = await ctx.db
       .query("channelMembers")
@@ -69,6 +69,7 @@ export const addToChannel = mutation({
     return ctx.db.insert("channelMembers", {
       userId,
       channelId,
+      workspaceId: channel.workspaceId,
       role: ChannelRole.MEMBER,
     });
   },
@@ -111,7 +112,7 @@ export const removeFromChannel = mutation({
       );
     }
 
-    ctx.db.patch(channelId, {
+    await ctx.db.patch(channelId, {
       roleCount: {
         ...channel.roleCount,
         [channelMember.role]: channel.roleCount[`${channelMember.role}`] - 1,
