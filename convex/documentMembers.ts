@@ -1,12 +1,27 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { DocumentRole } from "@shared/enums";
 import { documentRoleSchema } from "./schema";
-import { internal } from "./_generated/api";
 
 export const membersByDocument = query({
   args: { documentId: v.id("documents") },
+  returns: v.array(v.object({
+    _id: v.id("documentMembers"),
+    _creationTime: v.number(),
+    documentId: v.id("documents"),
+    userId: v.id("users"),
+    role: v.union(v.literal("admin"), v.literal("member")),
+    user: v.object({
+      _id: v.id("users"),
+      _creationTime: v.number(),
+      name: v.optional(v.string()),
+      email: v.optional(v.string()),
+      emailVerificationTime: v.optional(v.number()),
+      image: v.optional(v.string()),
+      isAnonymous: v.optional(v.boolean()),
+    }),
+  })),
   handler: async (ctx, { documentId }) => {
     const members = await ctx.db
       .query("documentMembers")
@@ -28,6 +43,7 @@ export const addMember = mutation({
     documentId: v.id("documents"),
     userId: v.id("users"),
   },
+  returns: v.null(),
   handler: async (ctx, { documentId, userId }) => {
     const actingUserId = await getAuthUserId(ctx);
     if (!actingUserId) throw new ConvexError("Not authenticated");
@@ -51,7 +67,7 @@ export const addMember = mutation({
       .withIndex("by_document_user", (q) => q.eq("documentId", documentId).eq("userId", userId))
       .first();
 
-    if (existingMember) return;
+    if (existingMember) return null;
 
     await ctx.db.insert("documentMembers", {
       documentId,
@@ -65,6 +81,7 @@ export const addMember = mutation({
         [DocumentRole.MEMBER]: document.roleCount[DocumentRole.MEMBER] + 1,
       },
     });
+    return null;
   },
 });
 
@@ -73,6 +90,7 @@ export const removeMember = mutation({
     documentId: v.id("documents"),
     userId: v.id("users"),
   },
+  returns: v.null(),
   handler: async (ctx, { documentId, userId }) => {
     const actingUserId = await getAuthUserId(ctx);
     if (!actingUserId) throw new ConvexError("Not authenticated");
@@ -96,7 +114,7 @@ export const removeMember = mutation({
       .withIndex("by_document_user", (q) => q.eq("documentId", documentId).eq("userId", userId))
       .first();
 
-    if (!memberToRemove) return;
+    if (!memberToRemove) return null;
 
     await ctx.db.delete(memberToRemove._id);
 
@@ -106,6 +124,7 @@ export const removeMember = mutation({
         [memberToRemove.role]: document.roleCount[memberToRemove.role] - 1,
       },
     });
+    return null;
   },
 });
 
@@ -115,6 +134,7 @@ export const updateRole = mutation({
     userId: v.id("users"),
     role: documentRoleSchema,
   },
+  returns: v.null(),
   handler: async (ctx, { documentId, userId, role }) => {
     const actingUserId = await getAuthUserId(ctx);
     if (!actingUserId) throw new ConvexError("Not authenticated");
@@ -149,11 +169,13 @@ export const updateRole = mutation({
         [role]: document.roleCount[role] + 1,
       },
     });
+    return null;
   },
 });
 
 export const leave = mutation({
   args: { documentId: v.id("documents") },
+  returns: v.null(),
   handler: async (ctx, { documentId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
@@ -179,5 +201,6 @@ export const leave = mutation({
         [member.role]: document.roleCount[member.role] - 1,
       },
     });
+    return null;
   },
 }); 

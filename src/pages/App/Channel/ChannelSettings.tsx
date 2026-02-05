@@ -7,6 +7,8 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { LoadingSpinner } from "../../../components/ui/loading-spinner";
 import { ChannelMembershipSelection } from "./ChannelMembershipSelection";
 import { ChannelMembershipRole } from "./ChannelMembershipRole";
+import { ChannelVisibilityToggler } from "./ChannelVisibilityToggler";
+import { Button } from "@/components/ui/button";
 
 type ChannelMembershipProps = {
   workspaceId: Id<"workspaces">;
@@ -16,18 +18,27 @@ type ChannelMembershipProps = {
 const ChannelMembership = ({ workspaceId, channelId }: ChannelMembershipProps) => {
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const channelMembers = useQuery(api.channelMembers.membersByChannel, { channelId });
+  const isChannelPublic = true // query
 
   return (
     <>
       {workspaceMembers && channelMembers ? (
         <div className="flex flex-col space-y-3">
-          <h2 className="h2 ">Channel members</h2>
-          <ChannelMembershipSelection
-            channelMembers={channelMembers}
-            workspaceMembers={workspaceMembers}
-            channelId={channelId}
-          />
+          <div>
+            {isChannelPublic && <>
+              <h2 className="h2 ">Channel members</h2>
+              <ChannelMembershipSelection
+                channelMembers={channelMembers}
+                workspaceMembers={workspaceMembers}
+                channelId={channelId}
+              />
+            </>
+            }
+          </div>
           <ChannelMembershipRole channelMembers={channelMembers} />
+          <h2 className="h2">Danger zone</h2>
+          <ChannelVisibilityToggler />
+          <Button variant="destructive">Delete channel</Button>
         </div>
       ) : (
         <LoadingSpinner />

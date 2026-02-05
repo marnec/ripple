@@ -1,6 +1,6 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation } from "convex/react";
-import { Folder, Info, MoreHorizontal, Trash2 } from "lucide-react";
+import { Cog, Folder, Info, MoreHorizontal, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -35,9 +35,9 @@ export function ChannelSelectorItem({
   const deleteChannel = useMutation(api.channels.remove);
 
   const handleChannelDelete = async (id: Id<"channels">) => {
-    await deleteChannel({ id });
-
     onChannelSelect(null);
+    
+    await deleteChannel({ id });
   };
 
   return (
@@ -60,7 +60,7 @@ export function ChannelSelectorItem({
             <span>Details</span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onManageChannel(channel._id)}>
-            <Folder className="text-muted-foreground" />
+            <Cog className="text-muted-foreground" />
             <span>Manage channel</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />

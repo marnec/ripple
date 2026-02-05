@@ -292,7 +292,7 @@ export const DiagramBlock = createReactBlockSpec(
   {
     type: "diagram",
     propSchema: {
-      ...defaultProps,
+      textAlignment: defaultProps.textAlignment,
       diagramId: {
         default: null as unknown as Id<"diagrams">,
       },

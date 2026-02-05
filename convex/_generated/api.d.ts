@@ -19,6 +19,8 @@ import type * as emails from "../emails.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
 import type * as presence from "../presence.js";
+import type * as projectMembers from "../projectMembers.js";
+import type * as projects from "../projects.js";
 import type * as prosemirror from "../prosemirror.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as pushSubscription from "../pushSubscription.js";
@@ -34,14 +36,6 @@ import type {
   FunctionReference,
 } from "convex/server";
 
-/**
- * A utility for referencing Convex functions in your app's API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   breadcrumb: typeof breadcrumb;
@@ -54,6 +48,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   messages: typeof messages;
   presence: typeof presence;
+  projectMembers: typeof projectMembers;
+  projects: typeof projects;
   prosemirror: typeof prosemirror;
   pushNotifications: typeof pushNotifications;
   pushSubscription: typeof pushSubscription;
@@ -63,14 +59,30 @@ declare const fullApi: ApiFromModules<{
   workspaceMembers: typeof workspaceMembers;
   workspaces: typeof workspaces;
 }>;
-declare const fullApiWithMounts: typeof fullApi;
 
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
 export declare const api: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "public">
 >;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
 export declare const internal: FilterApi<
-  typeof fullApiWithMounts,
+  typeof fullApi,
   FunctionReference<any, "internal">
 >;
 
@@ -174,7 +186,12 @@ export declare const components: {
         "query",
         "internal",
         { limit?: number; roomToken: string },
-        Array<{ lastDisconnected: number; online: boolean; userId: string }>
+        Array<{
+          data?: any;
+          lastDisconnected: number;
+          online: boolean;
+          userId: string;
+        }>
       >;
       listRoom: FunctionReference<
         "query",
@@ -198,6 +215,12 @@ export declare const components: {
         "mutation",
         "internal",
         { roomId: string; userId: string },
+        null
+      >;
+      updateRoomUser: FunctionReference<
+        "mutation",
+        "internal",
+        { data?: any; roomId: string; userId: string },
         null
       >;
     };

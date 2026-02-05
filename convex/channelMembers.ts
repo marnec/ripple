@@ -5,8 +5,18 @@ import { mutation, query } from "./_generated/server";
 import { ChannelMember } from "@shared/types/channel";
 import { channelRoleSchema } from "./schema";
 
+const channelMemberValidator = v.object({
+  _id: v.id("channelMembers"),
+  _creationTime: v.number(),
+  channelId: v.id("channels"),
+  workspaceId: v.id("workspaces"),
+  userId: v.id("users"),
+  role: v.union(v.literal("admin"), v.literal("member")),
+});
+
 export const byChannel = query({
   args: { channelId: v.id("channels") },
+  returns: v.array(channelMemberValidator),
   handler: async (ctx, { channelId }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -21,6 +31,15 @@ export const byChannel = query({
 
 export const membersByChannel = query({
   args: { channelId: v.id("channels") },
+  returns: v.array(v.object({
+    _id: v.id("channelMembers"),
+    _creationTime: v.number(),
+    channelId: v.id("channels"),
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    role: v.union(v.literal("admin"), v.literal("member")),
+    name: v.string(),
+  })),
   handler: async (ctx, { channelId }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -43,7 +62,8 @@ export const membersByChannel = query({
 });
 
 export const addToChannel = mutation({
-  args: { userId: v.id("users"), channelId: v.id("channels")},
+  args: { userId: v.id("users"), channelId: v.id("channels") },
+  returns: v.id("channelMembers"),
   handler: async (ctx, { userId, channelId }) => {
     const channelMemberExists = await ctx.db
       .query("channelMembers")
@@ -77,6 +97,7 @@ export const addToChannel = mutation({
 
 export const removeFromChannel = mutation({
   args: { userId: v.id("users"), channelId: v.id("channels") },
+  returns: v.null(),
   handler: async (ctx, { userId, channelId }) => {
     const channelMember = await ctx.db
       .query("channelMembers")
@@ -119,12 +140,14 @@ export const removeFromChannel = mutation({
       },
     });
 
-    return ctx.db.delete(channelMember._id);
+    await ctx.db.delete(channelMember._id);
+    return null;
   },
 });
 
 export const changeMemberRole = mutation({
   args: { channelMemberId: v.id("channelMembers"), role: channelRoleSchema },
+  returns: v.null(),
   handler: async (ctx, { channelMemberId, role }) => {
     const channelMember = await ctx.db.get(channelMemberId);
 
@@ -132,7 +155,7 @@ export const changeMemberRole = mutation({
       throw new ConvexError(`No channel member found with id=${channelMemberId}`);
     }
 
-    if (channelMember.role === role) return;
+    if (channelMember.role === role) return null;
 
     if (channelMember.role === "admin") {
       const channelAdmins = await ctx.db
@@ -149,6 +172,7 @@ export const changeMemberRole = mutation({
       }
     }
 
-    return ctx.db.patch(channelMemberId, { role });
+    await ctx.db.patch(channelMemberId, { role });
+    return null;
   },
 });

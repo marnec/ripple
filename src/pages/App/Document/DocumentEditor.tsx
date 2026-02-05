@@ -39,7 +39,7 @@ export function DocumentEditorContainer() {
 const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
-    diagram: DiagramBlock,
+    diagram: DiagramBlock(),
   },
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,

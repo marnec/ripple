@@ -48,14 +48,14 @@ export function WorkspaceSwitcher({
             >
               {activeWorkspace ? (
                 <>
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                    <i data-lucide={activeWorkspace.name}></i>
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-semibold text-sm">
+                    {activeWorkspace.name.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">
                       {activeWorkspace.name}
                     </span>
-                    <span className="truncate text-xs">PLAN_PLACEHOLDER</span>
+                    <span className="truncate text-xs text-muted-foreground">Workspace</span>
                   </div>
                 </>
               ) : (
@@ -85,8 +85,8 @@ export function WorkspaceSwitcher({
                 onClick={() => handleWorkspaceSelect(workspace._id)}
                 className="gap-2 p-2"
               >
-                <div className="flex size-6 items-center justify-center rounded-sm border">
-                  <i data-lucide={workspace.name} />
+                <div className="flex size-6 items-center justify-center rounded-sm border bg-muted text-xs font-medium">
+                  {workspace.name.slice(0, 1).toUpperCase()}
                 </div>
                 {workspace.name}
                 <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>

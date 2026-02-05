@@ -45,7 +45,7 @@ function NamedBreadcrumbItem({ item, onClick }: BreadcrumbLinkWithResourceProps)
   }
 
   return (
-    <BreadcrumbLink onClick={handleClick}>
+    <BreadcrumbLink onClick={handleClick} className="cursor-pointer">
       {displayName}
     </BreadcrumbLink>
   );
@@ -77,7 +77,7 @@ export function DynamicBreadcrumb() {
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem key="#">
-          <BreadcrumbLink onClick={() => navigate("/")}>
+          <BreadcrumbLink onClick={() => navigate("/")} className="cursor-pointer">
             {APP_NAME}
           </BreadcrumbLink>
         </BreadcrumbItem>

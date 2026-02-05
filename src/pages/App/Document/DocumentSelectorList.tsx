@@ -22,13 +22,7 @@ export function DocumentSelectorList({
 
   const documents = useQuery(api.documents.list, { workspaceId });
   const createNewDocument = useMutation(api.documents.create);
-  const deleteDocument = useMutation(api.documents.remove);
 
-  const handleDocumentDelete = async (id: Id<"documents">) => {
-    await deleteDocument({ id });
-
-    onDocumentSelect(null);
-  };
 
   const handleDocumentCreate = async () => {
     if (!workspaceId) return;
@@ -41,11 +35,14 @@ export function DocumentSelectorList({
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>Documents</SidebarGroupLabel>
-      <SidebarGroupAction onClick={handleDocumentCreate} title="Create document">
+      <SidebarGroupAction onClick={() => {void handleDocumentCreate()}} title="Create document">
         <FilePlus />
         <span className="sr-only">Create channel</span>
       </SidebarGroupAction>
       <SidebarMenu>
+        {documents?.length === 0 && (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">No documents yet</p>
+        )}
         {documents?.map((document) => (
           <DocumentSelectorItem
             key={document._id}
@@ -53,7 +50,6 @@ export function DocumentSelectorList({
             documentId={documentId}
             onDocumentSelect={onDocumentSelect}
             onRenameDocument={setSelectedDocForRename}
-            onDeleteDocument={handleDocumentDelete}
           />
         ))}
       </SidebarMenu>

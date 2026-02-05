@@ -28,14 +28,14 @@ export function Message({ message }: MessageProps) {
     <ContextMenu>
       <li
         className={cn(
-          "flex flex-col text-sm",
+          "flex flex-col text-sm animate-slide-up",
           userIsAuthor ? "items-end self-end" : "items-start self-start",
         )}
       >
         <div
           className={cn("flex items-center gap-3", userIsAuthor ? "flex-row" : "flex-row-reverse")}
         >
-          <div className="mb-1 text-xs text-muted">{new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' })}</div>
+          <div className="mb-1 text-xs text-muted-foreground/70">{new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' })}</div>
           <div className="mb-1 text-sm font-medium">{author}</div>
         </div>
 

@@ -2,8 +2,18 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+const diagramValidator = v.object({
+  _id: v.id("diagrams"),
+  _creationTime: v.number(),
+  workspaceId: v.id("workspaces"),
+  name: v.string(),
+  tags: v.optional(v.array(v.string())),
+  content: v.optional(v.string()),
+});
+
 export const list = query({
   args: { workspaceId: v.id("workspaces") },
+  returns: v.array(diagramValidator),
   handler: async (ctx, { workspaceId }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -32,6 +42,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("diagrams") },
+  returns: v.union(diagramValidator, v.null()),
   handler: async (ctx, { id }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -56,10 +67,11 @@ export const get = query({
 });
 
 export const create = mutation({
-  args: { 
+  args: {
     workspaceId: v.id("workspaces"),
     name: v.optional(v.string()),
   },
+  returns: v.id("diagrams"),
   handler: async (ctx, { workspaceId, name }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -102,6 +114,7 @@ export const create = mutation({
 
 export const rename = mutation({
   args: { id: v.id("diagrams"), name: v.string() },
+  returns: v.null(),
   handler: async (ctx, { id, name }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -124,15 +137,17 @@ export const rename = mutation({
         `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
       );
 
-    return ctx.db.patch(id, { name });
+    await ctx.db.patch(id, { name });
+    return null;
   },
 });
 
 export const updateContent = mutation({
-  args: { 
-    id: v.id("diagrams"), 
+  args: {
+    id: v.id("diagrams"),
     content: v.string(),
   },
+  returns: v.null(),
   handler: async (ctx, { id, content }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -186,12 +201,14 @@ export const updateContent = mutation({
       },
     };
 
-    return ctx.db.patch(id, { content: JSON.stringify(mergedScene) });
+    await ctx.db.patch(id, { content: JSON.stringify(mergedScene) });
+    return null;
   },
 });
 
 export const remove = mutation({
   args: { id: v.id("diagrams") },
+  returns: v.null(),
   handler: async (ctx, { id }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -214,6 +231,7 @@ export const remove = mutation({
         `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
       );
 
-    return ctx.db.delete(id);
+    await ctx.db.delete(id);
+    return null;
   },
 }); 

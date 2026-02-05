@@ -1,6 +1,6 @@
-import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs} from "@blocknote/core";
+import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { en } from '@blocknote/core/locales';
-import { useCreateBlockNote, useEditorContentOrSelectionChange } from "@blocknote/react";
+import { useCreateBlockNote, useEditorChange, useEditorSelectionChange } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import {
   CodeIcon,
@@ -61,22 +61,20 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     editor._tiptapEditor.commands.clearContent();
 
     if (editingMessage.id && editingMessage.body) {
-      editor.tryParseHTMLToBlocks(editingMessage.body).then((document) => {
-        editor.replaceBlocks([editor.document[0].id], document);
-      });
+      const document = editor.tryParseHTMLToBlocks(editingMessage.body)
+      editor.replaceBlocks([editor.document[0].id], document);
+
     }
   }, [editingMessage]);
 
   const editor = useCreateBlockNote(editorConfig);
 
-  const { bold, italic, strike, code, underline } = editor.getActiveStyles();
-
-  const [isBold, setIsBold] = useState(bold);
-  const [isItalic, setIsItalic] = useState(italic);
-  const [isStrike, setIsStrike] = useState(strike);
-  const [isCode, setIsCode] = useState(code);
-  const [isUnderline, setIsUnderline] = useState(underline);
-  const [isEmpty, setIsEmpty] = useState(editorIsEmpty(editor));
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isStrike, setIsStrike] = useState(false);
+  const [isCode, setIsCode] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(true);
 
   const sendMessage = async () => {
     if (isEmpty || !editor) return;
@@ -87,17 +85,23 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     editorClear(editor);
   };
 
-  useEditorContentOrSelectionChange(() => {
+  const updateActiveStyles = () => {
     if (!editor) return;
-
     const { bold, italic, underline, strike, code } = editor.getActiveStyles();
-
     setIsBold(!!bold);
     setIsItalic(!!italic);
     setIsStrike(!!strike);
     setIsUnderline(!!underline);
     setIsCode(!!code);
+  };
+
+  useEditorChange(() => {
     setIsEmpty(editorIsEmpty(editor));
+    updateActiveStyles();
+  }, editor);
+
+  useEditorSelectionChange(() => {
+    updateActiveStyles();
   }, editor);
 
   return (
@@ -189,7 +193,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         <BlockNoteView
           id="message-composer"
           editor={editor}
-          className="w-full flex-grow min-w-0 box-border border rounded-md px-2"
+          className="w-full grow min-w-0 box-border border rounded-md px-2 transition-shadow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1"
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
           filePanel={false}
@@ -210,7 +214,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             }
           }}
         />
-        <Button disabled={isEmpty} onClick={sendMessage} className="flex-shrink-0">
+        <Button disabled={isEmpty} onClick={sendMessage} className="shrink-0 transition-transform active:scale-95">
           Send
         </Button>
       </div>

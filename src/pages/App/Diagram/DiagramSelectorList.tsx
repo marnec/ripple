@@ -44,6 +44,9 @@ export function DiagramSelectorList({
         <span className="sr-only">Create diagram</span>
       </SidebarGroupAction>
       <SidebarMenu>
+        {diagrams?.length === 0 && (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">No diagrams yet</p>
+        )}
         {diagrams?.map((diagram) => (
           <DiagramSelectorItem
             key={diagram._id}

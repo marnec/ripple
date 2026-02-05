@@ -18,7 +18,7 @@ export function ChannelSelectorButton({channelId, channel, onClick}: ChannelSele
   >
     <div className="flex flex-row items-center">
       <div className="flex flex-row items-end ">
-        <Hash />
+        <Hash size={18} />
 
         <Lock className={cn("size-3", "-ml-1", channel.isPublic ? 'invisible' : '')} />
       </div>

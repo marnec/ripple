@@ -36,6 +36,9 @@ export function ChannelSelectorList({
         <span className="sr-only">Create channel</span>
       </SidebarGroupAction>
       <SidebarMenu>
+        {channels?.length === 0 && (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">No channels yet</p>
+        )}
         {channels?.map((channel) => (
           <ChannelSelectorItem
             key={channel._id}
