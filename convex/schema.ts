@@ -92,7 +92,10 @@ export default defineSchema({
     type: v.optional(v.string()),
     sdp: v.optional(v.string()),
     candidate: v.optional(v.any()),
-  }),
+  })
+    .index("by_roomId", ["roomId"])
+    .index("by_peerId", ["peerId"])
+    .index("by_userId", ["userId"]),
 
   documents: defineTable({
     workspaceId: v.id("workspaces"),
@@ -127,6 +130,30 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
+
+  projects: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    color: v.string(), // Tailwind color class like "bg-blue-500"
+    workspaceId: v.id("workspaces"),
+    linkedChannelId: v.id("channels"), // auto-created discussion channel
+    creatorId: v.id("users"), // the user who created the project (the admin)
+    memberCount: v.number(), // total members including creator
+  })
+    .index("by_workspace", ["workspaceId"])
+    .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
+
+  projectMembers: defineTable({
+    projectId: v.id("projects"),
+    workspaceId: v.id("workspaces"), // denormalized for efficient queries
+    userId: v.id("users"),
+    // No role field - per CONTEXT.md: "No project-specific roles for v1 - just membership"
+    // The creator stored in projects.creatorId is the only one who can manage the project
+  })
+    .index("by_user", ["userId"])
+    .index("by_project", ["projectId"])
+    .index("by_project_user", ["projectId", "userId"])
+    .index("by_workspace_user", ["workspaceId", "userId"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),
