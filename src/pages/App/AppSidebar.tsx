@@ -15,8 +15,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
-import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
+import { DocumentSelectorList } from "./Document/DocumentSelectorList";
+import { ProjectSelectorList } from "./Project/ProjectSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 
 export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
@@ -26,7 +27,7 @@ export function AppSidebar() {
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
 
-  const { workspaceId, channelId, documentId, diagramId } = useParams<QueryParams>();
+  const { workspaceId, channelId, documentId, diagramId, projectId } = useParams<QueryParams>();
 
   const { subscribeUser } = usePushNotifications();
 
@@ -77,6 +78,19 @@ export function AppSidebar() {
     navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
   };
 
+  const handleProjectSelect = (id: string | null) => {
+    setOpenMobile(false);
+    if (!id) {
+      navigate(`/workspaces/${workspaceId}/projects`);
+    } else {
+      navigate(`/workspaces/${workspaceId}/projects/${id}`);
+    }
+  };
+
+  const handleManageProject = (id: string) => {
+    navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
+  };
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -98,6 +112,12 @@ export function AppSidebar() {
                 onChannelSelect={handleChannelSelect}
                 onManageChannel={handleManageChannel}
                 onChannelDetails={handleChannelDetails}
+              />
+              <ProjectSelectorList
+                workspaceId={workspaceId}
+                projectId={projectId}
+                onProjectSelect={handleProjectSelect}
+                onManageProject={handleManageProject}
               />
               <DocumentSelectorList
                 workspaceId={workspaceId}
