@@ -9,6 +9,9 @@ import { Diagrams } from "./pages/App/Diagram/Diagrams";
 import { DocumentEditorContainer } from "./pages/App/Document/DocumentEditor";
 import { Documents } from "./pages/App/Document/Documents";
 import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
+import { ProjectDetails } from "./pages/App/Project/ProjectDetails";
+import { Projects } from "./pages/App/Project/Projects";
+import { ProjectSettings } from "./pages/App/Project/ProjectSettings";
 import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
 import { Workspaces } from "./pages/App/Workspace/Workspaces";
 import { WorkspaceSettings } from "./pages/App/Workspace/WorkspaceSettings";
@@ -59,6 +62,23 @@ export const router = createBrowserRouter(
                 {
                   path: ":channelId/settings",
                   element: <ChannelSettings />,
+                },
+              ],
+            },
+            {
+              path: "projects",
+              children: [
+                {
+                  index: true,
+                  element: <Projects />,
+                },
+                {
+                  path: ":projectId",
+                  element: <ProjectDetails />,
+                },
+                {
+                  path: ":projectId/settings",
+                  element: <ProjectSettings />,
                 },
               ],
             },
