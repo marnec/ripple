@@ -4,11 +4,11 @@
 
 ### Projects (PROJ)
 
-- [ ] **PROJ-01**: User can create a project within a workspace
-- [ ] **PROJ-02**: User can rename and delete projects they administer
-- [ ] **PROJ-03**: Project has membership with admin/member roles (controls visibility)
-- [ ] **PROJ-04**: Creating a project auto-creates a dedicated channel that inherits project membership
-- [ ] **PROJ-05**: User can view list of projects they have access to in workspace
+- [x] **PROJ-01**: User can create a project within a workspace
+- [x] **PROJ-02**: User can rename and delete projects they administer
+- [x] **PROJ-03**: Project has membership with admin/member roles (controls visibility)
+- [x] **PROJ-04**: Creating a project auto-creates a dedicated channel that inherits project membership
+- [x] **PROJ-05**: User can view list of projects they have access to in workspace
 
 ### Tasks (TASK)
 
@@ -96,11 +96,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROJ-01 | Phase 1 | Pending |
-| PROJ-02 | Phase 1 | Pending |
-| PROJ-03 | Phase 1 | Pending |
-| PROJ-04 | Phase 1 | Pending |
-| PROJ-05 | Phase 1 | Pending |
+| PROJ-01 | Phase 1 | Complete |
+| PROJ-02 | Phase 1 | Complete |
+| PROJ-03 | Phase 1 | Complete |
+| PROJ-04 | Phase 1 | Complete |
+| PROJ-05 | Phase 1 | Complete |
 | TASK-01 | Phase 2 | Pending |
 | TASK-02 | Phase 2 | Pending |
 | TASK-03 | Phase 2 | Pending |
