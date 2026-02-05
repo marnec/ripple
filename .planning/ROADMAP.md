@@ -32,10 +32,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Project automatically creates a dedicated channel that inherits project membership
   4. User with admin role can rename and delete projects
   5. Project membership controls who can view the project and its tasks
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- TBD (determined during planning)
+- [ ] 01-01-PLAN.md — Backend schema and API (projects + projectMembers tables, CRUD operations)
+- [ ] 01-02-PLAN.md — Routes and sidebar integration (navigation, ProjectSelectorList)
+- [ ] 01-03-PLAN.md — Create dialog and project details page
+- [ ] 01-04-PLAN.md — Settings page with membership management and verification
 
 ### Phase 2: Basic Tasks
 **Goal**: Users can create and manage tasks within projects with essential properties
@@ -126,7 +129,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Projects Foundation | 0/TBD | Not started | - |
+| 1. Projects Foundation | 0/4 | Ready for execution | - |
 | 2. Basic Tasks | 0/TBD | Not started | - |
 | 3. Kanban Board View | 0/TBD | Not started | - |
 | 4. Chat-to-Task Integration | 0/TBD | Not started | - |
