@@ -60,7 +60,7 @@ function ProjectSettingsContent({
   const project = useQuery(api.projects.get, { id: projectId });
   const projectMembers = useQuery(api.projectMembers.membersByProject, { projectId });
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
-  const currentUser = useQuery(api.users.currentUser);
+  const currentUser = useQuery(api.users.viewer);
 
   // Mutations
   const updateProject = useMutation(api.projects.update);
