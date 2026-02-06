@@ -83,10 +83,11 @@ Plans:
   1. User can create a task from a chat message via context menu
   2. Task created from message automatically captures message content and conversation context
   3. When a task is mentioned in chat, an inline preview shows its current status and assignee
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- TBD (determined during planning)
+- [ ] 04-01-PLAN.md — Task creation from message (context menu, popover, context capture, system message)
+- [ ] 04-02-PLAN.md — Task mentions in chat (# autocomplete, inline chips, live status updates)
 
 ### Phase 5: Document & Diagram Embeds
 **Goal**: Users can link tasks to documents and diagrams with inline previews
@@ -137,7 +138,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 1. Projects Foundation | 4/4 | Complete | 2026-02-05 |
 | 2. Basic Tasks | 4/4 | Complete | 2026-02-06 |
 | 3. Kanban Board View | 3/3 | Complete | 2026-02-06 |
-| 4. Chat-to-Task Integration | 0/TBD | Not started | - |
+| 4. Chat-to-Task Integration | 0/2 | Not started | - |
 | 5. Document & Diagram Embeds | 0/TBD | Not started | - |
 | 6. Task Comments | 0/TBD | Not started | - |
 | 7. Notifications & Polish | 0/TBD | Not started | - |
