@@ -1,8 +1,10 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 import { generateKeyBetween } from "fractional-indexing";
+import { extractMentionedUserIds } from "./utils/blocknote";
 
 export const create = mutation({
   args: {
@@ -135,6 +137,40 @@ export const create = mutation({
       creatorId: userId,
       position,
     });
+
+    // Schedule notifications after database write
+    const user = await ctx.db.get(userId);
+
+    // Assignment notification
+    if (args.assigneeId && args.assigneeId !== userId) {
+      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskAssignment, {
+        taskId,
+        assigneeId: args.assigneeId,
+        taskTitle: args.title,
+        assignedBy: {
+          name: user?.name ?? user?.email ?? "Someone",
+          id: userId,
+        },
+      });
+    }
+
+    // Description mention notification
+    if (args.description) {
+      const mentionedUserIds = extractMentionedUserIds(args.description);
+      const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+      if (filteredMentions.length > 0) {
+        await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+          taskId,
+          mentionedUserIds: filteredMentions,
+          taskTitle: args.title,
+          mentionedBy: {
+            name: user?.name ?? user?.email ?? "Someone",
+            id: userId,
+          },
+          context: "task description",
+        });
+      }
+    }
 
     return taskId;
   },
@@ -348,6 +384,44 @@ export const update = mutation({
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(taskId, patch);
+    }
+
+    // Schedule notifications after database write
+    let currentUser: any = null;
+
+    // Assignment change notification
+    const assigneeChanged = assigneeId !== undefined && assigneeId !== null && assigneeId !== task.assigneeId;
+    if (assigneeChanged && assigneeId !== userId) {
+      currentUser = await ctx.db.get(userId);
+      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskAssignment, {
+        taskId,
+        assigneeId,
+        taskTitle: title ?? task.title,
+        assignedBy: {
+          name: currentUser?.name ?? currentUser?.email ?? "Someone",
+          id: userId,
+        },
+      });
+    }
+
+    // Description mention notification (diff-based)
+    if (description !== undefined) {
+      const oldMentions = new Set(task.description ? extractMentionedUserIds(task.description) : []);
+      const newMentions = extractMentionedUserIds(description);
+      const addedMentions = newMentions.filter(id => !oldMentions.has(id) && id !== userId);
+      if (addedMentions.length > 0) {
+        currentUser = currentUser ?? await ctx.db.get(userId);
+        await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+          taskId,
+          mentionedUserIds: addedMentions,
+          taskTitle: title ?? task.title,
+          mentionedBy: {
+            name: currentUser?.name ?? currentUser?.email ?? "Someone",
+            id: userId,
+          },
+          context: "task description",
+        });
+      }
     }
 
     return null;
