@@ -45,7 +45,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
-import "./task-description.css";
+
 import { TaskComments } from "./TaskComments";
 
 export function TaskDetailPage() {
@@ -432,6 +432,7 @@ function TaskDetailPageContent({
               editor={editor}
               onChange={handleDescriptionChange}
               theme={resolvedTheme === "dark" ? "dark" : "light"}
+              sideMenu={false}
             >
               <SuggestionMenuController
                 triggerCharacter={"#"}

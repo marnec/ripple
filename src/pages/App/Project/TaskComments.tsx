@@ -14,7 +14,7 @@ import { useTheme } from "next-themes";
 
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import "./task-comment.css";
+
 
 type TaskCommentsProps = {
   taskId: Id<"tasks">;

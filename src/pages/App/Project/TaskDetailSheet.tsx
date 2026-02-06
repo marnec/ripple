@@ -49,7 +49,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
-import "./task-description.css";
+
 import { TaskComments } from "./TaskComments";
 
 type TaskDetailSheetProps = {
@@ -468,6 +468,7 @@ export function TaskDetailSheet({
                   editor={editor}
                   onChange={handleDescriptionChange}
                   theme={resolvedTheme === "dark" ? "dark" : "light"}
+                  sideMenu={false}
                 >
                   <SuggestionMenuController
                     triggerCharacter={"#"}
