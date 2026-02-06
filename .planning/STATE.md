@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 3 of 7 (Kanban Board View)
-Plan: 3 of 4 in current phase
-Status: In progress - awaiting checkpoint verification
-Last activity: 2026-02-06 — Executing 03-03-PLAN.md (at checkpoint)
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-06 — Completed 03-03-PLAN.md
 
-Progress: [████████░░] ~50%
+Progress: [████████░░] ~52%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
-- Average duration: 3.8 min
-- Total execution time: 38 min
+- Total plans completed: 11
+- Average duration: 4.0 min
+- Total execution time: 44 min
 
 **By Phase:**
 
@@ -29,11 +29,11 @@ Progress: [████████░░] ~50%
 |-------|-------|-------|----------|
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
 | 02-basic-tasks | 4 | 19 min | 4.8 min |
-| 03-kanban-board-view | 2 | 5 min | 2.5 min |
+| 03-kanban-board-view | 3 | 11 min | 3.7 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (6 min), 02-04 (5 min), 03-01 (2 min), 03-02 (3 min)
-- Trend: Improving
+- Last 5 plans: 02-04 (5 min), 03-01 (2 min), 03-02 (3 min), 03-03 (6 min)
+- Trend: Stable
 
 *Updated after each plan completion*
 
@@ -85,6 +85,13 @@ Recent decisions affecting current work:
 - Split presentational and draggable components (CardPresenter + Card) for DragOverlay reuse
 - 8px PointerSensor activation distance to distinguish clicks from drags
 - Optimistic updates via useMutation().withOptimisticUpdate() for instant drag feedback
+- Column three-dot menu consolidates management actions (Rename, Move Left/Right, Delete)
+- Inline rename uses Enter to confirm, Escape to cancel (no Save button)
+- Column reorder via swap algorithm (swap adjacent columns in array)
+- Delete validation prevents removal of default columns and columns with tasks
+- Add Column button is placeholder column with dashed border
+- Column color picker uses same 8 Tailwind colors as projects
+- Column completion toggle determines if moving tasks to column completes them
 
 ### Pending Todos
 
@@ -96,8 +103,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T10:13:09Z
-Stopped at: Checkpoint in 03-03-PLAN.md (Task 2 - human verification)
+Last session: 2026-02-06T10:22:20Z
+Stopped at: Completed 03-03-PLAN.md (Phase 3 complete)
 Resume file: None
 
 Config:
