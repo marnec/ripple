@@ -6,4 +6,5 @@ export type QueryParams = {
   documentId: Id<"documents">
   diagramId: Id<"diagrams">
   projectId: Id<"projects">
+  taskId: Id<"tasks">
 }
