@@ -192,6 +192,15 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_project_status_position", ["projectId", "statusId", "position"]),
 
+  taskComments: defineTable({
+    taskId: v.id("tasks"),
+    userId: v.id("users"),
+    body: v.string(),
+    deleted: v.boolean(),
+  })
+    .index("by_task", ["taskId"])
+    .index("undeleted_by_task", ["taskId", "deleted"]),
+
   pushSubscriptions: defineTable({
     userId: v.id("users"),
     device: v.string(),
