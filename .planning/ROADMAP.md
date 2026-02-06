@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Chat-to-Task Integration** - Create tasks from messages with context capture
 - [x] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
 - [x] **Phase 6: Task Comments** - Threaded discussions on tasks
-- [ ] **Phase 6.1: Mention People in Task Comments** - @mentions in comment text (INSERTED)
+- [x] **Phase 6.1: Mention People in Task Comments** - @mentions in comment text (INSERTED)
 - [ ] **Phase 7: Notifications & Polish** - Push notifications and final integrations
 
 ## Phase Details
@@ -129,7 +129,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06.1-01-PLAN.md — BlockNote @mention upgrade for task comments (schema, component rewrite, integration)
+- [x] 06.1-01-PLAN.md — BlockNote @mention upgrade for task comments (schema, component rewrite, integration)
 
 ### Phase 7: Notifications & Polish
 **Goal**: Users receive timely notifications for task-related events
@@ -156,5 +156,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7
 | 4. Chat-to-Task Integration | 2/2 | Complete | 2026-02-06 |
 | 5. Document & Diagram Embeds | 3/3 | Complete | 2026-02-06 |
 | 6. Task Comments | 1/1 | Complete | 2026-02-06 |
-| 6.1. Mention People in Task Comments | 0/TBD | Not started | - |
+| 6.1. Mention People in Task Comments | 1/1 | Complete | 2026-02-06 |
 | 7. Notifications & Polish | 0/TBD | Not started | - |
