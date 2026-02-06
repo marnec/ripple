@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 4 of 7 (Chat to Task Integration)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-06 — Completed 04-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-06 — Completed 04-02-PLAN.md
 
-Progress: [████████░░] ~57%
+Progress: [█████████░] ~62%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 4.0 min
-- Total execution time: 48 min
+- Total plans completed: 13
+- Average duration: 3.8 min
+- Total execution time: 51 min
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [████████░░] ~57%
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
 | 02-basic-tasks | 4 | 19 min | 4.8 min |
 | 03-kanban-board-view | 3 | 11 min | 3.7 min |
-| 04-chat-to-task-integration | 1 | 4 min | 4.0 min |
+| 04-chat-to-task-integration | 2 | 7 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (2 min), 03-02 (3 min), 03-03 (6 min), 04-01 (4 min)
+- Last 5 plans: 03-02 (3 min), 03-03 (6 min), 04-01 (4 min), 04-02 (3 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -97,6 +97,10 @@ Recent decisions affecting current work:
 - Split popover components to avoid setState in useEffect (remount pattern)
 - System messages use inline HTML styles for visual distinction from regular messages
 - Auto-select linked project when creating task from channel message
+- Task mention inline content stores both taskId and taskTitle for editor performance
+- HTML parsing replaces task mention spans with React components for live updates
+- Task autocomplete scoped to linked project or all user tasks based on channel context
+- Task mention chips navigate to project with highlightTaskId state for future highlighting
 
 ### Pending Todos
 
@@ -108,8 +112,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T13:45:44Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-02-06T13:52:14Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
 
 Config:
