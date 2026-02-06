@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 6.1 - Mention People in Task Comments (Complete)
+**Current focus:** Phase 7 - Notifications and Polish (In progress)
 
 ## Current Position
 
-Phase: 6.1 of 7 (Mention People in Task Comments)
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-02-06 — Completed 06.1-01-PLAN.md
+Phase: 7 of 7 (Notifications and Polish)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-06 — Completed 07-01-PLAN.md
 
-Progress: [███████████░] 87% (phases 1-6.1 complete, phase 7 remaining)
+Progress: [███████████░] 89% (phases 1-6.1 + 07-01 complete, 07-02 remaining)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 18
-- Average duration: 3.6 min
-- Total execution time: 66.1 min
+- Total plans completed: 19
+- Average duration: 3.5 min
+- Total execution time: 68.1 min
 
 **By Phase:**
 
@@ -34,10 +34,11 @@ Progress: [███████████░] 87% (phases 1-6.1 complete, pha
 | 05-document-diagram-embeds | 3 | 9.1 min | 3.0 min |
 | 06-task-comments | 1 | 3 min | 3.0 min |
 | 06.1-mention-people-in-task-comments | 1 | 3 min | 3.0 min |
+| 07-notifications-and-polish | 1 | 2 min | 2.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-02 (2.9 min), 05-03 (3 min), 06-01 (3 min), 06.1-01 (3 min)
-- Trend: Fast and consistent
+- Last 5 plans: 05-03 (3 min), 06-01 (3 min), 06.1-01 (3 min), 07-01 (2 min)
+- Trend: Fast and consistent, latest even faster
 
 *Updated after each plan completion*
 
@@ -125,6 +126,10 @@ Recent decisions affecting current work:
 - BlockNote for task comments with @mention autocomplete (10 result limit)
 - CommentBody and EditCommentEditor sub-components for display and editing
 - SuggestionMenuController items follow title/onItemClick/icon/group pattern
+- Graceful VAPID error handling with console.error instead of throwing (missing env vars don't crash app)
+- mentionedUserIds as v.array(v.string()) not v.array(v.id('users')) because IDs come from JSON parsing
+- Promise.allSettled for notification sending (individual failures don't block other sends)
+- Internal action notification pattern: query user subscriptions → setup VAPID → Promise.allSettled sends
 
 ### Roadmap Evolution
 
@@ -140,8 +145,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T22:22:18Z
-Stopped at: Completed 06.1-01-PLAN.md (Phase 6.1 complete)
+Last session: 2026-02-06T23:05:35Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
 
 Config:
