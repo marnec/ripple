@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 6 - Task Comments (Complete)
+**Current focus:** Phase 6.1 - Mention People in Task Comments (Complete)
 
 ## Current Position
 
-Phase: 6 of 7 (Task Comments)
+Phase: 6.1 of 7 (Mention People in Task Comments)
 Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-02-06 — Completed 06-01-PLAN.md
+Last activity: 2026-02-06 — Completed 06.1-01-PLAN.md
 
-Progress: [███████████░] 86% (phases 1-6 complete, phase 7 remaining)
+Progress: [███████████░] 87% (phases 1-6.1 complete, phase 7 remaining)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 17
+- Total plans completed: 18
 - Average duration: 3.6 min
-- Total execution time: 63.1 min
+- Total execution time: 66.1 min
 
 **By Phase:**
 
@@ -33,9 +33,10 @@ Progress: [███████████░] 86% (phases 1-6 complete, phase
 | 04-chat-to-task-integration | 2 | 7 min | 3.5 min |
 | 05-document-diagram-embeds | 3 | 9.1 min | 3.0 min |
 | 06-task-comments | 1 | 3 min | 3.0 min |
+| 06.1-mention-people-in-task-comments | 1 | 3 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-01 (3.3 min), 05-02 (2.9 min), 05-03 (3 min), 06-01 (3 min)
+- Last 5 plans: 05-02 (2.9 min), 05-03 (3 min), 06-01 (3 min), 06.1-01 (3 min)
 - Trend: Fast and consistent
 
 *Updated after each plan completion*
@@ -119,6 +120,15 @@ Recent decisions affecting current work:
 - Chronological order (oldest first) for comment conversation flow
 - Author-only edit/delete for comments (no project admin override)
 - Ctrl+Enter keyboard shortcut for comment submission
+- Separate taskCommentSchema with only userMention (not reusing taskDescriptionSchema)
+- JSON.stringify for comment body storage, parseCommentBody fallback for plain text
+- BlockNote for task comments with @mention autocomplete (10 result limit)
+- CommentBody and EditCommentEditor sub-components for display and editing
+- SuggestionMenuController items follow title/onItemClick/icon/group pattern
+
+### Roadmap Evolution
+
+- Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
 
 ### Pending Todos
 
@@ -130,8 +140,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T20:32:38Z
-Stopped at: Completed 06-01-PLAN.md (Phase 6 complete)
+Last session: 2026-02-06T22:22:18Z
+Stopped at: Completed 06.1-01-PLAN.md (Phase 6.1 complete)
 Resume file: None
 
 Config:
