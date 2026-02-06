@@ -106,8 +106,12 @@ Recent decisions affecting current work:
 - DiagramEmbed renders read-only SVG preview using exportToSvg (not interactive Excalidraw)
 - UserMention in tasks uses bold text only (lighter than Document editor mentions with avatars)
 - Custom inline content specs follow ESLint exception pattern (non-component exports allowed)
-- Combined # autocomplete for both tasks and projects (not separate triggers)
-- Tasks limited to 7 results, projects to 5 for reasonable combined list
+- # autocomplete in task descriptions combines three entity types (documents, diagrams, projects) in grouped sections
+- @ autocomplete in task descriptions scoped to project members
+- Autocomplete limits: 5 results per entity type for #, 10 results for @ in task descriptions
+- Icons differentiate entity types in autocomplete: FileText for documents, PenTool for diagrams, FolderKanban for projects
+- Combined # autocomplete for both tasks and projects in chat (not separate triggers)
+- Tasks limited to 7 results, projects to 5 for reasonable combined list in chat
 - ProjectReferenceChip uses same visual pattern as TaskMentionChip for consistency
 - Inaccessible projects degrade to grey #inaccessible-project chip
 
@@ -121,8 +125,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T17:50:33Z
-Stopped at: Completed 05-03-PLAN.md (Phase 5 complete)
+Last session: 2026-02-06T17:50:42Z
+Stopped at: Completed 05-02-PLAN.md and 05-03-PLAN.md in parallel (Phase 5 complete)
 Resume file: None
 
 Config:
