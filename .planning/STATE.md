@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 2 - Basic Tasks (Complete)
+**Current focus:** Phase 3 - Kanban Board View (In Progress)
 
 ## Current Position
 
-Phase: 2 of 7 (Basic Tasks)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-02-06 — Completed Phase 2 (Basic Tasks)
+Phase: 3 of 7 (Kanban Board View)
+Plan: 1 of 4 in current phase
+Status: In progress
+Last activity: 2026-02-06 — Completed 03-01-PLAN.md
 
-Progress: [███████░░░] ~40%
+Progress: [████████░░] ~45%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 4.1 min
-- Total execution time: 33 min
+- Total plans completed: 9
+- Average duration: 3.9 min
+- Total execution time: 35 min
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [███████░░░] ~40%
 |-------|-------|-------|----------|
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
 | 02-basic-tasks | 4 | 19 min | 4.8 min |
+| 03-kanban-board-view | 1 | 2 min | 2.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (3 min), 02-02 (5 min), 02-03 (6 min), 02-04 (5 min)
-- Trend: Stable
+- Last 5 plans: 02-02 (5 min), 02-03 (6 min), 02-04 (5 min), 03-01 (2 min)
+- Trend: Improving
 
 *Updated after each plan completion*
 
@@ -73,6 +74,12 @@ Recent decisions affecting current work:
 - BlockNote for task descriptions with 500ms debounce (reduces write frequency)
 - Separate TaskDetailPage component for full-page view (reusable logic, different layout)
 - Assignee dropdown includes explicit "Unassigned" option (sets assigneeId to undefined)
+- position field is v.optional() for backward compatibility with existing tasks
+- generateKeyBetween auto-calculates position at end of status column when not provided
+- listByProject sorts by position with _creationTime fallback for legacy tasks
+- updatePosition mutation dedicated to drag-drop for performance (only updates statusId, position, completed)
+- Fractional indexing via generateKeyBetween for flexible ordering without renumbering
+- Dedicated lightweight mutations for high-frequency operations (updatePosition for drag-drop)
 
 ### Pending Todos
 
@@ -84,8 +91,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T09:00:08Z
-Stopped at: Completed 02-03-PLAN.md (Task Detail Side Panel)
+Last session: 2026-02-06T10:02:31Z
+Stopped at: Completed 03-01-PLAN.md (Task Ordering Infrastructure)
 Resume file: None
 
 Config:
