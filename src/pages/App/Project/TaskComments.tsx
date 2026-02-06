@@ -1,65 +1,84 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery } from "convex/react";
 import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { BlockNoteView } from "@blocknote/shadcn";
+import { useCreateBlockNote } from "@blocknote/react";
+import { SuggestionMenuController } from "@blocknote/react";
+import { taskCommentSchema } from "./taskCommentSchema";
+import { useTheme } from "next-themes";
+
+import "@blocknote/core/fonts/inter.css";
+import "@blocknote/shadcn/style.css";
+import "./task-comment.css";
 
 type TaskCommentsProps = {
   taskId: Id<"tasks">;
   currentUserId: Id<"users">;
+  projectId: Id<"projects">;
 };
 
-export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
+// Parse comment body - backwards compatible with plain text
+function parseCommentBody(body: string) {
+  try {
+    return JSON.parse(body);
+  } catch {
+    // Plain text fallback
+    return [{ type: "paragraph", content: body }];
+  }
+}
+
+// Check if editor is empty
+function isEditorEmpty(blocks: unknown[]): boolean {
+  if (blocks.length === 0) return true;
+  if (blocks.length === 1) {
+    const block = blocks[0] as { type: string; content?: unknown };
+    if (block.type === "paragraph" && (!block.content || (Array.isArray(block.content) && block.content.length === 0))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsProps) {
   const comments = useQuery(api.taskComments.list, { taskId });
+  const projectMembers = useQuery(api.projectMembers.membersByProject, { projectId });
   const createComment = useMutation(api.taskComments.create);
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);
 
-  const [commentBody, setCommentBody] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<Id<"taskComments"> | null>(null);
-  const [editingBody, setEditingBody] = useState("");
+  const [isEmpty, setIsEmpty] = useState(true);
+
+  const { resolvedTheme } = useTheme();
+
+  // New comment editor
+  const editor = useCreateBlockNote({
+    schema: taskCommentSchema,
+  });
 
   // Handle submitting new comment
   const handleSubmit = () => {
-    if (!commentBody.trim()) return;
+    if (isEditorEmpty(editor.document)) return;
 
-    void createComment({ taskId, body: commentBody.trim() }).then(() => {
-      setCommentBody("");
+    const body = JSON.stringify(editor.document);
+    void createComment({ taskId, body }).then(() => {
+      // Clear the editor
+      editor.replaceBlocks(editor.document, [{ type: "paragraph", content: "" }]);
+      setIsEmpty(true);
     });
   };
 
   // Handle keyboard shortcuts for new comment
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && e.ctrlKey) {
       e.preventDefault();
       handleSubmit();
     }
-  };
-
-  // Handle starting edit mode
-  const handleEdit = (commentId: Id<"taskComments">, currentBody: string) => {
-    setEditingCommentId(commentId);
-    setEditingBody(currentBody);
-  };
-
-  // Handle saving edited comment
-  const handleSave = (commentId: Id<"taskComments">) => {
-    if (!editingBody.trim()) return;
-
-    void updateComment({ id: commentId, body: editingBody.trim() }).then(() => {
-      setEditingCommentId(null);
-      setEditingBody("");
-    });
-  };
-
-  // Handle canceling edit
-  const handleCancel = () => {
-    setEditingCommentId(null);
-    setEditingBody("");
   };
 
   // Handle deleting comment
@@ -68,7 +87,7 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
   };
 
   // Loading state
-  if (comments === undefined) {
+  if (comments === undefined || projectMembers === undefined) {
     return <LoadingSpinner />;
   }
 
@@ -104,33 +123,21 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
 
                 {/* Comment body or edit mode */}
                 {editingCommentId === comment._id ? (
-                  <div className="space-y-2">
-                    <Textarea
-                      value={editingBody}
-                      onChange={(e) => setEditingBody(e.target.value)}
-                      className="text-sm resize-none"
-                      rows={3}
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleSave(comment._id)}
-                      >
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleCancel}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
+                  <EditCommentEditor
+                    commentId={comment._id}
+                    initialBody={comment.body}
+                    projectId={projectId}
+                    projectMembers={projectMembers}
+                    onSave={(id, body) => {
+                      void updateComment({ id, body }).then(() => {
+                        setEditingCommentId(null);
+                      });
+                    }}
+                    onCancel={() => setEditingCommentId(null)}
+                  />
                 ) : (
                   <>
-                    <p className="text-sm whitespace-pre-wrap">{comment.body}</p>
+                    <CommentBody body={comment.body} />
 
                     {/* Author actions */}
                     {comment.userId === currentUserId && (
@@ -138,7 +145,7 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEdit(comment._id, comment.body)}
+                          onClick={() => setEditingCommentId(comment._id)}
                           className="h-auto py-1 px-2"
                         >
                           <Pencil className="h-3 w-3 mr-1" />
@@ -164,21 +171,156 @@ export function TaskComments({ taskId, currentUserId }: TaskCommentsProps) {
       </div>
 
       {/* Comment input */}
-      <div className="space-y-2">
-        <Textarea
-          value={commentBody}
-          onChange={(e) => setCommentBody(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Add a comment... (Ctrl+Enter to submit)"
-          className="text-sm resize-none"
-          rows={3}
-        />
-        <Button
-          onClick={handleSubmit}
-          disabled={!commentBody.trim()}
-          size="sm"
-        >
+      <div className="space-y-2" onKeyDown={handleKeyDown}>
+        <div className="task-comment-editor border rounded-md p-2">
+          <BlockNoteView
+            editor={editor}
+            theme={resolvedTheme === "dark" ? "dark" : "light"}
+            sideMenu={false}
+            onChange={() => {
+              setIsEmpty(isEditorEmpty(editor.document));
+            }}
+          >
+            <SuggestionMenuController
+              triggerCharacter="@"
+              getItems={async (query) => {
+                if (!projectMembers) return [];
+                return projectMembers
+                  .filter((m) =>
+                    m.name?.toLowerCase().includes(query.toLowerCase())
+                  )
+                  .slice(0, 10)
+                  .map((m) => ({
+                    title: m.name ?? "Unknown",
+                    onItemClick: () => {
+                      editor.insertInlineContent([
+                        {
+                          type: "userMention",
+                          props: { userId: m.userId },
+                        },
+                        " ",
+                      ]);
+                    },
+                    icon: (
+                      <Avatar className="h-5 w-5">
+                        {m.image && <AvatarImage src={m.image} />}
+                        <AvatarFallback className="text-xs">
+                          {m.name?.slice(0, 2).toUpperCase() ?? "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                    ),
+                    group: "Project members",
+                  }));
+              }}
+            />
+          </BlockNoteView>
+        </div>
+        <Button onClick={handleSubmit} disabled={isEmpty} size="sm">
           Comment
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Read-only comment body display
+function CommentBody({ body }: { body: string }) {
+  const { resolvedTheme } = useTheme();
+
+  const displayEditor = useCreateBlockNote({
+    schema: taskCommentSchema,
+    initialContent: parseCommentBody(body),
+  });
+
+  return (
+    <div className="task-comment-editor">
+      <BlockNoteView
+        editor={displayEditor}
+        editable={false}
+        theme={resolvedTheme === "dark" ? "dark" : "light"}
+      />
+    </div>
+  );
+}
+
+// Edit mode for existing comment
+type EditCommentEditorProps = {
+  commentId: Id<"taskComments">;
+  initialBody: string;
+  projectId: Id<"projects">;
+  projectMembers: Array<{ userId: Id<"users">; name: string; image?: string }>;
+  onSave: (id: Id<"taskComments">, body: string) => void;
+  onCancel: () => void;
+};
+
+function EditCommentEditor({
+  commentId,
+  initialBody,
+  projectMembers,
+  onSave,
+  onCancel,
+}: EditCommentEditorProps) {
+  const { resolvedTheme } = useTheme();
+
+  const editEditor = useCreateBlockNote({
+    schema: taskCommentSchema,
+    initialContent: parseCommentBody(initialBody),
+  });
+
+  const handleSave = () => {
+    if (isEditorEmpty(editEditor.document)) return;
+    const body = JSON.stringify(editEditor.document);
+    onSave(commentId, body);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="task-comment-editor border rounded-md p-2">
+        <BlockNoteView
+          editor={editEditor}
+          theme={resolvedTheme === "dark" ? "dark" : "light"}
+          sideMenu={false}
+        >
+          <SuggestionMenuController
+            triggerCharacter="@"
+            getItems={async (query) => {
+              if (!projectMembers) return [];
+              return projectMembers
+                .filter((m) =>
+                  m.name?.toLowerCase().includes(query.toLowerCase())
+                )
+                .slice(0, 10)
+                .map((m) => ({
+                  title: m.name ?? "Unknown",
+                  onItemClick: () => {
+                    editEditor.insertInlineContent([
+                      {
+                        type: "userMention",
+                        props: { userId: m.userId },
+                      },
+                      " ",
+                    ]);
+                  },
+                  icon: (
+                    <Avatar className="h-5 w-5">
+                      {m.image && <AvatarImage src={m.image} />}
+                      <AvatarFallback className="text-xs">
+                        {m.name?.slice(0, 2).toUpperCase() ?? "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                  ),
+                  group: "Project members",
+                }));
+            }}
+          />
+        </BlockNoteView>
+      </div>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={handleSave}>
+          Save
+        </Button>
+        <Button size="sm" variant="outline" onClick={onCancel}>
+          Cancel
         </Button>
       </div>
     </div>
