@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 2 of 7 (Basic Tasks)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-06 — Completed 02-01-PLAN.md (Task Backend Foundation)
+Last activity: 2026-02-06 — Completed 02-02-PLAN.md (Task List UI)
 
-Progress: [█████░░░░░] ~25%
+Progress: [█████░░░░░] ~30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 3.4 min
-- Total execution time: 17 min
+- Total plans completed: 6
+- Average duration: 3.7 min
+- Total execution time: 22 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
-| 02-basic-tasks | 1 | 3 min | 3.0 min |
+| 02-basic-tasks | 2 | 8 min | 4.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (3 min), 01-03 (3 min), 01-04 (5 min), 02-01 (3 min)
+- Last 5 plans: 01-03 (3 min), 01-04 (5 min), 02-01 (3 min), 02-02 (5 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -62,6 +62,10 @@ Recent decisions affecting current work:
 - Freeform string labels for v1 (migrate to label entities in Phase 3+)
 - Denormalized completed field on tasks for efficient hideCompleted filtering
 - Enriched queries return nested objects with status/assignee/project data
+- Status badge colored dot pattern (colored dot before text, not background - avoids contrast issues)
+- Hide-completed defaults to true (users see active tasks first)
+- Rapid entry pattern: inline creation clears and refocuses input after submit
+- Priority icon visual system: dual-coding with color + shape for accessibility
 
 ### Pending Todos
 
@@ -73,8 +77,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T08:40:02Z
-Stopped at: Completed 02-01-PLAN.md (Task Backend Foundation)
+Last session: 2026-02-06T08:48:53Z
+Stopped at: Completed 02-02-PLAN.md (Task List UI)
 Resume file: None
 
 Config:
