@@ -156,6 +156,39 @@ export const update = mutation({
   },
 });
 
+export const reorderColumns = mutation({
+  args: {
+    statusIds: v.array(v.id("taskStatuses")),
+  },
+  returns: v.null(),
+  handler: async (ctx, { statusIds }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    // Validate all statuses exist and belong to same workspace
+    if (statusIds.length === 0) return null;
+
+    const firstStatus = await ctx.db.get(statusIds[0]);
+    if (!firstStatus) throw new ConvexError("Status not found");
+
+    // Permission check
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", firstStatus.workspaceId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) throw new ConvexError("Not a member of this workspace");
+
+    // Reassign order values sequentially
+    for (let i = 0; i < statusIds.length; i++) {
+      await ctx.db.patch(statusIds[i], { order: i });
+    }
+
+    return null;
+  },
+});
+
 export const remove = mutation({
   args: { statusId: v.id("taskStatuses") },
   returns: v.null(),

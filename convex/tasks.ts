@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { generateKeyBetween } from "fractional-indexing";
 
 export const create = mutation({
   args: {
@@ -19,6 +20,7 @@ export const create = mutation({
       )
     ),
     labels: v.optional(v.array(v.string())),
+    position: v.optional(v.string()),
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
@@ -99,6 +101,26 @@ export const create = mutation({
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
 
+    // Calculate position if not provided
+    let position = args.position;
+    if (!position) {
+      // Find the last task in this project+status by position
+      const tasksInStatus = await ctx.db
+        .query("tasks")
+        .withIndex("by_project_status_position", (q) =>
+          q.eq("projectId", args.projectId).eq("statusId", statusId)
+        )
+        .collect();
+
+      const lastTask = tasksInStatus.length > 0
+        ? tasksInStatus.reduce((max, task) =>
+            (task.position ?? '') > (max.position ?? '') ? task : max
+          )
+        : null;
+
+      position = generateKeyBetween(lastTask?.position ?? null, null);
+    }
+
     // Create task with all fields
     const taskId = await ctx.db.insert("tasks", {
       projectId: args.projectId,
@@ -111,6 +133,7 @@ export const create = mutation({
       labels: args.labels,
       completed: status.isCompleted,
       creatorId: userId,
+      position,
     });
 
     return taskId;
@@ -203,6 +226,13 @@ export const listByProject = query({
       })
     );
 
+    // Sort by position within status groups (tasks without position sort after those with position)
+    enrichedTasks.sort((a, b) => {
+      const posA = a.position ?? '';
+      const posB = b.position ?? '';
+      return posA.localeCompare(posB) || a._creationTime - b._creationTime;
+    });
+
     return enrichedTasks;
   },
 });
@@ -274,9 +304,10 @@ export const update = mutation({
       )
     ),
     labels: v.optional(v.array(v.string())),
+    position: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, title, description, statusId, assigneeId, priority, labels }) => {
+  handler: async (ctx, { taskId, title, description, statusId, assigneeId, priority, labels, position }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -304,6 +335,7 @@ export const update = mutation({
       priority: "urgent" | "high" | "medium" | "low";
       labels: string[];
       completed: boolean;
+      position: string;
     }> = {};
 
     if (title !== undefined) patch.title = title;
@@ -311,6 +343,7 @@ export const update = mutation({
     if (assigneeId !== undefined) patch.assigneeId = assigneeId;
     if (priority !== undefined) patch.priority = priority;
     if (labels !== undefined) patch.labels = labels;
+    if (position !== undefined) patch.position = position;
 
     // If statusId changed: look up new status, update completed field accordingly
     if (statusId !== undefined) {
@@ -324,6 +357,43 @@ export const update = mutation({
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(taskId, patch);
     }
+
+    return null;
+  },
+});
+
+export const updatePosition = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    statusId: v.id("taskStatuses"),
+    position: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { taskId, statusId, position }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new ConvexError("Task not found");
+
+    // Auth: validate membership
+    const membership = await ctx.db
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", task.projectId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) throw new ConvexError("Not a member of this project");
+
+    // Look up status to update completed field
+    const newStatus = await ctx.db.get(statusId);
+    if (!newStatus) throw new ConvexError("Status not found");
+
+    await ctx.db.patch(taskId, {
+      statusId,
+      position,
+      completed: newStatus.isCompleted,
+    });
 
     return null;
   },

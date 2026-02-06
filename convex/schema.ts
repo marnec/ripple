@@ -182,13 +182,15 @@ export default defineSchema({
     labels: v.optional(v.array(v.string())), // freeform string labels (matches documents.tags pattern)
     completed: v.boolean(), // denormalized from status.isCompleted for efficient filtering
     creatorId: v.id("users"), // who created the task
+    position: v.optional(v.string()), // fractional index for ordering within status column
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
     .index("by_assignee", ["assigneeId"])
     .index("by_assignee_completed", ["assigneeId", "completed"])
     .index("by_project_status", ["projectId", "statusId"])
-    .index("by_workspace", ["workspaceId"]),
+    .index("by_workspace", ["workspaceId"])
+    .index("by_project_status_position", ["projectId", "statusId", "position"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),
