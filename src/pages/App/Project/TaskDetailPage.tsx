@@ -422,7 +422,107 @@ function TaskDetailPageContent({
               editor={editor}
               onChange={handleDescriptionChange}
               theme={resolvedTheme === "dark" ? "dark" : "light"}
-            />
+            >
+              <SuggestionMenuController
+                triggerCharacter={"#"}
+                getItems={async (query) => {
+                  const items: Array<{title: string; onItemClick: () => void; icon: React.ReactNode; group: string; key: string}> = [];
+
+                  // Documents
+                  if (documents) {
+                    documents
+                      .filter(doc => doc.name.toLowerCase().includes(query.toLowerCase()))
+                      .slice(0, 5)
+                      .forEach(doc => {
+                        items.push({
+                          title: doc.name,
+                          onItemClick: () => {
+                            editor.insertInlineContent([
+                              { type: "documentLink", props: { documentId: doc._id } },
+                              " ",
+                            ]);
+                          },
+                          icon: <FileText className="h-4 w-4" />,
+                          group: "Documents",
+                          key: `doc-${doc._id}`,
+                        });
+                      });
+                  }
+
+                  // Diagrams
+                  if (diagrams) {
+                    diagrams
+                      .filter(d => d.name.toLowerCase().includes(query.toLowerCase()))
+                      .slice(0, 5)
+                      .forEach(d => {
+                        items.push({
+                          title: d.name,
+                          onItemClick: () => {
+                            editor.insertInlineContent([
+                              { type: "diagramEmbed", props: { diagramId: d._id } },
+                              " ",
+                            ]);
+                          },
+                          icon: <PenTool className="h-4 w-4" />,
+                          group: "Diagrams",
+                          key: `dia-${d._id}`,
+                        });
+                      });
+                  }
+
+                  // Projects
+                  if (projects) {
+                    projects
+                      .filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+                      .slice(0, 5)
+                      .forEach(p => {
+                        items.push({
+                          title: p.name,
+                          onItemClick: () => {
+                            editor.insertInlineContent([
+                              { type: "projectReference", props: { projectId: p._id } },
+                              " ",
+                            ]);
+                          },
+                          icon: <FolderKanban className="h-4 w-4" />,
+                          group: "Projects",
+                          key: `proj-${p._id}`,
+                        });
+                      });
+                  }
+
+                  return items;
+                }}
+              />
+              <SuggestionMenuController
+                triggerCharacter={"@"}
+                getItems={async (query) => {
+                  if (!members) return [];
+                  return members
+                    .filter(m => m.name?.toLowerCase().includes(query.toLowerCase()))
+                    .slice(0, 10)
+                    .map(m => ({
+                      title: m.name ?? "Unknown",
+                      onItemClick: () => {
+                        editor.insertInlineContent([
+                          { type: "userMention", props: { userId: m.userId } },
+                          " ",
+                        ]);
+                      },
+                      icon: (
+                        <Avatar className="h-5 w-5">
+                          {m.image && <AvatarImage src={m.image} />}
+                          <AvatarFallback className="text-xs">
+                            {m.name?.slice(0, 2).toUpperCase() ?? "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                      ),
+                      group: "Project members",
+                      key: m.userId,
+                    }));
+                }}
+              />
+            </BlockNoteView>
           </div>
         </div>
       </div>
