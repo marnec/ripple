@@ -44,7 +44,7 @@ function ProjectDetailsContent({
   }
 
   return (
-    <div className="container mx-auto py-6">
+    <div className="container mx-auto p-6 max-w-5xl">
       {/* Project Header */}
       <div className="flex items-center gap-3 mb-6">
         <span className={`w-4 h-4 rounded-full ${project.color}`} />

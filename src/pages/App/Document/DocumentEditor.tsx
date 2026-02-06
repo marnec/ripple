@@ -12,6 +12,7 @@ import { useBlockNoteSync } from "@convex-dev/prosemirror-sync/blocknote";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { PenTool } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -50,6 +51,7 @@ const schema = BlockNoteSchema.create({
 type Editor = BlockNoteEditor<typeof schema.blockSchema, typeof schema.inlineContentSchema>;
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
+  const { resolvedTheme } = useTheme();
   const [editor, setEditor] = useState<Editor | null>(null);
   const sync = useBlockNoteSync<Editor>(api.prosemirror, documentId, {
     editorOptions: {
@@ -90,7 +92,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             <FacePile users={enhancedPresence} hideInactive={true} />
           </div>
           <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
-          <BlockNoteView editor={editor}>
+          <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController
               triggerCharacter={"#"}
               getItems={async (query) => {

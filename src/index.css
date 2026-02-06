@@ -310,6 +310,11 @@ body {
   opacity: 0.5;
 }
 
+/* BlockNote editor transparent backgrounds */
+.bn-shadcn {
+  --bn-colors-editor-background: transparent !important;
+}
+
 /* Subtle card hover */
 .card-hover {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;

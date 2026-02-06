@@ -1,7 +1,3 @@
-.bn-shadcn.dark {
-  --background: rgba(196, 119, 119, 0);
-}
-
 .bn-shadcn .bn-suggestion-menu {
   height: fit-content;
   max-height: inherit;

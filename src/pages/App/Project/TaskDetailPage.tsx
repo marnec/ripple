@@ -37,6 +37,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -77,16 +78,17 @@ function TaskDetailPageContent({
   const [newLabel, setNewLabel] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-
-  // Initialize BlockNote editor
-  const editor = useCreateBlockNote({
-    initialContent: task?.description
-      ? JSON.parse(task.description)
-      : undefined,
-  });
+  const { resolvedTheme } = useTheme();
 
   // Debounce timeout for description updates
   const descriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track whether task description has been loaded into the editor
+  const loadedTaskIdRef = useRef<Id<"tasks"> | null>(null);
+  const suppressOnChangeRef = useRef(false);
+
+  // Initialize BlockNote editor (content loaded via useEffect below)
+  const editor = useCreateBlockNote({});
 
   // Update title value when task loads
   useEffect(() => {
@@ -95,6 +97,21 @@ function TaskDetailPageContent({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.title]);
+
+  // Load task description into editor when task changes
+  useEffect(() => {
+    if (!task || !taskId) return;
+    if (loadedTaskIdRef.current === taskId) return;
+    loadedTaskIdRef.current = taskId;
+
+    suppressOnChangeRef.current = true;
+    if (task.description) {
+      const blocks = JSON.parse(task.description);
+      editor.replaceBlocks(editor.document, blocks);
+    } else {
+      editor.replaceBlocks(editor.document, []);
+    }
+  }, [task, taskId, editor]);
 
   if (task === undefined || statuses === undefined || members === undefined) {
     return (
@@ -155,6 +172,12 @@ function TaskDetailPageContent({
   };
 
   const handleDescriptionChange = () => {
+    // Skip save when content was set programmatically (initial load)
+    if (suppressOnChangeRef.current) {
+      suppressOnChangeRef.current = false;
+      return;
+    }
+
     // Debounce description updates
     if (descriptionTimeoutRef.current) {
       clearTimeout(descriptionTimeoutRef.current);
@@ -392,7 +415,7 @@ function TaskDetailPageContent({
             <BlockNoteView
               editor={editor}
               onChange={handleDescriptionChange}
-              theme="light"
+              theme={resolvedTheme === "dark" ? "dark" : "light"}
             />
           </div>
         </div>

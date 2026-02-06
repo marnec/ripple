@@ -23,6 +23,7 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
+  SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -40,6 +41,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -70,17 +72,17 @@ export function TaskDetailSheet({
   const [newLabel, setNewLabel] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { resolvedTheme } = useTheme();
 
   // Debounce timeout for description updates
   const descriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize BlockNote editor (memo to avoid recreating on every render)
-  const initialContent = task?.description
-    ? JSON.parse(task.description)
-    : undefined;
-  const editor = useCreateBlockNote({
-    initialContent,
-  });
+  // Track which task's description has been loaded into the editor
+  const loadedTaskIdRef = useRef<Id<"tasks"> | null>(null);
+  const suppressOnChangeRef = useRef(false);
+
+  // Initialize BlockNote editor (content loaded via useEffect below)
+  const editor = useCreateBlockNote({});
 
   // Update title value when task loads (only update if task.title changes)
   useEffect(() => {
@@ -90,6 +92,31 @@ export function TaskDetailSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.title]);
 
+  // Load task description into editor when task changes
+  useEffect(() => {
+    if (!task || !taskId) return;
+    if (loadedTaskIdRef.current === taskId) return;
+    loadedTaskIdRef.current = taskId;
+
+    suppressOnChangeRef.current = true;
+    if (task.description) {
+      const blocks = JSON.parse(task.description);
+      editor.replaceBlocks(editor.document, blocks);
+    } else {
+      editor.replaceBlocks(editor.document, []);
+    }
+  }, [task, taskId, editor]);
+
+  // Reset loaded state when sheet closes so re-opening reloads content
+  useEffect(() => {
+    if (!open) {
+      loadedTaskIdRef.current = null;
+      if (descriptionTimeoutRef.current) {
+        clearTimeout(descriptionTimeoutRef.current);
+      }
+    }
+  }, [open]);
+
   if (!taskId || !task || task === null) {
     return null;
   }
@@ -98,6 +125,7 @@ export function TaskDetailSheet({
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-[600px] sm:w-[540px] overflow-y-auto">
+          <SheetTitle className="sr-only">Task Details</SheetTitle>
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner />
           </div>
@@ -153,6 +181,12 @@ export function TaskDetailSheet({
   };
 
   const handleDescriptionChange = () => {
+    // Skip save when content was set programmatically (initial load)
+    if (suppressOnChangeRef.current) {
+      suppressOnChangeRef.current = false;
+      return;
+    }
+
     // Debounce description updates
     if (descriptionTimeoutRef.current) {
       clearTimeout(descriptionTimeoutRef.current);
@@ -202,6 +236,7 @@ export function TaskDetailSheet({
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-[600px] sm:w-[540px] overflow-y-auto">
+          <SheetTitle className="sr-only">Task Details</SheetTitle>
           <SheetHeader>
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
@@ -418,7 +453,7 @@ export function TaskDetailSheet({
                 <BlockNoteView
                   editor={editor}
                   onChange={handleDescriptionChange}
-                  theme="light"
+                  theme={resolvedTheme === "dark" ? "dark" : "light"}
                 />
               </div>
             </div>
