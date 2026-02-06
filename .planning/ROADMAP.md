@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
 - [x] **Phase 6: Task Comments** - Threaded discussions on tasks
 - [x] **Phase 6.1: Mention People in Task Comments** - @mentions in comment text (INSERTED)
-- [ ] **Phase 7: Notifications & Polish** - Push notifications and final integrations
+- [x] **Phase 7: Notifications & Polish** - Push notifications and final integrations
 
 ## Phase Details
 
@@ -141,8 +141,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Notification infrastructure (BlockNote mention extraction utility + task notification internal actions)
-- [ ] 07-02-PLAN.md — Wire task and comment mutations to schedule notifications for assignments and @mentions
+- [x] 07-01-PLAN.md — Notification infrastructure (BlockNote mention extraction utility + task notification internal actions)
+- [x] 07-02-PLAN.md — Wire task and comment mutations to schedule notifications for assignments and @mentions
 
 ## Progress
 
@@ -158,4 +158,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7
 | 5. Document & Diagram Embeds | 3/3 | Complete | 2026-02-06 |
 | 6. Task Comments | 1/1 | Complete | 2026-02-06 |
 | 6.1. Mention People in Task Comments | 1/1 | Complete | 2026-02-06 |
-| 7. Notifications & Polish | 0/2 | Not started | - |
+| 7. Notifications & Polish | 2/2 | Complete | 2026-02-06 |

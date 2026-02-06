@@ -44,8 +44,8 @@
 
 ### Notifications (NOTIF)
 
-- [ ] **NOTIF-01**: User receives push notification when assigned to a task
-- [ ] **NOTIF-02**: User receives push notification when @mentioned in a task
+- [x] **NOTIF-01**: User receives push notification when assigned to a task
+- [x] **NOTIF-02**: User receives push notification when @mentioned in a task
 
 ### Comments (COMM)
 
@@ -124,8 +124,8 @@
 | COMM-01 | Phase 6 | Complete |
 | COMM-02 | Phase 6 | Complete |
 | COMM-03 | Phase 6 | Complete |
-| NOTIF-01 | Phase 7 | Pending |
-| NOTIF-02 | Phase 7 | Pending |
+| NOTIF-01 | Phase 7 | Complete |
+| NOTIF-02 | Phase 7 | Complete |
 
 ---
 
