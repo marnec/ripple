@@ -45,6 +45,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
+import "./task-description.css";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -424,7 +425,7 @@ function TaskDetailPageContent({
           <h3 className="text-sm font-semibold text-muted-foreground">
             Description
           </h3>
-          <div className="min-h-75 border rounded-md p-4">
+          <div className="task-description-editor min-h-75 border rounded-md p-4">
             <BlockNoteView
               editor={editor}
               onChange={handleDescriptionChange}

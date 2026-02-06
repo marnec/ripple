@@ -15,8 +15,10 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMutation, useQuery } from "convex/react";
 import { generateKeyBetween } from "fractional-indexing";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { AddColumnDialog } from "./AddColumnDialog";
@@ -33,6 +35,8 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
   const [hideCompleted, setHideCompleted] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [activeDragId, setActiveDragId] = useState<Id<"tasks"> | null>(null);
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [showAddColumn, setShowAddColumn] = useState(false);
 
   const tasks = useQuery(api.tasks.listByProject, {
@@ -235,7 +239,13 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
               key={status._id}
               status={status}
               tasks={tasksByStatus[status._id] || []}
-              onTaskClick={(taskId) => setSelectedTaskId(taskId as Id<"tasks">)}
+              onTaskClick={(taskId) => {
+                if (isMobile) {
+                  void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);
+                } else {
+                  setSelectedTaskId(taskId as Id<"tasks">);
+                }
+              }}
               onMoveLeft={() => handleMoveColumn(status._id, "left")}
               onMoveRight={() => handleMoveColumn(status._id, "right")}
               onDelete={() => handleDeleteColumn(status._id)}

@@ -2,9 +2,11 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex/react";
 import { CheckSquare } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { CreateTaskInline } from "./CreateTaskInline";
@@ -22,6 +24,8 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
     null
   );
   const sheetOpen = selectedTaskId !== null;
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
   const tasks = useQuery(api.tasks.listByProject, {
     projectId,
@@ -81,7 +85,11 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
               key={task._id}
               task={task}
               onClick={() => {
-                setSelectedTaskId(task._id);
+                if (isMobile) {
+                  void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
+                } else {
+                  setSelectedTaskId(task._id);
+                }
               }}
             />
           ))}

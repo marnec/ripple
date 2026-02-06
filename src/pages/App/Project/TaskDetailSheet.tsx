@@ -49,6 +49,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
+import "./task-description.css";
 
 type TaskDetailSheetProps = {
   taskId: Id<"tasks"> | null;
@@ -131,7 +132,7 @@ export function TaskDetailSheet({
   if (task === undefined || statuses === undefined || members === undefined) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-150 sm:w-135 overflow-y-auto">
+        <SheetContent className="w-200 sm:w-175 overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner />
@@ -242,7 +243,7 @@ export function TaskDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-150 sm:w-135 overflow-y-auto">
+        <SheetContent className="w-200 sm:w-175 overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <SheetHeader>
             <div className="flex items-start justify-between gap-2">
@@ -462,7 +463,7 @@ export function TaskDetailSheet({
               <h3 className="text-sm font-semibold text-muted-foreground">
                 Description
               </h3>
-              <div className="min-h-50 border rounded-md p-4">
+              <div className="task-description-editor min-h-50 border rounded-md p-4">
                 <BlockNoteView
                   editor={editor}
                   onChange={handleDescriptionChange}

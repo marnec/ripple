@@ -6,8 +6,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { CheckSquare, ChevronDown, ChevronRight } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskDetailSheet } from "./TaskDetailSheet";
@@ -43,6 +44,8 @@ export function MyTasks() {
   const [hideCompleted, setHideCompleted] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
 
   const tasks = useQuery(
     api.tasks.listByAssignee,
@@ -168,7 +171,11 @@ export function MyTasks() {
                           key={task._id}
                           task={task}
                           onClick={() => {
-                            setSelectedTaskId(task._id);
+                            if (isMobile) {
+                              void navigate(`/workspaces/${workspaceId}/projects/${group.projectId}/tasks/${task._id}`);
+                            } else {
+                              setSelectedTaskId(task._id);
+                            }
                           }}
                         />
                       ))}

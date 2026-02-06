@@ -5,6 +5,7 @@ import {
   TabsTrigger,
   TabsContent,
 } from "@/components/ui/tabs";
+import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
@@ -38,7 +39,8 @@ function ProjectDetailsContent({
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects">;
 }) {
-  const [view, setView] = useState<"list" | "board">("board");
+  const isMobile = useIsMobile();
+  const [view, setView] = useState<"list" | "board">(isMobile ? "list" : "board");
   const project = useQuery(api.projects.get, { id: projectId });
 
   if (project === undefined) {
