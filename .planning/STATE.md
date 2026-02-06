@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 7 of 7 (Notifications and Polish)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-06 — Completed 07-01-PLAN.md
+Plan: 2 of 2 complete in current phase
+Status: Phase complete
+Last activity: 2026-02-06 — Completed 07-02-PLAN.md
 
-Progress: [███████████░] 89% (phases 1-6.1 + 07-01 complete, 07-02 remaining)
+Progress: [████████████] 100% (all phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 19
-- Average duration: 3.5 min
-- Total execution time: 68.1 min
+- Total plans completed: 20
+- Average duration: 3.4 min
+- Total execution time: 70.1 min
 
 **By Phase:**
 
@@ -34,11 +34,11 @@ Progress: [███████████░] 89% (phases 1-6.1 + 07-01 compl
 | 05-document-diagram-embeds | 3 | 9.1 min | 3.0 min |
 | 06-task-comments | 1 | 3 min | 3.0 min |
 | 06.1-mention-people-in-task-comments | 1 | 3 min | 3.0 min |
-| 07-notifications-and-polish | 1 | 2 min | 2.0 min |
+| 07-notifications-and-polish | 2 | 4 min | 2.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-03 (3 min), 06-01 (3 min), 06.1-01 (3 min), 07-01 (2 min)
-- Trend: Fast and consistent, latest even faster
+- Last 5 plans: 06-01 (3 min), 06.1-01 (3 min), 07-01 (2 min), 07-02 (2 min)
+- Trend: Consistently fast, optimized execution
 
 *Updated after each plan completion*
 
@@ -130,6 +130,10 @@ Recent decisions affecting current work:
 - mentionedUserIds as v.array(v.string()) not v.array(v.id('users')) because IDs come from JSON parsing
 - Promise.allSettled for notification sending (individual failures don't block other sends)
 - Internal action notification pattern: query user subscriptions → setup VAPID → Promise.allSettled sends
+- Scheduler notifications always AFTER database writes (ensures data consistency before background jobs)
+- Lazy user fetching in update mutations (avoid db reads unless notification needed)
+- Diff-based mention detection for edits (Set-based comparison prevents duplicate notifications)
+- Self-notification filtering: userId excluded from all recipient lists
 
 ### Roadmap Evolution
 
@@ -145,8 +149,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T23:05:35Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-02-06T23:10:46Z
+Stopped at: Completed 07-02-PLAN.md (Phase 7 complete)
 Resume file: None
 
 Config:
