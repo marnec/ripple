@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 2 of 7 (Basic Tasks)
-Plan: 2 of 4 in current phase
+Plan: 4 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-06 — Completed 02-02-PLAN.md (Task List UI)
+Last activity: 2026-02-06 — Completed 02-04-PLAN.md (My Tasks Cross-Project View)
 
-Progress: [█████░░░░░] ~30%
+Progress: [██████░░░░] ~35%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
-- Average duration: 3.7 min
-- Total execution time: 22 min
+- Total plans completed: 7
+- Average duration: 3.9 min
+- Total execution time: 27 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
-| 02-basic-tasks | 2 | 8 min | 4.0 min |
+| 02-basic-tasks | 3 | 13 min | 4.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (3 min), 01-04 (5 min), 02-01 (3 min), 02-02 (5 min)
+- Last 5 plans: 01-04 (5 min), 02-01 (3 min), 02-02 (5 min), 02-04 (5 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -66,6 +66,8 @@ Recent decisions affecting current work:
 - Hide-completed defaults to true (users see active tasks first)
 - Rapid entry pattern: inline creation clears and refocuses input after submit
 - Priority icon visual system: dual-coding with color + shape for accessibility
+- Track closed groups instead of open groups for default-expanded collapsible sections (avoids setState in useEffect)
+- My Tasks positioned above all section lists in sidebar (personal productivity shortcut)
 
 ### Pending Todos
 
@@ -77,8 +79,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T08:48:53Z
-Stopped at: Completed 02-02-PLAN.md (Task List UI)
+Last session: 2026-02-06T08:59:09Z
+Stopped at: Completed 02-04-PLAN.md (My Tasks Cross-Project View)
 Resume file: None
 
 Config:
