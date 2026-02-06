@@ -138,10 +138,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User receives push notification when assigned to a task
   2. User receives push notification when @mentioned in task descriptions or comments
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- TBD (determined during planning)
+- [ ] 07-01-PLAN.md — Notification infrastructure (BlockNote mention extraction utility + task notification internal actions)
+- [ ] 07-02-PLAN.md — Wire task and comment mutations to schedule notifications for assignments and @mentions
 
 ## Progress
 
@@ -157,4 +158,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7
 | 5. Document & Diagram Embeds | 3/3 | Complete | 2026-02-06 |
 | 6. Task Comments | 1/1 | Complete | 2026-02-06 |
 | 6.1. Mention People in Task Comments | 1/1 | Complete | 2026-02-06 |
-| 7. Notifications & Polish | 0/TBD | Not started | - |
+| 7. Notifications & Polish | 0/2 | Not started | - |
