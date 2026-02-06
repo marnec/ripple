@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 5 of 7 (Document & Diagram Embeds)
-Plan: 1 of 3 in current phase
-Status: In progress
-Last activity: 2026-02-06 — Completed 05-01-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-02-06 — Completed 05-03-PLAN.md
 
-Progress: [█████████░] ~64%
+Progress: [██████████] 100% (phases 1-5 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
-- Average duration: 3.7 min
-- Total execution time: 54.3 min
+- Total plans completed: 16
+- Average duration: 3.6 min
+- Total execution time: 60.1 min
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [█████████░] ~64%
 | 02-basic-tasks | 4 | 19 min | 4.8 min |
 | 03-kanban-board-view | 3 | 11 min | 3.7 min |
 | 04-chat-to-task-integration | 2 | 7 min | 3.5 min |
-| 05-document-diagram-embeds | 1 | 3.3 min | 3.3 min |
+| 05-document-diagram-embeds | 3 | 9.1 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-03 (6 min), 04-01 (4 min), 04-02 (3 min), 05-01 (3.3 min)
-- Trend: Stable
+- Last 5 plans: 04-02 (3 min), 05-01 (3.3 min), 05-02 (2.9 min), 05-03 (3 min)
+- Trend: Fast and consistent
 
 *Updated after each plan completion*
 
@@ -106,6 +106,10 @@ Recent decisions affecting current work:
 - DiagramEmbed renders read-only SVG preview using exportToSvg (not interactive Excalidraw)
 - UserMention in tasks uses bold text only (lighter than Document editor mentions with avatars)
 - Custom inline content specs follow ESLint exception pattern (non-component exports allowed)
+- Combined # autocomplete for both tasks and projects (not separate triggers)
+- Tasks limited to 7 results, projects to 5 for reasonable combined list
+- ProjectReferenceChip uses same visual pattern as TaskMentionChip for consistency
+- Inaccessible projects degrade to grey #inaccessible-project chip
 
 ### Pending Todos
 
@@ -117,8 +121,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T17:43:23Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-02-06T17:50:33Z
+Stopped at: Completed 05-03-PLAN.md (Phase 5 complete)
 Resume file: None
 
 Config:
