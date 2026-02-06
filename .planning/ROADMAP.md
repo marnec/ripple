@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Kanban Board View** - Drag-drop board with real-time updates
 - [x] **Phase 4: Chat-to-Task Integration** - Create tasks from messages with context capture
 - [x] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
-- [ ] **Phase 6: Task Comments** - Threaded discussions on tasks
+- [x] **Phase 6: Task Comments** - Threaded discussions on tasks
 - [ ] **Phase 7: Notifications & Polish** - Push notifications and final integrations
 
 ## Phase Details
@@ -116,7 +116,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md — Backend taskComments CRUD and frontend comment list with inline edit/delete
+- [x] 06-01-PLAN.md — Backend taskComments CRUD and frontend comment list with inline edit/delete
 
 ### Phase 7: Notifications & Polish
 **Goal**: Users receive timely notifications for task-related events
@@ -142,5 +142,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Kanban Board View | 3/3 | Complete | 2026-02-06 |
 | 4. Chat-to-Task Integration | 2/2 | Complete | 2026-02-06 |
 | 5. Document & Diagram Embeds | 3/3 | Complete | 2026-02-06 |
-| 6. Task Comments | 0/1 | Not started | - |
+| 6. Task Comments | 1/1 | Complete | 2026-02-06 |
 | 7. Notifications & Polish | 0/TBD | Not started | - |

@@ -49,9 +49,9 @@
 
 ### Comments (COMM)
 
-- [ ] **COMM-01**: User can add comments to a task
-- [ ] **COMM-02**: Task comments display in chronological thread
-- [ ] **COMM-03**: User can edit and delete their own comments
+- [x] **COMM-01**: User can add comments to a task
+- [x] **COMM-02**: Task comments display in chronological thread
+- [x] **COMM-03**: User can edit and delete their own comments
 
 ---
 
@@ -121,9 +121,9 @@
 | INTEG-02 | Phase 5 | Complete |
 | INTEG-03 | Phase 5 | Complete |
 | INTEG-04 | Phase 5 | Complete |
-| COMM-01 | Phase 6 | Pending |
-| COMM-02 | Phase 6 | Pending |
-| COMM-03 | Phase 6 | Pending |
+| COMM-01 | Phase 6 | Complete |
+| COMM-02 | Phase 6 | Complete |
+| COMM-03 | Phase 6 | Complete |
 | NOTIF-01 | Phase 7 | Pending |
 | NOTIF-02 | Phase 7 | Pending |
 
