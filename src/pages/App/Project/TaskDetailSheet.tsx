@@ -551,7 +551,7 @@ export function TaskDetailSheet({
             {/* Comments Section */}
             {currentUser && (
               <div className="space-y-2">
-                <TaskComments taskId={taskId} currentUserId={currentUser._id} />
+                <TaskComments taskId={taskId} currentUserId={currentUser._id} projectId={projectId} />
               </div>
             )}
           </div>
