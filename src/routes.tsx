@@ -12,6 +12,8 @@ import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
 import { ProjectDetails } from "./pages/App/Project/ProjectDetails";
 import { Projects } from "./pages/App/Project/Projects";
 import { ProjectSettings } from "./pages/App/Project/ProjectSettings";
+import { MyTasks } from "./pages/App/Project/MyTasks";
+import { TaskDetailPage } from "./pages/App/Project/TaskDetailPage";
 import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
 import { Workspaces } from "./pages/App/Workspace/Workspaces";
 import { WorkspaceSettings } from "./pages/App/Workspace/WorkspaceSettings";
@@ -45,6 +47,10 @@ export const router = createBrowserRouter(
               element: <WorkspaceSettings />,
             },
             {
+              path: "my-tasks",
+              element: <MyTasks />,
+            },
+            {
               path: "channels",
               children: [
                 {
@@ -75,6 +81,10 @@ export const router = createBrowserRouter(
                 {
                   path: ":projectId",
                   element: <ProjectDetails />,
+                },
+                {
+                  path: ":projectId/tasks/:taskId",
+                  element: <TaskDetailPage />,
                 },
                 {
                   path: ":projectId/settings",

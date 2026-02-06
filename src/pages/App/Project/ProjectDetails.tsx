@@ -23,7 +23,7 @@ export function ProjectDetails() {
 }
 
 function ProjectDetailsContent({
-  workspaceId: _workspaceId,
+  workspaceId,
   projectId,
 }: {
   workspaceId: Id<"workspaces">;
@@ -56,7 +56,7 @@ function ProjectDetailsContent({
       )}
 
       {/* Task List */}
-      <Tasks projectId={projectId} />
+      <Tasks projectId={projectId} workspaceId={workspaceId} />
     </div>
   );
 }

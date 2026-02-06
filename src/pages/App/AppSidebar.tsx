@@ -4,13 +4,17 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
 import usePushNotifications from "@/hooks/use-push-notifications";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
-import { useNavigate, useParams } from "react-router-dom";
+import { CheckSquare } from "lucide-react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
@@ -21,6 +25,7 @@ import { NavUser } from "@/pages/App/UserMenu";
 
 export function AppSidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
 
@@ -88,6 +93,14 @@ export function AppSidebar() {
     void navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
   };
 
+  const handleMyTasksClick = () => {
+    if (!workspaceId) return;
+    if (isMobile) setOpenMobile(false);
+    void navigate(`/workspaces/${workspaceId}/my-tasks`);
+  };
+
+  const isMyTasksActive = location.pathname.includes("/my-tasks");
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -103,6 +116,20 @@ export function AppSidebar() {
         <SidebarGroup>
           {workspaceId && (
             <>
+              {/* My Tasks - Personal productivity shortcut above all sections */}
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={handleMyTasksClick}
+                    isActive={isMyTasksActive}
+                    tooltip="My Tasks"
+                  >
+                    <CheckSquare />
+                    <span>My Tasks</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+
               <ChannelSelectorList
                 channelId={channelId}
                 workspaceId={workspaceId}

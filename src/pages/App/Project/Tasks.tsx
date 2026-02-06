@@ -8,15 +8,20 @@ import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { CreateTaskInline } from "./CreateTaskInline";
+import { TaskDetailSheet } from "./TaskDetailSheet";
 import { TaskRow } from "./TaskRow";
 
 type TasksProps = {
   projectId: Id<"projects">;
+  workspaceId: Id<"workspaces">;
 };
 
-export function Tasks({ projectId }: TasksProps) {
+export function Tasks({ projectId, workspaceId }: TasksProps) {
   const [hideCompleted, setHideCompleted] = useState(true);
-  const [_selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(
+    null
+  );
+  const sheetOpen = selectedTaskId !== null;
 
   const tasks = useQuery(api.tasks.listByProject, {
     projectId,
@@ -77,12 +82,22 @@ export function Tasks({ projectId }: TasksProps) {
               task={task}
               onClick={() => {
                 setSelectedTaskId(task._id);
-                console.log("Task clicked:", task._id);
               }}
             />
           ))}
         </div>
       )}
+
+      {/* Task Detail Sheet */}
+      <TaskDetailSheet
+        taskId={selectedTaskId}
+        open={sheetOpen}
+        onOpenChange={(open) => {
+          if (!open) setSelectedTaskId(null);
+        }}
+        workspaceId={workspaceId}
+        projectId={projectId}
+      />
     </div>
   );
 }
