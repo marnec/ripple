@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { TaskDetailSheet } from "./TaskDetailSheet";
 import { TaskRow } from "./TaskRow";
 
 type ProjectGroup = {
@@ -39,7 +40,7 @@ type ProjectGroup = {
 export function MyTasks() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [hideCompleted, setHideCompleted] = useState(true);
-  const [_selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
 
   const tasks = useQuery(
@@ -178,12 +179,19 @@ export function MyTasks() {
         </div>
       )}
 
-      {/* TODO: TaskDetailSheet integration
-          Once TaskDetailSheet.tsx is created by plan 02-03, integrate it here.
-          When a task is clicked (selectedTaskId is set), render TaskDetailSheet
-          with the task's projectId from the task data and the workspace workspaceId.
-          The sheet should allow in-place editing without navigating away from My Tasks.
-      */}
+      {selectedTaskId && workspaceId && (() => {
+        const selectedTask = tasks?.find((t) => t._id === selectedTaskId);
+        if (!selectedTask) return null;
+        return (
+          <TaskDetailSheet
+            taskId={selectedTaskId as Id<"tasks">}
+            open={true}
+            onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
+            workspaceId={workspaceId as Id<"workspaces">}
+            projectId={selectedTask.projectId}
+          />
+        );
+      })()}
     </div>
   );
 }
