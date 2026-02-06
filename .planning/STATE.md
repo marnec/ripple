@@ -11,27 +11,27 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 Phase: 2 of 7 (Basic Tasks)
 Plan: 4 of 4 in current phase
-Status: In progress
-Last activity: 2026-02-06 — Completed 02-04-PLAN.md (My Tasks Cross-Project View)
+Status: Phase complete
+Last activity: 2026-02-06 — Completed 02-03-PLAN.md (Task Detail Side Panel)
 
-Progress: [██████░░░░] ~35%
+Progress: [███████░░░] ~40%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 3.9 min
-- Total execution time: 27 min
+- Total plans completed: 8
+- Average duration: 4.1 min
+- Total execution time: 33 min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
-| 02-basic-tasks | 3 | 13 min | 4.3 min |
+| 02-basic-tasks | 4 | 19 min | 4.8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-04 (5 min), 02-01 (3 min), 02-02 (5 min), 02-04 (5 min)
+- Last 5 plans: 02-01 (3 min), 02-02 (5 min), 02-03 (6 min), 02-04 (5 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -68,6 +68,11 @@ Recent decisions affecting current work:
 - Priority icon visual system: dual-coding with color + shape for accessibility
 - Track closed groups instead of open groups for default-expanded collapsible sections (avoids setState in useEffect)
 - My Tasks positioned above all section lists in sidebar (personal productivity shortcut)
+- Task detail sheet slides from right (not modal - maintains context with list)
+- Auto-save pattern for task properties: individual updates, no save button (Convex reactivity makes this safe)
+- BlockNote for task descriptions with 500ms debounce (reduces write frequency)
+- Separate TaskDetailPage component for full-page view (reusable logic, different layout)
+- Assignee dropdown includes explicit "Unassigned" option (sets assigneeId to undefined)
 
 ### Pending Todos
 
@@ -79,8 +84,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T08:59:09Z
-Stopped at: Completed 02-04-PLAN.md (My Tasks Cross-Project View)
+Last session: 2026-02-06T09:00:08Z
+Stopped at: Completed 02-03-PLAN.md (Task Detail Side Panel)
 Resume file: None
 
 Config:
