@@ -16,6 +16,8 @@ import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
 import { useChatContext } from "./ChatContext";
 import { TaskMention } from "./CustomInlineContent/TaskMention";
+import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
+import { FolderKanban } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -40,6 +42,7 @@ const schema = BlockNoteSchema.create({
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,
     taskMention: TaskMention,
+    projectReference: ProjectReference,
   },
 });
 
@@ -244,39 +247,67 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           <SuggestionMenuController
             triggerCharacter={"#"}
             getItems={async (query) => {
-              const tasksToSearch = linkedProject ? projectTasks : myTasks;
-              if (!tasksToSearch) return [];
+              const items: Array<{title: string; onItemClick: () => void; icon: React.ReactNode; group: string; key: string}> = [];
 
-              return tasksToSearch
-                .filter((task) =>
-                  task.title.toLowerCase().includes(query.toLowerCase())
-                )
-                .slice(0, 10)
-                .map((task) => ({
-                  title: task.title,
-                  onItemClick: () => {
-                    editor.insertInlineContent([
-                      {
-                        type: "taskMention",
-                        props: {
-                          taskId: task._id,
-                          taskTitle: task.title,
-                        },
+              // Task mentions (existing logic)
+              const tasksToSearch = linkedProject ? projectTasks : myTasks;
+              if (tasksToSearch) {
+                tasksToSearch
+                  .filter((task) =>
+                    task.title.toLowerCase().includes(query.toLowerCase())
+                  )
+                  .slice(0, 7)
+                  .forEach((task) => {
+                    items.push({
+                      title: task.title,
+                      onItemClick: () => {
+                        editor.insertInlineContent([
+                          {
+                            type: "taskMention",
+                            props: {
+                              taskId: task._id,
+                              taskTitle: task.title,
+                            },
+                          },
+                          " ",
+                        ]);
                       },
-                      " ",
-                    ]);
-                  },
-                  icon: (
-                    <div
-                      className={cn(
-                        "h-3 w-3 rounded-full",
-                        task.status?.color || "bg-gray-500"
-                      )}
-                    />
-                  ),
-                  group: linkedProject ? "Project tasks" : "My tasks",
-                  key: task._id,
-                }));
+                      icon: (
+                        <div
+                          className={cn(
+                            "h-3 w-3 rounded-full",
+                            task.status?.color || "bg-gray-500"
+                          )}
+                        />
+                      ),
+                      group: linkedProject ? "Project tasks" : "My tasks",
+                      key: task._id,
+                    });
+                  });
+              }
+
+              // Project references (NEW)
+              if (projects) {
+                projects
+                  .filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
+                  .slice(0, 5)
+                  .forEach((p) => {
+                    items.push({
+                      title: p.name,
+                      onItemClick: () => {
+                        editor.insertInlineContent([
+                          { type: "projectReference", props: { projectId: p._id } },
+                          " ",
+                        ]);
+                      },
+                      icon: <FolderKanban className="h-4 w-4" />,
+                      group: "Projects",
+                      key: `proj-${p._id}`,
+                    });
+                  });
+              }
+
+              return items;
             }}
           />
         </BlockNoteView>
