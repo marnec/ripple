@@ -68,10 +68,12 @@ Plans:
   3. User can drag and drop tasks within a column to reorder them
   4. User can add, rename, and reorder status columns beyond the default three
   5. Multiple users see board updates in real-time when others make changes
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- TBD (determined during planning)
+- [ ] 03-01-PLAN.md — Backend infrastructure (position field, indexes, fractional-indexing, dnd-kit deps)
+- [ ] 03-02-PLAN.md — Kanban board UI with drag-and-drop (KanbanBoard, KanbanColumn, KanbanCard, view toggle)
+- [ ] 03-03-PLAN.md — Column management (add, rename, reorder, delete) and visual verification
 
 ### Phase 4: Chat-to-Task Integration
 **Goal**: Users can capture action items from conversations by creating tasks from messages
@@ -128,13 +130,13 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Projects Foundation | 4/4 | Complete | 2026-02-05 |
 | 2. Basic Tasks | 4/4 | Complete | 2026-02-06 |
-| 3. Kanban Board View | 0/TBD | Not started | - |
+| 3. Kanban Board View | 0/3 | In progress | - |
 | 4. Chat-to-Task Integration | 0/TBD | Not started | - |
 | 5. Document & Diagram Embeds | 0/TBD | Not started | - |
 | 6. Task Comments | 0/TBD | Not started | - |
