@@ -155,6 +155,41 @@ export default defineSchema({
     .index("by_project_user", ["projectId", "userId"])
     .index("by_workspace_user", ["workspaceId", "userId"]),
 
+  taskStatuses: defineTable({
+    workspaceId: v.id("workspaces"),
+    name: v.string(), // "To Do", "In Progress", "Done"
+    color: v.string(), // Tailwind class like "bg-gray-500"
+    order: v.number(), // display order (0, 1, 2...)
+    isDefault: v.boolean(), // marks the default status for new tasks (only one per workspace)
+    isCompleted: v.boolean(), // when true, tasks with this status are considered completed
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_order", ["workspaceId", "order"]),
+
+  tasks: defineTable({
+    projectId: v.id("projects"),
+    workspaceId: v.id("workspaces"), // denormalized for cross-project queries
+    title: v.string(),
+    description: v.optional(v.string()), // BlockNote JSON content stored as string
+    statusId: v.id("taskStatuses"), // reference to customizable status
+    assigneeId: v.optional(v.id("users")), // single assignee
+    priority: v.union(
+      v.literal("urgent"),
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low")
+    ),
+    labels: v.optional(v.array(v.string())), // freeform string labels (matches documents.tags pattern)
+    completed: v.boolean(), // denormalized from status.isCompleted for efficient filtering
+    creatorId: v.id("users"), // who created the task
+  })
+    .index("by_project", ["projectId"])
+    .index("by_project_completed", ["projectId", "completed"])
+    .index("by_assignee", ["assigneeId"])
+    .index("by_assignee_completed", ["assigneeId", "completed"])
+    .index("by_project_status", ["projectId", "statusId"])
+    .index("by_workspace", ["workspaceId"]),
+
   pushSubscriptions: defineTable({
     userId: v.id("users"),
     device: v.string(),
