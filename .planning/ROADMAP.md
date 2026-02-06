@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Projects Foundation** - Project containers with membership-based access control
 - [x] **Phase 2: Basic Tasks** - Core task CRUD with properties and list view
-- [ ] **Phase 3: Kanban Board View** - Drag-drop board with real-time updates
+- [x] **Phase 3: Kanban Board View** - Drag-drop board with real-time updates
 - [ ] **Phase 4: Chat-to-Task Integration** - Create tasks from messages with context capture
 - [ ] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
 - [ ] **Phase 6: Task Comments** - Threaded discussions on tasks
@@ -71,9 +71,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Backend infrastructure (position field, indexes, fractional-indexing, dnd-kit deps)
-- [ ] 03-02-PLAN.md — Kanban board UI with drag-and-drop (KanbanBoard, KanbanColumn, KanbanCard, view toggle)
-- [ ] 03-03-PLAN.md — Column management (add, rename, reorder, delete) and visual verification
+- [x] 03-01-PLAN.md — Backend infrastructure (position field, indexes, fractional-indexing, dnd-kit deps)
+- [x] 03-02-PLAN.md — Kanban board UI with drag-and-drop (KanbanBoard, KanbanColumn, KanbanCard, view toggle)
+- [x] 03-03-PLAN.md — Column management (add, rename, reorder, delete) and visual verification
 
 ### Phase 4: Chat-to-Task Integration
 **Goal**: Users can capture action items from conversations by creating tasks from messages
@@ -136,7 +136,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 |-------|----------------|--------|-----------|
 | 1. Projects Foundation | 4/4 | Complete | 2026-02-05 |
 | 2. Basic Tasks | 4/4 | Complete | 2026-02-06 |
-| 3. Kanban Board View | 0/3 | In progress | - |
+| 3. Kanban Board View | 3/3 | Complete | 2026-02-06 |
 | 4. Chat-to-Task Integration | 0/TBD | Not started | - |
 | 5. Document & Diagram Embeds | 0/TBD | Not started | - |
 | 6. Task Comments | 0/TBD | Not started | - |

@@ -23,11 +23,11 @@
 
 ### Kanban Board (KANBAN)
 
-- [ ] **KANBAN-01**: User can view project tasks in a Kanban board organized by status columns
-- [ ] **KANBAN-02**: User can drag-and-drop tasks between columns to change status
-- [ ] **KANBAN-03**: Kanban board updates in real-time when other users make changes
-- [ ] **KANBAN-04**: User can add, rename, and reorder columns (customize beyond default 3)
-- [ ] **KANBAN-05**: User can reorder tasks within a column via drag-and-drop
+- [x] **KANBAN-01**: User can view project tasks in a Kanban board organized by status columns
+- [x] **KANBAN-02**: User can drag-and-drop tasks between columns to change status
+- [x] **KANBAN-03**: Kanban board updates in real-time when other users make changes
+- [x] **KANBAN-04**: User can add, rename, and reorder columns (customize beyond default 3)
+- [x] **KANBAN-05**: User can reorder tasks within a column via drag-and-drop
 
 ### Chat Integration (CHAT)
 
@@ -109,11 +109,11 @@
 | TASK-06 | Phase 2 | Complete |
 | TASK-07 | Phase 2 | Complete |
 | TASK-08 | Phase 2 | Complete |
-| KANBAN-01 | Phase 3 | Pending |
-| KANBAN-02 | Phase 3 | Pending |
-| KANBAN-03 | Phase 3 | Pending |
-| KANBAN-04 | Phase 3 | Pending |
-| KANBAN-05 | Phase 3 | Pending |
+| KANBAN-01 | Phase 3 | Complete |
+| KANBAN-02 | Phase 3 | Complete |
+| KANBAN-03 | Phase 3 | Complete |
+| KANBAN-04 | Phase 3 | Complete |
+| KANBAN-05 | Phase 3 | Complete |
 | CHAT-01 | Phase 4 | Pending |
 | CHAT-02 | Phase 4 | Pending |
 | CHAT-03 | Phase 4 | Pending |
