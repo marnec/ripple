@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Chat-to-Task Integration** - Create tasks from messages with context capture
 - [x] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
 - [x] **Phase 6: Task Comments** - Threaded discussions on tasks
+- [ ] **Phase 6.1: Mention People in Task Comments** - @mentions in comment text (INSERTED)
 - [ ] **Phase 7: Notifications & Polish** - Push notifications and final integrations
 
 ## Phase Details
@@ -118,9 +119,21 @@ Plans:
 Plans:
 - [x] 06-01-PLAN.md — Backend taskComments CRUD and frontend comment list with inline edit/delete
 
+### Phase 6.1: Mention People in Task Comments (INSERTED)
+**Goal**: Users can @mention project members in task comments for targeted communication
+**Depends on**: Phase 6 (comments must exist)
+**Requirements**: Derived from COMM enhancement
+**Success Criteria** (what must be TRUE):
+  1. User can @mention project members in task comments
+  2. Mentioned users are visually distinguished in comment text
+**Plans**: 1 plan
+
+Plans:
+- [ ] 06.1-01-PLAN.md — BlockNote @mention upgrade for task comments (schema, component rewrite, integration)
+
 ### Phase 7: Notifications & Polish
 **Goal**: Users receive timely notifications for task-related events
-**Depends on**: Phases 2, 5, 6 (tasks, mentions, and comments must exist)
+**Depends on**: Phases 2, 5, 6, 6.1 (tasks, mentions, and comments must exist)
 **Requirements**: NOTIF-01, NOTIF-02
 **Success Criteria** (what must be TRUE):
   1. User receives push notification when assigned to a task
@@ -133,7 +146,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 6.1 -> 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -143,4 +156,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 4. Chat-to-Task Integration | 2/2 | Complete | 2026-02-06 |
 | 5. Document & Diagram Embeds | 3/3 | Complete | 2026-02-06 |
 | 6. Task Comments | 1/1 | Complete | 2026-02-06 |
+| 6.1. Mention People in Task Comments | 0/TBD | Not started | - |
 | 7. Notifications & Polish | 0/TBD | Not started | - |
