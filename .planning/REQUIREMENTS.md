@@ -37,10 +37,10 @@
 
 ### Cross-Feature Integration (INTEG)
 
-- [ ] **INTEG-01**: User can embed Excalidraw diagrams in task description with inline preview
-- [ ] **INTEG-02**: User can link Ripple documents in task description (internal link)
-- [ ] **INTEG-03**: User can @mention users in task descriptions and comments
-- [ ] **INTEG-04**: User can reference projects from any channel they have visibility on
+- [x] **INTEG-01**: User can embed Excalidraw diagrams in task description with inline preview
+- [x] **INTEG-02**: User can link Ripple documents in task description (internal link)
+- [x] **INTEG-03**: User can @mention users in task descriptions and comments
+- [x] **INTEG-04**: User can reference projects from any channel they have visibility on
 
 ### Notifications (NOTIF)
 
@@ -117,10 +117,10 @@
 | CHAT-01 | Phase 4 | Complete |
 | CHAT-02 | Phase 4 | Complete |
 | CHAT-03 | Phase 4 | Complete |
-| INTEG-01 | Phase 5 | Pending |
-| INTEG-02 | Phase 5 | Pending |
-| INTEG-03 | Phase 5 | Pending |
-| INTEG-04 | Phase 5 | Pending |
+| INTEG-01 | Phase 5 | Complete |
+| INTEG-02 | Phase 5 | Complete |
+| INTEG-03 | Phase 5 | Complete |
+| INTEG-04 | Phase 5 | Complete |
 | COMM-01 | Phase 6 | Pending |
 | COMM-02 | Phase 6 | Pending |
 | COMM-03 | Phase 6 | Pending |
@@ -129,4 +129,4 @@
 
 ---
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-06*

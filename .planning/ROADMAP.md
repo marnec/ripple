@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Basic Tasks** - Core task CRUD with properties and list view
 - [x] **Phase 3: Kanban Board View** - Drag-drop board with real-time updates
 - [x] **Phase 4: Chat-to-Task Integration** - Create tasks from messages with context capture
-- [ ] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
+- [x] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
 - [ ] **Phase 6: Task Comments** - Threaded discussions on tasks
 - [ ] **Phase 7: Notifications & Polish** - Push notifications and final integrations
 
@@ -101,9 +101,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Custom inline content types and shared task description schema
-- [ ] 05-02-PLAN.md — Task description editor upgrade with # and @ autocomplete
-- [ ] 05-03-PLAN.md — Project references in chat messages
+- [x] 05-01-PLAN.md — Custom inline content types and shared task description schema
+- [x] 05-02-PLAN.md — Task description editor upgrade with # and @ autocomplete
+- [x] 05-03-PLAN.md — Project references in chat messages
 
 ### Phase 6: Task Comments
 **Goal**: Users can discuss tasks through threaded comments
@@ -141,6 +141,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Basic Tasks | 4/4 | Complete | 2026-02-06 |
 | 3. Kanban Board View | 3/3 | Complete | 2026-02-06 |
 | 4. Chat-to-Task Integration | 2/2 | Complete | 2026-02-06 |
-| 5. Document & Diagram Embeds | 0/3 | Not started | - |
+| 5. Document & Diagram Embeds | 3/3 | Complete | 2026-02-06 |
 | 6. Task Comments | 0/TBD | Not started | - |
 | 7. Notifications & Polish | 0/TBD | Not started | - |

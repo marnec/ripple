@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 5 - Document & Diagram Embeds (In progress)
+**Current focus:** Phase 5 - Document & Diagram Embeds (Complete)
 
 ## Current Position
 
