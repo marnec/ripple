@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 3 of 7 (Kanban Board View)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-02-06 — Completed 03-01-PLAN.md
+Last activity: 2026-02-06 — Completed 03-02-PLAN.md
 
-Progress: [████████░░] ~45%
+Progress: [████████░░] ~50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
-- Average duration: 3.9 min
-- Total execution time: 35 min
+- Total plans completed: 10
+- Average duration: 3.8 min
+- Total execution time: 38 min
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [████████░░] ~45%
 |-------|-------|-------|----------|
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
 | 02-basic-tasks | 4 | 19 min | 4.8 min |
-| 03-kanban-board-view | 1 | 2 min | 2.0 min |
+| 03-kanban-board-view | 2 | 5 min | 2.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (5 min), 02-03 (6 min), 02-04 (5 min), 03-01 (2 min)
+- Last 5 plans: 02-03 (6 min), 02-04 (5 min), 03-01 (2 min), 03-02 (3 min)
 - Trend: Improving
 
 *Updated after each plan completion*
@@ -80,6 +80,11 @@ Recent decisions affecting current work:
 - updatePosition mutation dedicated to drag-drop for performance (only updates statusId, position, completed)
 - Fractional indexing via generateKeyBetween for flexible ordering without renumbering
 - Dedicated lightweight mutations for high-frequency operations (updatePosition for drag-drop)
+- Board view defaults to active (Kanban is phase focus)
+- closestCorners collision detection for better multi-container Kanban drag handling
+- Split presentational and draggable components (CardPresenter + Card) for DragOverlay reuse
+- 8px PointerSensor activation distance to distinguish clicks from drags
+- Optimistic updates via useMutation().withOptimisticUpdate() for instant drag feedback
 
 ### Pending Todos
 
@@ -91,8 +96,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T10:02:31Z
-Stopped at: Completed 03-01-PLAN.md (Task Ordering Infrastructure)
+Last session: 2026-02-06T10:09:42Z
+Stopped at: Completed 03-02-PLAN.md (Kanban Board UI)
 Resume file: None
 
 Config:
