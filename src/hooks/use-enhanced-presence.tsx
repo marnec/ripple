@@ -13,7 +13,7 @@ interface EnhancedUserPresence {
   lastDisconnected?: number;
 }
 
-export function useEnhancedPresence(roomId: string) {
+export function useEnhancedPresence(roomId: string): EnhancedUserPresence[] {
   const viewer = useQuery(api.users.viewer);
 
   const presenceState = usePresence(
@@ -26,8 +26,8 @@ export function useEnhancedPresence(roomId: string) {
   const userIds = useMemo(() => {
     if (!roomId || !presenceState || !Array.isArray(presenceState)) return [];
     return presenceState
-      .map((p: any) => p.user)
-      .filter((userId): userId is Id<"users"> => userId !== undefined && userId !== null && userId !== "Anonymous");
+      .map((p) => p.userId)
+      .filter((id): id is Id<"users"> => id !== undefined && id !== null && id !== "Anonymous");
   }, [roomId, presenceState]);
 
   const users = useQuery(api.users.getByIds, userIds.length > 0 ? { ids: userIds } : "skip");
@@ -36,17 +36,17 @@ export function useEnhancedPresence(roomId: string) {
     if (!roomId || !presenceState || !users) return [];
 
     return presenceState
-      .filter((presence: any) => presence.user !== undefined && presence.user !== null && presence.user !== "Anonymous")
-      .map((presence: any) => {
-        const user = users[presence.user as Id<"users">];
+      .filter((presence) => presence.userId !== undefined && presence.userId !== null && presence.userId !== "Anonymous")
+      .map((presence) => {
+        const user = users[presence.userId as Id<"users">];
         return {
-          userId: presence.user,
+          userId: presence.userId as Id<"users">,
           online: presence.online,
           name: user?.name,
           image: user?.image,
           email: user?.email,
           lastDisconnected: presence.lastDisconnected,
-        } as EnhancedUserPresence;
+        } satisfies EnhancedUserPresence;
       });
   }, [roomId, presenceState, users]);
 

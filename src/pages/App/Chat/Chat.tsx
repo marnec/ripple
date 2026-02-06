@@ -105,6 +105,8 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
       {viewMode === 'context' && contextMessageId ? (
         <MessageContext
           messageId={contextMessageId}
+          channelId={channelId}
+          workspaceId={workspaceId as Id<"workspaces">}
           onClose={handleBackToChat}
           onBackToChat={handleBackToChat}
         />

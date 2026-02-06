@@ -30,7 +30,7 @@ import { useNavigate } from "react-router-dom";
 
 const formSchema = z.object({
   name: z.string().min(1, { message: "Channel name is required" }),
-  isPublic: z.boolean().default(true),
+  isPublic: z.boolean(),
 });
 
 export function CreateChannelDialog({

@@ -89,7 +89,7 @@ const DiagramEmbedView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
         );
         setSvg(svgString);
       })
-      .catch((e) => {
+      .catch((e: unknown) => {
         if (cancelled) return;
         console.error("Failed to render diagram", e);
       });

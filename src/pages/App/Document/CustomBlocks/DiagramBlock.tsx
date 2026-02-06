@@ -1,4 +1,4 @@
-import { createReactBlockSpec } from "@blocknote/react";
+import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
@@ -77,7 +77,7 @@ const DiagramView = ({
         'font-family: "Virgil, Segoe UI Emoji"',
       );
       setSvg(svgString);
-    }).catch((e) => {
+    }).catch((e: unknown) => {
       if (cancelled) return;
       console.error("Failed to render diagram", e);
     });
@@ -121,7 +121,19 @@ const DiagramView = ({
   );
 };
 
-const ResizableDiagram = ({ block, editor }: any) => {
+const diagramPropSchema = {
+  textAlignment: defaultProps.textAlignment,
+  diagramId: {
+    default: null as unknown as Id<"diagrams">,
+  },
+  width: {
+    default: 512,
+  },
+} as const;
+
+type DiagramBlockProps = ReactCustomBlockRenderProps<"diagram", typeof diagramPropSchema, "none">;
+
+const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   const { diagramId } = block.props;
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -129,7 +141,7 @@ const ResizableDiagram = ({ block, editor }: any) => {
     handleUsed: "l" | "r";
     initialWidth: number;
     initialClientX: number;
-  }>();
+  } | undefined>(undefined);
 
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   // state to show/hide handles
@@ -234,7 +246,6 @@ const ResizableDiagram = ({ block, editor }: any) => {
 
   return (
     <div
-      {...block.contentAttributes}
       ref={wrapperRef}
       className="relative"
       style={{
@@ -295,19 +306,11 @@ const ResizableDiagram = ({ block, editor }: any) => {
 export const DiagramBlock = createReactBlockSpec(
   {
     type: "diagram",
-    propSchema: {
-      textAlignment: defaultProps.textAlignment,
-      diagramId: {
-        default: null as unknown as Id<"diagrams">,
-      },
-      width: {
-        default: 512,
-      },
-    },
+    propSchema: diagramPropSchema,
     content: "none",
   },
   {
-    render: (props: any) => {
+    render: (props) => {
       return <ResizableDiagram {...props} />;
     },
   },

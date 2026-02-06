@@ -11,7 +11,7 @@ export function Tooltip({
   ...props
 }: {
   children: React.ReactNode;
-  content: any;
+  content: React.ReactNode;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;

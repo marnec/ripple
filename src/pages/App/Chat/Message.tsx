@@ -2,7 +2,7 @@ import { UserContext } from "@/pages/App/UserContext";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
-import { useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../../../components/ui/context-menu";
@@ -22,7 +22,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
   const user = useContext(UserContext);
 
   const userIsAuthor = userId === user?._id;
-  const messageRef = useRef<HTMLDivElement>(null);
+  const messageRef = useRef<HTMLLIElement>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
 
   const { setEditingMessage } = useChatContext()
@@ -80,7 +80,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
           workspaceId={workspaceId}
           open={isCreatingTask}
           onOpenChange={setIsCreatingTask}
-          anchorRef={messageRef}
+          anchorRef={messageRef as React.RefObject<HTMLElement>}
           onTaskCreated={(taskId, taskTitle) => {
             onTaskCreated(taskId, taskTitle);
             setIsCreatingTask(false);

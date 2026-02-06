@@ -9,7 +9,7 @@
     "dev:backend": "convex dev",
     "predev": "convex dev --until-success && node setup.mjs --once && convex dashboard",
     "build": "tsc -b && vite build",
-    "lint": "tsc && eslint . --report-unused-disable-directives --max-warnings 0",
+    "lint": "tsc -b && eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy:convex": "npx convex deploy",
     "deploy": "git push origin main:main"

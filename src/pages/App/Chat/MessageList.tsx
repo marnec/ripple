@@ -1,5 +1,5 @@
 import { MessageWithAuthor } from "@shared/types/channel";
-import { PropsWithChildren, useLayoutEffect, useRef } from "react";
+import React, { PropsWithChildren, useLayoutEffect, useRef } from "react";
 import { useResizeObserver } from "usehooks-ts";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 
@@ -12,7 +12,7 @@ type MessageListProps = PropsWithChildren & {
 export function MessageList({ children, messages }: MessageListProps) {
   const messageListRef = useRef<HTMLOListElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { height = 0 } = useResizeObserver({ ref: messageListRef, box: "border-box" });
+  const { height = 0 } = useResizeObserver({ ref: messageListRef as React.RefObject<HTMLElement>, box: "border-box" });
   const previousLastMessage = useRef<MessageWithAuthor | null>(null);
   const initialRenderRef = useRef(true);
 

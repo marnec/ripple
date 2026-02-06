@@ -29,10 +29,10 @@ interface MessageComposerProps {
   workspaceId: Id<"workspaces">;
 }
 
-const editorIsEmpty = (editor: BlockNoteEditor<any>) =>
+const editorIsEmpty = (editor: BlockNoteEditor<any, any, any>) =>
   !editor._tiptapEditor.state.doc.textContent.trim().length;
 
-const editorClear = (editor: BlockNoteEditor<any>) => {
+const editorClear = (editor: BlockNoteEditor<any, any, any>) => {
   editor.removeBlocks(editor.document.map((b) => b.id));
 };
 
@@ -68,11 +68,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   // Query tasks for autocomplete
   const projectTasks = useQuery(
-    linkedProject ? api.tasks.listByProject : "skip",
+    api.tasks.listByProject,
     linkedProject ? { projectId: linkedProject._id, hideCompleted: true } : "skip"
   );
   const myTasks = useQuery(
-    !linkedProject ? api.tasks.listByAssignee : "skip",
+    api.tasks.listByAssignee,
     !linkedProject ? { workspaceId, hideCompleted: true } : "skip"
   );
 
@@ -247,7 +247,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           <SuggestionMenuController
             triggerCharacter={"#"}
             getItems={async (query) => {
-              const items: Array<{title: string; onItemClick: () => void; icon: React.ReactNode; group: string; key: string}> = [];
+              const items: Array<{title: string; onItemClick: () => void; icon: React.JSX.Element; group: string}> = [];
 
               // Task mentions (existing logic)
               const tasksToSearch = linkedProject ? projectTasks : myTasks;
@@ -281,7 +281,6 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
                         />
                       ),
                       group: linkedProject ? "Project tasks" : "My tasks",
-                      key: task._id,
                     });
                   });
               }
@@ -302,7 +301,6 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
                       },
                       icon: <FolderKanban className="h-4 w-4" />,
                       group: "Projects",
-                      key: `proj-${p._id}`,
                     });
                   });
               }

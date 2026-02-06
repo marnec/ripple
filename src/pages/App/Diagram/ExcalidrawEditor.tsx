@@ -29,7 +29,7 @@ export function ExcalidrawEditor({ onSave, diagram }: DiagramPageProps) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI>();
   const { resolvedTheme } = useTheme();
   const isSaving = useRef(false);
-  const elementsRef = useRef<readonly ExcalidrawElement[]>();
+  const elementsRef = useRef<readonly ExcalidrawElement[] | undefined>(undefined);
 
   useEffect(() => {
     if (!diagram.content) return;

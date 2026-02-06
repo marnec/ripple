@@ -71,17 +71,7 @@ const ResendOTPPasswordReset = Resend({
   },
 });
 
-export const {
-  auth,
-  signIn,
-  signOut,
-  store,
-}: {
-  auth: any;
-  signIn: any;
-  signOut: any;
-  store: any;
-} = convexAuth({
+export const { auth, signIn, signOut, store } = convexAuth({
   providers: [
     GitHub,
     Resend({ from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>` }),

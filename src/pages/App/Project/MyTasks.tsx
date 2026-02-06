@@ -34,7 +34,7 @@ type ProjectGroup = {
     project: {
       name: string;
       color: string;
-    };
+    } | null;
   }>;
 };
 
@@ -54,6 +54,7 @@ export function MyTasks() {
     if (!tasks) return [];
     const groups = new Map<string, ProjectGroup>();
     for (const task of tasks) {
+      if (!task.project) continue;
       const key = task.projectId;
       if (!groups.has(key)) {
         groups.set(key, {

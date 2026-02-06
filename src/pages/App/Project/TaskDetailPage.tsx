@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useCreateBlockNote } from "@blocknote/react";
+import { SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
@@ -32,7 +32,10 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  FileText,
+  FolderKanban,
   Minus,
+  PenTool,
   Trash2,
   X,
 } from "lucide-react";
@@ -41,6 +44,7 @@ import { useTheme } from "next-themes";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { taskDescriptionSchema } from "./taskDescriptionSchema";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -70,6 +74,9 @@ function TaskDetailPageContent({
   const task = useQuery(api.tasks.get, { taskId });
   const statuses = useQuery(api.taskStatuses.listByWorkspace, { workspaceId });
   const members = useQuery(api.projectMembers.membersByProject, { projectId });
+  const diagrams = useQuery(api.diagrams.list, { workspaceId });
+  const documents = useQuery(api.documents.listByUserMembership, { workspaceId });
+  const projects = useQuery(api.projects.listByUserMembership, { workspaceId });
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
@@ -88,7 +95,7 @@ function TaskDetailPageContent({
   const suppressOnChangeRef = useRef(false);
 
   // Initialize BlockNote editor (content loaded via useEffect below)
-  const editor = useCreateBlockNote({});
+  const editor = useCreateBlockNote({ schema: taskDescriptionSchema });
 
   // Update title value when task loads
   useEffect(() => {
@@ -426,7 +433,7 @@ function TaskDetailPageContent({
               <SuggestionMenuController
                 triggerCharacter={"#"}
                 getItems={async (query) => {
-                  const items: Array<{title: string; onItemClick: () => void; icon: React.ReactNode; group: string; key: string}> = [];
+                  const items: Array<{title: string; onItemClick: () => void; icon: React.JSX.Element; group: string}> = [];
 
                   // Documents
                   if (documents) {
@@ -444,7 +451,6 @@ function TaskDetailPageContent({
                           },
                           icon: <FileText className="h-4 w-4" />,
                           group: "Documents",
-                          key: `doc-${doc._id}`,
                         });
                       });
                   }
@@ -465,7 +471,6 @@ function TaskDetailPageContent({
                           },
                           icon: <PenTool className="h-4 w-4" />,
                           group: "Diagrams",
-                          key: `dia-${d._id}`,
                         });
                       });
                   }
@@ -486,7 +491,6 @@ function TaskDetailPageContent({
                           },
                           icon: <FolderKanban className="h-4 w-4" />,
                           group: "Projects",
-                          key: `proj-${p._id}`,
                         });
                       });
                   }
@@ -518,7 +522,6 @@ function TaskDetailPageContent({
                         </Avatar>
                       ),
                       group: "Project members",
-                      key: m.userId,
                     }));
                 }}
               />

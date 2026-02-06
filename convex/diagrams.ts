@@ -180,7 +180,7 @@ export const updateContent = mutation({
       : [];
 
     const existingElementsMap = new Map(
-      existingElements.map((el: any) => [el.id, el]),
+      existingElements.map((el: { id: string }) => [el.id, el]),
     );
 
     const newElements = Array.isArray(newScene.elements)

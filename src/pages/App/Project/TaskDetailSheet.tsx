@@ -26,8 +26,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteView, SuggestionMenuController } from "@blocknote/shadcn";
+import { SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { useMutation, useQuery } from "convex/react";
@@ -471,7 +471,7 @@ export function TaskDetailSheet({
                   <SuggestionMenuController
                     triggerCharacter={"#"}
                     getItems={async (query) => {
-                      const items: Array<{title: string; onItemClick: () => void; icon: React.ReactNode; group: string; key: string}> = [];
+                      const items: Array<{title: string; onItemClick: () => void; icon: React.JSX.Element; group: string}> = [];
 
                       // Documents
                       if (documents) {
@@ -489,7 +489,6 @@ export function TaskDetailSheet({
                               },
                               icon: <FileText className="h-4 w-4" />,
                               group: "Documents",
-                              key: `doc-${doc._id}`,
                             });
                           });
                       }
@@ -510,7 +509,6 @@ export function TaskDetailSheet({
                               },
                               icon: <PenTool className="h-4 w-4" />,
                               group: "Diagrams",
-                              key: `dia-${d._id}`,
                             });
                           });
                       }
@@ -531,7 +529,6 @@ export function TaskDetailSheet({
                               },
                               icon: <FolderKanban className="h-4 w-4" />,
                               group: "Projects",
-                              key: `proj-${p._id}`,
                             });
                           });
                       }
@@ -563,7 +560,6 @@ export function TaskDetailSheet({
                             </Avatar>
                           ),
                           group: "Project members",
-                          key: m.userId,
                         }));
                     }}
                   />
