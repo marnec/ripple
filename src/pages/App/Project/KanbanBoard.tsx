@@ -15,9 +15,11 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMutation, useQuery } from "convex/react";
 import { generateKeyBetween } from "fractional-indexing";
+import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { AddColumnDialog } from "./AddColumnDialog";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskDetailSheet } from "./TaskDetailSheet";
@@ -31,6 +33,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
   const [hideCompleted, setHideCompleted] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [activeDragId, setActiveDragId] = useState<Id<"tasks"> | null>(null);
+  const [showAddColumn, setShowAddColumn] = useState(false);
 
   const tasks = useQuery(api.tasks.listByProject, {
     projectId,
@@ -59,6 +62,9 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
       );
     }
   );
+
+  const reorderColumns = useMutation(api.taskStatuses.reorderColumns);
+  const removeStatus = useMutation(api.taskStatuses.remove);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -157,6 +163,35 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
     ? tasks?.find((t) => t._id === activeDragId)
     : null;
 
+  // Column reorder handler
+  const handleMoveColumn = (
+    statusId: Id<"taskStatuses">,
+    direction: "left" | "right"
+  ) => {
+    if (!statuses) return;
+
+    const sortedStatuses = [...statuses].sort((a, b) => a.order - b.order);
+    const currentIndex = sortedStatuses.findIndex((s) => s._id === statusId);
+    const targetIndex = direction === "left" ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= sortedStatuses.length) return;
+
+    // Swap positions in the array
+    const reordered = [...sortedStatuses];
+    [reordered[currentIndex], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[currentIndex],
+    ];
+
+    // Call reorderColumns with new order
+    void reorderColumns({ statusIds: reordered.map((s) => s._id) });
+  };
+
+  // Column delete handler
+  const handleDeleteColumn = (statusId: Id<"taskStatuses">) => {
+    void removeStatus({ statusId });
+  };
+
   if (tasks === undefined || statuses === undefined) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -195,14 +230,31 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
           className="flex gap-4 overflow-x-auto pb-4"
           style={{ minHeight: "calc(100vh - 200px)" }}
         >
-          {statuses.map((status) => (
+          {statuses.map((status, index) => (
             <KanbanColumn
               key={status._id}
               status={status}
               tasks={tasksByStatus[status._id] || []}
               onTaskClick={(taskId) => setSelectedTaskId(taskId as Id<"tasks">)}
+              onMoveLeft={() => handleMoveColumn(status._id, "left")}
+              onMoveRight={() => handleMoveColumn(status._id, "right")}
+              onDelete={() => handleDeleteColumn(status._id)}
+              isFirst={index === 0}
+              isLast={index === statuses.length - 1}
+              canDelete={!status.isDefault && (tasksByStatus[status._id]?.length ?? 0) === 0}
             />
           ))}
+
+          {/* Add Column Button */}
+          <button
+            onClick={() => setShowAddColumn(true)}
+            className="flex flex-col w-72 h-32 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20 flex-shrink-0 items-center justify-center gap-2 hover:bg-muted/50 hover:border-muted-foreground/40 transition-colors cursor-pointer"
+          >
+            <Plus className="h-6 w-6 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground font-medium">
+              Add Column
+            </span>
+          </button>
         </div>
 
         {/* Drag Overlay */}
@@ -226,6 +278,13 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
         }}
         workspaceId={workspaceId}
         projectId={projectId}
+      />
+
+      {/* Add Column Dialog */}
+      <AddColumnDialog
+        workspaceId={workspaceId}
+        open={showAddColumn}
+        onOpenChange={setShowAddColumn}
       />
     </div>
   );
