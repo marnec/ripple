@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: 5 of 7 (Document & Diagram Embeds)
-Plan: 3 of 3 in current phase
+Phase: 6 of 7 (Task Comments)
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-02-06 — Completed 05-03-PLAN.md
+Last activity: 2026-02-06 — Completed 06-01-PLAN.md
 
-Progress: [██████████] 100% (phases 1-5 complete)
+Progress: [███████████░] 86% (phases 1-6 complete, phase 7 remaining)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: 3.6 min
-- Total execution time: 60.1 min
+- Total execution time: 63.1 min
 
 **By Phase:**
 
@@ -32,9 +32,10 @@ Progress: [██████████] 100% (phases 1-5 complete)
 | 03-kanban-board-view | 3 | 11 min | 3.7 min |
 | 04-chat-to-task-integration | 2 | 7 min | 3.5 min |
 | 05-document-diagram-embeds | 3 | 9.1 min | 3.0 min |
+| 06-task-comments | 1 | 3 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-02 (3 min), 05-01 (3.3 min), 05-02 (2.9 min), 05-03 (3 min)
+- Last 5 plans: 05-01 (3.3 min), 05-02 (2.9 min), 05-03 (3 min), 06-01 (3 min)
 - Trend: Fast and consistent
 
 *Updated after each plan completion*
@@ -114,6 +115,10 @@ Recent decisions affecting current work:
 - Tasks limited to 7 results, projects to 5 for reasonable combined list in chat
 - ProjectReferenceChip uses same visual pattern as TaskMentionChip for consistency
 - Inaccessible projects degrade to grey #inaccessible-project chip
+- Soft-delete for comments (reversible, maintains history)
+- Chronological order (oldest first) for comment conversation flow
+- Author-only edit/delete for comments (no project admin override)
+- Ctrl+Enter keyboard shortcut for comment submission
 
 ### Pending Todos
 
@@ -125,8 +130,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T17:50:42Z
-Stopped at: Completed 05-02-PLAN.md and 05-03-PLAN.md in parallel (Phase 5 complete)
+Last session: 2026-02-06T20:32:38Z
+Stopped at: Completed 06-01-PLAN.md (Phase 6 complete)
 Resume file: None
 
 Config:
