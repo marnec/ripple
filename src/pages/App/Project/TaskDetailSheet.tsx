@@ -124,7 +124,7 @@ export function TaskDetailSheet({
   if (task === undefined || statuses === undefined || members === undefined) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-[600px] sm:w-[540px] overflow-y-auto">
+        <SheetContent className="w-150 sm:w-135 overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner />
@@ -235,7 +235,7 @@ export function TaskDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-[600px] sm:w-[540px] overflow-y-auto">
+        <SheetContent className="w-150 sm:w-135 overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <SheetHeader>
             <div className="flex items-start justify-between gap-2">
@@ -250,7 +250,7 @@ export function TaskDetailSheet({
                   placeholder="Task title"
                 />
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -455,7 +455,7 @@ export function TaskDetailSheet({
               <h3 className="text-sm font-semibold text-muted-foreground">
                 Description
               </h3>
-              <div className="min-h-[200px] border rounded-md p-4">
+              <div className="min-h-50 border rounded-md p-4">
                 <BlockNoteView
                   editor={editor}
                   onChange={handleDescriptionChange}

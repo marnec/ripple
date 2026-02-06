@@ -417,7 +417,7 @@ function TaskDetailPageContent({
           <h3 className="text-sm font-semibold text-muted-foreground">
             Description
           </h3>
-          <div className="min-h-[300px] border rounded-md p-4">
+          <div className="min-h-75 border rounded-md p-4">
             <BlockNoteView
               editor={editor}
               onChange={handleDescriptionChange}
