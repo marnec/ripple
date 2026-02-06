@@ -36,7 +36,7 @@ import {
   ArrowDown,
   ArrowUp,
   FileText,
-  FolderKanban,
+
   Maximize2,
   Minus,
   PenTool,
@@ -71,7 +71,7 @@ export function TaskDetailSheet({
   const members = useQuery(api.projectMembers.membersByProject, { projectId });
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const documents = useQuery(api.documents.listByUserMembership, { workspaceId });
-  const projects = useQuery(api.projects.listByUserMembership, { workspaceId });
+
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
@@ -245,37 +245,35 @@ export function TaskDetailSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-200 sm:w-175 overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-12 top-4 rounded-sm opacity-70 hover:opacity-100 h-auto w-auto p-0"
+            onClick={handleExpand}
+            title="Expand to full page"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </Button>
           <SheetHeader>
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <Input
-                  ref={titleInputRef}
-                  value={titleValue}
-                  onChange={(e) => setTitleValue(e.target.value)}
-                  onBlur={handleTitleBlur}
-                  onKeyDown={handleTitleKeyDown}
-                  className="text-lg font-semibold border-none focus-visible:ring-0 px-0 h-auto"
-                  placeholder="Task title"
-                />
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleExpand}
-                  title="Expand to full page"
-                >
-                  <Maximize2 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowDeleteDialog(true)}
-                  title="Delete task"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0"
+                onClick={() => setShowDeleteDialog(true)}
+                title="Delete task"
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+              <Input
+                ref={titleInputRef}
+                value={titleValue}
+                onChange={(e) => setTitleValue(e.target.value)}
+                onBlur={handleTitleBlur}
+                onKeyDown={handleTitleKeyDown}
+                className="text-lg font-semibold border-none focus-visible:ring-0 px-0 h-auto"
+                placeholder="Task title"
+              />
             </div>
           </SheetHeader>
 
@@ -510,26 +508,6 @@ export function TaskDetailSheet({
                               },
                               icon: <PenTool className="h-4 w-4" />,
                               group: "Diagrams",
-                            });
-                          });
-                      }
-
-                      // Projects
-                      if (projects) {
-                        projects
-                          .filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
-                          .slice(0, 5)
-                          .forEach(p => {
-                            items.push({
-                              title: p.name,
-                              onItemClick: () => {
-                                editor.insertInlineContent([
-                                  { type: "projectReference", props: { projectId: p._id } },
-                                  " ",
-                                ]);
-                              },
-                              icon: <FolderKanban className="h-4 w-4" />,
-                              group: "Projects",
                             });
                           });
                       }

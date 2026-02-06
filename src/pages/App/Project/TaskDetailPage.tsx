@@ -33,7 +33,7 @@ import {
   ArrowLeft,
   ArrowUp,
   FileText,
-  FolderKanban,
+
   Minus,
   PenTool,
   Trash2,
@@ -77,7 +77,7 @@ function TaskDetailPageContent({
   const members = useQuery(api.projectMembers.membersByProject, { projectId });
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const documents = useQuery(api.documents.listByUserMembership, { workspaceId });
-  const projects = useQuery(api.projects.listByUserMembership, { workspaceId });
+
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
@@ -472,26 +472,6 @@ function TaskDetailPageContent({
                           },
                           icon: <PenTool className="h-4 w-4" />,
                           group: "Diagrams",
-                        });
-                      });
-                  }
-
-                  // Projects
-                  if (projects) {
-                    projects
-                      .filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
-                      .slice(0, 5)
-                      .forEach(p => {
-                        items.push({
-                          title: p.name,
-                          onItemClick: () => {
-                            editor.insertInlineContent([
-                              { type: "projectReference", props: { projectId: p._id } },
-                              " ",
-                            ]);
-                          },
-                          icon: <FolderKanban className="h-4 w-4" />,
-                          group: "Projects",
                         });
                       });
                   }
