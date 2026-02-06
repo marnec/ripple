@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 08 - Emoji Reactions Foundation
 Plan: —
-Status: Defining requirements
-Last activity: 2026-02-07 — Milestone v0.9 started
+Status: Roadmap defined, awaiting phase planning
+Last activity: 2026-02-07 — Roadmap created for v0.9
 
-Progress: ░░░░░░░░░░ 0%
+Progress: ░░░░░░░░░░ 0% (0/3 phases)
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 ### Roadmap Evolution
 
 - Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
+- v0.9 milestone started at Phase 08 (continues from v0.8)
 
 ### Pending Todos
 
@@ -57,7 +58,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: v0.8 milestone completion
+Stopped at: v0.9 roadmap creation
 Resume file: None
 
 Config:

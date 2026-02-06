@@ -56,27 +56,27 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MENT-01 | Pending | Pending |
-| MENT-02 | Pending | Pending |
-| MENT-03 | Pending | Pending |
-| MENT-04 | Pending | Pending |
-| MENT-05 | Pending | Pending |
-| REACT-01 | Pending | Pending |
-| REACT-02 | Pending | Pending |
-| REACT-03 | Pending | Pending |
-| REACT-04 | Pending | Pending |
-| REACT-05 | Pending | Pending |
-| REACT-06 | Pending | Pending |
-| REPLY-01 | Pending | Pending |
-| REPLY-02 | Pending | Pending |
-| REPLY-03 | Pending | Pending |
-| REPLY-04 | Pending | Pending |
+| MENT-01 | Phase 09 | Pending |
+| MENT-02 | Phase 09 | Pending |
+| MENT-03 | Phase 09 | Pending |
+| MENT-04 | Phase 09 | Pending |
+| MENT-05 | Phase 09 | Pending |
+| REACT-01 | Phase 08 | Pending |
+| REACT-02 | Phase 08 | Pending |
+| REACT-03 | Phase 08 | Pending |
+| REACT-04 | Phase 08 | Pending |
+| REACT-05 | Phase 08 | Pending |
+| REACT-06 | Phase 08 | Pending |
+| REPLY-01 | Phase 10 | Pending |
+| REPLY-02 | Phase 10 | Pending |
+| REPLY-03 | Phase 10 | Pending |
+| REPLY-04 | Phase 10 | Pending |
 
 **Coverage:**
 - v0.9 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-07*
-*Last updated: 2026-02-07 after initial definition*
+*Last updated: 2026-02-07 after roadmap creation*
