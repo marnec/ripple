@@ -31,9 +31,9 @@
 
 ### Chat Integration (CHAT)
 
-- [ ] **CHAT-01**: User can create a task from a chat message via context menu
-- [ ] **CHAT-02**: Task created from message captures message content as context
-- [ ] **CHAT-03**: When a task is linked in chat, it shows inline preview (status, assignee)
+- [x] **CHAT-01**: User can create a task from a chat message via context menu
+- [x] **CHAT-02**: Task created from message captures message content as context
+- [x] **CHAT-03**: When a task is linked in chat, it shows inline preview (status, assignee)
 
 ### Cross-Feature Integration (INTEG)
 
@@ -114,9 +114,9 @@
 | KANBAN-03 | Phase 3 | Complete |
 | KANBAN-04 | Phase 3 | Complete |
 | KANBAN-05 | Phase 3 | Complete |
-| CHAT-01 | Phase 4 | Pending |
-| CHAT-02 | Phase 4 | Pending |
-| CHAT-03 | Phase 4 | Pending |
+| CHAT-01 | Phase 4 | Complete |
+| CHAT-02 | Phase 4 | Complete |
+| CHAT-03 | Phase 4 | Complete |
 | INTEG-01 | Phase 5 | Pending |
 | INTEG-02 | Phase 5 | Pending |
 | INTEG-03 | Phase 5 | Pending |
