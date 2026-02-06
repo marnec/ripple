@@ -1,7 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+
 import { generateKeyBetween } from "fractional-indexing";
 
 export const create = mutation({
@@ -294,7 +294,7 @@ export const update = mutation({
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     statusId: v.optional(v.id("taskStatuses")),
-    assigneeId: v.optional(v.id("users")),
+    assigneeId: v.optional(v.union(v.id("users"), v.null())),
     priority: v.optional(
       v.union(
         v.literal("urgent"),
@@ -327,20 +327,12 @@ export const update = mutation({
     }
 
     // Build patch object with only provided fields
-    const patch: Partial<{
-      title: string;
-      description: string;
-      statusId: Id<"taskStatuses">;
-      assigneeId: Id<"users">;
-      priority: "urgent" | "high" | "medium" | "low";
-      labels: string[];
-      completed: boolean;
-      position: string;
-    }> = {};
+    const patch: Record<string, any> = {};
 
     if (title !== undefined) patch.title = title;
     if (description !== undefined) patch.description = description;
-    if (assigneeId !== undefined) patch.assigneeId = assigneeId;
+    if (assigneeId === null) patch.assigneeId = undefined;
+    else if (assigneeId !== undefined) patch.assigneeId = assigneeId;
     if (priority !== undefined) patch.priority = priority;
     if (labels !== undefined) patch.labels = labels;
     if (position !== undefined) patch.position = position;

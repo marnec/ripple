@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { AlertCircle, ArrowDown, ArrowUp, Minus } from "lucide-react";
@@ -15,6 +15,7 @@ type TaskRowProps = {
     } | null;
     assignee: {
       name?: string;
+      image?: string;
     } | null;
   };
   onClick: () => void;
@@ -66,6 +67,9 @@ export function TaskRow({ task, onClick }: TaskRowProps) {
       {/* Assignee Avatar */}
       {task.assignee && (
         <Avatar className="h-6 w-6">
+          {task.assignee.image && (
+            <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
+          )}
           <AvatarFallback className="text-xs">
             {task.assignee.name?.slice(0, 2).toUpperCase() ?? "?"}
           </AvatarFallback>

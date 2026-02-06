@@ -10,6 +10,7 @@ const projectMemberValidator = v.object({
   workspaceId: v.id("workspaces"),
   userId: v.id("users"),
   name: v.string(),
+  image: v.optional(v.string()),
   isCreator: v.boolean(),
 });
 
@@ -38,6 +39,7 @@ export const membersByProject = query({
         return {
           ...member,
           name: user.name ?? user.email ?? "unknown",
+          image: user.image,
           isCreator: member.userId === project.creatorId,
         };
       })

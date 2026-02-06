@@ -7,9 +7,8 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../../../components/ui/context-menu";
 import { useChatContext } from "./ChatContext";
-import { SafeHtml } from "@/components/ui/safe-html";
 import { CreateTaskFromMessagePopover } from "./CreateTaskFromMessagePopover";
-import { TaskMentionChip } from "./TaskMentionChip";
+import { MessageRenderer } from "./MessageRenderer";
 
 type MessageProps = {
   message: MessageWithAuthor;
@@ -17,27 +16,6 @@ type MessageProps = {
   workspaceId: Id<"workspaces">;
   onTaskCreated: (taskId: Id<"tasks">, taskTitle: string) => void;
 };
-
-function parseMessageContent(html: string): Array<{ type: 'html'; content: string } | { type: 'taskMention'; taskId: string }> {
-  const segments: Array<{ type: 'html'; content: string } | { type: 'taskMention'; taskId: string }> = [];
-  const pattern = /<span[^>]*data-content-type="task-mention"[^>]*data-task-id="([^"]*)"[^>]*>.*?<\/span>/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = pattern.exec(html)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: 'html', content: html.slice(lastIndex, match.index) });
-    }
-    segments.push({ type: 'taskMention', taskId: match[1] });
-    lastIndex = match.index + match[0].length;
-  }
-
-  if (lastIndex < html.length) {
-    segments.push({ type: 'html', content: html.slice(lastIndex) });
-  }
-
-  return segments;
-}
 
 export function Message({ message, channelId, workspaceId, onTaskCreated }: MessageProps) {
   const { author, body, userId, _creationTime } = message;
@@ -54,7 +32,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
   const handleDelete = useCallback(() => void deleteMessage({ id: message._id }), [message, deleteMessage])
   const handleCreateTask = useCallback(() => setIsCreatingTask(true), [])
 
-  const segments = useMemo(() => parseMessageContent(body), [body]);
+  const blocks = useMemo(() => JSON.parse(body), [body]);
 
   return (
     <>
@@ -80,13 +58,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
                 userIsAuthor ? "rounded-tr-none" : "rounded-tl-none"
               )}
             >
-              {segments.map((seg, i) =>
-                seg.type === 'html' ? (
-                  <SafeHtml key={i} html={seg.content} className="inline" />
-                ) : (
-                  <TaskMentionChip key={i} taskId={seg.taskId} />
-                )
-              )}
+              <MessageRenderer blocks={blocks} />
             </div>
           </ContextMenuTrigger>
         </li>

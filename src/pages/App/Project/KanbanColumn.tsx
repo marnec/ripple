@@ -45,6 +45,7 @@ type KanbanColumnProps = {
     } | null;
     assignee: {
       name?: string;
+      image?: string;
     } | null;
   }>;
   onTaskClick: (taskId: string) => void;
@@ -186,6 +187,7 @@ export function KanbanColumn({
         style={{ maxHeight: "calc(100vh - 200px)" }}
       >
         <SortableContext
+          id={status._id}
           items={tasks.map((t) => t._id)}
           strategy={verticalListSortingStrategy}
         >

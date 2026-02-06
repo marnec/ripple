@@ -17,7 +17,7 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
 
   if (!task) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground text-sm">
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-background/60 text-muted-foreground text-sm align-middle">
         #deleted-task
       </span>
     );
@@ -34,7 +34,7 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
   return (
     <button
       onClick={handleClick}
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted hover:bg-muted/80 transition-colors cursor-pointer text-sm font-medium"
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-background/60 hover:bg-background/80 transition-colors cursor-pointer text-sm font-medium align-middle"
     >
       <span
         className={cn(

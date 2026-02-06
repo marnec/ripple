@@ -29,6 +29,7 @@ type ProjectGroup = {
     } | null;
     assignee: {
       name?: string;
+      image?: string;
     } | null;
     project: {
       name: string;

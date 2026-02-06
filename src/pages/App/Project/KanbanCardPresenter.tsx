@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ type KanbanCardPresenterProps = {
     } | null;
     assignee: {
       name?: string;
+      image?: string;
     } | null;
   };
   onClick: () => void;
@@ -59,6 +60,9 @@ export function KanbanCardPresenter({
           {/* Assignee Avatar */}
           {task.assignee && (
             <Avatar className="h-6 w-6">
+              {task.assignee.image && (
+                <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
+              )}
               <AvatarFallback className="text-xs">
                 {task.assignee.name?.slice(0, 2).toUpperCase() ?? "?"}
               </AvatarFallback>

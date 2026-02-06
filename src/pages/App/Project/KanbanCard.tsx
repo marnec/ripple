@@ -14,6 +14,7 @@ type KanbanCardProps = {
     } | null;
     assignee: {
       name?: string;
+      image?: string;
     } | null;
   };
   onClick: () => void;

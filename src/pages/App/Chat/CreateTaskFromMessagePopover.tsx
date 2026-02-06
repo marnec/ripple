@@ -10,7 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/use-toast";
-import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
@@ -32,12 +31,6 @@ function extractTitle(plainText: string): string {
   const firstLine = plainText.split('\n').map(l => l.trim()).find(l => l.length > 0) ?? '';
   return firstLine.length > 80 ? firstLine.substring(0, 77) + '...' : firstLine;
 }
-
-// Same schema as MessageComposer for consistent HTML parsing
-const { audio: _audio, image: _image, heading: _heading, ...remainingBlockSpecs } = defaultBlockSpecs;
-const schema = BlockNoteSchema.create({
-  blockSpecs: { ...remainingBlockSpecs },
-});
 
 function CreateTaskFromMessagePopoverContent({
   message,
@@ -66,10 +59,8 @@ function CreateTaskFromMessagePopoverContent({
 
     setIsCreating(true);
 
-    // Convert message HTML to BlockNote JSON using temp editor
-    const tempEditor = BlockNoteEditor.create({ schema });
-    const blocks = tempEditor.tryParseHTMLToBlocks(message.body);
-    const description = JSON.stringify(blocks);
+    // Body is already BlockNote JSON
+    const description = message.body;
 
     // Create task with message content as description
     void createTask({

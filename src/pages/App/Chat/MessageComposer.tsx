@@ -88,9 +88,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     editor._tiptapEditor.commands.clearContent();
 
     if (editingMessage.id && editingMessage.body) {
-      const document = editor.tryParseHTMLToBlocks(editingMessage.body)
-      editor.replaceBlocks([editor.document[0].id], document);
-
+      const blocks = JSON.parse(editingMessage.body);
+      editor.replaceBlocks(editor.document, blocks);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);
@@ -106,7 +105,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   const sendMessage = () => {
     if (isEmpty || !editor) return;
-    const body = editor.blocksToFullHTML(editor.document);
+    const body = JSON.stringify(editor.document);
     const plainText = editor._tiptapEditor.getText();
 
     handleSubmit(body, plainText);

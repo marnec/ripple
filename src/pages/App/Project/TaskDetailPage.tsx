@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -150,7 +150,7 @@ function TaskDetailPageContent({
 
   const handleAssigneeChange = (value: string) => {
     if (value === "unassigned") {
-      void updateTask({ taskId, assigneeId: undefined });
+      void updateTask({ taskId, assigneeId: null });
     } else {
       void updateTask({ taskId, assigneeId: value as Id<"users"> });
     }
@@ -331,6 +331,9 @@ function TaskDetailPageContent({
                     {task.assignee ? (
                       <div className="flex items-center gap-2">
                         <Avatar className="h-5 w-5">
+                          {task.assignee.image && (
+                            <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
+                          )}
                           <AvatarFallback className="text-xs">
                             {task.assignee.name?.slice(0, 2).toUpperCase() ??
                               "?"}
@@ -351,6 +354,9 @@ function TaskDetailPageContent({
                     <SelectItem key={member.userId} value={member.userId}>
                       <div className="flex items-center gap-2">
                         <Avatar className="h-5 w-5">
+                          {member.image && (
+                            <AvatarImage src={member.image} alt={member.name ?? "Member"} />
+                          )}
                           <AvatarFallback className="text-xs">
                             {member.name?.slice(0, 2).toUpperCase() ?? "?"}
                           </AvatarFallback>
