@@ -190,7 +190,11 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
         )}
       </MessageList>
 
-          <MessageComposer handleSubmit={(content, plainText) => void handleSubmit(content, plainText)}></MessageComposer>
+          <MessageComposer
+            handleSubmit={(content, plainText) => void handleSubmit(content, plainText)}
+            channelId={channelId}
+            workspaceId={workspaceId as Id<"workspaces">}
+          />
         </>
       )}
     </ChatContext.Provider>

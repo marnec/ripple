@@ -1,6 +1,6 @@
-import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { BlockNoteEditor, BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { en } from '@blocknote/core/locales';
-import { useCreateBlockNote, useEditorChange, useEditorSelectionChange } from "@blocknote/react";
+import { useCreateBlockNote, useEditorChange, useEditorSelectionChange, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import {
   CodeIcon,
@@ -15,9 +15,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
 import { useChatContext } from "./ChatContext";
+import { TaskMention } from "./CustomInlineContent/TaskMention";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
+import { cn } from "@/lib/utils";
 
 interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
+  channelId: Id<"channels">;
+  workspaceId: Id<"workspaces">;
 }
 
 const editorIsEmpty = (editor: BlockNoteEditor<any>) =>
@@ -30,6 +37,10 @@ const editorClear = (editor: BlockNoteEditor<any>) => {
 const { audio: _audio, image: _image, heading: _heading, ...remainingBlockSpecs } = defaultBlockSpecs;
 const schema = BlockNoteSchema.create({
   blockSpecs: { ...remainingBlockSpecs },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    taskMention: TaskMention,
+  },
 });
 
 const dictionary = {
@@ -42,9 +53,25 @@ const dictionary = {
 
 export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
+  channelId,
+  workspaceId,
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
   const { editingMessage } = useChatContext();
+
+  // Query projects to determine linked project scope
+  const projects = useQuery(api.projects.listByUserMembership, { workspaceId });
+  const linkedProject = projects?.find(p => p.linkedChannelId === channelId);
+
+  // Query tasks for autocomplete
+  const projectTasks = useQuery(
+    linkedProject ? api.tasks.listByProject : "skip",
+    linkedProject ? { projectId: linkedProject._id, hideCompleted: true } : "skip"
+  );
+  const myTasks = useQuery(
+    !linkedProject ? api.tasks.listByAssignee : "skip",
+    !linkedProject ? { workspaceId, hideCompleted: true } : "skip"
+  );
 
   const editorConfig = useMemo(
     () => ({
@@ -214,7 +241,46 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
               sendMessage();
             }
           }}
-        />
+        >
+          <SuggestionMenuController
+            triggerCharacter={"#"}
+            getItems={async (query) => {
+              const tasksToSearch = linkedProject ? projectTasks : myTasks;
+              if (!tasksToSearch) return [];
+
+              return tasksToSearch
+                .filter((task) =>
+                  task.title.toLowerCase().includes(query.toLowerCase())
+                )
+                .slice(0, 10)
+                .map((task) => ({
+                  title: task.title,
+                  onItemClick: () => {
+                    editor.insertInlineContent([
+                      {
+                        type: "taskMention",
+                        props: {
+                          taskId: task._id,
+                          taskTitle: task.title,
+                        },
+                      },
+                      " ",
+                    ]);
+                  },
+                  icon: (
+                    <div
+                      className={cn(
+                        "h-3 w-3 rounded-full",
+                        task.status?.color || "bg-gray-500"
+                      )}
+                    />
+                  ),
+                  group: linkedProject ? "Project tasks" : "My tasks",
+                  key: task._id,
+                }));
+            }}
+          />
+        </BlockNoteView>
         <Button disabled={isEmpty} onClick={sendMessage} className="shrink-0 transition-transform active:scale-95">
           Send
         </Button>
