@@ -80,4 +80,14 @@ export default tseslint.config(
       "react-refresh/only-export-components": "off",
     },
   },
+  {
+    // BlockNote inline content specs export non-component objects from createReactInlineContentSpec
+    files: ["src/pages/App/Project/CustomInlineContent/**", "src/pages/App/Chat/CustomInlineContent/**"],
+    plugins: {
+      "react-refresh": reactRefresh,
+    },
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
 );
