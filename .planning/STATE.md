@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-05)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 3 - Kanban Board View (Complete)
+**Current focus:** Phase 4 - Chat to Task Integration (In progress)
 
 ## Current Position
 
-Phase: 3 of 7 (Kanban Board View)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-06 — Completed Phase 3 (Kanban Board View)
+Phase: 4 of 7 (Chat to Task Integration)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-06 — Completed 04-01-PLAN.md
 
-Progress: [████████░░] ~52%
+Progress: [████████░░] ~57%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
+- Total plans completed: 12
 - Average duration: 4.0 min
-- Total execution time: 44 min
+- Total execution time: 48 min
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [████████░░] ~52%
 | 01-projects-foundation | 4 | 14 min | 3.5 min |
 | 02-basic-tasks | 4 | 19 min | 4.8 min |
 | 03-kanban-board-view | 3 | 11 min | 3.7 min |
+| 04-chat-to-task-integration | 1 | 4 min | 4.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-04 (5 min), 03-01 (2 min), 03-02 (3 min), 03-03 (6 min)
+- Last 5 plans: 03-01 (2 min), 03-02 (3 min), 03-03 (6 min), 04-01 (4 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -92,6 +93,10 @@ Recent decisions affecting current work:
 - Add Column button is placeholder column with dashed border
 - Column color picker uses same 8 Tailwind colors as projects
 - Column completion toggle determines if moving tasks to column completes them
+- Context menu available to all users for task creation, edit/delete only for author
+- Split popover components to avoid setState in useEffect (remount pattern)
+- System messages use inline HTML styles for visual distinction from regular messages
+- Auto-select linked project when creating task from channel message
 
 ### Pending Todos
 
@@ -103,8 +108,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-06T10:22:20Z
-Stopped at: Completed 03-03-PLAN.md (Phase 3 complete)
+Last session: 2026-02-06T13:45:44Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None
 
 Config:
