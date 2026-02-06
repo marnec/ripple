@@ -1,7 +1,9 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
+import { extractMentionedUserIds } from "./utils/blocknote";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -88,6 +90,23 @@ export const create = mutation({
       deleted: false,
     });
 
+    // Schedule mention notifications after database write
+    const mentionedUserIds = extractMentionedUserIds(body);
+    const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+    if (filteredMentions.length > 0) {
+      const user = await ctx.db.get(userId);
+      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+        taskId,
+        mentionedUserIds: filteredMentions,
+        taskTitle: task?.title ?? "a task",
+        mentionedBy: {
+          name: user?.name ?? user?.email ?? "Someone",
+          id: userId,
+        },
+        context: "comment",
+      });
+    }
+
     return commentId;
   },
 });
@@ -113,6 +132,26 @@ export const update = mutation({
 
     // Update body with trimmed value
     await ctx.db.patch(id, { body: body.trim() });
+
+    // Schedule mention notifications for newly added mentions after database write
+    const oldMentions = new Set(comment.body ? extractMentionedUserIds(comment.body) : []);
+    const newMentions = extractMentionedUserIds(body);
+    const addedMentions = newMentions.filter(id => !oldMentions.has(id) && id !== userId);
+    if (addedMentions.length > 0) {
+      const task = await ctx.db.get(comment.taskId);
+      const user = await ctx.db.get(userId);
+      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+        taskId: comment.taskId,
+        mentionedUserIds: addedMentions,
+        taskTitle: task?.title ?? "a task",
+        mentionedBy: {
+          name: user?.name ?? user?.email ?? "Someone",
+          id: userId,
+        },
+        context: "comment",
+      });
+    }
+
     return null;
   },
 });
