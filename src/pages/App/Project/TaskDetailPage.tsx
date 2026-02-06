@@ -46,6 +46,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import "./task-description.css";
+import { TaskComments } from "./TaskComments";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -77,6 +78,7 @@ function TaskDetailPageContent({
   const members = useQuery(api.projectMembers.membersByProject, { projectId });
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const documents = useQuery(api.documents.listByUserMembership, { workspaceId });
+  const currentUser = useQuery(api.users.viewer);
 
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
@@ -509,6 +511,13 @@ function TaskDetailPageContent({
             </BlockNoteView>
           </div>
         </div>
+
+        {/* Comments Section */}
+        {currentUser && (
+          <div className="space-y-2">
+            <TaskComments taskId={taskId} currentUserId={currentUser._id} />
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Dialog */}
