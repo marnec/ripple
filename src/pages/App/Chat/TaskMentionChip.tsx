@@ -1,0 +1,48 @@
+import { cn } from "@/lib/utils";
+import { useQuery } from "convex/react";
+import { useNavigate, useParams } from "react-router-dom";
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
+
+interface TaskMentionChipProps {
+  taskId: string; // comes from data attribute as string
+}
+
+export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
+  const task = useQuery(api.tasks.get, {
+    taskId: taskId as Id<"tasks">,
+  });
+  const navigate = useNavigate();
+  const { workspaceId } = useParams();
+
+  if (!task) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground text-sm">
+        #deleted-task
+      </span>
+    );
+  }
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void navigate(`/workspaces/${workspaceId}/projects/${task.projectId}`, {
+      state: { highlightTaskId: taskId },
+    });
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted hover:bg-muted/80 transition-colors cursor-pointer text-sm font-medium"
+    >
+      <span
+        className={cn(
+          "h-2 w-2 rounded-full shrink-0",
+          task.status?.color || "bg-gray-500"
+        )}
+      />
+      <span className="max-w-[200px] truncate">{task.title}</span>
+    </button>
+  );
+}
