@@ -256,3 +256,38 @@ export const remove = mutation({
     return null;
   },
 });
+
+export const getByLinkedChannel = query({
+  args: { channelId: v.id("channels") },
+  returns: v.union(projectValidator, v.null()),
+  handler: async (ctx, { channelId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    // Get channel to find workspace
+    const channel = await ctx.db.get(channelId);
+    if (!channel) return null;
+
+    // Find project that has this channel as linked channel
+    // Projects per workspace are small (<100), so filter is acceptable
+    const projects = await ctx.db
+      .query("projects")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", channel.workspaceId))
+      .collect();
+
+    const project = projects.find((p) => p.linkedChannelId === channelId);
+    if (!project) return null;
+
+    // Verify user has project membership
+    const membership = await ctx.db
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", project._id).eq("userId", userId)
+      )
+      .first();
+
+    if (!membership) return null;
+
+    return project;
+  },
+});
