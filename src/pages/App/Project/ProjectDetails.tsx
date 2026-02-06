@@ -2,10 +2,10 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
-import { FolderKanban } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { Tasks } from "./Tasks";
 
 export function ProjectDetails() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -55,14 +55,8 @@ function ProjectDetailsContent({
         <p className="text-muted-foreground mb-6">{project.description}</p>
       )}
 
-      {/* Empty state for tasks (Kanban board comes in Phase 3) */}
-      <div className="border-2 border-dashed rounded-lg p-12 text-center">
-        <FolderKanban className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-        <h2 className="text-lg font-medium mb-2">No tasks yet</h2>
-        <p className="text-muted-foreground">
-          Tasks and Kanban board will be available in a future update.
-        </p>
-      </div>
+      {/* Task List */}
+      <Tasks projectId={projectId} />
     </div>
   );
 }
