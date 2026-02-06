@@ -98,10 +98,12 @@ Plans:
   2. User can link Ripple documents in task descriptions with clickable references
   3. User can @mention other users in task descriptions
   4. User can reference projects from any channel they have visibility on
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- TBD (determined during planning)
+- [ ] 05-01-PLAN.md — Custom inline content types and shared task description schema
+- [ ] 05-02-PLAN.md — Task description editor upgrade with # and @ autocomplete
+- [ ] 05-03-PLAN.md — Project references in chat messages
 
 ### Phase 6: Task Comments
 **Goal**: Users can discuss tasks through threaded comments
@@ -139,6 +141,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 2. Basic Tasks | 4/4 | Complete | 2026-02-06 |
 | 3. Kanban Board View | 3/3 | Complete | 2026-02-06 |
 | 4. Chat-to-Task Integration | 2/2 | Complete | 2026-02-06 |
-| 5. Document & Diagram Embeds | 0/TBD | Not started | - |
+| 5. Document & Diagram Embeds | 0/3 | Not started | - |
 | 6. Task Comments | 0/TBD | Not started | - |
 | 7. Notifications & Polish | 0/TBD | Not started | - |
