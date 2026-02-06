@@ -1,458 +1,304 @@
-# Technology Stack: Task Management with Kanban Boards
+# Stack Research: Chat Mentions, Reactions, and Reply-To
 
-**Project:** Ripple - Task Management Feature
-**Researched:** 2026-02-05
+**Domain:** Real-time collaborative chat enhancements (mentions, reactions, threading)
+**Researched:** 2026-02-07
 **Confidence:** HIGH
 
 ## Executive Summary
 
-For adding Kanban task management to your existing Convex/React workspace, the 2025-2026 standard stack is:
-- **@dnd-kit** (v6.3.1 core, v10.0.0 sortable) for drag-and-drop
-- **react-day-picker** (v9.13.0) via shadcn/ui for date selection
-- **Convex native patterns** for optimistic updates and real-time sync
-- **Fractional indexing** for task ordering without reindexing
-
-This stack integrates seamlessly with your existing Convex 1.31.7, React 18, shadcn/ui foundation.
-
----
+The existing stack (Convex 1.31.7, BlockNote 0.46.2, React 18, Radix UI) already provides most primitives needed. Only one new dependency required: an emoji picker library for reaction selection. @user mentions leverage existing BlockNote custom inline content pattern. Reply-to threading requires only schema additions, no new libraries.
 
 ## Recommended Stack
 
-### Drag-and-Drop System
+### Core Technologies (No Changes)
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| @dnd-kit/core | 6.3.1 | Core drag-drop primitives | Modern, actively maintained, 5.4M weekly downloads. Replaces deprecated react-beautiful-dnd |
-| @dnd-kit/sortable | 10.0.0 | Kanban board sorting | Pre-built sortable presets for columns and cards |
-| @dnd-kit/utilities | 3.2.2 | Helper utilities | CSS utilities and common transforms |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| BlockNote | 0.46.2 (existing) | Rich text editor with custom inline content | Already integrated for chat composer. Built-in SuggestionMenuController supports @mention autocomplete with trigger characters. Project already uses custom inline specs (taskMention, projectReference) - user mentions follow same pattern. |
+| Convex | 1.31.7 (existing) | Real-time database with subscriptions | Already stores messages table. Reactions require new `messageReactions` table with compound indexes. Convex reactivity ensures real-time reaction updates without WebSocket management. |
+| Radix UI Popover | 1.1.15 (existing) | Popover primitive for emoji picker | Already in dependencies. Positions emoji picker relative to reaction button trigger. |
 
-**Rationale:**
-- react-beautiful-dnd is deprecated with no future maintenance planned (as of 2024)
-- @dnd-kit is the 2025+ standard with 5.4M weekly downloads vs 1.9M for react-beautiful-dnd
-- Supports accessibility (keyboard nav, screen readers), touch devices, virtualization
-- Modular architecture fits with existing Convex patterns
-- **Confidence: HIGH** - Verified via npm registry and multiple ecosystem surveys
+### Supporting Libraries (New Addition)
 
-**Key Features:**
-- Built-in collision detection algorithms
-- Customizable drag overlays
-- Multiple droppable containers (Kanban columns)
-- Smooth animations with physics-based motion
-- Zero dependencies on deprecated libraries
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| **emoji-picker-react** | ^4.17.4 | Emoji selection UI for reactions | Render inside Radix Popover when user clicks reaction button. Actively maintained (published 4 days ago as of Feb 2026). Better DX than emoji-mart for simple use cases. |
 
-### Date Management
+## Installation
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| react-day-picker | 9.13.0 | Date selection UI | Industry standard, powers shadcn/ui date picker |
-| date-fns | 4.1.0 | Date manipulation | Lightweight, tree-shakeable, modern alternative to moment.js |
+```bash
+# Single new package
+npm install emoji-picker-react@^4.17.4
+```
 
-**Rationale:**
-- Already using shadcn/ui components, which standardize on react-day-picker
-- Maintains design consistency with existing Radix UI components
-- date-fns is 2026 standard (moment.js deprecated in 2020)
-- WCAG 2.1 AA compliant for accessibility
-- **Confidence: HIGH** - Verified via npm registry
+## Implementation Details
 
-**Integration Pattern:**
+### 1. @User Mentions
+
+**No new libraries needed.** Leverage existing BlockNote patterns:
+
 ```typescript
-// Use existing shadcn/ui date picker pattern
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format } from "date-fns"
+// Extend existing schema (MessageComposer.tsx)
+const schema = BlockNoteSchema.create({
+  blockSpecs: { ...remainingBlockSpecs },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    taskMention: TaskMention,        // existing
+    projectReference: ProjectReference, // existing
+    userMention: UserMention,         // NEW - follows same pattern
+  },
+});
 
-// Task due date selector
+// Add SuggestionMenuController for "@" trigger
+<SuggestionMenuController
+  triggerCharacter={"@"}
+  getItems={async (query) => {
+    // Query workspace members via Convex
+    return workspaceMembers
+      .filter(m => m.name.includes(query))
+      .map(m => ({
+        title: m.name,
+        onItemClick: () => {
+          editor.insertInlineContent([
+            { type: "userMention", props: { userId: m._id, userName: m.name } },
+            " ",
+          ]);
+        },
+      }));
+  }}
+/>
+```
+
+**Pattern precedent:** Project already implements taskMention and projectReference using `createReactInlineContentSpec`. User mentions are structurally identical - just a different data source (workspaceMembers instead of tasks/projects).
+
+**Why BlockNote native vs mention library:** BlockNote's custom inline content system provides:
+- Type-safe props (userId, userName)
+- Editor-time preview rendering
+- Serialization to JSON (stored in message body)
+- No external dependency conflicts
+
+### 2. Emoji Reactions
+
+**Requires emoji-picker-react for picker UI.**
+
+#### Database Schema
+
+```typescript
+// convex/schema.ts - NEW TABLE
+messageReactions: defineTable({
+  messageId: v.id("messages"),
+  userId: v.id("users"),
+  emoji: v.string(),              // native emoji character (e.g., "👍")
+  channelId: v.id("channels"),    // denormalized for efficient queries
+})
+  .index("by_message", ["messageId"])
+  .index("by_message_emoji", ["messageId", "emoji"])        // count reactions per emoji
+  .index("by_message_user", ["messageId", "userId"])        // prevent duplicate reactions
+  .index("by_channel", ["channelId"])                       // cleanup when channel deleted
+```
+
+**Why this schema:**
+- `by_message_emoji` enables aggregation: "👍 3, ❤️ 5" counts
+- `by_message_user` enforces uniqueness: user can only react once per emoji per message
+- Stores native emoji string (not emoji codes) for simplicity
+- `channelId` denormalized for cascade deletion patterns
+
+#### UI Implementation
+
+```typescript
+// Reaction picker (Radix Popover + emoji-picker-react)
+import Picker from 'emoji-picker-react';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+
 <Popover>
   <PopoverTrigger asChild>
-    <Button variant="outline">
-      {dueDate ? format(dueDate, "PPP") : "Pick a date"}
-    </Button>
+    <Button variant="ghost" size="sm">Add Reaction</Button>
   </PopoverTrigger>
-  <PopoverContent className="w-auto p-0">
-    <Calendar
-      mode="single"
-      selected={dueDate}
-      onSelect={setDueDate}
+  <PopoverContent>
+    <Picker
+      onEmojiClick={(emojiData) => {
+        addReaction({ messageId, emoji: emojiData.emoji });
+      }}
     />
   </PopoverContent>
 </Popover>
 ```
 
-### State Management & Real-Time Sync
+**Why emoji-picker-react over emoji-mart:**
+- Simpler API - single component import vs modular data loading
+- Actively maintained (v4.17.4 published Feb 2026)
+- Better TypeScript types out of the box
+- Bundle size acceptable (2.59MB) given feature richness
+- emoji-mart's modular data loading adds complexity without significant benefit for this use case
 
-| Technology | Version | Purpose | Why |
-|------------|---------|---------|-----|
-| Convex (existing) | 1.31.7 | Backend, real-time DB | Already in use, handles subscriptions natively |
-| convex-helpers | 0.1.111 | Validation, relationships | Already in use, provides Zod integration |
+**Tradeoff:** emoji-mart has smaller bundle (45KB gzipped with emoji-mart-lite) but requires manual data management. For a chat app where emojis are secondary feature (not primary like Slack), emoji-picker-react's DX wins.
 
-**Rationale:**
-- No additional state management library needed (Redux, Zustand, etc.)
-- Convex `useQuery` hooks provide reactive state automatically
-- Built-in optimistic updates via `useMutation().withOptimisticUpdate()`
-- Real-time sync is native, not bolted on
-- **Confidence: HIGH** - Direct from your existing package.json
+### 3. Inline Reply-To
 
-### Task Ordering & Positioning
+**No new libraries needed.** Pure data modeling + UI.
 
-| Approach | Implementation | Why |
-|----------|---------------|-----|
-| Fractional indexing | Custom utility or library | Enables reordering without cascading updates |
-
-**Rationale:**
-- Traditional integer positions require reindexing all tasks when inserting
-- Fractional indexing (e.g., "a0", "a1", "a2" → insert "a0V" between "a0" and "a1") avoids this
-- Lexicographic ordering: strings like "aaa", "aab", "aac" for infinite insertions
-- Single mutation updates only the moved task's position field
-- **Confidence: MEDIUM** - Pattern is well-documented but requires custom implementation
-
-**Implementation Options:**
-1. **fractional-indexing** npm package (recommended)
-2. **Custom implementation** using lexicographic strings (see PITFALLS.md for edge cases)
-
----
-
-## Supporting Libraries (Optional)
-
-### Task Properties Enhancement
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| cmdk | 1.0.0 (existing) | Command palette | Quick task creation from anywhere |
-| lucide-react | 0.462.0 (existing) | Icons | Priority badges, status indicators |
-| class-variance-authority | 0.7.1 (existing) | Conditional styling | Priority colors, status badges |
-
-**Note:** These are already in your project. Reuse for task management UI.
-
-### Labels & Tags
-
-| Approach | Implementation | Why |
-|----------|---------------|-----|
-| Array of strings | `labels: v.array(v.string())` | Simple, flexible, searchable with Convex indexes |
-
-**Rationale:**
-- Your existing schema uses this pattern for `documents.tags` and `diagrams.tags`
-- Maintains consistency across workspace features
-- Enables full-text search via Convex `searchIndex`
-
----
-
-## Architecture Patterns
-
-### 1. Optimistic Updates for Drag-Drop
-
-**Pattern:** Use Convex `withOptimisticUpdate` to prevent UI jank during drag operations.
+#### Database Schema
 
 ```typescript
-// Example: Moving a task between columns
-const moveTask = useMutation(api.tasks.move).withOptimisticUpdate(
-  (localStore, args) => {
-    const existingTasks = localStore.getQuery(api.tasks.list, {
-      projectId: args.projectId
-    });
-
-    if (!existingTasks) return;
-
-    // Optimistically update local state
-    const updatedTasks = existingTasks.map(task =>
-      task._id === args.taskId
-        ? { ...task, status: args.newStatus, position: args.newPosition }
-        : task
-    );
-
-    localStore.setQuery(
-      api.tasks.list,
-      { projectId: args.projectId },
-      updatedTasks
-    );
-  }
-);
+// convex/schema.ts - MODIFY EXISTING TABLE
+messages: defineTable({
+  userId: v.id("users"),
+  isomorphicId: v.string(),
+  body: v.string(),
+  plainText: v.string(),
+  channelId: v.id("channels"),
+  deleted: v.boolean(),
+  replyToMessageId: v.optional(v.id("messages")), // NEW - reference to parent message
+})
+  .index("by_channel", ["channelId"])
+  .index("undeleted_by_channel", ["channelId", "deleted"])
+  .index("by_reply_to", ["replyToMessageId"])      // NEW - fetch all replies to a message
+  .searchIndex("by_text", { searchField: "plainText", filterFields: ["channelId"] })
 ```
 
-**Why:** Prevents the jarring reversion when Convex revalidates after mutation completes. Essential for smooth drag-drop UX.
+**Pattern:** Inline reply (quoted parent preview in chat flow), NOT threaded replies (separate thread view). Matches Slack/Discord UX.
 
-**Source:** [Convex Optimistic Updates Documentation](https://docs.convex.dev/client/react/optimistic-updates) (verified 2026-02-05)
-
-### 2. Database Schema for Tasks
-
-**Pattern:** Flat documents with relational IDs, following Convex best practices.
+#### UI Pattern
 
 ```typescript
-// schema.ts
-export default defineSchema({
-  projects: defineTable({
-    workspaceId: v.id("workspaces"),
-    name: v.string(),
-    description: v.optional(v.string()),
-    color: v.optional(v.string()), // For visual distinction
-  }).index("by_workspace", ["workspaceId"]),
-
-  tasks: defineTable({
-    projectId: v.id("projects"),
-    workspaceId: v.id("workspaces"), // Denormalized for efficient queries
-    title: v.string(),
-    description: v.optional(v.string()),
-    status: v.string(), // "todo", "in_progress", "done", etc.
-    priority: v.optional(v.string()), // "low", "medium", "high", "urgent"
-    position: v.string(), // Fractional index for ordering within column
-    dueDate: v.optional(v.number()), // Unix timestamp
-    labels: v.optional(v.array(v.string())),
-    createdBy: v.id("users"),
-    createdAt: v.number(),
-  })
-    .index("by_project", ["projectId"])
-    .index("by_project_status", ["projectId", "status"]) // Efficient column queries
-    .index("by_workspace", ["workspaceId"])
-    .index("by_assignee", ["assigneeId"]) // For user's task list
-    .searchIndex("by_title", {
-      searchField: "title",
-      filterFields: ["projectId", "workspaceId"]
-    }),
-
-  taskAssignees: defineTable({
-    taskId: v.id("tasks"),
-    userId: v.id("users"),
-    projectId: v.id("projects"), // Denormalized for queries
-  })
-    .index("by_task", ["taskId"])
-    .index("by_user", ["userId"])
-    .index("by_project", ["projectId"])
-    .index("by_task_user", ["taskId", "userId"]), // Unique constraint via app logic
-});
+// Message with reply-to preview
+{message.replyToMessageId && (
+  <div className="border-l-2 border-muted pl-2 mb-1 text-sm text-muted-foreground">
+    <QuotedMessage messageId={message.replyToMessageId} />
+  </div>
+)}
+<MessageRenderer body={message.body} />
 ```
 
-**Key Decisions:**
-- **Many-to-many assignees:** Separate `taskAssignees` table (Convex best practice)
-- **Denormalized `workspaceId`:** Enables direct workspace-level queries without joins
-- **String positions:** Fractional indexing for efficient reordering
-- **Indexes match query patterns:** `by_project_status` for Kanban columns, `by_assignee` for user views
-
-**Confidence: HIGH** - Pattern matches your existing schema for channels, documents, and follows [Convex relationship guidelines](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas)
-
-### 3. Real-Time Sync Strategy
-
-**Pattern:** Convex subscriptions handle all real-time updates automatically.
-
-```typescript
-// TaskBoard.tsx
-const tasks = useQuery(api.tasks.list, { projectId });
-
-// Automatically updates when:
-// - Current user moves a task (optimistic update → mutation → revalidation)
-// - Another user moves a task (mutation → subscription update)
-// - Task is created/deleted (subscription update)
-
-// No WebSocket management needed!
-```
-
-**Why:** Convex's reactive subscriptions eliminate manual conflict resolution. Unlike CRDTs or OT algorithms, the server is source of truth and broadcasts changes via WebSocket.
-
-**Conflict Resolution:** Last-write-wins at database level. For task movement, position strings prevent conflicts (each task has unique position).
-
-**Confidence: HIGH** - This is Convex's core value proposition, already working for your messages and documents.
-
-### 4. Drag-Drop Integration with @dnd-kit
-
-**Pattern:** Combine @dnd-kit sensors with Convex mutations.
-
-```typescript
-import { DndContext, DragEndEvent, closestCorners } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-
-function KanbanBoard({ projectId }: { projectId: Id<"projects"> }) {
-  const tasks = useQuery(api.tasks.list, { projectId });
-  const moveTask = useMutation(api.tasks.move).withOptimisticUpdate(/* ... */);
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    // Calculate new position using fractional indexing
-    const newPosition = calculatePosition(tasks, active.id, over.id);
-
-    // Mutation with optimistic update
-    await moveTask({
-      taskId: active.id as Id<"tasks">,
-      projectId,
-      newStatus: /* determine from over container */,
-      newPosition,
-    });
-  };
-
-  return (
-    <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCorners}>
-      {columns.map(column => (
-        <SortableContext
-          id={column.id}
-          items={tasks.filter(t => t.status === column.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {/* Render tasks */}
-        </SortableContext>
-      ))}
-    </DndContext>
-  );
-}
-```
-
-**Key Points:**
-- `collisionDetection={closestCorners}` for multi-column detection
-- `SortableContext` per column with filtered tasks
-- Optimistic update prevents reorder animation jank
-- Position calculation uses fractional indexing library
-
-**Confidence: HIGH** - Pattern documented in [@dnd-kit Kanban examples](https://radzion.com/blog/kanban/) and [LogRocket guide](https://blog.logrocket.com/build-kanban-board-dnd-kit-react/)
-
----
-
-## Installation
-
-### New Dependencies
-
-```bash
-# Drag-and-drop
-npm install @dnd-kit/core@6.3.1 @dnd-kit/sortable@10.0.0 @dnd-kit/utilities@3.2.2
-
-# Date utilities (date-fns likely already installed)
-npm install date-fns@4.1.0
-
-# Fractional indexing
-npm install fractional-indexing@3.2.0  # or implement custom
-```
-
-### Verify Existing Dependencies
-
-These should already be in your project (from package.json):
-- `convex@1.31.7`
-- `convex-helpers@0.1.111`
-- `react-day-picker` (via shadcn/ui calendar component)
-- `zod@3.25.76` (for validators)
-- `lucide-react@0.462.0` (for icons)
-- `@radix-ui/*` components (for popovers, select, etc.)
-
----
+**Why inline vs threaded:**
+- Simpler UX for linear chat flow
+- No thread view management
+- Matches existing chat message layout
+- Can upgrade to threads later if needed (schema already supports it)
 
 ## Alternatives Considered
 
-### Drag-Drop Libraries
+| Category | Recommended | Alternative | Why Not Alternative |
+|----------|-------------|-------------|---------------------|
+| Emoji Picker | emoji-picker-react | emoji-mart | Modular data loading adds complexity. emoji-mart-lite saves 2.5MB but requires manual emoji data imports. Not worth engineering time for marginal bundle savings in chat app. |
+| Emoji Picker | emoji-picker-react | Frimousse | Newer library (2025), less battle-tested. Designed for Liveblocks integration which we don't use. |
+| Mentions | BlockNote custom inline | react-mentions | BlockNote already integrated. Adding separate mention library creates two rich text systems. BlockNote's inline content is type-safe and serializes to message.body JSON. |
+| Mentions | BlockNote custom inline | draft-js-mention-plugin | Draft.js is legacy (deprecated in favor of Lexical). BlockNote is actively maintained and already integrated. |
+| Reply Threading | Inline (single-level) | Full threading (Stream Chat pattern) | Over-engineered for v0.9. Inline reply-to provides 80% of value with 20% of complexity. Can migrate schema to full threading later (just add threadId field). |
 
-| Library | Why Not Recommended |
-|---------|-------------------|
-| react-beautiful-dnd | Deprecated, no maintenance since 2021. Official repo archived. |
-| react-dnd | Overly complex for Kanban use case. Better for heterogeneous drag-drop (file uploads, multi-type draggables). Higher learning curve. |
-| Pragmatic Drag and Drop (Atlassian) | New (2024), but less mature ecosystem. No React-specific presets. More low-level than needed. |
-| HTML5 Drag and Drop API | Poor mobile support, inconsistent across browsers, requires significant boilerplate. |
+## What NOT to Use
 
-**Verdict:** @dnd-kit is the 2025-2026 standard for React Kanban boards.
+| Library/Pattern | Why Avoid | Do Instead |
+|-----------------|-----------|------------|
+| Separate rich text editor for mentions | Duplication of editor stack. BlockNote handles inline content natively. | Use BlockNote's `createReactInlineContentSpec` pattern (already proven with taskMention, projectReference). |
+| Emoji codes (:smile:, :thumbsup:) | Requires parsing library. Adds conversion layer. Native emoji works directly in React. | Store native emoji string in `messageReactions.emoji` field. |
+| Client-side reaction aggregation | Race conditions in real-time updates. Multiple users reacting simultaneously causes UI glitches. | Query Convex with `by_message_emoji` index. Convex reactivity handles live count updates. |
+| WebSocket library for reactions | Convex already provides real-time subscriptions. Adding ws/socket.io duplicates infrastructure. | Use Convex `useQuery` for live reaction counts. Updates propagate automatically. |
+| Full threading library (react-chat-elements) | Brings opinionated chat UI components. Conflicts with existing BlockNote-based MessageRenderer. | Implement simple reply-to with schema field + QuotedMessage component. |
 
-### Date Pickers
+## Integration Points
 
-| Library | Why Not Recommended |
-|---------|-------------------|
-| react-datepicker | Requires additional CSS, less integrated with Tailwind/shadcn. Heavier bundle. |
-| MUI X Date Pickers | Requires @mui/material dependency. Design inconsistency with shadcn/ui. |
-| Airbnb react-dates | Older, less actively maintained. Designed for date ranges (travel booking), overkill for task due dates. |
+### BlockNote Schema Extension
 
-**Verdict:** Stick with react-day-picker via shadcn/ui for consistency.
+Current schema (MessageComposer.tsx line 40-47):
+```typescript
+const schema = BlockNoteSchema.create({
+  blockSpecs: { ...remainingBlockSpecs },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    taskMention: TaskMention,         // existing
+    projectReference: ProjectReference, // existing
+    // ADD: userMention: UserMention
+  },
+});
+```
 
-### State Management
+**Validation:** Project already uses SuggestionMenuController with "#" trigger (line 247-310). Adding "@" trigger follows identical pattern.
 
-| Approach | Why Not Recommended |
-|----------|-------------------|
-| Redux Toolkit | Unnecessary complexity when Convex provides reactive state. Would duplicate subscription logic. |
-| Zustand | Simpler than Redux, but still redundant with Convex queries. Adds mental overhead of two state systems. |
-| Jotai/Recoil | Atomic state useful for local UI, but Convex subscriptions already handle shared state. |
+### Convex Schema Extensions
 
-**Verdict:** Convex's `useQuery` + `useMutation` is sufficient. Only use local React state (`useState`) for ephemeral UI (modals, dropdowns).
+Current tables:
+- `messages` - add `replyToMessageId` field
+- NEW `messageReactions` table
 
-### Task Ordering
+Indexes required:
+- `messages.by_reply_to` - fetch replies
+- `messageReactions.by_message_emoji` - count reactions
+- `messageReactions.by_message_user` - uniqueness constraint
 
-| Approach | Pros | Cons | Verdict |
-|----------|------|------|---------|
-| Integer positions (1, 2, 3...) | Simple | Requires reindexing all tasks on insert | ❌ Avoid |
-| Float positions (1.0, 2.0, 3.0) | Better than integers | Precision issues after many inserts | ❌ Avoid |
-| Fractional indexing (strings) | Infinite insertions, single-task updates | Requires library or custom logic | ✅ Recommended |
-| Linked list (prevId/nextId) | No position field needed | Complex queries, race conditions in real-time | ❌ Avoid |
+### Push Notification Integration
 
-**Verdict:** Fractional indexing (lexicographic strings) is the modern standard for collaborative ordering.
+Project already has `pushSubscriptions` table (schema.ts line 204-215). Mention notifications leverage existing infrastructure:
 
----
+```typescript
+// convex/messages.ts mutation
+if (mentionedUserIds.length > 0) {
+  await ctx.scheduler.runAfter(0, internal.notifications.sendMentionNotifications, {
+    messageId: newMessageId,
+    mentionedUserIds,
+    channelId,
+  });
+}
+```
+
+**Pattern precedent:** Task assignment notifications already implemented (per milestone context). Mention notifications follow same pattern.
+
+## Version Compatibility
+
+| Package | Current | Required | Notes |
+|---------|---------|----------|-------|
+| BlockNote | 0.46.2 | 0.46.x | Custom inline content API stable since 0.44. No breaking changes needed. |
+| Convex | 1.31.7 | 1.31.x | Schema extensions backward compatible. Indexes can be added without migration. |
+| Radix Popover | 1.1.15 | 1.1.x | No changes needed. |
+| emoji-picker-react | - | ^4.17.4 | New dependency. React 18 compatible. |
+
+## Bundle Size Impact
+
+| Addition | Size (minified) | Size (gzipped) | Justification |
+|----------|-----------------|----------------|---------------|
+| emoji-picker-react | 2.59 MB | ~600 KB | Comparable to BlockNote (already loaded). Lazy load with React.lazy() if needed. |
+| UserMention inline content | ~2 KB | ~1 KB | Minimal - follows TaskMention pattern. |
+| Schema changes | 0 KB | 0 KB | Backend only. |
+
+**Total impact:** ~600 KB gzipped for emoji picker. Mitigations:
+- Lazy load: `const Picker = lazy(() => import('emoji-picker-react'))`
+- Only loads when user opens reaction popover
+- One-time cost amortized across all reactions
 
 ## Confidence Assessment
 
-| Technology | Confidence | Rationale |
-|-----------|-----------|-----------|
-| @dnd-kit | HIGH | Verified latest versions via npm (6.3.1, 10.0.0). Multiple 2025-2026 ecosystem surveys confirm as standard. 5.4M weekly downloads. |
-| react-day-picker | HIGH | Verified v9.13.0 via npm. Powers shadcn/ui, already in ecosystem. |
-| date-fns | HIGH | Verified v4.1.0 via npm. Standard for 2025+ (moment.js deprecated). |
-| Convex patterns | HIGH | Official documentation reviewed. Patterns match existing codebase (messages, documents). |
-| Fractional indexing | MEDIUM | Well-documented pattern, but requires custom implementation or small library. Edge cases exist (see PITFALLS.md). |
-| Optimistic updates | HIGH | Convex native feature, documented extensively. Used successfully for chat apps. |
-
-**Overall Stack Confidence: HIGH**
-
-All core technologies are verified via official sources and npm registry. Patterns align with existing Ripple architecture.
-
----
-
-## Integration Notes
-
-### Consistency with Existing Stack
-
-This stack maintains consistency with your existing architecture:
-
-| Feature | Existing Pattern | Task Management Pattern |
-|---------|-----------------|------------------------|
-| Real-time sync | Convex subscriptions (messages, presence) | Same for tasks |
-| Data model | Flat tables with indexes (channels, documents) | Same for projects/tasks |
-| UI components | shadcn/ui + Radix | Continue using for task UI |
-| Form validation | Zod + convex-helpers | Same for task forms |
-| Role-based access | WorkspaceRole, ChannelRole, DocumentRole | Add ProjectRole enum |
-| Search | `searchIndex` on messages, documents | Add for task titles |
-
-### Reusable Patterns
-
-You can leverage existing patterns:
-- **Membership model:** Copy `workspaceMembers` pattern for project members
-- **Role counts:** Copy `channels.roleCount` for project access control
-- **Search:** Copy `messages` search index pattern for task search
-- **Optimistic updates:** Copy message creation pattern for task creation
-
----
-
-## Next Steps
-
-1. **Install dependencies** (see Installation section)
-2. **Extend schema** with `projects`, `tasks`, `taskAssignees` tables
-3. **Create fractional indexing utility** (or install library)
-4. **Build basic Kanban board** with @dnd-kit
-5. **Add optimistic updates** to drag-drop mutations
-6. **Integrate task properties** (assignees, due dates, labels)
-7. **Add deep integration** (embed docs/diagrams, create from chat)
-
----
+| Area | Confidence | Rationale |
+|------|------------|-----------|
+| BlockNote mentions | HIGH | Pattern already validated with taskMention and projectReference. SuggestionMenuController API documented and stable. |
+| Emoji picker library | HIGH | emoji-picker-react actively maintained (published Feb 3, 2026 per npm). 7.8k GitHub stars, 234 dependent packages. |
+| Reaction schema | HIGH | Convex official docs include reactions implementation guide. Pattern validated in production apps. |
+| Reply-to threading | MEDIUM | Schema pattern straightforward (single optional field). UI complexity depends on quoted message rendering (needs design). |
 
 ## Sources
 
-### Verified via Official Sources (HIGH Confidence)
-- [@dnd-kit/core - npm](https://www.npmjs.com/package/@dnd-kit/core) - Version 6.3.1
-- [@dnd-kit/sortable - npm](https://www.npmjs.com/package/@dnd-kit/sortable) - Version 10.0.0
-- [react-day-picker - npm](https://www.npmjs.com/package/react-day-picker) - Version 9.13.0
-- [Convex Optimistic Updates Documentation](https://docs.convex.dev/client/react/optimistic-updates)
-- [Convex Best Practices](https://docs.convex.dev/understanding/best-practices/)
-- [Convex Relationship Structures](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas)
+**Emoji Picker Research:**
+- [emoji-picker-react npm](https://www.npmjs.com/package/emoji-picker-react) - Latest version 4.17.4
+- [emoji-picker-react GitHub](https://github.com/ealush/emoji-picker-react) - Most popular React emoji picker
+- [emoji-mart GitHub](https://github.com/missive/emoji-mart) - Alternative with modular data loading
+- [React Emoji Picker Guide (Velt, Oct 2025)](https://velt.dev/blog/react-emoji-picker-guide) - Comparison and best practices
+- [npm-compare: emoji-mart vs emoji-picker-react](https://npm-compare.com/emoji-mart,emoji-picker-react,react-emoji-render) - Bundle size analysis
 
-### Ecosystem Surveys (MEDIUM-HIGH Confidence)
-- [Top 5 Drag-and-Drop Libraries for React in 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react)
-- [Comparison with react-beautiful-dnd - GitHub Discussion](https://github.com/clauderic/dnd-kit/discussions/481)
-- [Building a Drag-and-Drop Kanban Board with React and dnd-kit](https://radzion.com/blog/kanban/)
-- [Build a Kanban board with dnd kit and React - LogRocket](https://blog.logrocket.com/build-kanban-board-dnd-kit-react/)
+**BlockNote Custom Inline Content:**
+- [BlockNote Custom Inline Content docs](https://www.blocknotejs.org/docs/custom-schemas/custom-inline-content) - createReactInlineContentSpec API
+- [BlockNote Mentions Menu example](https://www.blocknotejs.org/examples/custom-schema/suggestion-menus-mentions) - @ trigger autocomplete pattern
+- [BlockNote Suggestion Menus docs](https://www.blocknotejs.org/docs/react/components/suggestion-menus) - SuggestionMenuController
 
-### Patterns and Best Practices (MEDIUM Confidence)
-- [Database Relationship Helpers - Convex](https://stack.convex.dev/functional-relationships-helpers)
-- [Kanban board column indexing mechanism](https://nickmccleery.com/posts/08-kanban-indexing/)
-- [Convex Helpers - Zod Validation](https://github.com/get-convex/convex-helpers)
+**Convex Reactions:**
+- [Convex: Likes, Upvotes & Reactions](https://www.convex.dev/can-do/likes-and-reactions) - Official implementation guide
+- [Convex Schemas](https://docs.convex.dev/database/schemas) - defineTable and index patterns
 
----
+**Chat Threading Patterns:**
+- [Stream Chat React Threads docs](https://getstream.io/chat/docs/react/threads/) - parent_id threading pattern
+- [Sendbird Quote Reply](https://sendbird.com/docs/chat/uikit/v3/react/features/message-threading/quote-reply) - Inline reply-to implementation
 
-**Last Updated:** 2026-02-05
-**Next Review:** When adding advanced features (e.g., subtasks, dependencies, time tracking)
+**Slack Engineering:**
+- [Rebuilding Slack's Emoji Picker in React](https://slack.engineering/rebuilding-slacks-emoji-picker-in-react/) - React-virtualized for performance, component architecture
+
+**Community Resources:**
+- [Building an Emoji Picker with React (Jan 2026)](https://jafmah97.medium.com/building-an-emoji-picker-with-react-66f612a43d67) - Provider pattern best practices
+- [react-emoji-react GitHub](https://github.com/conorhastings/react-emoji-react) - Slack-style reaction UI clone

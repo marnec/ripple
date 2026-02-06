@@ -1,921 +1,718 @@
-# Architecture Patterns: Projects & Tasks Integration
-
-**Domain:** Task Management in Real-Time Collaborative Workspace
-**Researched:** 2026-02-05
+# Architecture Research: Chat Enhancements
+**Domain:** Real-time chat messaging with @mentions, emoji reactions, and reply-to threading
+**Researched:** 2026-02-07
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Integrating Projects and Tasks into Ripple's existing Convex architecture requires following established patterns: membership tables for access control, junction tables for many-to-many relationships, compound indexes for efficient queries, and ID references for cross-entity relationships. The existing codebase demonstrates robust patterns that can be directly applied to task management.
+This research covers integrating three social messaging features (@user mentions, emoji reactions, inline reply-to) into Ripple's existing Convex + BlockNote chat architecture. All three features follow established patterns in the codebase and have clear implementation paths with minimal architectural risk.
 
-## Recommended Architecture
+**Key finding:** All features can be implemented incrementally without breaking changes to existing chat functionality. The codebase already demonstrates the necessary patterns (custom inline content, mention detection, real-time updates, push notifications).
+
+## Standard Architecture
 
 ### System Overview
 
 ```
-Workspaces (existing)
-    ├── Channels (existing) ─────┐
-    ├── Documents (existing)      │
-    ├── Diagrams (existing)       │
-    └── Projects (new)            │
-            ├── Tasks (new)       │
-            │   ├── References ───┼─── Documents/Diagrams/Users
-            │   └── Dependencies  │
-            └── Members (new)     │
-                                  │
-        ProjectChannels (new) ────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (React)                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  MessageComposer (BlockNote)                                    │
+│  ├─ Custom inline content specs:                               │
+│  │  ├─ taskMention (existing)                                  │
+│  │  ├─ projectReference (existing)                             │
+│  │  └─ userMention (NEW)                                       │
+│  ├─ SuggestionMenuController:                                  │
+│  │  ├─ # trigger → tasks/projects (existing)                   │
+│  │  └─ @ trigger → users (NEW)                                 │
+│  └─ Submit → JSON body + plainText                             │
+│                                                                 │
+│  Message Component                                              │
+│  ├─ MessageRenderer (BlockNote JSON → React)                   │
+│  ├─ Context menu (edit, delete, create task)                   │
+│  ├─ ReactionBar (NEW)                                           │
+│  │  ├─ Reaction picker button                                  │
+│  │  ├─ Aggregated reaction chips (emoji + count)               │
+│  │  └─ Optimistic updates on click                             │
+│  └─ Reply preview (NEW - if parentMessageId exists)            │
+│                                                                 │
+│  Chat View                                                      │
+│  └─ Message list (paginated, newest first)                     │
+│                                                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                      CONVEX BACKEND                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  messages table (MODIFIED)                                      │
+│  ├─ userId, body, plainText, channelId, deleted (existing)     │
+│  └─ parentMessageId: optional Id<"messages"> (NEW)             │
+│                                                                 │
+│  messageReactions table (NEW - separate table approach)        │
+│  ├─ messageId: Id<"messages">                                  │
+│  ├─ userId: Id<"users">                                        │
+│  ├─ emoji: string                                              │
+│  └─ Indexes: by_message, by_message_emoji, by_user             │
+│                                                                 │
+│  Mutations                                                      │
+│  ├─ messages.send (MODIFIED)                                   │
+│  │  └─ Extract @mentions → schedule notifications             │
+│  ├─ messageReactions.toggle (NEW)                              │
+│  │  └─ Add/remove reaction with optimistic update support     │
+│  └─ messages.update (MODIFIED)                                 │
+│     └─ Diff mentions → notify newly added @mentions            │
+│                                                                 │
+│  Queries                                                        │
+│  ├─ messages.list (MODIFIED - join reactions)                  │
+│  │  └─ Return messages with aggregated reaction counts         │
+│  ├─ messageReactions.byMessage (NEW)                           │
+│  │  └─ Get all reactions for a message (grouped by emoji)     │
+│  └─ messages.getWithParent (NEW)                               │
+│     └─ Fetch message + parent preview for reply rendering      │
+│                                                                 │
+│  Push Notifications (existing pattern)                         │
+│  └─ internal.chatNotifications.notifyUserMentions (NEW)        │
+│     └─ Similar to taskNotifications.notifyUserMentions         │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Boundaries
+### Component Responsibilities
 
-| Component | Responsibility | Data Ownership | Access Pattern |
-|-----------|---------------|----------------|----------------|
-| **projects** | Project metadata (name, description, status) | Projects table | Workspace-scoped, membership-filtered |
-| **projectMembers** | Project access control & roles | ProjectMembers junction table | User-project authorization |
-| **tasks** | Task data (title, status, assignee, priority, due date) | Tasks table | Project-scoped |
-| **taskDependencies** | Task ordering & dependency graph | TaskDependencies junction table | Task-to-task relationships |
-| **projectChannels** | Project-channel associations | ProjectChannels junction table | Many-to-many linking |
-| **taskReferences** | Embedded entity references | Stored in task body/metadata | ID references to documents/diagrams/users |
+| Component | Responsibility | Integration Points |
+|-----------|---------------|-------------------|
+| **UserMention inline content (NEW)** | BlockNote custom inline content for @user mentions | - MessageComposer schema<br>- MessageRenderer rendering<br>- UserMentionChip component |
+| **SuggestionMenuController @-trigger (NEW)** | Autocomplete menu for workspace users on @ key | - MessageComposer<br>- workspaceMembers query |
+| **ReactionBar (NEW)** | Display and manage emoji reactions on messages | - Message component<br>- messageReactions.toggle mutation<br>- messageReactions.byMessage query |
+| **ReplyPreview (NEW)** | Show parent message context for threaded replies | - Message component<br>- messages.getWithParent query |
+| **UserMentionChip (NEW)** | Render @user mentions with live user data | - MessageRenderer InlineRenderer<br>- users API |
+| **messages.send (MODIFIED)** | Extract @mentions from body, send notifications | - extractMentionedUserIds utility<br>- internal.chatNotifications |
+| **messageReactions table (NEW)** | Store individual user reactions | - Separate table pattern<br>- Real-time subscriptions |
 
-## Schema Design
+## Data Model Changes
 
-### Core Tables
+### Modified Tables
 
-#### projects
+#### messages table
 ```typescript
-projects: defineTable({
-  workspaceId: v.id("workspaces"),
-  name: v.string(),
-  description: v.optional(v.string()),
-  status: v.union(
-    v.literal("active"),
-    v.literal("archived"),
-    v.literal("completed")
-  ),
-  roleCount: v.object({
-    admin: v.number(),
-    member: v.number(),
-  }),
-})
-  .index("by_workspace", ["workspaceId"])
-  .index("by_workspace_status", ["workspaceId", "status"])
-  .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] })
-```
-
-**Rationale:**
-- Mirrors `documents` pattern with roleCount for efficient UI display
-- Compound index `by_workspace_status` enables filtered project lists (active vs archived)
-- Search index enables project search within workspace context
-
-#### projectMembers
-```typescript
-projectMembers: defineTable({
-  projectId: v.id("projects"),
+messages: defineTable({
   userId: v.id("users"),
-  workspaceId: v.id("workspaces"), // Denormalized for efficient queries
-  role: v.union(v.literal("admin"), v.literal("member")),
-})
-  .index("by_project", ["projectId"])
-  .index("by_user", ["userId"])
-  .index("by_project_user", ["projectId", "userId"])
-  .index("by_workspace_user", ["workspaceId", "userId"])
-  .index("by_project_role", ["projectId", "role"])
-```
-
-**Rationale:**
-- Exact pattern from `documentMembers` and `channelMembers`
-- Denormalized `workspaceId` enables efficient "all projects for user in workspace" queries
-- `by_project_user` supports unique constraint checking and authorization
-- `by_project_role` enables admin-only queries (e.g., settings page)
-
-#### tasks
-```typescript
-tasks: defineTable({
-  projectId: v.id("projects"),
-  title: v.string(),
-  description: v.optional(v.string()),
-  status: v.union(
-    v.literal("backlog"),
-    v.literal("todo"),
-    v.literal("in_progress"),
-    v.literal("review"),
-    v.literal("done")
-  ),
-  assigneeId: v.optional(v.id("users")),
-  createdBy: v.id("users"),
-  priority: v.union(
-    v.literal("low"),
-    v.literal("medium"),
-    v.literal("high"),
-    v.literal("urgent")
-  ),
-  dueDate: v.optional(v.number()), // Unix timestamp
-  sortOrder: v.number(), // For Kanban column ordering
-  // Embedded references (stored as structured data)
-  references: v.optional(v.object({
-    documents: v.optional(v.array(v.id("documents"))),
-    diagrams: v.optional(v.array(v.id("diagrams"))),
-    messages: v.optional(v.array(v.id("messages"))),
-  })),
-  parentTaskId: v.optional(v.id("tasks")), // For subtasks
-})
-  .index("by_project", ["projectId"])
-  .index("by_project_status", ["projectId", "status"])
-  .index("by_assignee", ["assigneeId"])
-  .index("by_project_assignee", ["projectId", "assigneeId"])
-  .index("by_project_sortOrder", ["projectId", "sortOrder"])
-  .index("by_parent", ["parentTaskId"])
-  .searchIndex("by_title", { searchField: "title", filterFields: ["projectId"] })
-```
-
-**Rationale:**
-- `by_project_status` is critical for Kanban view (query tasks by status column)
-- `sortOrder` enables drag-and-drop reordering within status columns
-- `by_project_assignee` supports "My Tasks" filtered views
-- `parentTaskId` enables subtask hierarchies without separate table
-- Embedded `references` object avoids separate junction table for simple references
-
-**Why not separate reference tables?**
-- Tasks typically reference 0-5 entities, well within Convex's array limits
-- Avoids additional queries when loading task details
-- Simplifies mutations (single document update vs multiple junction records)
-- Can still query efficiently by ID with client-side filtering or custom indexes if needed
-
-#### taskDependencies
-```typescript
-taskDependencies: defineTable({
-  taskId: v.id("tasks"),
-  dependsOnTaskId: v.id("tasks"),
-  type: v.union(
-    v.literal("blocks"), // taskId is blocked by dependsOnTaskId
-    v.literal("relates_to"), // Weaker relationship
-  ),
-})
-  .index("by_task", ["taskId"])
-  .index("by_depends_on", ["dependsOnTaskId"])
-  .index("by_task_type", ["taskId", "type"])
-```
-
-**Rationale:**
-- Junction table pattern for many-to-many relationships
-- `by_task` query: "What does this task depend on?"
-- `by_depends_on` query: "What tasks depend on this?"
-- Enables dependency graph traversal for both directions
-
-**Alternative considered:** Embedded array of dependency IDs in tasks table
-**Why junction table is better:**
-- Bidirectional queries are equally efficient
-- No 8192 array limit concerns for tasks with many dependencies
-- Easier to add dependency metadata (type, created date, etc.)
-
-#### projectChannels
-```typescript
-projectChannels: defineTable({
-  projectId: v.id("projects"),
+  isomorphicId: v.string(),
+  body: v.string(),              // BlockNote JSON (may contain userMention inline content)
+  plainText: v.string(),
   channelId: v.id("channels"),
-  workspaceId: v.id("workspaces"), // Denormalized
+  deleted: v.boolean(),
+  parentMessageId: v.optional(v.id("messages")), // NEW: for reply-to threading
 })
-  .index("by_project", ["projectId"])
   .index("by_channel", ["channelId"])
-  .index("by_project_channel", ["projectId", "channelId"])
+  .index("undeleted_by_channel", ["channelId", "deleted"])
+  .index("by_parent_message", ["parentMessageId"]) // NEW: for thread queries
+  .searchIndex("by_text", { searchField: "plainText", filterFields: ["channelId"] })
 ```
 
-**Rationale:**
-- Junction table for many-to-many project-channel links
-- `by_project_channel` ensures uniqueness and enables link existence checks
-- Enables "Show all channels for this project" and "Show all projects for this channel"
+**Changes:**
+- Add `parentMessageId` field (optional) for reply-to feature
+- Add `by_parent_message` index for querying threaded replies
 
-### Index Strategy
+### New Tables
 
-#### Query Patterns & Index Selection
-
-| Query | Index Used | Performance Impact |
-|-------|-----------|-------------------|
-| List all projects in workspace | `by_workspace` | O(projects in workspace) |
-| List active projects only | `by_workspace_status` | O(active projects) - **significantly faster** |
-| Get tasks for project | `by_project` | O(tasks in project) |
-| Get tasks by status (Kanban column) | `by_project_status` | O(tasks in status) - **critical for Kanban** |
-| Get user's assigned tasks | `by_assignee` | O(tasks assigned to user) |
-| Get assigned tasks in project | `by_project_assignee` | O(assigned tasks in project) |
-| Check project membership | `by_project_user` | O(1) - **unique lookup** |
-| Get subtasks | `by_parent` | O(subtasks) |
-| Get task dependencies | `by_task` | O(dependencies) |
-| Search projects | `by_name` searchIndex | Full-text search |
-
-#### Compound Index Best Practices
-
-Following Convex documentation on [Introduction to Indexes and Query Performance](https://docs.convex.dev/database/reading-data/indexes/indexes-and-query-perf):
-
-1. **Order matters:** `by_workspace_status` enables queries filtering on workspace alone OR workspace+status, but not status alone
-2. **Avoid redundancy:** `by_project` makes `by_project_status` potentially redundant for small projects, but the performance gain for Kanban views justifies the storage cost
-3. **Denormalization:** Including `workspaceId` in `projectMembers` enables efficient workspace-scoped queries without joining through projects table
-
-### Cross-Entity References
-
-#### Pattern 1: Direct ID References (Tasks → Documents/Diagrams)
-
-**Implementation:**
+#### messageReactions table
 ```typescript
-// In task document
-references: {
-  documents: ["document_id_1", "document_id_2"],
-  diagrams: ["diagram_id_1"],
-}
+messageReactions: defineTable({
+  messageId: v.id("messages"),
+  userId: v.id("users"),
+  emoji: v.string(), // Unicode emoji (e.g., "👍", "❤️", "🎉")
+})
+  .index("by_message", ["messageId"])
+  .index("by_message_emoji", ["messageId", "emoji"])
+  .index("by_user", ["userId"])
+  .index("by_message_user", ["messageId", "userId"])
 ```
 
-**Resolution in queries:**
+**Design rationale:**
+- **Separate table vs embedded array:** Separate table chosen for real-time granularity and Convex best practices
+- **Real-time updates:** Each reaction is a separate document → Convex subscriptions update only affected reactions
+- **Aggregation:** Query by `by_message_emoji` index, group by emoji, count users
+- **Toggle semantics:** Query `by_message_user` to check if user already reacted, then insert/delete
+
+**Alternative considered:** Embedded array on messages table
 ```typescript
-// Using convex-helpers getAll
-const documentIds = task.references?.documents || [];
-const documents = await getAll(ctx.db, documentIds);
+reactions: v.optional(v.array(v.object({
+  userId: v.id("users"),
+  emoji: v.string(),
+})))
+```
+**Why rejected:**
+- Entire message document updates on every reaction → triggers re-render of entire message
+- No index support for array contents (can't query "messages with 👍")
+- Harder to implement optimistic updates (must patch entire array)
+- Poor scalability (popular messages with many reactions = large document)
+
+### BlockNote JSON Schema Changes
+
+#### UserMention inline content type (NEW)
+```typescript
+type InlineContent =
+  | { type: "text"; ... }
+  | { type: "link"; ... }
+  | { type: "taskMention"; props: { taskId: string; taskTitle?: string } }
+  | { type: "projectReference"; props: { projectId: string } }
+  | { type: "userMention"; props: { userId: string } }  // NEW
 ```
 
-**When to use:**
-- Small number of references (< 50 per task)
-- References are read together with task details
-- No need to query "all tasks referencing this document"
+Stored in `messages.body` JSON field, extracted via `extractMentionedUserIds` utility (existing pattern from task comments).
 
-#### Pattern 2: Junction Tables (Task Dependencies)
+## Data Flow
 
-**Implementation:**
-```typescript
-// Separate taskDependencies table
-{ taskId: "task_1", dependsOnTaskId: "task_2" }
+### @User Mention Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. User types "@" in MessageComposer                        │
+│    └─ SuggestionMenuController triggers                     │
+│                                                              │
+│ 2. Query workspace members for autocomplete                 │
+│    └─ Filter by query text (name/email)                     │
+│                                                              │
+│ 3. User selects @Alice from menu                            │
+│    └─ Insert { type: "userMention", props: { userId } }     │
+│                                                              │
+│ 4. Submit message                                            │
+│    ├─ Serialize BlockNote JSON → body                       │
+│    ├─ Extract plainText (without @mentions)                 │
+│    └─ Call messages.send mutation                           │
+│                                                              │
+│ 5. messages.send mutation                                   │
+│    ├─ Insert message document                               │
+│    ├─ extractMentionedUserIds(body) → ["userId1", ...]     │
+│    ├─ Filter out sender from mentioned list                 │
+│    └─ Schedule internal.chatNotifications.notifyUserMentions│
+│                                                              │
+│ 6. Push notification sent to @mentioned users               │
+│    └─ "Alice mentioned you in #general"                     │
+│                                                              │
+│ 7. MessageRenderer displays message                         │
+│    └─ userMention → <UserMentionChip userId={userId} />    │
+│       └─ Live query for user data (name, avatar)           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Resolution in queries:**
-```typescript
-// Query dependencies
-const deps = await ctx.db
-  .query("taskDependencies")
-  .withIndex("by_task", q => q.eq("taskId", taskId))
-  .collect();
+**Key integration points:**
+- Reuse existing `extractMentionedUserIds` utility from task comments (already handles BlockNote JSON traversal)
+- Reuse existing push notification pattern from `taskNotifications.ts`
+- Follow existing pattern from `TaskMention` and `ProjectReference` inline content specs
+
+### Emoji Reaction Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. User hovers/clicks message → ReactionBar appears         │
+│                                                              │
+│ 2. User clicks emoji picker or existing reaction            │
+│    └─ Optimistic update: immediately show/remove reaction   │
+│                                                              │
+│ 3. messageReactions.toggle mutation                         │
+│    ├─ Check if reaction exists (by_message_user index)      │
+│    ├─ If exists: delete reaction                            │
+│    └─ If not: insert new reaction                           │
+│                                                              │
+│ 4. Convex real-time subscription updates                    │
+│    └─ All clients viewing message see updated reactions     │
+│                                                              │
+│ 5. ReactionBar re-queries and aggregates                    │
+│    ├─ Group reactions by emoji                              │
+│    ├─ Count users per emoji                                 │
+│    ├─ Highlight user's own reactions                        │
+│    └─ Render: "👍 3  ❤️ 5  🎉 1"                            │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**When to use:**
-- Many-to-many relationships (M:N)
-- Need bidirectional queries
-- Metadata on the relationship itself (dependency type, creation date)
-- Potential for > 50 related items
-
-#### Pattern 3: Denormalized References (Assignee)
-
-**Implementation:**
+**Aggregation query example:**
 ```typescript
-// Direct foreign key
-assigneeId: "user_id"
-```
+export const byMessage = query({
+  args: { messageId: v.id("messages") },
+  returns: v.any(),
+  handler: async (ctx, { messageId }) => {
+    const reactions = await ctx.db
+      .query("messageReactions")
+      .withIndex("by_message", (q) => q.eq("messageId", messageId))
+      .collect();
 
-**Resolution in queries:**
-```typescript
-// Batch fetch with getAll
-const userIds = tasks.map(t => t.assigneeId);
-const users = await getAll(ctx.db, userIds);
-```
+    // Group by emoji, aggregate counts and user IDs
+    const aggregated = new Map<string, { count: number; userIds: Id<"users">[] }>();
+    for (const r of reactions) {
+      const existing = aggregated.get(r.emoji) ?? { count: 0, userIds: [] };
+      existing.count++;
+      existing.userIds.push(r.userId);
+      aggregated.set(r.emoji, existing);
+    }
 
-**When to use:**
-- 1:1 or 1:many relationships
-- Need to index by the reference (e.g., query tasks by assignee)
-- Simple reference without additional metadata
-
-### Real-Time Data Flow
-
-#### Subscription Pattern
-
-Convex's reactive architecture (from [Real-Time Database Guide](https://stack.convex.dev/real-time-database)) automatically tracks dependencies:
-
-```typescript
-// Client subscribes to query
-const tasks = useQuery(api.tasks.listByProject, { projectId });
-
-// Server mutation updates task
-await ctx.db.patch(taskId, { status: "done" });
-
-// Convex automatically:
-// 1. Detects mutation affected query dependency
-// 2. Reruns query function
-// 3. Pushes update via WebSocket to subscribed clients
-// 4. React re-renders with new data
-```
-
-**Key points:**
-- No manual subscription management
-- Queries define dependencies automatically
-- Mutations trigger updates to affected subscriptions
-- Optimistic updates handled client-side for perceived performance
-
-#### Kanban Board Updates
-
-```typescript
-// User drags task to new column
-// 1. Optimistic update (instant UI feedback)
-setTasks(prev => prev.map(t =>
-  t._id === taskId ? { ...t, status: newStatus } : t
-));
-
-// 2. Mutation to server
-await updateTaskStatus({ taskId, status: newStatus });
-
-// 3. Server processes mutation
-await ctx.db.patch(taskId, { status: args.status });
-
-// 4. Convex pushes update to ALL clients viewing this project
-// 5. Other users see the task move in real-time
-```
-
-**Build order implication:** Real-time updates "just work" with Convex's reactive queries. No need for separate WebSocket layer or pub/sub.
-
-### Message → Task Conversion
-
-#### Architecture Decision
-
-**Option A: Copy message content**
-```typescript
-{
-  title: message.plainText.substring(0, 100),
-  description: message.body,
-  references: { messages: [messageId] }
-}
-```
-
-**Option B: Reference only**
-```typescript
-{
-  references: { messages: [messageId] }
-}
-```
-
-**Recommendation: Option A (copy + reference)**
-
-**Rationale:**
-- Tasks need editable content (title/description)
-- Messages are immutable once sent
-- Reference preserves context ("created from message")
-- Enables "jump to conversation" feature
-- Deleting message doesn't lose task content
-
-**Implementation:**
-```typescript
-export const createFromMessage = mutation({
-  args: {
-    messageId: v.id("messages"),
-    projectId: v.id("projects")
+    return Array.from(aggregated.entries()).map(([emoji, data]) => ({
+      emoji,
+      count: data.count,
+      userIds: data.userIds,
+    }));
   },
-  handler: async (ctx, args) => {
-    const message = await ctx.db.get(args.messageId);
-    // Verify permissions...
-
-    return ctx.db.insert("tasks", {
-      projectId: args.projectId,
-      title: message.plainText.substring(0, 100),
-      description: message.body,
-      status: "backlog",
-      createdBy: message.userId,
-      references: { messages: [args.messageId] },
-      // ... other defaults
-    });
-  }
 });
 ```
 
-## Data Access Patterns
-
-### Authorization Model
-
-Following the established pattern from documents/channels:
-
+**Optimistic update pattern:**
 ```typescript
-// Pattern: Check membership before data access
-export const listTasks = query({
-  args: { projectId: v.id("projects") },
-  handler: async (ctx, { projectId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+const toggleReaction = useMutation(api.messageReactions.toggle);
 
-    // Check project membership
-    const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", q =>
-        q.eq("projectId", projectId).eq("userId", userId)
-      )
-      .first();
+const handleReactionClick = (emoji: string) => {
+  toggleReaction({
+    messageId,
+    emoji
+  }, {
+    optimisticUpdate: (localQueryStore) => {
+      // Immediately update local cache before server confirms
+      // Convex rolls back if mutation fails
+    }
+  });
+};
+```
 
-    if (!membership) throw new ConvexError("Not a project member");
+### Reply-to Flow
 
-    // Query tasks
-    return ctx.db
-      .query("tasks")
-      .withIndex("by_project", q => q.eq("projectId", projectId))
-      .collect();
-  }
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. User right-clicks message → "Reply to message"           │
+│    └─ Store parentMessageId in composer state               │
+│                                                              │
+│ 2. Composer shows reply preview                             │
+│    ├─ Small preview card: author, snippet of parent body    │
+│    └─ "X" button to cancel reply mode                       │
+│                                                              │
+│ 3. User types reply and submits                             │
+│    └─ messages.send({ ..., parentMessageId })               │
+│                                                              │
+│ 4. MessageRenderer detects parentMessageId                  │
+│    ├─ Query parent message                                  │
+│    ├─ Render compact reply preview above message body       │
+│    └─ Handle deleted parent gracefully                      │
+│                                                              │
+│ 5. Reply preview component                                  │
+│    ├─ If parent exists: show author + snippet              │
+│    ├─ If parent deleted: show "Original message deleted"    │
+│    └─ Click preview → scroll to parent (if visible) or      │
+│       open MessageContext view (existing search feature)    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Deleted parent message handling:**
+```typescript
+export const getWithParent = query({
+  args: { messageId: v.id("messages") },
+  returns: v.any(),
+  handler: async (ctx, { messageId }) => {
+    const message = await ctx.db.get(messageId);
+    if (!message || message.deleted) return null;
+
+    let parent = null;
+    if (message.parentMessageId) {
+      parent = await ctx.db.get(message.parentMessageId);
+      // If deleted, return tombstone for graceful degradation
+      if (parent?.deleted) {
+        parent = { _id: parent._id, deleted: true };
+      }
+    }
+
+    return { message, parent };
+  },
 });
 ```
 
-**Key principle:** Authorization happens at query/mutation entry, not database level.
+**UI for deleted parent:**
+```tsx
+{parentMessageId && (
+  <ReplyPreview>
+    {parent?.deleted ? (
+      <div className="text-muted-foreground italic">
+        Original message deleted
+      </div>
+    ) : (
+      <>
+        <strong>{parent.author}</strong>
+        <p className="truncate">{parent.plainText}</p>
+      </>
+    )}
+  </ReplyPreview>
+)}
+```
 
-### Common Query Functions
+## Architectural Patterns
 
-Based on existing patterns in `documents.ts` and `channels.ts`:
-
+### Pattern 1: Custom BlockNote Inline Content
+**What:** Define new inline content types in BlockNote schema, render them as React components
+**When:** Adding interactive elements within message text (@mentions, task links, etc.)
+**Example:**
 ```typescript
-// List projects user has access to
-export const listByUserMembership = query({
-  args: { workspaceId: v.id("workspaces") },
-  handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-
-    // Get user's project memberships
-    const memberships = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_workspace_user", q =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId)
-      )
-      .collect();
-
-    // Batch fetch projects
-    const projectIds = memberships.map(m => m.projectId);
-    return getAll(ctx.db, projectIds);
+// Define spec
+export const UserMention = createReactInlineContentSpec(
+  {
+    type: "userMention",
+    propSchema: { userId: { default: "" } },
+    content: "none",
+  },
+  {
+    render: ({ inlineContent }) => (
+      <UserMentionChip userId={inlineContent.props.userId} />
+    ),
   }
-});
+);
 
-// Get task with dependencies resolved
-export const getWithDependencies = query({
-  args: { taskId: v.id("tasks") },
-  handler: async (ctx, { taskId }) => {
-    // Check permission...
-    const task = await ctx.db.get(taskId);
-
-    // Fetch dependencies
-    const deps = await ctx.db
-      .query("taskDependencies")
-      .withIndex("by_task", q => q.eq("taskId", taskId))
-      .collect();
-
-    // Resolve dependent task details
-    const depTaskIds = deps.map(d => d.dependsOnTaskId);
-    const depTasks = await getAll(ctx.db, depTaskIds);
-
-    return { task, dependencies: depTasks };
-  }
+// Add to schema
+const schema = BlockNoteSchema.create({
+  blockSpecs: { ...defaultBlockSpecs },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    userMention: UserMention, // NEW
+  },
 });
 ```
 
-## Architecture Patterns to Follow
+**Existing examples:** `TaskMention`, `ProjectReference`
 
-### Pattern 1: Membership-Based Access Control
-
-**What:** Every entity with access control has a corresponding `*Members` table with `by_entity_user` compound index.
-
-**Example from codebase:**
-- `documentMembers` → `documents`
-- `channelMembers` → `channels`
-- `workspaceMembers` → `workspaces`
-
-**Apply to:**
-- `projectMembers` → `projects`
-
-**Benefits:**
-- Consistent authorization pattern
-- Efficient permission checks (O(1) lookup)
-- Supports role-based permissions
-- Enables "list accessible entities" queries
-
-### Pattern 2: Denormalized Context IDs
-
-**What:** Junction tables include higher-level context IDs for efficient filtering.
-
-**Example from codebase:**
+### Pattern 2: SuggestionMenuController for Autocomplete
+**What:** BlockNote's built-in autocomplete triggered by special characters
+**When:** User types trigger character (# for tasks, @ for mentions)
+**Example:**
 ```typescript
-channelMembers: {
-  channelId: v.id("channels"),
-  workspaceId: v.id("workspaces"), // Denormalized!
-  userId: v.id("users"),
+<SuggestionMenuController
+  triggerCharacter={"@"}
+  getItems={async (query) => {
+    const members = await queryWorkspaceMembers({ workspaceId });
+    return members
+      .filter((m) => m.name.toLowerCase().includes(query.toLowerCase()))
+      .map((m) => ({
+        title: m.name,
+        onItemClick: () => {
+          editor.insertInlineContent([
+            { type: "userMention", props: { userId: m._id } },
+            " ",
+          ]);
+        },
+      }));
+  }}
+/>
+```
+
+**Existing example:** MessageComposer # trigger for tasks/projects
+
+### Pattern 3: Mention Extraction and Diff-based Notifications
+**What:** Parse BlockNote JSON to extract mention IDs, diff old vs new for edit notifications
+**When:** Sending or editing messages with @mentions
+**Example:**
+```typescript
+// In messages.send mutation
+const mentionedUserIds = extractMentionedUserIds(body);
+const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+
+if (filteredMentions.length > 0) {
+  await ctx.scheduler.runAfter(0, internal.chatNotifications.notifyUserMentions, {
+    messageId,
+    mentionedUserIds: filteredMentions,
+    mentionedBy: { name: user.name, id: userId },
+  });
 }
 ```
 
-**Apply to:**
+**Existing example:** `taskComments.create` and `taskComments.update` mutations
+
+### Pattern 4: Separate Table for Many-to-Many Relationships
+**What:** Store reactions as individual documents in a join table
+**When:** Many users can react with many emojis to many messages
+**Why:**
+- Real-time granularity (only changed reaction updates, not entire message)
+- Indexable and queryable (find all messages with 🎉 emoji)
+- Scalable (no document size limits)
+
+**Example:** messageReactions table with indexes for efficient aggregation
+
+**Convex best practice:** Documented in [Relationship Structures: Let's Talk About Schemas](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas) and [Likes, Upvotes & Reactions: Convex can do that](https://www.convex.dev/can-do/likes-and-reactions)
+
+### Pattern 5: Optimistic Updates for Instant Feedback
+**What:** Update local UI immediately, rollback if mutation fails
+**When:** User interactions that should feel instant (reactions, typing indicators)
+**Example:**
 ```typescript
-projectMembers: {
-  projectId: v.id("projects"),
-  workspaceId: v.id("workspaces"), // Enables workspace-scoped queries
-  userId: v.id("users"),
-}
-```
-
-**Benefits:**
-- Query "all projects for user in workspace" without joining
-- Reduced query complexity
-- Trade-off: Slightly more complex mutations (must maintain consistency)
-
-### Pattern 3: Role Counts for UI Performance
-
-**What:** Store aggregate role counts in entity documents for efficient display.
-
-**Example from codebase:**
-```typescript
-documents: {
-  roleCount: {
-    admin: 3,
-    member: 12,
-  }
-}
-```
-
-**Apply to:**
-```typescript
-projects: {
-  roleCount: {
-    admin: 2,
-    member: 8,
-  }
-}
-```
-
-**Benefits:**
-- Display member counts without counting query
-- No N+1 query problem
-- Trade-off: Must update on membership changes
-
-**Implementation pattern from `documentMembers.ts`:**
-```typescript
-// On member add
-await ctx.db.patch(projectId, {
-  roleCount: {
-    ...project.roleCount,
-    [role]: project.roleCount[role] + 1,
-  }
-});
-
-// On member remove
-await ctx.db.patch(projectId, {
-  roleCount: {
-    ...project.roleCount,
-    [role]: project.roleCount[role] - 1,
+const toggleReaction = useMutation(api.messageReactions.toggle, {
+  optimisticUpdate: (localQueryStore, args) => {
+    const currentReactions = localQueryStore.getQuery(
+      api.messageReactions.byMessage,
+      { messageId: args.messageId }
+    );
+    // Modify local cache immediately
   }
 });
 ```
 
-### Pattern 4: Batch Fetching with getAll
-
-**What:** Use `convex-helpers` `getAll()` to batch fetch related documents instead of N+1 queries.
-
-**Example from codebase:**
-```typescript
-// From messages.ts
-const userIds = [...new Set(messagesPage.page.map(m => m.userId))];
-const users = await getAll(ctx.db, userIds);
-const userMap = new Map(users.map((u, i) => [userIds[i], u]));
-```
-
-**Apply to:**
-```typescript
-// Fetch tasks with assignees
-const tasks = await ctx.db.query("tasks").collect();
-const assigneeIds = tasks.map(t => t.assigneeId).filter(Boolean);
-const assignees = await getAll(ctx.db, assigneeIds);
-```
-
-**Benefits:**
-- O(1) database round-trips instead of O(N)
-- Significant performance improvement for lists
-- Built-in by Convex helpers library
+**Existing pattern:** Convex optimistic updates are used in other parts of app
+**Documentation:** [Optimistic Updates | Convex Developer Hub](https://docs.convex.dev/client/react/optimistic-updates)
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Using .filter() Instead of Indexes
+### Anti-Pattern 1: Embedding Reactions Array in Messages
+**What:** Store reactions as `reactions: v.array(v.object({ userId, emoji }))`
+**Why bad:**
+- Updates entire message document on every reaction
+- All message subscribers re-render (not just reaction bar)
+- No indexes on array contents (can't query "messages with 👍")
+- Document size limits for viral messages
+**Instead:** Use separate `messageReactions` table with indexes
 
-**What goes wrong:**
-```typescript
-// BAD: Scans all tasks in table
-const tasks = await ctx.db
-  .query("tasks")
-  .filter(q => q.eq(q.field("projectId"), projectId))
-  .collect();
-```
+### Anti-Pattern 2: Querying All Users for @Mention Autocomplete
+**What:** Query all platform users, filter client-side
+**Why bad:**
+- Wasted bandwidth for large platforms
+- Slow autocomplete UX
+- Can leak user information across workspaces
+**Instead:** Query `workspaceMembers` table with workspace filter, limit results
 
-**Why bad:** Scans every task document in the database, O(total tasks)
-
+### Anti-Pattern 3: Fetching Parent Message on Every Render
+**What:** Call `messages.get(parentMessageId)` in message component render
+**Why bad:**
+- N+1 query problem for threaded conversations
+- Redundant queries for same parent
 **Instead:**
-```typescript
-// GOOD: Uses index, only scans relevant range
-const tasks = await ctx.db
-  .query("tasks")
-  .withIndex("by_project", q => q.eq("projectId", projectId))
-  .collect();
-```
+- Join parent data in `messages.list` query (batch fetch)
+- Use Convex's automatic query memoization
+- OR fetch parent only on-demand (expand thread UI)
 
-**Prevention:** Define index in schema first, then write query using `.withIndex()`
-
-**Source:** [Convex Best Practices](https://docs.convex.dev/understanding/best-practices/)
-
-### Anti-Pattern 2: Creating Redundant Indexes
-
-**What goes wrong:**
-```typescript
-// Redundant indexes
-.index("by_project", ["projectId"])
-.index("by_project_status", ["projectId", "status"])
-.index("by_project_assignee", ["projectId", "assigneeId"])
-```
-
+### Anti-Pattern 4: Cascading Deletes for Threaded Messages
+**What:** Delete all replies when parent message is deleted
 **Why bad:**
-- Every index increases write overhead
-- `by_project_status` can serve queries that only filter by `projectId`
-- Storage cost multiplies with index count
+- Loses conversation context
+- Violates user expectation (their reply still has value)
+- Increases mutation complexity
+**Instead:** Keep replies, show tombstone for deleted parent
 
-**Evaluation:**
-- `by_project` alone: Enables project-scoped queries, but must scan all tasks for status filtering
-- `by_project_status`: Enables Kanban column queries (critical performance), can also serve project-only queries
-- `by_project_assignee`: Enables "My Tasks in Project" queries
-
-**Decision:** Keep all three because:
-- `by_project_status` is NOT redundant - critical for Kanban performance
-- `by_project_assignee` serves distinct query pattern
-- Write overhead acceptable for task management (not high-frequency writes)
-
-**Rule:** Redundant indexes are `by_a` + `by_a_b` where you NEVER filter by `b` independently.
-
-### Anti-Pattern 3: Embedding Large or Unbounded Arrays
-
-**What goes wrong:**
-```typescript
-// BAD: Array can grow without limit
-tasks: {
-  dependentTaskIds: v.array(v.id("tasks")), // Could be 100s
-}
-```
-
+### Anti-Pattern 5: Storing Plaintext Mention List Separately
+**What:** Add `mentionedUserIds: v.array(v.id("users"))` field on messages
 **Why bad:**
-- Convex has 8192 item array limit
-- Cannot index array fields
-- Must scan all tasks to find "what depends on this task?"
+- Duplicates data (already in BlockNote JSON body)
+- Can drift out of sync with body
+- Extra storage cost
+**Instead:** Extract mentions on-demand from body via `extractMentionedUserIds`
 
-**Instead:** Use junction table (`taskDependencies`)
-
-**Prevention:** Use embedded arrays only for bounded collections (< 50 items, clear upper limit)
-
-### Anti-Pattern 4: N+1 Query Pattern
-
-**What goes wrong:**
-```typescript
-// BAD: Fetches user for each task individually
-const tasks = await ctx.db.query("tasks").collect();
-const tasksWithAssignees = await Promise.all(
-  tasks.map(async task => ({
-    ...task,
-    assignee: await ctx.db.get(task.assigneeId)
-  }))
-);
-```
-
-**Why bad:** O(N) database queries for N tasks
-
-**Instead:**
-```typescript
-// GOOD: Batch fetch all users at once
-const tasks = await ctx.db.query("tasks").collect();
-const assigneeIds = [...new Set(tasks.map(t => t.assigneeId).filter(Boolean))];
-const assignees = await getAll(ctx.db, assigneeIds);
-const assigneeMap = new Map(assignees.map((u, i) => [assigneeIds[i], u]));
-
-const tasksWithAssignees = tasks.map(task => ({
-  ...task,
-  assignee: task.assigneeId ? assigneeMap.get(task.assigneeId) : null
-}));
-```
-
-**Prevention:** Always batch fetch with `getAll()` when resolving multiple references
-
-**Source:** Pattern from `messages.ts` line 41-45
-
-### Anti-Pattern 5: Separate Task Status Table
-
-**What goes wrong:**
-```typescript
-// BAD: Status as separate entity
-taskStatuses: defineTable({
-  taskId: v.id("tasks"),
-  status: v.string(),
-})
-```
-
+### Anti-Pattern 6: Creating New Notification Action Per Feature
+**What:** Copy-paste push notification code for each notification type
 **Why bad:**
-- Every status query requires join
-- Status is 1:1 with task
-- No benefit over storing status in task document
+- Code duplication
+- Harder to change notification provider
+- Inconsistent VAPID setup
+**Instead:** Create shared notification helper, pass template parameters
 
-**Instead:** Status as field in task document
+## Integration Points
 
-**Prevention:** Use separate tables only for many-to-many or when entity has independent lifecycle
-
-## Build Order Recommendations
-
-### Phase Structure Based on Dependencies
-
-```
-Phase 1: Projects Foundation
-  ├─ Schema: projects, projectMembers
-  ├─ Functions: create, list, get, rename, remove
-  ├─ UI: Project list, project settings
-  └─ Rationale: Establishes container before tasks
-
-Phase 2: Basic Tasks
-  ├─ Schema: tasks (without dependencies/references)
-  ├─ Functions: create, list, update, remove
-  ├─ UI: Task list view
-  └─ Rationale: Core task CRUD before complex features
-
-Phase 3: Kanban View
-  ├─ Enhanced: Update task status & sortOrder
-  ├─ Functions: reorderTasks mutation
-  ├─ UI: Drag-and-drop Kanban board
-  └─ Rationale: Requires Phase 2 tasks, uses existing real-time
-
-Phase 4: Task References
-  ├─ Enhanced: Add references field to tasks
-  ├─ Functions: addReference, removeReference
-  ├─ UI: Reference picker, embedded previews
-  └─ Rationale: Builds on existing document/diagram queries
-
-Phase 5: Task Dependencies
-  ├─ Schema: taskDependencies
-  ├─ Functions: addDependency, removeDependency, getDependencyGraph
-  ├─ UI: Dependency visualization
-  └─ Rationale: Complex feature, requires core tasks stable
-
-Phase 6: Message → Task
-  ├─ Functions: createFromMessage
-  ├─ UI: Message action menu
-  └─ Rationale: Integration feature, requires Phases 2+4
-
-Phase 7: Project-Channel Links
-  ├─ Schema: projectChannels
-  ├─ Functions: linkChannel, unlinkChannel
-  ├─ UI: Channel selector in project settings
-  └─ Rationale: Nice-to-have integration
-```
-
-### Why This Order?
-
-**Dependency flow:**
-- Projects must exist before tasks (foreign key)
-- Tasks must exist before dependencies (task-to-task links)
-- Basic tasks needed before Kanban (status is just a field)
-- References require stable task model
-
-**Risk mitigation:**
-- Phase 1-2 establish foundation (highest risk if wrong)
-- Phase 3 adds value quickly (Kanban is core UX)
-- Phase 4-5 are enhancements (can be deferred if needed)
-- Phase 6-7 are integrations (lowest risk, highest complexity)
-
-**Real-time consideration:**
-- No special phases needed for real-time updates
-- Convex reactive queries handle updates automatically
-- Optimistic updates in UI layer (standard React pattern)
-
-### Data Migration Considerations
-
-**None required** - This is additive:
-- New tables don't affect existing data
-- No changes to existing schema
-- Indexes are created at schema deploy time
-
-**If modifying existing tables later:**
-- Convex schema migrations are automatic for additive changes
-- Breaking changes require migration functions
-- Pattern: Create migration mutation, run once, deploy new schema
-
-## Scalability Considerations
-
-### At 100 Tasks per Project
-
-**Approach:**
-- Standard indexed queries work perfectly
-- `.collect()` on task lists is fine
-- No special optimization needed
-
-**Bottlenecks:**
-- None expected
-
-### At 1,000 Tasks per Project
-
-**Approach:**
-- Consider pagination for task lists
-- Kanban view still works (filtered by status)
-- Dependency graph may need optimization
-
-**Optimizations:**
+### Integration Point 1: MessageComposer Schema
+**Current state:**
 ```typescript
-// Paginated task list
-export const listPaginated = query({
-  args: {
-    projectId: v.id("projects"),
-    paginationOpts: paginationOptsValidator
+const schema = BlockNoteSchema.create({
+  blockSpecs: { ...defaultBlockSpecs },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    taskMention: TaskMention,
+    projectReference: ProjectReference,
   },
-  handler: async (ctx, args) => {
-    return ctx.db
-      .query("tasks")
-      .withIndex("by_project", q => q.eq("projectId", args.projectId))
-      .order("desc")
-      .paginate(args.paginationOpts);
-  }
 });
 ```
 
-**Source:** Pattern from `messages.ts` pagination
+**Required change:**
+```typescript
+inlineContentSpecs: {
+  ...defaultInlineContentSpecs,
+  taskMention: TaskMention,
+  projectReference: ProjectReference,
+  userMention: UserMention, // ADD THIS
+},
+```
 
-### At 10,000+ Tasks per Project
+**Files affected:**
+- `src/pages/App/Chat/MessageComposer.tsx`
+- `src/pages/App/Chat/CustomInlineContent/UserMention.tsx` (NEW)
 
-**Approach:**
-- Mandatory pagination
-- Consider archiving completed tasks
-- Dependency graph queries need limits
-- May need task count caching
+### Integration Point 2: MessageRenderer Inline Content Types
+**Current state:** Handles `text`, `link`, `taskMention`, `projectReference`
 
-**Optimizations:**
-- Add `taskCount` to projects table (updated via trigger)
-- Implement archive mechanism (soft delete with `archived: true`)
-- Index: `by_project_archived_status` for filtering archived tasks
+**Required change:** Add case for `userMention` type
+```typescript
+function InlineRenderer({ content }: { content: InlineContent }) {
+  switch (content.type) {
+    case "text": return <StyledText ... />;
+    case "link": return <a ... />;
+    case "taskMention": return <TaskMentionChip ... />;
+    case "projectReference": return <ProjectReferenceChip ... />;
+    case "userMention": return <UserMentionChip userId={content.props.userId} />; // ADD
+    default: return null;
+  }
+}
+```
 
-**Real-world context:**
-- Most projects have < 1,000 tasks
-- Jira recommends archiving projects > 5,000 issues
-- This scale unlikely in typical workspace app
+**Files affected:**
+- `src/pages/App/Chat/MessageRenderer.tsx`
+- `src/pages/App/Chat/UserMentionChip.tsx` (NEW)
 
-## Open Questions & Research Needs
+### Integration Point 3: messages.send Mutation
+**Current state:**
+```typescript
+export const send = mutation({
+  handler: async (ctx, { body, channelId, plainText, isomorphicId }) => {
+    // Insert message
+    await ctx.db.insert("messages", { ... });
 
-### Question 1: Task Comments vs Message Threads
+    // Send channel push notification (existing)
+    await ctx.scheduler.runAfter(0, api.pushNotifications.sendPushNotification, { ... });
+  },
+});
+```
 
-**Context:** Should tasks have dedicated comment threads or link to channel messages?
+**Required change:**
+```typescript
+handler: async (ctx, { body, channelId, plainText, isomorphicId, parentMessageId }) => {
+  // Insert message (add parentMessageId)
+  await ctx.db.insert("messages", {
+    ...,
+    parentMessageId: parentMessageId ?? undefined
+  });
 
-**Options:**
-A. Separate `taskComments` table
-B. Link task to channel, comments are channel messages
-C. Both (comments + channel link)
+  // Send channel push notification (existing)
+  await ctx.scheduler.runAfter(0, api.pushNotifications.sendPushNotification, { ... });
 
-**Needs research in phase:** Task detail view (Phase 4-5)
+  // Send @mention notifications (NEW)
+  const mentionedUserIds = extractMentionedUserIds(body);
+  const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+  if (filteredMentions.length > 0) {
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.chatNotifications.notifyUserMentions, {
+      messageId: insertedMessageId,
+      mentionedUserIds: filteredMentions,
+      mentionedBy: { name: user?.name ?? "Someone", id: userId },
+      channelId,
+    });
+  }
+}
+```
 
-**Implications:**
-- Option A: Simpler, but duplicates message infrastructure
-- Option B: Reuses existing message code, but mixing contexts
-- Option C: Most flexible, but more complex UX
+**Files affected:**
+- `convex/messages.ts`
+- `convex/chatNotifications.ts` (NEW - internal action)
+- `convex/utils/blocknote.ts` (already exists, reuse `extractMentionedUserIds`)
 
-**Recommendation:** Defer to phase-specific research. Lean toward Option B (link to channel) to avoid code duplication.
+### Integration Point 4: Message Component
+**Current state:** Renders message body, context menu (edit/delete/create task)
 
-### Question 2: Task Templates
+**Required additions:**
+```typescript
+export function Message({ message, ... }: MessageProps) {
+  // ... existing code ...
 
-**Context:** Should projects support task templates (e.g., "Onboarding checklist")?
+  return (
+    <li>
+      <MessageRenderer blocks={blocks} />
 
-**Needs research in phase:** Project settings (post-MVP)
+      {/* NEW: Reply preview */}
+      {message.parentMessageId && (
+        <ReplyPreview parentMessageId={message.parentMessageId} />
+      )}
 
-**Implications:**
-- Requires template storage and instantiation logic
-- Affects task creation UX
-- May need separate `taskTemplates` table
+      {/* NEW: Reaction bar */}
+      <ReactionBar messageId={message._id} />
 
-**Recommendation:** Not in initial architecture. Add later if user research validates need.
+      {/* Existing context menu */}
+      <ContextMenu>
+        <ContextMenuItem onClick={handleEdit}>Edit</ContextMenuItem>
+        <ContextMenuItem onClick={handleDelete}>Delete</ContextMenuItem>
+        <ContextMenuItem onClick={handleCreateTask}>Create task</ContextMenuItem>
+        <ContextMenuItem onClick={handleReply}>Reply to message</ContextMenuItem> {/* NEW */}
+      </ContextMenu>
+    </li>
+  );
+}
+```
 
-### Question 3: Recurring Tasks
+**Files affected:**
+- `src/pages/App/Chat/Message.tsx`
+- `src/pages/App/Chat/ReactionBar.tsx` (NEW)
+- `src/pages/App/Chat/ReplyPreview.tsx` (NEW)
 
-**Context:** Should tasks support recurrence (e.g., "Weekly standup")?
+### Integration Point 5: Schema and Indexes
+**Current state:** `convex/schema.ts` has messages table
 
-**Needs research in phase:** Advanced task features (post-MVP)
+**Required changes:**
+```typescript
+messages: defineTable({
+  // ... existing fields ...
+  parentMessageId: v.optional(v.id("messages")), // ADD
+})
+  .index("by_channel", ["channelId"])
+  .index("undeleted_by_channel", ["channelId", "deleted"])
+  .index("by_parent_message", ["parentMessageId"]) // ADD
+  .searchIndex("by_text", { searchField: "plainText", filterFields: ["channelId"] }),
 
-**Implications:**
-- Requires cron-like scheduling in Convex
-- Affects task data model (recurrence rule)
-- May use Convex scheduled functions
+messageReactions: defineTable({ // NEW TABLE
+  messageId: v.id("messages"),
+  userId: v.id("users"),
+  emoji: v.string(),
+})
+  .index("by_message", ["messageId"])
+  .index("by_message_emoji", ["messageId", "emoji"])
+  .index("by_user", ["userId"])
+  .index("by_message_user", ["messageId", "userId"]),
+```
 
-**Recommendation:** Out of scope for initial architecture. Can be added later without schema changes (add optional `recurrence` field).
+**Files affected:**
+- `convex/schema.ts`
+
+## Component Dependency Graph
+
+```
+Phase 1: @User Mentions
+├─ UserMention inline content spec
+├─ UserMentionChip component
+├─ MessageComposer @ trigger
+├─ MessageRenderer userMention case
+├─ extractMentionedUserIds (reuse from tasks)
+├─ messages.send mention detection
+├─ chatNotifications.notifyUserMentions (internal action)
+└─ Push notification delivery
+
+Phase 2: Emoji Reactions
+├─ messageReactions table + indexes
+├─ messageReactions.toggle mutation
+├─ messageReactions.byMessage query
+├─ ReactionBar component
+├─ Reaction picker UI
+├─ Optimistic update logic
+└─ messages.list aggregation join (optional)
+
+Phase 3: Reply-to Threading
+├─ messages.parentMessageId field + index
+├─ messages.send parentMessageId parameter
+├─ messages.getWithParent query
+├─ ReplyPreview component
+├─ Message context menu "Reply" action
+├─ MessageComposer reply mode state
+└─ Deleted parent tombstone handling
+```
+
+**Build order rationale:**
+1. **Phase 1 (@mentions) first:** Reuses most existing patterns (inline content, mention extraction, push notifications)
+2. **Phase 2 (reactions) second:** New data model pattern but self-contained, no dependencies on mentions
+3. **Phase 3 (reply-to) last:** UI integration with phases 1-2 (reply + mention, reply + react)
 
 ## Sources
 
-### High Confidence (Official Documentation)
-
-- [Convex Relationship Structures](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas) - Schema design patterns
-- [Convex Database Relationship Helpers](https://stack.convex.dev/functional-relationships-helpers) - getManyVia and getAll patterns
-- [Convex Schemas Documentation](https://docs.convex.dev/database/schemas) - Schema definition and indexes
-- [Introduction to Indexes and Query Performance](https://docs.convex.dev/database/reading-data/indexes/indexes-and-query-perf) - Index optimization
-- [Convex Best Practices](https://docs.convex.dev/understanding/best-practices/) - Query patterns and anti-patterns
-- [Real-Time Database Guide](https://stack.convex.dev/real-time-database) - Real-time subscription architecture
-
-### Medium Confidence (Verified Patterns)
-
-- [Kanban Data Model Patterns](https://medium.com/@agrawalkanishk3004/kanban-board-ui-system-design-35665fbf85b5) - Kanban schema structure
-- [Task Dependencies in Project Management](https://activecollab.com/blog/project-management/task-dependencies-for-better-project-management) - Dependency types and patterns
-- [Entity Relationship Diagrams Guide](https://www.geeksforgeeks.org/sql/how-to-design-er-diagrams-for-project-management-software/) - Cross-entity relationships
-
-### Implementation Evidence (Existing Codebase)
-
-- `/convex/schema.ts` - Membership table pattern, roleCount pattern, compound indexes
-- `/convex/documents.ts` - Entity CRUD pattern, authorization pattern, getAll usage
-- `/convex/messages.ts` - Pagination pattern, batch fetching with getAll
-- `/convex/channelMembers.ts` - Junction table pattern, denormalized context IDs
-- `/convex/diagrams.ts` - Workspace-scoped entity pattern
-
----
-
-**Research confidence: HIGH** - Patterns directly derived from existing codebase and official Convex documentation. Cross-entity reference patterns verified through WebSearch and confirmed against existing code.
-
-**Ready for roadmap:** Yes. Schema design is comprehensive, build order is clear, and patterns follow established conventions.
+- [Slack Architecture - System Design](https://systemdesign.one/slack-architecture/)
+- [Slack Engineering: Rebuilding Emoji Picker in React](https://slack.engineering/rebuilding-slacks-emoji-picker-in-react/)
+- [Slack API: reactions.add method](https://docs.slack.dev/reference/methods/reactions.add/)
+- [Discord Message Reactions](https://discordjs.guide/popular-topics/reactions)
+- [Convex: Likes, Upvotes & Reactions](https://www.convex.dev/can-do/likes-and-reactions)
+- [Convex: Relationship Structures](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas)
+- [Convex: Optimistic Updates](https://docs.convex.dev/client/react/optimistic-updates)
+- [Convex: Real-Time Database Guide](https://stack.convex.dev/real-time-database)
+- [BlockNote: Custom Inline Content](https://www.blocknotejs.org/docs/custom-schemas/custom-inline-content)
+- [BlockNote: Mentions Menu](https://www.blocknotejs.org/examples/custom-schema/suggestion-menus-mentions)
+- [Slack: Message Threading](https://api.slack.com/docs/message-threading)
+- [Email Threading: In-Reply-To and References](https://cr.yp.to/immhf/thread.html)

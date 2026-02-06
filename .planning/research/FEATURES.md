@@ -1,298 +1,315 @@
-# Feature Landscape: Task Management Integration
+# Feature Research: Chat Enhancements
 
-**Domain:** Collaborative workspace with integrated task management
-**Researched:** 2026-02-05
-**Confidence:** HIGH (verified across Linear, Notion, Plane, MS Teams/Planner, Asana)
+**Domain:** Real-time collaborative chat messaging (Slack/Teams/Discord-style)
+**Researched:** 2026-02-07
+**Confidence:** HIGH
 
 ## Executive Summary
 
-Task management in collaborative workspaces has evolved from standalone project tools to deeply integrated systems where tasks are created from conversations, linked to documents, and managed alongside communication. Modern tools emphasize **progressive complexity**—starting simple but scaling to advanced features without overwhelming users.
+This research examines the expected behavior and implementation patterns for three chat features being added to Ripple v0.9: @user mentions, emoji reactions, and inline reply-to. The findings are based on established patterns from Slack, Microsoft Teams, Discord, and other modern chat platforms.
 
-**Key insight for MS Teams alternative:** Users expect task-chat bidirectionality (create tasks from messages, discuss tasks inline), real-time updates, and lightweight Kanban views. They do NOT expect Jira-level complexity or rigid sprint ceremonies.
+**Key insight:** These features are table stakes for professional collaboration tools in 2026. Users expect specific behaviors based on years of conditioning from Slack and Teams. The implementation must nail the fundamentals or users will perceive the product as incomplete.
 
----
+## Feature Landscape
 
-## Table Stakes
-
-Features users expect in ANY task system integrated with collaboration tools. Missing these = product feels incomplete.
+### Table Stakes (Users Expect These)
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Basic task CRUD** | Foundation of any task system | Low | Create, read, update, delete tasks with title + description |
-| **Task assignment** | Need to know who's responsible | Low | Single assignee per task (multi-assignee adds complexity) |
-| **Status workflow** | Track progress (todo → doing → done) | Low | 3-5 statuses max for v1; avoid custom workflows initially |
-| **Kanban board view** | Visual task organization by status | Medium | Drag-and-drop between columns; industry standard since 2020 |
-| **Create task from chat** | Capture action items during conversation | Medium | Right-click message → "Create task"; Linear/Slack pattern |
-| **Rich text descriptions** | Format task details, add structure | Low | Bold/italic/lists; users expect this post-2024 |
-| **@mentions in tasks** | Reference people in descriptions/comments | Low | Notify mentioned users; must work across task descriptions |
-| **Task comments/activity** | Discuss task context, log changes | Medium | Thread-based like chat; show status changes + manual comments |
-| **Due dates** | Time-bound accountability | Low | Optional per task; NO recurring tasks in v1 (complexity trap) |
-| **Task list view** | Alternative to Kanban for power users | Low | Sortable table with filters; some prefer lists to boards |
-| **Push notifications** | Alert on assignment, mentions, updates | Medium | Already have push infra; extend to tasks |
-| **Search tasks** | Find by title, assignee, status | Medium | Leverage existing full-text search; index task titles |
+| **@mentions - Autocomplete on typing @** | Universal pattern from all chat apps; users type @ and expect dropdown | MEDIUM | Must support keyboard navigation (up/down arrows, Enter) and mouse selection. Filter as they type. |
+| **@mentions - Styled chips in message** | Visual differentiation from plain text; users need to see who's mentioned at a glance | LOW | Existing UserBlock pattern from task descriptions can be reused. Rounded pill with avatar + name. |
+| **@mentions - Push notification to mentioned user** | Core value prop of @mentions; notification is why you mention someone | MEDIUM | Ripple already has push notifications infrastructure from v0.8. Need new trigger in message.send mutation. |
+| **@mentions - Works in message edits** | Users expect to add mentions when editing messages | MEDIUM | Diff-based detection (already implemented for task comments) prevents duplicate notifications. |
+| **@mentions - @channel / @here variants** | Professional tools expect mass-mention options; Slack has @channel (all members) and @here (active only) | MEDIUM | Optional for v1 but users will ask for it. Requires admin controls to prevent abuse in large channels. |
+| **Reactions - Click to add/remove** | One-click interaction; clicking your own reaction removes it (toggle behavior) | LOW | Standard pattern. Must highlight user's own reactions differently (e.g., darker background). |
+| **Reactions - Aggregated counter display** | Users expect to see how many people reacted with same emoji (e.g., 👍 3) | LOW | Group by emoji, count unique users. Display as pills below message. |
+| **Reactions - "Who reacted" tooltip** | Hovering reaction pill shows list of users who reacted | LOW | Enhances transparency. Common in Slack, Teams, Discord. |
+| **Reactions - Emoji picker** | Users can't type Unicode; need visual picker to browse and select emojis | MEDIUM | Skin tone variants add complexity but are expected (press-and-hold or right-click for variants). Many React libraries available. |
+| **Reactions - Multiple reactions per message** | Users expect to react with different emojis to same message (not just one) | LOW | No artificial limits. Slack allows unlimited reactions. |
+| **Reply-to - Quote preview in message** | Visual link to original message; users need context for what's being replied to | MEDIUM | Display truncated original message above reply (max 2-3 lines). Click preview to jump to original. |
+| **Reply-to - Jump to original message** | Clicking quote preview scrolls to and highlights original message | MEDIUM | Requires scroll-to logic and temporary highlight (e.g., yellow flash). |
+| **Reply-to - Handle deleted original** | Original message may be deleted after reply is sent | LOW | Display "[Message deleted]" placeholder in quote. WhatsApp 2025 update removes quote when original deleted for privacy. |
+| **Reply-to - Visual connector/thread line** | Subtle visual indicator linking reply to original (vertical line, indentation, icon) | LOW | Helps users scan and understand reply relationships at a glance. |
 
-### Why These Are Non-Negotiable
+### Differentiators (Competitive Advantage)
 
-According to [research on collaborative workspaces](https://reclaim.ai/blog/collaboration-platforms), these features emerged as baseline expectations by 2024. Tools lacking Kanban views or chat-to-task creation feel dated. [Best Kanban tools in 2026](https://www.flowlu.com/blog/task-management/best-kanban-apps/) shows even simple tools like Trello include all these features.
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Cross-feature mention integration** | @mention a user in chat AND in task descriptions/comments with unified notification preferences | LOW | Ripple already has @mentions in task comments. Unifying the experience (same chip design, same notification settings) creates cohesion that Teams/Slack lack. |
+| **Mention + Reply combined** | Reply to a message while @mentioning someone else to bring them into the conversation | LOW | Natural integration — reply-to provides context, mention provides targeting. Most chat apps support this but don't highlight it. |
+| **Reaction on reply-to message** | Users can react to a reply just like any message; no artificial limitations | LOW | Some chat apps treat replies as second-class. Treating them equally feels powerful. |
+| **Search includes mentioned messages** | Filter search results to "messages where I was mentioned" | MEDIUM | Leverages existing full-text search. Requires mentionedUserIds field on messages table. Powerful for catching up after time away. |
+| **Mention notification bundling** | If mentioned multiple times in short window, bundle into single notification: "3 new mentions in #design" | MEDIUM | Reduces notification fatigue. Slack does this poorly; opportunity to improve. Requires batching logic in push notification scheduler. |
+| **Smart mention suggestions** | Autocomplete prioritizes recent conversation participants, assignees of linked tasks | MEDIUM | Better than alphabetical. Context-aware. Requires logic to track recent participants + linked task assignees. |
+| **Emoji reaction quick-pick** | Hover over message shows 3-5 most common reactions for one-click add (👍 ❤️ 😄 🎉 👀) | MEDIUM | Slack has this; reduces friction vs opening full picker. Customize per workspace or use defaults. |
+| **Reply-to preserves rich content** | Quote preview shows task mentions, project chips, not just plain text | HIGH | Leverage BlockNote's existing rich content rendering. Most chat apps strip to plain text in quote. |
 
-**Complexity note:** Building these well requires ~60% of v1 effort. The remaining 40% is tempting "nice-to-haves" that should wait.
+### Anti-Features (Commonly Requested, Often Problematic)
 
----
-
-## Differentiators
-
-Features that set product apart from basic task tools. Not expected in v1, but valuable for competitive positioning.
-
-| Feature | Value Proposition | Complexity | Phase Recommendation |
-|---------|-------------------|------------|---------------------|
-| **Embed documents in tasks** | Link task to related docs/diagrams | Low | **v1 INCLUDE** — you have docs/diagrams already |
-| **Bi-directional task links** | Task references in chat show live status | High | v2 — needs real-time sync across systems |
-| **Project grouping** | Organize tasks under thematic containers | Medium | **v1 INCLUDE** — Plane model (projects contain tasks) |
-| **Task templates** | Reusable task structures for recurring work | Medium | v2 — wait for user patterns to emerge |
-| **Bulk task operations** | Select multiple, change status/assignee | Medium | v2 — nice DX but not MVP-critical |
-| **Task dependencies** | Block tasks until predecessors complete | High | v3 — Gantt chart territory; avoid early |
-| **Time tracking** | Log hours spent on tasks | Medium | v3 — different user persona (freelancers) |
-| **Custom fields** | Add metadata beyond core fields | High | v3 — slippery slope to Jira complexity |
-| **Automation rules** | "If status → then notify/assign" | High | v2 — [Plane automation](https://plane.so) shows this as differentiator but needs mature system |
-| **Sub-tasks** | Break complex work into smaller pieces | Medium | v2 — useful but can nest infinitely (trap) |
-| **Task chat (dedicated)** | Separate chat thread per task vs comments | Medium | v2 — [MS Teams 2026](https://m365admin.handsontek.net/retirement-several-microsoft-planner-features-early-2026-part-planner-update/) adding this, but comments sufficient for v1 |
-
-### Why Embed Documents/Diagrams Is v1-Critical
-
-Your app ALREADY has collaborative documents and Excalidraw diagrams. [Linear's model](https://linear.app) shows linking related work is a core workflow—engineers attach PRs, designers attach Figma files. For Ripple, attaching a Ripple doc to a task is **zero-cost differentiation** (just a relation field). This makes tasks more useful than standalone tools.
-
-### Why Avoid Custom Fields/Dependencies Early
-
-[Over-engineering pitfalls research](https://codecat15.medium.com/the-pitfalls-of-over-engineering-in-the-software-industry-adc8a97ee402) shows custom fields are the #1 complexity trap. Asana/Jira users complain about field sprawl. [MVP guidance](https://monday.com/blog/rnd/mvp-in-project-management/) emphasizes: 70% of MVP failures stem from building too many features. Start with hardcoded fields, let users ask for custom ones.
-
----
-
-## Anti-Features
-
-Features to explicitly NOT build for v1. Common mistakes in this domain.
-
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Sprint/cycle planning** | Adds Scrum ceremony overhead | Simple "project" grouping; no sprint start/end dates |
-| **Burndown charts** | Analytics before workflows are proven | Basic "X of Y tasks complete" progress bar |
-| **Multi-assignee tasks** | Diffuses accountability | Single assignee; use @mentions for collaborators |
-| **Custom workflows** | Users spend days configuring statuses | Fixed workflow: To Do → In Progress → Done (+ optional Review) |
-| **Recurring tasks** | Edge cases for scheduling logic | Manual task creation; wait for user requests |
-| **File uploads to tasks** | Redundant with document embeds | Embed existing docs/diagrams; no orphan files |
-| **Task priorities (P0-P4)** | Every task becomes "urgent" | Use due dates + project context instead |
-| **Gantt charts** | Over-planning, brittle timelines | Kanban board is flexible; Gantt implies false precision |
-| **Task voting/polls** | Premature consensus features | Use comments to discuss; decide via assignment |
-| **External task sharing** | Security complexity (guest access) | Tasks visible to workspace members only in v1 |
-
-### Why These Are Traps
-
-**Sprint planning:** [Asana vs Monday research](https://www.leiga.com/post/asana-vs-monday-com-2026-best-project-management-tool-for-scaling-teams) shows Monday's flexibility beats Asana's rigid sprint model. Teams want lightweight task tracking, not Scrum ceremonies.
-
-**Custom workflows:** [MS Teams Planner 2026 updates](https://sourcepassmcoe.com/articles/microsoft-planner-2026-new-and-retiring-features-sourcepass-mcoe) show Microsoft is ADDING simplicity, not complexity. They're focusing on task chat and templates, not workflow customization.
-
-**File uploads:** You already have documents and diagrams. Allowing arbitrary file uploads creates "where did I put that?" confusion. [Document management best practices](https://thedigitalprojectmanager.com/project-management/document-management-best-practices/) emphasize centralized storage, not scattered attachments.
-
-**Priorities:** In practice, everything becomes P0. [Linear's approach](https://linear.app/docs) uses implicit prioritization via ordering + due dates rather than explicit priority fields.
-
----
+| Anti-Feature | Why Requested | Why Problematic | Alternative |
+|--------------|---------------|-----------------|-------------|
+| **Threaded replies (nested conversations)** | Users from Slack expect threads; seems organized | Creates split attention — main channel vs thread. Messages get lost. Google Chat abandoned two threading models for inline-only in 2023. | **Inline reply-to** (already chosen): Replies stay in main flow with quote preview. Better for keeping everyone in sync. |
+| **Limited reaction set** | Easier to implement; less UI complexity | Feels restrictive. Users want expressiveness. Teams tried this, users complained. | **Full emoji picker** (already chosen): Modern chat apps (Slack, Discord) allow any emoji. Use well-designed picker (emoji-picker-react). |
+| **Reaction removal by others** | Moderation feature; remove inappropriate reactions | Opens abuse vector — deleting others' reactions creates conflict. | Only user who reacted can remove their own reaction. Message author can delete entire message (which removes all reactions). |
+| **Nested reply depth limits** | Prevent infinite nesting | With inline replies, not needed — no nesting, just quote references. | N/A — inline model avoids this problem entirely. |
+| **Disable mentions per user** | Privacy concern — don't want to be @mentioned | Breaks core collaboration feature. If you don't want mentions, leave channel. | Notification preferences — mute specific channels, but mentions still work for those who need to find you. |
+| **Auto-emoji from text** | Slack converts :smile: to 😄 automatically | Cognitive overhead — users forget syntax, typos create confusion. Modern emoji pickers with search ("smile" → 😄) are better UX. | Emoji picker with search. Reserve : syntax for deliberate emoji codes if users want it. |
+| **Mention everyone with no restrictions** | "I should be able to notify everyone in my workspace" | Abuse in large channels. Slack requires confirmation for @channel when 6+ members. Teams requires admin permission. | Workspace admins can configure who can use @channel/@here. Require confirmation dialog for channels with 10+ members. |
+| **Reactions count as unread** | "I want to know someone reacted to my message" | Notification fatigue. Reactions are lightweight, not worth interrupting. | Reactions visible on message; don't increment unread count. Optionally: notification only for first reaction on your message. |
 
 ## Feature Dependencies
 
-Understanding build order based on technical dependencies:
+### Dependency Graph
 
 ```
-Core Task Model (table)
-  ↓
-Task Assignment (single user)
-  ↓
-Task Status (enum: todo/in_progress/done)
-  ↓
-┌─────────────────┴───────────────┐
-│                                 │
-Kanban Board View         Task List View
-  ↓                                ↓
-Create from Chat          Rich Text Descriptions
-  ↓                                ↓
-Comments/Activity         @Mentions (reuse existing)
-  ↓                                ↓
-Push Notifications        Document Embeds
-  ↓                                ↓
-Project Grouping          Search (leverage existing index)
+Chat message infrastructure (existing) ✓
+├── @user mentions
+│   ├── Autocomplete component
+│   │   └── Keyboard navigation
+│   ├── UserMention inline content (reuse from tasks) ✓
+│   ├── mentionedUserIds field on messages
+│   └── Push notification trigger (modify existing) ✓
+│
+├── Emoji reactions
+│   ├── reactions table (new)
+│   │   ├── messageId (foreign key)
+│   │   ├── userId (foreign key)
+│   │   └── emoji (string)
+│   ├── Emoji picker component
+│   │   ├── Skin tone variants
+│   │   └── Search/categories
+│   ├── Reaction aggregation query
+│   └── Reaction toggle mutation (add/remove)
+│
+└── Inline reply-to
+    ├── replyToMessageId field on messages
+    ├── Quote preview component
+    │   ├── Render rich content (BlockNote) ✓
+    │   └── Truncation logic
+    ├── Jump-to-message scroll logic
+    └── Deleted message handling
 ```
 
-**Critical path:** Core model → Assignment/Status → Kanban view → Create from chat
-**Parallel tracks:** List view, rich text, mentions, notifications can develop independently
+### Cross-Feature Interactions
 
----
+| Scenario | Expected Behavior | Implementation Notes |
+|----------|-------------------|---------------------|
+| **React to a reply** | Works normally — reactions apply to reply message, not original | No special handling. Reply is a message like any other. |
+| **Mention in a reply** | Quote shows original, mention notifies user, both work independently | Quote is structural (replyToMessageId). Mentions are content (mentionedUserIds). Orthogonal features. |
+| **Reply to message with reactions** | Reactions stay on original; reply has separate reaction set | Each message has its own reactions. No inheritance. |
+| **Delete original message that has replies** | Replies persist; quote preview shows "[Message deleted]" | Similar to how Slack handles it. Don't cascade delete. |
+| **Edit message to add mention** | Diff-based detection (existing pattern from task comments) prevents duplicate notifications for existing mentions, sends for new mentions | Reuse diff algorithm from task mutation. |
+| **Search for mentioned messages** | Full-text search can filter by mentionedUserIds field | Extend existing search query with optional userId filter. |
+| **Notification for mention in reply** | Mentioned user gets notification even if they weren't in original conversation | Mentions are explicit; don't suppress notifications based on reply context. |
+| **Reaction emoji is same as mentioned user's avatar** | No conflict — reactions and mentions are separate UI elements | Unlikely edge case; no special handling needed. |
 
-## MVP Recommendation (v1 Scope)
+## MVP Definition
 
-Based on [Linear's approach](https://everhour.com/blog/linear-task-management/) to focus and [Plane's simplicity](https://plane.so/blog/top-6-open-source-project-management-software-in-2026), prioritize these for MVP:
+### Launch With (v0.9)
 
-### Must-Have (Core Experience)
-1. **Task CRUD** — Basic create/edit/delete with title + description
-2. **Single assignee** — Who's responsible
-3. **3-state workflow** — To Do → In Progress → Done
-4. **Kanban board** — Visual drag-and-drop by status
-5. **Create from chat** — Right-click message → "Create task"
-6. **Project grouping** — Tasks belong to projects within workspace
-7. **Rich text descriptions** — Use existing BlockNote editor
-8. **Task comments** — Reuse chat message UI
-9. **@mentions** — Notify users when mentioned in tasks
-10. **Push notifications** — Assignment + mention alerts
-11. **Embed docs/diagrams** — Link to existing workspace content
+**Must have for launch:**
+1. **@mentions - Core flow**
+   - Type @ to trigger autocomplete dropdown
+   - Autocomplete filters workspace members by name
+   - Keyboard navigation (up/down, Enter to select, Esc to close)
+   - Insert UserMention inline content (reuse existing UserBlock from tasks)
+   - Save mentionedUserIds on message
+   - Push notification to mentioned users
 
-### Nice-to-Have (Enhance Polish)
-- Task list view (alternative to Kanban)
-- Due dates (optional per task)
-- Task search (index by title)
-- Activity log (track status changes)
+2. **Emoji reactions - Core flow**
+   - Click emoji button on message hover → opens emoji picker
+   - Click emoji in picker → adds reaction to message
+   - Click existing reaction pill → toggles reaction on/off
+   - Display reaction pills below message with counter (👍 3)
+   - Hover reaction pill → tooltip shows who reacted
 
-### Defer to Post-MVP
-- Sub-tasks (nesting complexity)
-- Task templates (wait for patterns)
-- Bulk operations (power user feature)
-- Automation rules (needs mature system)
-- Custom fields (complexity trap)
-- Dependencies (Gantt chart territory)
+3. **Inline reply-to - Core flow**
+   - Click reply button on message → activates reply mode in composer
+   - Quote preview shows in composer (original message truncated to 2 lines)
+   - Submit reply → saves replyToMessageId, displays quote preview above reply in chat
+   - Click quote preview → jumps to original message with highlight
 
-**Rationale:** This MVP delivers the [Linear-Slack integration pattern](https://linear.app/integrations/slack) that users expect (chat → task → board) while leveraging Ripple's existing document/diagram assets as a differentiator. Total scope: ~8-10 weeks for a team of 2-3.
+**Can defer:**
+- @channel / @here mentions (high value but adds admin controls complexity)
+- Emoji skin tone variants (use default skin tone only for v1)
+- Emoji quick-pick hover (show picker only, skip shortcuts)
+- Smart mention suggestions (use alphabetical for v1)
+- Mention notification bundling (send individual notifications)
+- Search filter by mentions (basic search works)
 
----
+### Add After Validation (v1.1)
 
-## Integration Patterns (How Features Work Together)
+**After users validate core features:**
+1. @channel / @here mentions with admin controls
+2. Emoji skin tone variant picker
+3. Emoji quick-pick on hover (👍 ❤️ 😄 shortcut bar)
+4. Search filter: "messages where I was mentioned"
+5. Smart autocomplete: prioritize recent participants, assignees
 
-Based on [Linear-Slack integration research](https://clearfeed.ai/blogs/linear-slack-integration-to-enhance-collaboration) and [Notion task integration](https://everhour.com/blog/notion-integrations/):
+### Future Consideration (v2+)
 
-### Pattern 1: Chat-to-Task Flow
+**Strategic features, not urgent:**
+1. Mention notification bundling ("3 new mentions in #design")
+2. Custom emoji upload (Slack-style workspace-specific emojis)
+3. Reaction notifications (optional: notify when first person reacts to your message)
+4. Animated emoji reactions (Google Meet-style floating emojis)
+5. @mention suggestions in reply context (automatically suggest original message author)
+6. Rich quote previews with embedded diagrams/tasks
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Engineering Effort | Risk | Priority | Launch |
+|---------|------------|-------------------|------|----------|--------|
+| @mentions autocomplete | Critical | Medium | Low | P0 | v0.9 |
+| @mentions push notifications | Critical | Low | Low | P0 | v0.9 |
+| Emoji reaction add/remove | Critical | Medium | Low | P0 | v0.9 |
+| Emoji picker | Critical | Medium | Low | P0 | v0.9 |
+| Reply-to with quote preview | Critical | Medium | Medium | P0 | v0.9 |
+| Jump to original message | High | Medium | Low | P0 | v0.9 |
+| Who reacted tooltip | High | Low | Low | P0 | v0.9 |
+| @channel / @here | High | Medium | Medium | P1 | v1.1 |
+| Emoji skin tones | Medium | Low | Low | P1 | v1.1 |
+| Smart autocomplete | Medium | Medium | Low | P1 | v1.1 |
+| Search by mentions | Medium | Low | Low | P1 | v1.1 |
+| Emoji quick-pick | Medium | Medium | Low | P2 | v1.1 |
+| Mention bundling | Low | High | Medium | P2 | v2+ |
+| Custom emoji upload | Low | High | Medium | P3 | v2+ |
+
+### Prioritization Rationale
+
+**P0 (v0.9):** Table stakes features. Without these, the feature set feels incomplete and users will compare unfavorably to Slack.
+
+**P1 (v1.1):** Differentiators and quality-of-life improvements. Validate core features first, then add these to polish the experience.
+
+**P2-P3 (v2+):** Nice-to-have features that require disproportionate engineering effort or introduce complexity. Wait for user requests.
+
+## Competitor Feature Analysis
+
+| Feature | Slack | Microsoft Teams | Discord | WhatsApp | Google Chat | Ripple v0.9 Target |
+|---------|-------|-----------------|---------|----------|-------------|-------------------|
+| **@user mentions** | ✓ Full | ✓ Full | ✓ Full | ✓ Full | ✓ Full | ✓ Full |
+| **Mention autocomplete** | ✓ Smart (recent) | ✓ Basic (alpha) | ✓ Basic (alpha) | ✓ Basic | ✓ Basic | ✓ Basic (smart in v1.1) |
+| **@channel / @here** | ✓ Both | ✓ @channel only | ✓ @everyone | ✗ | ✓ @all | Defer to v1.1 |
+| **Mention notifications** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Emoji reactions** | ✓ Unlimited | ✓ Limited set | ✓ Unlimited | ✓ 6 predefined | ✓ Unlimited | ✓ Unlimited |
+| **Emoji picker** | ✓ Full | ✓ Full | ✓ Full | ✗ | ✓ Full | ✓ Full |
+| **Skin tone variants** | ✓ | ✓ | ✓ | ✓ | ✓ | Defer to v1.1 |
+| **Reaction counter** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Who reacted tooltip** | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Emoji quick-pick** | ✓ (3 emojis) | ✗ | ✗ | ✗ | ✗ | Defer to v1.1 |
+| **Reply-to inline** | ✗ (threads) | ✗ (threads) | ✗ (threads) | ✓ | ✓ (switched 2023) | ✓ |
+| **Reply-to threaded** | ✓ | ✓ | ✓ | ✗ | ✗ (deprecated) | ✗ (by design) |
+| **Quote preview** | N/A | N/A | N/A | ✓ | ✓ | ✓ |
+| **Jump to original** | ✓ (in thread) | ✓ (in thread) | ✓ (in thread) | ✓ | ✓ | ✓ |
+| **Custom emoji** | ✓ | ✗ | ✓ | ✗ | ✗ | v2+ |
+
+### Key Takeaways
+
+1. **Mentions are universal** — Every platform has @user mentions with autocomplete. This is non-negotiable table stakes.
+
+2. **Reactions split: unlimited vs limited** — Slack and Discord allow any emoji. Teams restricts to predefined set (changed in 2024 to expand to 800+ but still curated). Users prefer unlimited. Ripple should match Slack.
+
+3. **Reply models diverging** — Traditional platforms (Slack, Teams, Discord) use threaded replies. Modern platforms (WhatsApp, Google Chat post-2023) use inline replies. Google explicitly deprecated threading because it was confusing. Ripple's inline choice aligns with modern direction.
+
+4. **Skin tones are expected** — All platforms support skin tone variants in 2026. Can defer to v1.1 but users will notice absence.
+
+5. **@channel abuse is real** — Slack requires confirmation for 6+ members. Teams requires admin permission. This should be planned for v1.1.
+
+## Accessibility Considerations
+
+| Feature | Accessibility Requirement | Implementation |
+|---------|---------------------------|----------------|
+| **Mention autocomplete** | Keyboard navigation (arrow keys, Enter, Esc) | ARIA combobox pattern. Announce "X results" with screen reader. |
+| **Mention chips** | Screen reader should announce "@John Doe mentioned" | Use `role="link"` or semantic markup with aria-label. |
+| **Emoji picker** | Keyboard navigation, search by name | Use emoji-picker-react which has built-in keyboard support. |
+| **Reaction pills** | Screen reader announces "3 people reacted with thumbs up, you reacted" | Proper ARIA labels on buttons. |
+| **Reply quote preview** | Screen reader announces "Replying to [author]: [quote text]" | Semantic HTML with aria-describedby linking reply to quoted message. |
+| **Jump to message** | Keyboard shortcut to jump (e.g., Cmd+J in Slack) | Optional for v1. Screen reader announces "Jumped to message from [author] at [time]". |
+
+**Note:** Slack is the gold standard for chat accessibility. Reference Slack accessibility documentation for keyboard patterns.
+
+## Technical Implementation Notes
+
+### Schema Changes Required
+
+```typescript
+// messages table — ADD these fields
+messages: defineTable({
+  // ... existing fields ...
+  mentionedUserIds: v.optional(v.array(v.string())), // User IDs mentioned in message
+  replyToMessageId: v.optional(v.id("messages")), // Message being replied to
+})
+.index("by_channel", ["channelId"])
+.index("by_mentioned_user", ["mentionedUserIds"]) // NEW: for search by mentions
+
+// reactions table — NEW
+reactions: defineTable({
+  messageId: v.id("messages"),
+  userId: v.id("users"),
+  emoji: v.string(), // Unicode emoji string
+})
+.index("by_message", ["messageId"])
+.index("by_message_user", ["messageId", "userId"])
+.index("by_user", ["userId"])
 ```
-User sees actionable message in chat
-  ↓
-Right-click message → "Create task"
-  ↓
-Modal pre-fills task title with message text
-  ↓
-User assigns to person, adds to project
-  ↓
-Task appears in Kanban board
-  ↓
-Chat message shows "Task created: [link]"
-```
 
-### Pattern 2: Task-to-Document Flow
-```
-User creates task with vague description
-  ↓
-Clicks "Attach document" in task
-  ↓
-Selects existing doc or creates new one
-  ↓
-Document appears as card in task sidebar
-  ↓
-Clicking document opens it in editor
-```
+### Reuse Existing Patterns
 
-### Pattern 3: Notification Flow
-```
-User assigns task to teammate
-  ↓
-Convex mutation triggers notification
-  ↓
-Push notification sent (iOS/Android/web)
-  ↓
-Notification opens task detail view
-  ↓
-User updates status or comments
-```
+| Existing Pattern | Reuse For |
+|------------------|-----------|
+| **UserBlock inline content (task descriptions)** | @mention chips in chat messages |
+| **taskCommentSchema with UserMention** | Chat message schema needs same UserMention inline content |
+| **Diff-based mention detection (task mutations)** | Chat message edits — prevent duplicate notifications |
+| **Push notifications infrastructure** | Mention notifications (already triggers on new message, extend for mentions) |
+| **BlockNote rich content rendering** | Quote preview rendering in reply-to |
+| **Full-text search on messages** | Extend with mentionedUserIds filter for "messages where I was mentioned" |
 
----
+### Performance Considerations
 
-## Competitive Positioning (MS Teams Alternative)
+| Feature | Scaling Concern | Mitigation |
+|---------|----------------|------------|
+| **Autocomplete query** | Workspace with 10,000+ users | Limit results to 20, prioritize recent participants (v1.1), debounce input 200ms |
+| **Reaction aggregation** | Message with 500+ reactions (viral message) | Index by_message, batch fetch users, use aggregation query pattern |
+| **Jump to message** | Scrolling to message from 6 months ago | Use virtualized list (existing MessageList already uses pagination), fetch context around target message |
+| **Emoji picker mount** | Mounting picker for every message input | Mount once globally, position near click target. Pattern from emoji-picker-react docs. |
 
-For teams switching from Microsoft Teams/Planner to Ripple:
+## Edge Cases & Error Handling
 
-| Feature Category | Teams/Planner (2026) | Ripple v1 Target | Competitive Advantage |
-|------------------|----------------------|------------------|----------------------|
-| **Chat integration** | Separate Planner tab | Native create-from-chat | Tighter workflow |
-| **Task views** | Kanban + Timeline | Kanban + List | Simpler, less overwhelming |
-| **Notifications** | Email-heavy | Push-first | Modern, real-time |
-| **Document linking** | SharePoint only | Ripple docs + diagrams | All-in-one workspace |
-| **Customization** | Custom templates (2026) | Fixed simple workflow | Faster setup |
-| **Complexity** | Feature-heavy | Opinionated simplicity | Lower learning curve |
+| Edge Case | Expected Behavior |
+|-----------|-------------------|
+| **User deletes account, was mentioned** | Mention chip shows "[Deleted user]" placeholder (same as existing UserBlock pattern) |
+| **Reply to deleted message** | Quote preview shows "[Message deleted]" in gray (no author/content) |
+| **Mention user not in channel** | Autocomplete shows all workspace members; mentioned user sees notification but can't view message until invited to channel (same as Slack) |
+| **React with same emoji twice** | Second click removes reaction (toggle behavior) |
+| **Multiple users react with same emoji** | Counter increments, tooltip lists all users ("Alice, Bob, +3 more") |
+| **Edit message to remove mention** | Diff algorithm detects removal, no notification sent, no un-notification (can't un-notify) |
+| **Message with 50+ reactions** | Show top 5-10 reaction types, "+ X more" button to expand full list (copy Slack pattern) |
+| **Autocomplete with no matching users** | Show "No users found" empty state |
+| **Reply to own message** | Allowed — useful for adding context or corrections |
+| **Circular replies (A replies to B, B replies to A)** | Allowed — quote preview breaks visual cycle |
 
-**Key differentiator:** [MS Teams is adding complexity](https://sourcepassmcoe.com/articles/microsoft-planner-2026-new-and-retiring-features-sourcepass-mcoe) (task chat, custom templates, Copilot agent). Ripple competes by being **focused and integrated**, not feature-rich.
+## Sources
 
----
+Research findings based on the following sources:
 
-## User Personas and Feature Priorities
-
-Different user types value different features:
-
-| Persona | Top 3 Priorities | Can Defer |
-|---------|-----------------|-----------|
-| **Project Manager** | Projects, Kanban view, assignments | Time tracking, Gantt charts |
-| **IC Contributor** | Create from chat, notifications, comments | Bulk operations, custom fields |
-| **Team Lead** | Project overview, status visibility, task search | Automation, dependencies |
-| **Designer/Creative** | Document embeds, rich descriptions, comments | Sprint planning, analytics |
-
-**For v1:** Optimize for IC contributors and designers. They're 70% of users and need lightweight task capture, not PM complexity.
-
----
-
-## Research Confidence & Sources
-
-| Feature Category | Confidence | Verification |
-|-----------------|------------|--------------|
-| Table stakes | HIGH | Verified across Linear, Plane, Notion, Asana |
-| Differentiators | MEDIUM | Based on competitive analysis; need user validation |
-| Anti-features | HIGH | Supported by over-engineering research + MVP best practices |
-| Integration patterns | HIGH | Linear-Slack integration widely documented |
-
-### Primary Sources
-
-**Task Management Systems:**
-- [Linear Task Management 2026](https://everhour.com/blog/linear-task-management/)
-- [Plane Open Source Project Management](https://plane.so)
-- [Notion Task Management Integration](https://everhour.com/blog/notion-integrations/)
-- [MS Teams Planner 2026 Updates](https://sourcepassmcoe.com/articles/microsoft-planner-2026-new-and-retiring-features-sourcepass-mcoe)
-
-**Integration Patterns:**
-- [Linear Slack Integration](https://linear.app/integrations/slack)
-- [Chat-to-Task Creation Patterns](https://clearfeed.ai/blogs/linear-slack-integration-to-enhance-collaboration)
-- [Task Chat Features](https://supersimple365.com/rich-text-and-images-in-planner-task-notes/)
-
-**Best Practices:**
-- [Kanban Tool Features 2026](https://www.flowlu.com/blog/task-management/best-kanban-apps/)
-- [Over-Engineering Pitfalls](https://codecat15.medium.com/the-pitfalls-of-over-engineering-in-the-software-industry-adc8a97ee402)
-- [MVP Best Practices](https://monday.com/blog/rnd/mvp-in-project-management/)
-
-**Competitive Analysis:**
-- [Asana vs Monday 2026](https://www.leiga.com/post/asana-vs-monday-com-2026-best-project-management-tool-for-scaling-teams)
-- [Collaboration Platform Comparison](https://reclaim.ai/blog/collaboration-platforms)
-
----
-
-## Open Questions for User Research
-
-Research clarified feature landscape but left questions needing user validation:
-
-1. **Task privacy:** Should tasks inherit channel privacy (public/private) or be workspace-wide by default?
-2. **Multi-project tasks:** Can one task belong to multiple projects, or strict 1:1?
-3. **Comment vs chat:** Use existing chat message component for task comments, or separate UI?
-4. **Board scope:** One Kanban board per project, or workspace-level board with project filters?
-5. **Completed task visibility:** Archive completed tasks after N days, or keep visible indefinitely?
-
-These questions don't block v1 but should be answered during design phase.
-
----
-
-## Next Steps
-
-1. **Design phase:** Wireframe Kanban board + task detail views
-2. **Schema design:** Add `projects` and `tasks` tables to Convex schema
-3. **Prototype:** Build basic task CRUD + Kanban board (no chat integration)
-4. **Validate:** User testing with 3-5 target users (ICs who use Linear/Notion)
-5. **Iterate:** Add chat-to-task creation once core UX is proven
-6. **Launch:** Deploy with 11 MVP features, gather feedback for v2 prioritization
-
-**Estimated timeline:** 8-10 weeks from design kickoff to v1 launch (team of 2-3 developers).
+- [Slack Notifications Setup Guide 2026](https://blog.buddieshr.com/slack-notifications-setup-guide/)
+- [Use mentions in Slack](https://slack.com/help/articles/205240127-Use-mentions-in-Slack)
+- [Use emoji and reactions | Slack](https://slack.com/help/articles/202931348-Use-emoji-and-reactions)
+- [Slack emojis: How Emojis Can Boost Team Collaboration](https://blog.attendancebot.com/blog/slack-emojis-reacjis/)
+- [Google Workspace Updates: In-line threaded Google Chat (2023)](https://workspaceupdates.googleblog.com/2023/02/new-google-chat-spaces-will-be-in-line-threaded.html)
+- [WhatsApp privacy tweak: deleted messages removed from quoted replies](https://www.idownloadblog.com/2025/06/02/meta-privacy-update-whatsapp-deleted-messages-quoted-replies/)
+- [Google Chat will now show when someone deletes a message](https://www.androidpolice.com/google-chat-will-now-show-you-when-someone-deletes-a-message/)
+- [Chat UX Best Practices: From Onboarding to Re-Engagement](https://getstream.io/blog/chat-ux/)
+- [Accessible Autocomplete](https://haltersweb.github.io/Accessibility/autocomplete.html)
+- [Building an Emoji Picker with React (2026)](https://jafmah97.medium.com/building-an-emoji-picker-with-react-66f612a43d67)
+- [Emoji Picker - React Chat Messaging Docs](https://getstream.io/chat/docs/sdk/react/guides/customization/emoji_picker/)
+- [Microsoft Teams new skin tone settings](https://techcommunity.microsoft.com/blog/microsoft365insiderblog/new-skin-tone-settings-in-microsoft-teams/4261358)
+- [Notify a channel or workspace | Slack](https://slack.com/help/articles/202009646-Notify-a-channel-or-workspace)
+- [Manage who can notify a channel or workspace | Slack](https://slack.com/help/articles/115004855143-Manage-who-can-notify-a-channel-or-workspace)
+- [Replies and Threaded Discussions | Pronto](https://support.pronto.io/en/articles/5177869-replies-and-threaded-discussions)
+- [Telegram Replies 2.0: Quote specific parts](https://telegram.org/blog/reply-revolution)
+- [Message Reactions | Ably Chat](https://ably.com/docs/chat/rooms/message-reactions)
+- [Manage Google Chat notifications](https://support.google.com/chat/answer/7655718?hl=en&co=GENIE.Platform%3DDesktop)
+- [Manage Microsoft Teams Notifications (2026)](https://www.socialintents.com/blog/how-to-manage-microsoft-teams-notifications/)
+- [Designing better nested comments](https://justintadlock.com/archives/2016/11/16/designing-better-nested-comments)
+- [16 Chat UI Design Patterns That Work in 2025](https://bricxlabs.com/blogs/message-screen-ui-deisgn)

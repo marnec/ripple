@@ -1,576 +1,298 @@
-# Domain Pitfalls: Task Management Integration
+# Pitfalls Research: Chat @Mentions, Emoji Reactions, Reply-To
 
-**Domain:** Collaborative task management in real-time workspace applications
-**Researched:** 2026-02-05
-**Confidence:** HIGH (research verified with multiple authoritative sources)
+**Domain:** Adding @user mentions, emoji reactions, and inline reply-to to existing real-time chat application
+**Researched:** 2026-02-07
+**Confidence:** HIGH
+
+## Executive Summary
+
+This research identifies critical pitfalls when adding @mentions, emoji reactions, and inline reply-to to Ripple's existing Convex-powered real-time chat system. The system already has proven patterns for @mentions (task comments Phase 6.1), push notifications (task assignments), and BlockNote rich text (task descriptions). The primary risks center on **race conditions in reaction toggling**, **notification spam from @everyone abuse**, **performance degradation with embedded reactions**, and **stale reply-to previews when parent messages are deleted**.
+
+Unlike implementing these features from scratch, the integration challenge is avoiding conflicts with existing optimistic updates, preventing schema bloat when messages already store BlockNote JSON, and ensuring consistency between chat mentions and task comment mentions. Convex's reactive subscriptions amplify race conditions—two users clicking the same reaction emoji simultaneously can result in duplicate reaction documents without proper deduplication.
+
+**Critical insight:** Chat @mentions differ fundamentally from task comment @mentions. Task comments notify project members (bounded set), but chat channels can have hundreds of workspace members. An @everyone mention in a busy channel becomes a notification DOS attack. Prevention requires rate limiting and permission controls BEFORE building the feature, not as an afterthought.
 
 ## Critical Pitfalls
 
-Mistakes that cause rewrites or major issues.
-
-### Pitfall 1: Drag-and-Drop Performance Collapse at Scale
-**What goes wrong:** Drag-and-drop becomes unusable (multi-second delays) when boards have 100+ tasks. The problem compounds with real-time updates - every state change triggers re-renders across all drop targets.
+### Pitfall 1: Reaction Race Condition Without Deduplication
+**What goes wrong:** Two users click the same emoji reaction simultaneously. Convex processes both mutations in parallel, each checks "does this user's reaction exist?" (answer: no for both), and both insert a reaction document. Result: User has two identical reactions, one visible in UI, one orphaned in database. When user tries to un-react, only one gets deleted, leaving the orphaned reaction forever.
 
 **Why it happens:**
-- Drag events fire dozens of times per second, each triggering state updates and re-renders
-- With 1000+ DropTargets, the `collect` function is called on ALL targets frequently
-- React's reconciliation algorithm struggles with large lists during drag operations
-- Real-time subscription updates conflict with optimistic drag updates, causing visual "snapping back"
+- Convex mutations run in parallel when invoked simultaneously from different clients
+- "Check then insert" pattern creates race window between the check and insert operations
+- Optimistic UI updates don't prevent server-side races (client shows correct state, server has duplicate data)
+- Reactive queries hide the duplicate from UI (UI deduplicates by userId+emoji in map), making the bug invisible until database inspection
 
-**Consequences:**
-- User frustration and abandonment of task boards
-- Support complaints about "slow/broken drag and drop"
-- Expensive late-stage refactoring to switch libraries or virtualization
+**How to avoid:**
+- Use Convex **unique indexes** on `reactions` table: `.index("by_message_user_emoji_unique", ["messageId", "userId", "emoji"]).unique()` (planned Convex feature—currently not available, use query-before-mutate with awareness of race)
+- NEVER use separate check + insert mutations—consolidate into single `toggleReaction` mutation
+- Query + conditional insert pattern: `const existing = await ctx.db.query(...).first(); if (existing) { await ctx.db.delete(existing._id); } else { await ctx.db.insert(...); }`
+- Accept that simultaneous clicks may result in non-deterministic final state (both users click within 100ms, one wins), but prevent data corruption
+- Use `isomorphicId` pattern (like messages table) for client-generated unique keys, but problematic for reactions because "toggle" semantics mean same action should delete, not create duplicate
 
-**Prevention:**
-1. **Choose the right library from day one:**
-   - **Avoid:** react-beautiful-dnd (deprecated, poor performance at scale)
-   - **Consider:** pragmatic-drag-and-drop (Atlassian's official evolution, better performance, smaller bundle)
-   - **Consider:** dnd-kit (modern, supports virtualization, fine-grained control)
+**Warning signs:**
+- Database query shows `reactions.count() > messages.count()` by large margin (indicates duplicates)
+- User reports "I un-reacted but the count is still wrong"
+- Reactions table grows unbounded despite reaction removal
+- Production logs show multiple inserts for same userId+messageId+emoji within milliseconds
 
-2. **Throttle state updates:** Use throttling/debouncing for drag position updates (balance reactivity vs performance)
+**Phase to address:** Phase 1 (Schema Design) must include race condition mitigation in the mutation design. Don't defer to later phase—retrofitting is painful.
 
-3. **Optimize Convex queries during drag:**
-   - Don't subscribe to the entire tasks collection during drag
-   - Use pagination or data segmentation
-   - Consider optimistic updates with delayed server sync
-
-4. **Implement virtualization early:** Use react-window or similar for boards with 50+ tasks
-
-5. **Pass task maps, not arrays:** Avoid dynamically creating task arrays on each render - pass the entire task map instead
-
-**Detection:**
-- Performance testing with 100+ tasks should be in acceptance criteria
-- Monitor drag operation duration in production (should be <100ms)
-- User reports of "laggy" or "jumpy" drag behavior
-
-**Phase impact:** Should be addressed in Phase 2 (Kanban board implementation) - choosing library and architecture early prevents costly rewrites.
-
----
-
-### Pitfall 2: Permission Model Explosion
-**What goes wrong:** Permission checking becomes unmaintainable spaghetti code. You end up with 3-4 levels of permissions (workspace → project → task → subtask) where logic like "Can user X edit task Y?" requires multiple database queries and complex business logic.
+### Pitfall 2: Embedded Reactions Array Hits 8192 Limit
+**What goes wrong:** Schema uses `messages.reactions: v.array(v.object({ userId, emoji }))` embedded in message document. Viral message in busy channel accumulates reactions. First 8000 reactions work fine, then the 8193rd reaction causes `ctx.db.patch()` to throw "Array size limit exceeded" error. Message becomes un-reactable. Worse: trying to remove reactions also requires patching the array, which fails, so reactions are permanently stuck.
 
 **Why it happens:**
-- Workspace already has RBAC (admin/member)
-- Channels have RBAC (admin/member/guest)
-- Documents have RBAC (editor/viewer)
-- Projects naturally want RBAC (owner/editor/viewer)
-- Tasks inherit from projects, but what about tasks created from channels?
+- Convex arrays limited to 8192 entries (per [Convex relationship structures documentation](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas))
+- Popular messages in busy workspaces can accumulate hundreds of reactions (50 users × 5 different emojis = 250 reactions is common)
+- Embedded arrays prevent selective updates—every reaction toggle requires rewriting entire array
+- Document size grows unbounded as reactions accumulate (affects read performance even before hitting limit)
 
-**Consequences:**
-- 75% of database errors arise from ignoring permission cascading (ON DELETE/UPDATE actions)
-- Complex role hierarchies impact query performance in high-transaction environments
-- Bugs where users can see/edit tasks they shouldn't
-- Developer cognitive overload - every feature requires "wait, who can do this?"
-- Support burden from confused users about "why can't I edit this task?"
+**How to avoid:**
+- Use **separate `reactions` table** with many-to-one relationship to messages
+- Schema: `reactions: defineTable({ messageId: v.id("messages"), userId: v.id("users"), emoji: v.string() }).index("by_message", ["messageId"]).index("by_message_user", ["messageId", "userId"])`
+- Query reactions separately: `ctx.db.query("reactions").withIndex("by_message", q => q.eq("messageId", messageId))`
+- Tradeoff: One extra query per message list, but selective inserts/deletes and no size limit
+- Group reactions client-side: `reactions.reduce((acc, r) => { acc[r.emoji] = [...(acc[r.emoji] || []), r.userId]; return acc; }, {})`
 
-**Prevention:**
-1. **Simplify the permission model from the start:**
-   - Projects inherit workspace membership by default
-   - Tasks inherit project permissions (no task-level RBAC)
-   - Only add complexity when there's proven user need
+**Warning signs:**
+- Messages table documents approaching 1MB size (check with `await ctx.db.get(messageId)` and log byte size)
+- Error logs showing "Array size limit exceeded"
+- Reaction toggles becoming slower as message ages
+- Database backup size growing disproportionately to message count
 
-2. **Single source of truth:**
-   ```typescript
-   // BAD: Multiple permission checks scattered across codebase
-   const canEdit = await checkWorkspaceRole() &&
-                   await checkProjectRole() &&
-                   await checkTaskOwnership();
+**Phase to address:** Phase 1 (Schema Design). Embedded arrays are architectural decision—can't migrate easily once production data exists.
 
-   // GOOD: Centralized permission resolver
-   const canEdit = await ctx.auth.can('edit', 'task', taskId);
-   ```
-
-3. **Design for permission queries:**
-   - Add compound indexes for permission checks: `by_workspace_user`, `by_project_user`
-   - Cache effective permissions (pre-compute and store)
-   - Use Convex's reactive queries to invalidate caches automatically
-
-4. **Explicit permission policies:**
-   - Document WHO can DO WHAT in each context
-   - Make policies visible in UI (don't hide permission errors)
-   - Test matrix: every role × every action
-
-**Detection:**
-- Permission bugs in production
-- Slow queries containing multiple joins/filters for permission checks
-- Growing `if/else` chains in permission logic
-- Developer hesitation when asked "who can do X?"
-
-**Phase impact:** Must be resolved in Phase 1 (data model design). Changing permission model after launch is painful.
-
----
-
-### Pitfall 3: Stale Cross-Entity References
-**What goes wrong:** Tasks created from chat messages or embedding documents/diagrams end up with broken references. User clicks "View original message" and gets 404 or sees deleted content. Cross-workspace references break completely.
+### Pitfall 3: @everyone Mention Notification Bomb
+**What goes wrong:** User types `@everyone` in busy channel with 500 workspace members. Mention extraction finds 500 userIds, notification mutation sends 500 push notifications simultaneously. Push notification service (web-push) rate limits or times out. Some notifications send, others fail silently. Users report "I was mentioned but didn't get notification" inconsistently. Worse: Malicious user discovers `@everyone` and spams it repeatedly, creating notification DOS attack.
 
 **Why it happens:**
-- Tasks store `messageId`, `documentId`, or `diagramId` as raw IDs
-- Referenced entities get deleted without updating dependent tasks
-- No referential integrity enforcement
-- No "what references this?" tracking
+- Chat channels are workspace-scoped (Ripple's channels belong to workspaces, which can have hundreds of members)
+- Task comment @mentions are project-scoped (projects typically have <20 members), so notification spam wasn't a concern
+- Push notification infrastructure (convex/pushNotifications.ts) uses `Promise.allSettled()` on all subscriptions—scales poorly beyond 50-100 simultaneous sends
+- No rate limiting on mention notifications (task system didn't need it)
+- BlockNote @mention autocomplete shows all workspace members in chat, making @everyone pattern obvious
 
-**Consequences:**
-- 67% of SQL-related issues stem from improper relationships between entities
-- User frustration with "broken links"
-- Data integrity issues compound over time
-- Manual cleanup becomes impossible at scale
+**How to avoid:**
+- **Implement @channel and @here special mentions** with explicit permission checks (only channel admins can @channel)
+- Rate limit mentions per message: `if (mentionedUserIds.length > 50) throw new ConvexError("Too many mentions")`
+- Batch notification sends: `for (let i = 0; i < mentionedUserIds.length; i += 50) { await Promise.allSettled(batch); }`
+- Add notification preference: `users.mentionNotificationPreference: "all" | "direct" | "none"` to allow users to opt out of @channel
+- Log excessive mentions: `if (mentionedUserIds.length > 20) { console.warn("Excessive mentions", userId, messageId); }`
+- Consider async notification queue instead of synchronous `ctx.scheduler.runAfter(0, ...)` pattern (Convex action rate limits may be hit)
 
-**Prevention:**
-1. **Enforce referential integrity:**
-   ```typescript
-   // In schema.ts
-   tasks: defineTable({
-     // ... other fields
-     sourceMessageId: v.optional(v.id("messages")),
-     sourceDocumentId: v.optional(v.id("documents")),
-     sourceDiagramId: v.optional(v.id("diagrams")),
-   })
-   .index("by_source_message", ["sourceMessageId"])
-   .index("by_source_document", ["sourceDocumentId"])
-   .index("by_source_diagram", ["sourceDiagramId"])
-   ```
+**Warning signs:**
+- Push notification action timing out (Convex actions have 10-minute limit)
+- Notification delivery becoming inconsistent (some users get, others don't)
+- Database logs showing same userId sending hundreds of notifications per hour
+- User complaints about notification spam
 
-2. **Cascade deletes OR preserve tombstones:**
-   - Option A: When message deleted → delete linked tasks (use Convex mutation chaining)
-   - Option B: Keep task, mark source as deleted, show graceful UI
-   - **Recommendation:** Option B for tasks (preserve work even if source deleted)
+**Phase to address:** Phase 2 (Mention Implementation) must include rate limiting BEFORE enabling @mentions. Don't ship without this—notification spam destroys user trust.
 
-3. **Reverse lookup queries:**
-   ```typescript
-   // Query to find all tasks referencing a message
-   export const tasksBySourceMessage = query({
-     args: { messageId: v.id("messages") },
-     handler: async (ctx, args) => {
-       return await ctx.db
-         .query("tasks")
-         .withIndex("by_source_message", q =>
-           q.eq("sourceMessageId", args.messageId)
-         )
-         .collect();
-     },
-   });
-   ```
-
-4. **Periodic audit queries:**
-   - Run weekly: find tasks with `sourceMessageId` where message doesn't exist
-   - Surface to admins for cleanup or auto-flag for review
-
-5. **Avoid cross-workspace references initially:**
-   - Tasks can only reference entities in same workspace
-   - Add cross-workspace later if needed with explicit federation
-
-**Detection:**
-- User reports of "broken links" or 404s
-- Run audit query: `LEFT JOIN` to find dangling references
-- Monitor error logs for "entity not found" when loading task details
-
-**Phase impact:** Address in Phase 1 (data model) and Phase 3 (task creation from chat/docs). Fixing later requires data migration.
-
----
-
-### Pitfall 4: Real-Time Conflict Chaos During Collaborative Drag
-**What goes wrong:** Two users drag the same task simultaneously. Task "jumps" between positions. Board states diverge across clients. Undo/redo breaks. Users see flickering or "rubber-banding" UI.
+### Pitfall 4: Reply-To Parent Message Deleted (Stale Dangling References)
+**What goes wrong:** User replies to Message A. Message A author deletes Message A (soft delete: `messages.deleted = true`). Reply message still shows "Replying to [Deleted message]" preview. User clicks preview to jump to context—nothing happens because parent message is filtered out by `undeleted_by_channel` index. Reply message looks broken. Worse: If hard delete (remove from DB), reply crashes trying to render `null` parent.
 
 **Why it happens:**
-- Optimistic updates for drag operations
-- Real-time subscriptions delivering server state during drag
-- No conflict resolution strategy for concurrent position changes
-- Last-write-wins creates unexpected behavior
+- Replies store `replyToMessageId: v.id("messages")` reference, but no cascade delete or staleness check
+- Messages use soft delete (`deleted: boolean` field), not hard delete, so reference remains valid but unusable
+- UI queries messages with `undeleted_by_channel` index, which excludes deleted messages—reply's parent never appears in list
+- Real-time updates mean parent can be deleted WHILE user is viewing reply (race between render and delete)
 
-**Consequences:**
-- User confusion and lost trust ("this app is buggy")
-- Data corruption (tasks lost, positions wrong)
-- Support burden from "I moved this task and it moved back"
-- Difficult to debug/reproduce issues
+**How to avoid:**
+- **Denormalize parent preview data** into reply message at creation time: `{ replyToMessageId, replyToAuthor: string, replyToPreview: string }` (first 100 chars of plainText)
+- If parent deleted, show preview from denormalized data with "(message deleted)" indicator
+- Don't allow clicking deleted parent preview (disable jump-to-message link if parent missing)
+- Mutation: When inserting reply, fetch parent immediately and extract preview: `const parent = await ctx.db.get(replyToMessageId); if (!parent) throw new Error("Parent message not found"); const preview = parent.plainText.slice(0, 100);`
+- Query: `const parent = await ctx.db.get(message.replyToMessageId); const isDeleted = parent?.deleted ?? true;`
 
-**Prevention:**
-1. **Establish explicit policies for concurrent updates:**
-   - Who wins: last drag completion (not last drag start)?
-   - Use version numbers or timestamps
-   - Show "Someone else is moving this task" warnings
+**Warning signs:**
+- Errors in console: "Cannot read property of null"
+- Reply preview UI shows blank or "undefined"
+- User reports "I clicked reply preview, nothing happened"
+- Message list rendering delays (blocking on parent fetch for every reply)
 
-2. **Separate drag state from persisted state:**
-   ```typescript
-   // Local drag state (immediate UI feedback)
-   const [localTaskPositions, setLocalTaskPositions] = useState({});
+**Phase to address:** Phase 3 (Reply-To Schema). Denormalization must be in initial schema—retrofitting requires migration.
 
-   // Server state (source of truth)
-   const serverTasks = useQuery(api.tasks.getByProject, { projectId });
-
-   // Merged view with conflict indicators
-   const displayTasks = mergeWithConflictDetection(
-     serverTasks,
-     localTaskPositions
-   );
-   ```
-
-3. **Debounce persistence during drag:**
-   - Don't save position on every pixel moved
-   - Save only on drop completion
-   - Use exponential backoff for retries
-
-4. **Implement optimistic concurrency control:**
-   - Tasks have `version` field
-   - Mutation includes current version
-   - Server rejects if version mismatch
-   - Client resolves conflict (show dialog or auto-merge)
-
-5. **Convex-specific: Leverage reactive queries carefully:**
-   - Query invalidation during drag causes re-fetches
-   - Consider suspending real-time updates during active drag
-   - Resume subscriptions on drop
-
-**Detection:**
-- Test with two browsers side-by-side, same board
-- Drag same task simultaneously
-- Monitor for "task snapping back" reports
-- Check for version conflict errors in logs
-
-**Phase impact:** Must be designed in Phase 2 (Kanban board). Retrofitting conflict resolution is very hard.
-
----
-
-## Moderate Pitfalls
-
-Mistakes that cause delays or technical debt.
-
-### Pitfall 5: Board Accuracy Degradation (Stale Boards)
-**What goes wrong:** Tasks stay in "In Progress" for weeks after completion. Board becomes untrustworthy. Team stops using it, returns to spreadsheets.
+### Pitfall 5: Mention Extraction Race Between Optimistic Update and Server Insert
+**What goes wrong:** User types "@Alice hello" in chat, hits send. Optimistic UI immediately shows message in channel with @Alice highlighted. `messages.send` mutation runs, extracts mentions via `extractMentionedUserIds(body)`, sends notification, inserts message with same `isomorphicId`. But BlockNote JSON structure in optimistic update differs slightly from server-side JSON (editor normalizes whitespace differently). Mention extraction finds mention in optimistic update but not in server version, or vice versa. Alice gets notification but message doesn't show mention highlighting when it re-renders from server data.
 
 **Why it happens:**
-- No enforcement of board updates
-- Friction to update status (too many clicks, slow UI)
-- Status updates batched for standups instead of immediate
+- BlockNote editor's `editor.document` serialization is non-deterministic for whitespace/formatting edge cases
+- Optimistic update uses client's BlockNote version/serialization, server uses current deployed version
+- `extractMentionedUserIds()` utility parses JSON structure—structural differences break extraction
+- Convex reactive queries replace optimistic data with server data on insert, causing visual "flicker" if mention rendering differs
 
-**Prevention:**
-1. **Make updates frictionless:**
-   - Keyboard shortcuts for status changes
-   - Bulk operations (select multiple tasks → move)
-   - Auto-status based on actions (merge PR → task moves to Done)
+**How to avoid:**
+- **Always serialize consistently** between client and server: Use same BlockNote version, same serialization config
+- Test mention extraction with round-trip: `const doc = editor.document; const json = JSON.stringify(doc); const parsed = JSON.parse(json); assert(extractMentionedUserIds(json).length === expectedCount);`
+- Validate mention extraction server-side BEFORE sending notifications: `if (mentionedUserIds.length === 0 && body.includes("userMention")) { console.error("Mention extraction failed", messageId); }`
+- Use `isomorphicId` on messages to ensure optimistic update and server update refer to same message (already in schema)
+- If client-side extraction needed for UI preview, ensure it uses same utility: `import { extractMentionedUserIds } from "convex/utils/blocknote"` (but Convex shared utils aren't importable client-side—needs duplication or shared package)
 
-2. **Explicit policies with enforcement:**
-   - Define WHEN status must change (not just HOW)
-   - Reminder notifications for stale tasks
-   - Board health metrics visible to team
+**Warning signs:**
+- Notification sent but mention not highlighted in message
+- Mention highlighted in optimistic UI, then disappears when server data loads
+- Console errors: "extractMentionedUserIds returned empty array for message with mention"
+- Flicker: message renders with mention, then without, then with again
 
-3. **Real-time = immediate updates:**
-   - Convex's real-time nature helps here
-   - Show "Last updated 3 days ago" warnings
-   - Auto-archive tasks in Done > 7 days
+**Phase to address:** Phase 2 (Mention Implementation). Test extraction thoroughly in both optimistic and server paths before considering feature complete.
 
-**Detection:**
-- Measure task "staleness": time since last status update
-- User complaints about "board doesn't reflect reality"
-
----
-
-### Pitfall 6: Context Loss When Creating Tasks from Chat
-**What goes wrong:** User creates task from chat message, but loses important context. Task says "Fix that bug" but doesn't link back to conversation where bug was described.
+### Pitfall 6: Reaction Count Query N+1 Problem at Scale
+**What goes wrong:** Channel has 100 messages visible. Each message needs reaction count to display "👍 5" pills. Naive implementation: for each message, query `reactions.by_message` index. Result: 100 queries per message list render. Convex query latency is ~20-50ms, so 100 × 50ms = 5 seconds to render message list. UI feels sluggish. Scroll pagination loads more messages, each triggering another batch of queries.
 
 **Why it happens:**
-- Sharded information: task creation is isolated from source
-- No automatic context capture
-- UI makes it easy to create tasks, hard to add context
+- Separate reactions table requires join to display counts (necessary to avoid embedded array limits)
+- React components naively query reactions per message: `const reactions = useQuery(api.reactions.byMessage, { messageId })`
+- Convex doesn't have built-in join queries—must manually aggregate
+- Pagination loads 20 messages at a time, but each message queries independently
 
-**Prevention:**
-1. **Auto-capture context:**
-   ```typescript
-   // When creating task from message
-   {
-     title: "Fix authentication bug",
-     description: messageText,
-     sourceMessageId: messageId,
-     sourceChannelId: channelId,
-     createdFromContext: {
-       type: "chat_message",
-       timestamp: message._creationTime,
-       author: message.userId,
-     }
-   }
-   ```
+**How to avoid:**
+- **Batch fetch reactions** for all visible messages in single query: `api.reactions.byMessages({ messageIds: string[] })`
+- Use `getAll()` helper from convex-helpers: `const messages = paginatedMessages.page; const allReactions = await getAll(ctx.db, messages.map(m => m._id));` (but `getAll` is for documents by ID, not for one-to-many relationships)
+- Better: Query all reactions in channel message range: `ctx.db.query("reactions").withIndex("by_channel_message", q => q.eq("channelId", channelId))` and group client-side
+- Denormalize reaction counts into message document: `messages.reactionCounts: v.object({ "👍": v.number(), "❤️": v.number() })` (updated by reaction mutations)
+- Tradeoff: Denormalized counts require updating message document on every reaction toggle (more writes, but much faster reads)
 
-2. **Make context visible:**
-   - Task detail view shows "Created from message in #general"
-   - Click to jump back to original message
-   - Show message thread preview in task
+**Warning signs:**
+- Convex query count in metrics dashboard grows proportionally to visible messages (100 messages = 100 queries)
+- Message list render time increases with page size
+- Browser devtools Network tab shows hundreds of Convex query requests
+- Scroll performance degrades as more messages load
 
-3. **Prompt for additional context:**
-   - Modal for task creation with pre-filled description
-   - Allow editing before saving
-   - Suggest adding assignee, due date
+**Phase to address:** Phase 1 (Schema Design) should decide embedded vs denormalized counts. Phase 4 (Performance Optimization) if deferred, but user experience may suffer in Phase 2-3.
 
-**Detection:**
-- Tasks with sparse descriptions
-- User feedback: "I can't remember why I created this task"
-- Low task completion rates (unclear requirements)
+## Technical Debt Patterns
 
----
+| Pattern | Why It Happens | Impact | Prevention |
+|---------|---------------|--------|------------|
+| Separate mutations for add/remove reaction | "Delete reaction" and "add reaction" feel like separate features | Race conditions, duplicate state management, inconsistent behavior | Single `toggleReaction` mutation with conditional logic |
+| Inline reply stores only messageId reference | Minimal schema feels cleaner | Broken UI when parent deleted, expensive joins | Denormalize parent author + preview text (100 chars) |
+| @mention extraction only in send mutation | "Notification is backend concern" | No client-side mention preview, no validation before send | Shared extraction utility (blocknote.ts) used in client + server (but Convex server utils not importable—needs shared package) |
+| Reactions embedded in message document | "One query instead of two" | Array limit, document bloat, can't query "messages I reacted to" | Separate reactions table, accept one extra query |
+| Plain text @everyone without permission check | "We'll add permissions later" | Notification spam in production | Permission check in Phase 2 before shipping, not "nice to have" |
+| No rate limiting on mention notifications | "Our channels are small" | Scales poorly as workspace grows, open to abuse | Rate limit mentionedUserIds.length > 50 in Phase 2 |
 
-### Pitfall 7: WIP Limit Ignored (Column Overload)
-**What goes wrong:** "In Progress" column has 47 tasks. Team has 3 people. Nothing gets finished. Kanban becomes a glorified to-do list.
+## Performance Traps
 
-**Why it happens:**
-- No enforcement of WIP limits
-- Starting new tasks is easy and feels productive
-- Finishing tasks is hard and invisible
+| Trap | Symptoms | Query Pattern | Solution |
+|------|----------|---------------|----------|
+| N+1 reaction queries | Message list render takes 5+ seconds | `for (msg of messages) { useQuery(api.reactions.byMessage, { messageId: msg._id }) }` | Batch query: `api.reactions.byMessages({ messageIds })` returns reactions for all messages |
+| Scanning all reactions for count | `reactions.count()` query scans full table | `ctx.db.query("reactions").filter(q => q.eq(q.field("messageId"), messageId)).collect()` (no index on messageId alone) | Use `by_message` index: `withIndex("by_message", q => q.eq("messageId", messageId))` |
+| Mention extraction on every render | Re-parsing BlockNote JSON 60 times/sec (React re-renders) | `const mentions = extractMentionedUserIds(message.body)` in component body | Memoize with `useMemo(() => extractMentionedUserIds(message.body), [message.body])` |
+| Reply parent lookup per message | Each reply fetches parent separately | `const parent = useQuery(api.messages.get, { messageId: replyToMessageId })` | Denormalize parent preview, only fetch parent on click |
+| Unindexed reaction toggle check | Full table scan to find existing reaction | `filter(q => q.and(q.eq(q.field("userId"), userId), q.eq(q.field("emoji"), emoji)))` without index | Compound index: `by_message_user_emoji` on ["messageId", "userId", "emoji"] |
 
-**Prevention:**
-1. **Explicit WIP limits per column:**
-   ```typescript
-   columns: [
-     { name: "In Progress", wipLimit: 5 },
-     { name: "In Review", wipLimit: 3 },
-   ]
-   ```
+## UX Pitfalls
 
-2. **Enforce limits in UI:**
-   - Warning when approaching limit (4/5 tasks)
-   - Block dragging new tasks when at limit
-   - Allow override with justification (tracked)
+| Pitfall | User Experience | Root Cause | Solution |
+|---------|----------------|------------|----------|
+| Reaction animation flicker | Click 👍, appears briefly, disappears, reappears | Optimistic update conflict with server update | Use `isomorphicId` on reactions, client reconciles by ID not mutation order |
+| @mention autocomplete shows deleted users | Autocomplete suggests "@John" but John left workspace | Autocomplete queries all users, not filtered by workspace membership | Query `workspaceMembers.by_workspace` first, then join to users |
+| Reply preview truncates emoji/mentions | Preview shows "@Al..." (truncated mid-mention) | Naive `plainText.slice(0, 100)` cuts BlockNote inline content | Extract plain text preserving mention boundaries, or store structured preview |
+| Can't un-react on deleted message | User reacted before deletion, now reaction stuck | Deleted messages excluded from UI, no way to access reaction toggle | Show deleted message placeholder with reactions still interactive |
+| Multiple reactions appear on click | User clicks 👍 once, sees "👍 2" count | Race condition: check-then-insert pattern | Use `firstOrNull()` + conditional insert in single mutation transaction |
+| Mention notification for self | User types "@Alice" in message, Alice gets notification even though Alice is the author | Mention extraction doesn't filter self | Filter authorId from mentionedUserIds: `mentionedUserIds.filter(id => id !== authorId)` |
 
-3. **Visualize limit breaches:**
-   - Column header shows "5/5 ⚠️"
-   - Red border on overloaded columns
-   - Dashboard metric: "WIP limit breached X times this week"
+## "Looks Done But Isn't" Checklist
 
-**Detection:**
-- Monitor task velocity: are tasks moving or stagnating?
-- Count tasks per column per user
-- User reports of "too many things in progress"
+Features that SEEM complete in local testing but fail in production:
 
----
+- [ ] **Reaction race condition tested**: Two users click same emoji within 100ms—verify no duplicate reactions
+- [ ] **Array limit tested**: Create message with 1000+ reactions—verify doesn't hit embedded array limit
+- [ ] **@everyone tested**: Mention 500 users in channel—verify notifications don't timeout/fail
+- [ ] **Reply parent deletion tested**: Delete parent message, verify reply preview still renders gracefully
+- [ ] **Mention extraction consistency tested**: Optimistic update mentions match server-side extraction after insert
+- [ ] **Notification spam prevention tested**: Rate limit prevents 100 @mentions in single message
+- [ ] **Reaction query performance tested**: Load channel with 100 messages × 10 reactions each, verify < 1s render time
+- [ ] **Deleted user mention tested**: @mention user, user leaves workspace, verify mention still renders (shows "Unknown")
+- [ ] **Self-mention filtered**: User @mentions themselves, verify no notification sent to self
+- [ ] **Reply to deleted message UX**: Click reply to deleted message, verify graceful "Message unavailable" instead of crash
+- [ ] **Optimistic reaction toggle**: Click reaction, immediately un-click, verify no flicker or stuck state
+- [ ] **Mention autocomplete member filtering**: Verify autocomplete only shows current workspace members, not all users
 
-### Pitfall 8: Notification Fatigue
-**What goes wrong:** Every task update triggers a notification. Users get 47 notifications per day. They disable all notifications, missing critical updates.
+## Integration Pitfalls with Existing Ripple System
 
-**Why it happens:**
-- Default to "notify on everything"
-- No prioritization of notifications
-- No batching or throttling
-- Cross-channel notification sync issues
+| Existing Feature | Integration Risk | Why | Mitigation |
+|-----------------|------------------|-----|------------|
+| Message optimistic updates (isomorphicId) | Reactions need same isomorphicId pattern to reconcile optimistic/server data | Messages use `isomorphicId` for deduplication, reactions would need similar | Add `isomorphicId` to reactions schema OR use compound unique index (messageId + userId + emoji) |
+| Push notifications (scheduler.runAfter) | Chat mentions reuse notification system, but channel size >> project size | Task notifications send to 5-20 people, chat could send to 500 | Rate limit mentionedUserIds.length, add permission check for @channel |
+| BlockNote schemas (task descriptions vs comments vs chat) | Three different BlockNote schemas—inconsistency confuses users | Task descriptions have 4 inline types, comments have 1, chat would have 2+ | Create `chatMessageSchema.ts` with only userMention + link (minimal), document decision in SCHEMA.md |
+| Soft delete (messages.deleted boolean) | Reply-to references deleted messages, but UI filters them out | Channel message list uses `undeleted_by_channel` index | Denormalize parent preview OR show deleted message placeholders in reply chains |
+| Channel pagination (20 messages per page) | Reaction queries multiply by page size—N+1 problem | Each message queries reactions separately | Batch query reactions for entire page, not per-message |
+| Real-time subscriptions | Race conditions amplified by Convex reactive queries | Two users see update simultaneously, both mutate, both succeed in parallel | Use unique indexes (when available) or accept non-deterministic final state with idempotent mutations |
 
-**Consequences:**
-- 47% of analysts point to alerting issues as most common inefficiency
-- Users disable notifications entirely
-- Critical updates missed
-- Decreased engagement
+## Convex-Specific Pitfalls
 
-**Prevention:**
-1. **Intelligent notification strategy:**
-   - Only notify on: assignments, @mentions, status changes on watched tasks
-   - Don't notify: every comment, every task creation, mass updates
+### Mutations Can't Call Other Mutations
+**Problem:** Reaction toggle wants to call `addReaction()` or `removeReaction()` based on state.
+**Why it fails:** Convex mutations can't invoke other mutations (from CLAUDE.md: "Mutations can't call other mutations").
+**Solution:** Inline conditional logic in single `toggleReaction` mutation. Extract shared logic into internal helper function (not exported mutation).
 
-2. **Batching and throttling:**
-   - Batch: "5 tasks updated in Project X" instead of 5 separate notifications
-   - Throttle: Max 1 notification per project per hour
-   - Daily digest option for low-priority updates
+### Can't Index Arrays
+**Problem:** Want to query "messages user X reacted to" with `messages.reactions: v.array(...)`.
+**Why it fails:** Convex arrays not indexable (from WebSearch result: "You can't index an array in Convex").
+**Solution:** Separate `reactions` table with `by_user` index. Query: `ctx.db.query("reactions").withIndex("by_user", q => q.eq("userId", userId))`.
 
-3. **Granular user preferences:**
-   ```typescript
-   notificationPreferences: {
-     taskAssigned: { push: true, email: true },
-     taskCommented: { push: false, email: false },
-     taskStatusChanged: { push: true, email: false },
-     projectUpdates: { digest: "daily" },
-   }
-   ```
+### No Built-in Unique Constraints
+**Problem:** Prevent duplicate reactions (same userId + emoji on same message).
+**Why it fails:** Convex schema lacks unique constraints (`.unique()` index flag exists in schema but not enforced at write time—must manually check).
+**Solution:** Query-before-insert pattern: `const existing = await ctx.db.query(...).withIndex("by_message_user_emoji", ...).first(); if (!existing) { await ctx.db.insert(...); }`. Accept race condition edge case where simultaneous clicks create duplicate (eventual consistency via client-side deduplication in UI).
 
-4. **Contextual awareness:**
-   - Don't notify if user is actively viewing the board
-   - Don't notify user about their own actions
-   - Suppress duplicates across channels (push + email + in-app)
+### Reactive Queries Replace Optimistic Updates
+**Problem:** User clicks reaction, sees immediate optimistic update, then Convex reactive query replaces it with server data 100ms later, causing flicker.
+**Why it happens:** Convex's reactivity model replaces client state with server state automatically. If client and server data structures differ (even slightly), UI flickers.
+**Solution:** Ensure optimistic update structure EXACTLY matches server return structure. Use `isomorphicId` for client-generated IDs so Convex can reconcile. For reactions, optimistic update must include: `{ _id: tempId, messageId, userId, emoji, _creationTime: Date.now() }` matching server document shape.
 
-5. **Clear prioritization:**
-   - High: Task assigned to you, deadline today
-   - Medium: Task status changed on watched project
-   - Low: New comment on project you're member of
+### Filter Without Index = Full Table Scan
+**Problem:** `ctx.db.query("reactions").filter(q => q.eq(q.field("messageId"), messageId))` scans all reactions.
+**Why it fails:** Convex requires `withIndex()` for performant queries (from CLAUDE.md: "Use withIndex() instead of filter()").
+**Solution:** Define `by_message` index in schema, use: `ctx.db.query("reactions").withIndex("by_message", q => q.eq("messageId", messageId))`. Filter is only for non-indexed fields AFTER indexed lookup.
 
-**Detection:**
-- Monitor notification opt-out rates
-- Survey: "Do notifications help or annoy you?"
-- Track notification→action conversion rate
+### Scheduled Actions Rate Limits
+**Problem:** `ctx.scheduler.runAfter(0, internal.notifications.sendMentionNotifications, ...)` called 500 times for @everyone mention.
+**Why it fails:** Convex rate limits scheduled action invocations (specific limits not documented publicly, but observed failures at high scale).
+**Solution:** Batch notification sends INSIDE the action, not via 500 separate scheduled actions. Single action invocation that iterates `mentionedUserIds` and sends in batches of 50.
 
----
+## Pitfall-to-Phase Mapping
 
-### Pitfall 9: Overcomplicated Board Structure
-**What goes wrong:** Board has 15 columns with names like "Ready for Dev (Blocked)", "In QA (Waiting)", "Done (Pending Deploy)". New users are paralyzed, don't know where to put tasks.
-
-**Why it happens:**
-- Trying to capture every workflow nuance
-- Adding columns instead of using task metadata
-- Different stakeholders want different views
-
-**Prevention:**
-1. **Start simple, add complexity later:**
-   - MVP: Todo → In Progress → Done
-   - Later: Add "In Review" if needed
-   - Resist: Splitting columns for edge cases
-
-2. **Use task metadata instead of columns:**
-   - Blocked tasks: Add `isBlocked: true` field, show indicator
-   - Waiting: Add `waitingOn: string` field
-   - Deploy pending: Add label/tag
-
-3. **Multiple board views instead of one complex board:**
-   - Dev view: columns for dev workflow
-   - PM view: columns for planning workflow
-   - Same tasks, different visualizations
-
-**Detection:**
-- User confusion during onboarding
-- Tasks stuck because "I don't know where to move this"
-- Support questions: "What's the difference between X and Y column?"
-
----
-
-## Minor Pitfalls
-
-Mistakes that cause annoyance but are fixable.
-
-### Pitfall 10: No Bulk Operations
-**What goes wrong:** User needs to move 20 tasks from Sprint 1 to Sprint 2. Has to drag each one individually. Takes 10 minutes. Frustrating experience.
-
-**Prevention:**
-- Multi-select with Shift+Click or Cmd+Click
-- Bulk actions menu: Move, Delete, Archive, Change Status
-- Keyboard shortcuts for power users
-
-**Detection:**
-- User feedback about tedious workflows
-- Support requests for bulk operations
-
----
-
-### Pitfall 11: Poor Mobile Drag-and-Drop
-**What goes wrong:** Drag-and-drop doesn't work on mobile/tablet. Users on iPad can view boards but can't update them. Forces desktop-only workflow.
-
-**Prevention:**
-- Choose library with touch support (dnd-kit, pragmatic-drag-and-drop)
-- Alternative interactions on mobile: long-press → menu → "Move to..."
-- Test on actual devices, not just browser DevTools
-
-**Detection:**
-- Analytics showing 0% task updates from mobile users
-- User complaints about "doesn't work on iPad"
-
----
-
-### Pitfall 12: Missing Metrics and Flow Visualization
-**What goes wrong:** Team uses Kanban but has no visibility into bottlenecks, cycle time, or velocity. Can't improve what you don't measure.
-
-**Prevention:**
-- Track metrics: Lead Time, Cycle Time, WIP
-- Cumulative Flow Diagram showing column distribution over time
-- Bottleneck detection: "Tasks stay in Review 3x longer than In Progress"
-
-**Detection:**
-- Team asks "Are we getting faster?" and nobody knows
-- Metrics never discussed in retrospectives
-
----
-
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation | Research Flag |
-|-------------|---------------|------------|---------------|
-| Phase 1: Data Model | Permission Model Explosion, Stale References | Design simple permission model, add referential integrity from start | LOW - patterns are well-known |
-| Phase 2: Kanban Board | Drag-Drop Performance, Real-Time Conflicts | Choose performant library, design conflict resolution | MEDIUM - need to test at scale |
-| Phase 3: Task Creation from Chat | Context Loss | Auto-capture source context, preserve links | LOW - straightforward implementation |
-| Phase 4: Notifications | Notification Fatigue | Implement batching and granular preferences from day one | LOW - Convex has good notification patterns |
-| Phase 5: Advanced Features | Overcomplicated Boards, Missing Metrics | Start simple, add complexity based on usage data | MEDIUM - requires user feedback loop |
-
----
-
-## Convex-Specific Considerations
-
-### Query Performance with Many Subscribers
-**Pitfall:** Board with 10 active users means 10 subscriptions to the same query. If query is inefficient, it compounds.
-
-**Prevention:**
-- Use indexes religiously: `withIndex()` not `filter()`
-- Paginate: Don't load all 500 tasks at once
-- Segment data: Tasks by status, by assignee
-- Avoid queries that read frequently-updating documents
-
-**Sources:**
-- [Convex Query Performance](https://stack.convex.dev/convex-query-performance)
-- [Queries that Scale](https://stack.convex.dev/queries-that-scale)
-
-### Mutation Chaining for Referential Integrity
-**Pattern:** When entity deleted, cascade to dependents.
-
-```typescript
-export const deleteMessage = mutation({
-  args: { messageId: v.id("messages") },
-  handler: async (ctx, args) => {
-    // Find dependent tasks
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_source_message", q =>
-        q.eq("sourceMessageId", args.messageId)
-      )
-      .collect();
-
-    // Cascade: delete tasks or mark as orphaned
-    for (const task of tasks) {
-      await ctx.db.patch(task._id, {
-        sourceMessageId: undefined,
-        orphanedAt: Date.now(),
-      });
-    }
-
-    // Delete message
-    await ctx.db.delete(args.messageId);
-  },
-});
-```
-
----
-
-## Summary: Top 3 Mistakes to Avoid
-
-1. **Choosing wrong drag-drop library** → Performance hell, expensive rewrite
-2. **Overcomplicating permissions** → Unmaintainable code, security bugs
-3. **Ignoring real-time conflicts** → Data corruption, user frustration
-
-**Success criteria:**
-- Board with 200+ tasks remains responsive (<100ms drag operations)
-- Permission checks are single-query operations with indexed lookups
-- Concurrent edits handled gracefully with conflict indicators
-- Context preserved when creating tasks from other entities
-- Users trust board accuracy (updated in real-time, not stale)
-
----
+| Phase | Must Address | Nice to Have | Defer to Later |
+|-------|-------------|--------------|----------------|
+| **Phase 1: Schema Design + Reactions** | Separate reactions table (avoid embedded array limit), by_message index, by_message_user_emoji compound index, toggleReaction mutation with race mitigation | Denormalized reaction counts in messages | Unique constraint enforcement (not critical—client dedupes) |
+| **Phase 2: @Mentions in Chat** | Rate limit mentionedUserIds.length > 50, filter self-mentions, reuse extractMentionedUserIds utility, batch notification sends, chatMessageSchema with userMention | @channel/@here special mentions with permissions, notification preferences | @everyone mention (too risky without more controls) |
+| **Phase 3: Inline Reply-To** | Denormalize parent author + preview in reply, graceful deleted parent handling, replyToMessageId field | Jump-to-message scroll, threaded reply visualization | Full threading (out of scope—inline only) |
+| **Phase 4: Performance + Polish** | Batch reaction queries for message page, memoize mention extraction, optimistic reaction toggle, mention autocomplete member filtering | Reaction animation polish, reply preview rich text | N/A |
 
 ## Sources
 
-### Kanban & Task Management
-- [Common Kanban Mistakes](https://kanbanproject.app/article/Common_mistakes_to_avoid_when_using_kanban_Pitfalls_to_watch_out_for_and_how_to_overcome_them.html)
-- [Vabro: Common Kanban Mistakes](https://www.vabro.com/blog/common-kanban-mistakes-and-how-to-avoid-them)
-- [5 Worst Mistakes in Kanban](https://www.dailybot.com/insights/5-worst-mistakes-you-can-make-in-kanban)
+### Primary (HIGH confidence)
+- Existing codebase: `convex/schema.ts` - Messages table structure, indexes, soft delete pattern
+- Existing codebase: `convex/messages.ts` - Optimistic update pattern (isomorphicId), pagination query
+- Existing codebase: `convex/tasks.ts` - Notification scheduling pattern (scheduler.runAfter)
+- Existing codebase: `convex/utils/blocknote.ts` - Mention extraction utility for task descriptions
+- Existing codebase: `.planning/phases/06.1-mention-people-in-task-comments/06.1-RESEARCH.md` - BlockNote mention implementation patterns
+- [Convex Relationship Structures: Let's Talk About Schemas](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas) - Array limits (8192 entries), relationship patterns, indexing constraints
+- [Opinionated Convex guidelines](https://gist.github.com/srizvi/966e583693271d874bf65c2a95466339) - Best practices for schema design, queries, mutations
 
-### Drag-and-Drop Performance
-- [Top 5 Drag-and-Drop Libraries for React 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react)
-- [React DnD Performance Issues](https://github.com/react-dnd/react-dnd/issues/421)
-- [Comparison: dnd-kit vs react-beautiful-dnd](https://github.com/clauderic/dnd-kit/discussions/481)
+### Secondary (MEDIUM confidence)
+- [Concurrent Optimistic Updates in React Query](https://tkdodo.eu/blog/concurrent-optimistic-updates-in-react-query) - Race condition patterns in optimistic UI
+- [Optimistic State: Rollbacks and Race Condition Handling](https://github.com/perceived-dev/optimistic-state) - Race condition prevention strategies
+- [MongoDB Embedded Data vs References](https://www.mongodb.com/docs/manual/data-modeling/concepts/embedding-vs-references/) - Embedded vs separate table tradeoffs (Convex uses similar document model)
+- [PubNub: Automate Spam Detection and Prevention](https://www.pubnub.com/blog/automate-spam-detection-and-prevention/) - Mention spam prevention patterns
+- [WhatsApp Tests 'Mention Everyone' Option - Spam Concerns](https://www.digitalinformationworld.com/2025/09/whatsapp-tests-mention-everyone-option.html) - @everyone abuse patterns
 
-### Permission & Data Integrity
-- [Database Design Mistakes](https://chartdb.io/blog/common-database-design-mistakes)
-- [RBAC Implementation Complexity](https://www.osohq.com/learn/rbac-role-based-access-control)
-- [Role-Based Access Control Best Practices 2026](https://www.techprescient.com/blogs/role-based-access-control-best-practices/)
+### Tertiary (LOW confidence)
+- [Threads & Replies - React Chat Messaging Docs](https://getstream.io/chat/docs/react/threads/) - General threading patterns (not Convex-specific)
+- [Telegram Desktop Issue #10315: Deleted message in reply not disappearing](https://github.com/telegramdesktop/tdesktop/issues/10315) - Stale reply references in production
+- [Element Android Issue #2236: Replies to deleted messages visible](https://github.com/element-hq/element-android/issues/2236) - Reply-to-deleted UX patterns
 
-### Real-Time Conflicts
-- [Optimistic Updates](https://swugisha.medium.com/concept-of-optimistic-updates-682c5504dfa9)
-- [RxDB Optimistic UI](https://rxdb.info/articles/optimistic-ui.html)
-- [AWS AppSync Conflict Resolution](https://docs.aws.amazon.com/appsync/latest/devguide/conflict-detection-and-resolution.html)
+## Metadata
 
-### Notification Fatigue
-- [How to Reduce Notification Fatigue](https://www.courier.com/blog/how-to-reduce-notification-fatigue-7-proven-product-strategies-for-saas)
-- [Alert Fatigue 2026](https://torq.io/blog/cybersecurity-alert-management-2026/)
+**Confidence breakdown:**
+- Schema design pitfalls: HIGH (based on existing Ripple schema + Convex docs)
+- Race conditions: HIGH (Convex concurrency model + existing optimistic update patterns in codebase)
+- Notification spam: MEDIUM (based on WebSearch results + task notification patterns in codebase)
+- Performance: HIGH (Convex index requirements in CLAUDE.md + relationship docs)
+- Reply-to pitfalls: MEDIUM (based on other chat app issues, not Ripple-specific testing)
 
-### Convex-Specific
-- [Convex Query Performance](https://stack.convex.dev/convex-query-performance)
-- [Queries that Scale](https://stack.convex.dev/queries-that-scale)
-- [Real-Time Database Guide](https://stack.convex.dev/real-time-database)
+**Research date:** 2026-02-07
+**Valid until:** 30 days (Convex features stable, chat patterns well-established)
+**Reviewer notes:** This research focuses on INTEGRATION pitfalls specific to adding features to Ripple's existing system. Generic chat feature pitfalls (e.g., "emoji picker performance") intentionally excluded. Emphasis on Convex-specific constraints (mutations can't call mutations, arrays not indexable, filter requires index) because these differ from traditional backend patterns.

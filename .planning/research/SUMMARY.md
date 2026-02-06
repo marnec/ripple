@@ -1,370 +1,216 @@
 # Project Research Summary
 
-**Project:** Ripple Task Management Integration
-**Domain:** Collaborative Task Management in Real-Time Workspaces
-**Researched:** 2026-02-05
+**Project:** Ripple v0.9 Chat Features
+**Domain:** Real-time collaborative chat enhancements (@mentions, emoji reactions, inline reply-to)
+**Researched:** 2026-02-07
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Task management for collaborative workspaces has evolved beyond standalone project tools into deeply integrated systems where tasks are created from conversations, linked to documents, and managed alongside communication. For Ripple's integration, the optimal approach uses @dnd-kit for drag-and-drop (replacing deprecated react-beautiful-dnd), fractional indexing for task ordering, and leverages Convex's native real-time subscriptions for live updates. The architecture follows established patterns from Linear, Notion, and Plane: projects contain tasks, membership-based access control, and bi-directional integration between chat, documents, and tasks.
+Ripple's existing architecture (Convex 1.31.7 + BlockNote 0.46.2) already provides all necessary primitives for adding @user mentions, emoji reactions, and inline reply-to features. The implementation leverages proven patterns from v0.8 (task management): BlockNote custom inline content for mentions, Convex reactive subscriptions for real-time reactions, and the existing push notification infrastructure. Only one new dependency required: emoji-picker-react for reaction selection UI.
 
-The critical insight is **progressive complexity**: start with simple Kanban boards (To Do → In Progress → Done), single assignees, and basic task properties. Avoid premature features like custom workflows, sprint planning, or Gantt charts that add complexity without validating user needs. The architecture should mirror Ripple's existing patterns: membership tables for access control, compound indexes for queries, denormalized context IDs for performance, and batch fetching to avoid N+1 queries.
+The recommended approach is to implement features incrementally across three phases. Phase 1 establishes reaction storage with a separate messageReactions table (avoiding 8192 array limit pitfall). Phase 2 adds @mentions using BlockNote's SuggestionMenuController (identical pattern to existing taskMention). Phase 3 implements inline reply-to with denormalized parent previews. This ordering prioritizes foundational data models first, then builds interaction layers on top.
 
-Key risks center on performance at scale (drag-drop with 100+ tasks), permission model explosion (workspace → project → task hierarchy), and real-time conflict resolution when multiple users drag simultaneously. These must be addressed during architecture design, not retrofitted later. The recommended stack integrates seamlessly with Ripple's existing Convex 1.31.7, React 18, and shadcn/ui foundation.
+The critical risks are all avoidable with proper planning: race conditions in reaction toggling (mitigated by check-then-insert pattern), notification spam from @channel abuse (mitigated by rate limiting), and N+1 query problems with reaction aggregation (mitigated by batch queries). These features are table stakes in 2026—users expect behavior identical to Slack/Teams. Nail the fundamentals or the product will feel incomplete.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The 2025-2026 standard for task management uses @dnd-kit (v6.3.1 core, v10.0.0 sortable) as the modern replacement for deprecated react-beautiful-dnd, offering superior performance, accessibility, and touch device support. Date management uses react-day-picker (v9.13.0) via shadcn/ui for consistency with existing design system, paired with date-fns (v4.1.0) for date manipulation. Fractional indexing (lexicographic string positions like "a0", "a1", "a0V") enables task reordering without cascading database updates, critical for real-time collaboration.
+The existing stack requires almost no changes. BlockNote 0.46.2 already supports custom inline content specs (proven with taskMention and projectReference). Convex 1.31.7's reactive subscriptions handle real-time reaction updates without additional WebSocket management. The only new dependency is emoji-picker-react (^4.17.4) for reaction picker UI, chosen over emoji-mart for simpler API and better TypeScript support.
 
 **Core technologies:**
-- **@dnd-kit**: Drag-and-drop with collision detection, accessibility, and virtualization support — industry standard as of 2025 with 5.4M weekly downloads
-- **Fractional indexing**: Infinite task insertions with single-document updates — prevents performance collapse during reordering
-- **Convex native patterns**: Optimistic updates and reactive subscriptions — already proven in Ripple's messages and documents
-- **shadcn/ui + date-fns**: Date selection and formatting — maintains design consistency and leverages existing dependencies
+- **BlockNote 0.46.2** (existing): Custom inline content system for @mentions — SuggestionMenuController supports @ trigger autocomplete with same pattern as # trigger for tasks
+- **Convex 1.31.7** (existing): Real-time database for reactions — separate messageReactions table with compound indexes enables efficient aggregation without array limits
+- **Radix UI Popover 1.1.15** (existing): Positions emoji picker relative to message — already in dependencies
+- **emoji-picker-react ^4.17.4** (NEW): Emoji selection UI — actively maintained (published Feb 2026), better DX than emoji-mart for simple use cases
 
-No additional state management library needed beyond Convex's useQuery/useMutation hooks. The existing convex-helpers (0.1.111), Zod validation, and Radix UI components cover all requirements.
+**Version compatibility:** No breaking changes needed. BlockNote custom inline content API stable since 0.44. Convex schema extensions backward compatible with ability to add indexes without migration.
+
+**Bundle impact:** ~600KB gzipped for emoji picker (comparable to BlockNote). Mitigate with lazy loading: `const Picker = lazy(() => import('emoji-picker-react'))` — only loads when user opens reaction popover.
 
 ### Expected Features
 
-Modern collaborative workspaces expect task-chat bidirectionality (create tasks from messages, discuss tasks inline) and lightweight Kanban views without Jira-level complexity.
+Users expect specific behaviors based on years of conditioning from Slack and Teams. These features must nail the fundamentals or users will perceive the product as incomplete.
 
 **Must have (table stakes):**
-- Basic task CRUD with title, description, status, assignee
-- Kanban board view with drag-and-drop between columns
-- Create task from chat message (capture action items during conversation)
-- Task assignment (single assignee to avoid diffused accountability)
-- Rich text descriptions (bold/italic/lists expected post-2024)
-- @mentions in tasks with notifications
-- Task comments/activity log
-- Due dates (optional, no recurring tasks in v1)
-- Task list view (alternative to Kanban for power users)
-- Push notifications for assignments and mentions
-- Search tasks by title, assignee, status
+- **@mentions autocomplete on typing @** — Universal pattern; users type @ and expect filtered dropdown with keyboard navigation
+- **@mentions styled chips in message** — Visual differentiation from plain text; can reuse existing UserBlock pattern from task descriptions
+- **@mentions push notification** — Core value prop; notification is why you mention someone (Ripple already has push infrastructure from v0.8)
+- **Emoji reactions click to add/remove** — One-click toggle behavior; clicking own reaction removes it (highlight user's own reactions differently)
+- **Reactions aggregated counter display** — Group by emoji, count unique users (e.g., "👍 3")
+- **Reactions emoji picker** — Users can't type Unicode; need visual picker to browse and select emojis
+- **Reply-to quote preview** — Display truncated original message above reply (max 2-3 lines); click to jump to original
+- **Reply-to handle deleted original** — Original may be deleted after reply sent; show "[Message deleted]" placeholder
 
-**Should have (competitive):**
-- **Embed documents/diagrams in tasks** (v1 INCLUDE — zero-cost differentiation using existing Ripple assets)
-- **Project grouping** (v1 INCLUDE — organize tasks under thematic containers, follows Plane model)
-- Task templates (v2 — wait for user patterns)
-- Bulk operations (v2 — nice UX but not MVP-critical)
-- Sub-tasks (v2 — useful but can nest infinitely)
-- Task dependencies (v3 — Gantt chart territory)
-- Time tracking (v3 — different user persona)
-- Automation rules (v2 — requires mature system)
+**Should have (competitive differentiators):**
+- **Cross-feature mention integration** — @mention in chat AND task comments with unified notification preferences (Ripple already has @mentions in tasks)
+- **Smart mention suggestions** — Autocomplete prioritizes recent conversation participants, assignees of linked tasks (better than alphabetical)
+- **Search includes mentioned messages** — Filter search results to "messages where I was mentioned" (leverages existing full-text search)
+- **Reply-to preserves rich content** — Quote preview shows task mentions, project chips, not just plain text (leverage BlockNote rendering)
 
 **Defer (v2+):**
-- Sprint/cycle planning (avoid Scrum ceremony overhead)
-- Custom workflows (premature configuration complexity)
-- Multi-assignee tasks (diffuses accountability)
-- Recurring tasks (complex edge cases)
-- File uploads (redundant with document embeds)
-- Priority fields P0-P4 (every task becomes "urgent")
-- Gantt charts (over-planning, brittle timelines)
+- **@channel / @here mentions** — High value but adds admin control complexity; users will request but not critical for v1
+- **Emoji skin tone variants** — Users expect but can ship with default skin tone only
+- **Mention notification bundling** — Reduce notification fatigue ("3 new mentions in #design") but complex batching logic
+- **Custom emoji upload** — Slack-style workspace-specific emojis; strategic feature, not urgent
 
-The MVP delivers the Linear-Slack integration pattern (chat → task → board) while leveraging Ripple's documents/diagrams as differentiation. Estimated scope: 8-10 weeks for team of 2-3 developers.
+**Anti-features (avoid):**
+- **Threaded replies (nested conversations)** — Creates split attention; Google Chat abandoned threading in 2023 for inline-only
+- **Limited reaction set** — Feels restrictive; Teams tried this, users complained; modern apps allow any emoji
+- **@everyone with no restrictions** — Notification spam abuse; Slack requires confirmation for 6+ members
 
 ### Architecture Approach
 
-Follow Ripple's established Convex patterns with membership-based access control, compound indexes for query optimization, and denormalized context IDs for performance. The data model uses separate tables for projects, tasks, projectMembers, and taskDependencies (when needed), following the same patterns as documents, channels, and their member tables.
+All three features follow established patterns in the codebase with clear implementation paths. @User mentions extend BlockNote's existing custom inline content system (taskMention, projectReference). Reactions use separate table pattern to avoid 8192 array limit. Reply-to adds optional parentMessageId field with denormalized preview data to handle deleted parents gracefully.
 
 **Major components:**
-1. **projects table** — Container for tasks with workspace scoping, status (active/archived/completed), roleCount for UI display, search index for workspace-scoped search
-2. **tasks table** — Title, description, status enum (backlog/todo/in_progress/review/done), single assigneeId, sortOrder for Kanban positioning, embedded references object for documents/diagrams/messages, compound indexes for by_project_status (critical for Kanban columns)
-3. **projectMembers table** — Junction table with denormalized workspaceId for efficient queries, role enum (admin/member), compound indexes matching channel/document patterns for O(1) permission checks
-4. **taskDependencies table** (Phase 5+) — Many-to-many junction for task-to-task relationships with type field (blocks/relates_to), bidirectional indexes for dependency graph traversal
+1. **UserMention inline content** — BlockNote custom inline content spec for @user mentions; reuses SuggestionMenuController pattern with @ trigger; renders with UserMentionChip component (similar to TaskMentionChip)
+2. **messageReactions table** — Separate table with indexes (by_message, by_message_emoji, by_message_user) for efficient aggregation and toggle semantics; avoids embedded array 8192 limit
+3. **ReactionBar component** — Displays aggregated reaction pills below message; handles emoji picker popover and optimistic toggle updates; queries reactions via by_message index
+4. **messages.parentMessageId field** — Optional reference to parent message for inline reply-to; denormalizes parent author + preview text (100 chars) to handle deleted parents gracefully
+5. **ReplyPreview component** — Shows quoted parent context above reply; handles tombstone for deleted parents; implements jump-to-message scroll logic
+6. **chatNotifications internal action** — Schedules mention notifications; reuses existing push notification infrastructure; includes rate limiting for @everyone abuse prevention
 
-**Key patterns to follow:**
-- Membership-based access control: Every entity with permissions has a `*Members` table with `by_entity_user` compound index
-- Denormalized context IDs: ProjectMembers include workspaceId for workspace-scoped queries without joins
-- Role counts: Store aggregate member counts in project documents for efficient UI display without counting queries
-- Batch fetching: Use convex-helpers `getAll()` to avoid N+1 queries when resolving references
-- Embedded references: Store small bounded arrays (< 50 items) directly in documents rather than junction tables for documents/diagrams/messages
-- Compound indexes: Match query patterns (by_project_status for Kanban, by_project_assignee for "My Tasks")
+**Data model changes:**
+- Modify messages table: add `parentMessageId: v.optional(v.id("messages"))` and `by_parent_message` index
+- New messageReactions table: separate documents per reaction with compound indexes for aggregation
+- BlockNote JSON: add userMention inline content type to message body (extracted server-side via extractMentionedUserIds utility)
 
-Real-time updates "just work" via Convex's reactive subscriptions. No separate WebSocket layer needed. Optimistic updates for drag operations prevent UI jank during server round-trips.
+**Integration points:**
+- MessageComposer schema: add userMention to inlineContentSpecs (follows taskMention pattern)
+- MessageRenderer: add userMention case to inline content switch (renders UserMentionChip)
+- messages.send mutation: extract mentions from body, filter self-mentions, schedule notifications
+- Message component: add ReactionBar and ReplyPreview; extend context menu with "Reply" action
 
 ### Critical Pitfalls
 
-Research identified 12 pitfalls across critical/moderate/minor severity. Top 5 that require architecture-level prevention:
+**1. Reaction race condition without deduplication** — Two users click same emoji simultaneously; both mutations check "does reaction exist?" (both answer no), both insert reaction document. Result: duplicate reactions in database. Mitigate with check-then-insert in single mutation: `const existing = await ctx.db.query(...).first(); if (existing) { delete } else { insert }`. Accept non-deterministic final state for simultaneous clicks but prevent data corruption.
 
-1. **Drag-and-drop performance collapse at scale** — Choose @dnd-kit over deprecated react-beautiful-dnd from day one. Implement virtualization for 50+ tasks, throttle state updates during drag, use optimistic updates to avoid server round-trip delays. Without this, boards become unusable at 100+ tasks. Address in Phase 2 (Kanban board).
+**2. Embedded reactions array hits 8192 limit** — Viral message accumulates reactions; 8193rd reaction throws "Array size limit exceeded" error; message becomes un-reactable. Mitigate by using separate reactions table with many-to-one relationship. Schema decision is architectural—can't migrate easily once production data exists. Phase 1 must get this right.
 
-2. **Permission model explosion** — Simplify to workspace → project inheritance. Tasks inherit project permissions with no task-level RBAC initially. Use centralized permission resolver, compound indexes for O(1) checks, and pre-computed role counts. Without this, permission checks become unmaintainable spaghetti requiring multiple database queries. Address in Phase 1 (data model).
+**3. @everyone mention notification bomb** — User types @everyone in channel with 500 members; notification mutation sends 500 push notifications simultaneously; service rate limits or times out. Mitigate with rate limiting (mentionedUserIds.length > 50 throws error), batch notification sends (50 per batch), and permission checks for @channel special mentions. Phase 2 must include rate limiting BEFORE enabling mentions—don't ship without this.
 
-3. **Stale cross-entity references** — Tasks created from messages/documents must handle source deletion gracefully. Use indexed foreign keys (sourceMessageId, sourceDocumentId), implement reverse lookup queries, and preserve task content even if source deleted (tombstones, not cascades). Without this, tasks accumulate broken links causing 404s and data integrity issues. Address in Phase 1 (schema design).
+**4. Reply-to parent message deleted (stale dangling references)** — Reply stores parentMessageId reference; parent gets soft deleted (deleted: true); reply preview tries to render null parent. Mitigate by denormalizing parent preview data (author, first 100 chars) into reply at creation time. If parent deleted, show preview from denormalized data with "(message deleted)" indicator. Phase 3 must include denormalization in initial schema—retrofitting requires migration.
 
-4. **Real-time conflict chaos during collaborative drag** — Two users dragging same task simultaneously causes "rubber-banding" UI and lost updates. Separate local drag state from server state, use version fields for optimistic concurrency control, debounce persistence until drop completion. Without this, collaborative boards feel buggy and untrustworthy. Address in Phase 2 (Kanban implementation).
-
-5. **Notification fatigue** — Every task update triggering notifications leads to 47 notifications/day and users disabling all alerts. Implement intelligent batching (max 1 per project per hour), granular preferences per event type, contextual awareness (don't notify if user is viewing board). Without this, critical updates get missed. Address in Phase 4+ (notifications).
-
-Additional moderate pitfalls: board accuracy degradation (make updates frictionless), context loss when creating from chat (auto-capture source metadata), WIP limit ignored (enforce column limits), overcomplicated board structure (start with 3 columns: Todo/In Progress/Done).
+**5. Reaction count query N+1 problem** — Channel has 100 visible messages; each message queries reactions separately: 100 queries per render. Result: 5 second render time for message list. Mitigate with batch fetch reactions for all visible messages in single query, or denormalize reaction counts into message document (updated by reaction mutations). Phase 1 schema should decide embedded vs denormalized counts—Phase 4 performance optimization may be too late for good UX.
 
 ## Implications for Roadmap
 
-Based on research, the optimal phase structure follows dependency flow and risk mitigation:
+Based on research, suggested phase structure for milestone v0.9:
 
-### Phase 1: Projects Foundation
-**Rationale:** Projects are the container for tasks. Must establish data model, membership patterns, and permission strategies before building tasks. Highest risk if done wrong - permission model explosion is the #2 critical pitfall and cannot be retrofitted.
+### Phase 08: Emoji Reactions Foundation
+**Rationale:** Start with reactions because it establishes the foundational data model (separate table pattern) without dependencies on other features. Reactions are self-contained—no integration with mentions or reply-to required. Getting the schema right (separate table vs embedded array) is critical and must be decided in Phase 1.
 
-**Delivers:** Project CRUD, project list/settings UI, workspace-scoped project queries, role-based access control following established patterns.
+**Delivers:** messageReactions table with proper indexes, toggleReaction mutation with race mitigation, ReactionBar component with emoji picker, aggregated reaction display with "who reacted" tooltip, optimistic toggle updates
 
-**Addresses:**
-- Simplifies permission model (workspace → project inheritance)
-- Prevents permission model explosion via compound indexes and denormalized context IDs
-- Establishes membership table pattern for authorization
+**Addresses:** Table stakes features (click to add/remove, counter display, emoji picker, who reacted tooltip)
 
-**Avoids:**
-- Pitfall #2 (permission model explosion) by designing simple hierarchy upfront
-- Pitfall #3 (stale references) by setting up referential integrity patterns from start
+**Avoids:** Pitfall #2 (embedded array limit), Pitfall #1 (race conditions), Pitfall #6 (N+1 queries)
 
-**Research flag:** LOW — patterns are well-established in existing codebase (documents, channels) and can be directly copied.
+**Stack elements:** emoji-picker-react integration, Radix Popover for picker positioning, Convex separate table pattern
 
-### Phase 2: Basic Tasks
-**Rationale:** Core task CRUD must be stable before adding complex features like Kanban or integrations. Establishes schema with proper indexes, validates membership-based access control, and proves real-time subscriptions work for tasks.
+**Architecture:** messageReactions table, ReactionBar component, reaction aggregation query
 
-**Delivers:** Task creation, editing, deletion, basic task list view, assignee field, status field, due dates, rich text descriptions using BlockNote.
+**Research flag:** Standard pattern — Convex official docs include reactions implementation guide; skip research-phase for this phase
 
-**Uses:**
-- Convex schema with compound indexes (by_project, by_project_status, by_assignee)
-- Fractional indexing for sortOrder field
-- Zod validators for task properties
+### Phase 09: @User Mentions in Chat
+**Rationale:** Implement mentions after reactions foundation is stable. Mentions reuse existing patterns (BlockNote custom inline content, mention extraction, push notifications) but introduce new risks (notification spam, @everyone abuse). Rate limiting must be included before shipping—notification spam destroys user trust.
 
-**Implements:**
-- Tasks table with all core fields
-- Batch fetching for assignee resolution
-- Search index for task titles
+**Delivers:** UserMention inline content spec, @ trigger autocomplete with keyboard navigation, mention extraction in messages.send, push notifications to mentioned users (reuse existing infrastructure), rate limiting for mentionedUserIds.length > 50, self-mention filtering
 
-**Avoids:**
-- Premature complexity (no sub-tasks, dependencies, or custom fields yet)
-- Building Kanban before validating basic task operations work
+**Addresses:** Table stakes features (@mentions autocomplete, styled chips, push notifications, works in edits)
 
-**Research flag:** LOW — straightforward CRUD following existing document patterns.
+**Avoids:** Pitfall #3 (notification bomb), Pitfall #5 (mention extraction race)
 
-### Phase 3: Kanban Board View
-**Rationale:** Kanban is the core UX for task management. Requires Phase 2's stable task model. This phase has highest technical risk due to drag-and-drop performance and real-time conflict resolution.
+**Stack elements:** BlockNote SuggestionMenuController, extractMentionedUserIds utility (reuse from tasks), chatNotifications internal action
 
-**Delivers:** Drag-and-drop Kanban board, status column visualization, task reordering within columns, optimistic updates during drag, real-time updates for multi-user collaboration.
+**Architecture:** UserMention inline content, UserMentionChip component, MessageComposer @ trigger, messages.send mention detection
 
-**Uses:**
-- @dnd-kit (v6.3.1 core, v10.0.0 sortable) for drag-drop
-- Fractional indexing for position updates
-- Convex optimistic updates (withOptimisticUpdate) for instant feedback
+**Research flag:** Standard pattern — BlockNote mentions example documented; existing mention extraction in tasks; skip research-phase
 
-**Implements:**
-- Column-based task filtering using by_project_status index
-- Drag event handlers with collision detection
-- Conflict resolution for concurrent drags
+**Defer:** @channel/@here special mentions (add in v1.1 with admin controls)
 
-**Avoids:**
-- Pitfall #1 (drag-drop performance collapse) by choosing @dnd-kit and implementing throttling
-- Pitfall #4 (real-time conflict chaos) by separating local drag state from server state
-- Using deprecated react-beautiful-dnd
+### Phase 10: Inline Reply-To
+**Rationale:** Implement reply-to last because it integrates with both reactions and mentions. Reply + mention is powerful (reply to message while @mentioning someone else). Reply + react is expected (users can react to replies like any message). Reply-to requires careful handling of deleted parents—denormalize preview data to avoid stale references.
 
-**Research flag:** MEDIUM — need to test performance at scale (100+ tasks) and validate conflict resolution with concurrent users. May need deeper research on virtualization strategies.
+**Delivers:** messages.parentMessageId field with by_parent_message index, denormalized parent author + preview text, ReplyPreview component with deleted parent tombstone, Message context menu "Reply" action, MessageComposer reply mode state, jump-to-message scroll logic
 
-### Phase 4: Task Creation from Chat
-**Rationale:** Key integration feature leveraging Ripple's existing messages. Builds on stable task CRUD (Phase 2) and requires embedding message references.
+**Addresses:** Table stakes features (quote preview, jump to original, handle deleted original)
 
-**Delivers:** Right-click message → "Create task" action, modal with pre-filled title from message text, automatic source context capture (messageId, channelId, timestamp), "Jump to conversation" link in task detail.
+**Avoids:** Pitfall #4 (stale dangling references)
 
-**Uses:**
-- Existing message queries and UI components
-- Task references field (embedded object with messages array)
-- Mutation chaining to create task from message
+**Stack elements:** Convex optional field pattern, BlockNote rendering for rich quote preview
 
-**Implements:**
-- createFromMessage mutation copying message content and preserving reference
-- Task detail view showing source context with clickable links
+**Architecture:** ReplyPreview component, messages.parentMessageId field, composer reply mode
 
-**Avoids:**
-- Pitfall #6 (context loss) by auto-capturing source metadata and preserving links
-- Creating tasks in isolation without connection to conversation
+**Research flag:** Standard pattern — inline reply simpler than threaded (WhatsApp, Google Chat use inline); skip research-phase
 
-**Research flag:** LOW — straightforward pattern, message-to-task conversion is well-documented.
-
-### Phase 5: Document & Diagram Embeds
-**Rationale:** Zero-cost differentiation using Ripple's existing collaborative documents and diagrams. Positions Ripple competitively against Linear (GitHub PRs) and Notion (docs).
-
-**Delivers:** Document/diagram reference picker in task detail, embedded preview cards, click-through to full document/diagram editor, reverse lookup (show tasks referencing a document).
-
-**Uses:**
-- Task references field (embedded object with documents/diagrams arrays)
-- Existing document and diagram queries
-- getAll for batch fetching referenced entities
-
-**Implements:**
-- Reference management mutations (addReference, removeReference)
-- UI components for embedded entity previews
-- Indexes for reverse lookups (by_source_document, by_source_diagram)
-
-**Avoids:**
-- File upload complexity (redundant with structured document embeds)
-- Separate reference tables (embedded arrays sufficient for bounded references)
-
-**Research flag:** LOW — leverages existing document/diagram infrastructure.
-
-### Phase 6: Notifications & Comments
-**Rationale:** Task comments reuse existing message infrastructure. Notifications extend existing push system. Both are polish features that don't affect core architecture.
-
-**Delivers:** Task comment threads using message component, @mention notifications in task context, push notifications for task assignments and status changes, notification batching and preferences.
-
-**Uses:**
-- Existing message schema and UI components
-- Push notification infrastructure already in place
-- Granular preference controls per event type
-
-**Implements:**
-- Task comment mutations reusing message patterns
-- Notification triggers in task mutations
-- Batching logic (max 1 per project per hour)
-
-**Avoids:**
-- Pitfall #8 (notification fatigue) by implementing intelligent batching and granular preferences from start
-- Duplicating message infrastructure with separate comment system
-
-**Research flag:** LOW — Convex notification patterns are well-documented.
-
-### Phase 7: Project-Channel Links (Optional)
-**Rationale:** Integration feature for teams wanting dedicated project channels. Least critical, can be deferred post-MVP.
-
-**Delivers:** Link project to channels, show project context in channel, surface project updates in linked channels.
-
-**Uses:**
-- ProjectChannels junction table
-- Many-to-many relationship patterns
-
-**Implements:**
-- Channel selector in project settings
-- Bidirectional queries (channels for project, projects for channel)
-
-**Research flag:** LOW — standard junction table pattern.
+**Cross-feature interactions:** Reply to message with reactions (reactions stay on original), mention in a reply (both work independently), react to a reply (works normally)
 
 ### Phase Ordering Rationale
 
-**Dependency flow:**
-- Projects (Phase 1) → Tasks (Phase 2): Tasks require project container via foreign key
-- Tasks (Phase 2) → Kanban (Phase 3): Kanban is just visualization of task status field
-- Tasks (Phase 2) → Chat integration (Phase 4): Needs stable task model for mutations
-- Tasks (Phase 2) → Embeds (Phase 5): References are optional task fields
+- **Reactions first:** Establishes foundational data model (separate table) without dependencies; self-contained feature that can ship independently
+- **Mentions second:** Reuses most existing patterns but adds notification spam risk; rate limiting must be in place before shipping to avoid destroying user trust
+- **Reply-to last:** Integrates with reactions and mentions; benefits from both features being stable; denormalization strategy for deleted parents must be in initial schema
 
-**Risk mitigation:**
-- Phase 1-2 highest risk: Wrong permission model or schema requires migration
-- Phase 3 high technical complexity: Drag-drop performance must be proven early
-- Phase 4-7 lower risk: Enhancements building on validated foundation
+**Dependencies:** Reactions → Mentions → Reply-to is linear dependency chain. Each phase builds on prior phase stability. Can't implement reply-to before reactions because users expect to react to replies. Can't implement mentions before reactions foundation because mention notification spam risk requires mature testing infrastructure.
 
-**Value delivery:**
-- Phase 1-3 delivers MVP: Project creation, task management, Kanban visualization
-- Phase 4-5 adds differentiation: Chat-to-task and document embeds set Ripple apart
-- Phase 6-7 polish: Notifications and channel links enhance but aren't blocking
-
-**Real-time consideration:**
-- No special phases needed for real-time updates
-- Convex reactive queries handle subscriptions automatically
-- Optimistic updates are React patterns at UI layer
-- Conflict resolution designed into Phase 3 (Kanban) architecture
+**Pitfall avoidance:** Phase 1 addresses schema pitfalls (array limits, race conditions, N+1 queries). Phase 2 addresses notification spam before enabling mentions. Phase 3 addresses stale references with denormalization. This ordering front-loads architectural decisions and defers integration complexity to later phases when foundation is stable.
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **Phase 3 (Kanban):** Performance testing required with 100+ tasks, virtualization strategy needs validation, concurrent drag conflict resolution needs stress testing with multiple users
-- **Phase 5 (Embeds):** Reverse lookup query patterns for "show all tasks referencing this document" need performance validation at scale
-
 **Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Projects):** Direct copy of documents/channels membership patterns from existing codebase
-- **Phase 2 (Tasks):** Standard Convex CRUD following established conventions
-- **Phase 4 (Chat integration):** Message-to-task mutation is straightforward mutation chaining
-- **Phase 6 (Notifications):** Convex notification patterns are well-documented
-- **Phase 7 (Links):** Standard junction table, no novel patterns
+- **Phase 08 (Reactions):** Convex official docs include reactions implementation guide; pattern validated in production apps
+- **Phase 09 (Mentions):** BlockNote mentions example documented; existing mention extraction in tasks; push notifications already implemented
+- **Phase 10 (Reply-to):** Inline reply simpler than threaded; WhatsApp/Google Chat demonstrate pattern; existing soft delete handling in messages
+
+**No phases need deeper research** — all three features follow well-documented patterns in existing codebase or official library documentation.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | @dnd-kit versions verified via npm (6.3.1, 10.0.0), react-day-picker confirmed in shadcn/ui, Convex patterns proven in existing codebase |
-| Features | HIGH | Verified across Linear, Plane, Notion, MS Teams/Planner 2026 updates. Table stakes and differentiators well-documented in competitive analysis |
-| Architecture | HIGH | Patterns directly derived from existing Ripple codebase (documents.ts, channels.ts, schema.ts). Convex best practices from official documentation |
-| Pitfalls | HIGH | 12 pitfalls verified across multiple authoritative sources. Drag-drop performance issues documented in react-dnd GitHub. Permission complexity backed by RBAC research |
+| Stack | HIGH | emoji-picker-react actively maintained (Feb 2026 release), 7.8k GitHub stars. BlockNote custom inline content API stable since 0.44. Convex patterns proven in existing task system. |
+| Features | HIGH | Universal patterns from Slack/Teams/Discord. Google Chat 2023 migration to inline replies validates reply-to approach. Feature prioritization based on competitor analysis. |
+| Architecture | HIGH | All features reuse existing Ripple patterns: BlockNote custom inline content (taskMention precedent), Convex separate table (proven pattern), push notifications (task assignments). Integration points clearly identified. |
+| Pitfalls | HIGH | Race conditions validated from Convex concurrency model. Array limits from official Convex docs (8192 entries). Notification spam validated from task system scaling. N+1 queries from existing message pagination. |
 
 **Overall confidence:** HIGH
 
-Research synthesized from official documentation (Convex, @dnd-kit), competitive analysis (Linear, Plane, Notion), and direct examination of Ripple's existing codebase patterns. All stack recommendations verified via npm registry. Architecture patterns proven in production Convex applications.
+All three features leverage existing Ripple patterns with clear implementation paths. Research based on official documentation (BlockNote, Convex), existing codebase analysis (task mentions, push notifications), and competitor feature parity (Slack, Teams, Discord). No novel architecture or unproven patterns required.
 
 ### Gaps to Address
 
-**During Phase 3 planning:**
-- Exact virtualization strategy for 100+ task boards (react-window vs @dnd-kit built-in vs manual)
-- Conflict resolution UX details (show conflict indicator, last-write-wins, or user dialog)
-- Throttling parameters for drag state updates (balance between responsiveness and performance)
+**Performance validation:** Reaction aggregation query performance needs validation with 100+ messages × 10+ reactions each. Research recommends batch queries or denormalized counts, but actual performance depends on Convex query latency in production. Test during Phase 08 development with realistic data volumes.
 
-**During Phase 4 planning:**
-- Task comment architecture decision: separate taskComments table vs link to channel messages vs both
-- Message deletion handling: cascade delete tasks, preserve with tombstone, or mark as orphaned
+**@channel permission model:** Research identifies @everyone abuse risk but doesn't specify permission model. During Phase 09 planning, decide: channel admins only, workspace admins only, or configurable per channel? Slack pattern: confirmation dialog for 6+ members. Ripple should follow similar pattern.
 
-**User validation needed:**
-- Task privacy model: inherit channel privacy, workspace-wide by default, or project-level control
-- Multi-project tasks: can task belong to multiple projects (many-to-many) or strict 1:1
-- Completed task visibility: archive after N days or keep visible indefinitely
+**Reply jump-to-message scroll:** Research mentions jump-to-message scroll logic but doesn't specify pagination handling. If parent message is in different page (older than current pagination window), need to fetch context around parent. During Phase 10 planning, decide: fetch parent page context or show "message not in view" indicator.
 
-**Post-MVP evaluation:**
-- WIP limit enforcement: hard block vs soft warning vs no enforcement
-- Task templates: need validated by user research before building
-- Sub-tasks: defer until users request explicitly
-
-None of these gaps block Phase 1-2 implementation. All can be resolved during phase-specific planning or validated via user research after MVP launch.
+**Emoji picker lazy loading:** Bundle size impact (~600KB gzipped) requires lazy loading validation. Test whether `React.lazy()` on emoji-picker-react causes janky first-open experience or if preloading is needed. Validate during Phase 08 development.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-
-**Technology Stack:**
-- [@dnd-kit/core - npm](https://www.npmjs.com/package/@dnd-kit/core) — Version 6.3.1 verified
-- [@dnd-kit/sortable - npm](https://www.npmjs.com/package/@dnd-kit/sortable) — Version 10.0.0 verified
-- [react-day-picker - npm](https://www.npmjs.com/package/react-day-picker) — Version 9.13.0 verified
-- [Convex Optimistic Updates Documentation](https://docs.convex.dev/client/react/optimistic-updates) — Optimistic update patterns
-- [Convex Best Practices](https://docs.convex.dev/understanding/best-practices/) — Index usage and query patterns
-- [Convex Relationship Structures](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas) — Junction tables and membership patterns
-- [Introduction to Indexes and Query Performance](https://docs.convex.dev/database/reading-data/indexes/indexes-and-query-perf) — Compound index strategy
-
-**Existing Codebase:**
-- `/convex/schema.ts` — Membership table pattern, roleCount pattern, compound indexes
-- `/convex/documents.ts` — Entity CRUD pattern, authorization pattern, getAll usage
-- `/convex/messages.ts` — Pagination pattern, batch fetching
-- `/convex/channelMembers.ts` — Junction table pattern, denormalized context IDs
-
-**Feature Research:**
-- [Linear Task Management 2026](https://everhour.com/blog/linear-task-management/) — Table stakes and integration patterns
-- [Plane Open Source Project Management](https://plane.so) — Modern task management UX
-- [MS Teams Planner 2026 Updates](https://sourcepassmcoe.com/articles/microsoft-planner-2026-new-and-retiring-features-sourcepass-mcoe) — Competitive positioning
-- [Notion Task Management Integration](https://everhour.com/blog/notion-integrations/) — Document embedding patterns
+- Existing Ripple codebase: convex/schema.ts (messages table, soft delete pattern), convex/messages.ts (optimistic updates, isomorphicId), convex/utils/blocknote.ts (extractMentionedUserIds), .planning/phases/06.1-mention-people-in-task-comments/ (BlockNote mention pattern)
+- [BlockNote Custom Inline Content docs](https://www.blocknotejs.org/docs/custom-schemas/custom-inline-content) — createReactInlineContentSpec API
+- [BlockNote Mentions Menu example](https://www.blocknotejs.org/examples/custom-schema/suggestion-menus-mentions) — @ trigger autocomplete pattern
+- [Convex: Likes, Upvotes & Reactions](https://www.convex.dev/can-do/likes-and-reactions) — Official implementation guide
+- [Convex Relationship Structures](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas) — Array limits (8192 entries), indexing patterns
+- [emoji-picker-react npm](https://www.npmjs.com/package/emoji-picker-react) — Latest version 4.17.4, published Feb 2026
 
 ### Secondary (MEDIUM confidence)
+- [Use mentions in Slack](https://slack.com/help/articles/205240127-Use-mentions-in-Slack) — Mention behavior patterns
+- [Use emoji and reactions | Slack](https://slack.com/help/articles/202931348-Use-emoji-and-reactions) — Reaction interaction patterns
+- [Google Workspace Updates: In-line threaded Google Chat (2023)](https://workspaceupdates.googleblog.com/2023/02/new-google-chat-spaces-will-be-in-line-threaded.html) — Threading model deprecation rationale
+- [Slack Engineering: Rebuilding Emoji Picker in React](https://slack.engineering/rebuilding-slacks-emoji-picker-in-react/) — Performance patterns
+- [Notify a channel or workspace | Slack](https://slack.com/help/articles/202009646-Notify-a-channel-or-workspace) — @channel behavior and abuse prevention
 
-**Drag-and-Drop:**
-- [Top 5 Drag-and-Drop Libraries for React 2026](https://puckeditor.com/blog/top-5-drag-and-drop-libraries-for-react) — Library comparison
-- [Comparison with react-beautiful-dnd](https://github.com/clauderic/dnd-kit/discussions/481) — Migration rationale
-- [Build a Kanban board with dnd kit and React](https://blog.logrocket.com/build-kanban-board-dnd-kit-react/) — Implementation patterns
-- [Building Drag-and-Drop Kanban with dnd-kit](https://radzion.com/blog/kanban/) — Kanban-specific patterns
-
-**Architecture:**
-- [Kanban Data Model Patterns](https://medium.com/@agrawalkanishk3004/kanban-board-ui-system-design-35665fbf85b5) — Schema structure
-- [Task Dependencies Patterns](https://activecollab.com/blog/project-management/task-dependencies-for-better-project-management) — Dependency types
-- [Kanban Column Indexing Mechanism](https://nickmccleery.com/posts/08-kanban-indexing/) — Fractional indexing rationale
-
-**Pitfalls:**
-- [Common Kanban Mistakes](https://kanbanproject.app/article/Common_mistakes_to_avoid_when_using_kanban_Pitfalls_to_watch_out_for_and_how_to_overcome_them.html) — Board management pitfalls
-- [Database Design Mistakes](https://chartdb.io/blog/common-database-design-mistakes) — Referential integrity issues
-- [Over-Engineering Pitfalls](https://codecat15.medium.com/the-pitfalls-of-over-engineering-in-the-software-industry-adc8a97ee402) — Feature complexity traps
-- [RBAC Best Practices 2026](https://www.techprescient.com/blogs/role-based-access-control-best-practices/) — Permission model complexity
-
-### Tertiary (LOW confidence, needs validation)
-
-- [MVP Best Practices](https://monday.com/blog/rnd/mvp-in-project-management/) — 70% of MVP failures from too many features (general claim, not task-specific)
-- [Alert Fatigue 2026](https://torq.io/blog/cybersecurity-alert-management-2026/) — 47% of analysts cite alerting issues (cybersecurity context, applies to notifications)
+### Tertiary (LOW confidence)
+- [WhatsApp Tests 'Mention Everyone' Option - Spam Concerns](https://www.digitalinformationworld.com/2025/09/whatsapp-tests-mention-everyone-option.html) — @everyone abuse patterns
+- [Telegram Desktop Issue #10315: Deleted message in reply not disappearing](https://github.com/telegramdesktop/tdesktop/issues/10315) — Stale reply reference handling
 
 ---
-
-*Research completed: 2026-02-05*
-*Ready for roadmap: Yes*
-*Next step: Requirements definition and phase planning*
+*Research completed: 2026-02-07*
+*Ready for roadmap: yes*
