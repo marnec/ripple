@@ -184,7 +184,8 @@ export const remove = mutation({
     // Cannot remove if tasks are currently using this status
     const tasksUsingStatus = await ctx.db
       .query("tasks")
-      .withIndex("by_project_status", (q) => q.eq("statusId", statusId))
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", status.workspaceId))
+      .filter((q) => q.eq(q.field("statusId"), statusId))
       .first();
 
     if (tasksUsingStatus) {

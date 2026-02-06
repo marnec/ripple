@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 
 export const create = mutation({
   args: {
@@ -295,15 +296,15 @@ export const update = mutation({
     }
 
     // Build patch object with only provided fields
-    const patch: {
-      title?: string;
-      description?: string;
-      statusId?: string;
-      assigneeId?: string;
-      priority?: "urgent" | "high" | "medium" | "low";
-      labels?: string[];
-      completed?: boolean;
-    } = {};
+    const patch: Partial<{
+      title: string;
+      description: string;
+      statusId: Id<"taskStatuses">;
+      assigneeId: Id<"users">;
+      priority: "urgent" | "high" | "medium" | "low";
+      labels: string[];
+      completed: boolean;
+    }> = {};
 
     if (title !== undefined) patch.title = title;
     if (description !== undefined) patch.description = description;
