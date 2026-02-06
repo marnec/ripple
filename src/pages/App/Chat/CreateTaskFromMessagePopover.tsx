@@ -27,9 +27,9 @@ interface CreateTaskFromMessagePopoverProps {
   onTaskCreated: (taskId: Id<"tasks">, taskTitle: string) => void;
 }
 
-// Extract first line of message as title (max 80 chars)
+// Extract first non-empty line of message as title (max 80 chars)
 function extractTitle(plainText: string): string {
-  const firstLine = plainText.split('\n')[0].trim();
+  const firstLine = plainText.split('\n').map(l => l.trim()).find(l => l.length > 0) ?? '';
   return firstLine.length > 80 ? firstLine.substring(0, 77) + '...' : firstLine;
 }
 
@@ -58,8 +58,11 @@ function CreateTaskFromMessagePopoverContent({
   const [selectedProjectId, setSelectedProjectId] = useState<Id<"projects"> | null>(initialProjectId);
   const [isCreating, setIsCreating] = useState(false);
 
+  // In project chats, always use the linked project; otherwise use user selection
+  const effectiveProjectId = linkedProject ? linkedProject._id : selectedProjectId;
+
   const handleCreate = () => {
-    if (!selectedProjectId || !taskTitle.trim()) return;
+    if (!effectiveProjectId || !taskTitle.trim()) return;
 
     setIsCreating(true);
 
@@ -70,7 +73,7 @@ function CreateTaskFromMessagePopoverContent({
 
     // Create task with message content as description
     void createTask({
-      projectId: selectedProjectId,
+      projectId: effectiveProjectId,
       title: taskTitle,
       description,
     })
@@ -94,7 +97,13 @@ function CreateTaskFromMessagePopoverContent({
   };
 
   return (
-    <PopoverContent className="w-80 p-4 space-y-3" side="right" align="start">
+    <PopoverContent
+      className="w-80 p-4 space-y-3"
+      side="right"
+      align="start"
+      onPointerDownOutside={(e) => e.preventDefault()}
+      onInteractOutside={(e) => e.preventDefault()}
+    >
       <div className="space-y-2">
         <Label htmlFor="task-title">Title</Label>
         <Input
@@ -115,8 +124,9 @@ function CreateTaskFromMessagePopoverContent({
       <div className="space-y-2">
         <Label htmlFor="task-project">Project</Label>
         <Select
-          value={selectedProjectId || undefined}
+          value={effectiveProjectId || undefined}
           onValueChange={(value) => setSelectedProjectId(value as Id<"projects">)}
+          disabled={!!linkedProject}
         >
           <SelectTrigger id="task-project">
             <SelectValue placeholder="Select project..." />
@@ -133,7 +143,7 @@ function CreateTaskFromMessagePopoverContent({
 
       <Button
         onClick={handleCreate}
-        disabled={!selectedProjectId || !taskTitle.trim() || isCreating}
+        disabled={!effectiveProjectId || !taskTitle.trim() || isCreating}
         className="w-full"
       >
         {isCreating ? "Creating..." : "Create Task"}
