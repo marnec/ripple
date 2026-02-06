@@ -13,7 +13,7 @@ Ripple's task management integration follows a dependency-driven structure: esta
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Projects Foundation** - Project containers with membership-based access control
-- [ ] **Phase 2: Basic Tasks** - Core task CRUD with properties and list view
+- [x] **Phase 2: Basic Tasks** - Core task CRUD with properties and list view
 - [ ] **Phase 3: Kanban Board View** - Drag-drop board with real-time updates
 - [ ] **Phase 4: Chat-to-Task Integration** - Create tasks from messages with context capture
 - [ ] **Phase 5: Document & Diagram Embeds** - Cross-feature references in task descriptions
@@ -53,10 +53,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Backend schema and CRUD (tasks + taskStatuses tables, mutations, queries)
-- [ ] 02-02-PLAN.md — Task list UI (Badge, TaskRow, CreateTaskInline, Tasks view on project page)
-- [ ] 02-03-PLAN.md — Task detail side panel (TaskDetailSheet with BlockNote editor, property editing)
-- [ ] 02-04-PLAN.md — My Tasks cross-project view and sidebar integration
+- [x] 02-01-PLAN.md — Backend schema and CRUD (tasks + taskStatuses tables, mutations, queries)
+- [x] 02-02-PLAN.md — Task list UI (Badge, TaskRow, CreateTaskInline, Tasks view on project page)
+- [x] 02-03-PLAN.md — Task detail side panel (TaskDetailSheet with BlockNote editor, property editing)
+- [x] 02-04-PLAN.md — My Tasks cross-project view and sidebar integration
 
 ### Phase 3: Kanban Board View
 **Goal**: Users can visualize and organize tasks on a real-time collaborative Kanban board
@@ -133,7 +133,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Projects Foundation | 4/4 | Complete | 2026-02-05 |
-| 2. Basic Tasks | 0/4 | Not started | - |
+| 2. Basic Tasks | 4/4 | Complete | 2026-02-06 |
 | 3. Kanban Board View | 0/TBD | Not started | - |
 | 4. Chat-to-Task Integration | 0/TBD | Not started | - |
 | 5. Document & Diagram Embeds | 0/TBD | Not started | - |

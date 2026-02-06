@@ -12,14 +12,14 @@
 
 ### Tasks (TASK)
 
-- [ ] **TASK-01**: User can create a task within a project with title and description
-- [ ] **TASK-02**: User can edit task title and description (rich text via BlockNote)
-- [ ] **TASK-03**: User can delete tasks they have permission to modify
-- [ ] **TASK-04**: Task has status (customizable columns, default: To Do → In Progress → Done)
-- [ ] **TASK-05**: User can assign a single assignee to a task
-- [ ] **TASK-06**: User can set priority on a task (urgent/high/medium/low)
-- [ ] **TASK-07**: User can add/remove labels (tags) on a task
-- [ ] **TASK-08**: User can view all tasks assigned to them across projects
+- [x] **TASK-01**: User can create a task within a project with title and description
+- [x] **TASK-02**: User can edit task title and description (rich text via BlockNote)
+- [x] **TASK-03**: User can delete tasks they have permission to modify
+- [x] **TASK-04**: Task has status (customizable columns, default: To Do → In Progress → Done)
+- [x] **TASK-05**: User can assign a single assignee to a task
+- [x] **TASK-06**: User can set priority on a task (urgent/high/medium/low)
+- [x] **TASK-07**: User can add/remove labels (tags) on a task
+- [x] **TASK-08**: User can view all tasks assigned to them across projects
 
 ### Kanban Board (KANBAN)
 
@@ -101,14 +101,14 @@
 | PROJ-03 | Phase 1 | Complete |
 | PROJ-04 | Phase 1 | Complete |
 | PROJ-05 | Phase 1 | Complete |
-| TASK-01 | Phase 2 | Pending |
-| TASK-02 | Phase 2 | Pending |
-| TASK-03 | Phase 2 | Pending |
-| TASK-04 | Phase 2 | Pending |
-| TASK-05 | Phase 2 | Pending |
-| TASK-06 | Phase 2 | Pending |
-| TASK-07 | Phase 2 | Pending |
-| TASK-08 | Phase 2 | Pending |
+| TASK-01 | Phase 2 | Complete |
+| TASK-02 | Phase 2 | Complete |
+| TASK-03 | Phase 2 | Complete |
+| TASK-04 | Phase 2 | Complete |
+| TASK-05 | Phase 2 | Complete |
+| TASK-06 | Phase 2 | Complete |
+| TASK-07 | Phase 2 | Complete |
+| TASK-08 | Phase 2 | Complete |
 | KANBAN-01 | Phase 3 | Pending |
 | KANBAN-02 | Phase 3 | Pending |
 | KANBAN-03 | Phase 3 | Pending |
