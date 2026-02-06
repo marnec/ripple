@@ -113,10 +113,10 @@ Plans:
   1. User can add comments to a task
   2. Comments display in chronological order below task details
   3. User can edit and delete their own comments
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- TBD (determined during planning)
+- [ ] 06-01-PLAN.md — Backend taskComments CRUD and frontend comment list with inline edit/delete
 
 ### Phase 7: Notifications & Polish
 **Goal**: Users receive timely notifications for task-related events
@@ -142,5 +142,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7
 | 3. Kanban Board View | 3/3 | Complete | 2026-02-06 |
 | 4. Chat-to-Task Integration | 2/2 | Complete | 2026-02-06 |
 | 5. Document & Diagram Embeds | 3/3 | Complete | 2026-02-06 |
-| 6. Task Comments | 0/TBD | Not started | - |
+| 6. Task Comments | 0/1 | Not started | - |
 | 7. Notifications & Polish | 0/TBD | Not started | - |
