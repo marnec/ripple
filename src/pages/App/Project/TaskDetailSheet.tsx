@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteView } from "@blocknote/shadcn";
+import { BlockNoteView, SuggestionMenuController } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { useMutation, useQuery } from "convex/react";
@@ -35,8 +35,11 @@ import {
   AlertCircle,
   ArrowDown,
   ArrowUp,
+  FileText,
+  FolderKanban,
   Maximize2,
   Minus,
+  PenTool,
   Trash2,
   X,
 } from "lucide-react";
@@ -45,6 +48,7 @@ import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { taskDescriptionSchema } from "./taskDescriptionSchema";
 
 type TaskDetailSheetProps = {
   taskId: Id<"tasks"> | null;
@@ -64,6 +68,9 @@ export function TaskDetailSheet({
   const task = useQuery(api.tasks.get, taskId ? { taskId } : "skip");
   const statuses = useQuery(api.taskStatuses.listByWorkspace, { workspaceId });
   const members = useQuery(api.projectMembers.membersByProject, { projectId });
+  const diagrams = useQuery(api.diagrams.list, { workspaceId });
+  const documents = useQuery(api.documents.listByUserMembership, { workspaceId });
+  const projects = useQuery(api.projects.listByUserMembership, { workspaceId });
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
 
@@ -82,7 +89,7 @@ export function TaskDetailSheet({
   const suppressOnChangeRef = useRef(false);
 
   // Initialize BlockNote editor (content loaded via useEffect below)
-  const editor = useCreateBlockNote({});
+  const editor = useCreateBlockNote({ schema: taskDescriptionSchema });
 
   // Update title value when task loads (only update if task.title changes)
   useEffect(() => {
@@ -460,7 +467,107 @@ export function TaskDetailSheet({
                   editor={editor}
                   onChange={handleDescriptionChange}
                   theme={resolvedTheme === "dark" ? "dark" : "light"}
-                />
+                >
+                  <SuggestionMenuController
+                    triggerCharacter={"#"}
+                    getItems={async (query) => {
+                      const items: Array<{title: string; onItemClick: () => void; icon: React.ReactNode; group: string; key: string}> = [];
+
+                      // Documents
+                      if (documents) {
+                        documents
+                          .filter(doc => doc.name.toLowerCase().includes(query.toLowerCase()))
+                          .slice(0, 5)
+                          .forEach(doc => {
+                            items.push({
+                              title: doc.name,
+                              onItemClick: () => {
+                                editor.insertInlineContent([
+                                  { type: "documentLink", props: { documentId: doc._id } },
+                                  " ",
+                                ]);
+                              },
+                              icon: <FileText className="h-4 w-4" />,
+                              group: "Documents",
+                              key: `doc-${doc._id}`,
+                            });
+                          });
+                      }
+
+                      // Diagrams
+                      if (diagrams) {
+                        diagrams
+                          .filter(d => d.name.toLowerCase().includes(query.toLowerCase()))
+                          .slice(0, 5)
+                          .forEach(d => {
+                            items.push({
+                              title: d.name,
+                              onItemClick: () => {
+                                editor.insertInlineContent([
+                                  { type: "diagramEmbed", props: { diagramId: d._id } },
+                                  " ",
+                                ]);
+                              },
+                              icon: <PenTool className="h-4 w-4" />,
+                              group: "Diagrams",
+                              key: `dia-${d._id}`,
+                            });
+                          });
+                      }
+
+                      // Projects
+                      if (projects) {
+                        projects
+                          .filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+                          .slice(0, 5)
+                          .forEach(p => {
+                            items.push({
+                              title: p.name,
+                              onItemClick: () => {
+                                editor.insertInlineContent([
+                                  { type: "projectReference", props: { projectId: p._id } },
+                                  " ",
+                                ]);
+                              },
+                              icon: <FolderKanban className="h-4 w-4" />,
+                              group: "Projects",
+                              key: `proj-${p._id}`,
+                            });
+                          });
+                      }
+
+                      return items;
+                    }}
+                  />
+                  <SuggestionMenuController
+                    triggerCharacter={"@"}
+                    getItems={async (query) => {
+                      if (!members) return [];
+                      return members
+                        .filter(m => m.name?.toLowerCase().includes(query.toLowerCase()))
+                        .slice(0, 10)
+                        .map(m => ({
+                          title: m.name ?? "Unknown",
+                          onItemClick: () => {
+                            editor.insertInlineContent([
+                              { type: "userMention", props: { userId: m.userId } },
+                              " ",
+                            ]);
+                          },
+                          icon: (
+                            <Avatar className="h-5 w-5">
+                              {m.image && <AvatarImage src={m.image} />}
+                              <AvatarFallback className="text-xs">
+                                {m.name?.slice(0, 2).toUpperCase() ?? "?"}
+                              </AvatarFallback>
+                            </Avatar>
+                          ),
+                          group: "Project members",
+                          key: m.userId,
+                        }));
+                    }}
+                  />
+                </BlockNoteView>
               </div>
             </div>
           </div>
