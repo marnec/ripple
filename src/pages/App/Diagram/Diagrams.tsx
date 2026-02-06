@@ -1,6 +1,5 @@
 import { QueryParams } from "@shared/types/routes";
 import { useParams } from "react-router-dom";
-import { DiagramSelectorList } from "./DiagramSelectorList";
 
 export function Diagrams() {
   const { workspaceId } = useParams<QueryParams>();

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { MessageWithAuthor } from "@shared/types/channel";
 import {
   Dialog,
   DialogContent,
@@ -11,11 +10,9 @@ import {
   DialogTrigger,
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
-import { Button } from "../../../components/ui/button";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { SearchIcon, MessageSquareIcon } from "lucide-react";
 import { SafeHtml } from "@/components/ui/safe-html";
-import { cn } from "@/lib/utils";
 
 interface SearchDialogProps {
   channelId: Id<"channels">;
@@ -49,7 +46,7 @@ export function SearchDialog({ channelId, onJumpToMessage, children, initialSear
     if (!term) return text;
     
     const regex = new RegExp(`(${term})`, 'gi');
-    return text.replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-800">$1</mark>');
+    return text.replace(regex, '<mark class="bg-accent text-accent-foreground">$1</mark>');
   };
 
   return (

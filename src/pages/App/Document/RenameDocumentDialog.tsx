@@ -57,7 +57,7 @@ export function RenameDocumentDialog({
           <DialogTitle>Rename document </DialogTitle>
           <DialogDescription>{document?.name}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div className="space-y-2">
             <Input
               id="name"

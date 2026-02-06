@@ -1,2 +1,2 @@
-export type Keys<O extends Object> = keyof O;
-export type Values<O extends Object> = O[Keys<O>];
+export type Keys<O extends object> = keyof O;
+export type Values<O extends object> = O[Keys<O>];

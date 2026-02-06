@@ -97,14 +97,14 @@ function SignInWithMagicLink({ handleLinkSent }: { handleLinkSent: () => void })
       handleLinkSent();
     } catch (error) {
       toast({
-        title: `Could not send sign-in link ${error}`,
+        title: `Could not send sign-in link ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
     }
   };
 
   return (
-    <form className="flex flex-col" onSubmit={handleSubmit}>
+    <form className="flex flex-col" onSubmit={(e) => void handleSubmit(e)}>
       <label htmlFor="email">Email</label>
       <Input name="email" id="email" className="mb-4" autoComplete="email" required />
       <Button type="submit">Send sign-in link</Button>
@@ -129,7 +129,7 @@ function SignInWithPassword({
       if (!signingIn) {
         setStep({ email: formData.get("email") as string });
       }
-    } catch (error) {
+    } catch {
       toast({
         variant: "destructive",
         title: "Authentication failed",
@@ -141,7 +141,7 @@ function SignInWithPassword({
   return (
     <>
       {flow !== "forgot" ? (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-6">
           <input name="flow" type="hidden" value={flow} />
           <div>
             <label htmlFor="email">Email</label>

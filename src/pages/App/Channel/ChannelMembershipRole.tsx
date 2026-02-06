@@ -21,7 +21,7 @@ export const ChannelMembershipRole = ({ channelMembers }: ChannelMembershipRoleP
     channelMemberId: Id<"channelMembers">,
     role: Values<typeof ChannelRole>,
   ) => {
-    changeMemberRole({ channelMemberId, role });
+    void changeMemberRole({ channelMemberId, role });
   };
 
   return (

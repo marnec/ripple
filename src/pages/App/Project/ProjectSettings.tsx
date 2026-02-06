@@ -153,7 +153,7 @@ function ProjectSettingsContent({
     try {
       await deleteProject({ id: projectId });
       toast({ title: "Project deleted" });
-      navigate(`/workspaces/${workspaceId}/projects`);
+      void navigate(`/workspaces/${workspaceId}/projects`);
     } catch (error) {
       toast({
         title: "Error deleting project",

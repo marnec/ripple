@@ -37,7 +37,7 @@ export function MessageList({ children, messages }: MessageListProps) {
     }
 
     previousLastMessage.current = messages[0];
-  }, [height]);
+  }, [height, messages]);
 
   return (
     <ScrollArea

@@ -14,7 +14,7 @@ export function Layout() {
 
   useEffect(() => {
     if (pathname === "/") setOpenMobile(true);
-  }, [pathname]);
+  }, [pathname, setOpenMobile]);
 
   return (
     <>

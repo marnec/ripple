@@ -27,7 +27,7 @@ export function RenameDiagramDialog({
   const [name, setName] = useState("");
 
   const renameDiagram = useMutation(api.diagrams.rename);
-  const diagram = useQuery(api.diagrams.get, { id: diagramId });
+  useQuery(api.diagrams.get, { id: diagramId });
 
   const { toast } = useToast();
 
@@ -59,7 +59,7 @@ export function RenameDiagramDialog({
             Choose a new name for your diagram.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => void handleSubmit(e)}>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Input

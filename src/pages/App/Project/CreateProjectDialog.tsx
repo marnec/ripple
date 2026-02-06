@@ -84,7 +84,7 @@ export function CreateProjectDialog({
       form.reset();
       onOpenChange(false);
       // Navigate to new project (per CONTEXT.md: "User lands inside the new project after creation")
-      navigate(`/workspaces/${workspaceId}/projects/${projectId}`);
+      void navigate(`/workspaces/${workspaceId}/projects/${projectId}`);
     } catch (error) {
       toast({
         title: "Error creating project",

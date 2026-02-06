@@ -1,11 +1,11 @@
-import { UserContext } from "@/pages/App/App";
+import { UserContext } from "@/pages/App/UserContext";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
 import { useCallback, useContext } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../../../components/ui/context-menu";
-import { useChatContext } from "./Chat";
+import { useChatContext } from "./ChatContext";
 import { SafeHtml } from "@/components/ui/safe-html";
 
 type MessageProps = {
@@ -21,8 +21,8 @@ export function Message({ message }: MessageProps) {
   const { setEditingMessage } = useChatContext()
   const deleteMessage = useMutation(api.messages.remove)
 
-  const handleEdit = useCallback(() => setEditingMessage({ id: message._id, body: message.body }), [message])
-  const handleDelete = useCallback(() => deleteMessage({ id: message._id }), [message])
+  const handleEdit = useCallback(() => setEditingMessage({ id: message._id, body: message.body }), [message, setEditingMessage])
+  const handleDelete = useCallback(() => void deleteMessage({ id: message._id }), [message, deleteMessage])
 
   return (
     <ContextMenu>

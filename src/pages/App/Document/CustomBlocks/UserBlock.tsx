@@ -13,7 +13,7 @@ const UserView = ({ userId }: { userId: Id<"users"> }) => {
   }
 
   return (
-    <span className="align-middle inline-flex items-center gap-1 p-1 rounded-full bg-gray-200 dark:bg-gray-700">
+    <span className="align-middle inline-flex items-center gap-1 p-1 rounded-full bg-muted">
       <Avatar className="h-5 w-5">
         <AvatarImage src={user.image} />
         <AvatarFallback>
@@ -41,7 +41,7 @@ export const User = createReactInlineContentSpec(
 
       if (!userId) {
         return (
-          <span className="align-middle inline-flex items-center gap-1 p-1 rounded-full bg-red-200 dark:bg-red-700">
+          <span className="align-middle inline-flex items-center gap-1 p-1 rounded-full bg-destructive/20">
             <span className="font-medium">@Unknown User</span>
           </span>
         );

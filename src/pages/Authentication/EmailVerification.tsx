@@ -19,17 +19,17 @@ export function EmailVerification({ email }: { email: string }) {
 
     try {
       await signIn("password", formData);
-      navigate("/");
+      void navigate("/");
     } catch (error) {
       toast({
-        title: `Could not verify email ${error}`,
+        title: `Could not verify email ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
     }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={(e) => void handleSubmit(e)}>
       <label htmlFor="code">Verification Code</label>
       <Input
         name="code"

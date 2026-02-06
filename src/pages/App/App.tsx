@@ -1,14 +1,12 @@
 import { Layout } from "@/components/Layout";
 import { Authenticated, Unauthenticated, useQuery } from "convex/react";
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useReadLocalStorage } from "usehooks-ts";
 import { api } from "../../../convex/_generated/api";
-import { Doc } from "../../../convex/_generated/dataModel";
 import { SidebarProvider } from "../../components/ui/sidebar";
 import { TooltipProvider } from "../../components/ui/tooltip";
-
-export const UserContext = React.createContext<Doc<"users"> | null | undefined>(null);
+import { UserContext } from "./UserContext";
 
 export default function App() {
   const user = useQuery(api.users.viewer);
@@ -18,8 +16,10 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    if (storedInviteId) navigate(`/invite/${storedInviteId}`);
-  }, [user]);
+    if (storedInviteId && typeof storedInviteId === "string") {
+      void navigate(`/invite/${storedInviteId}`);
+    }
+  }, [user, storedInviteId, navigate]);
 
   return (
     <UserContext.Provider value={user}>

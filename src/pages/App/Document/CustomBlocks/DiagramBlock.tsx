@@ -1,7 +1,4 @@
-import {
-  createReactBlockSpec,
-  ReactCustomBlockRenderProps,
-} from "@blocknote/react";
+import { createReactBlockSpec } from "@blocknote/react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
@@ -31,55 +28,62 @@ const DiagramView = ({
   const sanitizedSvg = svg ? sanitize(svg) : "";
   const { resolvedTheme } = useTheme();
 
-  useEffect(() => {
-    if (diagram && diagram.content) {
-      try {
-        const scene = JSON.parse(diagram.content);
-        
-        const elements = (scene.elements as NonDeleted<ExcalidrawElement>[])
-          .filter((e) => e.isDeleted !== true);
-
-        if (!elements || elements.length === 0) {
-          setSvg(""); // Mark as empty
-          return;
-        }
-        const isDarkMode = resolvedTheme === "dark";
-        const appState: Partial<AppState> = {
-          theme: isDarkMode ? "dark" : "light",
-          exportBackground: false,
-          exportWithDarkMode: isDarkMode,
-          exportEmbedScene: true,
-        };
-
-        exportToSvg({
-          elements,
-          appState,
-          files: {},
-          exportingFrame: null,
-        }).then((svgElement: SVGSVGElement) => {
-          const svgWidth = parseFloat(svgElement.getAttribute("width") || "0");
-          const svgHeight = parseFloat(svgElement.getAttribute("height") || "0");
-          if (onAspectRatioChange && svgWidth > 0 && svgHeight > 0) {
-            onAspectRatioChange(svgHeight / svgWidth);
-          }
-          svgElement.setAttribute("width", "100%");
-          svgElement.setAttribute("height", "100%");
-          // Excalidraw's export function can leave the font as "Virgil", but the web-font is "Virgil, Segoe UI Emoji"
-          // We need to replace it to make sure the font is rendered correctly.
-          const svgString = svgElement.outerHTML.replace(
-            /font-family: Virgil/g,
-            'font-family: "Virgil, Segoe UI Emoji"',
-          );
-          setSvg(svgString);
-        });
-      } catch (e) {
-        setSvg(""); // Mark as empty on error
-        console.error("Failed to parse or render diagram", e);
-      }
-    } else if (diagram) {
-      setSvg(""); // Mark as empty
+  // Derive whether the diagram has renderable elements (no Effect needed)
+  const parsedElements = (() => {
+    if (!diagram?.content) return null;
+    try {
+      const scene = JSON.parse(diagram.content);
+      const elements = (scene.elements as NonDeleted<ExcalidrawElement>[])
+        .filter((e) => e.isDeleted !== true);
+      return elements.length > 0 ? elements : null;
+    } catch (e) {
+      console.error("Failed to parse diagram", e);
+      return null;
     }
-  }, [diagram, resolvedTheme, onAspectRatioChange]);
+  })();
+
+  const isDiagramEmpty = diagram !== undefined && diagram !== null && !parsedElements;
+
+  useEffect(() => {
+    if (!parsedElements) return;
+
+    let cancelled = false;
+    const isDarkMode = resolvedTheme === "dark";
+    const appState: Partial<AppState> = {
+      theme: isDarkMode ? "dark" : "light",
+      exportBackground: false,
+      exportWithDarkMode: isDarkMode,
+      exportEmbedScene: true,
+    };
+
+    exportToSvg({
+      elements: parsedElements,
+      appState,
+      files: {},
+      exportingFrame: null,
+    }).then((svgElement: SVGSVGElement) => {
+      if (cancelled) return;
+      const svgWidth = parseFloat(svgElement.getAttribute("width") || "0");
+      const svgHeight = parseFloat(svgElement.getAttribute("height") || "0");
+      if (onAspectRatioChange && svgWidth > 0 && svgHeight > 0) {
+        onAspectRatioChange(svgHeight / svgWidth);
+      }
+      svgElement.setAttribute("width", "100%");
+      svgElement.setAttribute("height", "100%");
+      // Excalidraw's export function can leave the font as "Virgil", but the web-font is "Virgil, Segoe UI Emoji"
+      // We need to replace it to make sure the font is rendered correctly.
+      const svgString = svgElement.outerHTML.replace(
+        /font-family: Virgil/g,
+        'font-family: "Virgil, Segoe UI Emoji"',
+      );
+      setSvg(svgString);
+    }).catch((e) => {
+      if (cancelled) return;
+      console.error("Failed to render diagram", e);
+    });
+
+    return () => { cancelled = true; };
+  }, [parsedElements, resolvedTheme, onAspectRatioChange]);
 
   if (diagram === undefined) {
     return <Skeleton className="h-40 w-full" />;
@@ -87,7 +91,7 @@ const DiagramView = ({
 
   if (diagram === null) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-4 border rounded-lg text-center text-gray-500 bg-secondary h-40 gap-2">
+      <div className="w-full flex flex-col items-center justify-center p-4 border rounded-lg text-center text-muted-foreground bg-secondary h-40 gap-2">
         <CircleSlash className="h-10 w-10 text-destructive" />
         <p className="text-destructive">
           Diagram not found. It may have been deleted.
@@ -96,9 +100,9 @@ const DiagramView = ({
     );
   }
 
-  if (svg === "") {
+  if (isDiagramEmpty) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-4 text-center text-gray-500 bg-secondary h-40 gap-2">
+      <div className="w-full flex flex-col items-center justify-center p-4 text-center text-muted-foreground bg-secondary h-40 gap-2">
         <p>This diagram is empty.</p>
         <p className="text-sm">Edit the diagram to add content.</p>
       </div>
@@ -210,7 +214,7 @@ const ResizableDiagram = ({ block, editor }: any) => {
 
   if (!diagramId) {
     return (
-      <div className="p-4 border rounded-lg text-center text-gray-500">
+      <div className="p-4 border rounded-lg text-center text-muted-foreground">
         <p>Please select a diagram to display.</p>
       </div>
     );

@@ -14,7 +14,7 @@ import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
-import { useChatContext } from "./Chat";
+import { useChatContext } from "./ChatContext";
 
 interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
@@ -27,7 +27,7 @@ const editorClear = (editor: BlockNoteEditor<any>) => {
   editor.removeBlocks(editor.document.map((b) => b.id));
 };
 
-const { audio, image, heading, ...remainingBlockSpecs } = defaultBlockSpecs;
+const { audio: _audio, image: _image, heading: _heading, ...remainingBlockSpecs } = defaultBlockSpecs;
 const schema = BlockNoteSchema.create({
   blockSpecs: { ...remainingBlockSpecs },
 });
@@ -65,6 +65,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       editor.replaceBlocks([editor.document[0].id], document);
 
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);
 
   const editor = useCreateBlockNote(editorConfig);
@@ -76,9 +77,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const [isUnderline, setIsUnderline] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
 
-  const sendMessage = async () => {
+  const sendMessage = () => {
     if (isEmpty || !editor) return;
-    const body = await editor.blocksToFullHTML(editor.document);
+    const body = editor.blocksToFullHTML(editor.document);
     const plainText = editor._tiptapEditor.getText();
 
     handleSubmit(body, plainText);

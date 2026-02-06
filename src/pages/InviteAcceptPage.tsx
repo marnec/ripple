@@ -36,7 +36,7 @@ export function InviteAcceptPage() {
         title: "Invitation accepted",
         description: "You have successfully joined the workspace",
       });
-      navigate("/");
+      void navigate("/");
     } catch (error) {
       toast({
         title: "Error accepting invitation",
@@ -52,8 +52,8 @@ export function InviteAcceptPage() {
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-bold">Accept Workspace Invitation</h1>
           <p>Click below to join the workspace</p>
-          <button 
-            onClick={handleAcceptInvite}
+          <button
+            onClick={() => void handleAcceptInvite()}
             className="px-4 py-2 bg-primary text-white rounded"
           >
             Accept Invite

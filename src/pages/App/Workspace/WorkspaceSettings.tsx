@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { api } from "../../../../convex/_generated/api";
 import { useToast } from "../../../components/ui/use-toast";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Input } from "../../../components/ui/input";
 import { Button } from "../../../components/ui/button";
 import { Textarea } from "../../../components/ui/textarea";
@@ -14,15 +14,11 @@ export function WorkspaceSettings() {
     const workspace = useQuery(api.workspaces.get, { id});
     const updateWorkspace = useMutation(api.workspaces.update);
     const { toast } = useToast();
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
+    const [nameOverride, setNameOverride] = useState<string | null>(null);
+    const [descriptionOverride, setDescriptionOverride] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (workspace) {
-            setName(workspace.name);
-            setDescription(workspace.description || "");
-        }
-    }, [workspace]);
+    const name = nameOverride ?? workspace?.name ?? "";
+    const description = descriptionOverride ?? workspace?.description ?? "";
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -43,13 +39,13 @@ export function WorkspaceSettings() {
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-4 w-full p-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4 w-full p-4">
             <div>
                 <label htmlFor="name" className="block text-sm font-medium">Workspace Name</label>
                 <Input
                     id="name"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => setNameOverride(e.target.value)}
                     required
                 />
             </div>
@@ -58,7 +54,7 @@ export function WorkspaceSettings() {
                 <Textarea
                     id="description"
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={(e) => setDescriptionOverride(e.target.value)}
                     rows={3}
                 />
             </div>

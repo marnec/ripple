@@ -5,9 +5,8 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery } from "convex/react";
-import { ConvexError } from "convex/values";
 import { SearchIcon } from "lucide-react";
-import { createContext, Fragment, useContext, useState } from "react";
+import { Fragment, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
@@ -18,27 +17,9 @@ import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
 import { MessageContext } from "./MessageContext";
 import { SearchDialog } from "./SearchDialog";
+import { ChatContext, type EditingMessage } from "./ChatContext";
 
-export const useChatContext = () => {
-  const context = useContext(ChatContext);
-  if (!context) throw new ConvexError("useChatContext must be used within ChatProvider");
-  return context;
-};
-
-type EditingMessage = { body: string | null; id: Id<"messages"> | null };
-
-type EditingMessageContext = {
-  editingMessage: EditingMessage;
-  setEditingMessage: (msg: EditingMessage) => void;
-};
-
-export const ChatContext = createContext<EditingMessageContext | null>(null);
-
-export type ChatProps = {
-  channelId: Id<"channels">;
-};
-
-export function Chat({ channelId }: ChatProps) {
+export function Chat({ channelId }: { channelId: Id<"channels"> }) {
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
   const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');
   const [contextMessageId, setContextMessageId] = useState<Id<"messages"> | null>(null);
@@ -178,7 +159,7 @@ export function Chat({ channelId }: ChatProps) {
         )}
       </MessageList>
 
-          <MessageComposer handleSubmit={handleSubmit}></MessageComposer>
+          <MessageComposer handleSubmit={(content, plainText) => void handleSubmit(content, plainText)}></MessageComposer>
         </>
       )}
     </ChatContext.Provider>

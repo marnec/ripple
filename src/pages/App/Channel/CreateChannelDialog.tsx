@@ -68,10 +68,10 @@ export function CreateChannelDialog({
         description: `Successfully created channel "#${values.name}"`,
       });
       form.reset();
-      navigate(`/workspaces/${workspaceId}/channels/${newChannelId}${values.isPublic ? '' : '/settings'}`)
+      void navigate(`/workspaces/${workspaceId}/channels/${newChannelId}${values.isPublic ? '' : '/settings'}`)
 
       onOpenChange(false);
-    } catch (error) {
+    } catch {
       toast({
         title: "Error creating channel",
         description: "Please try again later",

@@ -25,7 +25,7 @@ export const DocumentMembershipRole = ({ documentMembers }: DocumentMembershipRo
     userId: Id<"users">,
     role: Values<typeof DocumentRole>,
   ) => {
-    updateRole({ documentId, userId, role });
+    void updateRole({ documentId, userId, role });
   };
 
   return (

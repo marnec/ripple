@@ -9,8 +9,7 @@ import {
 import usePushNotifications from "@/hooks/use-push-notifications";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@shared/types/routes";
-import { makeUseQueryWithStatus } from "convex-helpers/react";
-import { useQueries, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
@@ -19,8 +18,6 @@ import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
 import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { ProjectSelectorList } from "./Project/ProjectSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
-
-export const useQueryWithStatus = makeUseQueryWithStatus(useQueries);
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -36,25 +33,25 @@ export function AppSidebar() {
 
   const handleChannelSelect = (id: string | null) => {
     if (!id) {
-      navigate(`/workspaces/${workspaceId}`);
+      void navigate(`/workspaces/${workspaceId}`);
     } else {
-      navigate(`/workspaces/${workspaceId}/channels/${id}`);
+      void navigate(`/workspaces/${workspaceId}/channels/${id}`);
       setOpenMobile(false);
       void subscribeUser();
     }
   };
 
   const handleManageChannel = (id: string) => {
-    navigate(`/workspaces/${workspaceId}/channels/${id}/settings`);
+    void navigate(`/workspaces/${workspaceId}/channels/${id}/settings`);
   };
 
   const handleDocumentSelect = (id: string | null) => {
     setOpenMobile(false);
 
     if (!id) {
-      navigate(`/workspaces/${workspaceId}/documents`);
+      void navigate(`/workspaces/${workspaceId}/documents`);
     } else {
-      navigate(`/workspaces/${workspaceId}/documents/${id}`);
+      void navigate(`/workspaces/${workspaceId}/documents/${id}`);
     }
   };
 
@@ -62,33 +59,33 @@ export function AppSidebar() {
     setOpenMobile(false);
 
     if (!id) {
-      navigate(`/workspaces/${workspaceId}/diagrams`);
+      void navigate(`/workspaces/${workspaceId}/diagrams`);
     } else {
-      navigate(`/workspaces/${workspaceId}/diagrams/${id}`);
+      void navigate(`/workspaces/${workspaceId}/diagrams/${id}`);
     }
   };
 
   const handleWorkspaceSelect = (id: string) => {
-    navigate(`/workspaces/${id}`);
+    void navigate(`/workspaces/${id}`);
   };
 
   const handleChannelDetails = (id: string) => {
     if (!workspaceId) return;
     if (isMobile) setOpenMobile(false);
-    navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
+    void navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
   };
 
   const handleProjectSelect = (id: string | null) => {
     setOpenMobile(false);
     if (!id) {
-      navigate(`/workspaces/${workspaceId}/projects`);
+      void navigate(`/workspaces/${workspaceId}/projects`);
     } else {
-      navigate(`/workspaces/${workspaceId}/projects/${id}`);
+      void navigate(`/workspaces/${workspaceId}/projects/${id}`);
     }
   };
 
   const handleManageProject = (id: string) => {
-    navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
+    void navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
   };
 
   return (

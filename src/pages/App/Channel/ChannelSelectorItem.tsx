@@ -1,6 +1,6 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation } from "convex/react";
-import { Cog, Folder, Info, MoreHorizontal, Trash2 } from "lucide-react";
+import { Cog, Info, MoreHorizontal, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {

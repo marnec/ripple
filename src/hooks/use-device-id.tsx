@@ -1,24 +1,20 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 
 const generateDeviceId = () => {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
 
 export const useDeviceId = () => {
-  const [deviceId, setDeviceId] = useState(() => {
+  const deviceId = useMemo(() => {
     if (typeof window !== "undefined") {
-      return sessionStorage.getItem("device_id") || "";
+      const existing = sessionStorage.getItem("device_id");
+      if (existing) return existing;
+      const newId = generateDeviceId();
+      sessionStorage.setItem("device_id", newId);
+      return newId;
     }
     return "";
-  });
-
-  useEffect(() => {
-    if (!deviceId) {
-      const newId = generateDeviceId();
-      setDeviceId(newId);
-      sessionStorage.setItem("device_id", newId);
-    }
-  }, [deviceId]);
+  }, []);
 
   return deviceId;
 };

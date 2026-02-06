@@ -37,7 +37,7 @@ export function CreateWorkspaceDialog({
       setName("");
       setDescription("");
       onOpenChange(false);
-    } catch (error) {
+    } catch {
       toast({
         title: "Error creating workspace",
         description: "Please try again later",
@@ -55,7 +55,7 @@ export function CreateWorkspaceDialog({
             Create a new workspace to start chatting with your team
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={void handleSubmit} className="space-y-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="name" className="text-sm font-medium">
               Name

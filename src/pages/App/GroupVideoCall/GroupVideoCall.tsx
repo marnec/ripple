@@ -158,7 +158,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         { audio: true }
       ];
 
-      let lastError: any;
+      let _lastError: unknown;
       for (let i = 0; i < attempts.length; i++) {
         try {
           console.log(`Attempt ${i + 1}:`, attempts[i]);
@@ -166,7 +166,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
           break;
         } catch (error) {
           console.warn(`Attempt ${i + 1} failed:`, error);
-          lastError = error;
+          _lastError = error;
           if (i === attempts.length - 1) {
             throw error;
           }
@@ -449,7 +449,7 @@ const GroupVideoCall = ({ channelId }: { channelId: string }) => {
         }
       })();
     });
-  }, [hasJoined, offerSignals, user?._id, channelId, otherParticipants, createPeerConnection, processQueuedIceCandidates, sendSignal]);
+  }, [hasJoined, offerSignals, user?._id, channelId, otherParticipants, createPeerConnection, processQueuedIceCandidates, sendSignal, localStream]);
 
   // Handle incoming answers (when someone answers our offer)
   useEffect(() => {

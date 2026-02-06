@@ -23,7 +23,7 @@ export function MessageContext({ messageId, onClose, onBackToChat }: MessageCont
     );
   }
 
-  const { messages, targetMessageId, targetIndex } = contextData;
+  const { messages, targetMessageId: _targetMessageId, targetIndex } = contextData;
 
   return (
     <div className="flex flex-col h-full">

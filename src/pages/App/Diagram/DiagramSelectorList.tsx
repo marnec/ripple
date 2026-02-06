@@ -39,7 +39,7 @@ export function DiagramSelectorList({
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>Diagrams</SidebarGroupLabel>
-      <SidebarGroupAction onClick={handleDiagramCreate} title="Create diagram">
+      <SidebarGroupAction onClick={() => void handleDiagramCreate()} title="Create diagram">
         <PenTool />
         <span className="sr-only">Create diagram</span>
       </SidebarGroupAction>
@@ -54,7 +54,7 @@ export function DiagramSelectorList({
             diagramId={diagramId}
             onDiagramSelect={onDiagramSelect}
             onRenameDiagram={setSelectedDiagramForRename}
-            onDeleteDiagram={handleDiagramDelete}
+            onDeleteDiagram={(id) => void handleDiagramDelete(id)}
           />
         ))}
       </SidebarMenu>

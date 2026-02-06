@@ -77,7 +77,7 @@ export function DynamicBreadcrumb() {
     <Breadcrumb>
       <BreadcrumbList>
         <BreadcrumbItem key="#">
-          <BreadcrumbLink onClick={() => navigate("/")} className="cursor-pointer">
+          <BreadcrumbLink onClick={() => void navigate("/")} className="cursor-pointer">
             {APP_NAME}
           </BreadcrumbLink>
         </BreadcrumbItem>
@@ -86,9 +86,9 @@ export function DynamicBreadcrumb() {
             <React.Fragment key={item.href}>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <NamedBreadcrumbItem 
-                  item={item} 
-                  onClick={navigate}
+                <NamedBreadcrumbItem
+                  item={item}
+                  onClick={(href) => void navigate(href)}
                 />
               </BreadcrumbItem>
             </React.Fragment>

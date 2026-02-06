@@ -1,4 +1,4 @@
-import { UserContext } from "@/pages/App/App";
+import { UserContext } from "@/pages/App/UserContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,7 +99,7 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={signOut}>
+            <DropdownMenuItem onClick={() => void signOut()}>
               <LogOut />
               Log out
             </DropdownMenuItem>
