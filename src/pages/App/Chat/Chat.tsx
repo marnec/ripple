@@ -6,13 +6,15 @@ import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery } from "convex/react";
 import { SearchIcon } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useState, useContext } from "react";
+import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Separator } from "../../../components/ui/separator";
 import { toast } from "../../../components/ui/use-toast";
+import { UserContext } from "../UserContext";
 import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
 import { MessageContext } from "./MessageContext";
@@ -20,6 +22,8 @@ import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage } from "./ChatContext";
 
 export function Chat({ channelId }: { channelId: Id<"channels"> }) {
+  const { workspaceId } = useParams<{ workspaceId: string }>();
+  const currentUser = useContext(UserContext);
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
   const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');
   const [contextMessageId, setContextMessageId] = useState<Id<"messages"> | null>(null);
@@ -89,6 +93,28 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
     }
   };
 
+  const handleTaskCreated = (taskId: Id<"tasks">, taskTitle: string) => {
+    if (!currentUser) return;
+
+    const userName = currentUser.name || currentUser.email || "Someone";
+    const systemMessageBody = `<p class="text-muted-foreground text-sm italic">📋 ${userName} created a task: <strong>${taskTitle}</strong></p>`;
+    const systemMessagePlainText = `${userName} created a task: ${taskTitle}`;
+    const isomorphicId = crypto.randomUUID();
+
+    void sendMessage({
+      body: systemMessageBody,
+      plainText: systemMessagePlainText,
+      channelId,
+      isomorphicId,
+    }).catch((error) => {
+      console.error("Failed to send system message:", error);
+    });
+  };
+
+  if (!workspaceId) {
+    return <div>Error: Workspace ID not found</div>;
+  }
+
   return (
     <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
       {/* Show message context view when jumping to a specific message */}
@@ -144,7 +170,12 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
                 </div>
               </>
             )}
-            <Message message={message}></Message>
+            <Message
+              message={message}
+              channelId={channelId}
+              workspaceId={workspaceId as Id<"workspaces">}
+              onTaskCreated={handleTaskCreated}
+            />
           </Fragment>
         ))}
         {messages && (
