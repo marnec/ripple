@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Planning next milestone
+**Current focus:** v0.9 Chat Features — @mentions, emoji reactions, reply-to
 
 ## Current Position
 
-Phase: v0.8 complete — all 8 phases shipped
-Plan: N/A
-Status: Milestone complete, ready for next milestone
-Last activity: 2026-02-07 — v0.8 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-07 — Milestone v0.9 started
 
-Progress: [████████████] 100% (v0.8 shipped)
+Progress: ░░░░░░░░░░ 0%
 
 ## Performance Metrics
 

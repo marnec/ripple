@@ -16,7 +16,7 @@ Seamless integration between all workspace features — users, documents, diagra
 - ✓ Workspaces with membership and role-based access control — existing
 - ✓ Channels (public/private) with real-time messaging — existing
 - ✓ Full-text search on messages — existing
-- ✓ User tagging in chat — existing
+- ✓ Task/project mention chips in chat composer — existing
 - ✓ Collaborative documents with BlockNote editor — existing
 - ✓ Real-time presence and cursor awareness — existing
 - ✓ Excalidraw diagrams embeddable in documents — existing
@@ -38,6 +38,9 @@ Seamless integration between all workspace features — users, documents, diagra
 
 <!-- Current scope. Building toward these. -->
 
+- [ ] @user mentions in chat with autocomplete and push notifications
+- [ ] Emoji reactions on messages (Slack-style pills with counts)
+- [ ] Inline reply-to messages with quoted preview
 - [ ] Due dates on tasks
 - [ ] Board filters (by assignee, priority, labels)
 - [ ] Configurable views (list view, calendar view)
@@ -57,11 +60,21 @@ Seamless integration between all workspace features — users, documents, diagra
 - Gantt charts — implies false precision; Kanban is more flexible
 - External task sharing — security complexity; workspace members only
 
+## Current Milestone: v0.9 Chat Features
+
+**Goal:** Enrich chat with @user mentions, emoji reactions, and inline reply-to — bringing chat interaction quality closer to Slack/Teams.
+
+**Target features:**
+- @user mentions in chat with autocomplete, styled chips, and push notifications
+- Emoji reactions on messages (Slack-style pills with counts, emoji picker)
+- Inline reply-to with quoted preview of original message in chat flow
+
 ## Context
 
 Shipped v0.8 with ~20,568 net lines of TypeScript across 180 files.
 Tech stack: Convex, React 18, React Router v6, Tailwind CSS, shadcn/ui, BlockNote, dnd-kit, fractional-indexing.
 Task management fully integrated with existing chat, documents, and diagrams.
+Chat currently has task/project mention chips but no @user mentions, no reactions, no reply-to.
 
 ## Constraints
 
@@ -88,4 +101,4 @@ Task management fully integrated with existing chat, documents, and diagrams.
 | mentionedUserIds as v.array(v.string()) | IDs come from JSON parsing, not typed Convex IDs | ⚠️ Revisit |
 
 ---
-*Last updated: 2026-02-07 after v0.8 milestone*
+*Last updated: 2026-02-07 after v0.9 milestone start*
