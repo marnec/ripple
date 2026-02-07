@@ -42,7 +42,7 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
           task.status?.color || "bg-gray-500"
         )}
       />
-      <span className="max-w-[200px] truncate">{task.title}</span>
+      <span className="max-w-50 truncate">{task.title}</span>
     </button>
   );
 }

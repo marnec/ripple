@@ -38,7 +38,7 @@ export const TaskMention = createReactInlineContentSpec(
           )}
         >
           <span className="h-2 w-2 rounded-full bg-gray-400" />
-          <span className="max-w-[200px] truncate">{taskTitle || "Task"}</span>
+          <span className="max-w-50 truncate">{taskTitle || "Task"}</span>
         </span>
       );
     },

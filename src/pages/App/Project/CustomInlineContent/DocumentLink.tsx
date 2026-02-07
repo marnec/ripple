@@ -61,7 +61,7 @@ const DocumentLinkView = ({ documentId }: { documentId: Id<"documents"> }) => {
       onClick={handleClick}
     >
       <FileText className="h-3.5 w-3.5 shrink-0" />
-      <span className="max-w-[200px] truncate">{document.name}</span>
+      <span className="max-w-50 truncate">{document.name}</span>
     </span>
   );
 };

@@ -69,7 +69,7 @@ const ProjectReferenceView = ({
       onClick={handleClick}
     >
       <span className={cn("h-2 w-2 rounded-full shrink-0", project.color)} />
-      <span className="max-w-[200px] truncate">{project.name}</span>
+      <span className="max-w-50 truncate">{project.name}</span>
     </span>
   );
 };
