@@ -3,6 +3,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getUserDisplayName } from "@shared/displayName";
 
 export const UserMention = createReactInlineContentSpec(
   {
@@ -42,7 +43,7 @@ const UserMentionView = ({ userId }: { userId: Id<"users"> }) => {
 
   return (
     <span className="font-bold text-foreground align-middle" contentEditable={false}>
-      @{user.name || "Unknown"}
+      @{getUserDisplayName(user)}
     </span>
   );
 };

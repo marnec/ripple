@@ -308,7 +308,7 @@ export const TaskMention = createReactInlineContentSpec(
                      rounded-full bg-muted text-sm font-medium cursor-default"
         >
           <span className="h-2 w-2 rounded-full bg-gray-400" />
-          <span className="max-w-[200px] truncate">{taskTitle || "Task"}</span>
+          <span className="max-w-50 truncate">{taskTitle || "Task"}</span>
         </span>
       );
     },
@@ -488,7 +488,7 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
                  transition-colors cursor-pointer text-sm font-medium align-middle"
     >
       <span className={cn("h-2 w-2 rounded-full shrink-0", task.status?.color)} />
-      <span className="max-w-[200px] truncate">{task.title}</span>
+      <span className="max-w-50 truncate">{task.title}</span>
     </button>
   );
 }

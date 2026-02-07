@@ -5,7 +5,208 @@ import { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
-import { extractMentionedUserIds } from "./utils/blocknote";
+import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractTaskMentionIds } from "./utils/blocknote";
+import { getUserDisplayName } from "@shared/displayName";
+import { DatabaseReader } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
+
+/**
+ * Enrich messages with mentionedUsers record, batch-resolving all @mentions
+ * found in message bodies so the client can render them instantly.
+ */
+async function enrichWithMentionedUsers<T extends { body: string }>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+  userMap: Map<string, Doc<"users"> | null>,
+): Promise<(T & { mentionedUsers: Record<string, { name: string | null; email?: string | null; image?: string }> })[]> {
+  // Collect all mentioned user IDs across all message bodies
+  const allMentionedIds = new Set<string>();
+  for (const msg of messages) {
+    for (const id of extractMentionedUserIds(msg.body)) {
+      allMentionedIds.add(id);
+    }
+  }
+
+  // Batch-fetch any not already in userMap
+  const missingIds = [...allMentionedIds].filter(id => !userMap.has(id));
+  if (missingIds.length > 0) {
+    const fetched = await getAll(ctx.db, missingIds as Id<"users">[]);
+    fetched.forEach((u, i) => {
+      userMap.set(missingIds[i], u);
+    });
+  }
+
+  // Build per-message mentionedUsers record
+  return messages.map(msg => {
+    const mentionedIds = extractMentionedUserIds(msg.body);
+    const mentionedUsers: Record<string, { name: string | null; email?: string | null; image?: string }> = {};
+    for (const id of mentionedIds) {
+      const u = userMap.get(id);
+      if (u) {
+        mentionedUsers[id] = { name: u.name ?? null, email: u.email ?? null, image: u.image };
+      }
+    }
+    return { ...msg, mentionedUsers };
+  });
+}
+
+/**
+ * Enrich messages with mentionedTasks record, batch-resolving all #task mentions.
+ */
+async function enrichWithMentionedTasks<T extends { body: string }>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+): Promise<(T & { mentionedTasks: Record<string, { title: string; projectId: string; statusColor?: string }> })[]> {
+  const allTaskIds = new Set<string>();
+  for (const msg of messages) {
+    for (const id of extractTaskMentionIds(msg.body)) {
+      allTaskIds.add(id);
+    }
+  }
+
+  const taskIds = [...allTaskIds];
+  const taskMap = new Map<string, { title: string; projectId: string; statusId: string } | null>();
+  if (taskIds.length > 0) {
+    const tasks = await getAll(ctx.db, taskIds as Id<"tasks">[]);
+    tasks.forEach((t, i) => {
+      taskMap.set(taskIds[i], t ? { title: t.title, projectId: t.projectId as string, statusId: t.statusId as string } : null);
+    });
+  }
+
+  // Batch-fetch statuses for all tasks
+  const statusIds = [...new Set(
+    [...taskMap.values()].filter(t => t).map(t => t!.statusId)
+  )];
+  const statusMap = new Map<string, string>();
+  if (statusIds.length > 0) {
+    const statuses = await getAll(ctx.db, statusIds as Id<"taskStatuses">[]);
+    statuses.forEach((s, i) => {
+      if (s) statusMap.set(statusIds[i], s.color);
+    });
+  }
+
+  return messages.map(msg => {
+    const ids = extractTaskMentionIds(msg.body);
+    const mentionedTasks: Record<string, { title: string; projectId: string; statusColor?: string }> = {};
+    for (const id of ids) {
+      const t = taskMap.get(id);
+      if (t) {
+        mentionedTasks[id] = { title: t.title, projectId: t.projectId, statusColor: statusMap.get(t.statusId) };
+      }
+    }
+    return { ...msg, mentionedTasks };
+  });
+}
+
+/**
+ * Enrich messages with mentionedProjects record, batch-resolving all #project references.
+ */
+async function enrichWithMentionedProjects<T extends { body: string }>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+): Promise<(T & { mentionedProjects: Record<string, { name: string; color: string }> })[]> {
+  const allProjectIds = new Set<string>();
+  for (const msg of messages) {
+    for (const id of extractProjectIds(msg.body)) {
+      allProjectIds.add(id);
+    }
+  }
+
+  const projectIds = [...allProjectIds];
+  const projectMap = new Map<string, { name: string; color: string } | null>();
+  if (projectIds.length > 0) {
+    const projects = await getAll(ctx.db, projectIds as Id<"projects">[]);
+    projects.forEach((p, i) => {
+      projectMap.set(projectIds[i], p ? { name: p.name, color: p.color } : null);
+    });
+  }
+
+  return messages.map(msg => {
+    const ids = extractProjectIds(msg.body);
+    const mentionedProjects: Record<string, { name: string; color: string }> = {};
+    for (const id of ids) {
+      const p = projectMap.get(id);
+      if (p) {
+        mentionedProjects[id] = p;
+      }
+    }
+    return { ...msg, mentionedProjects };
+  });
+}
+
+/**
+ * Enrich messages with replyTo info, resolving mention text from parent bodies.
+ * Shared by list, search, and getMessageContext queries.
+ */
+async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+  userMap: Map<string, Doc<"users"> | null>,
+): Promise<(T & { replyTo: { author: string; plainText: string; deleted: boolean } | null })[]> {
+  // Batch-fetch parent messages
+  const parentIds = [...new Set(
+    messages.filter(m => m.replyToId).map(m => m.replyToId!)
+  )];
+  const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
+  const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
+
+  // Collect parent author user IDs not already in userMap
+  const missingParentUserIds = [...new Set(
+    parents.filter(p => p && !userMap.has(p.userId)).map(p => p!.userId)
+  )];
+
+  // Also collect user IDs mentioned inside parent bodies
+  const mentionedUserIds = [...new Set(
+    parents.filter(p => p?.body).flatMap(p => extractMentionedUserIds(p!.body))
+  )].filter(id => !userMap.has(id));
+
+  const allMissingIds = [...new Set([...missingParentUserIds, ...mentionedUserIds])];
+  if (allMissingIds.length > 0) {
+    const fetched = await getAll(ctx.db, allMissingIds as Id<"users">[]);
+    fetched.forEach((u, i) => {
+      if (u) userMap.set(allMissingIds[i], u);
+    });
+  }
+
+  // Build user name map for mention text extraction
+  const userNameMap = new Map<string, string>();
+  for (const [id, u] of userMap) {
+    if (u) userNameMap.set(id, getUserDisplayName(u));
+  }
+
+  // Batch-fetch project names for parent message mentions
+  const allParentProjectIds = [...new Set(
+    parents.filter(p => p?.body).flatMap(p => extractProjectIds(p!.body))
+  )];
+  const projectNameMap = new Map<string, string>();
+  if (allParentProjectIds.length > 0) {
+    const projects = await getAll(ctx.db, allParentProjectIds as any);
+    projects.forEach((p, i) => {
+      if (p && "name" in p) projectNameMap.set(allParentProjectIds[i], (p as any).name);
+    });
+  }
+
+  // Enrich each message
+  return messages.map((msg) => {
+    if (!msg.replyToId) {
+      return { ...msg, replyTo: null };
+    }
+    const parent = parentMap.get(msg.replyToId);
+    if (!parent) {
+      return { ...msg, replyTo: null };
+    }
+    const parentUser = userMap.get(parent.userId);
+    const plainText = extractPlainTextFromBody(parent.body, userNameMap, projectNameMap) || parent.plainText;
+    return {
+      ...msg,
+      replyTo: {
+        author: getUserDisplayName(parentUser),
+        plainText,
+        deleted: parent.deleted,
+      },
+    };
+  });
+}
 
 export const list = query({
   args: { channelId: v.id("channels"), paginationOpts: paginationOptsValidator },
@@ -22,6 +223,9 @@ export const list = query({
       replyToId: v.optional(v.id("messages")),
       author: v.string(),
       replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
+      mentionedUsers: v.any(),
+      mentionedTasks: v.any(),
+      mentionedProjects: v.any(),
     })),
     isDone: v.boolean(),
     continueCursor: v.string(),
@@ -63,52 +267,17 @@ export const list = query({
     // Add the author's name to each message
     const messagesWithAuthor = messagesPage.page.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: user?.name ?? user?.email ?? "Unknown" };
+      return { ...message, author: getUserDisplayName(user) };
     });
 
-    // Batch-fetch parent messages for replies
-    const parentIds = [...new Set(
-      messagesWithAuthor
-        .filter(m => m.replyToId)
-        .map(m => m.replyToId!)
-    )];
-    const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
-    const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
-
-    // Collect parent user IDs not already in userMap
-    const missingParentUserIds = [...new Set(
-      parents.filter(p => p && !userMap.has(p.userId)).map(p => p!.userId)
-    )];
-    if (missingParentUserIds.length > 0) {
-      const missingUsers = await getAll(ctx.db, missingParentUserIds);
-      missingUsers.forEach((u, i) => {
-        if (u) userMap.set(missingParentUserIds[i], u);
-      });
-    }
-
-    // Enrich with parent message info
-    const messagesWithReplyTo = messagesWithAuthor.map((msg) => {
-      if (!msg.replyToId) {
-        return { ...msg, replyTo: null };
-      }
-      const parent = parentMap.get(msg.replyToId);
-      if (!parent) {
-        return { ...msg, replyTo: null };
-      }
-      const parentUser = userMap.get(parent.userId);
-      return {
-        ...msg,
-        replyTo: {
-          author: parentUser?.name ?? parentUser?.email ?? "Unknown",
-          plainText: parent.plainText,
-          deleted: parent.deleted,
-        },
-      };
-    });
+    const messagesWithReplyTo = await enrichWithReplyTo(ctx, messagesWithAuthor, userMap);
+    const messagesWithMentions = await enrichWithMentionedUsers(ctx, messagesWithReplyTo, userMap);
+    const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
+    const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
 
     return {
       ...messagesPage,
-      page: messagesWithReplyTo,
+      page: messagesWithProjects,
     };
   },
 });
@@ -165,7 +334,7 @@ export const send = mutation({
         channelId,
         plainText,
         mentionedBy: {
-          name: user.name || user.email || "Someone",
+          name: getUserDisplayName(user),
           id: userId,
         },
       });
@@ -175,7 +344,7 @@ export const send = mutation({
       channelId,
       body: plainText,
       author: {
-        name: user.name || user.email || user._id,
+        name: getUserDisplayName(user),
         id: user._id,
       },
     });
@@ -233,6 +402,9 @@ export const search = query({
     replyToId: v.optional(v.id("messages")),
     author: v.string(),
     replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
+    mentionedUsers: v.any(),
+    mentionedTasks: v.any(),
+    mentionedProjects: v.any(),
   })),
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
     const userId = await getAuthUserId(ctx);
@@ -257,7 +429,7 @@ export const search = query({
     // Search for messages
     const searchResults = await ctx.db
       .query("messages")
-      .withSearchIndex("by_text", (q) => 
+      .withSearchIndex("by_text", (q) =>
         q.search("plainText", searchTerm).eq("channelId", channelId)
       )
       .take(limit);
@@ -270,50 +442,15 @@ export const search = query({
     // Add author information
     const searchResultsWithAuthor = searchResults.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: user?.name ?? user?.email ?? "Unknown" };
+      return { ...message, author: getUserDisplayName(user) };
     });
 
-    // Batch-fetch parent messages for replies
-    const parentIds = [...new Set(
-      searchResultsWithAuthor
-        .filter(m => m.replyToId)
-        .map(m => m.replyToId!)
-    )];
-    const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
-    const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
+    const searchResultsWithReplyTo = await enrichWithReplyTo(ctx, searchResultsWithAuthor, userMap);
+    const searchResultsWithMentions = await enrichWithMentionedUsers(ctx, searchResultsWithReplyTo, userMap);
+    const searchResultsWithTasks = await enrichWithMentionedTasks(ctx, searchResultsWithMentions);
+    const searchResultsWithProjects = await enrichWithMentionedProjects(ctx, searchResultsWithTasks);
 
-    // Collect parent user IDs not already in userMap
-    const missingParentUserIds = [...new Set(
-      parents.filter(p => p && !userMap.has(p.userId)).map(p => p!.userId)
-    )];
-    if (missingParentUserIds.length > 0) {
-      const missingUsers = await getAll(ctx.db, missingParentUserIds);
-      missingUsers.forEach((u, i) => {
-        if (u) userMap.set(missingParentUserIds[i], u);
-      });
-    }
-
-    // Enrich with parent message info
-    const searchResultsWithReplyTo = searchResultsWithAuthor.map((msg) => {
-      if (!msg.replyToId) {
-        return { ...msg, replyTo: null };
-      }
-      const parent = parentMap.get(msg.replyToId);
-      if (!parent) {
-        return { ...msg, replyTo: null };
-      }
-      const parentUser = userMap.get(parent.userId);
-      return {
-        ...msg,
-        replyTo: {
-          author: parentUser?.name ?? parentUser?.email ?? "Unknown",
-          plainText: parent.plainText,
-          deleted: parent.deleted,
-        },
-      };
-    });
-
-    return searchResultsWithReplyTo;
+    return searchResultsWithProjects;
   },
 });
 
@@ -335,6 +472,9 @@ export const getMessageContext = query({
       replyToId: v.optional(v.id("messages")),
       author: v.string(),
       replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
+      mentionedUsers: v.any(),
+      mentionedTasks: v.any(),
+      mentionedProjects: v.any(),
     })),
     targetMessageId: v.id("messages"),
     targetIndex: v.number(),
@@ -363,7 +503,7 @@ export const getMessageContext = query({
     // Get messages before and after the target message
     const messagesBefore = await ctx.db
       .query("messages")
-      .withIndex("undeleted_by_channel", (q) => 
+      .withIndex("undeleted_by_channel", (q) =>
         q.eq("channelId", targetMessage.channelId).eq("deleted", false)
       )
       .filter((q) => q.lt(q.field("_creationTime"), targetMessage._creationTime))
@@ -372,7 +512,7 @@ export const getMessageContext = query({
 
     const messagesAfter = await ctx.db
       .query("messages")
-      .withIndex("undeleted_by_channel", (q) => 
+      .withIndex("undeleted_by_channel", (q) =>
         q.eq("channelId", targetMessage.channelId).eq("deleted", false)
       )
       .filter((q) => q.gt(q.field("_creationTime"), targetMessage._creationTime))
@@ -390,51 +530,16 @@ export const getMessageContext = query({
     // Add author information
     const messagesWithAuthor = allMessages.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: user?.name ?? user?.email ?? "Unknown" };
+      return { ...message, author: getUserDisplayName(user) };
     });
 
-    // Batch-fetch parent messages for replies
-    const parentIds = [...new Set(
-      messagesWithAuthor
-        .filter(m => m.replyToId)
-        .map(m => m.replyToId!)
-    )];
-    const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
-    const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
-
-    // Collect parent user IDs not already in userMap
-    const missingParentUserIds = [...new Set(
-      parents.filter(p => p && !userMap.has(p.userId)).map(p => p!.userId)
-    )];
-    if (missingParentUserIds.length > 0) {
-      const missingUsers = await getAll(ctx.db, missingParentUserIds);
-      missingUsers.forEach((u, i) => {
-        if (u) userMap.set(missingParentUserIds[i], u);
-      });
-    }
-
-    // Enrich with parent message info
-    const messagesWithReplyTo = messagesWithAuthor.map((msg) => {
-      if (!msg.replyToId) {
-        return { ...msg, replyTo: null };
-      }
-      const parent = parentMap.get(msg.replyToId);
-      if (!parent) {
-        return { ...msg, replyTo: null };
-      }
-      const parentUser = userMap.get(parent.userId);
-      return {
-        ...msg,
-        replyTo: {
-          author: parentUser?.name ?? parentUser?.email ?? "Unknown",
-          plainText: parent.plainText,
-          deleted: parent.deleted,
-        },
-      };
-    });
+    const messagesWithReplyTo = await enrichWithReplyTo(ctx, messagesWithAuthor, userMap);
+    const messagesWithMentions = await enrichWithMentionedUsers(ctx, messagesWithReplyTo, userMap);
+    const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
+    const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
 
     return {
-      messages: messagesWithReplyTo,
+      messages: messagesWithProjects,
       targetMessageId: messageId,
       targetIndex: messagesBefore.length // Index of the target message in the results
     };

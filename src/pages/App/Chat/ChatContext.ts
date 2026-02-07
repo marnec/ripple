@@ -8,6 +8,7 @@ export type ReplyingToMessage = {
   id: Id<"messages">;
   author: string;
   plainText: string;
+  body: string;
 } | null;
 
 type ChatContextType = {

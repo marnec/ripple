@@ -51,6 +51,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
 
 import { TaskComments } from "./TaskComments";
+import { getUserDisplayName } from "@shared/displayName";
 
 type TaskDetailSheetProps = {
   taskId: Id<"tasks"> | null;
@@ -526,7 +527,7 @@ export function TaskDetailSheet({
                         .filter(m => m.name?.toLowerCase().includes(query.toLowerCase()))
                         .slice(0, 10)
                         .map(m => ({
-                          title: m.name ?? "Unknown",
+                          title: getUserDisplayName(m),
                           onItemClick: () => {
                             editor.insertInlineContent([
                               { type: "userMention", props: { userId: m.userId } },

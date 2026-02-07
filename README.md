@@ -3,7 +3,7 @@ NEXT STEPS:
 - pwa
 - migrate from netlify to cloudflare hosting
 - fix videocalls and activate cloudflare STUN servers
-- internationalization
+- internationalization (i18n and localization)
 - profile settings saved to local storage  
     - user notification settings
     - language preference

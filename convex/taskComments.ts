@@ -4,6 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
+import { getUserDisplayName } from "@shared/displayName";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -47,7 +48,7 @@ export const list = query({
       const user = userMap.get(comment.userId);
       return {
         ...comment,
-        author: user?.name ?? user?.email ?? "Unknown",
+        author: getUserDisplayName(user),
         image: user?.image,
       };
     });
@@ -100,7 +101,7 @@ export const create = mutation({
         mentionedUserIds: filteredMentions,
         taskTitle: task?.title ?? "a task",
         mentionedBy: {
-          name: user?.name ?? user?.email ?? "Someone",
+          name: getUserDisplayName(user),
           id: userId,
         },
         context: "comment",
@@ -145,7 +146,7 @@ export const update = mutation({
         mentionedUserIds: addedMentions,
         taskTitle: task?.title ?? "a task",
         mentionedBy: {
-          name: user?.name ?? user?.email ?? "Someone",
+          name: getUserDisplayName(user),
           id: userId,
         },
         context: "comment",

@@ -3,6 +3,7 @@ import { ChannelRole } from "@shared/enums";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ChannelMember } from "@shared/types/channel";
+import { getUserDisplayName } from "@shared/displayName";
 import { channelRoleSchema } from "./schema";
 
 const channelMemberValidator = v.object({
@@ -54,7 +55,7 @@ export const membersByChannel = query({
       members.map((member) => {
         return ctx.db.get(member.userId).then((user) => {
           if (!user) return null;
-          return { ...member, name: user.name ?? user.email ?? "unknown" } satisfies ChannelMember;
+          return { ...member, name: getUserDisplayName(user) } satisfies ChannelMember;
         });
       }),
     ).then((users) => users.filter((u) => u !== null));

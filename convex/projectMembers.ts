@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ChannelRole } from "@shared/enums";
+import { getUserDisplayName } from "@shared/displayName";
 
 const projectMemberValidator = v.object({
   _id: v.id("projectMembers"),
@@ -38,7 +39,7 @@ export const membersByProject = query({
         if (!user) return null;
         return {
           ...member,
-          name: user.name ?? user.email ?? "unknown",
+          name: getUserDisplayName(user),
           image: user.image,
           isCreator: member.userId === project.creatorId,
         };

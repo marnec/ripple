@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { getUserDisplayName } from "@shared/displayName";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -33,7 +34,7 @@ export function MessageReactionPill({
   const tooltipContent = userIds
     .map((userId) => {
       const user = userMap[userId];
-      return user?.name ?? user?.email ?? "Unknown";
+      return getUserDisplayName(user);
     })
     .join(", ");
 

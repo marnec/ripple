@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
+import { getUserDisplayName } from "@shared/displayName";
 import { useMutation, useQuery } from "convex/react";
 import { Trash2, UserMinus, UserPlus } from "lucide-react";
 import { useState } from "react";
@@ -224,7 +225,7 @@ function ProjectSettingsContent({
               <SelectContent>
                 {availableMembers.map((member) => (
                   <SelectItem key={member._id} value={member._id}>
-                    {member.name ?? member.email ?? "Unknown user"}
+                    {getUserDisplayName(member)}
                   </SelectItem>
                 ))}
               </SelectContent>

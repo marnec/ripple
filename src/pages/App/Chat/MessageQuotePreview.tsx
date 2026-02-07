@@ -16,8 +16,10 @@ export function MessageQuotePreview({ message, onCancel, compact = false }: Mess
   if (!message) {
     return (
       <div className={cn(
-        "flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md border-l-2 border-muted-foreground/40 text-sm text-muted-foreground italic",
-        compact && "py-1 text-xs"
+        "flex items-center gap-2 rounded-md border-l-2 border-muted-foreground/40 text-muted-foreground italic",
+        compact
+          ? "pl-2 py-0.5 mb-1.5 text-xs bg-background/30"
+          : "px-3 py-1.5 bg-muted/50 text-sm"
       )}>
         [Original message not found]
       </div>
@@ -27,8 +29,10 @@ export function MessageQuotePreview({ message, onCancel, compact = false }: Mess
   if (message.deleted) {
     return (
       <div className={cn(
-        "flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md border-l-2 border-muted-foreground/40 text-sm text-muted-foreground italic",
-        compact && "py-1 text-xs"
+        "flex items-center gap-2 rounded-md border-l-2 border-muted-foreground/40 text-muted-foreground italic",
+        compact
+          ? "pl-2 py-0.5 mb-1.5 text-xs bg-background/30"
+          : "px-3 py-1.5 bg-muted/50 text-sm"
       )}>
         [Message deleted]
       </div>
@@ -39,16 +43,28 @@ export function MessageQuotePreview({ message, onCancel, compact = false }: Mess
     ? message.plainText.slice(0, 100) + "..."
     : message.plainText;
 
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-0.5 mb-1.5 rounded-sm border-l-2 border-primary bg-background/30">
+        <div className="min-w-0 flex items-baseline gap-1.5">
+          <span className="shrink-0 text-[11px] font-semibold text-primary">
+            {message.author}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            {truncatedText}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn(
-      "flex items-start gap-2 px-3 py-1.5 bg-muted/50 rounded-md border-l-2 border-primary",
-      compact && "py-1"
-    )}>
+    <div className="flex items-start gap-2 px-3 py-1.5 bg-muted/50 rounded-md border-l-2 border-primary">
       <div className="flex-1 min-w-0">
-        <div className={cn("font-semibold text-muted-foreground", compact ? "text-xs" : "text-xs")}>
+        <div className="font-semibold text-xs text-muted-foreground">
           {message.author}
         </div>
-        <div className={cn("truncate", compact ? "text-xs" : "text-sm")}>
+        <div className="truncate text-sm">
           {truncatedText}
         </div>
       </div>

@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 
 import { generateKeyBetween } from "fractional-indexing";
 import { extractMentionedUserIds } from "./utils/blocknote";
+import { getUserDisplayName } from "@shared/displayName";
 
 export const create = mutation({
   args: {
@@ -148,7 +149,7 @@ export const create = mutation({
         assigneeId: args.assigneeId,
         taskTitle: args.title,
         assignedBy: {
-          name: user?.name ?? user?.email ?? "Someone",
+          name: getUserDisplayName(user),
           id: userId,
         },
       });
@@ -164,7 +165,7 @@ export const create = mutation({
           mentionedUserIds: filteredMentions,
           taskTitle: args.title,
           mentionedBy: {
-            name: user?.name ?? user?.email ?? "Someone",
+            name: getUserDisplayName(user),
             id: userId,
           },
           context: "task description",
@@ -398,7 +399,7 @@ export const update = mutation({
         assigneeId,
         taskTitle: title ?? task.title,
         assignedBy: {
-          name: currentUser?.name ?? currentUser?.email ?? "Someone",
+          name: getUserDisplayName(currentUser),
           id: userId,
         },
       });
@@ -416,7 +417,7 @@ export const update = mutation({
           mentionedUserIds: addedMentions,
           taskTitle: title ?? task.title,
           mentionedBy: {
-            name: currentUser?.name ?? currentUser?.email ?? "Someone",
+            name: getUserDisplayName(currentUser),
             id: userId,
           },
           context: "task description",

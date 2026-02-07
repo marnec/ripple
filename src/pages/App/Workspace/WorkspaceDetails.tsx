@@ -3,6 +3,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useParams } from "react-router-dom";
 import { QueryParams } from "@shared/types/routes";
+import { getUserDisplayName } from "@shared/displayName";
 import {
   Card,
   CardContent,
@@ -49,7 +50,7 @@ export function WorkspaceDetails() {
                     <ul className="list-disc pl-5">
                       {members.map((member) => (
                         <li key={member?._id} className="text-sm">
-                          {member?.name || member?.email || "Unnamed User"}
+                          {getUserDisplayName(member)}
                         </li>
                       ))}
                     </ul>

@@ -14,6 +14,7 @@ import { useTheme } from "next-themes";
 
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
+import { getUserDisplayName } from "@shared/displayName";
 
 
 type TaskCommentsProps = {
@@ -191,7 +192,7 @@ export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsP
                   )
                   .slice(0, 10)
                   .map((m) => ({
-                    title: m.name ?? "Unknown",
+                    title: getUserDisplayName(m),
                     onItemClick: () => {
                       editor.insertInlineContent([
                         {
@@ -291,7 +292,7 @@ function EditCommentEditor({
                 )
                 .slice(0, 10)
                 .map((m) => ({
-                  title: m.name ?? "Unknown",
+                  title: getUserDisplayName(m),
                   onItemClick: () => {
                     editEditor.insertInlineContent([
                       {

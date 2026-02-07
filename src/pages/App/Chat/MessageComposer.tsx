@@ -24,6 +24,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
+import { getUserDisplayName } from "@shared/displayName";
 
 interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
@@ -57,6 +58,48 @@ const dictionary = {
   },
 };
 
+/** Extract plain text from BlockNote document JSON, including mention text */
+function blocksToPlainText(
+  blocks: any[],
+  userNames: Map<string, string>,
+  projectNames: Map<string, string>,
+): string {
+  const lines: string[] = [];
+  for (const block of blocks) {
+    let line = "";
+    if (Array.isArray(block.content)) {
+      for (const inline of block.content) {
+        switch (inline.type) {
+          case "text":
+            line += inline.text;
+            break;
+          case "link":
+            for (const c of inline.content || []) line += c.text;
+            break;
+          case "taskMention":
+            line += `#${inline.props.taskTitle || "task"}`;
+            break;
+          case "userMention": {
+            const name = userNames.get(inline.props.userId);
+            line += `@${name || "user"}`;
+            break;
+          }
+          case "projectReference": {
+            const name = projectNames.get(inline.props.projectId);
+            line += `#${name || "project"}`;
+            break;
+          }
+        }
+      }
+    }
+    lines.push(line);
+    if (block.children?.length) {
+      lines.push(blocksToPlainText(block.children, userNames, projectNames));
+    }
+  }
+  return lines.join("\n").trim();
+}
+
 export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
   channelId,
@@ -82,6 +125,27 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   // Query workspace members for @ autocomplete
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const currentUser = useQuery(api.users.viewer);
+
+  // Name lookup maps for mention text extraction (used in send + reply preview)
+  const { userNames, projectNames } = useMemo(() => {
+    const u = new Map<string, string>();
+    workspaceMembers?.forEach(m => u.set(m._id, getUserDisplayName(m)));
+    if (currentUser) u.set(currentUser._id, getUserDisplayName(currentUser));
+    const p = new Map<string, string>();
+    projects?.forEach(pr => p.set(pr._id, pr.name));
+    return { userNames: u, projectNames: p };
+  }, [workspaceMembers, currentUser, projects]);
+
+  // Extract mention-aware text for reply preview
+  const replyPreviewText = useMemo(() => {
+    if (!replyingTo) return "";
+    if (replyingTo.body) {
+      try {
+        return blocksToPlainText(JSON.parse(replyingTo.body), userNames, projectNames) || replyingTo.plainText;
+      } catch { /* fall through */ }
+    }
+    return replyingTo.plainText;
+  }, [replyingTo, userNames, projectNames]);
 
   const editorConfig = useMemo(
     () => ({
@@ -116,7 +180,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const sendMessage = () => {
     if (isEmpty || !editor) return;
     const body = JSON.stringify(editor.document);
-    const plainText = editor._tiptapEditor.getText();
+    const plainText = blocksToPlainText(editor.document, userNames, projectNames);
 
     handleSubmit(body, plainText);
     editorClear(editor);
@@ -142,17 +206,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, editor);
 
   return (
-    <div className="flex sm:flex-col flex-col-reverse p-2 max-w-full border-t">
-      {replyingTo && (
-        <MessageQuotePreview
-          message={{
-            author: replyingTo.author,
-            plainText: replyingTo.plainText,
-            deleted: false,
-          }}
-          onCancel={() => setReplyingTo(null)}
-        />
-      )}
+    <div className="flex sm:flex-col flex-col-reverse p-2 max-w-full border-t gap-2">
       <div className="flex justify-between items-start">
         <div className="flex flex-row gap-2">
           <Toggle
@@ -236,7 +290,17 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         </div>
         {/* <Button onClick={() => navigate("videocall")}>Call</Button> */}
       </div>
-      <div className="flex gap-2 py-4">
+      {replyingTo && (
+        <MessageQuotePreview
+          message={{
+            author: replyingTo.author,
+            plainText: replyPreviewText,
+            deleted: false,
+          }}
+          onCancel={() => setReplyingTo(null)}
+        />
+      )}
+      <div className="flex gap-2">
         <BlockNoteView
           id="message-composer"
           editor={editor}
@@ -337,7 +401,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
                 .filter((m) => m._id !== currentUser._id)
                 .slice(0, 10)
                 .map((m) => ({
-                  title: m.name ?? "Unknown",
+                  title: getUserDisplayName(m),
                   onItemClick: () => {
                     editor.insertInlineContent([
                       { type: "userMention", props: { userId: m._id } },

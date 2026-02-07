@@ -175,7 +175,7 @@ const TaskMentionView = ({ taskId }: { taskId: Id<"tasks"> }) => {
       {/* Status dot */}
       <span className={cn("h-2 w-2 rounded-full", statusColor)} />
       {/* Task title (truncated) */}
-      <span className="font-medium text-sm max-w-[200px] truncate">
+      <span className="font-medium text-sm max-w-50 truncate">
         {task.title}
       </span>
     </span>
@@ -483,7 +483,7 @@ const TaskChipView = ({ taskId }: { taskId: Id<"tasks"> }) => {
         className={cn("h-2 w-2 rounded-full", task.status?.color || "bg-gray-500")}
       />
       {/* Truncated title */}
-      <span className="font-medium text-sm max-w-[200px] truncate">
+      <span className="font-medium text-sm max-w-50 truncate">
         {task.title}
       </span>
     </button>

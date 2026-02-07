@@ -8,6 +8,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../../../components/ui/context-menu";
 import { useChatContext } from "./ChatContext";
 import { CreateTaskFromMessagePopover } from "./CreateTaskFromMessagePopover";
+import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
 import { MessageQuotePreview } from "./MessageQuotePreview";
@@ -39,6 +40,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
       id: message._id,
       author: message.author,
       plainText: message.plainText,
+      body: message.body,
     });
   }, [message, setEditingMessage, setReplyingTo]);
 
@@ -62,12 +64,6 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
             userIsAuthor ? "items-end self-end" : "items-start self-start",
           )}
         >
-          {message.replyToId && (
-            <div className={cn("mb-1", userIsAuthor ? "self-end" : "self-start")}>
-              <MessageQuotePreview message={message.replyTo ?? null} compact />
-            </div>
-          )}
-
           <div
             className={cn("flex items-center gap-3", userIsAuthor ? "flex-row" : "flex-row-reverse")}
           >
@@ -76,14 +72,23 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
           </div>
 
           <ContextMenuTrigger>
-            <div
-              className={cn(
-                "rounded-xl bg-muted px-3 py-2 transition-all",
-                userIsAuthor ? "rounded-tr-none" : "rounded-tl-none"
-              )}
-            >
-              <MessageRenderer blocks={blocks} />
-            </div>
+            <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
+            <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
+            <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
+              <div
+                className={cn(
+                  "rounded-xl bg-muted px-3 py-2 transition-all",
+                  userIsAuthor ? "rounded-tr-none" : "rounded-tl-none"
+                )}
+              >
+                {message.replyToId && (
+                  <MessageQuotePreview message={message.replyTo ?? null} compact />
+                )}
+                <MessageRenderer blocks={blocks} />
+              </div>
+            </MentionedProjectsContext.Provider>
+            </MentionedTasksContext.Provider>
+            </MentionedUsersContext.Provider>
           </ContextMenuTrigger>
 
           <MessageReactions messageId={message._id} />
@@ -95,7 +100,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
               <ContextMenuItem onClick={handleDelete}>Delete</ContextMenuItem>
             </>
           )}
-          {!message.deleted && !message.replyToId && (
+          {!message.deleted && (
             <ContextMenuItem onClick={handleReply}>
               <CornerUpLeft className="mr-2 h-4 w-4" />
               Reply
