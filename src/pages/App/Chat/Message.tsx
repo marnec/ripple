@@ -8,6 +8,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../../../components/ui/context-menu";
 import { useChatContext } from "./ChatContext";
 import { CreateTaskFromMessagePopover } from "./CreateTaskFromMessagePopover";
+import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
 
 type MessageProps = {
@@ -61,6 +62,8 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
               <MessageRenderer blocks={blocks} />
             </div>
           </ContextMenuTrigger>
+
+          <MessageReactions messageId={message._id} />
         </li>
         <ContextMenuContent>
           {userIsAuthor && (
