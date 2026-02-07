@@ -17,7 +17,8 @@ import { Toggle } from "../../../components/ui/toggle";
 import { useChatContext } from "./ChatContext";
 import { TaskMention } from "./CustomInlineContent/TaskMention";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
-import { FolderKanban } from "lucide-react";
+import { UserMention } from "../Project/CustomInlineContent/UserMention";
+import { FolderKanban, User } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -43,6 +44,7 @@ const schema = BlockNoteSchema.create({
     ...defaultInlineContentSpecs,
     taskMention: TaskMention,
     projectReference: ProjectReference,
+    userMention: UserMention,
   },
 });
 
@@ -75,6 +77,10 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     api.tasks.listByAssignee,
     !linkedProject ? { workspaceId, hideCompleted: true } : "skip"
   );
+
+  // Query workspace members for @ autocomplete
+  const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  const currentUser = useQuery(api.users.viewer);
 
   const editorConfig = useMemo(
     () => ({
@@ -306,6 +312,30 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
               }
 
               return items;
+            }}
+          />
+          <SuggestionMenuController
+            triggerCharacter={"@"}
+            getItems={async (query) => {
+              if (!workspaceMembers || !currentUser) return [];
+
+              return workspaceMembers
+                .filter((m) =>
+                  (m.name ?? "").toLowerCase().includes(query.toLowerCase())
+                )
+                .filter((m) => m._id !== currentUser._id)
+                .slice(0, 10)
+                .map((m) => ({
+                  title: m.name ?? "Unknown",
+                  onItemClick: () => {
+                    editor.insertInlineContent([
+                      { type: "userMention", props: { userId: m._id } },
+                      " ",
+                    ]);
+                  },
+                  icon: <User className="h-4 w-4" />,
+                  group: "Members",
+                }));
             }}
           />
         </BlockNoteView>
