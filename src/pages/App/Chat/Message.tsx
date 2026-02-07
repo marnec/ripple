@@ -76,6 +76,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
   const handleQuickReaction = useCallback(
     (unified: string, native: string) => {
       void toggleReaction({ messageId: message._id, emoji: unified, emojiNative: native });
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     },
     [message._id, toggleReaction],
   );
@@ -83,6 +84,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
   const handleEmojiClick = useCallback(
     (emojiData: { unified: string; emoji: string }) => {
       void toggleReaction({ messageId: message._id, emoji: emojiData.unified, emojiNative: emojiData.emoji });
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     },
     [message._id, toggleReaction],
   );
@@ -154,6 +156,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
                 >
                   <EmojiPicker
                     onEmojiClick={handleEmojiClick}
+                    theme={"auto" as import("emoji-picker-react").Theme}
                     lazyLoadEmojis={true}
                     width={350}
                     height={400}
