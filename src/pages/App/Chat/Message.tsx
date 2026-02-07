@@ -2,17 +2,37 @@ import { UserContext } from "@/pages/App/UserContext";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
-import React, { useCallback, useContext, useMemo, useRef, useState } from "react";
+import { CornerUpLeft, ListTodo, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import React, { Suspense, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../../../components/ui/context-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "../../../components/ui/context-menu";
 import { useChatContext } from "./ChatContext";
 import { CreateTaskFromMessagePopover } from "./CreateTaskFromMessagePopover";
 import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { CornerUpLeft } from "lucide-react";
+
+const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
+
+const QUICK_EMOJIS = [
+  { unified: "2764-fe0f", native: "\u2764\uFE0F" },
+  { unified: "1f44d", native: "\uD83D\uDC4D" },
+  { unified: "1f602", native: "\uD83D\uDE02" },
+  { unified: "1f525", native: "\uD83D\uDD25" },
+  { unified: "1f622", native: "\uD83D\uDE22" },
+  { unified: "1f389", native: "\uD83C\uDF89" },
+];
 
 type MessageProps = {
   message: MessageWithAuthor;
@@ -31,6 +51,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
 
   const { setEditingMessage, setReplyingTo } = useChatContext()
   const deleteMessage = useMutation(api.messages.remove)
+  const toggleReaction = useMutation(api.messageReactions.toggle);
 
   const handleReply = useCallback(() => {
     // Clear edit mode (mutually exclusive)
@@ -51,6 +72,20 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
 
   const handleDelete = useCallback(() => void deleteMessage({ id: message._id }), [message, deleteMessage])
   const handleCreateTask = useCallback(() => setIsCreatingTask(true), [])
+
+  const handleQuickReaction = useCallback(
+    (unified: string, native: string) => {
+      void toggleReaction({ messageId: message._id, emoji: unified, emojiNative: native });
+    },
+    [message._id, toggleReaction],
+  );
+
+  const handleEmojiClick = useCallback(
+    (emojiData: { unified: string; emoji: string }) => {
+      void toggleReaction({ messageId: message._id, emoji: emojiData.unified, emojiNative: emojiData.emoji });
+    },
+    [message._id, toggleReaction],
+  );
 
   const blocks = useMemo(() => JSON.parse(body), [body]);
 
@@ -93,11 +128,53 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
 
           <MessageReactions messageId={message._id} />
         </li>
-        <ContextMenuContent>
+        <ContextMenuContent className="w-56">
+          {/* Quick reaction row */}
+          <div className="flex items-center justify-center gap-0.5 px-1.5 py-1.5">
+            {QUICK_EMOJIS.map(({ unified, native }) => (
+              <button
+                key={unified}
+                onClick={() => handleQuickReaction(unified, native)}
+                className="cursor-pointer rounded-md p-1 text-base transition-colors hover:bg-accent"
+              >
+                {native}
+              </button>
+            ))}
+            <ContextMenuSub>
+              <ContextMenuSubTrigger className="inline-flex h-7 w-7 items-center justify-center rounded-md p-0 hover:bg-accent">
+                <Plus className="h-3.5 w-3.5" />
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="p-0">
+                <Suspense
+                  fallback={
+                    <div className="flex h-[400px] w-[350px] items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  }
+                >
+                  <EmojiPicker
+                    onEmojiClick={handleEmojiClick}
+                    lazyLoadEmojis={true}
+                    width={350}
+                    height={400}
+                    searchPlaceholder="Search emoji..."
+                  />
+                </Suspense>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
+          </div>
+          <ContextMenuSeparator />
+
           {userIsAuthor && (
             <>
-              <ContextMenuItem onClick={handleEdit}>Edit</ContextMenuItem>
-              <ContextMenuItem onClick={handleDelete}>Delete</ContextMenuItem>
+              <ContextMenuItem onClick={handleEdit}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </ContextMenuItem>
+              <ContextMenuItem onClick={handleDelete}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </ContextMenuItem>
             </>
           )}
           {!message.deleted && (
@@ -106,7 +183,10 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
               Reply
             </ContextMenuItem>
           )}
-          <ContextMenuItem onClick={handleCreateTask}>Create task from message</ContextMenuItem>
+          <ContextMenuItem onClick={handleCreateTask}>
+            <ListTodo className="mr-2 h-4 w-4" />
+            Create task from message
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 

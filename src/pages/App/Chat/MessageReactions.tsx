@@ -2,7 +2,6 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TooltipProvider } from "../../../components/ui/tooltip";
-import { MessageReactionPicker } from "./MessageReactionPicker";
 import { MessageReactionPill } from "./MessageReactionPill";
 
 type Props = {
@@ -27,22 +26,8 @@ export function MessageReactions({ messageId }: Props) {
   // Batch-fetch all users in a single query
   const userMap = useQuery(api.users.getByIds, { ids: uniqueUserIds });
 
-  // If reactions are loading or empty, just show the picker
-  if (!reactions || reactions.length === 0) {
-    return (
-      <div className="mt-1 flex items-center gap-1">
-        <MessageReactionPicker messageId={messageId} />
-      </div>
-    );
-  }
-
-  // If userMap is still loading, show picker only (avoid flash of incomplete data)
-  if (!userMap) {
-    return (
-      <div className="mt-1 flex items-center gap-1">
-        <MessageReactionPicker messageId={messageId} />
-      </div>
-    );
+  if (!reactions || reactions.length === 0 || !userMap) {
+    return null;
   }
 
   return (
@@ -60,7 +45,6 @@ export function MessageReactions({ messageId }: Props) {
             userMap={userMap}
           />
         ))}
-        <MessageReactionPicker messageId={messageId} />
       </div>
     </TooltipProvider>
   );
