@@ -28,5 +28,5 @@
       "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["src", "shared", "convex/signaling.ts", "public/service-worker.js"]
+  "include": ["src", "shared", "convex/signaling.ts", "convex/utils/blocknote.ts", "public/service-worker.js"]
 }

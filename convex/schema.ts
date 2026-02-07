@@ -30,6 +30,15 @@ export default defineSchema({
     .index("undeleted_by_channel", ["channelId", "deleted"])
     .searchIndex("by_text", { searchField: "plainText", filterFields: ["channelId"] }),
 
+  messageReactions: defineTable({
+    messageId: v.id("messages"),
+    userId: v.id("users"),
+    emoji: v.string(), // unified emoji code (e.g., "1f44d")
+    emojiNative: v.string(), // rendered emoji character (e.g., "👍")
+  })
+    .index("by_message", ["messageId"])
+    .index("by_message_emoji_user", ["messageId", "emoji", "userId"]),
+
   workspaces: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
