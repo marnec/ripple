@@ -24,10 +24,10 @@
 
 ### Inline Reply-To
 
-- [ ] **REPLY-01**: User can click "Reply" on a message to enter reply mode in composer
-- [ ] **REPLY-02**: Reply mode shows quoted preview of original message in composer (with cancel button)
-- [ ] **REPLY-03**: Submitted reply displays in chat flow with compact quoted preview above it
-- [ ] **REPLY-04**: If original message is deleted, reply shows "Message deleted" placeholder gracefully
+- [x] **REPLY-01**: User can click "Reply" on a message to enter reply mode in composer
+- [x] **REPLY-02**: Reply mode shows quoted preview of original message in composer (with cancel button)
+- [x] **REPLY-03**: Submitted reply displays in chat flow with compact quoted preview above it
+- [x] **REPLY-04**: If original message is deleted, reply shows "Message deleted" placeholder gracefully
 
 ## Future Requirements
 
@@ -67,10 +67,10 @@
 | REACT-04 | Phase 08 | Complete |
 | REACT-05 | Phase 08 | Complete |
 | REACT-06 | Phase 08 | Complete |
-| REPLY-01 | Phase 10 | Pending |
-| REPLY-02 | Phase 10 | Pending |
-| REPLY-03 | Phase 10 | Pending |
-| REPLY-04 | Phase 10 | Pending |
+| REPLY-01 | Phase 10 | Complete |
+| REPLY-02 | Phase 10 | Complete |
+| REPLY-03 | Phase 10 | Complete |
+| REPLY-04 | Phase 10 | Complete |
 
 **Coverage:**
 - v0.9 requirements: 15 total

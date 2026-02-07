@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v0.8 Task Management** - Phases 01-07 (shipped 2026-02-07)
-- 🚧 **v0.9 Chat Features** - Phases 08-10 (in progress)
+- ✅ **v0.9 Chat Features** - Phases 08-10 (shipped 2026-02-07)
 
 ## Overview
 
@@ -83,7 +83,7 @@ Plans:
 
 </details>
 
-### 🚧 v0.9 Chat Features (In Progress)
+### ✅ v0.9 Chat Features (SHIPPED 2026-02-07)
 
 **Milestone Goal:** Enrich chat with @user mentions, emoji reactions, and inline reply-to — bringing chat interaction quality closer to Slack/Teams.
 
@@ -132,8 +132,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Backend schema and query enrichment (replyToId field, messages.send update, messages.list parent info)
-- [ ] 10-02-PLAN.md — Frontend reply mode UI (ChatContext reply state, MessageQuotePreview, Message reply action + display, MessageComposer preview)
+- [x] 10-01-PLAN.md — Backend schema and query enrichment (replyToId field, messages.send update, messages.list parent info)
+- [x] 10-02-PLAN.md — Frontend reply mode UI (ChatContext reply state, MessageQuotePreview, Message reply action + display, MessageComposer preview)
 
 ## Progress
 
@@ -152,4 +152,4 @@ Phases execute in numeric order: 08 → 09 → 10
 | 7. Notifications and Polish | v0.8 | 2/2 | Complete | 2026-02-07 |
 | 8. Emoji Reactions Foundation | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 9. @User Mentions in Chat | v0.9 | 2/2 | Complete | 2026-02-07 |
-| 10. Inline Reply-To | v0.9 | 0/2 | Not started | - |
+| 10. Inline Reply-To | v0.9 | 2/2 | Complete | 2026-02-07 |

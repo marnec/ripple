@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** v0.9 Chat Features — @mentions, emoji reactions, reply-to
+**Current focus:** v0.9 Chat Features — COMPLETE
 
 ## Current Position
 
-Phase: 10 - Inline Reply-to
-Plan: 02 of 3
-Status: In progress
+Phase: 10 - Inline Reply-To
+Plan: 02 of 2
+Status: Phase complete — v0.9 milestone complete
 Last activity: 2026-02-07 — Completed 10-02-PLAN.md (Reply-to UI implementation)
 
-Progress: ███████░░░ 72% (26/36 plans complete)
+Progress: ██████████ 100% (3/3 phases complete)
 
 ## Performance Metrics
 
@@ -61,7 +61,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-07
-Stopped at: Completed 10-02-PLAN.md (Reply-to UI implementation)
+Stopped at: Phase 10 complete — v0.9 Chat Features milestone complete
 Resume file: None
 
 Config:
