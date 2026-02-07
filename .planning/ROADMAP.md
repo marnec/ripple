@@ -98,11 +98,11 @@ Plans:
   4. Hovering a reaction pill shows tooltip listing all users who reacted with that emoji
   5. Multiple different emoji reactions work on the same message
   6. Reactions update in real-time across all connected clients (other users see new reactions immediately)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Backend schema and CRUD (messageReactions table, toggle mutation, aggregation query)
+- [ ] 08-02-PLAN.md — Frontend reaction UI (emoji picker, pills, tooltips, Message.tsx integration)
 
 #### Phase 09: @User Mentions in Chat
 **Goal**: Users can @mention workspace members in chat with autocomplete and notifications
@@ -149,6 +149,6 @@ Phases execute in numeric order: 08 → 09 → 10
 | 6. Task Comments | v0.8 | 1/1 | Complete | 2026-02-07 |
 | 6.1. Mention People (INSERTED) | v0.8 | 1/1 | Complete | 2026-02-07 |
 | 7. Notifications and Polish | v0.8 | 2/2 | Complete | 2026-02-07 |
-| 8. Emoji Reactions Foundation | v0.9 | 0/TBD | Not started | - |
+| 8. Emoji Reactions Foundation | v0.9 | 0/2 | Planned | - |
 | 9. @User Mentions in Chat | v0.9 | 0/TBD | Not started | - |
 | 10. Inline Reply-To | v0.9 | 0/TBD | Not started | - |
