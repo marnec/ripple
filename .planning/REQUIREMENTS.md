@@ -15,12 +15,12 @@
 
 ### Emoji Reactions
 
-- [ ] **REACT-01**: User can open emoji picker on any message to select a reaction
-- [ ] **REACT-02**: Reactions display as Slack-style pills below message with emoji and count
-- [ ] **REACT-03**: User can click an existing reaction pill to toggle their reaction on/off
-- [ ] **REACT-04**: Hovering a reaction pill shows tooltip listing users who reacted
-- [ ] **REACT-05**: Multiple different emoji reactions supported per message
-- [ ] **REACT-06**: Reactions update in real-time across all connected clients
+- [x] **REACT-01**: User can open emoji picker on any message to select a reaction
+- [x] **REACT-02**: Reactions display as Slack-style pills below message with emoji and count
+- [x] **REACT-03**: User can click an existing reaction pill to toggle their reaction on/off
+- [x] **REACT-04**: Hovering a reaction pill shows tooltip listing users who reacted
+- [x] **REACT-05**: Multiple different emoji reactions supported per message
+- [x] **REACT-06**: Reactions update in real-time across all connected clients
 
 ### Inline Reply-To
 
@@ -61,12 +61,12 @@
 | MENT-03 | Phase 09 | Pending |
 | MENT-04 | Phase 09 | Pending |
 | MENT-05 | Phase 09 | Pending |
-| REACT-01 | Phase 08 | Pending |
-| REACT-02 | Phase 08 | Pending |
-| REACT-03 | Phase 08 | Pending |
-| REACT-04 | Phase 08 | Pending |
-| REACT-05 | Phase 08 | Pending |
-| REACT-06 | Phase 08 | Pending |
+| REACT-01 | Phase 08 | Complete |
+| REACT-02 | Phase 08 | Complete |
+| REACT-03 | Phase 08 | Complete |
+| REACT-04 | Phase 08 | Complete |
+| REACT-05 | Phase 08 | Complete |
+| REACT-06 | Phase 08 | Complete |
 | REPLY-01 | Phase 10 | Pending |
 | REPLY-02 | Phase 10 | Pending |
 | REPLY-03 | Phase 10 | Pending |
