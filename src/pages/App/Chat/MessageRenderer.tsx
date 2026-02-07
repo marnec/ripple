@@ -1,6 +1,7 @@
 import React from "react";
 import { TaskMentionChip } from "./TaskMentionChip";
 import { ProjectReferenceChip } from "./ProjectReferenceChip";
+import { UserMentionRenderer } from "./UserMentionRenderer";
 
 // BlockNote JSON types (simplified for rendering)
 type Style = {
@@ -35,7 +36,12 @@ type ProjectReferenceContent = {
   props: { projectId: string };
 };
 
-type InlineContent = TextContent | LinkContent | TaskMentionContent | ProjectReferenceContent;
+type UserMentionContent = {
+  type: "userMention";
+  props: { userId: string };
+};
+
+type InlineContent = TextContent | LinkContent | TaskMentionContent | ProjectReferenceContent | UserMentionContent;
 
 type Block = {
   id?: string;
@@ -233,6 +239,9 @@ function InlineRenderer({ content }: { content: InlineContent }) {
 
     case "projectReference":
       return <ProjectReferenceChip projectId={content.props.projectId} />;
+
+    case "userMention":
+      return <UserMentionRenderer userId={content.props.userId} />;
 
     default:
       return null;
