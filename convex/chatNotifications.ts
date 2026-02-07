@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import * as webpush from "web-push";
 
 /**
@@ -21,7 +21,7 @@ export const notifyMessageMentions = internalAction({
   returns: v.null(),
   handler: async (ctx, { mentionedUserIds, channelId, plainText, mentionedBy }) => {
     // Get channel to build notification
-    const channel = await ctx.runQuery(api.channels.get, { id: channelId });
+    const channel = await ctx.runQuery(internal.channels.getInternal, { id: channelId });
     if (!channel) {
       console.error(`Channel ${channelId} not found for mention notification`);
       return null;

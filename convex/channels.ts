@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { ChannelRole } from "@shared/enums";
 import { stream } from "convex-helpers/server/stream";
 import { getAll } from "convex-helpers/server/relationships";
@@ -172,6 +172,14 @@ const channelValidator = v.object({
     admin: v.number(),
     member: v.number(),
   }),
+});
+
+export const getInternal = internalQuery({
+  args: { id: v.id("channels") },
+  returns: v.union(channelValidator, v.null()),
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id);
+  },
 });
 
 export const listByUserMembership = query({
