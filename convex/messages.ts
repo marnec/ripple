@@ -19,7 +19,9 @@ export const list = query({
       plainText: v.string(),
       channelId: v.id("channels"),
       deleted: v.boolean(),
+      replyToId: v.optional(v.id("messages")),
       author: v.string(),
+      replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
     })),
     isDone: v.boolean(),
     continueCursor: v.string(),
@@ -64,9 +66,49 @@ export const list = query({
       return { ...message, author: user?.name ?? user?.email ?? "Unknown" };
     });
 
+    // Batch-fetch parent messages for replies
+    const parentIds = [...new Set(
+      messagesWithAuthor
+        .filter(m => m.replyToId)
+        .map(m => m.replyToId!)
+    )];
+    const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
+    const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
+
+    // Collect parent user IDs not already in userMap
+    const missingParentUserIds = [...new Set(
+      parents.filter(p => p && !userMap.has(p.userId)).map(p => p!.userId)
+    )];
+    if (missingParentUserIds.length > 0) {
+      const missingUsers = await getAll(ctx.db, missingParentUserIds);
+      missingUsers.forEach((u, i) => {
+        if (u) userMap.set(missingParentUserIds[i], u);
+      });
+    }
+
+    // Enrich with parent message info
+    const messagesWithReplyTo = messagesWithAuthor.map((msg) => {
+      if (!msg.replyToId) {
+        return { ...msg, replyTo: null };
+      }
+      const parent = parentMap.get(msg.replyToId);
+      if (!parent) {
+        return { ...msg, replyTo: null };
+      }
+      const parentUser = userMap.get(parent.userId);
+      return {
+        ...msg,
+        replyTo: {
+          author: parentUser?.name ?? parentUser?.email ?? "Unknown",
+          plainText: parent.plainText,
+          deleted: parent.deleted,
+        },
+      };
+    });
+
     return {
       ...messagesPage,
-      page: messagesWithAuthor,
+      page: messagesWithReplyTo,
     };
   },
 });
@@ -188,7 +230,9 @@ export const search = query({
     plainText: v.string(),
     channelId: v.id("channels"),
     deleted: v.boolean(),
+    replyToId: v.optional(v.id("messages")),
     author: v.string(),
+    replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
   })),
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
     const userId = await getAuthUserId(ctx);
@@ -229,7 +273,47 @@ export const search = query({
       return { ...message, author: user?.name ?? user?.email ?? "Unknown" };
     });
 
-    return searchResultsWithAuthor;
+    // Batch-fetch parent messages for replies
+    const parentIds = [...new Set(
+      searchResultsWithAuthor
+        .filter(m => m.replyToId)
+        .map(m => m.replyToId!)
+    )];
+    const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
+    const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
+
+    // Collect parent user IDs not already in userMap
+    const missingParentUserIds = [...new Set(
+      parents.filter(p => p && !userMap.has(p.userId)).map(p => p!.userId)
+    )];
+    if (missingParentUserIds.length > 0) {
+      const missingUsers = await getAll(ctx.db, missingParentUserIds);
+      missingUsers.forEach((u, i) => {
+        if (u) userMap.set(missingParentUserIds[i], u);
+      });
+    }
+
+    // Enrich with parent message info
+    const searchResultsWithReplyTo = searchResultsWithAuthor.map((msg) => {
+      if (!msg.replyToId) {
+        return { ...msg, replyTo: null };
+      }
+      const parent = parentMap.get(msg.replyToId);
+      if (!parent) {
+        return { ...msg, replyTo: null };
+      }
+      const parentUser = userMap.get(parent.userId);
+      return {
+        ...msg,
+        replyTo: {
+          author: parentUser?.name ?? parentUser?.email ?? "Unknown",
+          plainText: parent.plainText,
+          deleted: parent.deleted,
+        },
+      };
+    });
+
+    return searchResultsWithReplyTo;
   },
 });
 
@@ -248,7 +332,9 @@ export const getMessageContext = query({
       plainText: v.string(),
       channelId: v.id("channels"),
       deleted: v.boolean(),
+      replyToId: v.optional(v.id("messages")),
       author: v.string(),
+      replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
     })),
     targetMessageId: v.id("messages"),
     targetIndex: v.number(),
@@ -307,8 +393,48 @@ export const getMessageContext = query({
       return { ...message, author: user?.name ?? user?.email ?? "Unknown" };
     });
 
+    // Batch-fetch parent messages for replies
+    const parentIds = [...new Set(
+      messagesWithAuthor
+        .filter(m => m.replyToId)
+        .map(m => m.replyToId!)
+    )];
+    const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
+    const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
+
+    // Collect parent user IDs not already in userMap
+    const missingParentUserIds = [...new Set(
+      parents.filter(p => p && !userMap.has(p.userId)).map(p => p!.userId)
+    )];
+    if (missingParentUserIds.length > 0) {
+      const missingUsers = await getAll(ctx.db, missingParentUserIds);
+      missingUsers.forEach((u, i) => {
+        if (u) userMap.set(missingParentUserIds[i], u);
+      });
+    }
+
+    // Enrich with parent message info
+    const messagesWithReplyTo = messagesWithAuthor.map((msg) => {
+      if (!msg.replyToId) {
+        return { ...msg, replyTo: null };
+      }
+      const parent = parentMap.get(msg.replyToId);
+      if (!parent) {
+        return { ...msg, replyTo: null };
+      }
+      const parentUser = userMap.get(parent.userId);
+      return {
+        ...msg,
+        replyTo: {
+          author: parentUser?.name ?? parentUser?.email ?? "Unknown",
+          plainText: parent.plainText,
+          deleted: parent.deleted,
+        },
+      };
+    });
+
     return {
-      messages: messagesWithAuthor,
+      messages: messagesWithReplyTo,
       targetMessageId: messageId,
       targetIndex: messagesBefore.length // Index of the target message in the results
     };
