@@ -77,9 +77,10 @@ export const send = mutation({
     body: v.string(),
     plainText: v.string(),
     channelId: v.id("channels"),
+    replyToId: v.optional(v.id("messages")),
   },
   returns: v.null(),
-  handler: async (ctx, { body, channelId, plainText, isomorphicId }) => {
+  handler: async (ctx, { body, channelId, plainText, isomorphicId, replyToId }) => {
     const userId = await getAuthUserId(ctx);
 
     if (!userId) throw new ConvexError("Not authenticated");
@@ -109,6 +110,7 @@ export const send = mutation({
       plainText,
       isomorphicId,
       deleted: false,
+      replyToId,
     });
 
     // Extract @mentions and schedule chat mention notifications

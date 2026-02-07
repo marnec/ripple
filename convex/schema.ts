@@ -25,6 +25,7 @@ export default defineSchema({
     plainText: v.string(), // to filter messages
     channelId: v.id("channels"),
     deleted: v.boolean(),
+    replyToId: v.optional(v.id("messages")),
   })
     .index("by_channel", ["channelId"])
     .index("undeleted_by_channel", ["channelId", "deleted"])
