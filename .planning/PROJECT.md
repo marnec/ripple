@@ -99,6 +99,9 @@ Chat currently has task/project mention chips but no @user mentions, no reaction
 | Separate taskCommentSchema | Comments lighter than descriptions, only need @mentions | ✓ Good |
 | Diff-based mention detection | Prevents duplicate notifications on edits | ✓ Good |
 | mentionedUserIds as v.array(v.string()) | IDs come from JSON parsing, not typed Convex IDs | ⚠️ Revisit |
+| Chat mentions: create-only notifications | v1 simplification - only notify on new messages, not edits | ✓ Good |
+| Separate chat notification action | Chat needs different context (#channel) than tasks | ✓ Good |
+| Pass plainText to notification action | Simpler than querying message by ID for preview | ✓ Good |
 
 ---
-*Last updated: 2026-02-07 after v0.9 milestone start*
+*Last updated: 2026-02-07 after Phase 09 completion*
