@@ -1,7 +1,7 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import * as webpush from "web-push";
@@ -17,7 +17,7 @@ export const sendPushNotification = action({
   },
   returns: v.null(),
   handler: async (ctx, { author, body, channelId }) => {
-    const channel = await ctx.runQuery(api.channels.get, { id: channelId });
+    const channel = await ctx.runQuery(internal.channels.getInternal, { id: channelId });
 
     if (!channel) throw new ConvexError(`Could not find channel=${channelId}`);
 
