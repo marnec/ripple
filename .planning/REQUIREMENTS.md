@@ -7,11 +7,11 @@
 
 ### @User Mentions
 
-- [ ] **MENT-01**: User can type @ in chat to trigger autocomplete dropdown of workspace members
-- [ ] **MENT-02**: User can select a member from autocomplete to insert a styled @mention chip
-- [ ] **MENT-03**: @mention chips render with user name in both composer and message display
-- [ ] **MENT-04**: Mentioned users receive push notification ("Alice mentioned you in #general")
-- [ ] **MENT-05**: Self-mentions are filtered from notifications (mentioning yourself doesn't notify you)
+- [x] **MENT-01**: User can type @ in chat to trigger autocomplete dropdown of workspace members
+- [x] **MENT-02**: User can select a member from autocomplete to insert a styled @mention chip
+- [x] **MENT-03**: @mention chips render with user name in both composer and message display
+- [x] **MENT-04**: Mentioned users receive push notification ("Alice mentioned you in #general")
+- [x] **MENT-05**: Self-mentions are filtered from notifications (mentioning yourself doesn't notify you)
 
 ### Emoji Reactions
 
@@ -56,11 +56,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MENT-01 | Phase 09 | Pending |
-| MENT-02 | Phase 09 | Pending |
-| MENT-03 | Phase 09 | Pending |
-| MENT-04 | Phase 09 | Pending |
-| MENT-05 | Phase 09 | Pending |
+| MENT-01 | Phase 09 | Complete |
+| MENT-02 | Phase 09 | Complete |
+| MENT-03 | Phase 09 | Complete |
+| MENT-04 | Phase 09 | Complete |
+| MENT-05 | Phase 09 | Complete |
 | REACT-01 | Phase 08 | Complete |
 | REACT-02 | Phase 08 | Complete |
 | REACT-03 | Phase 08 | Complete |

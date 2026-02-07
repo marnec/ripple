@@ -117,8 +117,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Frontend @mention autocomplete and rendering (composer schema, @ trigger, message renderer)
-- [ ] 09-02-PLAN.md — Backend chat notifications and mention wiring (chatNotifications action, messages.send extraction)
+- [x] 09-01-PLAN.md — Frontend @mention autocomplete and rendering (composer schema, @ trigger, message renderer)
+- [x] 09-02-PLAN.md — Backend chat notifications and mention wiring (chatNotifications action, messages.send extraction)
 
 #### Phase 10: Inline Reply-To
 **Goal**: Users can reply to specific messages with quoted preview in chat flow
@@ -150,5 +150,5 @@ Phases execute in numeric order: 08 → 09 → 10
 | 6.1. Mention People (INSERTED) | v0.8 | 1/1 | Complete | 2026-02-07 |
 | 7. Notifications and Polish | v0.8 | 2/2 | Complete | 2026-02-07 |
 | 8. Emoji Reactions Foundation | v0.9 | 2/2 | Complete | 2026-02-07 |
-| 9. @User Mentions in Chat | v0.9 | 0/2 | Not started | - |
+| 9. @User Mentions in Chat | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 10. Inline Reply-To | v0.9 | 0/TBD | Not started | - |
