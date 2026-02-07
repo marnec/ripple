@@ -1,10 +1,11 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
+import { extractMentionedUserIds } from "./utils/blocknote";
 
 export const list = query({
   args: { channelId: v.id("channels"), paginationOpts: paginationOptsValidator },
@@ -109,6 +110,22 @@ export const send = mutation({
       isomorphicId,
       deleted: false,
     });
+
+    // Extract @mentions and schedule chat mention notifications
+    const mentionedUserIds = extractMentionedUserIds(body);
+    const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+
+    if (filteredMentions.length > 0) {
+      await ctx.scheduler.runAfter(0, internal.chatNotifications.notifyMessageMentions, {
+        mentionedUserIds: filteredMentions,
+        channelId,
+        plainText,
+        mentionedBy: {
+          name: user.name || user.email || "Someone",
+          id: userId,
+        },
+      });
+    }
 
     await ctx.scheduler.runAfter(0, api.pushNotifications.sendPushNotification, {
       channelId,
