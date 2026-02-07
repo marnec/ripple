@@ -129,10 +129,11 @@ Plans:
   2. Reply mode shows compact quoted preview of original message in composer with cancel button
   3. Submitted reply displays in normal chat flow with compact quoted preview above it (showing author and truncated text)
   4. If original message is deleted after reply was sent, reply shows "[Message deleted]" placeholder gracefully (no broken references)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md — Backend schema and query enrichment (replyToId field, messages.send update, messages.list parent info)
+- [ ] 10-02-PLAN.md — Frontend reply mode UI (ChatContext reply state, MessageQuotePreview, Message reply action + display, MessageComposer preview)
 
 ## Progress
 
@@ -151,4 +152,4 @@ Phases execute in numeric order: 08 → 09 → 10
 | 7. Notifications and Polish | v0.8 | 2/2 | Complete | 2026-02-07 |
 | 8. Emoji Reactions Foundation | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 9. @User Mentions in Chat | v0.9 | 2/2 | Complete | 2026-02-07 |
-| 10. Inline Reply-To | v0.9 | 0/TBD | Not started | - |
+| 10. Inline Reply-To | v0.9 | 0/2 | Not started | - |
