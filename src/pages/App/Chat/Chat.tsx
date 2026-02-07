@@ -18,11 +18,12 @@ import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
 import { MessageContext } from "./MessageContext";
 import { SearchDialog } from "./SearchDialog";
-import { ChatContext, type EditingMessage } from "./ChatContext";
+import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
 
 export function Chat({ channelId }: { channelId: Id<"channels"> }) {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
+  const [replyingTo, setReplyingTo] = useState<ReplyingToMessage>(null);
   const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');
   const [contextMessageId, setContextMessageId] = useState<Id<"messages"> | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -52,9 +53,20 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
     } else {
       const isomorphicId = crypto.randomUUID();
 
-      await sendMessage({ body, plainText, channelId, isomorphicId }).catch((error) => {
+      await sendMessage({
+        body,
+        plainText,
+        channelId,
+        isomorphicId,
+        ...(replyingTo?.id ? { replyToId: replyingTo.id } : {}),
+      }).catch((error) => {
         toast({ variant: "destructive", title: "could not send message", content: error });
       });
+
+      // Clear reply mode after sending
+      if (replyingTo) {
+        setReplyingTo(null);
+      }
     }
   };
 
@@ -100,7 +112,7 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
   }
 
   return (
-    <ChatContext.Provider value={{ editingMessage, setEditingMessage }}>
+    <ChatContext.Provider value={{ editingMessage, setEditingMessage, replyingTo, setReplyingTo }}>
       {/* Show message context view when jumping to a specific message */}
       {viewMode === 'context' && contextMessageId ? (
         <MessageContext

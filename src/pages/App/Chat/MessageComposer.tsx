@@ -18,6 +18,7 @@ import { useChatContext } from "./ChatContext";
 import { TaskMention } from "./CustomInlineContent/TaskMention";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
+import { MessageQuotePreview } from "./MessageQuotePreview";
 import { FolderKanban, User } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
@@ -62,7 +63,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   workspaceId,
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
-  const { editingMessage } = useChatContext();
+  const { editingMessage, replyingTo, setReplyingTo } = useChatContext();
 
   // Query projects to determine linked project scope
   const projects = useQuery(api.projects.listByUserMembership, { workspaceId });
@@ -142,6 +143,16 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   return (
     <div className="flex sm:flex-col flex-col-reverse p-2 max-w-full border-t">
+      {replyingTo && (
+        <MessageQuotePreview
+          message={{
+            author: replyingTo.author,
+            plainText: replyingTo.plainText,
+            deleted: false,
+          }}
+          onCancel={() => setReplyingTo(null)}
+        />
+      )}
       <div className="flex justify-between items-start">
         <div className="flex flex-row gap-2">
           <Toggle

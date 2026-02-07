@@ -10,6 +10,8 @@ import { useChatContext } from "./ChatContext";
 import { CreateTaskFromMessagePopover } from "./CreateTaskFromMessagePopover";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
+import { MessageQuotePreview } from "./MessageQuotePreview";
+import { CornerUpLeft } from "lucide-react";
 
 type MessageProps = {
   message: MessageWithAuthor;
@@ -26,10 +28,25 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
   const messageRef = useRef<HTMLLIElement>(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
 
-  const { setEditingMessage } = useChatContext()
+  const { setEditingMessage, setReplyingTo } = useChatContext()
   const deleteMessage = useMutation(api.messages.remove)
 
-  const handleEdit = useCallback(() => setEditingMessage({ id: message._id, body: message.body }), [message, setEditingMessage])
+  const handleReply = useCallback(() => {
+    // Clear edit mode (mutually exclusive)
+    setEditingMessage({ id: null, body: null });
+    // Enter reply mode
+    setReplyingTo({
+      id: message._id,
+      author: message.author,
+      plainText: message.plainText,
+    });
+  }, [message, setEditingMessage, setReplyingTo]);
+
+  const handleEdit = useCallback(() => {
+    setReplyingTo(null); // Clear reply mode (mutually exclusive)
+    setEditingMessage({ id: message._id, body: message.body });
+  }, [message, setEditingMessage, setReplyingTo]);
+
   const handleDelete = useCallback(() => void deleteMessage({ id: message._id }), [message, deleteMessage])
   const handleCreateTask = useCallback(() => setIsCreatingTask(true), [])
 
@@ -45,6 +62,12 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
             userIsAuthor ? "items-end self-end" : "items-start self-start",
           )}
         >
+          {message.replyToId && (
+            <div className={cn("mb-1", userIsAuthor ? "self-end" : "self-start")}>
+              <MessageQuotePreview message={message.replyTo ?? null} compact />
+            </div>
+          )}
+
           <div
             className={cn("flex items-center gap-3", userIsAuthor ? "flex-row" : "flex-row-reverse")}
           >
@@ -71,6 +94,12 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
               <ContextMenuItem onClick={handleEdit}>Edit</ContextMenuItem>
               <ContextMenuItem onClick={handleDelete}>Delete</ContextMenuItem>
             </>
+          )}
+          {!message.deleted && !message.replyToId && (
+            <ContextMenuItem onClick={handleReply}>
+              <CornerUpLeft className="mr-2 h-4 w-4" />
+              Reply
+            </ContextMenuItem>
           )}
           <ContextMenuItem onClick={handleCreateTask}>Create task from message</ContextMenuItem>
         </ContextMenuContent>
