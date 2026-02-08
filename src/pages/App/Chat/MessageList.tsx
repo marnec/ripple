@@ -45,7 +45,7 @@ export function MessageList({ children, messages }: MessageListProps) {
       viewportClassName="h-full overflow-y-auto overscroll-contain"
       ref={scrollAreaRef}
     >
-      <ol ref={messageListRef} className="flex grow flex-col-reverse gap-4 px-8 py-4">
+      <ol ref={messageListRef} className="flex grow flex-col-reverse gap-4 px-4 py-4">
         {children}
       </ol>
     </ScrollArea>

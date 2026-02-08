@@ -4,14 +4,14 @@ import GroupVideoCall from "../GroupVideoCall/GroupVideoCall";
 import { QueryParams } from "@shared/types/routes";
 
 export const ChannelVideoCall = () => {
-  const { channelId } = useParams<QueryParams>();
+  const { channelId, workspaceId } = useParams<QueryParams>();
 
-  if (!channelId) {
+  if (!channelId || !workspaceId) {
     console.error(
-      "Channel Id not found. The channel Videocall should be rendered in a route where the :channelId param si available",
+      "Channel Id or Workspace Id not found. The channel Videocall should be rendered in a route where both params are available",
     );
     return <SomethingWentWrong />;
   }
 
-  return <GroupVideoCall channelId={channelId} />;
+  return <GroupVideoCall channelId={channelId} workspaceId={workspaceId} />;
 };

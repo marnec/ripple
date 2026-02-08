@@ -211,6 +211,13 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("undeleted_by_task", ["taskId", "deleted"]),
 
+  callSessions: defineTable({
+    channelId: v.id("channels"),
+    cloudflareMeetingId: v.string(),
+    active: v.boolean(),
+  })
+    .index("by_channel_active", ["channelId", "active"]),
+
   pushSubscriptions: defineTable({
     userId: v.id("users"),
     device: v.string(),

@@ -114,7 +114,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
             <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
               <div
                 className={cn(
-                  "rounded-xl bg-muted px-3 py-2 transition-all",
+                  "max-w-[85%] rounded-xl bg-muted px-3 py-2 transition-all",
                   userIsAuthor ? "rounded-tr-none" : "rounded-tl-none"
                 )}
               >

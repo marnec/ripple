@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as breadcrumb from "../breadcrumb.js";
+import type * as callSessions from "../callSessions.js";
 import type * as channelMembers from "../channelMembers.js";
 import type * as channels from "../channels.js";
 import type * as chatNotifications from "../chatNotifications.js";
@@ -46,6 +47,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   breadcrumb: typeof breadcrumb;
+  callSessions: typeof callSessions;
   channelMembers: typeof channelMembers;
   channels: typeof channels;
   chatNotifications: typeof chatNotifications;

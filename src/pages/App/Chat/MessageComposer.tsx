@@ -12,6 +12,7 @@ import {
 } from "@radix-ui/react-icons";
 import { useTheme } from "next-themes";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
 import { useChatContext } from "./ChatContext";
@@ -19,7 +20,7 @@ import { TaskMention } from "./CustomInlineContent/TaskMention";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { FolderKanban, User } from "lucide-react";
+import { FolderKanban, Phone, User } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -30,6 +31,7 @@ interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
   channelId: Id<"channels">;
   workspaceId: Id<"workspaces">;
+  showCallButton?: boolean;
 }
 
 const editorIsEmpty = (editor: BlockNoteEditor<any, any, any>) =>
@@ -104,8 +106,10 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
   channelId,
   workspaceId,
+  showCallButton = true,
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
+  const navigate = useNavigate();
   const { editingMessage, replyingTo, setReplyingTo } = useChatContext();
 
   // Query projects to determine linked project scope
@@ -288,7 +292,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             <Link1Icon />
           </Button>
         </div>
-        {/* <Button onClick={() => navigate("videocall")}>Call</Button> */}
+        {showCallButton && (
+          <Button variant="ghost" size="icon" onClick={() => void navigate("videocall")} title="Start a call">
+            <Phone className="h-4 w-4" />
+          </Button>
+        )}
       </div>
       {replyingTo && (
         <MessageQuotePreview

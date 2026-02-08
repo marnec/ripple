@@ -20,7 +20,9 @@ import { MessageContext } from "./MessageContext";
 import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
 
-export function Chat({ channelId }: { channelId: Id<"channels"> }) {
+export type ChatVariant = "full" | "compact";
+
+export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels">; variant?: ChatVariant }) {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
   const [replyingTo, setReplyingTo] = useState<ReplyingToMessage>(null);
@@ -123,9 +125,10 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
           onBackToChat={handleBackToChat}
         />
       ) : (
-        <>
+        <div className="flex h-full min-h-0 flex-col">
           {/* Main Chat View */}
-      {/* Inline Search */}
+      {/* Inline Search — hidden in compact variant */}
+      {variant === "full" && (
       <div className="flex items-center gap-2 p-2 border-b">
         <div className="relative flex-1">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -137,16 +140,16 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
             className="pl-10 pr-12"
           />
         </div>
-        <SearchDialog 
-          channelId={channelId} 
+        <SearchDialog
+          channelId={channelId}
           onJumpToMessage={handleJumpToMessage}
           initialSearchTerm={searchDialogTerm}
           isOpen={isSearchDialogOpen}
           onOpenChange={setIsSearchDialogOpen}
         >
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleSearchSubmit}
             disabled={!searchInput.trim()}
           >
@@ -154,7 +157,9 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
           </Button>
         </SearchDialog>
       </div>
+      )}
 
+      <div className="min-h-0 flex-1">
       <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
         {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
@@ -176,7 +181,7 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
             />
           </Fragment>
         ))}
-        {messages && (
+        {variant === "full" && messages && (
           <Button
             variant="outline"
             className="self-center sm:w-fit w-full"
@@ -187,13 +192,15 @@ export function Chat({ channelId }: { channelId: Id<"channels"> }) {
           </Button>
         )}
       </MessageList>
+      </div>
 
           <MessageComposer
             handleSubmit={(content, plainText) => void handleSubmit(content, plainText)}
             channelId={channelId}
             workspaceId={workspaceId as Id<"workspaces">}
+            showCallButton={variant === "full"}
           />
-        </>
+        </div>
       )}
     </ChatContext.Provider>
   );
