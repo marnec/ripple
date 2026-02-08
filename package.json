@@ -12,7 +12,8 @@
     "lint": "tsc -b && eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy:convex": "npx convex deploy",
-    "deploy": "git push origin main:main"
+    "deploy:frontend": "npm run build && wrangler deploy",
+    "deploy": "npm run build && npx convex deploy && wrangler deploy"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
@@ -96,6 +97,7 @@
     "tailwindcss": "4.1.18",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.54.0",
-    "vite": "7.3.1"
+    "vite": "7.3.1",
+    "wrangler": "^4.63.0"
   }
 }
