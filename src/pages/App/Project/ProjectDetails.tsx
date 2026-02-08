@@ -59,8 +59,8 @@ function ProjectDetailsContent({
     <div
       className={
         view === "board"
-          ? "container mx-auto p-6 max-w-full"
-          : "container mx-auto p-6 max-w-5xl"
+          ? "container mx-auto p-3 md:p-6 max-w-full"
+          : "container mx-auto p-3 md:p-6 max-w-5xl"
       }
     >
       {/* Project Header */}

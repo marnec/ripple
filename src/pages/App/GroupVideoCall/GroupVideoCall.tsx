@@ -218,10 +218,11 @@ function ControlsBar({
   }, [meeting, channelId, endSession, onLeave]);
 
   return (
-    <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-3">
+    <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-3 pb-[calc(0.75rem+var(--safe-area-bottom))]">
       <Button
         variant={audioEnabled ? "secondary" : "destructive"}
         size="icon"
+        className="h-11 w-11 md:h-9 md:w-9"
         onClick={() => void toggleAudio()}
         title={audioEnabled ? "Mute" : "Unmute"}
       >
@@ -234,6 +235,7 @@ function ControlsBar({
       <Button
         variant={videoEnabled ? "secondary" : "destructive"}
         size="icon"
+        className="h-11 w-11 md:h-9 md:w-9"
         onClick={() => void toggleVideo()}
         title={videoEnabled ? "Turn off camera" : "Turn on camera"}
       >
@@ -246,6 +248,7 @@ function ControlsBar({
       <Button
         variant={screenShareEnabled ? "destructive" : "secondary"}
         size="icon"
+        className="h-11 w-11 md:h-9 md:w-9"
         onClick={() => void toggleScreenShare()}
         title={screenShareEnabled ? "Stop sharing" : "Share screen"}
       >
@@ -258,6 +261,7 @@ function ControlsBar({
       <Button
         variant={chatOpen ? "default" : "secondary"}
         size="icon"
+        className="h-11 w-11 md:h-9 md:w-9"
         onClick={onToggleChat}
         title={chatOpen ? "Close chat" : "Open chat"}
       >
@@ -266,7 +270,7 @@ function ControlsBar({
       <Button
         variant="destructive"
         onClick={() => void handleLeave()}
-        className="gap-2"
+        className="gap-2 h-11 md:h-9"
       >
         <LogOut className="h-4 w-4" />
         Leave
@@ -295,7 +299,8 @@ function MeetingRoom({
         <div className="flex flex-1 flex-col overflow-y-auto p-4">
           <VideoGrid />
         </div>
-        {/* Collapsible chat sidebar */}
+        {/* Chat sidebar — intentionally desktop-only (lg+). On mobile/tablet the
+           video grid takes full width; chat is accessible from the channel after leaving. */}
         {chatOpen && (
           <div className="hidden w-80 border-l lg:flex lg:flex-col lg:overflow-hidden">
             <div className="flex items-center justify-between border-b px-3 py-2">

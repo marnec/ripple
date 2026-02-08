@@ -111,7 +111,7 @@ export function KanbanColumn({
 
   return (
     <>
-      <div className="flex flex-col w-72 bg-muted/30 rounded-lg p-2 flex-shrink-0">
+      <div className="flex flex-col w-64 md:w-72 bg-muted/30 rounded-lg p-2 flex-shrink-0">
         {/* Column Header */}
         <div className="flex items-center gap-2 px-2 py-3 mb-2">
           <span className={cn("w-2 h-2 rounded-full", status.color)} />

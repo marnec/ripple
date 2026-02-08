@@ -117,6 +117,9 @@
 /* To change the theme colors, change the values below
   or use the "Copy code" button at https://ui.shadcn.com/themes */
 :root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+
   --background: 0 0% 100%;
   --foreground: 20 14.3% 4.1%;
 
@@ -325,18 +328,5 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-/* PWA safe area handling for notched devices */
-.safe-area-top {
-  padding-top: env(safe-area-inset-top, 0);
-}
-
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0);
-}
-
-.safe-area-all {
-  padding-top: env(safe-area-inset-top, 0);
-  padding-right: env(safe-area-inset-right, 0);
-  padding-bottom: env(safe-area-inset-bottom, 0);
-  padding-left: env(safe-area-inset-left, 0);
-}
+/* PWA safe area handling — applied via var(--safe-area-top) / var(--safe-area-bottom)
+   defined in :root. Components that touch viewport edges use these in inline styles. */

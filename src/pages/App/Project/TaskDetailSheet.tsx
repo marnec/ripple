@@ -48,7 +48,7 @@ export function TaskDetailSheet({
   if (detail.statuses === undefined || detail.members === undefined) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-200 sm:w-175 overflow-y-auto">
+        <SheetContent className="w-full md:w-[44rem] overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <div className="flex items-center justify-center py-12">
             <LoadingSpinner />
@@ -61,7 +61,7 @@ export function TaskDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-200 sm:w-175 overflow-y-auto">
+        <SheetContent className="w-full md:w-[44rem] overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <Button
             variant="ghost"

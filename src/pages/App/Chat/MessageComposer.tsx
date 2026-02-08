@@ -210,7 +210,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, editor);
 
   return (
-    <div className="flex sm:flex-col flex-col-reverse p-2 max-w-full border-t gap-2">
+    <div className="flex sm:flex-col flex-col-reverse p-2 pb-[calc(0.5rem+var(--safe-area-bottom))] max-w-full border-t gap-2">
       <div className="flex justify-between items-start">
         <div className="flex flex-row gap-2">
           <Toggle

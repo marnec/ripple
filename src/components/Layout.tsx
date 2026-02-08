@@ -20,7 +20,7 @@ export function Layout() {
     <>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex shrink-0 sticky top-0 px-4 z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
+        <header className="flex shrink-0 sticky top-0 px-4 pt-[var(--safe-area-top)] z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
           <div className="flex items-center">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
@@ -31,7 +31,7 @@ export function Layout() {
         </header>
         {/* this solution is from https://github.com/shadcn-ui/ui/issues/5545 */}
         <div
-          className={cn("flex h-[calc(100svh-4rem)]", {
+          className={cn("flex h-[calc(100svh-4rem-var(--safe-area-top))]", {
             "w-svw": isMobile,
             "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
             "w-[calc(100svw-var(--sidebar-width-icon))]": !isMobile && state === "collapsed",

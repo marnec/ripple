@@ -232,7 +232,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
       >
         <div
           className="flex gap-4 overflow-x-auto pb-4"
-          style={{ minHeight: "calc(100vh - 200px)" }}
+          style={{ minHeight: "calc(100svh - 200px)" }}
         >
           {statuses.map((status, index) => (
             <KanbanColumn
@@ -258,7 +258,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
           {/* Add Column Button */}
           <button
             onClick={() => setShowAddColumn(true)}
-            className="flex flex-col w-72 h-32 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20 flex-shrink-0 items-center justify-center gap-2 hover:bg-muted/50 hover:border-muted-foreground/40 transition-colors cursor-pointer"
+            className="flex flex-col w-64 md:w-72 h-32 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20 flex-shrink-0 items-center justify-center gap-2 hover:bg-muted/50 hover:border-muted-foreground/40 transition-colors cursor-pointer"
           >
             <Plus className="h-6 w-6 text-muted-foreground" />
             <span className="text-sm text-muted-foreground font-medium">
