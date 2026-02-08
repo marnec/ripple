@@ -1,28 +1,35 @@
 NEXT STEPS:
 
-- pwa
-- migrate from netlify to cloudflare hosting
-- fix videocalls and activate cloudflare STUN servers
-- internationalization (i18n and localization)
-- profile settings saved to local storage  
-    - user notification settings
-    - language preference
-- sidebar organization
-    - channels grouping and personal channels
-    - documents folders?
-    - project documents?
-    - project diagrams?
-- dashboard pages (channels, projects, documents, diagrams)
-- PLANE.so inspired features:
-    - cycles
-    - task dependencies
-    - deadlines & estimates
-- AI integrations
-    - AI bot in chat (called on mention)
-    - AI dictate content
-    - AI translations in videocalls
-    - AI agent in videocall (unclear how)
-    - AI document agent
-    - AI tasks agent
-- External integrations
-    - github issues
+- [x] pwa
+- [x] migrate from netlify to cloudflare hosting
+- [x] fix videocalls and activate cloudflare STUN servers
+    - [ ] lobby page to join call
+    - [ ] docs in call
+    - [ ] diagrams in call
+    - [ ] call panels layout
+- [ ] realtime cursor tracking in documents via webrtc
+- [ ] realtime cursor tracking in excalidraw via webrtc
+- [ ] internationalization (i18n and localization)
+- [ ] profile settings saved to local storage  
+    - [ ] user notification settings
+    - [ ] language preference
+- [ ] fix breadcrumb on mobile
+- [ ] sidebar organization
+    - [ ] channels grouping and personal channels
+    - [ ] documents folders?
+    - [ ] project documents?
+    - [ ] project diagrams?
+- [ ] dashboard pages (channels, projects, documents, diagrams)
+- [ ] PLANE.so inspired features:
+    - [ ] cycles
+    - [ ] task dependencies
+    - [ ] deadlines & estimates
+- [ ] AI integrations
+    - [ ] AI bot in chat (called on mention)
+    - [ ] AI dictate content
+    - [ ] AI translations in videocalls
+    - [ ] AI agent in videocall (unclear how)
+    - [ ] AI document agent
+    - [ ] AI tasks agent
+- [ ] External integrations
+    - [ ] github issues
