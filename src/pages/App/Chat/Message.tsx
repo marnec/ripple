@@ -98,7 +98,7 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
           ref={messageRef}
           className={cn(
             "flex flex-col text-sm animate-slide-up",
-            userIsAuthor ? "items-end self-end" : "items-start self-start",
+            userIsAuthor ? "items-end" : "items-start",
           )}
         >
           <div
@@ -108,14 +108,14 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
             <div className="mb-1 text-sm font-medium">{author}</div>
           </div>
 
-          <ContextMenuTrigger>
+          <ContextMenuTrigger className="w-full">
             <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
             <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
             <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
               <div
                 className={cn(
-                  "max-w-[85%] rounded-xl bg-muted px-3 py-2 transition-all",
-                  userIsAuthor ? "rounded-tr-none" : "rounded-tl-none"
+                  "max-w-[85%] w-fit rounded-xl bg-muted px-3 py-2 transition-all",
+                  userIsAuthor ? "rounded-tr-none ml-auto" : "rounded-tl-none"
                 )}
               >
                 {message.replyToId && (
