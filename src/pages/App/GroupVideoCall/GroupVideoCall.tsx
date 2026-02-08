@@ -4,6 +4,7 @@ import {
   useRealtimeKitMeeting,
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
+import { RtkParticipantsAudio } from "@cloudflare/realtimekit-react-ui";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   LogOut,
@@ -283,10 +284,12 @@ function MeetingRoom({
   channelId: Id<"channels">;
   onLeave: () => void;
 }) {
+  const { meeting } = useRealtimeKitMeeting();
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
     <div className="flex h-full flex-col">
+      <RtkParticipantsAudio meeting={meeting} />
       <div className="flex min-h-0 flex-1">
         {/* Video grid */}
         <div className="flex flex-1 flex-col overflow-y-auto p-4">
