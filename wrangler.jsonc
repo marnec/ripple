@@ -9,8 +9,7 @@
   "routes": [
     {
       "pattern": "ripple.conduits.space",
-      "custom_domain": true,
-      "override_existing_dns_record": true
+      "custom_domain": true
     }
   ]
 }
