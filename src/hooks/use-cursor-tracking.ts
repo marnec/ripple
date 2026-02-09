@@ -1,7 +1,7 @@
 import { useRealtimeKitClient } from "@cloudflare/realtimekit-react";
 import RTKClient from "@cloudflare/realtimekit";
 import { useAction, useQuery } from "convex/react";
-import { RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useIsMobile } from "./use-mobile";
@@ -21,10 +21,14 @@ const RENDER_INTERVAL_MS = 50; // 20fps max
 
 export function useCursorTracking(opts: {
   documentId: Id<"documents">;
-  editorRef: RefObject<HTMLDivElement | null>;
   enabled?: boolean;
-}): { cursors: Map<string, CursorPosition>; isConnected: boolean } {
-  const { documentId, editorRef, enabled = true } = opts;
+}): {
+  cursors: Map<string, CursorPosition>;
+  isConnected: boolean;
+  onMouseMove: (e: ReactMouseEvent) => void;
+  onMouseLeave: () => void;
+} {
+  const { documentId, enabled = true } = opts;
   const isMobile = useIsMobile();
   const user = useQuery(api.users.viewer);
   const joinCursorSession = useAction(api.cursorSessions.joinCursorSession);
@@ -86,6 +90,23 @@ export function useCursorTracking(opts: {
       .broadcastMessage("cursor_leave", { userId: user._id })
       .catch(() => {});
   }, [user]);
+
+  // React event handlers — attached by the component, no ref timing issues
+  const onMouseMove = useCallback(
+    (e: ReactMouseEvent) => {
+      if (!enabled || isMobile) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      broadcastCursor(x, y);
+    },
+    [enabled, isMobile, broadcastCursor],
+  );
+
+  const onMouseLeave = useCallback(() => {
+    if (!enabled || isMobile) return;
+    broadcastLeave();
+  }, [enabled, isMobile, broadcastLeave]);
 
   // Connect to RTK meeting
   useEffect(() => {
@@ -183,32 +204,6 @@ export function useCursorTracking(opts: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, enabled, isMobile, user?._id]);
 
-  // Mouse tracking on editor
-  useEffect(() => {
-    if (!enabled || isMobile) return;
-    const el = editorRef.current;
-    if (!el) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = el.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      broadcastCursor(x, y);
-    };
-
-    const handleMouseLeave = () => {
-      broadcastLeave();
-    };
-
-    el.addEventListener("mousemove", handleMouseMove);
-    el.addEventListener("mouseleave", handleMouseLeave);
-
-    return () => {
-      el.removeEventListener("mousemove", handleMouseMove);
-      el.removeEventListener("mouseleave", handleMouseLeave);
-    };
-  }, [enabled, isMobile, editorRef, broadcastCursor, broadcastLeave]);
-
   // Render batching — tick at max 20fps
   useEffect(() => {
     if (!enabled || isMobile) return;
@@ -246,5 +241,5 @@ export function useCursorTracking(opts: {
     return () => window.removeEventListener("beforeunload", handler);
   }, [enabled, isMobile]);
 
-  return { cursors: cursorsRef.current, isConnected };
+  return { cursors: cursorsRef.current, isConnected, onMouseMove, onMouseLeave };
 }

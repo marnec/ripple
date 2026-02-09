@@ -13,7 +13,7 @@ import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { PenTool } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -72,10 +72,8 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   );
   const enhancedPresence = useEnhancedPresence(documentId);
   const isMobile = useIsMobile();
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const { cursors } = useCursorTracking({
+  const { cursors, onMouseMove, onMouseLeave } = useCursorTracking({
     documentId,
-    editorRef: editorContainerRef,
     enabled: !isMobile,
   });
 
@@ -97,7 +95,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   return (
     <>
       {editor && (
-        <div ref={editorContainerRef} className="px-20 max-w-full flex-1 animate-fade-in relative">
+        <div onMouseMove={onMouseMove} onMouseLeave={onMouseLeave} className="px-20 max-w-full flex-1 animate-fade-in relative">
           <div className="absolute top-5 right-10 z-10">
             <FacePile users={enhancedPresence} hideInactive={true} />
           </div>

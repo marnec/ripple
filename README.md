@@ -3,10 +3,13 @@ NEXT STEPS:
 - [x] pwa
 - [x] migrate from netlify to cloudflare hosting
 - [x] fix videocalls and activate cloudflare STUN servers
-    - [ ] lobby page to join call
+    - [x] lobby page to join call
     - [ ] docs in call
     - [ ] diagrams in call
     - [ ] call panels layout
+- [ ] fix broken invitation flow (link only works if registered/logged)
+- [ ] fix doc visibility and permissions
+- [ ] improve UX for section settings
 - [ ] realtime cursor tracking in documents via webrtc
 - [ ] realtime cursor tracking in excalidraw via webrtc
 - [ ] internationalization (i18n and localization)

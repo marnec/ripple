@@ -149,8 +149,8 @@ export const get = query({
       .withIndex("by_document_user", (q) => q.eq("documentId", id).eq("userId", userId))
       .first();
 
-    if (membership?.role !== DocumentRole.ADMIN) {
-      throw new ConvexError("You are not an admin of this document");
+    if (!membership) {
+      throw new ConvexError("You are not a member of this document");
     }
 
     const document = await ctx.db.get(id);
