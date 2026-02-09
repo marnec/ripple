@@ -6,22 +6,42 @@ import {
 } from "@cloudflare/realtimekit-react";
 import { RtkParticipantsAudio } from "@cloudflare/realtimekit-react-ui";
 import { useAction, useMutation, useQuery } from "convex/react";
-import {
-  LogOut,
-  Mic,
-  MicOff,
-  Monitor,
-  MonitorOff,
-  Video,
-  VideoOff,
-} from "lucide-react";
+import { LogOut, Monitor, MonitorOff } from "lucide-react";
 import { MessageSquare } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import { Chat } from "../Chat/Chat";
+import { CallLobby, type DevicePreferences } from "./CallLobby";
+import { CameraToggle, MicToggle } from "./MediaToggle";
+import { VideoTile } from "./VideoTile";
+
+// --- Meeting room context ---
+
+interface MeetingRoomContextValue {
+  channelId: Id<"channels">;
+  chatOpen: boolean;
+  toggleChat: () => void;
+  onLeave: () => void;
+}
+
+const MeetingRoomContext = createContext<MeetingRoomContextValue | null>(null);
+
+function useMeetingRoom() {
+  const ctx = useContext(MeetingRoomContext);
+  if (!ctx)
+    throw new Error("useMeetingRoom must be used within MeetingRoom");
+  return ctx;
+}
 
 // --- Participant video tile ---
 
@@ -51,30 +71,17 @@ function ParticipantTile({
   }, [participant, participant.videoTrack]);
 
   return (
-    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-muted">
+    <VideoTile.Root>
       {participant.videoEnabled ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="h-full w-full object-cover"
-        />
+        <VideoTile.Video videoRef={videoRef} />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
-            {participant.name?.charAt(0).toUpperCase() || "?"}
-          </div>
-          <span className="text-sm text-muted-foreground">
-            {participant.name || "Participant"}
-          </span>
-        </div>
+        <VideoTile.AvatarFallback name={participant.name} />
       )}
-      <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded bg-black/60 px-2 py-1 text-xs text-white">
-        {!participant.audioEnabled && <MicOff className="h-3 w-3" />}
-        <span>{participant.name || "Participant"}</span>
-      </div>
-    </div>
+      <VideoTile.NameBadge
+        name={participant.name || "Participant"}
+        muted={!participant.audioEnabled}
+      />
+    </VideoTile.Root>
   );
 }
 
@@ -104,30 +111,17 @@ function SelfTile() {
   }, [meeting.self, videoTrack]);
 
   return (
-    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-muted">
+    <VideoTile.Root>
       {videoEnabled ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="h-full w-full -scale-x-100 object-cover"
-        />
+        <VideoTile.Video videoRef={videoRef} mirrored />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-semibold text-primary-foreground">
-            {name?.charAt(0).toUpperCase() || "?"}
-          </div>
-          <span className="text-sm text-muted-foreground">
-            {name || "You"}
-          </span>
-        </div>
+        <VideoTile.AvatarFallback name={name || "You"} />
       )}
-      <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded bg-black/60 px-2 py-1 text-xs text-white">
-        {!audioEnabled && <MicOff className="h-3 w-3" />}
-        <span>{name || "You"} (You)</span>
-      </div>
-    </div>
+      <VideoTile.NameBadge
+        name={`${name || "You"} (You)`}
+        muted={!audioEnabled}
+      />
+    </VideoTile.Root>
   );
 }
 
@@ -160,18 +154,9 @@ function VideoGrid() {
 
 // --- Controls bar ---
 
-function ControlsBar({
-  channelId,
-  onLeave,
-  chatOpen,
-  onToggleChat,
-}: {
-  channelId: Id<"channels">;
-  onLeave: () => void;
-  chatOpen: boolean;
-  onToggleChat: () => void;
-}) {
+function ControlsBar() {
   const { meeting } = useRealtimeKitMeeting();
+  const { channelId, chatOpen, toggleChat, onLeave } = useMeetingRoom();
   const audioEnabled = useRealtimeKitSelector(
     (m) => m.self.audioEnabled,
   );
@@ -209,7 +194,6 @@ function ControlsBar({
 
   const handleLeave = useCallback(async () => {
     await meeting.leave();
-    // Check if any other participants remain
     const remaining = meeting.participants.joined.toArray();
     if (remaining.length === 0) {
       await endSession({ channelId });
@@ -219,32 +203,14 @@ function ControlsBar({
 
   return (
     <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-3 pb-[calc(0.75rem+var(--safe-area-bottom))]">
-      <Button
-        variant={audioEnabled ? "secondary" : "destructive"}
-        size="icon"
-        className="h-11 w-11 md:h-9 md:w-9"
-        onClick={() => void toggleAudio()}
-        title={audioEnabled ? "Mute" : "Unmute"}
-      >
-        {audioEnabled ? (
-          <Mic className="h-5 w-5" />
-        ) : (
-          <MicOff className="h-5 w-5" />
-        )}
-      </Button>
-      <Button
-        variant={videoEnabled ? "secondary" : "destructive"}
-        size="icon"
-        className="h-11 w-11 md:h-9 md:w-9"
-        onClick={() => void toggleVideo()}
-        title={videoEnabled ? "Turn off camera" : "Turn on camera"}
-      >
-        {videoEnabled ? (
-          <Video className="h-5 w-5" />
-        ) : (
-          <VideoOff className="h-5 w-5" />
-        )}
-      </Button>
+      <MicToggle
+        enabled={audioEnabled}
+        onToggle={() => void toggleAudio()}
+      />
+      <CameraToggle
+        enabled={videoEnabled}
+        onToggle={() => void toggleVideo()}
+      />
       <Button
         variant={screenShareEnabled ? "destructive" : "secondary"}
         size="icon"
@@ -262,7 +228,7 @@ function ControlsBar({
         variant={chatOpen ? "default" : "secondary"}
         size="icon"
         className="h-11 w-11 md:h-9 md:w-9"
-        onClick={onToggleChat}
+        onClick={toggleChat}
         title={chatOpen ? "Close chat" : "Open chat"}
       >
         <MessageSquare className="h-5 w-5" />
@@ -292,42 +258,46 @@ function MeetingRoom({
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <div className="flex h-full flex-col">
-      <RtkParticipantsAudio meeting={meeting} />
-      <div className="flex min-h-0 flex-1">
-        {/* Video grid */}
-        <div className="flex flex-1 flex-col overflow-y-auto p-4">
-          <VideoGrid />
-        </div>
-        {/* Chat sidebar — intentionally desktop-only (lg+). On mobile/tablet the
-           video grid takes full width; chat is accessible from the channel after leaving. */}
-        {chatOpen && (
-          <div className="hidden w-80 border-l lg:flex lg:flex-col lg:overflow-hidden">
-            <div className="flex items-center justify-between border-b px-3 py-2">
-              <span className="text-sm font-medium">Chat</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setChatOpen(false)}
-                title="Close chat"
-              >
-                <MessageSquare className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <Chat channelId={channelId} variant="compact" />
-            </div>
+    <MeetingRoomContext.Provider
+      value={{
+        channelId,
+        chatOpen,
+        toggleChat: () => setChatOpen((o) => !o),
+        onLeave,
+      }}
+    >
+      <div className="flex h-full flex-col">
+        <RtkParticipantsAudio meeting={meeting} />
+        <div className="flex min-h-0 flex-1">
+          {/* Video grid */}
+          <div className="flex flex-1 flex-col overflow-y-auto p-4">
+            <VideoGrid />
           </div>
-        )}
+          {/* Chat sidebar — intentionally desktop-only (lg+). On mobile/tablet the
+             video grid takes full width; chat is accessible from the channel after leaving. */}
+          {chatOpen && (
+            <div className="hidden w-80 border-l lg:flex lg:flex-col lg:overflow-hidden">
+              <div className="flex items-center justify-between border-b px-3 py-2">
+                <span className="text-sm font-medium">Chat</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setChatOpen(false)}
+                  title="Close chat"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <Chat channelId={channelId} variant="compact" />
+              </div>
+            </div>
+          )}
+        </div>
+        <ControlsBar />
       </div>
-      <ControlsBar
-        channelId={channelId}
-        onLeave={onLeave}
-        chatOpen={chatOpen}
-        onToggleChat={() => setChatOpen((o) => !o)}
-      />
-    </div>
+    </MeetingRoomContext.Provider>
   );
 }
 
@@ -344,36 +314,56 @@ const GroupVideoCall = ({
   const joinCallAction = useAction(api.callSessions.joinCall);
   const [meeting, initMeeting] = useRealtimeKitClient();
   const [status, setStatus] = useState<
-    "idle" | "joining" | "joined" | "error"
-  >("idle");
+    "lobby" | "joining" | "joined" | "error"
+  >("lobby");
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const initRef = useRef(false);
 
-  // Initialize meeting on mount
-  useEffect(() => {
-    if (!user || initRef.current) return;
-    initRef.current = true;
+  const handleLeave = useCallback(() => {
+    void navigate(
+      `/workspaces/${workspaceId}/channels/${channelId}`,
+    );
+  }, [navigate, workspaceId, channelId]);
 
-    const init = async () => {
+  const handleJoin = useCallback(
+    async (prefs: DevicePreferences) => {
+      if (!user) return;
       try {
         setStatus("joining");
 
-        // Get auth token from Convex action
         const { authToken } = await joinCallAction({
           channelId,
           userName: user.name || "Anonymous",
           userImage: user.image ?? undefined,
         });
 
-        // Initialize the RealtimeKit client
         const m = await initMeeting({
           authToken,
-          defaults: { audio: false, video: false },
+          defaults: {
+            audio: prefs.audioEnabled,
+            video: prefs.videoEnabled,
+          },
         });
 
         if (m) {
           await m.join();
+
+          // Apply device selections if specified
+          if (prefs.audioDeviceId) {
+            const audioDevices = await m.self.getAudioDevices();
+            const selected = audioDevices.find(
+              (d: { deviceId: string }) => d.deviceId === prefs.audioDeviceId,
+            );
+            if (selected) await m.self.setDevice(selected);
+          }
+          if (prefs.videoDeviceId) {
+            const videoDevices = await m.self.getVideoDevices();
+            const selected = videoDevices.find(
+              (d: { deviceId: string }) => d.deviceId === prefs.videoDeviceId,
+            );
+            if (selected) await m.self.setDevice(selected);
+          }
+
           setStatus("joined");
         }
       } catch (err) {
@@ -383,16 +373,9 @@ const GroupVideoCall = ({
         );
         setStatus("error");
       }
-    };
-
-    void init();
-  }, [user, channelId, joinCallAction, initMeeting]);
-
-  const handleLeave = useCallback(() => {
-    void navigate(
-      `/workspaces/${workspaceId}/channels/${channelId}`,
-    );
-  }, [navigate, workspaceId, channelId]);
+    },
+    [user, channelId, joinCallAction, initMeeting],
+  );
 
   if (status === "error") {
     return (
@@ -402,6 +385,16 @@ const GroupVideoCall = ({
           Back to channel
         </Button>
       </div>
+    );
+  }
+
+  if (status === "lobby") {
+    return (
+      <CallLobby
+        userName={user?.name || "You"}
+        onJoin={(prefs) => void handleJoin(prefs)}
+        onBack={handleLeave}
+      />
     );
   }
 
