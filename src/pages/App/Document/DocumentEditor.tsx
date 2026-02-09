@@ -13,7 +13,7 @@ import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { PenTool } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -23,7 +23,10 @@ import {
   AvatarImage,
 } from "../../../components/ui/avatar";
 import { FacePile } from "../../../components/ui/facepile";
+import { useCursorTracking } from "../../../hooks/use-cursor-tracking";
 import { useEnhancedPresence } from "../../../hooks/use-enhanced-presence";
+import { useIsMobile } from "../../../hooks/use-mobile";
+import { CursorOverlay } from "./CursorOverlay";
 import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
 import { User } from "./CustomBlocks/UserBlock";
 
@@ -68,6 +71,13 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     document ? { workspaceId: document.workspaceId } : "skip"
   );
   const enhancedPresence = useEnhancedPresence(documentId);
+  const isMobile = useIsMobile();
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const { cursors } = useCursorTracking({
+    documentId,
+    editorRef: editorContainerRef,
+    enabled: !isMobile,
+  });
 
   useEffect(() => {
     const setUpEditor = async () => {
@@ -87,10 +97,11 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   return (
     <>
       {editor && (
-        <div className="px-20 max-w-full flex-1 animate-fade-in relative">
+        <div ref={editorContainerRef} className="px-20 max-w-full flex-1 animate-fade-in relative">
           <div className="absolute top-5 right-10 z-10">
             <FacePile users={enhancedPresence} hideInactive={true} />
           </div>
+          <CursorOverlay cursors={cursors} />
           <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController
