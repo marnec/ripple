@@ -95,18 +95,6 @@ export default defineSchema({
     .index("by_workspace_user", ["workspaceId", "userId"])
     .index("by_channel_role", ["channelId", "role"]),
 
-  signals: defineTable({
-    roomId: v.optional(v.string()),
-    peerId: v.string(),
-    userId: v.id("users"),
-    type: v.optional(v.string()),
-    sdp: v.optional(v.string()),
-    candidate: v.optional(v.any()),
-  })
-    .index("by_roomId", ["roomId"])
-    .index("by_peerId", ["peerId"])
-    .index("by_userId", ["userId"]),
-
   documents: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),

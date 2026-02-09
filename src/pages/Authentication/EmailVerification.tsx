@@ -1,6 +1,5 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "../../components/ui/use-toast";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
@@ -8,7 +7,6 @@ import { Button } from "../../components/ui/button";
 export function EmailVerification({ email }: { email: string }) {
   const { signIn } = useAuthActions();
   const [code, setCode] = useState("");
-  const navigate = useNavigate();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -19,7 +17,6 @@ export function EmailVerification({ email }: { email: string }) {
 
     try {
       await signIn("password", formData);
-      void navigate("/");
     } catch (error) {
       toast({
         title: `Could not verify email ${error instanceof Error ? error.message : String(error)}`,

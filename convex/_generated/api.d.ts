@@ -28,7 +28,6 @@ import type * as projects from "../projects.js";
 import type * as prosemirror from "../prosemirror.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as pushSubscription from "../pushSubscription.js";
-import type * as signaling from "../signaling.js";
 import type * as taskComments from "../taskComments.js";
 import type * as taskNotifications from "../taskNotifications.js";
 import type * as taskStatuses from "../taskStatuses.js";
@@ -66,7 +65,6 @@ declare const fullApi: ApiFromModules<{
   prosemirror: typeof prosemirror;
   pushNotifications: typeof pushNotifications;
   pushSubscription: typeof pushSubscription;
-  signaling: typeof signaling;
   taskComments: typeof taskComments;
   taskNotifications: typeof taskNotifications;
   taskStatuses: typeof taskStatuses;

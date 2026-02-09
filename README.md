@@ -8,6 +8,7 @@ NEXT STEPS:
     - [ ] diagrams in call
     - [ ] call panels layout
 - [ ] fix broken invitation flow (link only works if registered/logged)
+- [ ] fix task detail view
 - [ ] see pending invitations in app (not only email)
 - [ ] fix doc visibility and permissions
 - [ ] improve UX for section settings

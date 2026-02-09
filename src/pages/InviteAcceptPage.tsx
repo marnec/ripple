@@ -1,64 +1,80 @@
 import { useToast } from "@/components/ui/use-toast";
 import { SignInForm } from "@/pages/Authentication/SignInForm";
 import { Authenticated, Unauthenticated, useMutation } from "convex/react";
-import { useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
-export function InviteAcceptPage() {
-  const { inviteId } = useParams();
+function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const acceptInvite = useMutation(api.workspaceInvites.accept);
-  
-  const removeInviteId = () => {
-    if (inviteId) {
-      localStorage.removeItem("inviteId");
-    }
-  };
-  
+  const hasRun = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    const storeInviteId = () => {
-      if (inviteId) {
-        localStorage.setItem("inviteId", inviteId);
+    if (hasRun.current) return;
+    hasRun.current = true;
+
+    void (async () => {
+      try {
+        await acceptInvite({ inviteId: inviteId as Id<"workspaceInvites"> });
+        localStorage.removeItem("inviteId");
+        toast({
+          title: "Invitation accepted",
+          description: "You have successfully joined the workspace",
+        });
+        void navigate("/");
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Something went wrong";
+        if (message.toLowerCase().includes("already a member")) {
+          localStorage.removeItem("inviteId");
+          toast({
+            title: "Already a member",
+            description: "You are already a member of this workspace",
+          });
+          void navigate("/");
+        } else {
+          setError(message);
+        }
       }
-    };
+    })();
+  }, [acceptInvite, inviteId, navigate, toast]);
 
-    storeInviteId();
-  }, [inviteId]);
+  if (error) {
+    return (
+      <div className="text-center space-y-4">
+        <h1 className="text-2xl font-bold">Could not accept invitation</h1>
+        <p className="text-destructive">{error}</p>
+        <Link to="/" className="text-primary underline">
+          Go to Home
+        </Link>
+      </div>
+    );
+  }
 
-  const handleAcceptInvite = async () => {
-    try {
-      await acceptInvite({ inviteId: inviteId as Id<"workspaceInvites"> });
-      removeInviteId();
-      toast({
-        title: "Invitation accepted",
-        description: "You have successfully joined the workspace",
-      });
-      void navigate("/");
-    } catch (error) {
-      toast({
-        title: "Error accepting invitation",
-        description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
-      });
+  return (
+    <div className="text-center space-y-4">
+      <h1 className="text-2xl font-bold">Accepting invitation...</h1>
+    </div>
+  );
+}
+
+export function InviteAcceptPage() {
+  const { inviteId } = useParams();
+
+  useEffect(() => {
+    if (inviteId) {
+      localStorage.setItem("inviteId", inviteId);
     }
-  };
+  }, [inviteId]);
 
   return (
     <div className="container flex flex-col items-center justify-center min-h-screen">
       <Authenticated>
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold">Accept Workspace Invitation</h1>
-          <p>Click below to join the workspace</p>
-          <button
-            onClick={() => void handleAcceptInvite()}
-            className="px-4 py-2 bg-primary text-white rounded"
-          >
-            Accept Invite
-          </button>
-        </div>
+        {inviteId && <AutoAcceptInvite inviteId={inviteId} />}
       </Authenticated>
       <Unauthenticated>
         Please sign in to accept the invitation
@@ -66,4 +82,4 @@ export function InviteAcceptPage() {
       </Unauthenticated>
     </div>
   );
-} 
+}
