@@ -46,56 +46,17 @@ export const create = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new ConvexError("Project not found");
 
-    // If no statusId: seed default statuses and get default status
+    // If no statusId provided, fetch the default status for the workspace
     let statusId = args.statusId;
     if (!statusId) {
-      // Check if statuses already exist for workspace
-      const existingStatus = await ctx.db
-        .query("taskStatuses")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", project.workspaceId))
-        .first();
-
-      // Seed default statuses if they don't exist
-      if (!existingStatus) {
-        await ctx.db.insert("taskStatuses", {
-          workspaceId: project.workspaceId,
-          name: "To Do",
-          color: "bg-gray-500",
-          order: 0,
-          isDefault: true,
-          isCompleted: false,
-        });
-
-        await ctx.db.insert("taskStatuses", {
-          workspaceId: project.workspaceId,
-          name: "In Progress",
-          color: "bg-blue-500",
-          order: 1,
-          isDefault: false,
-          isCompleted: false,
-        });
-
-        await ctx.db.insert("taskStatuses", {
-          workspaceId: project.workspaceId,
-          name: "Done",
-          color: "bg-green-500",
-          order: 2,
-          isDefault: false,
-          isCompleted: true,
-        });
-      }
-
-      // Get default status
       const defaultStatus = await ctx.db
         .query("taskStatuses")
-        .withIndex("by_workspace", (q) =>
-          q.eq("workspaceId", project.workspaceId)
-        )
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", project.workspaceId))
         .filter((q) => q.eq(q.field("isDefault"), true))
         .first();
 
       if (!defaultStatus) {
-        throw new ConvexError("No default status found for workspace");
+        throw new ConvexError("No default status found for workspace. Ensure statuses are seeded.");
       }
       statusId = defaultStatus._id;
     }
@@ -374,13 +335,18 @@ export const update = mutation({
     if (labels !== undefined) patch.labels = labels;
     if (position !== undefined) patch.position = position;
 
-    // If statusId changed: look up new status, update completed field accordingly
+    // If statusId changed: look up new status, one-way sync for completed field
     if (statusId !== undefined) {
       const newStatus = await ctx.db.get(statusId);
       if (!newStatus) throw new ConvexError("Status not found");
 
       patch.statusId = statusId;
-      patch.completed = newStatus.isCompleted;
+      // One-way sync: only auto-set completed=true when moving TO a completed status.
+      // Moving OUT of a completed status does NOT auto-reset completed.
+      // User must explicitly uncomplete the task.
+      if (newStatus.isCompleted) {
+        patch.completed = true;
+      }
     }
 
     if (Object.keys(patch).length > 0) {
@@ -452,15 +418,19 @@ export const updatePosition = mutation({
       .first();
     if (!membership) throw new ConvexError("Not a member of this project");
 
-    // Look up status to update completed field
+    // Look up status to update completed field (one-way sync)
     const newStatus = await ctx.db.get(statusId);
     if (!newStatus) throw new ConvexError("Status not found");
 
-    await ctx.db.patch(taskId, {
+    const patchData: Record<string, any> = {
       statusId,
       position,
-      completed: newStatus.isCompleted,
-    });
+    };
+    // One-way sync: only auto-set completed=true when moving TO a completed status
+    if (newStatus.isCompleted) {
+      patchData.completed = true;
+    }
+    await ctx.db.patch(taskId, patchData);
 
     return null;
   },

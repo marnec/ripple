@@ -78,6 +78,41 @@ export const create = mutation({
       userId,
     });
 
+    // Seed default task statuses for workspace (idempotent — only seeds once per workspace)
+    const existingStatus = await ctx.db
+      .query("taskStatuses")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .first();
+
+    if (!existingStatus) {
+      await ctx.db.insert("taskStatuses", {
+        workspaceId,
+        name: "Todo",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: false,
+      });
+
+      await ctx.db.insert("taskStatuses", {
+        workspaceId,
+        name: "In Progress",
+        color: "bg-blue-500",
+        order: 1,
+        isDefault: false,
+        isCompleted: false,
+      });
+
+      await ctx.db.insert("taskStatuses", {
+        workspaceId,
+        name: "Done",
+        color: "bg-green-500",
+        order: 2,
+        isDefault: false,
+        isCompleted: true,
+      });
+    }
+
     return projectId;
   },
 });
