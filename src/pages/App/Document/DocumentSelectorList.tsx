@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { FilePlus } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { SidebarGroup, SidebarGroupAction, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
@@ -19,6 +20,7 @@ export function DocumentSelectorList({
   onDocumentSelect,
 }: DocumentSelectorProps) {
   const [selectedDocForRename, setSelectedDocForRename] = useState<Id<"documents"> | null>(null);
+  const navigate = useNavigate();
 
   const documents = useQuery(api.documents.list, { workspaceId });
   const createNewDocument = useMutation(api.documents.create);
@@ -31,6 +33,10 @@ export function DocumentSelectorList({
 
     onDocumentSelect(id);
   };
+
+  const navigateToDocumentSettings = (id: Id<"documents">) => {
+    void navigate(`/workspaces/${workspaceId}/documents/${id}/settings`);
+  }
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -50,6 +56,7 @@ export function DocumentSelectorList({
             documentId={documentId}
             onDocumentSelect={onDocumentSelect}
             onRenameDocument={setSelectedDocForRename}
+            onManageDocument={navigateToDocumentSettings}
           />
         ))}
       </SidebarMenu>

@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { File, FilePen, MoreHorizontal, Trash2 } from "lucide-react";
+import { File, FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -20,20 +20,22 @@ export interface DocumentSelectorItemProps {
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
   onRenameDocument: (id: Id<"documents">) => void;
+  onManageDocument: (id: Id<"documents">) => void;
 }
 
 export function DocumentSelectorItem({
   document,
   documentId,
   onDocumentSelect,
-  onRenameDocument
+  onRenameDocument,
+  onManageDocument,
 }: DocumentSelectorItemProps) {
   const isMobile = useIsMobile();
   const deleteDocument = useMutation(api.documents.remove);
 
   const handleDocumentDelete = async (id: Id<"documents">) => {
     onDocumentSelect(null);
-    
+
     await deleteDocument({ id });
 
   };
@@ -64,6 +66,10 @@ export function DocumentSelectorItem({
           <DropdownMenuItem onClick={() => onRenameDocument(document._id)}>
             <FilePen className="text-muted-foreground" />
             <span>Rename</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onManageDocument(document._id)}>
+            <Settings className="text-muted-foreground" />
+            <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => { void handleDocumentDelete(document._id) }}>

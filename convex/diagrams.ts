@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { DiagramRole } from "@shared/enums";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -9,6 +10,10 @@ const diagramValidator = v.object({
   name: v.string(),
   tags: v.optional(v.array(v.string())),
   content: v.optional(v.string()),
+  roleCount: v.optional(v.object({
+    admin: v.number(),
+    member: v.number(),
+  })),
 });
 
 export const list = query({
@@ -99,7 +104,7 @@ export const create = mutation({
 
     const diagramName = name || `Diagram ${diagramCount + 1}`;
 
-    return ctx.db.insert("diagrams", {
+    const diagramId = await ctx.db.insert("diagrams", {
       workspaceId,
       name: diagramName,
       content: JSON.stringify({
@@ -108,7 +113,19 @@ export const create = mutation({
           viewBackgroundColor: "#ffffff",
         },
       }),
+      roleCount: {
+        [DiagramRole.ADMIN]: 1,
+        [DiagramRole.MEMBER]: 0,
+      },
     });
+
+    await ctx.db.insert("diagramMembers", {
+      diagramId,
+      userId,
+      role: DiagramRole.ADMIN,
+    });
+
+    return diagramId;
   },
 });
 

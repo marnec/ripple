@@ -1,32 +1,36 @@
-import { ChannelRole } from "@shared/enums";
-import { ChannelMember } from "@shared/types/channel";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select";
+import { DiagramRole } from "@shared/enums";
+import { DiagramMember } from "@shared/types/diagram";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../components/ui/select";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Values } from "@shared/types/object";
 import { User } from "lucide-react";
 
-type ChannelMembershipRoleProps = {
-  channelMembers: ChannelMember[];
+type DiagramMembershipRoleProps = {
+  diagramMembers: DiagramMember[];
 };
 
-export const ChannelMembershipRole = ({ channelMembers }: ChannelMembershipRoleProps) => {
-  // from https://github.com/shadcn-ui/ui/issues/2760
-  // and https://github.com/shadcn-ui/ui/discussions/1380
-
-  const changeMemberRole = useMutation(api.channelMembers.changeMemberRole);
+export const DiagramMembershipRole = ({ diagramMembers }: DiagramMembershipRoleProps) => {
+  const updateRole = useMutation(api.diagramMembers.updateRole);
 
   const handleRoleSelection = (
-    channelMemberId: Id<"channelMembers">,
-    role: Values<typeof ChannelRole>,
+    diagramId: Id<"diagrams">,
+    userId: Id<"users">,
+    role: Values<typeof DiagramRole>,
   ) => {
-    void changeMemberRole({ channelMemberId, role });
+    void updateRole({ diagramId, userId, role });
   };
 
   return (
     <>
-      {channelMembers.map((member, index) => (
+      {diagramMembers.map((member) => (
         <div
           key={member.userId}
           className="flex flex-row items-center justify-between w-full sm:w-1/2"
@@ -34,14 +38,14 @@ export const ChannelMembershipRole = ({ channelMembers }: ChannelMembershipRoleP
           <div className="flex items-center gap-3 truncate ">
             <User className="size-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground truncate">
-              {channelMembers[index].name}
+              {member.user.name || member.user.email}
             </span>
           </div>
 
           <div>
             <Select
-              onValueChange={(role: Values<typeof ChannelRole>) =>
-                handleRoleSelection(member._id, role)
+              onValueChange={(role: Values<typeof DiagramRole>) =>
+                handleRoleSelection(member.diagramId, member.userId, role)
               }
               defaultValue={member.role}
               value={member.role}
@@ -51,7 +55,7 @@ export const ChannelMembershipRole = ({ channelMembers }: ChannelMembershipRoleP
               </SelectTrigger>
 
               <SelectContent>
-                {Object.entries(ChannelRole).map(([roleName, roleValue]) => (
+                {Object.entries(DiagramRole).map(([roleName, roleValue]) => (
                   <SelectItem key={roleName} value={roleValue}>
                     {roleName}
                   </SelectItem>

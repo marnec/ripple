@@ -1,6 +1,6 @@
 import { authTables } from "@convex-dev/auth/server";
 import { InviteStatus } from "@shared/enums/inviteStatus";
-import { ChannelRole, DocumentRole, WorkspaceRole } from "@shared/enums/roles";
+import { ChannelRole, DiagramRole, DocumentRole, WorkspaceRole } from "@shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
 import { v, VFloat64 } from "convex/values";
 
@@ -10,6 +10,10 @@ export const channelRoleSchema = v.union(
 
 export const documentRoleSchema = v.union(
   ...Object.values(DocumentRole).map((role) => v.literal(role)),
+);
+
+export const diagramRoleSchema = v.union(
+  ...Object.values(DiagramRole).map((role) => v.literal(role)),
 );
 
 // The schema is normally optional, but Convex Auth
@@ -125,9 +129,26 @@ export default defineSchema({
     name: v.string(),
     tags: v.optional(v.array(v.string())),
     content: v.optional(v.string()),
+    roleCount: v.optional(v.object({
+      [DiagramRole.ADMIN]: v.number(),
+      [DiagramRole.MEMBER]: v.number(),
+    } satisfies Record<
+      (typeof DiagramRole)[keyof typeof DiagramRole],
+      VFloat64<number, "required">
+    >)),
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
+
+  diagramMembers: defineTable({
+    diagramId: v.id("diagrams"),
+    userId: v.id("users"),
+    role: diagramRoleSchema,
+  })
+    .index("by_user", ["userId"])
+    .index("by_diagram", ["diagramId"])
+    .index("by_diagram_user", ["diagramId", "userId"])
+    .index("by_diagram_role", ["diagramId", "role"]),
 
   projects: defineTable({
     name: v.string(),

@@ -6,6 +6,7 @@ import { ChannelSettings } from "./pages/App/Channel/ChannelSettings";
 import { ChatContainer } from "./pages/App/Chat/ChatContainer";
 import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
 import { Diagrams } from "./pages/App/Diagram/Diagrams";
+import { DiagramSettings } from "./pages/App/Diagram/DiagramSettings";
 import { DocumentEditorContainer } from "./pages/App/Document/DocumentEditor";
 import { Documents } from "./pages/App/Document/Documents";
 import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
@@ -119,6 +120,10 @@ export const router = createBrowserRouter(
                 {
                   path: ":diagramId",
                   element: <DiagramPage />,
+                },
+                {
+                  path: ":diagramId/settings",
+                  element: <DiagramSettings />,
                 },
               ],
             },

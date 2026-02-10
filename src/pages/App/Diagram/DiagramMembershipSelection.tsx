@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import { ChannelMember } from "@shared/types/channel";
 import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
 import { Check, ChevronsUpDown } from "lucide-react";
@@ -17,62 +16,34 @@ import {
 } from "../../../components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "../../../components/ui/popover";
 import { useToast } from "../../../components/ui/use-toast";
-import { ChannelRole } from "@shared/enums";
-import { OptimisticUpdate } from "convex/browser";
-import { FunctionArgs } from "convex/server";
+import { DiagramMember } from "@shared/types/diagram";
 
-const optimisticallyAddMemberToChannel: OptimisticUpdate<
-  FunctionArgs<typeof api.channelMembers.addToChannel>
-> = (lqs, { channelId, userId }) => {
-  const existingChannelMembers = lqs.getQuery(api.channelMembers.membersByChannel, {
-    channelId,
-  });
-  if (existingChannelMembers === undefined) return;
-
-  lqs.setQuery(api.channelMembers.membersByChannel, { channelId }, [
-    ...existingChannelMembers,
-    {
-      _id: crypto.randomUUID() as Id<"channelMembers">,
-      _creationTime: +new Date(),
-      channelId,
-      workspaceId: undefined as unknown as Id<"workspaces">,
-      userId,
-      role: ChannelRole.MEMBER,
-      name: "...",
-    },
-  ]);
-};
-
-
-type ChannelMembershipSelectionProps = {
+type DiagramMembershipSelectionProps = {
   workspaceMembers: Doc<"users">[];
-  channelMembers: ChannelMember[];
-  channelId: Id<"channels">;
+  diagramMembers: DiagramMember[];
+  diagramId: Id<"diagrams">;
 };
 
-export const ChannelMembershipSelection = ({
+export const DiagramMembershipSelection = ({
   workspaceMembers,
-  channelMembers,
-  channelId,
-}: ChannelMembershipSelectionProps) => {
-  const channelMemberIds = new Set(channelMembers.map(({ userId }) => userId));
+  diagramMembers,
+  diagramId,
+}: DiagramMembershipSelectionProps) => {
+  const diagramMemberIds = new Set(diagramMembers.map(({ userId }) => userId));
 
-  const addToChannel = useMutation(api.channelMembers.addToChannel).withOptimisticUpdate(
-    optimisticallyAddMemberToChannel,
-  );
-
-  const removeFromChannel = useMutation(api.channelMembers.removeFromChannel); 
+  const addMember = useMutation(api.diagramMembers.addMember);
+  const removeMember = useMutation(api.diagramMembers.removeMember);
 
   const { toast } = useToast();
 
   const [open, setOpen] = useState(false);
 
   const handleMemberSelection = (userId: Id<"users">) => {
-    const handler = !channelMemberIds.has(userId) ? addToChannel : removeFromChannel;
+    const handler = !diagramMemberIds.has(userId) ? addMember : removeMember;
 
-    handler({ channelId, userId }).catch((error) => {
+    handler({ diagramId, userId }).catch((error) => {
       if (error instanceof ConvexError) {
-        toast({ title: "Error", description: error.data, variant: "destructive" });
+        toast({ title: "Error", description: error.data as string, variant: "destructive" });
       }
     });
   };
@@ -88,9 +59,7 @@ export const ChannelMembershipSelection = ({
             aria-expanded={open}
             className="justify-between w-full"
           >
-            <span className="overflow-ellipsis">
-              Add/Remove members...
-            </span>
+            <span className="overflow-ellipsis">Add/Remove members...</span>
             <ChevronsUpDown className="opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -117,7 +86,7 @@ export const ChannelMembershipSelection = ({
                     <Check
                       className={cn(
                         "ml-auto",
-                        channelMemberIds.has(member._id) ? "opacity-100" : "opacity-0",
+                        diagramMemberIds.has(member._id) ? "opacity-100" : "opacity-0",
                       )}
                     />
                   </CommandItem>

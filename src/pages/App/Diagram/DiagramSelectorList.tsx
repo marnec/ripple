@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { PenTool } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { SidebarGroup, SidebarGroupAction, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
@@ -19,7 +20,8 @@ export function DiagramSelectorList({
   onDiagramSelect,
 }: DiagramSelectorProps) {
   const [selectedDiagramForRename, setSelectedDiagramForRename] = useState<Id<"diagrams"> | null>(null);
-  
+  const navigate = useNavigate();
+
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const createNewDiagram = useMutation(api.diagrams.create);
   const deleteDiagram = useMutation(api.diagrams.remove);
@@ -27,6 +29,10 @@ export function DiagramSelectorList({
   const handleDiagramDelete = async (id: Id<"diagrams">) => {
     await deleteDiagram({ id });
     onDiagramSelect(null);
+  };
+
+  const navigateToDiagramSettings = (id: Id<"diagrams">) => {
+    void navigate(`/workspaces/${workspaceId}/diagrams/${id}/settings`);
   };
 
   const handleDiagramCreate = async () => {
@@ -54,6 +60,7 @@ export function DiagramSelectorList({
             diagramId={diagramId}
             onDiagramSelect={onDiagramSelect}
             onRenameDiagram={setSelectedDiagramForRename}
+            onManageDiagram={navigateToDiagramSettings}
             onDeleteDiagram={(id) => void handleDiagramDelete(id)}
           />
         ))}

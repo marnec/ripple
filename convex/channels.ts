@@ -111,6 +111,52 @@ export const get = query({
   },
 });
 
+export const update = mutation({
+  args: {
+    id: v.id("channels"),
+    name: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { id, name }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const channel = await ctx.db.get(id);
+    if (!channel) throw new ConvexError("Channel not found");
+
+    // For private channels, require channel admin
+    if (!channel.isPublic) {
+      const channelMembership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) => q.eq("channelId", id).eq("userId", userId))
+        .first();
+
+      if (channelMembership?.role !== ChannelRole.ADMIN) {
+        throw new ConvexError("Not authorized to update this channel");
+      }
+    } else {
+      // For public channels, require workspace admin
+      const workspaceMembership = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", userId))
+        .first();
+
+      if (workspaceMembership?.role !== "admin") {
+        throw new ConvexError("Not authorized to update this channel");
+      }
+    }
+
+    const updates: { name?: string } = {};
+    if (name !== undefined) updates.name = name;
+
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(id, updates);
+    }
+
+    return null;
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("channels") },
   returns: v.null(),

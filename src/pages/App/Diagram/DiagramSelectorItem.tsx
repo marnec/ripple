@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { PenTool, FilePen, MoreHorizontal, Trash2 } from "lucide-react";
+import { PenTool, FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -20,6 +20,7 @@ export interface DiagramSelectorItemProps {
   diagramId: Id<"diagrams"> | undefined;
   onDiagramSelect: (id: string) => void;
   onRenameDiagram: (id: Id<"diagrams">) => void;
+  onManageDiagram: (id: Id<"diagrams">) => void;
   onDeleteDiagram: (id: Id<"diagrams">) => void;
 }
 
@@ -28,6 +29,7 @@ export function DiagramSelectorItem({
   diagramId,
   onDiagramSelect,
   onRenameDiagram,
+  onManageDiagram,
   onDeleteDiagram
 }: DiagramSelectorItemProps) {
   const isMobile = useIsMobile();
@@ -58,6 +60,10 @@ export function DiagramSelectorItem({
           <DropdownMenuItem onClick={() => onRenameDiagram(diagram._id)}>
             <FilePen className="text-muted-foreground" />
             <span>Rename</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onManageDiagram(diagram._id)}>
+            <Settings className="text-muted-foreground" />
+            <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => onDeleteDiagram(diagram._id)}>

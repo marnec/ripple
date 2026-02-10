@@ -12,3 +12,8 @@ export const DocumentRole = {
     ADMIN : "admin",
     MEMBER : "member"
 } as const
+
+export const DiagramRole = {
+    ADMIN : "admin",
+    MEMBER : "member"
+} as const
