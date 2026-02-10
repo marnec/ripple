@@ -13,6 +13,12 @@ NEXT STEPS:
 - [ ] see pending invitations in app (not only email)
 - [x] fix doc visibility and permissions
 - [ ] rethink hirarchy (workspace -> project -> {channels,docs,diagrams,tasks})
+    - [ ] on workspace creation create default project
+    - [ ] sidebar combobox project -> selection cascades subsections
+    - [ ] collapsible subsections
+    - [ ] searchable / scrollable subsections
+    - [ ] project membership add users manually with roles
+    - [ ] subsection membership opt-in
 - [ ] realtime cursor tracking in documents
 - [ ] realtime cursor tracking in excalidraw
 - [ ] internationalization (i18n and localization)
