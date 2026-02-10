@@ -78,40 +78,33 @@ export const create = mutation({
       userId,
     });
 
-    // Seed default task statuses for workspace (idempotent — only seeds once per workspace)
-    const existingStatus = await ctx.db
-      .query("taskStatuses")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .first();
+    // Seed default task statuses for this project
+    await ctx.db.insert("taskStatuses", {
+      projectId,
+      name: "Todo",
+      color: "bg-gray-500",
+      order: 0,
+      isDefault: true,
+      isCompleted: false,
+    });
 
-    if (!existingStatus) {
-      await ctx.db.insert("taskStatuses", {
-        workspaceId,
-        name: "Todo",
-        color: "bg-gray-500",
-        order: 0,
-        isDefault: true,
-        isCompleted: false,
-      });
+    await ctx.db.insert("taskStatuses", {
+      projectId,
+      name: "In Progress",
+      color: "bg-blue-500",
+      order: 1,
+      isDefault: false,
+      isCompleted: false,
+    });
 
-      await ctx.db.insert("taskStatuses", {
-        workspaceId,
-        name: "In Progress",
-        color: "bg-blue-500",
-        order: 1,
-        isDefault: false,
-        isCompleted: false,
-      });
-
-      await ctx.db.insert("taskStatuses", {
-        workspaceId,
-        name: "Done",
-        color: "bg-green-500",
-        order: 2,
-        isDefault: false,
-        isCompleted: true,
-      });
-    }
+    await ctx.db.insert("taskStatuses", {
+      projectId,
+      name: "Done",
+      color: "bg-green-500",
+      order: 2,
+      isDefault: false,
+      isCompleted: true,
+    });
 
     return projectId;
   },
@@ -259,6 +252,33 @@ export const remove = mutation({
         return null;
       })
       .collect();
+
+    // Cascade delete: tasks, taskComments, and taskStatuses
+    // 1. Delete all taskComments for tasks in this project
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+
+    await Promise.all(
+      tasks.map(async (task) => {
+        const taskComments = await ctx.db
+          .query("taskComments")
+          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .collect();
+        await Promise.all(taskComments.map((comment) => ctx.db.delete(comment._id)));
+      })
+    );
+
+    // 2. Delete all tasks in the project
+    await Promise.all(tasks.map((task) => ctx.db.delete(task._id)));
+
+    // 3. Delete all taskStatuses for the project
+    const taskStatuses = await ctx.db
+      .query("taskStatuses")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+    await Promise.all(taskStatuses.map((status) => ctx.db.delete(status._id)));
 
     // Delete linked channel (messages and channel members first)
     const channelId = project.linkedChannelId;

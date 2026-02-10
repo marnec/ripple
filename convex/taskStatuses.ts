@@ -2,71 +2,27 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-export const seedDefaultStatuses = mutation({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.null(),
-  handler: async (ctx, { workspaceId }) => {
-    // Check if statuses already exist for workspace
-    const existingStatus = await ctx.db
-      .query("taskStatuses")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .first();
-
-    if (existingStatus) return null; // Already seeded
-
-    // Insert 3 default statuses
-    await ctx.db.insert("taskStatuses", {
-      workspaceId,
-      name: "To Do",
-      color: "bg-gray-500",
-      order: 0,
-      isDefault: true,
-      isCompleted: false,
-    });
-
-    await ctx.db.insert("taskStatuses", {
-      workspaceId,
-      name: "In Progress",
-      color: "bg-blue-500",
-      order: 1,
-      isDefault: false,
-      isCompleted: false,
-    });
-
-    await ctx.db.insert("taskStatuses", {
-      workspaceId,
-      name: "Done",
-      color: "bg-green-500",
-      order: 2,
-      isDefault: false,
-      isCompleted: true,
-    });
-
-    return null;
-  },
-});
-
-export const listByWorkspace = query({
-  args: { workspaceId: v.id("workspaces") },
+export const listByProject = query({
+  args: { projectId: v.id("projects") },
   returns: v.array(v.any()),
-  handler: async (ctx, { workspaceId }) => {
+  handler: async (ctx, { projectId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    // Validate user is workspace member
+    // Validate user is project member
     const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId)
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", projectId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    if (!membership) throw new ConvexError("Not a member of this project");
 
-    // Query with by_workspace_order index, sorted by order
+    // Query with by_project_order index, sorted by order
     const statuses = await ctx.db
       .query("taskStatuses")
-      .withIndex("by_workspace_order", (q) => q.eq("workspaceId", workspaceId))
+      .withIndex("by_project_order", (q) => q.eq("projectId", projectId))
       .collect();
 
     return statuses;
@@ -75,37 +31,37 @@ export const listByWorkspace = query({
 
 export const create = mutation({
   args: {
-    workspaceId: v.id("workspaces"),
+    projectId: v.id("projects"),
     name: v.string(),
     color: v.string(),
     isCompleted: v.boolean(),
   },
   returns: v.id("taskStatuses"),
-  handler: async (ctx, { workspaceId, name, color, isCompleted }) => {
+  handler: async (ctx, { projectId, name, color, isCompleted }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    // Permission: must be workspace member
+    // Permission: must be project member
     const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId)
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", projectId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    if (!membership) throw new ConvexError("Not a member of this project");
 
     // Calculate next order number (max existing order + 1)
     const existingStatuses = await ctx.db
       .query("taskStatuses")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
 
     const maxOrder = existingStatuses.reduce((max, status) => Math.max(max, status.order), -1);
 
     // isDefault always false for user-created statuses
     const statusId = await ctx.db.insert("taskStatuses", {
-      workspaceId,
+      projectId,
       name,
       color,
       order: maxOrder + 1,
@@ -131,16 +87,19 @@ export const update = mutation({
 
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
+    if (!status.projectId) throw new ConvexError("Status has no project (legacy data)");
 
-    // Permission: must be workspace member
+    const projectId = status.projectId; // Extract for type narrowing
+
+    // Permission: must be project member
     const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", status.workspaceId).eq("userId", userId)
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", projectId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    if (!membership) throw new ConvexError("Not a member of this project");
 
     // Build patch object with only provided fields
     const patch: { name?: string; color?: string; order?: number } = {};
@@ -165,20 +124,23 @@ export const reorderColumns = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    // Validate all statuses exist and belong to same workspace
+    // Validate all statuses exist and belong to same project
     if (statusIds.length === 0) return null;
 
     const firstStatus = await ctx.db.get(statusIds[0]);
     if (!firstStatus) throw new ConvexError("Status not found");
+    if (!firstStatus.projectId) throw new ConvexError("Status has no project (legacy data)");
+
+    const projectId = firstStatus.projectId; // Extract for type narrowing
 
     // Permission check
     const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", firstStatus.workspaceId).eq("userId", userId)
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", projectId).eq("userId", userId)
       )
       .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    if (!membership) throw new ConvexError("Not a member of this project");
 
     // Reassign order values sequentially
     for (let i = 0; i < statusIds.length; i++) {
@@ -198,33 +160,52 @@ export const remove = mutation({
 
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
+    if (!status.projectId) throw new ConvexError("Status has no project (legacy data)");
 
-    // Permission: must be workspace member
+    const projectId = status.projectId; // Extract for type narrowing
+
+    // Permission: must be project member
     const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", status.workspaceId).eq("userId", userId)
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", projectId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    if (!membership) throw new ConvexError("Not a member of this project");
 
     // Cannot remove if it's the default status
     if (status.isDefault) {
       throw new ConvexError("Cannot remove the default status");
     }
 
-    // Cannot remove if tasks are currently using this status
-    const tasksUsingStatus = await ctx.db
-      .query("tasks")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", status.workspaceId))
-      .filter((q) => q.eq(q.field("statusId"), statusId))
+    // Find the default status for this project
+    const defaultStatus = await ctx.db
+      .query("taskStatuses")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .filter((q) => q.eq(q.field("isDefault"), true))
       .first();
 
-    if (tasksUsingStatus) {
-      throw new ConvexError("Cannot remove status that is being used by tasks");
+    if (!defaultStatus) {
+      throw new ConvexError("No default status found for project");
     }
 
+    // Cascade: move all tasks using this status to the default status
+    const tasksToMove = await ctx.db
+      .query("tasks")
+      .withIndex("by_project_status", (q) =>
+        q.eq("projectId", projectId).eq("statusId", statusId)
+      )
+      .collect();
+
+    // Move tasks to default status (preserve completed field - don't change it)
+    await Promise.all(
+      tasksToMove.map((task) =>
+        ctx.db.patch(task._id, { statusId: defaultStatus._id })
+      )
+    );
+
+    // Delete the status
     await ctx.db.delete(statusId);
     return null;
   },

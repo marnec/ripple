@@ -46,17 +46,17 @@ export const create = mutation({
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new ConvexError("Project not found");
 
-    // If no statusId provided, fetch the default status for the workspace
+    // If no statusId provided, fetch the default status for the project
     let statusId = args.statusId;
     if (!statusId) {
       const defaultStatus = await ctx.db
         .query("taskStatuses")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", project.workspaceId))
+        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .filter((q) => q.eq(q.field("isDefault"), true))
         .first();
 
       if (!defaultStatus) {
-        throw new ConvexError("No default status found for workspace. Ensure statuses are seeded.");
+        throw new ConvexError("No default status found for project. Ensure statuses are seeded.");
       }
       statusId = defaultStatus._id;
     }
