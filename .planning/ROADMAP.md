@@ -49,7 +49,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 03.1-01-PLAN.md — Backend status seeding in projects.create, simplified task default status, one-way completed sync
+- [x] 03.1-01-PLAN.md — Backend status seeding in projects.create, simplified task default status, one-way completed sync
 
 ### Phase 04: Chat-to-Task Integration
 **Goal**: Convert chat messages to tasks with context
@@ -154,7 +154,7 @@ Phases execute in numeric order: 08 → 09 → 10
 | 1. Projects Foundation | v0.8 | 3/3 | Complete | 2026-02-07 |
 | 2. Basic Tasks | v0.8 | 4/4 | Complete | 2026-02-07 |
 | 3. Kanban Board View | v0.8 | 3/3 | Complete | 2026-02-07 |
-| 3.1. Default taskStatus logic (INSERTED) | v0.8 | 0/1 | Planning | — |
+| 3.1. Default taskStatus logic (INSERTED) | v0.8 | 1/1 | Complete | 2026-02-10 |
 | 4. Chat-to-Task Integration | v0.8 | 2/2 | Complete | 2026-02-07 |
 | 5. Document-Diagram Embeds | v0.8 | 3/3 | Complete | 2026-02-07 |
 | 6. Task Comments | v0.8 | 1/1 | Complete | 2026-02-07 |
