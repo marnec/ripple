@@ -44,8 +44,8 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
     hideCompleted,
   });
 
-  const statuses = useQuery(api.taskStatuses.listByWorkspace, {
-    workspaceId,
+  const statuses = useQuery(api.taskStatuses.listByProject, {
+    projectId,
   });
 
   const updatePosition = useMutation(api.tasks.updatePosition).withOptimisticUpdate(
@@ -251,7 +251,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
               onDelete={() => handleDeleteColumn(status._id)}
               isFirst={index === 0}
               isLast={index === statuses.length - 1}
-              canDelete={!status.isDefault && (tasksByStatus[status._id]?.length ?? 0) === 0}
+              canDelete={!status.isDefault}
             />
           ))}
 
@@ -292,7 +292,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
 
       {/* Add Column Dialog */}
       <AddColumnDialog
-        workspaceId={workspaceId}
+        projectId={projectId}
         open={showAddColumn}
         onOpenChange={setShowAddColumn}
       />

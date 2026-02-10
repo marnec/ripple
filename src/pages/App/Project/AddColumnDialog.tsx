@@ -17,7 +17,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 
 type AddColumnDialogProps = {
-  workspaceId: Id<"workspaces">;
+  projectId: Id<"projects">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -34,7 +34,7 @@ const COLORS = [
 ];
 
 export function AddColumnDialog({
-  workspaceId,
+  projectId,
   open,
   onOpenChange,
 }: AddColumnDialogProps) {
@@ -51,7 +51,7 @@ export function AddColumnDialog({
     if (!trimmedName) return;
 
     void createStatus({
-      workspaceId,
+      projectId,
       name: trimmedName,
       color: selectedColor,
       isCompleted,
