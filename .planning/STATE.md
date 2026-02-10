@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 Phase: 03.2 - TaskStatus Per Project Scope and Cascade Delete
 Plan: 02 of 2
 Status: Phase complete
-Last activity: 2026-02-10 — Completed 03.2-02-PLAN.md (Frontend Project-Scoped TaskStatus APIs)
+Last activity: 2026-02-10 - Completed quick task 1: Fix Block doesn't have id error when clicking on a task
 
 Progress: ██████████ 100% (2/2 plans complete)
 
@@ -74,6 +74,12 @@ None.
 ### Blockers/Concerns
 
 None.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Fix Block doesn't have id error when clicking on a task | 2026-02-10 | 96bdc3a | [1-fix-block-doesn-t-have-id-error-when-cli](./quick/1-fix-block-doesn-t-have-id-error-when-cli/) |
 
 ## Session Continuity
 
