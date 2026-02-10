@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: 10 - Inline Reply-To
-Plan: 02 of 2
-Status: Phase complete — v0.9 milestone complete
-Last activity: 2026-02-07 — Completed 10-02-PLAN.md (Reply-to UI implementation)
+Phase: 03.1 - Default TaskStatus Logic
+Plan: 01 of 1
+Status: Phase complete
+Last activity: 2026-02-10 — Completed 03.1-01-PLAN.md (Default status seeding and one-way completed sync)
 
-Progress: ██████████ 100% (3/3 phases complete)
+Progress: ████████░░ 100% (1/1 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 26
+- Total plans completed: 27
 - Average duration: 3.3 min
-- Total execution time: 87.5 min
+- Total execution time: 90.0 min
 
 **By Phase:**
 
@@ -38,10 +38,16 @@ Progress: ██████████ 100% (3/3 phases complete)
 | 08-emoji-reactions-foundation | 2 | 4.4 min | 2.2 min |
 | 09-user-mentions-in-chat | 2 | 6.4 min | 3.2 min |
 | 10-inline-reply-to | 2 | 6.6 min | 3.3 min |
+| 03.1-default-taskstatus-logic | 1 | 2.5 min | 2.5 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 03.1:
+- Default statuses (Todo, In Progress, Done) seeded at project creation (workspace-scoped, idempotent)
+- One-way completed sync: moving TO Done sets completed=true, moving OUT does not reset
+- User must explicitly uncomplete tasks that move out of Done status
 
 All decisions logged in PROJECT.md Key Decisions table.
 
@@ -49,6 +55,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 
 - Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
 - v0.9 milestone started at Phase 08 (continues from v0.8)
+- Phase 03.1 inserted after Phase 03: default taskStatus logic (URGENT)
 
 ### Pending Todos
 
@@ -60,8 +67,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-07
-Stopped at: Phase 10 complete — v0.9 Chat Features milestone complete
+Last session: 2026-02-10
+Stopped at: Completed 03.1-01-PLAN.md (Default TaskStatus Logic)
 Resume file: None
 
 Config:
