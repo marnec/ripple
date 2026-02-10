@@ -1,298 +1,365 @@
-# Pitfalls Research: Chat @Mentions, Emoji Reactions, Reply-To
+# Pitfalls Research
 
-**Domain:** Adding @user mentions, emoji reactions, and inline reply-to to existing real-time chat application
-**Researched:** 2026-02-07
+**Domain:** Multiplayer Cursors and Real-Time Collaboration Infrastructure
+**Researched:** 2026-02-10
 **Confidence:** HIGH
-
-## Executive Summary
-
-This research identifies critical pitfalls when adding @mentions, emoji reactions, and inline reply-to to Ripple's existing Convex-powered real-time chat system. The system already has proven patterns for @mentions (task comments Phase 6.1), push notifications (task assignments), and BlockNote rich text (task descriptions). The primary risks center on **race conditions in reaction toggling**, **notification spam from @everyone abuse**, **performance degradation with embedded reactions**, and **stale reply-to previews when parent messages are deleted**.
-
-Unlike implementing these features from scratch, the integration challenge is avoiding conflicts with existing optimistic updates, preventing schema bloat when messages already store BlockNote JSON, and ensuring consistency between chat mentions and task comment mentions. Convex's reactive subscriptions amplify race conditions—two users clicking the same reaction emoji simultaneously can result in duplicate reaction documents without proper deduplication.
-
-**Critical insight:** Chat @mentions differ fundamentally from task comment @mentions. Task comments notify project members (bounded set), but chat channels can have hundreds of workspace members. An @everyone mention in a busy channel becomes a notification DOS attack. Prevention requires rate limiting and permission controls BEFORE building the feature, not as an afterthought.
 
 ## Critical Pitfalls
 
-### Pitfall 1: Reaction Race Condition Without Deduplication
-**What goes wrong:** Two users click the same emoji reaction simultaneously. Convex processes both mutations in parallel, each checks "does this user's reaction exist?" (answer: no for both), and both insert a reaction document. Result: User has two identical reactions, one visible in UI, one orphaned in database. When user tries to un-react, only one gets deleted, leaving the orphaned reaction forever.
+### Pitfall 1: Dual Real-Time System State Divergence
+
+**What goes wrong:**
+Convex subscriptions manage document persistence and permissions while PartyKit/Yjs manages ephemeral CRDT state. When both systems track related but separate state (e.g., document content in Convex vs. Yjs CRDT updates), they can diverge during network partitions, race conditions during reconnection, or concurrent writes. Users see different versions of the document, with Convex showing the "database truth" and Yjs showing the "CRDT truth."
 
 **Why it happens:**
-- Convex mutations run in parallel when invoked simultaneously from different clients
-- "Check then insert" pattern creates race window between the check and insert operations
-- Optimistic UI updates don't prevent server-side races (client shows correct state, server has duplicate data)
-- Reactive queries hide the duplicate from UI (UI deduplicates by userId+emoji in map), making the bug invisible until database inspection
+Developers assume both systems will stay in sync automatically. Convex updates trigger on database mutations, Yjs updates trigger on CRDT operations. During reconnection, Convex resubscribes to queries while Yjs replays updates—these happen in different orders with different timing. Your current system uses Convex for presence (`useEnhancedPresence`) and Cloudflare RTK for cursors (`useCursorTracking`), which already creates this dual-system pattern.
 
 **How to avoid:**
-- Use Convex **unique indexes** on `reactions` table: `.index("by_message_user_emoji_unique", ["messageId", "userId", "emoji"]).unique()` (planned Convex feature—currently not available, use query-before-mutate with awareness of race)
-- NEVER use separate check + insert mutations—consolidate into single `toggleReaction` mutation
-- Query + conditional insert pattern: `const existing = await ctx.db.query(...).first(); if (existing) { await ctx.db.delete(existing._id); } else { await ctx.db.insert(...); }`
-- Accept that simultaneous clicks may result in non-deterministic final state (both users click within 100ms, one wins), but prevent data corruption
-- Use `isomorphicId` pattern (like messages table) for client-generated unique keys, but problematic for reactions because "toggle" semantics mean same action should delete, not create duplicate
+- **Single source of truth per domain:** Convex owns persistent data (document content, permissions, membership), Yjs/PartyKit owns ephemeral state (cursor positions, selection ranges, awareness). Never duplicate the same state in both systems.
+- **One-way sync only:** If you must sync between systems, make it unidirectional. Example: Yjs updates write to Convex on debounce (500ms-2s), but Convex never writes back to Yjs (that would create circular updates).
+- **Versioning and timestamps:** Add version numbers to Convex document records. When initializing Yjs from Convex, check version. If Yjs has newer updates than Convex version, wait for persistence to complete before allowing edits.
+- **Separate providers cleanly:** Use Convex Presence for "who's here" (user list in FacePile), PartyKit Awareness for "what they're doing" (cursor positions, selections). Your existing `useEnhancedPresence` and `useCursorTracking` already follow this pattern—maintain this separation.
 
 **Warning signs:**
-- Database query shows `reactions.count() > messages.count()` by large margin (indicates duplicates)
-- User reports "I un-reacted but the count is still wrong"
-- Reactions table grows unbounded despite reaction removal
-- Production logs show multiple inserts for same userId+messageId+emoji within milliseconds
+- Users report "my changes disappeared after refresh" (Yjs had updates not yet persisted to Convex)
+- Cursor positions flash/jump during reconnection (both systems resyncing in different order)
+- Permission errors on edits immediately after joining (Convex hasn't confirmed membership but Yjs already allows edits)
+- Different users see different document states after network blip
 
-**Phase to address:** Phase 1 (Schema Design) must include race condition mitigation in the mutation design. Don't defer to later phase—retrofitting is painful.
+**Phase to address:**
+Phase 1 (Infrastructure Setup) — Define clear boundaries between Convex and Yjs domains before any implementation. Document in architecture file which system owns what.
 
-### Pitfall 2: Embedded Reactions Array Hits 8192 Limit
-**What goes wrong:** Schema uses `messages.reactions: v.array(v.object({ userId, emoji }))` embedded in message document. Viral message in busy channel accumulates reactions. First 8000 reactions work fine, then the 8193rd reaction causes `ctx.db.patch()` to throw "Array size limit exceeded" error. Message becomes un-reactable. Worse: trying to remove reactions also requires patching the array, which fails, so reactions are permanently stuck.
+---
+
+### Pitfall 2: ProseMirror Sync to Yjs Migration Data Loss
+
+**What goes wrong:**
+Your BlockNote documents currently use `@convex-dev/prosemirror-sync` which stores ProseMirror steps in Convex. Migrating to Yjs means converting from step-based operational transformation (OT) to CRDT-based sync. The data models are incompatible: ProseMirror steps are sequential transformations, Yjs updates are commutative operations. Naive conversion loses formatting, custom blocks (DiagramBlock, User mentions), or corrupts document structure.
 
 **Why it happens:**
-- Convex arrays limited to 8192 entries (per [Convex relationship structures documentation](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas))
-- Popular messages in busy workspaces can accumulate hundreds of reactions (50 users × 5 different emojis = 250 reactions is common)
-- Embedded arrays prevent selective updates—every reaction toggle requires rewriting entire array
-- Document size grows unbounded as reactions accumulate (affects read performance even before hitting limit)
+Developers assume "both are ProseMirror, so data should be compatible." But `prosemirror-sync` serializes steps (transform operations), while `y-prosemirror` embeds ProseMirror into a Yjs shared type. Even though BlockNote uses ProseMirror under the hood, switching collaboration providers means re-storing all document content. The schema (custom blocks: `diagram`, inline content: `mention`) must be rebuilt in the Yjs provider's initialization.
 
 **How to avoid:**
-- Use **separate `reactions` table** with many-to-one relationship to messages
-- Schema: `reactions: defineTable({ messageId: v.id("messages"), userId: v.id("users"), emoji: v.string() }).index("by_message", ["messageId"]).index("by_message_user", ["messageId", "userId"])`
-- Query reactions separately: `ctx.db.query("reactions").withIndex("by_message", q => q.eq("messageId", messageId))`
-- Tradeoff: One extra query per message list, but selective inserts/deletes and no size limit
-- Group reactions client-side: `reactions.reduce((acc, r) => { acc[r.emoji] = [...(acc[r.emoji] || []), r.userId]; return acc; }, {})`
+- **Export to canonical format first:** Convert all documents to BlockNote's JSON representation (`editor.document` → JSON), store in Convex as transition format.
+- **Dual-write during migration:** For a transition period, write to both `prosemirror-sync` AND initialize Yjs docs from the same source. Keep `prosemirror-sync` read-only as fallback.
+- **Schema preservation:** Initialize Yjs provider with identical BlockNote schema (your custom `DiagramBlock` and `User` inline content). Test that schema survives round-trip: Yjs → ProseMirror → Yjs.
+- **Migration script per document:** Don't migrate all at once. Create Convex mutation that reads ProseMirror doc, converts to BlockNote JSON, initializes Yjs doc from JSON, saves Yjs snapshot to new table. Run per document with rollback capability.
+- **Keep old data:** Never delete `prosemirror-sync` data until months after migration. Store migration timestamp in `documents` table.
 
 **Warning signs:**
-- Messages table documents approaching 1MB size (check with `await ctx.db.get(messageId)` and log byte size)
-- Error logs showing "Array size limit exceeded"
-- Reaction toggles becoming slower as message ages
-- Database backup size growing disproportionately to message count
+- Custom blocks (Excalidraw diagrams) render as plain text after migration
+- @mentions show as `[@Unknown User]` or break entirely
+- Formatting (bold, italic, lists) gets stripped during conversion
+- Documents with complex nesting (lists in lists) corrupt
+- Undo/redo breaks after migration (new Yjs history vs. old step history)
 
-**Phase to address:** Phase 1 (Schema Design). Embedded arrays are architectural decision—can't migrate easily once production data exists.
+**Phase to address:**
+Phase 2 (Migration & Compatibility) — After PartyKit infrastructure exists but before enabling for users. Include rollback plan.
 
-### Pitfall 3: @everyone Mention Notification Bomb
-**What goes wrong:** User types `@everyone` in busy channel with 500 workspace members. Mention extraction finds 500 userIds, notification mutation sends 500 push notifications simultaneously. Push notification service (web-push) rate limits or times out. Some notifications send, others fail silently. Users report "I was mentioned but didn't get notification" inconsistently. Worse: Malicious user discovers `@everyone` and spams it repeatedly, creating notification DOS attack.
+---
+
+### Pitfall 3: Cursor Broadcasting Rate Limit Overload
+
+**What goes wrong:**
+Your current system throttles cursor broadcasts to 200ms (`THROTTLE_MS = 200` in `use-cursor-tracking.ts`), which sends 5 updates/second per user. With 20 simultaneous editors, that's 100 cursor updates/second. Cloudflare RTK has a 5 events/second limit (per your PROJECT.md), causing dropped cursor updates, phantom cursors that don't move, or connection throttling. PartyKit without Hibernation supports only 100 connections per room—20 users = 40 connections (cursors + presence), hitting limits in larger documents.
 
 **Why it happens:**
-- Chat channels are workspace-scoped (Ripple's channels belong to workspaces, which can have hundreds of members)
-- Task comment @mentions are project-scoped (projects typically have <20 members), so notification spam wasn't a concern
-- Push notification infrastructure (convex/pushNotifications.ts) uses `Promise.allSettled()` on all subscriptions—scales poorly beyond 50-100 simultaneous sends
-- No rate limiting on mention notifications (task system didn't need it)
-- BlockNote @mention autocomplete shows all workspace members in chat, making @everyone pattern obvious
+Cursor position broadcasts naively on `mousemove` events, which fire 100+ times per second. Even with throttling, multiplying by number of users creates traffic spikes. The problem compounds when users make rapid selections (click-drag) which generates both cursor AND selection updates. Your current RTK implementation hit this exact problem (5 events/s too slow), and switching to PartyKit without Hibernation doesn't solve it—just moves the bottleneck from rate limits to memory limits.
 
 **How to avoid:**
-- **Implement @channel and @here special mentions** with explicit permission checks (only channel admins can @channel)
-- Rate limit mentions per message: `if (mentionedUserIds.length > 50) throw new ConvexError("Too many mentions")`
-- Batch notification sends: `for (let i = 0; i < mentionedUserIds.length; i += 50) { await Promise.allSettled(batch); }`
-- Add notification preference: `users.mentionNotificationPreference: "all" | "direct" | "none"` to allow users to opt out of @channel
-- Log excessive mentions: `if (mentionedUserIds.length > 20) { console.warn("Excessive mentions", userId, messageId); }`
-- Consider async notification queue instead of synchronous `ctx.scheduler.runAfter(0, ...)` pattern (Convex action rate limits may be hit)
+- **Server-side batching:** PartyKit server collects cursor updates for 50ms, then broadcasts once as batch: `{ cursors: [{ userId, x, y }, ...] }`. Reduces broadcasts from N per user to 1 per batch interval.
+- **Pause-based updates:** Only broadcast cursor after 100ms pause (existing approach), not on every throttle tick. When cursor actively moving, skip broadcasts—only send when cursor stops. Your current implementation already attempts this but still sends every 200ms if mouse keeps moving.
+- **Viewport culling:** Don't broadcast cursor positions outside viewport. On server, track which users see which regions (viewport coordinates), only broadcast to relevant users.
+- **Separate cursor from awareness:** Cursor positions go through high-frequency PartyKit room, document content goes through Yjs provider. Don't mix ephemeral (cursor) and durable (document) in same WebSocket stream.
+- **Enable PartyKit Hibernation:** Once y-partykit supports it (currently doesn't), Hibernation scales to 32,000 connections vs. 100. Until then, separate cursor-only rooms (no Yjs) can use Hibernation, Yjs rooms stay non-hibernated.
 
 **Warning signs:**
-- Push notification action timing out (Convex actions have 10-minute limit)
-- Notification delivery becoming inconsistent (some users get, others don't)
-- Database logs showing same userId sending hundreds of notifications per hour
-- User complaints about notification spam
+- Cursors "lag" or freeze for seconds then jump to new position
+- Console errors: "Broadcast rate limit exceeded" or "Too many requests"
+- Some users' cursors never appear (connection rejected due to room limit)
+- Cursor positions work with 5 users but break at 15+ users
+- Network tab shows WebSocket sending messages but server not acknowledging
 
-**Phase to address:** Phase 2 (Mention Implementation) must include rate limiting BEFORE enabling @mentions. Don't ship without this—notification spam destroys user trust.
+**Phase to address:**
+Phase 1 (Infrastructure Setup) — Design server-side batching into PartyKit server from start. Don't replicate current RTK throttle pattern.
 
-### Pitfall 4: Reply-To Parent Message Deleted (Stale Dangling References)
-**What goes wrong:** User replies to Message A. Message A author deletes Message A (soft delete: `messages.deleted = true`). Reply message still shows "Replying to [Deleted message]" preview. User clicks preview to jump to context—nothing happens because parent message is filtered out by `undeleted_by_channel` index. Reply message looks broken. Worse: If hard delete (remove from DB), reply crashes trying to render `null` parent.
+---
+
+### Pitfall 4: Excalidraw Self-Hosted Collaboration URL Hardcoding
+
+**What goes wrong:**
+The official Excalidraw npm package hardcodes collaboration URL to `https://oss-collab.excalidraw.com` at build time via `VITE_APP_WS_SERVER_URL`. Overriding this with environment variables at runtime fails because the URL is baked into compiled JavaScript. Self-hosted collaboration requires patching build assets or forking Excalidraw, both of which break on library updates. Your `DiagramBlock` embeds Excalidraw but doesn't use collaboration—adding it later hits this wall.
 
 **Why it happens:**
-- Replies store `replyToMessageId: v.id("messages")` reference, but no cascade delete or staleness check
-- Messages use soft delete (`deleted: boolean` field), not hard delete, so reference remains valid but unusable
-- UI queries messages with `undeleted_by_channel` index, which excludes deleted messages—reply's parent never appears in list
-- Real-time updates mean parent can be deleted WHILE user is viewing reply (race between render and delete)
+Excalidraw's Vite build inlines environment variables at compile time, not runtime. The library assumes users either use Excalidraw's hosted collab service or self-host the entire app (not embed the component). Your use case (embed Excalidraw component + self-hosted collab) isn't the primary supported pattern.
 
 **How to avoid:**
-- **Denormalize parent preview data** into reply message at creation time: `{ replyToMessageId, replyToAuthor: string, replyToPreview: string }` (first 100 chars of plainText)
-- If parent deleted, show preview from denormalized data with "(message deleted)" indicator
-- Don't allow clicking deleted parent preview (disable jump-to-message link if parent missing)
-- Mutation: When inserting reply, fetch parent immediately and extract preview: `const parent = await ctx.db.get(replyToMessageId); if (!parent) throw new Error("Parent message not found"); const preview = parent.plainText.slice(0, 100);`
-- Query: `const parent = await ctx.db.get(message.replyToMessageId); const isDeleted = parent?.deleted ?? true;`
+- **Separate diagram provider:** Don't reuse BlockNote's Yjs provider for Excalidraw. Create dedicated PartyKit room for each diagram. Excalidraw has its own reconciliation logic (`reconcileElements`) that conflicts with Yjs CRDT merging.
+- **Fork @excalidraw/excalidraw:** Create `@ripple/excalidraw` fork that accepts `collaborationUrl` prop at runtime. Pin to specific version, document upgrade process. Alternative: use official Excalidraw embed in iframe with postMessage communication.
+- **Stateless collaboration:** Store Excalidraw state (`elements`, `appState`) in Convex diagrams table. On change (debounced 100ms like your current `ExcalidrawEditor`), save to Convex. Broadcast "diagram updated" event via PartyKit, other clients fetch from Convex. Trades real-time smoothness for simpler infrastructure.
+- **Manual reconciliation:** Keep current approach (Convex + `reconcileElements` + debounced save). Broadcast cursor positions only via PartyKit Awareness, not diagram content. This avoids Excalidraw collab complexity entirely.
 
 **Warning signs:**
-- Errors in console: "Cannot read property of null"
-- Reply preview UI shows blank or "undefined"
-- User reports "I clicked reply preview, nothing happened"
-- Message list rendering delays (blocking on parent fetch for every reply)
+- Excalidraw diagrams don't show other users' cursors despite collaboration enabled
+- Environment variable changes don't affect collaboration URL
+- Console errors: "Failed to connect to wss://oss-collab.excalidraw.com" (wrong URL)
+- Diagram collaboration works in Excalidraw demo but not in your embedded component
+- npm audit shows vulnerabilities in forked Excalidraw (fork maintenance burden)
 
-**Phase to address:** Phase 3 (Reply-To Schema). Denormalization must be in initial schema—retrofitting requires migration.
+**Phase to address:**
+Phase 3 (Excalidraw Integration) — Decide collaboration strategy before implementation. If using Excalidraw native collab, address URL issue first. If stateless, skip Excalidraw collab entirely.
 
-### Pitfall 5: Mention Extraction Race Between Optimistic Update and Server Insert
-**What goes wrong:** User types "@Alice hello" in chat, hits send. Optimistic UI immediately shows message in channel with @Alice highlighted. `messages.send` mutation runs, extracts mentions via `extractMentionedUserIds(body)`, sends notification, inserts message with same `isomorphicId`. But BlockNote JSON structure in optimistic update differs slightly from server-side JSON (editor normalizes whitespace differently). Mention extraction finds mention in optimistic update but not in server version, or vice versa. Alice gets notification but message doesn't show mention highlighting when it re-renders from server data.
+---
+
+### Pitfall 5: Yjs Persistence Without Snapshot Compaction
+
+**What goes wrong:**
+Yjs stores all updates as append-only operations. A document edited 10,000 times has 10,000 update entries. Loading requires replaying all updates sequentially, causing 5+ second load times for heavily-edited documents. Storing raw updates in Convex creates massive storage bloat (100KB document → 10MB updates history). Without snapshot compaction, old documents become unusable.
 
 **Why it happens:**
-- BlockNote editor's `editor.document` serialization is non-deterministic for whitespace/formatting edge cases
-- Optimistic update uses client's BlockNote version/serialization, server uses current deployed version
-- `extractMentionedUserIds()` utility parses JSON structure—structural differences break extraction
-- Convex reactive queries replace optimistic data with server data on insert, causing visual "flicker" if mention rendering differs
+Yjs CRDTs are designed for append-only updates to guarantee convergence. Developers store updates directly in database without merging, assuming "updates are small." But updates accumulate—a cursor position change is an update, every keystroke is an update. For long-lived documents (active for months), this grows unbounded.
 
 **How to avoid:**
-- **Always serialize consistently** between client and server: Use same BlockNote version, same serialization config
-- Test mention extraction with round-trip: `const doc = editor.document; const json = JSON.stringify(doc); const parsed = JSON.parse(json); assert(extractMentionedUserIds(json).length === expectedCount);`
-- Validate mention extraction server-side BEFORE sending notifications: `if (mentionedUserIds.length === 0 && body.includes("userMention")) { console.error("Mention extraction failed", messageId); }`
-- Use `isomorphicId` on messages to ensure optimistic update and server update refer to same message (already in schema)
-- If client-side extraction needed for UI preview, ensure it uses same utility: `import { extractMentionedUserIds } from "convex/utils/blocknote"` (but Convex shared utils aren't importable client-side—needs duplication or shared package)
+- **Periodic snapshot creation:** Every 100 updates or every hour (whichever first), merge all updates into single snapshot. Store snapshot in Convex `diagrams.content` or new `documentSnapshots` table. Keep recent updates (last 50) for fine-grained history, delete older ones.
+- **PartyKit-side compaction:** PartyKit server tracks update count. At 100 updates, call `Y.encodeStateAsUpdate(doc)` to create compact snapshot, save to Convex, broadcast "snapshot created" event, clear old updates from room memory.
+- **Lazy loading with base snapshot:** On document open, load latest snapshot from Convex, apply only recent updates from PartyKit. Don't replay full history unless user requests version history.
+- **Separate metadata updates:** Awareness updates (cursor, selection) should never persist. Only document content updates persist. Use separate Yjs providers: permanent doc provider (persists), ephemeral awareness provider (doesn't persist).
+- **Migration path:** Current Excalidraw implementation already debounces saves (100ms) and stores full state, not updates. Maintain this pattern—store snapshots, not update history.
 
 **Warning signs:**
-- Notification sent but mention not highlighted in message
-- Mention highlighted in optimistic UI, then disappears when server data loads
-- Console errors: "extractMentionedUserIds returned empty array for message with mention"
-- Flicker: message renders with mention, then without, then with again
+- Document load time increases over weeks (1s → 5s → 20s)
+- Database storage grows much faster than expected (100 documents = 1GB+)
+- Convex function timeouts when loading old documents (too many updates to replay)
+- Browser tab crashes on opening heavily-edited document (out of memory replaying updates)
+- Yjs provider initialization takes >2 seconds (should be <200ms)
 
-**Phase to address:** Phase 2 (Mention Implementation). Test extraction thoroughly in both optimistic and server paths before considering feature complete.
+**Phase to address:**
+Phase 1 (Infrastructure Setup) — Design snapshot strategy into PartyKit persistence layer. Don't defer to "optimize later."
 
-### Pitfall 6: Reaction Count Query N+1 Problem at Scale
-**What goes wrong:** Channel has 100 messages visible. Each message needs reaction count to display "👍 5" pills. Naive implementation: for each message, query `reactions.by_message` index. Result: 100 queries per message list render. Convex query latency is ~20-50ms, so 100 × 50ms = 5 seconds to render message list. UI feels sluggish. Scroll pagination loads more messages, each triggering another batch of queries.
+---
+
+### Pitfall 6: Offline Edits Conflict with Convex Reactivity
+
+**What goes wrong:**
+User goes offline, makes edits in Yjs (which works offline), then reconnects. Yjs syncs updates, but Convex subscription re-runs queries and overwrites Yjs state with stale data from database. User's offline edits disappear or create duplicates. Alternatively, Yjs syncs updates but Convex permissions check fails (user's session expired during offline period), updates rejected.
 
 **Why it happens:**
-- Separate reactions table requires join to display counts (necessary to avoid embedded array limits)
-- React components naively query reactions per message: `const reactions = useQuery(api.reactions.byMessage, { messageId })`
-- Convex doesn't have built-in join queries—must manually aggregate
-- Pagination loads 20 messages at a time, but each message queries independently
+Yjs CRDTs allow offline editing by design—changes merge automatically on reconnect. Convex subscriptions are stateless—they refetch on reconnect, unaware of Yjs offline changes. When both systems reconnect, they race: does Yjs persist updates to Convex first, or does Convex subscription deliver stale data first?
 
 **How to avoid:**
-- **Batch fetch reactions** for all visible messages in single query: `api.reactions.byMessages({ messageIds: string[] })`
-- Use `getAll()` helper from convex-helpers: `const messages = paginatedMessages.page; const allReactions = await getAll(ctx.db, messages.map(m => m._id));` (but `getAll` is for documents by ID, not for one-to-many relationships)
-- Better: Query all reactions in channel message range: `ctx.db.query("reactions").withIndex("by_channel_message", q => q.eq("channelId", channelId))` and group client-side
-- Denormalize reaction counts into message document: `messages.reactionCounts: v.object({ "👍": v.number(), "❤️": v.number() })` (updated by reaction mutations)
-- Tradeoff: Denormalized counts require updating message document on every reaction toggle (more writes, but much faster reads)
+- **Yjs-first initialization:** On document load, initialize from Yjs provider, not Convex query. Use Convex only for initial load if Yjs has no local state. Never overwrite Yjs state from Convex after initialization.
+- **Optimistic Convex mutations:** When Yjs persists to Convex, use optimistic updates. The Convex mutation shouldn't trigger re-render—UI already updated from Yjs.
+- **Auth token refresh:** Before syncing offline updates, refresh Convex auth token. Check permissions still valid. If user lost access during offline period, show modal: "You lost edit access, offline changes not saved."
+- **Conflict detection:** Add `lastEditTimestamp` and `lastEditUserId` to Convex documents table. When Yjs syncs offline updates, compare timestamps. If Convex timestamp is newer than user's last sync, show conflict warning.
+- **Disable offline for MVP:** Yjs/PartyKit support offline, but your use case is real-time collaboration (users online together). Simply show "You're offline, edits disabled" banner when WebSocket disconnects. Enable offline in later phase after conflict resolution proven.
 
 **Warning signs:**
-- Convex query count in metrics dashboard grows proportionally to visible messages (100 messages = 100 queries)
-- Message list render time increases with page size
-- Browser devtools Network tab shows hundreds of Convex query requests
-- Scroll performance degrades as more messages load
+- User reports "my changes disappeared after WiFi came back"
+- Document reverts to earlier version after reconnection
+- Duplicate content appears (offline edits + server edits both applied)
+- Permission error after reconnection: "You can't edit this document" (auth expired offline)
+- Undo/redo stack corrupted after offline → online transition
 
-**Phase to address:** Phase 1 (Schema Design) should decide embedded vs denormalized counts. Phase 4 (Performance Optimization) if deferred, but user experience may suffer in Phase 2-3.
+**Phase to address:**
+Phase 4 (Offline & Reconnection) — After core collaboration works online-only. Add offline support as enhancement, not initial feature.
+
+---
+
+### Pitfall 7: PartyKit Cold Start Latency for Cursor Awareness
+
+**What goes wrong:**
+User opens document, PartyKit server hibernated (cold). Server takes 2-5 seconds to start, initialize Yjs doc from Convex, and establish WebSocket. During this time, user sees no cursors, presence list empty, feels like "collaboration is broken." User starts editing before PartyKit connects, creates 0-5 second window of unsynchronized edits.
+
+**Why it happens:**
+Cloudflare Workers (PartyKit backend) hibernate after inactivity. First user to room triggers cold start. Without Hibernation API, PartyKit room starts from scratch—new process, new memory, must load Yjs state from storage. Your current RTK implementation doesn't have this issue (always-on service), but PartyKit does.
+
+**How to avoid:**
+- **Optimistic presence:** Show "Loading collaboration..." state immediately. Display user's own cursor/presence even before PartyKit connects. Gives immediate feedback, prevents "nothing's happening" perception.
+- **Prefetch on navigation:** When user clicks document in sidebar, start PartyKit connection before rendering DocumentEditor. By the time editor loads, WebSocket already connected.
+- **Local-first editing:** Allow editing immediately, don't block on PartyKit connection. If connection takes >3 seconds, show warning but keep editor functional. Yjs handles late synchronization.
+- **Connection state UI:** Your `use-cursor-tracking` already returns `isConnected`. Display connection indicator: green dot (connected), yellow (connecting), red (disconnected). Users understand why cursors missing.
+- **Separate providers by priority:** Core document editing should work without PartyKit (use Convex optimistic updates). PartyKit adds real-time cursors/presence as enhancement, not requirement.
+
+**Warning signs:**
+- Users report "I don't see other people until 5 seconds after opening document"
+- Cursor positions suddenly appear all at once (backlog of updates after cold start)
+- First user to document always has degraded experience, subsequent users fine
+- Logs show PartyKit server restart on every document open (no connection reuse)
+- Metrics: p50 connection time <500ms, p95 connection time >3s (cold start outliers)
+
+**Phase to address:**
+Phase 1 (Infrastructure Setup) — Design UI to handle cold start delays. Don't assume instant connection.
+
+---
+
+### Pitfall 8: Memory Leaks from Undestroyed Yjs Documents
+
+**What goes wrong:**
+User navigates between documents rapidly. Each document creates Yjs `Y.Doc` instance with providers (PartyKit WebSocket, Awareness). React cleanup (`useEffect` return) disconnects providers but doesn't call `doc.destroy()`. Yjs docs accumulate in memory, each holding full document state. After visiting 50 documents, browser tab uses 2GB RAM and crashes.
+
+**Why it happens:**
+Yjs providers (`y-partykit`, `y-websocket`) handle WebSocket cleanup in `provider.destroy()`, but the underlying `Y.Doc` persists in memory unless explicitly destroyed. Developers assume garbage collection happens automatically. BlockNote's `useBlockNoteSync` may not expose Yjs doc lifecycle hooks, requiring manual cleanup in wrapper component.
+
+**How to avoid:**
+- **Call doc.destroy() in cleanup:** In your DocumentEditor unmount (useEffect return), call `yjsDoc.destroy()` after `provider.destroy()`. Verify Yjs doc reference nulled out.
+- **Track active docs:** Global map of `documentId → Y.Doc`. On mount, check if doc exists, reuse. On unmount, decrement reference count. When count reaches 0, destroy doc. Prevents duplicate docs for same document.
+- **Monitor memory:** Add `performance.memory.usedJSHeapSize` logging in dev mode. Alert if memory grows >500MB. Use Chrome DevTools heap snapshots to verify Yjs docs cleaned up.
+- **Provider lifecycle testing:** Write test: mount document, unmount, check `Y.Doc` destroyed. Use `doc.on('destroy', callback)` to verify destroy called.
+- **React Strict Mode testing:** StrictMode mounts/unmounts twice. If cleanup broken, you'll create 2 docs per visit. Test in StrictMode to catch lifecycle bugs early.
+
+**Warning signs:**
+- Browser memory usage grows continuously as user navigates documents
+- Browser tab crashes after 30-60 minutes of active use
+- DevTools heap snapshot shows dozens of `Y.Doc` instances for single document
+- Console warnings: "WebSocket still connected after unmount"
+- Performance degrades over time (smooth → laggy) without page refresh
+
+**Phase to address:**
+Phase 2 (Migration & Compatibility) — After Yjs integration, before beta. Memory leaks block production readiness.
+
+---
 
 ## Technical Debt Patterns
 
-| Pattern | Why It Happens | Impact | Prevention |
-|---------|---------------|--------|------------|
-| Separate mutations for add/remove reaction | "Delete reaction" and "add reaction" feel like separate features | Race conditions, duplicate state management, inconsistent behavior | Single `toggleReaction` mutation with conditional logic |
-| Inline reply stores only messageId reference | Minimal schema feels cleaner | Broken UI when parent deleted, expensive joins | Denormalize parent author + preview text (100 chars) |
-| @mention extraction only in send mutation | "Notification is backend concern" | No client-side mention preview, no validation before send | Shared extraction utility (blocknote.ts) used in client + server (but Convex server utils not importable—needs shared package) |
-| Reactions embedded in message document | "One query instead of two" | Array limit, document bloat, can't query "messages I reacted to" | Separate reactions table, accept one extra query |
-| Plain text @everyone without permission check | "We'll add permissions later" | Notification spam in production | Permission check in Phase 2 before shipping, not "nice to have" |
-| No rate limiting on mention notifications | "Our channels are small" | Scales poorly as workspace grows, open to abuse | Rate limit mentionedUserIds.length > 50 in Phase 2 |
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Store Yjs updates without compaction | Simple implementation, no snapshot logic | Unbounded storage growth, slow document loads | Never—implement from start |
+| Reuse single PartyKit room for cursors + docs | One WebSocket connection | Mixed ephemeral/durable state, hard to scale | Never—separate from start |
+| No offline support | Simpler conflict resolution | Users expect offline in 2026 | MVP only—add by v1.0 |
+| Skip Yjs → Convex persistence | Yjs works standalone | Data loss on PartyKit failure, no backup | Never—persist Yjs state |
+| Use Excalidraw hosted collab service | No self-host complexity | Vendor lock-in, data privacy issues | Acceptable for prototype only |
+| Broadcast all cursor movements | Smooth cursors at small scale | Rate limits, performance issues at scale | Small teams (<5 users) only |
+| Client-side only Yjs (no server persistence) | Fast setup | Loss of single source of truth | Demos only, never production |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| PartyKit + Yjs | Assuming y-partykit supports Hibernation | y-partykit currently doesn't support Hibernation—stay under 100 connections or use separate cursor-only rooms with Hibernation |
+| Convex + Yjs | Storing Yjs updates in Convex without schema validation | Validate Yjs update structure before persisting, wrap in try-catch for corrupted updates |
+| BlockNote + Yjs | Assuming `@convex-dev/prosemirror-sync` is compatible with `y-prosemirror` | Complete data migration required—different persistence models (steps vs. CRDTs) |
+| Excalidraw + PartyKit | Using Excalidraw's built-in collab with custom WebSocket URL | Hardcoded at build time—fork library or use stateless approach (Convex + manual reconcile) |
+| React + Yjs providers | Creating new `Y.Doc()` on every render | Memoize with `useMemo` or global singleton map keyed by documentId |
+| PartyKit + Convex Auth | Passing Convex JWT to PartyKit expecting validation | PartyKit doesn't know Convex auth—use separate auth token from Convex action or validate Convex JWT in PartyKit onConnect |
 
 ## Performance Traps
 
-| Trap | Symptoms | Query Pattern | Solution |
-|------|----------|---------------|----------|
-| N+1 reaction queries | Message list render takes 5+ seconds | `for (msg of messages) { useQuery(api.reactions.byMessage, { messageId: msg._id }) }` | Batch query: `api.reactions.byMessages({ messageIds })` returns reactions for all messages |
-| Scanning all reactions for count | `reactions.count()` query scans full table | `ctx.db.query("reactions").filter(q => q.eq(q.field("messageId"), messageId)).collect()` (no index on messageId alone) | Use `by_message` index: `withIndex("by_message", q => q.eq("messageId", messageId))` |
-| Mention extraction on every render | Re-parsing BlockNote JSON 60 times/sec (React re-renders) | `const mentions = extractMentionedUserIds(message.body)` in component body | Memoize with `useMemo(() => extractMentionedUserIds(message.body), [message.body])` |
-| Reply parent lookup per message | Each reply fetches parent separately | `const parent = useQuery(api.messages.get, { messageId: replyToMessageId })` | Denormalize parent preview, only fetch parent on click |
-| Unindexed reaction toggle check | Full table scan to find existing reaction | `filter(q => q.and(q.eq(q.field("userId"), userId), q.eq(q.field("emoji"), emoji)))` without index | Compound index: `by_message_user_emoji` on ["messageId", "userId", "emoji"] |
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Broadcasting every mousemove | Smooth local cursors, laggy remote cursors | Server-side batching (50ms), only broadcast after 100ms pause | 10+ simultaneous users |
+| Loading full Yjs update history | Instant for new docs, slow for old docs | Snapshot compaction every 100 updates | Documents >1 week old or >1000 edits |
+| Separate WebSocket per document element | Works with 1 diagram, browser hangs with 20 | Multiplex: one WebSocket per document, subdocuments for diagrams | 5+ embedded diagrams in single doc |
+| Client-side Yjs reconciliation in render loop | Works at 60fps with small docs, freezes with large docs | Move reconciliation to Web Worker, debounce setState | Documents >10,000 characters |
+| Storing awareness in Yjs doc | Immediate updates | Massive update history from ephemeral state | Any production use—awareness should never persist |
+| No index on Convex cursorSessions.active | Fast with 10 rooms, slow with 1000 rooms | Already have `by_document_active` index—ensure queries use it | 100+ concurrent documents |
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| PartyKit room IDs are document IDs (public) | Unauthorized users guess room IDs, join sessions | Generate random room ID per session in Convex, check permissions before returning room ID |
+| No permission check in PartyKit onConnect | Anyone with room ID can join | Validate auth token in onConnect, fetch document from Convex, check user has permission |
+| Broadcasting user's email in cursor awareness | Privacy leak | Only broadcast userId and display name, fetch email server-side if needed |
+| Persisting Yjs updates without size limits | DOS attack via huge updates | Limit update size to 1MB, reject larger updates |
+| Storing Convex auth token in Yjs awareness | Token exposed to all room participants | Use separate short-lived PartyKit token from Convex action |
+| No rate limiting on cursor broadcasts | Malicious client spams updates, DOS other users | Server-side rate limit: 10 updates/second per user, disconnect violators |
 
 ## UX Pitfalls
 
-| Pitfall | User Experience | Root Cause | Solution |
-|---------|----------------|------------|----------|
-| Reaction animation flicker | Click 👍, appears briefly, disappears, reappears | Optimistic update conflict with server update | Use `isomorphicId` on reactions, client reconciles by ID not mutation order |
-| @mention autocomplete shows deleted users | Autocomplete suggests "@John" but John left workspace | Autocomplete queries all users, not filtered by workspace membership | Query `workspaceMembers.by_workspace` first, then join to users |
-| Reply preview truncates emoji/mentions | Preview shows "@Al..." (truncated mid-mention) | Naive `plainText.slice(0, 100)` cuts BlockNote inline content | Extract plain text preserving mention boundaries, or store structured preview |
-| Can't un-react on deleted message | User reacted before deletion, now reaction stuck | Deleted messages excluded from UI, no way to access reaction toggle | Show deleted message placeholder with reactions still interactive |
-| Multiple reactions appear on click | User clicks 👍 once, sees "👍 2" count | Race condition: check-then-insert pattern | Use `firstOrNull()` + conditional insert in single mutation transaction |
-| Mention notification for self | User types "@Alice" in message, Alice gets notification even though Alice is the author | Mention extraction doesn't filter self | Filter authorId from mentionedUserIds: `mentionedUserIds.filter(id => id !== authorId)` |
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| No loading state for PartyKit connection | Users think collaboration broken (blank FacePile) | Show "Connecting..." with spinner, display own presence immediately |
+| Cursor jumps on reconnection | Disorienting, feels buggy | Smoothly animate cursor from last position to new position over 200ms |
+| All cursors same color | Can't distinguish who's who | Hash userId to color (you already do this in CursorOverlay) |
+| Cursor disappears when user stops moving mouse | Looks like user left | Show cursor for 5 seconds after last movement (you have STALE_TIMEOUT_MS = 5000) |
+| No indication of offline mode | Users make edits that may not save | Large banner: "You're offline. Changes will sync when reconnected." |
+| Presence list shows all workspace members | Confusing who's actually in document | Only show users in current document (you already do this with `useEnhancedPresence(documentId)`) |
+| Cursor positions as absolute pixels | Breaks on window resize | Store as percentage of container (you already do this: `x: number // % of container width`) |
+| No "user is typing" indicator in Excalidraw | Unclear who's editing diagram | Broadcast drawing state via awareness, show colored outline on selected elements |
 
 ## "Looks Done But Isn't" Checklist
 
-Features that SEEM complete in local testing but fail in production:
+- [ ] **Cursor awareness:** Often missing cleanup on unmount — verify no memory leaks after navigating 50 documents
+- [ ] **Yjs persistence:** Often missing snapshot compaction — test document with 10,000 edits loads in <1 second
+- [ ] **PartyKit auth:** Often missing permission checks in onConnect — verify unauthorized user gets rejected
+- [ ] **Offline sync:** Often missing conflict resolution — test two users edit offline, reconnect simultaneously
+- [ ] **Excalidraw collab:** Often missing custom collaboration URL config — verify self-hosted collab connects, not oss-collab.excalidraw.com
+- [ ] **Provider cleanup:** Often missing `provider.destroy()` + `doc.destroy()` — check heap snapshot after unmount shows no lingering docs
+- [ ] **Reconnection UX:** Often missing "reconnecting..." state — disconnect WiFi, verify user sees status indicator
+- [ ] **Rate limiting:** Often missing server-side throttle — spawn 20 clients moving cursors rapidly, verify no rate limit errors
+- [ ] **Cold start handling:** Often missing optimistic UI — measure p95 connection time, verify <3 seconds or show loading state
+- [ ] **Migration rollback:** Often missing undo path — verify can revert document from Yjs back to ProseMirror Sync
 
-- [ ] **Reaction race condition tested**: Two users click same emoji within 100ms—verify no duplicate reactions
-- [ ] **Array limit tested**: Create message with 1000+ reactions—verify doesn't hit embedded array limit
-- [ ] **@everyone tested**: Mention 500 users in channel—verify notifications don't timeout/fail
-- [ ] **Reply parent deletion tested**: Delete parent message, verify reply preview still renders gracefully
-- [ ] **Mention extraction consistency tested**: Optimistic update mentions match server-side extraction after insert
-- [ ] **Notification spam prevention tested**: Rate limit prevents 100 @mentions in single message
-- [ ] **Reaction query performance tested**: Load channel with 100 messages × 10 reactions each, verify < 1s render time
-- [ ] **Deleted user mention tested**: @mention user, user leaves workspace, verify mention still renders (shows "Unknown")
-- [ ] **Self-mention filtered**: User @mentions themselves, verify no notification sent to self
-- [ ] **Reply to deleted message UX**: Click reply to deleted message, verify graceful "Message unavailable" instead of crash
-- [ ] **Optimistic reaction toggle**: Click reaction, immediately un-click, verify no flicker or stuck state
-- [ ] **Mention autocomplete member filtering**: Verify autocomplete only shows current workspace members, not all users
+## Recovery Strategies
 
-## Integration Pitfalls with Existing Ripple System
-
-| Existing Feature | Integration Risk | Why | Mitigation |
-|-----------------|------------------|-----|------------|
-| Message optimistic updates (isomorphicId) | Reactions need same isomorphicId pattern to reconcile optimistic/server data | Messages use `isomorphicId` for deduplication, reactions would need similar | Add `isomorphicId` to reactions schema OR use compound unique index (messageId + userId + emoji) |
-| Push notifications (scheduler.runAfter) | Chat mentions reuse notification system, but channel size >> project size | Task notifications send to 5-20 people, chat could send to 500 | Rate limit mentionedUserIds.length, add permission check for @channel |
-| BlockNote schemas (task descriptions vs comments vs chat) | Three different BlockNote schemas—inconsistency confuses users | Task descriptions have 4 inline types, comments have 1, chat would have 2+ | Create `chatMessageSchema.ts` with only userMention + link (minimal), document decision in SCHEMA.md |
-| Soft delete (messages.deleted boolean) | Reply-to references deleted messages, but UI filters them out | Channel message list uses `undeleted_by_channel` index | Denormalize parent preview OR show deleted message placeholders in reply chains |
-| Channel pagination (20 messages per page) | Reaction queries multiply by page size—N+1 problem | Each message queries reactions separately | Batch query reactions for entire page, not per-message |
-| Real-time subscriptions | Race conditions amplified by Convex reactive queries | Two users see update simultaneously, both mutate, both succeed in parallel | Use unique indexes (when available) or accept non-deterministic final state with idempotent mutations |
-
-## Convex-Specific Pitfalls
-
-### Mutations Can't Call Other Mutations
-**Problem:** Reaction toggle wants to call `addReaction()` or `removeReaction()` based on state.
-**Why it fails:** Convex mutations can't invoke other mutations (from CLAUDE.md: "Mutations can't call other mutations").
-**Solution:** Inline conditional logic in single `toggleReaction` mutation. Extract shared logic into internal helper function (not exported mutation).
-
-### Can't Index Arrays
-**Problem:** Want to query "messages user X reacted to" with `messages.reactions: v.array(...)`.
-**Why it fails:** Convex arrays not indexable (from WebSearch result: "You can't index an array in Convex").
-**Solution:** Separate `reactions` table with `by_user` index. Query: `ctx.db.query("reactions").withIndex("by_user", q => q.eq("userId", userId))`.
-
-### No Built-in Unique Constraints
-**Problem:** Prevent duplicate reactions (same userId + emoji on same message).
-**Why it fails:** Convex schema lacks unique constraints (`.unique()` index flag exists in schema but not enforced at write time—must manually check).
-**Solution:** Query-before-insert pattern: `const existing = await ctx.db.query(...).withIndex("by_message_user_emoji", ...).first(); if (!existing) { await ctx.db.insert(...); }`. Accept race condition edge case where simultaneous clicks create duplicate (eventual consistency via client-side deduplication in UI).
-
-### Reactive Queries Replace Optimistic Updates
-**Problem:** User clicks reaction, sees immediate optimistic update, then Convex reactive query replaces it with server data 100ms later, causing flicker.
-**Why it happens:** Convex's reactivity model replaces client state with server state automatically. If client and server data structures differ (even slightly), UI flickers.
-**Solution:** Ensure optimistic update structure EXACTLY matches server return structure. Use `isomorphicId` for client-generated IDs so Convex can reconcile. For reactions, optimistic update must include: `{ _id: tempId, messageId, userId, emoji, _creationTime: Date.now() }` matching server document shape.
-
-### Filter Without Index = Full Table Scan
-**Problem:** `ctx.db.query("reactions").filter(q => q.eq(q.field("messageId"), messageId))` scans all reactions.
-**Why it fails:** Convex requires `withIndex()` for performant queries (from CLAUDE.md: "Use withIndex() instead of filter()").
-**Solution:** Define `by_message` index in schema, use: `ctx.db.query("reactions").withIndex("by_message", q => q.eq("messageId", messageId))`. Filter is only for non-indexed fields AFTER indexed lookup.
-
-### Scheduled Actions Rate Limits
-**Problem:** `ctx.scheduler.runAfter(0, internal.notifications.sendMentionNotifications, ...)` called 500 times for @everyone mention.
-**Why it fails:** Convex rate limits scheduled action invocations (specific limits not documented publicly, but observed failures at high scale).
-**Solution:** Batch notification sends INSIDE the action, not via 500 separate scheduled actions. Single action invocation that iterates `mentionedUserIds` and sends in batches of 50.
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Dual system state divergence | HIGH | Add version reconciliation: Convex timestamp vs. Yjs clock, manual merge UI for conflicts |
+| ProseMirror → Yjs migration data loss | HIGH | Restore from Convex backup, re-run migration with fixed schema, test round-trip conversion first |
+| Cursor rate limit overload | MEDIUM | Implement server-side batching, reduce broadcast frequency to 500ms, add viewport culling |
+| Excalidraw collab URL hardcoded | MEDIUM | Fork library with runtime config, or pivot to stateless approach (Convex + manual reconcile) |
+| Yjs persistence without compaction | MEDIUM | Run compaction job on all documents, delete old updates, add auto-compaction to PartyKit server |
+| Offline edits conflict | LOW | Show conflict resolution UI, let user pick version, add "last edit wins" logic with timestamp |
+| PartyKit cold start latency | LOW | Add prefetch on document hover, show loading state, optimize Yjs snapshot loading |
+| Memory leaks from undestroyed docs | LOW | Add global cleanup, force browser refresh for affected users, fix lifecycle in next deploy |
 
 ## Pitfall-to-Phase Mapping
 
-| Phase | Must Address | Nice to Have | Defer to Later |
-|-------|-------------|--------------|----------------|
-| **Phase 1: Schema Design + Reactions** | Separate reactions table (avoid embedded array limit), by_message index, by_message_user_emoji compound index, toggleReaction mutation with race mitigation | Denormalized reaction counts in messages | Unique constraint enforcement (not critical—client dedupes) |
-| **Phase 2: @Mentions in Chat** | Rate limit mentionedUserIds.length > 50, filter self-mentions, reuse extractMentionedUserIds utility, batch notification sends, chatMessageSchema with userMention | @channel/@here special mentions with permissions, notification preferences | @everyone mention (too risky without more controls) |
-| **Phase 3: Inline Reply-To** | Denormalize parent author + preview in reply, graceful deleted parent handling, replyToMessageId field | Jump-to-message scroll, threaded reply visualization | Full threading (out of scope—inline only) |
-| **Phase 4: Performance + Polish** | Batch reaction queries for message page, memoize mention extraction, optimistic reaction toggle, mention autocomplete member filtering | Reaction animation polish, reply preview rich text | N/A |
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Dual real-time system state divergence | Phase 1: Infrastructure | Chaos test: disconnect PartyKit, mutate Convex, reconnect—verify convergence |
+| ProseMirror Sync to Yjs migration | Phase 2: Migration | Run migration on copy of production DB, round-trip test all documents |
+| Cursor broadcasting rate limit | Phase 1: Infrastructure | Load test: 20 users × 5 updates/sec = 100/sec, verify no dropped cursors |
+| Excalidraw collab URL hardcoding | Phase 3: Excalidraw | Verify WebSocket connects to PartyKit, not oss-collab.excalidraw.com |
+| Yjs persistence without compaction | Phase 1: Infrastructure | Create doc with 1000 edits, verify snapshot created, load time <500ms |
+| Offline edits conflict | Phase 4: Offline | Disconnect two clients, make conflicting edits, reconnect, verify merge |
+| PartyKit cold start latency | Phase 1: Infrastructure | Measure p95 connection time in production, verify <3s or loading state shown |
+| Memory leaks from undestroyed docs | Phase 2: Integration | Visit 50 documents, check heap size <500MB, verify no lingering Y.Doc |
 
 ## Sources
 
-### Primary (HIGH confidence)
-- Existing codebase: `convex/schema.ts` - Messages table structure, indexes, soft delete pattern
-- Existing codebase: `convex/messages.ts` - Optimistic update pattern (isomorphicId), pagination query
-- Existing codebase: `convex/tasks.ts` - Notification scheduling pattern (scheduler.runAfter)
-- Existing codebase: `convex/utils/blocknote.ts` - Mention extraction utility for task descriptions
-- Existing codebase: `.planning/phases/06.1-mention-people-in-task-comments/06.1-RESEARCH.md` - BlockNote mention implementation patterns
-- [Convex Relationship Structures: Let's Talk About Schemas](https://stack.convex.dev/relationship-structures-let-s-talk-about-schemas) - Array limits (8192 entries), relationship patterns, indexing constraints
-- [Opinionated Convex guidelines](https://gist.github.com/srizvi/966e583693271d874bf65c2a95466339) - Best practices for schema design, queries, mutations
+**Yjs and CRDTs:**
+- [Yjs GitHub Repository](https://github.com/yjs/yjs)
+- [Yjs Documentation](https://docs.yjs.dev/)
+- [Awareness & Presence | Yjs Docs](https://docs.yjs.dev/getting-started/adding-awareness)
+- [Subdocuments | Yjs Docs](https://docs.yjs.dev/api/subdocuments)
+- [How to clear doc.store & memory leak - Yjs Community](https://discuss.yjs.dev/t/how-to-clear-doc-store-memory-leak/2276)
+- [Postgres And Yjs CRDT Collaborative Text Editing, Using PowerSync](https://www.powersync.com/blog/postgres-and-yjs-crdt-collaborative-text-editing-using-powersync)
 
-### Secondary (MEDIUM confidence)
-- [Concurrent Optimistic Updates in React Query](https://tkdodo.eu/blog/concurrent-optimistic-updates-in-react-query) - Race condition patterns in optimistic UI
-- [Optimistic State: Rollbacks and Race Condition Handling](https://github.com/perceived-dev/optimistic-state) - Race condition prevention strategies
-- [MongoDB Embedded Data vs References](https://www.mongodb.com/docs/manual/data-modeling/concepts/embedding-vs-references/) - Embedded vs separate table tradeoffs (Convex uses similar document model)
-- [PubNub: Automate Spam Detection and Prevention](https://www.pubnub.com/blog/automate-spam-detection-and-prevention/) - Mention spam prevention patterns
-- [WhatsApp Tests 'Mention Everyone' Option - Spam Concerns](https://www.digitalinformationworld.com/2025/09/whatsapp-tests-mention-everyone-option.html) - @everyone abuse patterns
+**PartyKit:**
+- [Scaling PartyKit servers with Hibernation | PartyKit Docs](https://docs.partykit.io/guides/scaling-partykit-servers-with-hibernation/)
+- [Y-PartyKit (Yjs API) | PartyKit Docs](https://docs.partykit.io/reference/y-partykit-api/)
+- [PartySocket (Client API) | PartyKit Docs](https://docs.partykit.io/reference/partysocket-api/)
+- [Only 100 web socket connections per room on 128MB of memory? · Issue #920](https://github.com/partykit/partykit/issues/920)
+- [Partykit gets into occasional infinite loops on connection disconnect · Issue #544](https://github.com/partykit/partykit/issues/544)
 
-### Tertiary (LOW confidence)
-- [Threads & Replies - React Chat Messaging Docs](https://getstream.io/chat/docs/react/threads/) - General threading patterns (not Convex-specific)
-- [Telegram Desktop Issue #10315: Deleted message in reply not disappearing](https://github.com/telegramdesktop/tdesktop/issues/10315) - Stale reply references in production
-- [Element Android Issue #2236: Replies to deleted messages visible](https://github.com/element-hq/element-android/issues/2236) - Reply-to-deleted UX patterns
+**BlockNote and ProseMirror:**
+- [BlockNote - Real-time Collaboration](https://www.blocknotejs.org/docs/features/collaboration)
+- [FOSDEM 2026 - BlockNote, Prosemirror and Yjs 14](https://fosdem.org/2026/schedule/event/8VKQXR-blocknote-yjs-prosemirror/)
+- [GitHub - get-convex/prosemirror-sync](https://github.com/get-convex/prosemirror-sync)
+- [ProseMirror | Yjs Docs](https://docs.yjs.dev/ecosystem/editor-bindings/prosemirror)
 
-## Metadata
+**Excalidraw:**
+- [Collaboration mode - Self-hosting vs Collab · Discussion #3879](https://github.com/excalidraw/excalidraw/discussions/3879)
+- [Excalidraw blog | Building Excalidraw's P2P Collaboration Feature](https://plus.excalidraw.com/blog/building-excalidraw-p2p-collaboration-feature)
+- [self-hosting live collaboration question · Issue #8195](https://github.com/excalidraw/excalidraw/issues/8195)
 
-**Confidence breakdown:**
-- Schema design pitfalls: HIGH (based on existing Ripple schema + Convex docs)
-- Race conditions: HIGH (Convex concurrency model + existing optimistic update patterns in codebase)
-- Notification spam: MEDIUM (based on WebSearch results + task notification patterns in codebase)
-- Performance: HIGH (Convex index requirements in CLAUDE.md + relationship docs)
-- Reply-to pitfalls: MEDIUM (based on other chat app issues, not Ripple-specific testing)
+**WebSocket and Real-Time Patterns:**
+- [How to Handle WebSocket Reconnection Logic](https://oneuptime.com/blog/post/2026-01-24-websocket-reconnection-logic/view)
+- [Multiuser whiteboard cursor position update overloads server · Issue #11169](https://github.com/bigbluebutton/bigbluebutton/issues/11169)
+- [Implementing cursor sharing with Daily's video call API](https://www.daily.co/blog/implementing-cursor-sharing-with-dailys-video-call-api/)
+- [WebRTC vs WebSocket: 10 Key Differences in 2026](https://www.designveloper.com/guide/webrtc-vs-websocket/)
 
-**Research date:** 2026-02-07
-**Valid until:** 30 days (Convex features stable, chat patterns well-established)
-**Reviewer notes:** This research focuses on INTEGRATION pitfalls specific to adding features to Ripple's existing system. Generic chat feature pitfalls (e.g., "emoji picker performance") intentionally excluded. Emphasis on Convex-specific constraints (mutations can't call mutations, arrays not indexable, filter requires index) because these differ from traditional backend patterns.
+**Convex:**
+- [Convex Overview | Convex Developer Hub](https://docs.convex.dev/understanding/)
+- [A Guide to Real-Time Databases](https://stack.convex.dev/real-time-database)
+
+**Offline and Conflict Resolution:**
+- [Multiplayer - React Flow](https://reactflow.dev/learn/advanced-use/multiplayer)
+- [Data Synchronization in PWAs: Offline-First Strategies](https://gtcsys.com/comprehensive-faqs-guide-data-synchronization-in-pwas-offline-first-strategies-and-conflict-resolution/)
+- [Understanding real-time collaboration with CRDTs | Medium](https://shambhavishandilya.medium.com/understanding-real-time-collaboration-with-crdts-e764eb65024e)
+
+---
+
+*Pitfalls research for: Multiplayer Cursors and Real-Time Collaboration Infrastructure*
+*Researched: 2026-02-10*

@@ -9,10 +9,11 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 11 - PartyKit Infrastructure & Persistence
 Plan: —
-Status: Defining requirements
-Last activity: 2026-02-10 — Milestone v0.10 started
+Status: Not Started
+Progress: [░░░░░░░░░░] 0% (Phase 11 of 13)
+Last activity: 2026-02-10 — v0.10 roadmap created
 
 ## Performance Metrics
 
@@ -43,6 +44,13 @@ Last activity: 2026-02-10 — Milestone v0.10 started
 
 ### Decisions
 
+Recent decisions from v0.10 roadmap:
+- Phase 11: PartyKit infrastructure must be deployed before any cursor work (blocks all other phases)
+- Phase 12: Document cursors + full Yjs migration combined (BlockNote has first-class Yjs support, proven path)
+- Phase 13: Diagram multiplayer isolated (y-excalidraw is community library, higher risk)
+- Snapshot compaction implemented in Phase 11 (research pitfall: prevents unbounded Yjs history growth)
+- User colors established in Phase 12 and reused in Phase 13 (AWARE-03)
+
 Recent decisions from Phase 03.2:
 - TaskStatuses migrated from workspace-scoped to project-scoped (each project independent)
 - Legacy fields kept optional in schema for backward compatibility during migration
@@ -60,6 +68,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 
 ### Roadmap Evolution
 
+- v0.10 milestone started at Phase 11 (continues from v0.9)
 - Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
 - v0.9 milestone started at Phase 08 (continues from v0.8)
 - Phase 03.1 inserted after Phase 03: default taskStatus logic (URGENT)
@@ -71,7 +80,12 @@ None.
 
 ### Blockers/Concerns
 
-None.
+Research notes for v0.10:
+- INFRA-04 (snapshot compaction): Must be implemented from Phase 1, not deferred (research pitfall)
+- DCOL-02 (ProseMirror to Yjs migration): Requires data migration script for existing documents
+- DCOL-03 (custom inline content with Yjs): Custom BlockNote types must work with Yjs sync
+- DIAG-03 (y-excalidraw): Community library without official npm package, needs vendoring from GitHub
+- Phase 12 combines cursors + full Yjs migration (research recommends unified approach vs incremental)
 
 ### Quick Tasks Completed
 
@@ -82,8 +96,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed quick-1-01 (Fix Block doesn't have id error)
+Stopped at: v0.10 roadmap creation complete
 Resume file: None
+Next step: `/gsd:plan-phase 11`
 
 Config:
 {

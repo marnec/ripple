@@ -4,10 +4,13 @@
 
 - ✅ **v0.8 Task Management** - Phases 01-07 (shipped 2026-02-07)
 - ✅ **v0.9 Chat Features** - Phases 08-10 (shipped 2026-02-07)
+- 🚧 **v0.10 Multiplayer Cursors & Collaboration** - Phases 11-13 (in progress)
 
 ## Overview
 
 v0.9 brings Ripple's chat interactions up to modern standards with emoji reactions, @user mentions, and inline reply-to. These three features transform chat from basic messaging into a rich communication layer comparable to Slack and Teams, completing the core workspace collaboration toolkit.
+
+v0.10 adds real-time multiplayer cursor awareness to documents and diagrams, backed by WebSocket infrastructure (PartyKit + Yjs). Users will see each other's cursor positions and selections in real-time, dramatically improving collaborative editing awareness. The infrastructure evaluation also explores migrating from ProseMirror Sync to Yjs for unified collaboration architecture.
 
 ## Phases
 
@@ -102,11 +105,12 @@ Plans:
 
 </details>
 
-### ✅ v0.9 Chat Features (SHIPPED 2026-02-07)
+<details>
+<summary>✅ v0.9 Chat Features (Phases 08-10) - SHIPPED 2026-02-07</summary>
 
 **Milestone Goal:** Enrich chat with @user mentions, emoji reactions, and inline reply-to — bringing chat interaction quality closer to Slack/Teams.
 
-#### Phase 08: Emoji Reactions Foundation
+### Phase 08: Emoji Reactions Foundation
 **Goal**: Users can react to messages with emoji (Slack-style pills with counts)
 **Depends on**: Phase 07
 **Requirements**: REACT-01, REACT-02, REACT-03, REACT-04, REACT-05, REACT-06
@@ -123,7 +127,7 @@ Plans:
 - [x] 08-01-PLAN.md — Backend schema and CRUD (messageReactions table, toggle mutation, aggregation query)
 - [x] 08-02-PLAN.md — Frontend reaction UI (emoji picker, pills, tooltips, Message.tsx integration)
 
-#### Phase 09: @User Mentions in Chat
+### Phase 09: @User Mentions in Chat
 **Goal**: Users can @mention workspace members in chat with autocomplete and notifications
 **Depends on**: Phase 08
 **Requirements**: MENT-01, MENT-02, MENT-03, MENT-04, MENT-05
@@ -139,7 +143,7 @@ Plans:
 - [x] 09-01-PLAN.md — Frontend @mention autocomplete and rendering (composer schema, @ trigger, message renderer)
 - [x] 09-02-PLAN.md — Backend chat notifications and mention wiring (chatNotifications action, messages.send extraction)
 
-#### Phase 10: Inline Reply-To
+### Phase 10: Inline Reply-To
 **Goal**: Users can reply to specific messages with quoted preview in chat flow
 **Depends on**: Phase 09
 **Requirements**: REPLY-01, REPLY-02, REPLY-03, REPLY-04
@@ -154,10 +158,64 @@ Plans:
 - [x] 10-01-PLAN.md — Backend schema and query enrichment (replyToId field, messages.send update, messages.list parent info)
 - [x] 10-02-PLAN.md — Frontend reply mode UI (ChatContext reply state, MessageQuotePreview, Message reply action + display, MessageComposer preview)
 
+</details>
+
+### 🚧 v0.10 Multiplayer Cursors & Collaboration (In Progress)
+
+**Milestone Goal:** Add real-time multiplayer cursor awareness to documents and diagrams, backed by proper WebSocket infrastructure — and evaluate whether the new infra should also replace/improve the existing collaborative editing approach.
+
+#### Phase 11: PartyKit Infrastructure & Persistence
+**Goal**: Deploy PartyKit server with Yjs persistence and snapshot compaction
+**Depends on**: Phase 10
+**Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04
+**Success Criteria** (what must be TRUE):
+  1. PartyKit server is deployed on Cloudflare and accessible from Ripple frontend
+  2. Frontend can authenticate to PartyKit rooms using Convex user identity (no unauthorized access)
+  3. Yjs document state persists across PartyKit server restarts (snapshot mode using Durable Objects)
+  4. Snapshot compaction runs automatically to prevent unbounded Yjs update history growth (storage and performance remain stable over time)
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+#### Phase 12: Document Multiplayer Cursors & Yjs Migration
+**Goal**: Real-time cursor awareness and Yjs-based collaboration for BlockNote documents
+**Depends on**: Phase 11
+**Requirements**: DCUR-01, DCUR-02, DCUR-03, DCUR-04, DCOL-01, DCOL-02, DCOL-03, DCOL-04, AWARE-01, AWARE-03
+**Success Criteria** (what must be TRUE):
+  1. User can see other users' cursor positions in real-time in BlockNote documents (position updates appear instantly, sub-100ms latency)
+  2. User can see other users' text selection ranges highlighted with user-specific colors
+  3. Each user's cursor displays a colored label with their display name (label follows cursor movement)
+  4. BlockNote document content syncs via Yjs CRDTs (replacing ProseMirror Sync), with concurrent edits merging automatically
+  5. Existing documents are migrated from ProseMirror JSON to Yjs format without data loss (migration script handles all existing docs)
+  6. Custom BlockNote inline content types (diagrams, documents, users, projects) continue to work with Yjs sync (no regressions)
+  7. Document content persists in Yjs binary format with Convex backup (documents can be restored from Convex if PartyKit state is lost)
+  8. User can see a list of active users currently viewing the same document (avatar list or similar UI)
+  9. User colors are consistent per user across all documents and diagrams (same user always gets same color)
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+#### Phase 13: Diagram Multiplayer Cursors
+**Goal**: Real-time cursor awareness and element sync for Excalidraw diagrams
+**Depends on**: Phase 12
+**Requirements**: DIAG-01, DIAG-02, DIAG-03, DIAG-04, AWARE-02
+**Success Criteria** (what must be TRUE):
+  1. User can see other users' pointer positions in real-time in Excalidraw diagrams (pointer updates appear instantly)
+  2. Each user's pointer displays a colored label with their display name (consistent with document cursor colors)
+  3. Excalidraw element changes (drawing, moving, editing) sync in real-time between users (no manual reconcileElements needed)
+  4. Existing diagrams remain compatible with new multiplayer infrastructure (no migration-related breakage)
+  5. User can see a list of active users currently viewing the same diagram (avatar list or similar UI)
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 08 → 09 → 10
+Phases execute in numeric order: 11 → 12 → 13
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -174,3 +232,6 @@ Phases execute in numeric order: 08 → 09 → 10
 | 8. Emoji Reactions Foundation | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 9. @User Mentions in Chat | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 10. Inline Reply-To | v0.9 | 2/2 | Complete | 2026-02-07 |
+| 11. PartyKit Infrastructure & Persistence | v0.10 | 0/TBD | Not Started | — |
+| 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 0/TBD | Not Started | — |
+| 13. Diagram Multiplayer Cursors | v0.10 | 0/TBD | Not Started | — |

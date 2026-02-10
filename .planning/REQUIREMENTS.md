@@ -67,31 +67,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | — | Pending |
-| INFRA-02 | — | Pending |
-| INFRA-03 | — | Pending |
-| INFRA-04 | — | Pending |
-| DCUR-01 | — | Pending |
-| DCUR-02 | — | Pending |
-| DCUR-03 | — | Pending |
-| DCUR-04 | — | Pending |
-| DCOL-01 | — | Pending |
-| DCOL-02 | — | Pending |
-| DCOL-03 | — | Pending |
-| DCOL-04 | — | Pending |
-| DIAG-01 | — | Pending |
-| DIAG-02 | — | Pending |
-| DIAG-03 | — | Pending |
-| DIAG-04 | — | Pending |
-| AWARE-01 | — | Pending |
-| AWARE-02 | — | Pending |
-| AWARE-03 | — | Pending |
+| INFRA-01 | Phase 11 | Pending |
+| INFRA-02 | Phase 11 | Pending |
+| INFRA-03 | Phase 11 | Pending |
+| INFRA-04 | Phase 11 | Pending |
+| DCUR-01 | Phase 12 | Pending |
+| DCUR-02 | Phase 12 | Pending |
+| DCUR-03 | Phase 12 | Pending |
+| DCUR-04 | Phase 12 | Pending |
+| DCOL-01 | Phase 12 | Pending |
+| DCOL-02 | Phase 12 | Pending |
+| DCOL-03 | Phase 12 | Pending |
+| DCOL-04 | Phase 12 | Pending |
+| AWARE-01 | Phase 12 | Pending |
+| AWARE-03 | Phase 12 | Pending |
+| DIAG-01 | Phase 13 | Pending |
+| DIAG-02 | Phase 13 | Pending |
+| DIAG-03 | Phase 13 | Pending |
+| DIAG-04 | Phase 13 | Pending |
+| AWARE-02 | Phase 13 | Pending |
 
 **Coverage:**
 - v0.10 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-10*
-*Last updated: 2026-02-10 after initial definition*
+*Last updated: 2026-02-10 after roadmap creation*

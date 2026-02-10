@@ -1,304 +1,215 @@
-# Stack Research: Chat Mentions, Reactions, and Reply-To
+# Stack Research: Multiplayer Cursors & Real-Time Collaboration
 
-**Domain:** Real-time collaborative chat enhancements (mentions, reactions, threading)
-**Researched:** 2026-02-07
+**Domain:** Multiplayer cursor awareness and collaborative editing infrastructure
+**Researched:** 2026-02-10
 **Confidence:** HIGH
-
-## Executive Summary
-
-The existing stack (Convex 1.31.7, BlockNote 0.46.2, React 18, Radix UI) already provides most primitives needed. Only one new dependency required: an emoji picker library for reaction selection. @user mentions leverage existing BlockNote custom inline content pattern. Reply-to threading requires only schema additions, no new libraries.
 
 ## Recommended Stack
 
-### Core Technologies (No Changes)
+### Core Technologies
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| BlockNote | 0.46.2 (existing) | Rich text editor with custom inline content | Already integrated for chat composer. Built-in SuggestionMenuController supports @mention autocomplete with trigger characters. Project already uses custom inline specs (taskMention, projectReference) - user mentions follow same pattern. |
-| Convex | 1.31.7 (existing) | Real-time database with subscriptions | Already stores messages table. Reactions require new `messageReactions` table with compound indexes. Convex reactivity ensures real-time reaction updates without WebSocket management. |
-| Radix UI Popover | 1.1.15 (existing) | Popover primitive for emoji picker | Already in dependencies. Positions emoji picker relative to reaction button trigger. |
+| **Yjs** | 13.6.29 | CRDT for conflict-free collaborative editing | Fastest CRDT implementation, state-based awareness for cursors, industry standard for real-time collaboration. BlockNote has first-class integration. |
+| **PartyKit (y-partykit)** | 0.0.33 | WebSocket provider running on Cloudflare Workers/Durable Objects | Serverless, runs on Cloudflare edge, Yjs-native persistence (snapshot/history modes), acquired by Cloudflare (maintained), hibernation API for cost efficiency. |
+| **y-prosemirror** | 1.3.7 | Yjs binding for ProseMirror editors | Official Yjs binding for ProseMirror (BlockNote's foundation), cursor awareness built-in, proven integration path. |
+| **y-excalidraw** | No official npm package | Yjs binding for Excalidraw whiteboards | Community library (RahulBadenkal/y-excalidraw on GitHub), binds Y.Array to Excalidraw elements, synchronizes at element level (not key level). |
 
-### Supporting Libraries (New Addition)
+### Supporting Libraries
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| **emoji-picker-react** | ^4.17.4 | Emoji selection UI for reactions | Render inside Radix Popover when user clicks reaction button. Actively maintained (published 4 days ago as of Feb 2026). Better DX than emoji-mart for simple use cases. |
+| **partykit** | 0.0.115 | PartyKit CLI and development tools | Development server for local testing, deployment to Cloudflare |
+| **partyserver** | Latest | Base class for PartyKit servers | When building custom PartyKit servers with lifecycle hooks |
+
+### Development Tools
+
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| PartyKit CLI | Local development server for testing collaboration | Run `npx partykit dev` for local testing |
+| Cloudflare Wrangler | Deploy PartyKit to your own Cloudflare account | Already in project (wrangler 4.63.0) |
 
 ## Installation
 
 ```bash
-# Single new package
-npm install emoji-picker-react@^4.17.4
+# Core collaboration libraries
+npm install yjs@13.6.29 y-partykit@0.0.33
+
+# ProseMirror Yjs binding (BlockNote integration)
+npm install y-prosemirror@1.3.7
+
+# Excalidraw Yjs binding (install from GitHub - no npm package)
+# Note: May need to vendor or fork this library
+# npm install github:RahulBadenkal/y-excalidraw
+
+# PartyKit development (already have wrangler)
+npm install -D partykit@0.0.115
 ```
-
-## Implementation Details
-
-### 1. @User Mentions
-
-**No new libraries needed.** Leverage existing BlockNote patterns:
-
-```typescript
-// Extend existing schema (MessageComposer.tsx)
-const schema = BlockNoteSchema.create({
-  blockSpecs: { ...remainingBlockSpecs },
-  inlineContentSpecs: {
-    ...defaultInlineContentSpecs,
-    taskMention: TaskMention,        // existing
-    projectReference: ProjectReference, // existing
-    userMention: UserMention,         // NEW - follows same pattern
-  },
-});
-
-// Add SuggestionMenuController for "@" trigger
-<SuggestionMenuController
-  triggerCharacter={"@"}
-  getItems={async (query) => {
-    // Query workspace members via Convex
-    return workspaceMembers
-      .filter(m => m.name.includes(query))
-      .map(m => ({
-        title: m.name,
-        onItemClick: () => {
-          editor.insertInlineContent([
-            { type: "userMention", props: { userId: m._id, userName: m.name } },
-            " ",
-          ]);
-        },
-      }));
-  }}
-/>
-```
-
-**Pattern precedent:** Project already implements taskMention and projectReference using `createReactInlineContentSpec`. User mentions are structurally identical - just a different data source (workspaceMembers instead of tasks/projects).
-
-**Why BlockNote native vs mention library:** BlockNote's custom inline content system provides:
-- Type-safe props (userId, userName)
-- Editor-time preview rendering
-- Serialization to JSON (stored in message body)
-- No external dependency conflicts
-
-### 2. Emoji Reactions
-
-**Requires emoji-picker-react for picker UI.**
-
-#### Database Schema
-
-```typescript
-// convex/schema.ts - NEW TABLE
-messageReactions: defineTable({
-  messageId: v.id("messages"),
-  userId: v.id("users"),
-  emoji: v.string(),              // native emoji character (e.g., "👍")
-  channelId: v.id("channels"),    // denormalized for efficient queries
-})
-  .index("by_message", ["messageId"])
-  .index("by_message_emoji", ["messageId", "emoji"])        // count reactions per emoji
-  .index("by_message_user", ["messageId", "userId"])        // prevent duplicate reactions
-  .index("by_channel", ["channelId"])                       // cleanup when channel deleted
-```
-
-**Why this schema:**
-- `by_message_emoji` enables aggregation: "👍 3, ❤️ 5" counts
-- `by_message_user` enforces uniqueness: user can only react once per emoji per message
-- Stores native emoji string (not emoji codes) for simplicity
-- `channelId` denormalized for cascade deletion patterns
-
-#### UI Implementation
-
-```typescript
-// Reaction picker (Radix Popover + emoji-picker-react)
-import Picker from 'emoji-picker-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-
-<Popover>
-  <PopoverTrigger asChild>
-    <Button variant="ghost" size="sm">Add Reaction</Button>
-  </PopoverTrigger>
-  <PopoverContent>
-    <Picker
-      onEmojiClick={(emojiData) => {
-        addReaction({ messageId, emoji: emojiData.emoji });
-      }}
-    />
-  </PopoverContent>
-</Popover>
-```
-
-**Why emoji-picker-react over emoji-mart:**
-- Simpler API - single component import vs modular data loading
-- Actively maintained (v4.17.4 published Feb 2026)
-- Better TypeScript types out of the box
-- Bundle size acceptable (2.59MB) given feature richness
-- emoji-mart's modular data loading adds complexity without significant benefit for this use case
-
-**Tradeoff:** emoji-mart has smaller bundle (45KB gzipped with emoji-mart-lite) but requires manual data management. For a chat app where emojis are secondary feature (not primary like Slack), emoji-picker-react's DX wins.
-
-### 3. Inline Reply-To
-
-**No new libraries needed.** Pure data modeling + UI.
-
-#### Database Schema
-
-```typescript
-// convex/schema.ts - MODIFY EXISTING TABLE
-messages: defineTable({
-  userId: v.id("users"),
-  isomorphicId: v.string(),
-  body: v.string(),
-  plainText: v.string(),
-  channelId: v.id("channels"),
-  deleted: v.boolean(),
-  replyToMessageId: v.optional(v.id("messages")), // NEW - reference to parent message
-})
-  .index("by_channel", ["channelId"])
-  .index("undeleted_by_channel", ["channelId", "deleted"])
-  .index("by_reply_to", ["replyToMessageId"])      // NEW - fetch all replies to a message
-  .searchIndex("by_text", { searchField: "plainText", filterFields: ["channelId"] })
-```
-
-**Pattern:** Inline reply (quoted parent preview in chat flow), NOT threaded replies (separate thread view). Matches Slack/Discord UX.
-
-#### UI Pattern
-
-```typescript
-// Message with reply-to preview
-{message.replyToMessageId && (
-  <div className="border-l-2 border-muted pl-2 mb-1 text-sm text-muted-foreground">
-    <QuotedMessage messageId={message.replyToMessageId} />
-  </div>
-)}
-<MessageRenderer body={message.body} />
-```
-
-**Why inline vs threaded:**
-- Simpler UX for linear chat flow
-- No thread view management
-- Matches existing chat message layout
-- Can upgrade to threads later if needed (schema already supports it)
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Not Alternative |
-|----------|-------------|-------------|---------------------|
-| Emoji Picker | emoji-picker-react | emoji-mart | Modular data loading adds complexity. emoji-mart-lite saves 2.5MB but requires manual emoji data imports. Not worth engineering time for marginal bundle savings in chat app. |
-| Emoji Picker | emoji-picker-react | Frimousse | Newer library (2025), less battle-tested. Designed for Liveblocks integration which we don't use. |
-| Mentions | BlockNote custom inline | react-mentions | BlockNote already integrated. Adding separate mention library creates two rich text systems. BlockNote's inline content is type-safe and serializes to message.body JSON. |
-| Mentions | BlockNote custom inline | draft-js-mention-plugin | Draft.js is legacy (deprecated in favor of Lexical). BlockNote is actively maintained and already integrated. |
-| Reply Threading | Inline (single-level) | Full threading (Stream Chat pattern) | Over-engineered for v0.9. Inline reply-to provides 80% of value with 20% of complexity. Can migrate schema to full threading later (just add threadId field). |
+| Category | Recommended | Alternative | When to Use Alternative |
+|----------|-------------|-------------|-------------------------|
+| **CRDT Library** | Yjs | Automerge | Need JSON CRDT instead of specialized types. Yjs is 10-100x faster for text editing. |
+| **WebSocket Provider** | PartyKit (y-partykit) | y-websocket + custom server | Need non-Cloudflare hosting (AWS, self-hosted). PartyKit is serverless and edge-native. |
+| **WebSocket Provider** | PartyKit | Liveblocks | Budget for hosted service ($29+/mo). Liveblocks has managed infrastructure but higher cost. |
+| **WebSocket Provider** | PartyKit | Y-Sweet (Jamsocket) | Need dedicated collaboration server. Y-Sweet adds server complexity vs PartyKit serverless. |
+| **WebSocket Provider** | PartyKit | Hocuspocus | Self-hosting Node.js server. More control but operational overhead. |
+| **Cursor Tracking** | Yjs Awareness | Cloudflare RTK | RTK has 5 events/s rate limit (too slow for cursors), already attempted and failed. |
+| **Cursor Tracking** | Yjs Awareness | Custom Convex presence | Convex Presence lacks CRDT guarantees, cursor positions need conflict-free merging. |
+| **BlockNote Sync** | Yjs (via y-prosemirror) | @convex-dev/prosemirror-sync | Keep existing ProseMirror Sync if not adding Yjs. Migration requires data transform. |
 
 ## What NOT to Use
 
-| Library/Pattern | Why Avoid | Do Instead |
-|-----------------|-----------|------------|
-| Separate rich text editor for mentions | Duplication of editor stack. BlockNote handles inline content natively. | Use BlockNote's `createReactInlineContentSpec` pattern (already proven with taskMention, projectReference). |
-| Emoji codes (:smile:, :thumbsup:) | Requires parsing library. Adds conversion layer. Native emoji works directly in React. | Store native emoji string in `messageReactions.emoji` field. |
-| Client-side reaction aggregation | Race conditions in real-time updates. Multiple users reacting simultaneously causes UI glitches. | Query Convex with `by_message_emoji` index. Convex reactivity handles live count updates. |
-| WebSocket library for reactions | Convex already provides real-time subscriptions. Adding ws/socket.io duplicates infrastructure. | Use Convex `useQuery` for live reaction counts. Updates propagate automatically. |
-| Full threading library (react-chat-elements) | Brings opinionated chat UI components. Conflicts with existing BlockNote-based MessageRenderer. | Implement simple reply-to with schema field + QuotedMessage component. |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| **Cloudflare RTK** | 5 events/s rate limit too slow for cursor tracking (200ms throttle needed = 5 events/s theoretical max, no headroom) | Yjs Awareness via PartyKit (no rate limit on Durable Objects WebSockets) |
+| **@convex-dev/prosemirror-sync for cursors** | No awareness API, document sync only | Yjs Awareness (state-based CRDT for presence) |
+| **Mixing Yjs + ProseMirror Sync** | Dual sync systems create conflicts, different data models | Migrate fully to Yjs OR keep ProseMirror Sync (pick one) |
+| **Official Excalidraw collab server** | Requires Socket.IO server, not serverless | y-excalidraw with PartyKit |
+| **y-websocket without hibernation** | Keeps WebSocket connections active 24/7, expensive on serverless | PartyKit with hibernation mode |
 
-## Integration Points
+## Stack Patterns by Variant
 
-### BlockNote Schema Extension
+**If migrating BlockNote from ProseMirror Sync to Yjs:**
+- Use BlockNote's `collaboration` prop with y-partykit provider
+- Migrate document data: convert ProseMirror JSON to Yjs updates (one-time)
+- Benefits: Unified cursor awareness + document sync, better offline support
+- Cost: Data migration required, different data model
 
-Current schema (MessageComposer.tsx line 40-47):
-```typescript
-const schema = BlockNoteSchema.create({
-  blockSpecs: { ...remainingBlockSpecs },
-  inlineContentSpecs: {
-    ...defaultInlineContentSpecs,
-    taskMention: TaskMention,         // existing
-    projectReference: ProjectReference, // existing
-    // ADD: userMention: UserMention
-  },
-});
-```
+**If keeping ProseMirror Sync for BlockNote:**
+- Add separate Yjs document for cursor-only awareness
+- Use Yjs Awareness without syncing document content
+- Benefits: No data migration, minimal changes
+- Cost: Dual systems (ProseMirror Sync + Yjs), more complexity
 
-**Validation:** Project already uses SuggestionMenuController with "#" trigger (line 247-310). Adding "@" trigger follows identical pattern.
-
-### Convex Schema Extensions
-
-Current tables:
-- `messages` - add `replyToMessageId` field
-- NEW `messageReactions` table
-
-Indexes required:
-- `messages.by_reply_to` - fetch replies
-- `messageReactions.by_message_emoji` - count reactions
-- `messageReactions.by_message_user` - uniqueness constraint
-
-### Push Notification Integration
-
-Project already has `pushSubscriptions` table (schema.ts line 204-215). Mention notifications leverage existing infrastructure:
-
-```typescript
-// convex/messages.ts mutation
-if (mentionedUserIds.length > 0) {
-  await ctx.scheduler.runAfter(0, internal.notifications.sendMentionNotifications, {
-    messageId: newMessageId,
-    mentionedUserIds,
-    channelId,
-  });
-}
-```
-
-**Pattern precedent:** Task assignment notifications already implemented (per milestone context). Mention notifications follow same pattern.
+**If adding Excalidraw collaboration:**
+- Use y-excalidraw binding (vendor from GitHub)
+- Separate PartyKit room per diagram OR shared room with namespaced Y.Arrays
+- Replace existing `reconcileElements` approach with Yjs CRDT
+- Benefits: True multiplayer with conflict resolution, cursor awareness
+- Cost: Community library (no official npm package), need to vendor/maintain
 
 ## Version Compatibility
 
-| Package | Current | Required | Notes |
-|---------|---------|----------|-------|
-| BlockNote | 0.46.2 | 0.46.x | Custom inline content API stable since 0.44. No breaking changes needed. |
-| Convex | 1.31.7 | 1.31.x | Schema extensions backward compatible. Indexes can be added without migration. |
-| Radix Popover | 1.1.15 | 1.1.x | No changes needed. |
-| emoji-picker-react | - | ^4.17.4 | New dependency. React 18 compatible. |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| yjs@13.6.29 | y-partykit@0.0.33 | y-partykit peer depends on yjs ^13.0.0 |
+| yjs@13.6.29 | y-prosemirror@1.3.7 | y-prosemirror peer depends on yjs >= 13.0.0 |
+| @blocknote/core@0.46.2 | y-prosemirror@1.3.7 | BlockNote built on ProseMirror, official Yjs integration documented |
+| @excalidraw/excalidraw@0.18.0 | y-excalidraw (no version) | y-excalidraw community library, no official package |
+| partykit@0.0.115 | Cloudflare Workers | PartyKit uses Durable Objects, requires Cloudflare account |
 
-## Bundle Size Impact
+## Integration with Existing Stack
 
-| Addition | Size (minified) | Size (gzipped) | Justification |
-|----------|-----------------|----------------|---------------|
-| emoji-picker-react | 2.59 MB | ~600 KB | Comparable to BlockNote (already loaded). Lazy load with React.lazy() if needed. |
-| UserMention inline content | ~2 KB | ~1 KB | Minimal - follows TaskMention pattern. |
-| Schema changes | 0 KB | 0 KB | Backend only. |
+### PartyKit + Convex Backend Integration
 
-**Total impact:** ~600 KB gzipped for emoji picker. Mitigations:
-- Lazy load: `const Picker = lazy(() => import('emoji-picker-react'))`
-- Only loads when user opens reaction popover
-- One-time cost amortized across all reactions
+**Persistence Strategy:**
+- **PartyKit handles:** Real-time WebSocket sync, CRDT merging, in-memory state
+- **Convex handles:** Durable storage, permissions, queries, non-collaborative data
 
-## Confidence Assessment
+**Two integration approaches:**
 
-| Area | Confidence | Rationale |
-|------|------------|-----------|
-| BlockNote mentions | HIGH | Pattern already validated with taskMention and projectReference. SuggestionMenuController API documented and stable. |
-| Emoji picker library | HIGH | emoji-picker-react actively maintained (published Feb 3, 2026 per npm). 7.8k GitHub stars, 234 dependent packages. |
-| Reaction schema | HIGH | Convex official docs include reactions implementation guide. Pattern validated in production apps. |
-| Reply-to threading | MEDIUM | Schema pattern straightforward (single optional field). UI complexity depends on quoted message rendering (needs design). |
+1. **PartyKit Snapshot Mode → Convex** (Recommended)
+   - PartyKit persists to Durable Objects storage (snapshot mode)
+   - Periodic sync: PartyKit → Convex action (Y.encodeStateAsUpdate → Convex mutation)
+   - Use PartyKit's `onSave()` hook with debounced callback
+   - Convex stores Yjs binary updates as blobs for backup/export
+   - Benefits: Simple, PartyKit handles all real-time, Convex is backup
+   - Drawbacks: Two sources of truth (eventual consistency)
+
+2. **PartyKit with Convex Persistence Hooks** (Advanced)
+   - Implement `onLoad()` → fetch from Convex on room creation
+   - Implement `onSave()` → push to Convex on updates
+   - PartyKit becomes stateless proxy, Convex is source of truth
+   - Benefits: Single source of truth (Convex)
+   - Drawbacks: Latency on load, more Convex action calls
+
+**Recommended approach:** Start with PartyKit snapshot mode (built-in Durable Objects storage). Add Convex sync later if needed for export/backup.
+
+### BlockNote Migration Path
+
+**Current:** `@convex-dev/prosemirror-sync` (ProseMirror Sync)
+**Target:** Yjs with y-partykit provider
+
+**Migration options:**
+
+1. **Keep ProseMirror Sync, add Yjs for cursors only**
+   - Minimal change: Add Yjs Awareness without document sync
+   - Separate Y.Doc for cursor awareness, use y-partykit provider
+   - BlockNote stays on ProseMirror Sync for content
+   - No data migration required
+   - Dual systems complexity
+
+2. **Full migration to Yjs**
+   - Replace `useBlockNoteSync` with `useCreateBlockNote` + `collaboration` prop
+   - One-time data migration: ProseMirror JSON → Yjs updates
+   - Unified cursor + content sync
+   - Cleaner architecture, but requires migration
+
+**Recommendation:** Start with option 1 (cursors only) for Phase 1. Evaluate Yjs migration in later phase if full collaboration needed.
+
+### Excalidraw Collaboration
+
+**Current:** Manual `reconcileElements` + debounced save to Convex
+**Target:** Yjs CRDT with y-excalidraw binding
+
+**Integration:**
+- Replace `onChange` → `debouncedSave` with Yjs binding
+- y-excalidraw handles conflict resolution (no manual reconcile)
+- Excalidraw API `.updateScene()` called by binding
+- Separate PartyKit room per diagram (or namespaced Y.Arrays)
+
+**Note:** y-excalidraw is community library (not official npm package). Consider vendoring or forking for stability.
+
+## Convex Optimistic Updates vs Yjs
+
+**Conflict:**
+- Convex uses optimistic updates (local prediction, rollback on mismatch)
+- Yjs uses CRDTs (local apply, guaranteed merge, no rollback)
+
+**Coexistence strategy:**
+- **Convex optimistic updates:** Non-collaborative data (workspace settings, permissions, non-real-time fields)
+- **Yjs CRDTs:** Collaborative data (document content, diagram elements, cursor positions)
+- **Avoid:** Mixing optimistic updates + Yjs on same data (conflicts)
+
+**Example:**
+- Document title change → Convex mutation with optimistic update (infrequent, no conflicts)
+- Document content editing → Yjs CRDT (frequent, conflict resolution needed)
+- Cursor positions → Yjs Awareness (ephemeral, high frequency)
+
+## PartyKit Pricing & Free Tier
+
+**PartyKit platform fee:** $0 (free, acquired by Cloudflare)
+
+**Underlying costs:** Cloudflare Workers pricing
+- **Free tier:** 5 GB Durable Objects storage, limited requests/day
+- **Paid tier:** $5/month minimum (Workers Paid plan)
+
+**Cost optimization:**
+- Use PartyKit hibernation mode (WebSocket hibernation API)
+- Durable Object sleeps between messages, wakes on activity
+- Reduces compute charges vs always-active connections
+
+**Compared to previous RTK:**
+- RTK has 5 events/s rate limit (blocker)
+- PartyKit has no rate limit on WebSocket messages (uses Durable Objects, not Calls API)
 
 ## Sources
 
-**Emoji Picker Research:**
-- [emoji-picker-react npm](https://www.npmjs.com/package/emoji-picker-react) - Latest version 4.17.4
-- [emoji-picker-react GitHub](https://github.com/ealush/emoji-picker-react) - Most popular React emoji picker
-- [emoji-mart GitHub](https://github.com/missive/emoji-mart) - Alternative with modular data loading
-- [React Emoji Picker Guide (Velt, Oct 2025)](https://velt.dev/blog/react-emoji-picker-guide) - Comparison and best practices
-- [npm-compare: emoji-mart vs emoji-picker-react](https://npm-compare.com/emoji-mart,emoji-picker-react,react-emoji-render) - Bundle size analysis
+- [Yjs npm package](https://www.npmjs.com/package/yjs) — Latest version 13.6.29
+- [y-partykit npm package](https://www.npmjs.com/package/y-partykit) — Latest version 0.0.33
+- [y-prosemirror npm package](https://www.npmjs.com/package/y-prosemirror) — Latest version 1.3.7
+- [PartyKit npm package](https://www.npmjs.com/package/partykit) — Latest version 0.0.115
+- [Yjs Awareness Documentation](https://docs.yjs.dev/getting-started/adding-awareness) — Cursor awareness API
+- [BlockNote Collaboration Documentation](https://www.blocknotejs.org/docs/features/collaboration) — Yjs integration
+- [PartyKit y-partykit API Reference](https://docs.partykit.io/reference/y-partykit-api/) — Server and client setup
+- [GitHub: cloudflare/partykit y-partyserver README](https://github.com/cloudflare/partykit/blob/main/packages/y-partyserver/README.md) — Persistence hooks
+- [GitHub: RahulBadenkal/y-excalidraw](https://github.com/RahulBadenkal/y-excalidraw) — Community Excalidraw binding
+- [Excalidraw Collaboration Blog](https://plus.excalidraw.com/blog/building-excalidraw-p2p-collaboration-feature) — Technical implementation
+- [Cloudflare Durable Objects Free Tier](https://developers.cloudflare.com/changelog/2025-04-07-durable-objects-free-tier/) — Free tier limits
+- [Cloudflare Acquires PartyKit](https://blog.cloudflare.com/cloudflare-acquires-partykit/) — Maintenance commitment
 
-**BlockNote Custom Inline Content:**
-- [BlockNote Custom Inline Content docs](https://www.blocknotejs.org/docs/custom-schemas/custom-inline-content) - createReactInlineContentSpec API
-- [BlockNote Mentions Menu example](https://www.blocknotejs.org/examples/custom-schema/suggestion-menus-mentions) - @ trigger autocomplete pattern
-- [BlockNote Suggestion Menus docs](https://www.blocknotejs.org/docs/react/components/suggestion-menus) - SuggestionMenuController
-
-**Convex Reactions:**
-- [Convex: Likes, Upvotes & Reactions](https://www.convex.dev/can-do/likes-and-reactions) - Official implementation guide
-- [Convex Schemas](https://docs.convex.dev/database/schemas) - defineTable and index patterns
-
-**Chat Threading Patterns:**
-- [Stream Chat React Threads docs](https://getstream.io/chat/docs/react/threads/) - parent_id threading pattern
-- [Sendbird Quote Reply](https://sendbird.com/docs/chat/uikit/v3/react/features/message-threading/quote-reply) - Inline reply-to implementation
-
-**Slack Engineering:**
-- [Rebuilding Slack's Emoji Picker in React](https://slack.engineering/rebuilding-slacks-emoji-picker-in-react/) - React-virtualized for performance, component architecture
-
-**Community Resources:**
-- [Building an Emoji Picker with React (Jan 2026)](https://jafmah97.medium.com/building-an-emoji-picker-with-react-66f612a43d67) - Provider pattern best practices
-- [react-emoji-react GitHub](https://github.com/conorhastings/react-emoji-react) - Slack-style reaction UI clone
+---
+*Stack research for: Multiplayer cursors and real-time collaboration infrastructure*
+*Researched: 2026-02-10*
