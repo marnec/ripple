@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 
 ## Current Position
 
-Phase: 03.1 - Default TaskStatus Logic
+Phase: 03.2 - TaskStatus Per Project Scope and Cascade Delete
 Plan: 01 of 1
 Status: Phase complete
-Last activity: 2026-02-10 — Completed 03.1-01-PLAN.md (Default status seeding and one-way completed sync)
+Last activity: 2026-02-10 — Completed 03.2-01-PLAN.md (Project-scoped statuses with cascade delete)
 
-Progress: ████████░░ 100% (1/1 plans complete)
+Progress: ██████████ 100% (1/1 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27
+- Total plans completed: 28
 - Average duration: 3.3 min
-- Total execution time: 90.0 min
+- Total execution time: 95.2 min
 
 **By Phase:**
 
@@ -39,10 +39,17 @@ Progress: ████████░░ 100% (1/1 plans complete)
 | 09-user-mentions-in-chat | 2 | 6.4 min | 3.2 min |
 | 10-inline-reply-to | 2 | 6.6 min | 3.3 min |
 | 03.1-default-taskstatus-logic | 1 | 2.5 min | 2.5 min |
+| 03.2-taskstatus-per-project-scope-and-cascade-delete | 1 | 5.2 min | 5.2 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 03.2:
+- TaskStatuses migrated from workspace-scoped to project-scoped (each project independent)
+- Legacy fields kept optional in schema for backward compatibility during migration
+- Cascade-to-default on status deletion: tasks move to project default instead of blocking
+- Full cascade delete on project removal: taskComments → tasks → taskStatuses → project
 
 Recent decisions from Phase 03.1:
 - Default statuses (Todo, In Progress, Done) seeded at project creation (workspace-scoped, idempotent)
@@ -56,6 +63,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 - Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
 - v0.9 milestone started at Phase 08 (continues from v0.8)
 - Phase 03.1 inserted after Phase 03: default taskStatus logic (URGENT)
+- Phase 03.2 inserted after Phase 03: taskStatus per project scope and cascade delete (URGENT)
 
 ### Pending Todos
 
@@ -68,7 +76,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 03.1-01-PLAN.md (Default TaskStatus Logic)
+Stopped at: Completed 03.2-01-PLAN.md (TaskStatus Project Scope and Cascade Delete)
 Resume file: None
 
 Config:
