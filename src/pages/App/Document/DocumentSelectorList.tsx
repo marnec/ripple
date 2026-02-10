@@ -24,7 +24,7 @@ export function DocumentSelectorList({
 
   const documents = useQuery(api.documents.list, { workspaceId });
   const createNewDocument = useMutation(api.documents.create);
-
+  const deleteDocument = useMutation(api.documents.remove);
 
   const handleDocumentCreate = async () => {
     if (!workspaceId) return;
@@ -34,9 +34,14 @@ export function DocumentSelectorList({
     onDocumentSelect(id);
   };
 
+  const handleDocumentDelete = async (id: Id<"documents">) => {
+    onDocumentSelect(null);
+    await deleteDocument({ id });
+  };
+
   const navigateToDocumentSettings = (id: Id<"documents">) => {
     void navigate(`/workspaces/${workspaceId}/documents/${id}/settings`);
-  }
+  };
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -57,6 +62,7 @@ export function DocumentSelectorList({
             onDocumentSelect={onDocumentSelect}
             onRenameDocument={setSelectedDocForRename}
             onManageDocument={navigateToDocumentSettings}
+            onDeleteDocument={(id) => void handleDocumentDelete(id)}
           />
         ))}
       </SidebarMenu>

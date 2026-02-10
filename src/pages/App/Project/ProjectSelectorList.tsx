@@ -1,6 +1,7 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { FolderPlus } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -16,20 +17,29 @@ export interface ProjectSelectorListProps {
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
-  onManageProject: (id: string) => void;
 }
 
 export function ProjectSelectorList({
   workspaceId,
   projectId,
   onProjectSelect,
-  onManageProject,
 }: ProjectSelectorListProps) {
   const [showCreateProject, setShowCreateProject] = useState(false);
+  const navigate = useNavigate();
+  const deleteProject = useMutation(api.projects.remove);
 
   const projects = useQuery(api.projects.listByUserMembership, {
     workspaceId,
   });
+
+  const handleProjectDelete = async (id: Id<"projects">) => {
+    onProjectSelect(null);
+    await deleteProject({ id });
+  };
+
+  const navigateToProjectSettings = (id: Id<"projects">) => {
+    void navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
+  };
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -51,7 +61,8 @@ export function ProjectSelectorList({
             project={project}
             projectId={projectId}
             onProjectSelect={onProjectSelect}
-            onManageProject={onManageProject}
+            onManageProject={navigateToProjectSettings}
+            onDeleteProject={(id) => void handleProjectDelete(id)}
           />
         ))}
       </SidebarMenu>

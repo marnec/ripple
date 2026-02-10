@@ -1,7 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useMutation } from "convex/react";
 import { Cog, Folder, MoreHorizontal, Trash2 } from "lucide-react";
-import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -20,7 +18,8 @@ export interface ProjectSelectorItemProps {
   project: Doc<"projects">;
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
-  onManageProject: (id: string) => void;
+  onManageProject: (id: Id<"projects">) => void;
+  onDeleteProject: (id: Id<"projects">) => void;
 }
 
 export function ProjectSelectorItem({
@@ -28,14 +27,9 @@ export function ProjectSelectorItem({
   projectId,
   onProjectSelect,
   onManageProject,
+  onDeleteProject,
 }: ProjectSelectorItemProps) {
   const isMobile = useIsMobile();
-  const deleteProject = useMutation(api.projects.remove);
-
-  const handleProjectDelete = async (id: Id<"projects">) => {
-    onProjectSelect(null);
-    await deleteProject({ id });
-  };
 
   return (
     <SidebarMenuItem>
@@ -71,7 +65,7 @@ export function ProjectSelectorItem({
             <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void handleProjectDelete(project._id)}>
+          <DropdownMenuItem onClick={() => onDeleteProject(project._id)}>
             <Trash2 className="text-muted-foreground" />
             <span>Delete project</span>
           </DropdownMenuItem>

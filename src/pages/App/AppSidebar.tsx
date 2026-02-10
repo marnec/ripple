@@ -28,7 +28,6 @@ export function AppSidebar() {
   const location = useLocation();
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
-
   const { workspaceId, channelId, documentId, diagramId, projectId } = useParams<QueryParams>();
 
   const { subscribeUser } = usePushNotifications();
@@ -44,10 +43,6 @@ export function AppSidebar() {
       setOpenMobile(false);
       void subscribeUser();
     }
-  };
-
-  const handleManageChannel = (id: string) => {
-    void navigate(`/workspaces/${workspaceId}/channels/${id}/settings`);
   };
 
   const handleDocumentSelect = (id: string | null) => {
@@ -74,12 +69,6 @@ export function AppSidebar() {
     void navigate(`/workspaces/${id}`);
   };
 
-  const handleChannelDetails = (id: string) => {
-    if (!workspaceId) return;
-    if (isMobile) setOpenMobile(false);
-    void navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
-  };
-
   const handleProjectSelect = (id: string | null) => {
     setOpenMobile(false);
     if (!id) {
@@ -87,10 +76,6 @@ export function AppSidebar() {
     } else {
       void navigate(`/workspaces/${workspaceId}/projects/${id}`);
     }
-  };
-
-  const handleManageProject = (id: string) => {
-    void navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
   };
 
   const handleMyTasksClick = () => {
@@ -134,14 +119,11 @@ export function AppSidebar() {
                 channelId={channelId}
                 workspaceId={workspaceId}
                 onChannelSelect={handleChannelSelect}
-                onManageChannel={handleManageChannel}
-                onChannelDetails={handleChannelDetails}
               />
               <ProjectSelectorList
                 workspaceId={workspaceId}
                 projectId={projectId}
                 onProjectSelect={handleProjectSelect}
-                onManageProject={handleManageProject}
               />
               <DocumentSelectorList
                 workspaceId={workspaceId}

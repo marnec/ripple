@@ -1,7 +1,6 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useMutation } from "convex/react";
-import { Cog, Info, MoreHorizontal, Trash2 } from "lucide-react";
-import { api } from "../../../../convex/_generated/api";
+import { cn } from "@/lib/utils";
+import { Cog, Hash, Info, Lock, MoreHorizontal, Trash2 } from "lucide-react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -12,16 +11,17 @@ import {
 } from "../../../components/ui/dropdown-menu";
 import {
   SidebarMenuAction,
+  SidebarMenuButton,
   SidebarMenuItem
 } from "../../../components/ui/sidebar";
-import { ChannelSelectorButton } from "./ChannelSelectorButton";
 
 export interface ChannelSelectorItemProps {
   channel: Doc<"channels">;
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
-  onManageChannel: (id: string) => void;
-  onChannelDetails: (id: string) => void;
+  onManageChannel: (id: Id<"channels">) => void;
+  onChannelDetails: (id: Id<"channels">) => void;
+  onDeleteChannel: (id: Id<"channels">) => void;
 }
 
 export function ChannelSelectorItem({
@@ -30,19 +30,25 @@ export function ChannelSelectorItem({
   onChannelSelect,
   onManageChannel,
   onChannelDetails,
+  onDeleteChannel,
 }: ChannelSelectorItemProps) {
   const isMobile = useIsMobile();
-  const deleteChannel = useMutation(api.channels.remove);
-
-  const handleChannelDelete = async (id: Id<"channels">) => {
-    onChannelSelect(null);
-    
-    await deleteChannel({ id });
-  };
 
   return (
     <SidebarMenuItem>
-      <ChannelSelectorButton channelId={channelId} channel={channel} onClick={onChannelSelect} />
+      <SidebarMenuButton
+        asChild
+        variant={channel._id === channelId ? "outline" : "default"}
+        onClick={() => onChannelSelect(channel._id)}
+      >
+        <div className="flex flex-row items-center">
+          <div className="flex flex-row items-end">
+            <Hash size={18} />
+            <Lock className={cn("size-3", "-ml-1", channel.isPublic ? "invisible" : "")} />
+          </div>
+          <div>{channel.name}</div>
+        </div>
+      </SidebarMenuButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <SidebarMenuAction showOnHover>
@@ -64,7 +70,7 @@ export function ChannelSelectorItem({
             <span>Manage channel</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => void handleChannelDelete(channel._id)}>
+          <DropdownMenuItem onClick={() => onDeleteChannel(channel._id)}>
             <Trash2 className="text-muted-foreground" />
             <span>Delete channel</span>
           </DropdownMenuItem>

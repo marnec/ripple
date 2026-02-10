@@ -1,6 +1,7 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { MessageSquarePlusIcon } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { SidebarGroup, SidebarGroupAction, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
@@ -11,22 +12,33 @@ export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
-  onManageChannel: (id: string) => void;
-  onChannelDetails: (id: string) => void;
 }
 
 export function ChannelSelectorList({
   workspaceId,
   channelId,
   onChannelSelect,
-  onManageChannel,
-  onChannelDetails,
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const navigate = useNavigate();
+  const deleteChannel = useMutation(api.channels.remove);
 
   const channels = useQuery(api.channels.listByUserMembership, {
     workspaceId: workspaceId,
   });
+
+  const handleChannelDelete = async (id: Id<"channels">) => {
+    onChannelSelect(null);
+    await deleteChannel({ id });
+  };
+
+  const navigateToChannelSettings = (id: Id<"channels">) => {
+    void navigate(`/workspaces/${workspaceId}/channels/${id}/settings`);
+  };
+
+  const navigateToChannelDetails = (id: Id<"channels">) => {
+    void navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
+  };
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
@@ -45,8 +57,9 @@ export function ChannelSelectorList({
             channel={channel}
             channelId={channelId}
             onChannelSelect={onChannelSelect}
-            onManageChannel={onManageChannel}
-            onChannelDetails={onChannelDetails}
+            onManageChannel={navigateToChannelSettings}
+            onChannelDetails={navigateToChannelDetails}
+            onDeleteChannel={(id) => void handleChannelDelete(id)}
           />
         ))}
       </SidebarMenu>
