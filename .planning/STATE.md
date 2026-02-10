@@ -2,19 +2,17 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-07)
+See: .planning/PROJECT.md (updated 2026-02-10)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** v0.9 Chat Features — COMPLETE
+**Current focus:** v0.10 Multiplayer Cursors & Collaboration
 
 ## Current Position
 
-Phase: 03.2 - TaskStatus Per Project Scope and Cascade Delete
-Plan: 02 of 2
-Status: Phase complete
-Last activity: 2026-02-10 - Completed quick task 1: Fix Block doesn't have id error when clicking on a task
-
-Progress: ██████████ 100% (2/2 plans complete)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-10 — Milestone v0.10 started
 
 ## Performance Metrics
 

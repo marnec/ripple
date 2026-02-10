@@ -33,14 +33,18 @@ Seamless integration between all workspace features — users, documents, diagra
 - ✓ Embed diagrams, documents, users, projects in task descriptions — v0.8
 - ✓ Task comments with @mentions — v0.8
 - ✓ Push notifications for task assignments and @mentions — v0.8
+- ✓ @user mentions in chat with autocomplete and push notifications — v0.9
+- ✓ Emoji reactions on messages (Slack-style pills with counts) — v0.9
+- ✓ Inline reply-to messages with quoted preview — v0.9
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] @user mentions in chat with autocomplete and push notifications
-- [ ] Emoji reactions on messages (Slack-style pills with counts)
-- [ ] Inline reply-to messages with quoted preview
+- [ ] Real-time multiplayer cursors in documents (BlockNote)
+- [ ] Real-time multiplayer cursors in diagrams (Excalidraw)
+- [ ] WebSocket-based collaboration infrastructure (PartyKit or equivalent)
+- [ ] Evaluate and potentially refactor collaborative editing to use new infra
 - [ ] Due dates on tasks
 - [ ] Board filters (by assignee, priority, labels)
 - [ ] Configurable views (list view, calendar view)
@@ -60,21 +64,25 @@ Seamless integration between all workspace features — users, documents, diagra
 - Gantt charts — implies false precision; Kanban is more flexible
 - External task sharing — security complexity; workspace members only
 
-## Current Milestone: v0.9 Chat Features
+## Current Milestone: v0.10 Multiplayer Cursors & Collaboration
 
-**Goal:** Enrich chat with @user mentions, emoji reactions, and inline reply-to — bringing chat interaction quality closer to Slack/Teams.
+**Goal:** Add real-time multiplayer cursor awareness to documents and diagrams, backed by proper WebSocket infrastructure — and evaluate whether the new infra should also replace/improve the existing collaborative editing approach.
 
 **Target features:**
-- @user mentions in chat with autocomplete, styled chips, and push notifications
-- Emoji reactions on messages (Slack-style pills with counts, emoji picker)
-- Inline reply-to with quoted preview of original message in chat flow
+- Real-time multiplayer cursors in BlockNote documents (see other users' cursor positions and selections)
+- Real-time multiplayer cursors in Excalidraw diagrams (see other users' pointer positions)
+- WebSocket-based collaboration infrastructure (PartyKit preferred, Cloudflare Workers acceptable)
+- Deep evaluation of current ProseMirror Sync approach vs new Yjs/CRDT-based collaboration
+- Integration with Convex backend storage (ensure persistence strategy is compatible)
 
 ## Context
 
-Shipped v0.8 with ~20,568 net lines of TypeScript across 180 files.
-Tech stack: Convex, React 18, React Router v6, Tailwind CSS, shadcn/ui, BlockNote, dnd-kit, fractional-indexing.
-Task management fully integrated with existing chat, documents, and diagrams.
-Chat currently has task/project mention chips but no @user mentions, no reactions, no reply-to.
+Shipped v0.9 with chat features (reactions, @mentions, reply-to) on top of v0.8 task management.
+Tech stack: Convex, React 18, React Router v6, Tailwind CSS, shadcn/ui, BlockNote, Excalidraw, dnd-kit, fractional-indexing.
+Current collaborative editing uses ProseMirror Sync. Current presence uses Convex Presence.
+Previous attempt at multiplayer cursors with Cloudflare RTK failed due to 5 events/s rate limiting.
+BlockNote offers PartyKit integration for Yjs-based collaboration. Excalidraw self-hosted collaboration is less documented — may need source code analysis.
+Key open question: how does WebSocket-based collab (Yjs/PartyKit) interact with Convex's own optimistic update and reconciliation model? May require architectural changes.
 
 ## Constraints
 
@@ -104,4 +112,4 @@ Chat currently has task/project mention chips but no @user mentions, no reaction
 | Pass plainText to notification action | Simpler than querying message by ID for preview | ✓ Good |
 
 ---
-*Last updated: 2026-02-07 after Phase 09 completion*
+*Last updated: 2026-02-10 after v0.10 milestone start*
