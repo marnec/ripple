@@ -51,6 +51,16 @@ Plans:
 Plans:
 - [x] 03.1-01-PLAN.md — Backend status seeding in projects.create, simplified task default status, one-way completed sync
 
+### Phase 03.2: taskStatus per project scope and cascade delete (INSERTED)
+
+**Goal:** Scope taskStatuses to individual projects (not workspace-level) and implement cascade delete when a taskStatus is removed, plus cascade delete tasks when a project is removed
+**Depends on:** Phase 03.1
+**Plans:** 2 plans
+
+Plans:
+- [ ] 03.2-01-PLAN.md — Schema migration and project-scoped taskStatuses backend with cascade delete
+- [ ] 03.2-02-PLAN.md — Frontend updates for project-scoped status APIs and cascade delete UX
+
 ### Phase 04: Chat-to-Task Integration
 **Goal**: Convert chat messages to tasks with context
 **Plans**: 2 plans
@@ -155,6 +165,7 @@ Phases execute in numeric order: 08 → 09 → 10
 | 2. Basic Tasks | v0.8 | 4/4 | Complete | 2026-02-07 |
 | 3. Kanban Board View | v0.8 | 3/3 | Complete | 2026-02-07 |
 | 3.1. Default taskStatus logic (INSERTED) | v0.8 | 1/1 | Complete | 2026-02-10 |
+| 3.2. taskStatus per project scope (INSERTED) | v0.8 | 0/2 | Planned | — |
 | 4. Chat-to-Task Integration | v0.8 | 2/2 | Complete | 2026-02-07 |
 | 5. Document-Diagram Embeds | v0.8 | 3/3 | Complete | 2026-02-07 |
 | 6. Task Comments | v0.8 | 1/1 | Complete | 2026-02-07 |
