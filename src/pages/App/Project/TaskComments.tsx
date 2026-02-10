@@ -29,7 +29,7 @@ function parseCommentBody(body: string) {
     return JSON.parse(body);
   } catch {
     // Plain text fallback
-    return [{ type: "paragraph", content: body }];
+    return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
   }
 }
 
@@ -69,7 +69,7 @@ export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsP
     const body = JSON.stringify(editor.document);
     void createComment({ taskId, body }).then(() => {
       // Clear the editor
-      editor.replaceBlocks(editor.document, [{ type: "paragraph", content: "" }]);
+      editor.replaceBlocks(editor.document, [{ id: crypto.randomUUID(), type: "paragraph", content: "" }]);
       setIsEmpty(true);
     });
   };
