@@ -167,14 +167,10 @@ export function KanbanColumn({
               <DropdownMenuItem
                 onClick={() => setShowDeleteDialog(true)}
                 disabled={!canDelete}
-                className="text-destructive"
+                className={canDelete ? "text-destructive" : ""}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                {!canDelete && tasks.length > 0
-                  ? "Has tasks"
-                  : !canDelete && status.isDefault
-                  ? "Default column"
-                  : "Delete Column"}
+                {!canDelete ? "Default column" : "Delete Column"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -214,7 +210,7 @@ export function KanbanColumn({
           <DialogHeader>
             <DialogTitle>Delete Column</DialogTitle>
             <DialogDescription>
-              Delete &quot;{status.name}&quot; column? This cannot be undone.
+              Delete &quot;{status.name}&quot; column? Tasks in this column will be moved to the default status. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

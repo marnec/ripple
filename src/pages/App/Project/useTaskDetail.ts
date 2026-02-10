@@ -15,7 +15,7 @@ export function useTaskDetail({
   projectId: Id<"projects">;
 }) {
   const task = useQuery(api.tasks.get, taskId ? { taskId } : "skip");
-  const statuses = useQuery(api.taskStatuses.listByWorkspace, { workspaceId });
+  const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const members = useQuery(api.projectMembers.membersByProject, { projectId });
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const documents = useQuery(api.documents.listByUserMembership, { workspaceId });
