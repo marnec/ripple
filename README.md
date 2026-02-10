@@ -11,10 +11,10 @@ NEXT STEPS:
 - [x] fix no default taskstatus
 - [x] fix task detail view
 - [ ] see pending invitations in app (not only email)
-- [ ] fix doc visibility and permissions
-- [ ] improve UX for section settings
-- [ ] realtime cursor tracking in documents via webrtc
-- [ ] realtime cursor tracking in excalidraw via webrtc
+- [x] fix doc visibility and permissions
+- [ ] rethink hirarchy (workspace -> project -> {channels,docs,diagrams,tasks})
+- [ ] realtime cursor tracking in documents
+- [ ] realtime cursor tracking in excalidraw
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
