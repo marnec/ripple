@@ -49,11 +49,16 @@ export function useTaskDetail({
     loadedTaskIdRef.current = taskId;
 
     suppressOnChangeRef.current = true;
+    const emptyBlock = [{ id: crypto.randomUUID(), type: "paragraph" as const, content: [] }];
     if (task.description) {
-      const blocks = JSON.parse(task.description);
-      editor.replaceBlocks(editor.document, blocks);
+      try {
+        const blocks = JSON.parse(task.description);
+        editor.replaceBlocks(editor.document, blocks);
+      } catch {
+        editor.replaceBlocks(editor.document, emptyBlock);
+      }
     } else {
-      editor.replaceBlocks(editor.document, []);
+      editor.replaceBlocks(editor.document, emptyBlock);
     }
   }, [task, taskId, editor]);
 
