@@ -11,6 +11,8 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import React from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { ChevronLeft } from "lucide-react";
 
 interface BreadcrumbItemData {
   href: string;
@@ -51,9 +53,64 @@ function NamedBreadcrumbItem({ item, onClick }: BreadcrumbLinkWithResourceProps)
   );
 }
 
+function MobileCurrentTitle({ item }: { item: BreadcrumbItemData }) {
+  const resourceName = useQuery(
+    api.breadcrumb.getResourceName,
+    item.resourceId
+      ? { resourceId: item.resourceId as Id<"workspaces"> | Id<"channels"> | Id<"documents"> }
+      : "skip"
+  );
+
+  let displayName;
+  if (item.resourceId) {
+    if (resourceName === undefined) {
+      displayName = "...";
+    } else {
+      displayName = resourceName ?? item.label;
+    }
+  } else {
+    displayName = item.label;
+  }
+
+  return (
+    <span className="text-sm font-medium truncate">{displayName}</span>
+  );
+}
+
+function MobileBreadcrumb({
+  items,
+  navigate,
+}: {
+  items: BreadcrumbItemData[];
+  navigate: (path: string) => void;
+}) {
+  const currentItem = items.length > 0 ? items[items.length - 1] : null;
+  const backHref = items.length > 1 ? items[items.length - 2].href : "/";
+
+  return (
+    <div className="flex items-center gap-1 min-w-0">
+      <button
+        onClick={() => navigate(backHref)}
+        className="shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+        aria-label="Go back"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <div className="min-w-0 overflow-hidden">
+        {currentItem ? (
+          <MobileCurrentTitle item={currentItem} />
+        ) : (
+          <span className="text-sm font-medium truncate">{APP_NAME}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function DynamicBreadcrumb() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const pathSegments = location.pathname.split("/").filter(Boolean);
 
   const items: BreadcrumbItemData[] = [];
@@ -71,6 +128,15 @@ export function DynamicBreadcrumb() {
         resourceId: undefined,
       });
     }
+  }
+
+  if (isMobile) {
+    return (
+      <MobileBreadcrumb
+        items={items}
+        navigate={(path) => void navigate(path)}
+      />
+    );
   }
 
   return (
