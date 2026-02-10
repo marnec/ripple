@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-07)
 ## Current Position
 
 Phase: 03.2 - TaskStatus Per Project Scope and Cascade Delete
-Plan: 01 of 1
+Plan: 02 of 2
 Status: Phase complete
-Last activity: 2026-02-10 — Completed 03.2-01-PLAN.md (Project-scoped statuses with cascade delete)
+Last activity: 2026-02-10 — Completed 03.2-02-PLAN.md (Frontend Project-Scoped TaskStatus APIs)
 
-Progress: ██████████ 100% (1/1 plans complete)
+Progress: ██████████ 100% (2/2 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
-- Average duration: 3.3 min
-- Total execution time: 95.2 min
+- Total plans completed: 29
+- Average duration: 3.2 min
+- Total execution time: 97.2 min
 
 **By Phase:**
 
@@ -39,7 +39,7 @@ Progress: ██████████ 100% (1/1 plans complete)
 | 09-user-mentions-in-chat | 2 | 6.4 min | 3.2 min |
 | 10-inline-reply-to | 2 | 6.6 min | 3.3 min |
 | 03.1-default-taskstatus-logic | 1 | 2.5 min | 2.5 min |
-| 03.2-taskstatus-per-project-scope-and-cascade-delete | 1 | 5.2 min | 5.2 min |
+| 03.2-taskstatus-per-project-scope-and-cascade-delete | 2 | 7.2 min | 3.6 min |
 
 ## Accumulated Context
 
@@ -50,6 +50,8 @@ Recent decisions from Phase 03.2:
 - Legacy fields kept optional in schema for backward compatibility during migration
 - Cascade-to-default on status deletion: tasks move to project default instead of blocking
 - Full cascade delete on project removal: taskComments → tasks → taskStatuses → project
+- Frontend uses project-scoped taskStatus APIs (listByProject)
+- Cascade delete UX messaging informs users tasks move to default status
 
 Recent decisions from Phase 03.1:
 - Default statuses (Todo, In Progress, Done) seeded at project creation (workspace-scoped, idempotent)
@@ -76,7 +78,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-10
-Stopped at: Completed 03.2-01-PLAN.md (TaskStatus Project Scope and Cascade Delete)
+Stopped at: Completed 03.2-02-PLAN.md (Frontend Project-Scoped TaskStatus APIs)
 Resume file: None
 
 Config:
