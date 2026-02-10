@@ -154,8 +154,7 @@ export default defineSchema({
     .index("by_workspace_user", ["workspaceId", "userId"]),
 
   taskStatuses: defineTable({
-    projectId: v.optional(v.id("projects")), // temporarily optional for migration
-    workspaceId: v.optional(v.id("workspaces")), // deprecated, will be removed
+    projectId: v.id("projects"),
     name: v.string(), // "To Do", "In Progress", "Done"
     color: v.string(), // Tailwind class like "bg-gray-500"
     order: v.number(), // display order (0, 1, 2...)
@@ -163,9 +162,7 @@ export default defineSchema({
     isCompleted: v.boolean(), // when true, tasks with this status are considered completed
   })
     .index("by_project", ["projectId"])
-    .index("by_project_order", ["projectId", "order"])
-    .index("by_workspace", ["workspaceId"])
-    .index("by_workspace_order", ["workspaceId", "order"]),
+    .index("by_project_order", ["projectId", "order"]),
 
   tasks: defineTable({
     projectId: v.id("projects"),

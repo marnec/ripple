@@ -87,15 +87,12 @@ export const update = mutation({
 
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
-    if (!status.projectId) throw new ConvexError("Status has no project (legacy data)");
-
-    const projectId = status.projectId; // Extract for type narrowing
 
     // Permission: must be project member
     const membership = await ctx.db
       .query("projectMembers")
       .withIndex("by_project_user", (q) =>
-        q.eq("projectId", projectId).eq("userId", userId)
+        q.eq("projectId", status.projectId).eq("userId", userId)
       )
       .first();
 
@@ -129,15 +126,12 @@ export const reorderColumns = mutation({
 
     const firstStatus = await ctx.db.get(statusIds[0]);
     if (!firstStatus) throw new ConvexError("Status not found");
-    if (!firstStatus.projectId) throw new ConvexError("Status has no project (legacy data)");
-
-    const projectId = firstStatus.projectId; // Extract for type narrowing
 
     // Permission check
     const membership = await ctx.db
       .query("projectMembers")
       .withIndex("by_project_user", (q) =>
-        q.eq("projectId", projectId).eq("userId", userId)
+        q.eq("projectId", firstStatus.projectId).eq("userId", userId)
       )
       .first();
     if (!membership) throw new ConvexError("Not a member of this project");
@@ -160,15 +154,12 @@ export const remove = mutation({
 
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
-    if (!status.projectId) throw new ConvexError("Status has no project (legacy data)");
-
-    const projectId = status.projectId; // Extract for type narrowing
 
     // Permission: must be project member
     const membership = await ctx.db
       .query("projectMembers")
       .withIndex("by_project_user", (q) =>
-        q.eq("projectId", projectId).eq("userId", userId)
+        q.eq("projectId", status.projectId).eq("userId", userId)
       )
       .first();
 
@@ -182,7 +173,7 @@ export const remove = mutation({
     // Find the default status for this project
     const defaultStatus = await ctx.db
       .query("taskStatuses")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", status.projectId))
       .filter((q) => q.eq(q.field("isDefault"), true))
       .first();
 
@@ -194,7 +185,7 @@ export const remove = mutation({
     const tasksToMove = await ctx.db
       .query("tasks")
       .withIndex("by_project_status", (q) =>
-        q.eq("projectId", projectId).eq("statusId", statusId)
+        q.eq("projectId", status.projectId).eq("statusId", statusId)
       )
       .collect();
 
