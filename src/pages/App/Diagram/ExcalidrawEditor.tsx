@@ -1,115 +1,118 @@
 "use client";
 
-import { Excalidraw, reconcileElements } from "@excalidraw/excalidraw";
+import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
-import { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import {
-  AppState,
   ExcalidrawImperativeAPI,
 } from "@excalidraw/excalidraw/types";
-import {
-  ExcalidrawElement,
-  OrderedExcalidrawElement,
-  Theme,
-} from "@excalidraw/excalidraw/element/types";
+import { Theme } from "@excalidraw/excalidraw/element/types";
 import { useTheme } from "next-themes";
-import { useEffect, useRef, useState } from "react";
-import { useDebounceCallback } from "usehooks-ts";
-import { Doc } from "../../../../convex/_generated/dataModel";
+import { useEffect, useState } from "react";
+import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
+import type { Awareness } from "y-protocols/awareness";
+import type YPartyKitProvider from "y-partykit/provider";
+import * as Y from "yjs";
+import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
+import { DiagramCursorOverlay } from "./DiagramCursorOverlay";
+import { DiagramLockOverlay } from "./DiagramLockOverlay";
+import { getCameraFromAppState } from "@/lib/canvas-coordinates";
 
-type DiagramPageProps = {
-  onSave: (
-    elements: readonly OrderedExcalidrawElement[],
-    appState: Partial<AppState>,
-  ) => Promise<null>;
-  diagram: Doc<"diagrams">;
-};
+interface ExcalidrawEditorProps {
+  yElements: Y.Array<Y.Map<any>>;
+  yAssets: Y.Map<any>;
+  awareness: Awareness | null;
+  provider: YPartyKitProvider | null;
+  onExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void;
+}
 
-export function ExcalidrawEditor({ onSave, diagram }: DiagramPageProps) {
+export function ExcalidrawEditor({
+  yElements,
+  yAssets,
+  awareness,
+  provider,
+  onExcalidrawAPI,
+}: ExcalidrawEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI>();
   const { resolvedTheme } = useTheme();
-  const isSaving = useRef(false);
-  const elementsRef = useRef<readonly ExcalidrawElement[] | undefined>(undefined);
+  const { remotePointers } = useDiagramCursorAwareness(awareness);
 
+  // Notify parent when API is ready
   useEffect(() => {
-    if (!diagram.content) return;
-    try {
-      const scene = JSON.parse(diagram.content);
-      elementsRef.current = scene.elements || [];
-    } catch (e) {
-      console.error("Failed to parse diagram content in useEffect", e);
+    if (excalidrawAPI) {
+      onExcalidrawAPI(excalidrawAPI);
     }
-  }, [diagram.content]);
+  }, [excalidrawAPI, onExcalidrawAPI]);
 
+  // Set up y-excalidraw binding and pointer tracking
   useEffect(() => {
-    if (!excalidrawAPI || !diagram.content) return;
+    if (!excalidrawAPI || !provider || !yElements || !yAssets || !awareness) return;
 
-    try {
-      const remoteScene = JSON.parse(diagram.content);
-      if (!remoteScene) return;
+    const binding = new ExcalidrawBinding(
+      yElements,
+      yAssets,
+      excalidrawAPI,
+      provider.awareness
+    );
 
-      const localElements = excalidrawAPI.getSceneElementsIncludingDeleted();
-      const remoteElements = remoteScene.elements as RemoteExcalidrawElement[];
+    // Track pointer updates via binding's onPointerUpdate handler
+    const handlePointerMove = (e: PointerEvent) => {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-      if (JSON.stringify(localElements) === JSON.stringify(remoteElements)) {
-        return;
-      }
+      const appState = excalidrawAPI.getAppState();
+      const camera = getCameraFromAppState(appState);
 
-      const reconciledElements = reconcileElements(
-        localElements,
-        remoteElements,
-        excalidrawAPI.getAppState(),
-      );
-      excalidrawAPI.updateScene({ elements: reconciledElements });
-    } catch (e) {
-      console.error("Failed to parse or sync diagram content", e);
-    }
-  }, [diagram.content, excalidrawAPI]);
-
-  const debouncedSave = useDebounceCallback(
-    async (
-      elements: readonly OrderedExcalidrawElement[],
-      appState: AppState,
-    ) => {
-      if (isSaving.current) return;
-      isSaving.current = true;
-      elementsRef.current = elements;
-      await onSave(elements, {
-        viewBackgroundColor: appState.viewBackgroundColor,
-        scrollX: appState.scrollX, 
-        scrollY: appState.scrollY,
-        editingFrame: appState.editingFrame
+      // Convert screen coords to canvas coords
+      awareness.setLocalStateField("pointer", {
+        x: x / camera.z - camera.x,
+        y: y / camera.z - camera.y,
       });
-      isSaving.current = false;
-    },
-    100,
-  );
+    };
+
+    const excalidrawDom = document.querySelector(".excalidraw-wrapper") as HTMLElement;
+    if (excalidrawDom) {
+      excalidrawDom.addEventListener("pointermove", handlePointerMove);
+    }
+
+    return () => {
+      binding.destroy();
+      if (excalidrawDom) {
+        excalidrawDom.removeEventListener("pointermove", handlePointerMove);
+      }
+    };
+  }, [excalidrawAPI, provider, yElements, yAssets, awareness]);
+
+  // Clean up locked elements on unmount
+  useEffect(() => {
+    return () => {
+      if (awareness) {
+        awareness.setLocalStateField("lockedElements", { elementIds: [] });
+      }
+    };
+  }, [awareness]);
 
   return (
     <div className="relative h-full w-full">
       <div className="h-full">
         <Excalidraw
-          excalidrawAPI={setExcalidrawAPI}
+          excalidrawAPI={(api) => setExcalidrawAPI(api)}
           theme={resolvedTheme as Theme}
-          initialData={() => {
-            if (!diagram.content) return { elements: [] };
-            try {
-              const scene = JSON.parse(diagram.content);
-              elementsRef.current = scene.elements || [];
-              return scene;
-            } catch (e) {
-              console.error("Failed to parse initial diagram content", e);
-              return { elements: [] };
-            }
+          initialData={{
+            elements: yElements ? yjsToExcalidraw(yElements) : [],
           }}
-          onChange={(elements, appState) => {
-            if (
-              JSON.stringify(elements) !== JSON.stringify(elementsRef.current)
-            ) {
-              if (isSaving.current) {
-                return;
+          onChange={(_elements, appState) => {
+            // Update locked elements based on selection
+            if (awareness) {
+              const selectedElementIds = appState.selectedElementIds;
+              if (!selectedElementIds || Object.keys(selectedElementIds).length === 0) {
+                awareness.setLocalStateField("lockedElements", { elementIds: [] });
+              } else {
+                const elementIds = Object.keys(selectedElementIds).filter(
+                  (id) => selectedElementIds[id]
+                );
+                awareness.setLocalStateField("lockedElements", { elementIds });
               }
-              void debouncedSave(elements, appState);
             }
           }}
           zenModeEnabled={true}
@@ -124,6 +127,12 @@ export function ExcalidrawEditor({ onSave, diagram }: DiagramPageProps) {
           }}
         />
       </div>
+
+      {/* Cursor overlay - sibling to Excalidraw, not child */}
+      <DiagramCursorOverlay cursors={remotePointers} excalidrawAPI={excalidrawAPI ?? null} />
+
+      {/* Lock overlay - sibling to Excalidraw, not child */}
+      <DiagramLockOverlay cursors={remotePointers} excalidrawAPI={excalidrawAPI ?? null} />
     </div>
   );
 }

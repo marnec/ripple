@@ -11,6 +11,7 @@ interface ActiveUsersProps {
   };
   max?: number;
   className?: string;
+  onUserClick?: (user: RemoteUser) => void;
 }
 
 const getInitials = (name: string) => {
@@ -28,7 +29,7 @@ const getUserStatus = (user: RemoteUser) => {
   return "Viewing";
 };
 
-export function ActiveUsers({ remoteUsers, currentUser, max = 5, className }: ActiveUsersProps) {
+export function ActiveUsers({ remoteUsers, currentUser, max = 5, className, onUserClick }: ActiveUsersProps) {
   const visibleUsers = remoteUsers.slice(0, max);
   const remainingCount = remoteUsers.length - max;
 
@@ -66,22 +67,28 @@ export function ActiveUsers({ remoteUsers, currentUser, max = 5, className }: Ac
           >
             <Tooltip>
               <TooltipTrigger asChild>
-                <Avatar
-                  className={cn(
-                    "h-8 w-8 border-2 transition-transform group-hover:scale-110",
-                    user.isIdle && "opacity-50"
-                  )}
-                  style={{
-                    borderColor: user.color,
-                  }}
+                <div
+                  className={onUserClick ? "cursor-pointer" : undefined}
+                  onClick={() => onUserClick?.(user)}
                 >
-                  <AvatarFallback
-                    className="text-xs font-medium"
-                    style={{ backgroundColor: user.color, color: "#fff" }}
+                  <Avatar
+                    className={cn(
+                      "h-8 w-8 border-2 transition-transform group-hover:scale-110",
+                      user.isIdle && "opacity-50",
+                      onUserClick && "pointer-events-auto"
+                    )}
+                    style={{
+                      borderColor: user.color,
+                    }}
                   >
-                    {getInitials(user.name)}
-                  </AvatarFallback>
-                </Avatar>
+                    <AvatarFallback
+                      className="text-xs font-medium"
+                      style={{ backgroundColor: user.color, color: "#fff" }}
+                    >
+                      {getInitials(user.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="font-medium">{user.name}</div>
