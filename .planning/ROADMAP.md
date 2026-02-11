@@ -209,10 +209,11 @@ Plans:
   3. Excalidraw element changes (drawing, moving, editing) sync in real-time between users (no manual reconcileElements needed)
   4. Existing diagrams remain compatible with new multiplayer infrastructure (no migration-related breakage)
   5. User can see a list of active users currently viewing the same diagram (avatar list or similar UI)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD
+- [ ] 13-01-PLAN.md — Install y-excalidraw, canvas coordinate utilities, diagram collaboration and cursor awareness hooks
+- [ ] 13-02-PLAN.md — Cursor overlay UI, lock indicators, ExcalidrawEditor rewrite, DiagramPage multiplayer integration
 
 ## Progress
 
@@ -236,4 +237,4 @@ Phases execute in numeric order: 11 → 12 → 13
 | 10. Inline Reply-To | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 11. PartyKit Infrastructure & Persistence | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 2/2 | Complete | 2026-02-11 |
-| 13. Diagram Multiplayer Cursors | v0.10 | 0/TBD | Not Started | — |
+| 13. Diagram Multiplayer Cursors | v0.10 | 0/2 | Not Started | — |
