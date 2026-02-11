@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 ## Current Position
 
 Phase: 13 - Diagram Multiplayer Cursors
-Plan: 01 of 02
-Status: In Progress
-Progress: [███████░░░] 65% (Phase 13 of 13)
-Last activity: 2026-02-11 — Completed 13-01-PLAN.md: Diagram collaboration foundation
+Plan: 02 of 02
+Status: Complete
+Progress: [██████████] 100% (Phase 13 of 13)
+Last activity: 2026-02-11 — Completed 13-02-PLAN.md: Diagram multiplayer UI integration
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 34
-- Average duration: 3.4 min
-- Total execution time: 118.0 min
+- Total plans completed: 35
+- Average duration: 3.5 min
+- Total execution time: 122.9 min
 
 **By Phase:**
 
@@ -41,11 +41,18 @@ Last activity: 2026-02-11 — Completed 13-01-PLAN.md: Diagram collaboration fou
 | 03.2-taskstatus-per-project-scope-and-cascade-delete | 2 | 7.2 min | 3.6 min |
 | 11-partykit-infrastructure-persistence | 2 | 8.6 min | 4.3 min |
 | 12-document-multiplayer-cursors-yjs-migration | 2 | 8.2 min | 4.1 min |
-| 13-diagram-multiplayer-cursors | 1 | 4 min | 4.0 min |
+| 13-diagram-multiplayer-cursors | 2 | 8.9 min | 4.5 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 13-02:
+- No off-screen cursor indicators (cursors hidden when outside viewport per user decision)
+- Lock badges always visible (not hover-only) for simplicity in typical 1-3 locked elements scenario
+- Pointer tracking via pointermove event on excalidraw-wrapper (not via Excalidraw onChange)
+- ActiveUsers onUserClick prop added as backwards-compatible enhancement (documents don't use it)
+- Removed all Convex presence system (useEnhancedPresence, FacePile) in favor of Yjs Awareness
 
 Recent decisions from Phase 13-01:
 - Installed y-excalidraw with --legacy-peer-deps due to Excalidraw 0.18.0 vs ^0.17.6 peer dependency mismatch
@@ -127,9 +134,9 @@ Research notes for v0.10:
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 13-01-PLAN.md (Diagram collaboration foundation)
+Stopped at: Completed 13-02-PLAN.md (Diagram multiplayer UI integration) - Phase 13 complete
 Resume file: None
-Next step: 13-02-PLAN.md (Diagram multiplayer UI integration)
+Next step: Phase 13 complete - all v0.10 Multiplayer Cursors & Collaboration features delivered
 
 Config:
 {
