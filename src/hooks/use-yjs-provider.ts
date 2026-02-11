@@ -1,5 +1,5 @@
 import { useAction } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import YPartyKitProvider from "y-partykit/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
@@ -16,6 +16,7 @@ export function useYjsProvider(opts: {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(enabled);
   const [provider, setProvider] = useState<YPartyKitProvider | null>(null);
+  const providerRef = useRef<YPartyKitProvider | null>(null);
 
   // Create stable Y.Doc per resourceId
   const yDoc = useMemo(() => new Y.Doc(), []);
@@ -39,8 +40,12 @@ export function useYjsProvider(opts: {
           params: { token },
         });
 
-        if (cancelled) return;
+        if (cancelled) {
+          newProvider.destroy();
+          return;
+        }
 
+        providerRef.current = newProvider;
         setProvider(newProvider);
 
         newProvider.on("sync", (synced: boolean) => {
@@ -65,14 +70,14 @@ export function useYjsProvider(opts: {
 
     return () => {
       cancelled = true;
-      // CRITICAL: destroy provider to prevent memory leaks
-      if (provider) {
-        provider.destroy();
+      if (providerRef.current) {
+        providerRef.current.destroy();
+        providerRef.current = null;
       }
       setProvider(null);
-      // yDoc cleanup happens when resourceId changes (useMemo recreates)
     };
-  }, [resourceType, resourceId, enabled, yDoc, getToken, provider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resourceType, resourceId, enabled, yDoc]);
 
   // Cleanup yDoc on unmount or resourceId change
   useEffect(() => {
