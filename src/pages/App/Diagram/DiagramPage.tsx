@@ -5,16 +5,19 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import { useTheme } from "next-themes";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
 import { ActiveUsers } from "../Document/ActiveUsers";
 import { ConnectionStatus } from "../Document/ConnectionStatus";
-import { getUserColor } from "@/lib/user-colors";
+import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import { getCameraFromAppState } from "@/lib/canvas-coordinates";
 
 function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
   const viewer = useQuery(api.users.viewer);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+  const { resolvedTheme } = useTheme();
+  const isDarkTheme = resolvedTheme === "dark";
 
   // Set up Yjs collaboration
   const {
@@ -75,7 +78,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
             ...p,
             cursor: p.pointer ? { anchor: 0, head: 0 } : null, // Map pointer to cursor for ActiveUsers compatibility
           }))}
-          currentUser={viewer ? { name: viewer.name, color: getUserColor(viewer._id) } : undefined}
+          currentUser={viewer && awareness ? { name: viewer.name, color: getExcalidrawCollaboratorColor(awareness.clientID, isDarkTheme) } : undefined}
           onUserClick={handleJumpToUser}
         />
       </div>

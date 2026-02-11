@@ -1,5 +1,7 @@
 import type { Awareness } from "y-protocols/awareness";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
+import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 
 export interface RemotePointer {
   clientId: number;
@@ -49,6 +51,8 @@ export function useDiagramCursorAwareness(awareness: Awareness | null) {
   const [remotePointers, setRemotePointers] = useState<RemotePointer[]>([]);
   const clientTimestampsRef = useRef<Map<number, number>>(new Map());
   const pointerPositionsRef = useRef<Map<number, { position: PointerPosition; timestamp: number }>>(new Map());
+  const { resolvedTheme } = useTheme();
+  const isDarkTheme = resolvedTheme === "dark";
 
   const updateRemotePointers = useCallback(() => {
     if (!awareness) return;
@@ -88,7 +92,7 @@ export function useDiagramCursorAwareness(awareness: Awareness | null) {
         pointers.push({
           clientId,
           name: user.name,
-          color: user.color,
+          color: getExcalidrawCollaboratorColor(clientId, isDarkTheme),
           pointer,
           lockedElements,
           lastUpdate,
@@ -98,7 +102,7 @@ export function useDiagramCursorAwareness(awareness: Awareness | null) {
     });
 
     setRemotePointers(pointers);
-  }, [awareness]);
+  }, [awareness, isDarkTheme]);
 
   useEffect(() => {
     if (!awareness) return;
