@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 ## Current Position
 
 Phase: 12 - Document Multiplayer Cursors & Yjs Migration
-Plan: 01 of 03
+Plan: 02 of 03
 Status: In Progress
 Progress: [██████░░░░] 58% (Phase 12 of 13)
-Last activity: 2026-02-11 — Plan 12-01 complete: Yjs Migration & User Colors
+Last activity: 2026-02-11 — Plan 12-02 complete: Cursor Awareness UI and Active Users
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 32
+- Total plans completed: 33
 - Average duration: 3.3 min
-- Total execution time: 110.0 min
+- Total execution time: 114.0 min
 
 **By Phase:**
 
@@ -40,11 +40,17 @@ Last activity: 2026-02-11 — Plan 12-01 complete: Yjs Migration & User Colors
 | 03.1-default-taskstatus-logic | 1 | 2.5 min | 2.5 min |
 | 03.2-taskstatus-per-project-scope-and-cascade-delete | 2 | 7.2 min | 3.6 min |
 | 11-partykit-infrastructure-persistence | 2 | 8.6 min | 4.3 min |
-| 12-document-multiplayer-cursors-yjs-migration | 1 | 4.2 min | 4.2 min |
+| 12-document-multiplayer-cursors-yjs-migration | 2 | 8.2 min | 4.1 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 12-02:
+- BlockNote handles cursor rendering automatically via y-prosemirror (no custom overlay needed)
+- 10s stale client removal in avatar stack (more aggressive than 30s in-editor timeout)
+- Simple sync state heuristic with 500ms debounce (Yjs syncs near-instantly)
+- Removed old Convex presence system from DocumentEditor (Yjs Awareness more accurate)
 
 Recent decisions from Phase 12-01:
 - Complete removal of ProseMirror Sync (clean break to Yjs, no hybrid state)
@@ -114,9 +120,9 @@ Research notes for v0.10:
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 12-01-PLAN.md (Yjs migration complete)
+Stopped at: Completed 12-02-PLAN.md (Cursor awareness UI and active users complete)
 Resume file: None
-Next step: Phase 12 Plan 02 (Cursor awareness and presence UI)
+Next step: Phase 12 Plan 03 (if exists) or Phase 13
 
 Config:
 {
