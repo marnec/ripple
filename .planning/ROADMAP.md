@@ -4,7 +4,7 @@
 
 - ✅ **v0.8 Task Management** - Phases 01-07 (shipped 2026-02-07)
 - ✅ **v0.9 Chat Features** - Phases 08-10 (shipped 2026-02-07)
-- 🚧 **v0.10 Multiplayer Cursors & Collaboration** - Phases 11-13 (in progress)
+- ✅ **v0.10 Multiplayer Cursors & Collaboration** - Phases 11-13 (shipped 2026-02-11)
 
 ## Overview
 
@@ -160,7 +160,7 @@ Plans:
 
 </details>
 
-### 🚧 v0.10 Multiplayer Cursors & Collaboration (In Progress)
+### ✅ v0.10 Multiplayer Cursors & Collaboration — SHIPPED 2026-02-11
 
 **Milestone Goal:** Add real-time multiplayer cursor awareness to documents and diagrams, backed by proper WebSocket infrastructure — and evaluate whether the new infra should also replace/improve the existing collaborative editing approach.
 
@@ -212,8 +212,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 13-01-PLAN.md — Install y-excalidraw, canvas coordinate utilities, diagram collaboration and cursor awareness hooks
-- [ ] 13-02-PLAN.md — Cursor overlay UI, lock indicators, ExcalidrawEditor rewrite, DiagramPage multiplayer integration
+- [x] 13-01-PLAN.md — Install y-excalidraw, canvas coordinate utilities, diagram collaboration and cursor awareness hooks
+- [x] 13-02-PLAN.md — Cursor overlay UI, lock indicators, ExcalidrawEditor rewrite, DiagramPage multiplayer integration
 
 ## Progress
 
@@ -237,4 +237,4 @@ Phases execute in numeric order: 11 → 12 → 13
 | 10. Inline Reply-To | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 11. PartyKit Infrastructure & Persistence | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 2/2 | Complete | 2026-02-11 |
-| 13. Diagram Multiplayer Cursors | v0.10 | 0/2 | Not Started | — |
+| 13. Diagram Multiplayer Cursors | v0.10 | 2/2 | Complete | 2026-02-11 |
