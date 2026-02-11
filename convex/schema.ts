@@ -234,6 +234,14 @@ export default defineSchema({
   })
     .index("by_document_active", ["documentId", "active"]),
 
+  collaborationTokens: defineTable({
+    token: v.string(),
+    userId: v.id("users"),
+    roomId: v.string(),
+    expiresAt: v.number(), // timestamp ms
+  })
+    .index("by_token", ["token"]),
+
   pushSubscriptions: defineTable({
     userId: v.id("users"),
     device: v.string(),
