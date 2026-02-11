@@ -176,8 +176,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — PartyKit server setup with Yjs snapshot persistence and dev workflow
-- [ ] 11-02-PLAN.md — Auth integration, frontend useYjsProvider hook, and RTK cursor cleanup
+- [x] 11-01-PLAN.md — PartyKit server setup with Yjs snapshot persistence and dev workflow
+- [x] 11-02-PLAN.md — Auth integration, frontend useYjsProvider hook, and RTK cursor cleanup
 
 #### Phase 12: Document Multiplayer Cursors & Yjs Migration
 **Goal**: Real-time cursor awareness and Yjs-based collaboration for BlockNote documents
@@ -233,6 +233,6 @@ Phases execute in numeric order: 11 → 12 → 13
 | 8. Emoji Reactions Foundation | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 9. @User Mentions in Chat | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 10. Inline Reply-To | v0.9 | 2/2 | Complete | 2026-02-07 |
-| 11. PartyKit Infrastructure & Persistence | v0.10 | 0/2 | Not Started | — |
+| 11. PartyKit Infrastructure & Persistence | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 0/TBD | Not Started | — |
 | 13. Diagram Multiplayer Cursors | v0.10 | 0/TBD | Not Started | — |
