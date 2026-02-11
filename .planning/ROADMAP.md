@@ -196,8 +196,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 12-01-PLAN.md — ProseMirror Sync removal, Yjs dependencies, and BlockNote Yjs collaboration rewrite
-- [ ] 12-02-PLAN.md — Cursor awareness UI, active users avatar stack, and connection status indicators
+- [x] 12-01-PLAN.md — ProseMirror Sync removal, Yjs dependencies, and BlockNote Yjs collaboration rewrite
+- [x] 12-02-PLAN.md — Cursor awareness UI, active users avatar stack, and connection status indicators
 
 #### Phase 13: Diagram Multiplayer Cursors
 **Goal**: Real-time cursor awareness and element sync for Excalidraw diagrams
@@ -235,5 +235,5 @@ Phases execute in numeric order: 11 → 12 → 13
 | 9. @User Mentions in Chat | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 10. Inline Reply-To | v0.9 | 2/2 | Complete | 2026-02-07 |
 | 11. PartyKit Infrastructure & Persistence | v0.10 | 2/2 | Complete | 2026-02-11 |
-| 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 0/2 | Not Started | — |
+| 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 13. Diagram Multiplayer Cursors | v0.10 | 0/TBD | Not Started | — |
