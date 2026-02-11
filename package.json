@@ -4,16 +4,18 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm-run-all --parallel dev:frontend dev:backend",
+    "dev": "npm-run-all --parallel dev:frontend dev:backend dev:partykit",
     "dev:frontend": "vite --open",
     "dev:backend": "convex dev",
+    "dev:partykit": "partykit dev",
     "predev": "convex dev --until-success && node setup.mjs --once && convex dashboard",
     "build": "tsc -b && vite build",
     "lint": "tsc -b && eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy:convex": "npx convex deploy",
     "deploy:frontend": "npm run build && wrangler deploy",
-    "deploy": "npm run build && npx convex deploy && wrangler deploy"
+    "deploy:partykit": "partykit deploy",
+    "deploy": "npm run build && npx convex deploy && partykit deploy && wrangler deploy"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
@@ -72,6 +74,8 @@
     "usehooks-ts": "3.1.1",
     "uuid4": "2.0.3",
     "web-push": "3.6.7",
+    "y-partykit": "^0.0.33",
+    "yjs": "^13.6.29",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -92,6 +96,7 @@
     "globals": "^17.3.0",
     "mkcert": "3.2.0",
     "npm-run-all": "4.1.5",
+    "partykit": "^0.0.115",
     "postcss": "8.5.6",
     "prettier": "3.8.1",
     "sass": "1.97.3",
