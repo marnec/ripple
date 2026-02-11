@@ -1,5 +1,4 @@
 import {
-  BlockNoteEditor,
   BlockNoteSchema,
   defaultBlockSpecs,
   defaultInlineContentSpecs,
@@ -8,12 +7,10 @@ import {
   SuggestionMenuController
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { useBlockNoteSync } from "@convex-dev/prosemirror-sync/blocknote";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { PenTool } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -23,6 +20,7 @@ import {
   AvatarImage,
 } from "../../../components/ui/avatar";
 import { FacePile } from "../../../components/ui/facepile";
+import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useEnhancedPresence } from "../../../hooks/use-enhanced-presence";
 import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
 import { User } from "./CustomBlocks/UserBlock";
@@ -48,16 +46,8 @@ const schema = BlockNoteSchema.create({
   },
 });
 
-type Editor = BlockNoteEditor<typeof schema.blockSchema, typeof schema.inlineContentSchema>;
-
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { resolvedTheme } = useTheme();
-  const [editor, setEditor] = useState<Editor | null>(null);
-  const sync = useBlockNoteSync<Editor>(api.prosemirror, documentId, {
-    editorOptions: {
-      schema,
-    },
-  });
   const document = useQuery(api.documents.get, { id: documentId });
   const diagrams = useQuery(
     api.diagrams.list,
@@ -67,32 +57,27 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     api.workspaceMembers.membersByWorkspace,
     document ? { workspaceId: document.workspaceId } : "skip"
   );
+  const viewer = useQuery(api.users.viewer);
   const enhancedPresence = useEnhancedPresence(documentId);
 
-  useEffect(() => {
-    const setUpEditor = async () => {
-      if (sync.isLoading) return;
+  const { editor, isLoading } = useDocumentCollaboration({
+    documentId,
+    userName: viewer?.name ?? "Anonymous",
+    userId: viewer?._id ?? "anonymous",
+    schema,
+  });
 
-      if (!sync.editor) {
-        await sync.create({ type: "doc", content: [] });
-        return;
-      }
-
-      setEditor(sync.editor);
-    };
-
-    void setUpEditor();
-  }, [sync, documentId]);
+  if (isLoading || !editor) {
+    return <div className="p-20 animate-pulse">Loading document...</div>;
+  }
 
   return (
-    <>
-      {editor && (
-        <div className="px-20 max-w-full flex-1 animate-fade-in relative">
-          <div className="absolute top-5 right-10 z-10">
-            <FacePile users={enhancedPresence} hideInactive={true} />
-          </div>
-          <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
-          <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
+    <div className="px-20 max-w-full flex-1 animate-fade-in relative">
+      <div className="absolute top-5 right-10 z-10">
+        <FacePile users={enhancedPresence} hideInactive={true} />
+      </div>
+      <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
+      <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController
               triggerCharacter={"#"}
               getItems={async (query) => {
@@ -158,8 +143,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }}
             />
           </BlockNoteView>
-        </div>
-      )}
-    </>
+    </div>
   );
 }
