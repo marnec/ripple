@@ -227,13 +227,6 @@ export default defineSchema({
   })
     .index("by_channel_active", ["channelId", "active"]),
 
-  cursorSessions: defineTable({
-    documentId: v.id("documents"),
-    cloudflareMeetingId: v.string(),
-    active: v.boolean(),
-  })
-    .index("by_document_active", ["documentId", "active"]),
-
   collaborationTokens: defineTable({
     token: v.string(),
     userId: v.id("users"),

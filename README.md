@@ -11,6 +11,7 @@ NEXT STEPS:
 - [x] fix no default taskstatus
 - [x] fix task detail view
 - [ ] see pending invitations in app (not only email)
+- [x] fix breadcrumb on mobile
 - [x] fix doc visibility and permissions
 - [ ] rethink hirarchy (workspace -> project -> {channels,docs,diagrams,tasks})
     - [ ] on workspace creation create default project
@@ -25,7 +26,6 @@ NEXT STEPS:
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
     - [ ] language preference
-- [ ] fix breadcrumb on mobile
 - [ ] sidebar organization
     - [ ] channels grouping and personal channels
     - [ ] documents folders?
