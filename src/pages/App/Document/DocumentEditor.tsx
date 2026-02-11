@@ -19,9 +19,11 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "../../../components/ui/avatar";
-import { FacePile } from "../../../components/ui/facepile";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
-import { useEnhancedPresence } from "../../../hooks/use-enhanced-presence";
+import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
+import { getUserColor } from "../../../lib/user-colors";
+import { ActiveUsers } from "./ActiveUsers";
+import { ConnectionStatus } from "./ConnectionStatus";
 import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
 import { User } from "./CustomBlocks/UserBlock";
 
@@ -58,14 +60,15 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     document ? { workspaceId: document.workspaceId } : "skip"
   );
   const viewer = useQuery(api.users.viewer);
-  const enhancedPresence = useEnhancedPresence(documentId);
 
-  const { editor, isLoading } = useDocumentCollaboration({
+  const { editor, isLoading, isConnected, provider } = useDocumentCollaboration({
     documentId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "anonymous",
     schema,
   });
+
+  const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
 
   if (isLoading || !editor) {
     return <div className="p-20 animate-pulse">Loading document...</div>;
@@ -73,8 +76,19 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   return (
     <div className="px-20 max-w-full flex-1 animate-fade-in relative">
-      <div className="absolute top-5 right-10 z-10">
-        <FacePile users={enhancedPresence} hideInactive={true} />
+      <div className="absolute top-5 right-10 z-10 flex items-center gap-3">
+        <ConnectionStatus isConnected={isConnected} provider={provider} />
+        <ActiveUsers
+          remoteUsers={remoteUsers}
+          currentUser={
+            viewer
+              ? {
+                  name: viewer.name,
+                  color: getUserColor(viewer._id),
+                }
+              : undefined
+          }
+        />
       </div>
       <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
       <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
