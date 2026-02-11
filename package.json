@@ -74,6 +74,7 @@
     "usehooks-ts": "3.1.1",
     "uuid4": "2.0.3",
     "web-push": "3.6.7",
+    "y-excalidraw": "^2.0.12",
     "y-indexeddb": "^9.0.12",
     "y-partykit": "^0.0.33",
     "yjs": "^13.6.29",
