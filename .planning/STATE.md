@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 
 ## Current Position
 
-Phase: 11 - PartyKit Infrastructure & Persistence
-Plan: 02 of 02
-Status: Complete
-Progress: [█████░░░░░] 50% (Phase 11 of 13)
-Last activity: 2026-02-11 — Plan 11-02 complete: PartyKit Authentication & Frontend Integration
+Phase: 12 - Document Multiplayer Cursors & Yjs Migration
+Plan: 01 of 03
+Status: In Progress
+Progress: [██████░░░░] 58% (Phase 12 of 13)
+Last activity: 2026-02-11 — Plan 12-01 complete: Yjs Migration & User Colors
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 31
+- Total plans completed: 32
 - Average duration: 3.3 min
-- Total execution time: 105.8 min
+- Total execution time: 110.0 min
 
 **By Phase:**
 
@@ -40,10 +40,17 @@ Last activity: 2026-02-11 — Plan 11-02 complete: PartyKit Authentication & Fro
 | 03.1-default-taskstatus-logic | 1 | 2.5 min | 2.5 min |
 | 03.2-taskstatus-per-project-scope-and-cascade-delete | 2 | 7.2 min | 3.6 min |
 | 11-partykit-infrastructure-persistence | 2 | 8.6 min | 4.3 min |
+| 12-document-multiplayer-cursors-yjs-migration | 1 | 4.2 min | 4.2 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 12-01:
+- Complete removal of ProseMirror Sync (clean break to Yjs, no hybrid state)
+- IndexedDB persistence from day one (prevents data loss, improves load performance)
+- Singleton ColorHash instance (consistent configuration for documents and future diagrams)
+- Schema passed as parameter to collaboration hook (enables custom blocks with Yjs)
 
 Recent decisions from Phase 11-02:
 - One-time token authentication for PartyKit (simpler than JWT, leverages Convex built-in auth)
@@ -92,11 +99,11 @@ None.
 ### Blockers/Concerns
 
 Research notes for v0.10:
-- INFRA-04 (snapshot compaction): Must be implemented from Phase 1, not deferred (research pitfall)
-- DCOL-02 (ProseMirror to Yjs migration): Requires data migration script for existing documents
-- DCOL-03 (custom inline content with Yjs): Custom BlockNote types must work with Yjs sync
+- INFRA-04 (snapshot compaction): ✅ RESOLVED - Implemented in Phase 11-01
+- DCOL-02 (ProseMirror to Yjs migration): ⚠️ FOLLOW-UP NEEDED - Migration script required if production has existing documents
+- DCOL-03 (custom inline content with Yjs): ✅ RESOLVED - Verified in Phase 12-01, custom blocks work correctly
 - DIAG-03 (y-excalidraw): Community library without official npm package, needs vendoring from GitHub
-- Phase 12 combines cursors + full Yjs migration (research recommends unified approach vs incremental)
+- Phase 12 combines cursors + full Yjs migration: ✅ IN PROGRESS - Plan 01 complete (migration), Plans 02-03 for cursors
 
 ### Quick Tasks Completed
 
@@ -107,9 +114,9 @@ Research notes for v0.10:
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Completed 11-02-PLAN.md (Phase 11 complete)
+Stopped at: Completed 12-01-PLAN.md (Yjs migration complete)
 Resume file: None
-Next step: Phase 12 (Document Collaboration)
+Next step: Phase 12 Plan 02 (Cursor awareness and presence UI)
 
 Config:
 {
