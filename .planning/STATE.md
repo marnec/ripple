@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 
 ## Current Position
 
-Phase: 12 - Document Multiplayer Cursors & Yjs Migration
-Plan: 02 of 02
-Status: Complete
-Progress: [██████░░░░] 58% (Phase 12 of 13)
-Last activity: 2026-02-11 — Phase 12 complete: Document Multiplayer Cursors & Yjs Migration
+Phase: 13 - Diagram Multiplayer Cursors
+Plan: 01 of 02
+Status: In Progress
+Progress: [███████░░░] 65% (Phase 13 of 13)
+Last activity: 2026-02-11 — Completed 13-01-PLAN.md: Diagram collaboration foundation
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 33
-- Average duration: 3.3 min
-- Total execution time: 114.0 min
+- Total plans completed: 34
+- Average duration: 3.4 min
+- Total execution time: 118.0 min
 
 **By Phase:**
 
@@ -41,10 +41,17 @@ Last activity: 2026-02-11 — Phase 12 complete: Document Multiplayer Cursors & 
 | 03.2-taskstatus-per-project-scope-and-cascade-delete | 2 | 7.2 min | 3.6 min |
 | 11-partykit-infrastructure-persistence | 2 | 8.6 min | 4.3 min |
 | 12-document-multiplayer-cursors-yjs-migration | 2 | 8.2 min | 4.1 min |
+| 13-diagram-multiplayer-cursors | 1 | 4 min | 4.0 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 13-01:
+- Installed y-excalidraw with --legacy-peer-deps due to Excalidraw 0.18.0 vs ^0.17.6 peer dependency mismatch
+- Store canvas coordinates in awareness (not screen coords) to prevent cross-viewport rendering issues
+- ExcalidrawBinding creation deferred to component (requires excalidrawAPI available after mount)
+- Reused Phase 12 timeouts: 10s stale client removal, 30s idle pointer detection
 
 Recent decisions from Phase 12-02:
 - BlockNote handles cursor rendering automatically via y-prosemirror (no custom overlay needed)
@@ -108,7 +115,7 @@ Research notes for v0.10:
 - INFRA-04 (snapshot compaction): ✅ RESOLVED - Implemented in Phase 11-01
 - DCOL-02 (ProseMirror to Yjs migration): ⚠️ FOLLOW-UP NEEDED - Migration script required if production has existing documents
 - DCOL-03 (custom inline content with Yjs): ✅ RESOLVED - Verified in Phase 12-01, custom blocks work correctly
-- DIAG-03 (y-excalidraw): Community library without official npm package, needs vendoring from GitHub
+- DIAG-03 (y-excalidraw): ✅ RESOLVED - Installed with --legacy-peer-deps for Excalidraw 0.18.0 compatibility, build/lint pass
 - Phase 12 combines cursors + full Yjs migration: ✅ COMPLETE - All plans executed, Yjs collaboration + cursor awareness live
 
 ### Quick Tasks Completed
@@ -120,9 +127,9 @@ Research notes for v0.10:
 ## Session Continuity
 
 Last session: 2026-02-11
-Stopped at: Phase 12 complete (Document Multiplayer Cursors & Yjs Migration)
+Stopped at: Completed 13-01-PLAN.md (Diagram collaboration foundation)
 Resume file: None
-Next step: Phase 13 (Diagram Multiplayer Cursors)
+Next step: 13-02-PLAN.md (Diagram multiplayer UI integration)
 
 Config:
 {
