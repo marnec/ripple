@@ -6,6 +6,9 @@ import { api } from "../../convex/_generated/api";
 import type { ResourceType, ErrorCode } from "@shared/protocol";
 import { ERROR_SEVERITY } from "@shared/protocol";
 
+// Connection timeout: 4 seconds (within the 3-5s user decision range)
+const CONNECTION_TIMEOUT = 4000;
+
 export function useYjsProvider(opts: {
   resourceType: ResourceType;
   resourceId: string;
@@ -15,8 +18,11 @@ export function useYjsProvider(opts: {
   const getToken = useAction(api.collaboration.getCollaborationToken);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(enabled);
+  const [isOffline, setIsOffline] = useState(false);
   const [provider, setProvider] = useState<YPartyKitProvider | null>(null);
   const providerRef = useRef<YPartyKitProvider | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isConnectedRef = useRef(false);
 
   // Create stable Y.Doc per resourceId
   const yDoc = useMemo(() => new Y.Doc(), []);
@@ -58,6 +64,15 @@ export function useYjsProvider(opts: {
         providerRef.current = newProvider;
         setProvider(newProvider);
 
+        // Start connection timeout - if not connected after CONNECTION_TIMEOUT, consider offline
+        timeoutRef.current = setTimeout(() => {
+          if (!cancelled && !isConnectedRef.current) {
+            console.warn(`PartyKit connection timeout after ${CONNECTION_TIMEOUT}ms - falling back to offline mode`);
+            setIsOffline(true);
+            setIsLoading(false);
+          }
+        }, CONNECTION_TIMEOUT);
+
         // Handler for custom protocol messages (permission_revoked, etc.)
         const handleProtocolMessage = (event: MessageEvent) => {
           if (typeof event.data !== "string") return;
@@ -80,18 +95,34 @@ export function useYjsProvider(opts: {
 
         newProvider.on("sync", (synced: boolean) => {
           if (!cancelled) {
+            isConnectedRef.current = synced;
             setIsConnected(synced);
-            setIsLoading(false);
+            if (synced) {
+              // Connection succeeded - clear timeout and offline state
+              if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+              }
+              setIsOffline(false);
+              setIsLoading(false);
+            }
           }
         });
 
         newProvider.on("status", ({ status }: { status: string }) => {
           if (!cancelled) {
-            setIsConnected(status === "connected");
+            const connected = status === "connected";
+            isConnectedRef.current = connected;
+            setIsConnected(connected);
 
-            // Attach message listener when connected
-            if (status === "connected" && newProvider.ws) {
-              newProvider.ws.addEventListener("message", handleProtocolMessage);
+            if (connected) {
+              // Connection succeeded - clear offline state
+              setIsOffline(false);
+
+              // Attach message listener when connected
+              if (newProvider.ws) {
+                newProvider.ws.addEventListener("message", handleProtocolMessage);
+              }
             }
           }
         });
@@ -113,6 +144,10 @@ export function useYjsProvider(opts: {
 
     return () => {
       cancelled = true;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       if (providerRef.current) {
         providerRef.current.destroy();
         providerRef.current = null;
@@ -128,5 +163,5 @@ export function useYjsProvider(opts: {
     };
   }, [yDoc]);
 
-  return { yDoc, provider, isConnected, isLoading };
+  return { yDoc, provider, isConnected, isLoading, isOffline };
 }

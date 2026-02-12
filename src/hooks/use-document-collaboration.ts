@@ -26,6 +26,7 @@ export interface UseDocumentCollaborationResult<
   editor: BlockNoteEditor<BSchema, ISchema, SSchema> | null;
   isLoading: boolean;
   isConnected: boolean;
+  isOffline: boolean;
   provider: ReturnType<typeof useYjsProvider>["provider"];
   yDoc: ReturnType<typeof useYjsProvider>["yDoc"];
 }
@@ -42,7 +43,7 @@ export function useDocumentCollaboration<
   resourceType = "doc",
   enabled = true,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
-  const { yDoc, provider, isConnected, isLoading: providerLoading } = useYjsProvider({
+  const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
     resourceType,
     resourceId: documentId,
     enabled,
@@ -51,21 +52,20 @@ export function useDocumentCollaboration<
   const [indexedDbSynced, setIndexedDbSynced] = useState(false);
 
   // Set up IndexedDB persistence for offline cache
+  // CRITICAL: Decouple from provider - IndexedDB initializes independently
   useEffect(() => {
-    if (!provider) return;
-
     const persistence = new IndexeddbPersistence(`${resourceType}-${documentId}`, yDoc);
 
     persistence.on("synced", () => {
       setIndexedDbSynced(true);
     });
 
-    // Cleanup on unmount or when provider/documentId changes
+    // Cleanup on unmount or when documentId changes
     return () => {
       void persistence.destroy();
       setIndexedDbSynced(false);
     };
-  }, [provider, documentId, resourceType, yDoc]);
+  }, [documentId, resourceType, yDoc]);
 
   // Get deterministic user color
   const userColor = getUserColor(userId);
@@ -88,12 +88,15 @@ export function useDocumentCollaboration<
     [provider, userName, userColor, schema]
   );
 
-  const isLoading = providerLoading || !indexedDbSynced;
+  // Loading completes when EITHER provider syncs OR IndexedDB syncs
+  const isLoading = providerLoading && !indexedDbSynced;
 
   return {
-    editor: provider ? editor : null,
+    // Editor can render from IndexedDB data even without provider connection
+    editor: (provider || indexedDbSynced) ? editor : null,
     isLoading,
     isConnected,
+    isOffline,
     provider,
     yDoc,
   };

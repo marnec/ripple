@@ -15,6 +15,7 @@ export interface UseDiagramCollaborationResult {
   yDoc: Y.Doc;
   provider: ReturnType<typeof useYjsProvider>["provider"];
   isConnected: boolean;
+  isOffline: boolean;
   isLoading: boolean;
   yElements: Y.Array<Y.Map<any>>;
   yAssets: Y.Map<any>;
@@ -41,7 +42,7 @@ export function useDiagramCollaboration({
   userName,
   userId,
 }: UseDiagramCollaborationOptions): UseDiagramCollaborationResult {
-  const { yDoc, provider, isConnected, isLoading: providerLoading } = useYjsProvider({
+  const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
     resourceType: "diagram",
     resourceId: diagramId,
   });
@@ -54,21 +55,20 @@ export function useDiagramCollaboration({
   const yAssets = useMemo(() => yDoc.getMap("assets"), [yDoc]);
 
   // Set up IndexedDB persistence for offline cache
+  // CRITICAL: Decouple from provider - IndexedDB initializes independently
   useEffect(() => {
-    if (!provider) return;
-
     const persistence = new IndexeddbPersistence(`diagram-${diagramId}`, yDoc);
 
     persistence.on("synced", () => {
       setIndexedDbSynced(true);
     });
 
-    // Cleanup on unmount or when provider/diagramId changes
+    // Cleanup on unmount or when diagramId changes
     return () => {
       void persistence.destroy();
       setIndexedDbSynced(false);
     };
-  }, [provider, diagramId, yDoc]);
+  }, [diagramId, yDoc]);
 
   // Get deterministic user color
   const userColor = getUserColor(userId);
@@ -83,12 +83,14 @@ export function useDiagramCollaboration({
     });
   }, [provider, userName, userColor]);
 
-  const isLoading = providerLoading || !indexedDbSynced;
+  // Loading completes when EITHER provider syncs OR IndexedDB syncs
+  const isLoading = providerLoading && !indexedDbSynced;
 
   return {
     yDoc,
     provider,
     isConnected,
+    isOffline,
     isLoading,
     yElements,
     yAssets,
