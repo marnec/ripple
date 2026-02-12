@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-12)
 ## Current Position
 
 Phase: 15 of 17 (Persistence Layer)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-12 — Completed 15-01-PLAN.md (Snapshot Persistence Infrastructure)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-12 — Completed 15-02-PLAN.md (PartyKit Snapshot Integration)
 
-Progress: [███████████████████░░░░░░░░░] 69% (40/58 plans complete)
+Progress: [███████████████████░░░░░░░░░] 71% (41/58 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 40
+- Total plans completed: 41
 - Average duration: 3.7 min
-- Total execution time: 164.1 min
+- Total execution time: 166.3 min
 
 **By Phase:**
 
@@ -46,13 +46,14 @@ Progress: [███████████████████░░░░
 | 13.1-fix-deployment-pipeline | 1 | 25 min | 25 min |
 | 13.2-add-document-like-collaboration-to-the-blocknote-editor-in-tasks | 2 | 9 min | 4.5 min |
 | 14-protocol-foundation | 1 | 4 min | 4.0 min |
-| 15-persistence-layer | 1 | 3.2 min | 3.2 min |
+| 15-persistence-layer | 2 | 5.4 min | 2.7 min |
 
 **Recent Trend:**
-- Last 5 plans: 4.5, 25, 4.5, 4.0, 3.2 min
-- Trend: Consistently stable execution times
+- Last 5 plans: 25, 4.5, 4.0, 3.2, 2.2 min
+- Trend: Consistently stable execution times (excluding deployment outlier)
 
 *Updated: 2026-02-12*
+| Phase 15 P02 | 2.2 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,14 @@ Recent decisions affecting v0.11 work:
 - Use yjsSnapshotId field name to clarify Yjs-specific binary data
 - Inline roomId parsing in HTTP actions to avoid import resolution issues
 - Remove legacy diagrams.content field - Yjs is single source of truth
+- Periodic save interval: 30 seconds for periodic saves while users are connected
+- Disconnect debounce window: 7 seconds after last user disconnects before saving
+- Cold-start loading via y-partykit load callback fetching from Convex GET endpoint
+- Save failure handling: log errors but don't crash server (PartyKit storage is fallback)
+- [Phase 15-02]: Periodic save interval: 30 seconds for periodic saves while users are connected
+- [Phase 15-02]: Disconnect debounce window: 7 seconds after last user disconnects before saving
+- [Phase 15-02]: Cold-start loading via y-partykit load callback fetching from Convex GET endpoint
+- [Phase 15-02]: Save failure handling: log errors but don't crash server (PartyKit storage is fallback)
 
 ### Pending Todos
 
@@ -99,7 +108,7 @@ None.
 
 **Known Issues (v0.11 addresses):**
 - ~~Phase 14: No shared types between PartyKit and frontend~~ ✓ Resolved — shared/protocol module
-- ~~Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)~~ ✓ In progress — 15-01 complete (snapshot persistence infrastructure)
+- ~~Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)~~ ✓ Resolved — periodic saves + disconnect debounce + cold-start loading
 - Phase 16: Token consumed on first connect (reconnection broken)
 - Phase 16: No permission re-validation (removed users can edit until disconnect)
 - Phase 17: No graceful degradation (editors crash if PartyKit unavailable)
@@ -113,6 +122,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 15-01-PLAN.md (Snapshot Persistence Infrastructure)
+Stopped at: Completed 15-02-PLAN.md (PartyKit Snapshot Integration)
 Resume file: None
-Next step: `/gsd:execute-plan 15-02` (PartyKit Snapshot Integration)
+Next step: Phase 15 complete — ready for Phase 16 (Token Refresh & Permission Validation)
