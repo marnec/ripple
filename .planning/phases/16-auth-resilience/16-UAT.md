@@ -1,9 +1,9 @@
 ---
 status: complete
 phase: 16-auth-resilience
-source: 16-01-SUMMARY.md, 16-02-SUMMARY.md
-started: 2026-02-12T23:30:00Z
-updated: 2026-02-12T23:45:00Z
+source: 16-03-SUMMARY.md, 16-04-SUMMARY.md
+started: 2026-02-12T23:55:00Z
+updated: 2026-02-12T23:55:00Z
 ---
 
 ## Current Test
@@ -12,57 +12,43 @@ updated: 2026-02-12T23:45:00Z
 
 ## Tests
 
-### 1. Collaboration Reconnects After Network Drop
-expected: Open a collaborative document. Briefly disconnect your network (toggle WiFi off/on or unplug ethernet). After reconnecting, the editor should automatically resume collaboration without requiring a page reload. The connection status indicator should show offline briefly, then return to connected.
+### 1. Connection Indicator Responds to Browser Offline
+expected: Open a collaborative document. Use Chrome DevTools (Network tab) to set throttling to "Offline". The connection status indicator should turn to offline/disconnected state immediately (not stay green). When you switch back to "No throttling", the indicator should eventually return to connected state.
 result: issue
-reported: "in local development I used the chrome dev tools to set my network as offline but the network indicator in the document remains green"
+reported: "on setting throttling to offline the connection status indicator turned immediately to offline but upon removing throttling it never came back online"
 severity: major
 
-### 2. Extended Editing Session Stays Connected
-expected: Open a collaborative document and keep editing for several minutes. The connection should remain stable without dropping due to token expiration. No page reload should be needed to continue collaborating.
+### 2. Diagram Block Click Navigates to Diagram
+expected: Open a document that has an embedded diagram block. Click on the diagram placeholder/preview. It should navigate you to the full diagram page at /workspaces/{id}/diagrams/{id}.
 result: pass
 
-### 3. Diagram Embeds Show Placeholder
-expected: Open a task description or document that has an embedded diagram. The embedded diagram should show a "Click to view diagram" placeholder (not a broken/empty state). Clicking it should navigate to the diagram.
-result: issue
-reported: "clicking does not navigate to diagram, also we never discussed the fact that embedding preview was being removed. You should have brought this up"
-severity: major
+### 3. SVG Preview Generated for Diagrams
+expected: Open a diagram and draw a few shapes (rectangles, arrows, etc). Wait about 10-15 seconds. The diagram's SVG preview should be silently saved to Convex in the background (you can verify by then embedding this diagram elsewhere and seeing a preview instead of just a placeholder).
+result: pass
 
-### 4. Revoked User Gets Disconnected
-expected: Have two users open the same document. Remove one user's workspace or project membership from the admin UI. Within about 60 seconds, the removed user's collaboration should disconnect and they should see an indication that access was revoked (not just an abrupt connection drop).
-result: skipped
-reason: Convex real-time subscriptions cause immediate re-render and uncaught error on user removal, navigating away before 30s PartyKit check fires. Expected behavior until error boundaries are in place.
+### 4. SVG Preview Renders in Document Embeds
+expected: Open a document and embed a diagram that has been opened and edited (so it has an SVG preview). The embedded diagram should show an actual visual SVG preview of the diagram content — not just a text placeholder saying "Click to view."
+result: pass
 
-### 5. No Reconnection Loop After Revocation
-expected: After a user's permission is revoked and they're disconnected (Test 4), the client should NOT attempt to reconnect in an infinite loop. The editor should stay in a disconnected/read-only state without spamming reconnection attempts.
-result: skipped
-reason: Cannot test for same reason as Test 4 - Convex subscription reacts before PartyKit permission check.
+### 5. SVG Preview Renders in Task Embeds
+expected: Open a task description and embed a diagram that has an SVG preview. The embedded diagram should show an inline SVG preview of the diagram content with a max height constraint, not just a text placeholder.
+result: pass
 
 ## Summary
 
 total: 5
-passed: 1
-issues: 2
+passed: 4
+issues: 1
 pending: 0
-skipped: 2
+skipped: 0
 
 ## Gaps
 
-- truth: "Connection status indicator reflects actual network state"
+- truth: "Connection status indicator recovers to connected state when network comes back online"
   status: failed
-  reason: "User reported: in local development I used the chrome dev tools to set my network as offline but the network indicator in the document remains green"
+  reason: "User reported: on setting throttling to offline the connection status indicator turned immediately to offline but upon removing throttling it never came back online"
   severity: major
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
-
-- truth: "Diagram embeds are clickable and navigate to the diagram; preview removal was discussed with user"
-  status: failed
-  reason: "User reported: clicking does not navigate to diagram, also we never discussed the fact that embedding preview was being removed. You should have brought this up"
-  severity: major
-  test: 3
   root_cause: ""
   artifacts: []
   missing: []
