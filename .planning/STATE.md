@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 
 ## Current Position
 
-Phase: 13.1 - Fix Deployment Pipeline and Environment Configuration
-Plan: 01 of 01
-Status: Complete
-Progress: [██████████] 100%
-Last activity: 2026-02-12 — Completed 13.1-01-PLAN.md: CI/CD pipeline and environment configuration
+Phase: 13.2 - Add Document-Like Collaboration to the BlockNote Editor in Tasks
+Plan: 01 of 02
+Status: In Progress
+Progress: [█████-----] 50%
+Last activity: 2026-02-12 — Completed 13.2-01-PLAN.md: Task collaboration backend infrastructure
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 36
+- Total plans completed: 37
 - Average duration: 3.6 min
-- Total execution time: 147.9 min
+- Total execution time: 151.9 min
 
 **By Phase:**
 
@@ -43,10 +43,17 @@ Last activity: 2026-02-12 — Completed 13.1-01-PLAN.md: CI/CD pipeline and envi
 | 12-document-multiplayer-cursors-yjs-migration | 2 | 8.2 min | 4.1 min |
 | 13-diagram-multiplayer-cursors | 2 | 8.9 min | 4.5 min |
 | 13.1-fix-deployment-pipeline | 1 | 25 min | 25 min |
+| 13.2-add-document-like-collaboration-to-the-blocknote-editor-in-tasks | 1 | 4 min | 4 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 13.2-01:
+- Task collaboration validates project membership (tasks inherit access from their project)
+- useDocumentCollaboration defaults resourceType to "doc" for backward compatibility
+- IndexedDB cache keys use resource type prefix (task-{id}, doc-{id}) to prevent collisions
+- clearDescription mutation provided for post-migration Convex cleanup
 
 Recent decisions from Phase 13.1-01:
 - Separate Cloudflare tokens: CLOUDFLARE_WORKERS_API_TOKEN for wrangler, CLOUDFLARE_API_TOKEN for RTK
@@ -114,6 +121,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 
 ### Roadmap Evolution
 
+- Phase 13.2 inserted after Phase 13: add document-like collaboration to the blocknote editor in tasks (URGENT)
 - Phase 13.1 inserted after Phase 13: Fix deployment pipeline and environment configuration (URGENT)
 - v0.10 milestone started at Phase 11 (continues from v0.9)
 - Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
@@ -143,9 +151,9 @@ Research notes for v0.10:
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 13.1-01-PLAN.md (CI/CD pipeline and environment configuration) - Phase 13.1 complete
+Stopped at: Completed 13.2-01-PLAN.md (Task collaboration backend infrastructure) - Phase 13.2 in progress (1 of 2 plans complete)
 Resume file: None
-Next step: Phase 13.1 complete - CI/CD pipeline operational, all services deploying via GitHub Actions
+Next step: Execute 13.2-02-PLAN.md to wire collaboration into TaskDetailSheet UI
 
 Config:
 {
