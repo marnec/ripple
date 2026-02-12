@@ -70,6 +70,7 @@ jobs:
       - name: Deploy PartyKit
         env:
           PARTYKIT_TOKEN: ${{ secrets.PARTYKIT_TOKEN }}
+          PARTYKIT_LOGIN: ${{ secrets.PARTYKIT_LOGIN }}
         run: npx partykit deploy --var CONVEX_SITE_URL=${{ secrets.CONVEX_SITE_URL }}
 
       - name: Health check PartyKit
