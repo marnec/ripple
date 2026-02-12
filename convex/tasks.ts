@@ -463,3 +463,28 @@ export const remove = mutation({
     return null;
   },
 });
+
+export const clearDescription = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, { taskId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new ConvexError("Task not found");
+
+    // Auth: validate membership
+    const membership = await ctx.db
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", task.projectId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) throw new ConvexError("Not a member of this project");
+
+    // Clear the description field (content now lives in Yjs/PartyKit)
+    await ctx.db.patch(taskId, { description: undefined });
+    return null;
+  },
+});

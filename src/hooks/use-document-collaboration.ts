@@ -14,6 +14,7 @@ export interface UseDocumentCollaborationOptions<
   userName: string;
   userId: string;
   schema: BlockNoteSchema<BSchema, ISchema, SSchema>;
+  resourceType?: "doc" | "diagram" | "task";
 }
 
 export interface UseDocumentCollaborationResult<
@@ -37,9 +38,10 @@ export function useDocumentCollaboration<
   userName,
   userId,
   schema,
+  resourceType = "doc",
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
   const { yDoc, provider, isConnected, isLoading: providerLoading } = useYjsProvider({
-    resourceType: "doc",
+    resourceType,
     resourceId: documentId,
   });
 
@@ -49,7 +51,7 @@ export function useDocumentCollaboration<
   useEffect(() => {
     if (!provider) return;
 
-    const persistence = new IndexeddbPersistence(`doc-${documentId}`, yDoc);
+    const persistence = new IndexeddbPersistence(`${resourceType}-${documentId}`, yDoc);
 
     persistence.on("synced", () => {
       setIndexedDbSynced(true);
@@ -60,7 +62,7 @@ export function useDocumentCollaboration<
       void persistence.destroy();
       setIndexedDbSynced(false);
     };
-  }, [provider, documentId, yDoc]);
+  }, [provider, documentId, resourceType, yDoc]);
 
   // Get deterministic user color
   const userColor = getUserColor(userId);
