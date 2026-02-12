@@ -9,18 +9,18 @@ See: .planning/PROJECT.md (updated 2026-02-10)
 
 ## Current Position
 
-Phase: 13 - Diagram Multiplayer Cursors
-Plan: 02 of 02
+Phase: 13.1 - Fix Deployment Pipeline and Environment Configuration
+Plan: 01 of 01
 Status: Complete
-Progress: [██████████] 100% (Phase 13 of 13)
-Last activity: 2026-02-11 — Completed 13-02-PLAN.md: Diagram multiplayer UI integration
+Progress: [██████████] 100%
+Last activity: 2026-02-12 — Completed 13.1-01-PLAN.md: CI/CD pipeline and environment configuration
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 35
-- Average duration: 3.5 min
-- Total execution time: 122.9 min
+- Total plans completed: 36
+- Average duration: 3.6 min
+- Total execution time: 147.9 min
 
 **By Phase:**
 
@@ -42,10 +42,18 @@ Last activity: 2026-02-11 — Completed 13-02-PLAN.md: Diagram multiplayer UI in
 | 11-partykit-infrastructure-persistence | 2 | 8.6 min | 4.3 min |
 | 12-document-multiplayer-cursors-yjs-migration | 2 | 8.2 min | 4.1 min |
 | 13-diagram-multiplayer-cursors | 2 | 8.9 min | 4.5 min |
+| 13.1-fix-deployment-pipeline | 1 | 25 min | 25 min |
 
 ## Accumulated Context
 
 ### Decisions
+
+Recent decisions from Phase 13.1-01:
+- Separate Cloudflare tokens: CLOUDFLARE_WORKERS_API_TOKEN for wrangler, CLOUDFLARE_API_TOKEN for RTK
+- PartyKit CI auth via GitHub token (Clerk tokens hang — tries browser-based session refresh)
+- npm overrides instead of --legacy-peer-deps for y-excalidraw peer dep resolution
+- Committed package-lock.json for deterministic CI installs
+- Relaxed health checks for WebSocket servers and SPA redirects
 
 Recent decisions from Phase 13-02:
 - No off-screen cursor indicators (cursors hidden when outside viewport per user decision)
@@ -134,10 +142,10 @@ Research notes for v0.10:
 
 ## Session Continuity
 
-Last session: 2026-02-11
-Stopped at: Completed 13-02-PLAN.md (Diagram multiplayer UI integration) - Phase 13 complete
+Last session: 2026-02-12
+Stopped at: Completed 13.1-01-PLAN.md (CI/CD pipeline and environment configuration) - Phase 13.1 complete
 Resume file: None
-Next step: Phase 13 complete - all v0.10 Multiplayer Cursors & Collaboration features delivered
+Next step: Phase 13.1 complete - CI/CD pipeline operational, all services deploying via GitHub Actions
 
 Config:
 {

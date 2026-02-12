@@ -246,4 +246,4 @@ Phases execute in numeric order: 11 → 12 → 13
 **Plans:** 1 plan
 
 Plans:
-- [ ] 13.1-01-PLAN.md — Environment config (.env.example, .gitignore) and GitHub Actions deployment workflow
+- [x] 13.1-01-PLAN.md — Environment config (.env.example, .gitignore) and GitHub Actions deployment workflow
