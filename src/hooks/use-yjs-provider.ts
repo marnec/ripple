@@ -20,6 +20,7 @@ export function useYjsProvider(opts: {
   const [isLoading, setIsLoading] = useState(enabled);
   const [isOffline, setIsOffline] = useState(false);
   const [provider, setProvider] = useState<YPartyKitProvider | null>(null);
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const providerRef = useRef<YPartyKitProvider | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
@@ -162,7 +163,7 @@ export function useYjsProvider(opts: {
       }
       setProvider(null);
     };
-  }, [resourceType, resourceId, enabled, yDoc, getToken]);
+  }, [resourceType, resourceId, enabled, yDoc, getToken, reconnectTrigger]);
 
   // Listen for browser offline/online events (independent of WebSocket close events)
   // This catches DevTools offline mode and airplane mode changes that don't close WebSockets
@@ -179,10 +180,17 @@ export function useYjsProvider(opts: {
     };
 
     const handleOnline = () => {
-      console.info("Browser online event detected");
+      console.info("Browser online event detected - triggering reconnection");
+      // Destroy the stale provider (its WebSocket is dead but Chrome didn't close it)
+      if (providerRef.current) {
+        providerRef.current.destroy();
+        providerRef.current = null;
+      }
+      setProvider(null);
       setIsOffline(false);
-      // Note: Don't set isConnected=true here. Let WebSocket sync/status events handle that.
-      // The provider will attempt reconnection automatically when network returns.
+      setIsLoading(true);
+      // Increment reconnectTrigger to force the connection useEffect to re-run
+      setReconnectTrigger((prev) => prev + 1);
     };
 
     window.addEventListener("offline", handleOffline);
