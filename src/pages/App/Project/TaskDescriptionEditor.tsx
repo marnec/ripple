@@ -10,7 +10,6 @@ import { useTheme } from "next-themes";
 
 type TaskDescriptionEditorProps = {
   editor: any;
-  onChange: () => void;
   documents?: Array<{ _id: string; name: string }>;
   diagrams?: Array<{ _id: string; name: string }>;
   members?: Array<{ userId: string; name?: string | null; image?: string }>;
@@ -19,13 +18,23 @@ type TaskDescriptionEditorProps = {
 
 export function TaskDescriptionEditor({
   editor,
-  onChange,
   documents,
   diagrams,
   members,
   className,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
+
+  if (!editor) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold text-muted-foreground">Description</h3>
+        <div className={cn("task-description-editor border rounded-md p-4 animate-pulse", className)}>
+          <div className="h-6 bg-muted rounded w-3/4" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -40,7 +49,6 @@ export function TaskDescriptionEditor({
       >
         <BlockNoteView
           editor={editor}
-          onChange={onChange}
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
         >

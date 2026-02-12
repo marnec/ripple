@@ -1,9 +1,11 @@
-import { useCreateBlockNote } from "@blocknote/react";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
+import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
+import { getUserColor } from "../../../lib/user-colors";
 
 export function useTaskDetail({
   taskId,
@@ -28,11 +30,47 @@ export function useTaskDetail({
   const [titleValue, setTitleValue] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  const descriptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const loadedTaskIdRef = useRef<Id<"tasks"> | null>(null);
-  const suppressOnChangeRef = useRef(false);
+  // Collaborative editor - Yjs handles sync automatically
+  const { editor, isLoading: editorLoading, isConnected, provider, yDoc } = useDocumentCollaboration({
+    documentId: taskId ?? "",
+    userName: currentUser?.name ?? "Anonymous",
+    userId: currentUser?._id ?? "anonymous",
+    schema: taskDescriptionSchema,
+    resourceType: "task",
+  });
 
-  const editor = useCreateBlockNote({ schema: taskDescriptionSchema });
+  const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
+
+  const clearDescription = useMutation(api.tasks.clearDescription);
+
+  // One-time migration: Convex description -> Yjs
+  const migrationDoneRef = useRef(false);
+  useEffect(() => {
+    if (!editor || !provider || !task || !taskId || migrationDoneRef.current) return;
+    if (!isConnected) return; // Wait for provider to connect
+
+    // Check if Yjs document is empty (no content yet)
+    const doc = editor.document;
+    const isEmpty = doc.length === 0 ||
+      (doc.length === 1 && doc[0].type === "paragraph" &&
+       (!doc[0].content || (Array.isArray(doc[0].content) && doc[0].content.length === 0)));
+
+    // If Yjs empty AND Convex has description, migrate
+    if (isEmpty && task.description) {
+      migrationDoneRef.current = true;
+      try {
+        const blocks = JSON.parse(task.description);
+        editor.replaceBlocks(editor.document, blocks);
+        // Clear Convex description to mark as migrated
+        void clearDescription({ taskId });
+      } catch (err) {
+        console.error("Task description migration failed:", err);
+      }
+    } else {
+      // No migration needed (either Yjs has content or no Convex description)
+      migrationDoneRef.current = true;
+    }
+  }, [editor, provider, isConnected, task, taskId, clearDescription]);
 
   // Sync title when task loads
   useEffect(() => {
@@ -41,26 +79,6 @@ export function useTaskDetail({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.title]);
-
-  // Load description into editor when task changes
-  useEffect(() => {
-    if (!task || !taskId) return;
-    if (loadedTaskIdRef.current === taskId) return;
-    loadedTaskIdRef.current = taskId;
-
-    suppressOnChangeRef.current = true;
-    const emptyBlock = [{ id: crypto.randomUUID(), type: "paragraph" as const, content: [] }];
-    if (task.description) {
-      try {
-        const blocks = JSON.parse(task.description);
-        editor.replaceBlocks(editor.document, blocks);
-      } catch {
-        editor.replaceBlocks(editor.document, emptyBlock);
-      }
-    } else {
-      editor.replaceBlocks(editor.document, emptyBlock);
-    }
-  }, [task, taskId, editor]);
 
   const handleTitleBlur = () => {
     if (taskId && titleValue.trim() && titleValue !== task?.title) {
@@ -110,39 +128,12 @@ export function useTaskDetail({
     }
   };
 
-  const handleDescriptionChange = () => {
-    if (suppressOnChangeRef.current) {
-      suppressOnChangeRef.current = false;
-      return;
-    }
-
-    if (descriptionTimeoutRef.current) {
-      clearTimeout(descriptionTimeoutRef.current);
-    }
-
-    descriptionTimeoutRef.current = setTimeout(() => {
-      if (taskId) {
-        void updateTask({
-          taskId,
-          description: JSON.stringify(editor.document),
-        });
-      }
-    }, 500);
-  };
-
   const handleDelete = (onDeleted: () => void) => {
     if (taskId) {
       void removeTask({ taskId }).then(() => {
         setShowDeleteDialog(false);
         onDeleted();
       });
-    }
-  };
-
-  const resetEditor = () => {
-    loadedTaskIdRef.current = null;
-    if (descriptionTimeoutRef.current) {
-      clearTimeout(descriptionTimeoutRef.current);
     }
   };
 
@@ -154,6 +145,10 @@ export function useTaskDetail({
     documents,
     currentUser,
     editor,
+    editorLoading,
+    isConnected,
+    provider,
+    remoteUsers,
     titleValue,
     setTitleValue,
     titleInputRef,
@@ -164,10 +159,8 @@ export function useTaskDetail({
     handleAssigneeChange,
     handleAddLabel,
     handleRemoveLabel,
-    handleDescriptionChange,
     showDeleteDialog,
     setShowDeleteDialog,
     handleDelete,
-    resetEditor,
   };
 }
