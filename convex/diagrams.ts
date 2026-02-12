@@ -9,7 +9,7 @@ const diagramValidator = v.object({
   workspaceId: v.id("workspaces"),
   name: v.string(),
   tags: v.optional(v.array(v.string())),
-  content: v.optional(v.string()),
+  yjsSnapshotId: v.optional(v.id("_storage")),
   roleCount: v.optional(v.object({
     admin: v.number(),
     member: v.number(),
@@ -107,12 +107,6 @@ export const create = mutation({
     const diagramId = await ctx.db.insert("diagrams", {
       workspaceId,
       name: diagramName,
-      content: JSON.stringify({
-        elements: [],
-        appState: {
-          viewBackgroundColor: "#ffffff",
-        },
-      }),
       roleCount: {
         [DiagramRole.ADMIN]: 1,
         [DiagramRole.MEMBER]: 0,
@@ -155,70 +149,6 @@ export const rename = mutation({
       );
 
     await ctx.db.patch(id, { name });
-    return null;
-  },
-});
-
-export const updateContent = mutation({
-  args: {
-    id: v.id("diagrams"),
-    content: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, { id, content }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const diagram = await ctx.db.get(id);
-
-    if (!diagram) throw new ConvexError("Diagram not found");
-
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
-      );
-
-    const newScene = JSON.parse(content);
-    const existingScene = JSON.parse(
-      diagram.content || '{"elements": [], "appState": {}}',
-    );
-
-    const existingElements = Array.isArray(existingScene.elements)
-      ? existingScene.elements
-      : [];
-
-    const existingElementsMap = new Map(
-      existingElements.map((el: { id: string }) => [el.id, el]),
-    );
-
-    const newElements = Array.isArray(newScene.elements)
-      ? newScene.elements
-      : [];
-
-    for (const element of newElements) {
-      existingElementsMap.set(element.id, element);
-    }
-
-    const mergedElements = Array.from(existingElementsMap.values());
-
-    const mergedScene = {
-      elements: mergedElements,
-      appState: {
-        ...(existingScene.appState || {}),
-        ...(newScene.appState || {}),
-      },
-    };
-
-    await ctx.db.patch(id, { content: JSON.stringify(mergedScene) });
     return null;
   },
 });

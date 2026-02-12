@@ -103,6 +103,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     tags: v.optional(v.array(v.string())),
+    yjsSnapshotId: v.optional(v.id("_storage")),
     roleCount: v.object({
       [DocumentRole.ADMIN]: v.number(),
       [DocumentRole.MEMBER]: v.number(),
@@ -128,7 +129,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     tags: v.optional(v.array(v.string())),
-    content: v.optional(v.string()),
+    yjsSnapshotId: v.optional(v.id("_storage")),
     roleCount: v.optional(v.object({
       [DiagramRole.ADMIN]: v.number(),
       [DiagramRole.MEMBER]: v.number(),
@@ -189,7 +190,6 @@ export default defineSchema({
     projectId: v.id("projects"),
     workspaceId: v.id("workspaces"), // denormalized for cross-project queries
     title: v.string(),
-    description: v.optional(v.string()), // BlockNote JSON content stored as string
     statusId: v.id("taskStatuses"), // reference to customizable status
     assigneeId: v.optional(v.id("users")), // single assignee
     priority: v.union(
@@ -202,6 +202,7 @@ export default defineSchema({
     completed: v.boolean(), // denormalized from status.isCompleted for efficient filtering
     creatorId: v.id("users"), // who created the task
     position: v.optional(v.string()), // fractional index for ordering within status column
+    yjsSnapshotId: v.optional(v.id("_storage")),
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
