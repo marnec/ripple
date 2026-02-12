@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-12)
 ## Current Position
 
 Phase: 16 of 17 (Auth Resilience)
-Plan: 4 of 4 in current phase
+Plan: 5 of 5 in current phase
 Status: Completed
-Last activity: 2026-02-12 — Completed 16-04-PLAN.md (SVG Preview Storage)
+Last activity: 2026-02-12 — Completed 16-05-PLAN.md (Online Event Reconnection)
 
-Progress: [████████████████████░░░░░░░░] 81% (47/58 plans complete)
+Progress: [████████████████████░░░░░░░░] 83% (48/58 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 47
-- Average duration: 3.8 min
-- Total execution time: 194.0 min
+- Total plans completed: 48
+- Average duration: 3.7 min
+- Total execution time: 195.5 min
 
 **By Phase:**
 
@@ -47,14 +47,15 @@ Progress: [████████████████████░░░
 | 13.2-add-document-like-collaboration-to-the-blocknote-editor-in-tasks | 2 | 9 min | 4.5 min |
 | 14-protocol-foundation | 1 | 4 min | 4.0 min |
 | 15-persistence-layer | 2 | 5.4 min | 2.7 min |
-| 16-auth-resilience | 4 | 17.0 min | 4.2 min |
+| 16-auth-resilience | 5 | 18.5 min | 3.7 min |
 | 17-graceful-degradation | 2 | 10.7 min | 5.4 min |
 
 **Recent Trend:**
-- Last 5 plans: 3.9, 5.5, 5.2, 3.1, 4.5 min
+- Last 5 plans: 5.5, 5.2, 3.1, 4.5, 1.5 min
 - Trend: Consistently stable execution times (excluding deployment outlier)
 
 *Updated: 2026-02-12*
+| Phase 16 P05 | 1.5 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,7 @@ Recent decisions affecting v0.11 work:
 - [Phase 16-03]: Window offline/online events supplement WebSocket-based detection (both needed for full coverage)
 - [Phase 16-03]: navigator.onLine check at connect time prevents unnecessary connection attempts
 - [Phase 16-03]: Diagram block click navigation works regardless of editor editable state
+- [Phase 16-05]: Reconnection trigger pattern forces connection useEffect re-run on browser online event
 
 ### Pending Todos
 
@@ -140,6 +142,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 16-04-PLAN.md (SVG Preview Storage)
+Stopped at: Completed 16-05-PLAN.md (Online Event Reconnection)
 Resume file: None
 Next step: Phase 16 complete - ready for Phase 16 UAT verification
