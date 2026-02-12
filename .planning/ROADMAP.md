@@ -239,6 +239,16 @@ Phases execute in numeric order: 11 → 12 → 13
 | 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 13. Diagram Multiplayer Cursors | v0.10 | 2/2 | Complete | 2026-02-11 |
 
+### Phase 13.2: add document-like collaboration to the blocknote editor in tasks (INSERTED)
+
+**Goal:** Add real-time collaborative Yjs-based editing to task descriptions, reusing PartyKit/Yjs infrastructure from Phases 11-13, with live cursors, active users UI, and migration from Convex-stored descriptions
+**Depends on:** Phase 13
+**Plans:** 2 plans
+
+Plans:
+- [ ] 13.2-01-PLAN.md — Backend task collaboration tokens, generalize useDocumentCollaboration hook, clearDescription mutation
+- [ ] 13.2-02-PLAN.md — Rewrite useTaskDetail for Yjs collaboration, add ActiveUsers/ConnectionStatus to sheet and full-page views
+
 ### Phase 13.1: Fix deployment pipeline and environment configuration (INSERTED)
 
 **Goal:** Create CI/CD pipeline (GitHub Actions) for sequential multi-service deployment (Convex, PartyKit, Cloudflare Workers), document all environment variables, and enable reliable production deployments
