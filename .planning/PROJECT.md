@@ -36,15 +36,23 @@ Seamless integration between all workspace features — users, documents, diagra
 - ✓ @user mentions in chat with autocomplete and push notifications — v0.9
 - ✓ Emoji reactions on messages (Slack-style pills with counts) — v0.9
 - ✓ Inline reply-to messages with quoted preview — v0.9
+- ✓ PartyKit WebSocket infrastructure with Yjs snapshot persistence — v0.10
+- ✓ Real-time multiplayer cursors in BlockNote documents — v0.10
+- ✓ Full Yjs migration replacing ProseMirror Sync for documents — v0.10
+- ✓ Real-time multiplayer cursors in Excalidraw diagrams — v0.10
+- ✓ Collaborative Yjs-based task description editing — v0.10
+- ✓ Active users avatar stacks and connection status indicators — v0.10
+- ✓ CI/CD pipeline for multi-service deployment — v0.10
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Real-time multiplayer cursors in documents (BlockNote)
-- [ ] Real-time multiplayer cursors in diagrams (Excalidraw)
-- [ ] WebSocket-based collaboration infrastructure (PartyKit or equivalent)
-- [ ] Evaluate and potentially refactor collaborative editing to use new infra
+- [ ] Yjs→Convex snapshot persistence on session close (content recovery)
+- [ ] Token refresh mechanism for WebSocket reconnection without page reload
+- [ ] Permission re-validation in PartyKit (TTL-based membership re-check)
+- [ ] Content recovery path from Convex backup
+- [ ] Graceful degradation on PartyKit unavailability
 - [ ] Due dates on tasks
 - [ ] Board filters (by assignee, priority, labels)
 - [ ] Configurable views (list view, calendar view)
@@ -64,25 +72,27 @@ Seamless integration between all workspace features — users, documents, diagra
 - Gantt charts — implies false precision; Kanban is more flexible
 - External task sharing — security complexity; workspace members only
 
-## Current Milestone: v0.10 Multiplayer Cursors & Collaboration
+## Current Milestone: v0.11 Architectural Risk Mitigation
 
-**Goal:** Add real-time multiplayer cursor awareness to documents and diagrams, backed by proper WebSocket infrastructure — and evaluate whether the new infra should also replace/improve the existing collaborative editing approach.
+**Goal:** Harden the PartyKit/Convex split persistence architecture — ensure data durability, fix auth gaps, and add graceful degradation so the collaboration layer is production-ready.
 
 **Target features:**
-- Real-time multiplayer cursors in BlockNote documents (see other users' cursor positions and selections)
-- Real-time multiplayer cursors in Excalidraw diagrams (see other users' pointer positions)
-- WebSocket-based collaboration infrastructure (PartyKit preferred, Cloudflare Workers acceptable)
-- Deep evaluation of current ProseMirror Sync approach vs new Yjs/CRDT-based collaboration
-- Integration with Convex backend storage (ensure persistence strategy is compatible)
+- Yjs→Convex snapshot persistence (flush full Yjs state to Convex on last client disconnect)
+- Token refresh mechanism (WebSocket reconnection without page reload)
+- PartyKit permission re-validation (periodic membership checks against Convex)
+- Content recovery from Convex backup (fallback when PartyKit state is lost)
+- Graceful degradation (read-only mode when PartyKit is unavailable)
+- Shared types and protocol versioning between PartyKit and Convex
 
 ## Context
 
-Shipped v0.9 with chat features (reactions, @mentions, reply-to) on top of v0.8 task management.
-Tech stack: Convex, React 18, React Router v6, Tailwind CSS, shadcn/ui, BlockNote, Excalidraw, dnd-kit, fractional-indexing.
-Current collaborative editing uses ProseMirror Sync. Current presence uses Convex Presence.
-Previous attempt at multiplayer cursors with Cloudflare RTK failed due to 5 events/s rate limiting.
-BlockNote offers PartyKit integration for Yjs-based collaboration. Excalidraw self-hosted collaboration is less documented — may need source code analysis.
-Key open question: how does WebSocket-based collab (Yjs/PartyKit) interact with Convex's own optimistic update and reconciliation model? May require architectural changes.
+Shipped v0.10 with full Yjs/PartyKit collaboration (multiplayer cursors in documents, diagrams, and task descriptions).
+Tech stack: Convex, React 18, React Router v6, Tailwind CSS, shadcn/ui, BlockNote, Excalidraw, PartyKit, Yjs, y-partykit, y-indexeddb.
+Collaborative editing uses Yjs CRDTs via PartyKit WebSocket. Presence uses Yjs Awareness (replaced Convex Presence).
+PartyKit persists via snapshot mode (Durable Objects). No write-through to Convex — content lives only in PartyKit + IndexedDB.
+Token auth is one-time-use (consumed on connect). Reconnection after disconnect requires page reload.
+No permission re-validation after initial connect. Removed users can edit until they disconnect.
+CI/CD deploys Convex, PartyKit, and Cloudflare Workers sequentially via GitHub Actions.
 
 ## Constraints
 
@@ -112,4 +122,4 @@ Key open question: how does WebSocket-based collab (Yjs/PartyKit) interact with 
 | Pass plainText to notification action | Simpler than querying message by ID for preview | ✓ Good |
 
 ---
-*Last updated: 2026-02-10 after v0.10 milestone start*
+*Last updated: 2026-02-12 after v0.11 milestone start*
