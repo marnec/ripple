@@ -80,6 +80,11 @@
     "yjs": "^13.6.29",
     "zod": "^3.25.76"
   },
+  "overrides": {
+    "y-excalidraw": {
+      "@excalidraw/excalidraw": "$@excalidraw/excalidraw"
+    }
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
     "@types/color-hash": "^2.0.0",
