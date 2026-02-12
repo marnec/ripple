@@ -238,6 +238,7 @@ Phases execute in numeric order: 11 → 12 → 13
 | 11. PartyKit Infrastructure & Persistence | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 13. Diagram Multiplayer Cursors | v0.10 | 2/2 | Complete | 2026-02-11 |
+| 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
 
 ### Phase 13.2: add document-like collaboration to the blocknote editor in tasks (INSERTED)
 
@@ -246,8 +247,8 @@ Phases execute in numeric order: 11 → 12 → 13
 **Plans:** 2 plans
 
 Plans:
-- [ ] 13.2-01-PLAN.md — Backend task collaboration tokens, generalize useDocumentCollaboration hook, clearDescription mutation
-- [ ] 13.2-02-PLAN.md — Rewrite useTaskDetail for Yjs collaboration, add ActiveUsers/ConnectionStatus to sheet and full-page views
+- [x] 13.2-01-PLAN.md — Backend task collaboration tokens, generalize useDocumentCollaboration hook, clearDescription mutation
+- [x] 13.2-02-PLAN.md — Rewrite useTaskDetail for Yjs collaboration, add ActiveUsers/ConnectionStatus to sheet and full-page views
 
 ### Phase 13.1: Fix deployment pipeline and environment configuration (INSERTED)
 
