@@ -266,10 +266,11 @@ Plans:
   2. When a user opens a document with no active PartyKit state, the editor loads content from the Convex snapshot
   3. User can recover full document content from Convex after a PartyKit server restart (no data loss)
   4. Same persistence behavior works for diagrams and task descriptions (all three resource types)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 15-01: TBD
+- [ ] 15-01-PLAN.md -- Convex schema (yjsSnapshotId fields), snapshot mutations, and HTTP save/load endpoints
+- [ ] 15-02-PLAN.md -- PartyKit periodic saves, disconnect debounce, cold-start loading from Convex snapshots
 
 #### Phase 16: Auth Resilience
 **Goal**: WebSocket connections survive token expiration and permission changes
@@ -324,6 +325,6 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 13.1. Fix deployment pipeline (INSERTED) | v0.10 | 1/1 | Complete | 2026-02-11 |
 | 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
 | 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
-| 15. Persistence Layer | v0.11 | 0/1 | Not started | - |
+| 15. Persistence Layer | v0.11 | 0/2 | Not started | - |
 | 16. Auth Resilience | v0.11 | 0/1 | Not started | - |
 | 17. Graceful Degradation | v0.11 | 0/1 | Not started | - |
