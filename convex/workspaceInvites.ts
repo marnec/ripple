@@ -67,7 +67,7 @@ export const create = mutation({
     await ctx.scheduler.runAfter(0, internal.emails.sendWorkspaceInvite, {
       inviteId,
       workspaceName: workspace!.name,
-      inviterName: inviter!.email!,
+      inviterName: inviter!.name ?? inviter!.email!,
       recipientEmail: email,
     });
 
@@ -99,9 +99,11 @@ export const listByEmail = query({
     return Promise.all(
       invites.map(async (invite) => {
         const workspace = await ctx.db.get(invite.workspaceId);
+        const inviter = await ctx.db.get(invite.invitedBy);
         return {
           ...invite,
           workspace,
+          inviterName: inviter?.name ?? inviter?.email ?? "Someone",
         };
       }),
     );
@@ -146,6 +148,29 @@ export const accept = mutation({
     // Update invite status
     await ctx.db.patch(inviteId, {
       status: InviteStatus.ACCEPTED,
+    });
+  },
+});
+
+export const decline = mutation({
+  args: {
+    inviteId: v.id("workspaceInvites"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { inviteId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const invite = await ctx.db.get(inviteId);
+    if (!invite) throw new ConvexError("Invite not found");
+
+    const user = await ctx.db.get(userId);
+    if (!user?.email || user.email !== invite.email) {
+      throw new ConvexError("Not authorized to decline this invite");
+    }
+
+    await ctx.db.patch(inviteId, {
+      status: InviteStatus.DECLINED,
     });
   },
 });

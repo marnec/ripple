@@ -15,9 +15,12 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
+  Mail,
   Sparkles,
 } from "lucide-react";
-import { useContext } from "react";
+import { useContext, useState } from "react";
+import { PendingInvitesDialog, usePendingInvites } from "./Workspace/PendingInvites";
+import { Badge } from "../../components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
 import {
   SidebarMenu,
@@ -31,6 +34,8 @@ export function NavUser() {
   const { isMobile } = useSidebar();
   const user = useContext(UserContext);
   const { signOut } = useAuthActions();
+  const [showInvites, setShowInvites] = useState(false);
+  const pendingInvites = usePendingInvites();
 
   return (
     <SidebarMenu>
@@ -97,6 +102,15 @@ export function NavUser() {
                 <Bell />
                 Notifications
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowInvites(true)}>
+                <Mail />
+                Invitations
+                {pendingInvites.length > 0 && (
+                  <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full px-1.5 text-[10px]">
+                    {pendingInvites.length}
+                  </Badge>
+                )}
+              </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => void signOut()}>
@@ -106,6 +120,7 @@ export function NavUser() {
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
+      <PendingInvitesDialog open={showInvites} onOpenChange={setShowInvites} />
     </SidebarMenu>
   );
 }
