@@ -280,13 +280,14 @@ Plans:
   1. When a WebSocket connection drops, the collaboration provider automatically reconnects without requiring page reload
   2. When a user's membership is revoked in Convex, their PartyKit connection terminates within 60 seconds
   3. User stays connected during extended editing sessions (beyond initial token expiration)
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
 - [x] 16-01-PLAN.md -- Token refresh and reconnection (dynamic params function, per-connection user state)
 - [x] 16-02-PLAN.md -- Permission re-validation (checkAccess endpoint, periodic membership checks, permission_revoked handler)
 - [x] 16-03-PLAN.md -- Gap closure: connection indicator offline detection and DiagramBlock click-to-navigate
 - [x] 16-04-PLAN.md -- Gap closure: SVG preview storage and rendering for diagram embeds
+- [ ] 16-05-PLAN.md -- Gap closure: reconnect provider on browser online event recovery
 
 #### Phase 17: Graceful Degradation
 **Goal**: Editors remain usable when PartyKit is unavailable
@@ -330,5 +331,5 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
 | 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
 | 15. Persistence Layer | v0.11 | 2/2 | Complete | 2026-02-12 |
-| 16. Auth Resilience | v0.11 | 4/4 | Complete | 2026-02-12 |
+| 16. Auth Resilience | v0.11 | 4/5 | In Progress | |
 | 17. Graceful Degradation | v0.11 | 2/2 | Complete | 2026-02-12 |
