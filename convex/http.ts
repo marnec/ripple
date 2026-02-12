@@ -88,4 +88,276 @@ http.route({
   }),
 });
 
+/**
+ * POST /collaboration/snapshot
+ *
+ * Save a Yjs snapshot from PartyKit to Convex file storage.
+ * Called by PartyKit server when persisting document state.
+ *
+ * Authentication: Shared secret via Authorization: Bearer <PARTYKIT_SECRET>
+ * Query params: roomId (format: "{resourceType}-{resourceId}")
+ * Body: Binary Yjs snapshot data
+ *
+ * Response:
+ * - 200: { success: true }
+ * - 400: Missing roomId
+ * - 401: Unauthorized (missing/invalid secret)
+ * - 500: Internal server error
+ *
+ * Note: Requires PARTYKIT_SECRET environment variable to be set.
+ * Set via: npx convex env set PARTYKIT_SECRET <value>
+ */
+http.route({
+  path: "/collaboration/snapshot",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Validate shared secret
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.PARTYKIT_SECRET;
+
+      if (!expectedSecret) {
+        console.error(
+          "PARTYKIT_SECRET environment variable not configured"
+        );
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Missing authorization header" }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const providedSecret = authHeader.substring(7); // Remove "Bearer "
+      if (providedSecret !== expectedSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Extract roomId from query params
+      const url = new URL(request.url);
+      const roomId = url.searchParams.get("roomId");
+
+      if (!roomId) {
+        return new Response(JSON.stringify({ error: "Missing roomId" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Parse roomId to extract resourceType and resourceId
+      // Format: "{resourceType}-{resourceId}"
+      const dashIndex = roomId.indexOf("-");
+      if (dashIndex === -1) {
+        return new Response(
+          JSON.stringify({ error: "Invalid roomId format" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const resourceType = roomId.substring(0, dashIndex);
+      const resourceId = roomId.substring(dashIndex + 1);
+
+      // Validate resource type
+      if (
+        resourceType !== "doc" &&
+        resourceType !== "diagram" &&
+        resourceType !== "task"
+      ) {
+        return new Response(
+          JSON.stringify({ error: "Invalid resource type" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Read binary snapshot data
+      const blob = await request.blob();
+
+      // Store in Convex file storage
+      const storageId = await ctx.storage.store(blob);
+
+      // Save snapshot reference to resource
+      await ctx.runMutation(internal.snapshots.saveSnapshot, {
+        resourceType,
+        resourceId,
+        storageId,
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Snapshot save error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+  }),
+});
+
+/**
+ * GET /collaboration/snapshot
+ *
+ * Load a Yjs snapshot from Convex file storage for PartyKit cold-start hydration.
+ * Called by PartyKit server when initializing a room with no in-memory state.
+ *
+ * Authentication: Shared secret via Authorization: Bearer <PARTYKIT_SECRET>
+ * Query params: roomId (format: "{resourceType}-{resourceId}")
+ *
+ * Response:
+ * - 200: Binary Yjs snapshot data (application/octet-stream)
+ * - 400: Missing roomId
+ * - 401: Unauthorized (missing/invalid secret)
+ * - 404: No snapshot found
+ * - 500: Internal server error
+ */
+http.route({
+  path: "/collaboration/snapshot",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Validate shared secret
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.PARTYKIT_SECRET;
+
+      if (!expectedSecret) {
+        console.error(
+          "PARTYKIT_SECRET environment variable not configured"
+        );
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Missing authorization header" }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const providedSecret = authHeader.substring(7); // Remove "Bearer "
+      if (providedSecret !== expectedSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Extract roomId from query params
+      const url = new URL(request.url);
+      const roomId = url.searchParams.get("roomId");
+
+      if (!roomId) {
+        return new Response(JSON.stringify({ error: "Missing roomId" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Parse roomId to extract resourceType and resourceId
+      const dashIndex = roomId.indexOf("-");
+      if (dashIndex === -1) {
+        return new Response(
+          JSON.stringify({ error: "Invalid roomId format" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const resourceType = roomId.substring(0, dashIndex);
+      const resourceId = roomId.substring(dashIndex + 1);
+
+      // Validate resource type
+      if (
+        resourceType !== "doc" &&
+        resourceType !== "diagram" &&
+        resourceType !== "task"
+      ) {
+        return new Response(
+          JSON.stringify({ error: "Invalid resource type" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Get snapshot storage ID
+      const storageId = await ctx.runQuery(internal.snapshots.getSnapshot, {
+        resourceType,
+        resourceId,
+      });
+
+      if (!storageId) {
+        return new Response(JSON.stringify({ error: "No snapshot found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Retrieve blob from storage
+      const blob = await ctx.storage.get(storageId);
+
+      if (!blob) {
+        return new Response(
+          JSON.stringify({ error: "Snapshot file not found" }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Return binary snapshot data
+      return new Response(blob, {
+        status: 200,
+        headers: { "Content-Type": "application/octet-stream" },
+      });
+    } catch (error) {
+      console.error("Snapshot load error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+  }),
+});
+
 export default http;
