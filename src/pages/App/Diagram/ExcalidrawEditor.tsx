@@ -19,6 +19,7 @@ interface ExcalidrawEditorProps {
   awareness: Awareness | null;
   provider: YPartyKitProvider | null;
   onExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void;
+  viewModeEnabled?: boolean;
 }
 
 export function ExcalidrawEditor({
@@ -27,6 +28,7 @@ export function ExcalidrawEditor({
   awareness,
   provider,
   onExcalidrawAPI,
+  viewModeEnabled,
 }: ExcalidrawEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI>();
   const { resolvedTheme } = useTheme();
@@ -81,6 +83,7 @@ export function ExcalidrawEditor({
           elements: yElements ? yjsToExcalidraw(yElements) : [],
         }}
         onPointerUpdate={handlePointerUpdate}
+        viewModeEnabled={viewModeEnabled}
         zenModeEnabled={true}
         UIOptions={{
           tools: { image: false },
