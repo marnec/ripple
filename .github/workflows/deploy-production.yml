@@ -1,0 +1,122 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy-convex:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set Convex environment variables
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          npx convex env set AUTH_RESEND_KEY "${{ secrets.AUTH_RESEND_KEY }}"
+          npx convex env set SITE_URL "${{ secrets.SITE_URL }}"
+          npx convex env set VAPID_SUBJECT "${{ secrets.VAPID_SUBJECT }}"
+          npx convex env set VAPID_PUBLIC_KEY "${{ secrets.VAPID_PUBLIC_KEY }}"
+          npx convex env set VAPID_PRIVATE_KEY "${{ secrets.VAPID_PRIVATE_KEY }}"
+          npx convex env set CLOUDFLARE_ACCOUNT_ID "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          npx convex env set CLOUDFLARE_RTK_APP_ID "${{ secrets.CLOUDFLARE_RTK_APP_ID }}"
+          npx convex env set CLOUDFLARE_API_TOKEN "${{ secrets.CLOUDFLARE_RTK_API_TOKEN }}"
+
+      - name: Deploy Convex backend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: npx convex deploy
+
+      - name: Health check Convex
+        run: |
+          curl -f -s -o /dev/null -w "%{http_code}" "${{ secrets.VITE_CONVEX_URL }}" || exit 1
+
+  deploy-partykit:
+    needs: deploy-convex
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy PartyKit
+        env:
+          PARTYKIT_TOKEN: ${{ secrets.PARTYKIT_TOKEN }}
+        run: npx partykit deploy --var CONVEX_SITE_URL=${{ secrets.CONVEX_SITE_URL }}
+
+      - name: Health check PartyKit
+        run: |
+          curl -f -s -o /dev/null -I "https://${{ secrets.VITE_PARTYKIT_HOST }}" || exit 1
+
+  deploy-frontend:
+    needs: [deploy-convex, deploy-partykit]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
+          VITE_CONVEX_SITE_URL: ${{ secrets.VITE_CONVEX_SITE_URL }}
+          VITE_PARTYKIT_HOST: ${{ secrets.VITE_PARTYKIT_HOST }}
+        run: npm run build
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy
+
+      - name: Health check frontend
+        run: |
+          curl -f -s -o /dev/null -I "https://ripple.conduits.space" || exit 1
+
+      - name: Deployment summary
+        run: |
+          echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Convex backend deployed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ PartyKit collaboration server deployed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Frontend deployed to Cloudflare Workers" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Production URL: https://ripple.conduits.space" >> $GITHUB_STEP_SUMMARY
