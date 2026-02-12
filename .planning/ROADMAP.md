@@ -272,7 +272,7 @@ Plans:
 - [x] 15-01-PLAN.md -- Convex schema (yjsSnapshotId fields), snapshot mutations, and HTTP save/load endpoints
 - [x] 15-02-PLAN.md -- PartyKit periodic saves, disconnect debounce, cold-start loading from Convex snapshots
 
-#### Phase 16: Auth Resilience
+#### Phase 16: Auth Resilience ✓
 **Goal**: WebSocket connections survive token expiration and permission changes
 **Depends on**: Phase 15
 **Requirements**: AUTH-01, AUTH-02
@@ -283,8 +283,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 16-01-PLAN.md -- Token refresh and reconnection (dynamic params function, per-connection user state)
-- [ ] 16-02-PLAN.md -- Permission re-validation (checkAccess endpoint, periodic membership checks, permission_revoked handler)
+- [x] 16-01-PLAN.md -- Token refresh and reconnection (dynamic params function, per-connection user state)
+- [x] 16-02-PLAN.md -- Permission re-validation (checkAccess endpoint, periodic membership checks, permission_revoked handler)
 
 #### Phase 17: Graceful Degradation
 **Goal**: Editors remain usable when PartyKit is unavailable
@@ -327,5 +327,5 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
 | 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
 | 15. Persistence Layer | v0.11 | 2/2 | Complete | 2026-02-12 |
-| 16. Auth Resilience | v0.11 | 0/1 | Not started | - |
+| 16. Auth Resilience | v0.11 | 2/2 | Complete | 2026-02-12 |
 | 17. Graceful Degradation | v0.11 | 0/1 | Not started | - |
