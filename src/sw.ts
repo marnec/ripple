@@ -9,6 +9,14 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Clean old caches from previous versions
 cleanupOutdatedCaches();
 
+// Activate new service worker immediately (skip waiting for old tabs to close)
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // Push notification handler
 self.addEventListener("push", (event) => {
   const data = event.data
