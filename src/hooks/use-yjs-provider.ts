@@ -35,6 +35,14 @@ export function useYjsProvider(opts: {
     let cancelled = false;
 
     const connect = async () => {
+      // Check navigator.onLine before attempting connection
+      if (!navigator.onLine) {
+        console.warn("Browser is offline - skipping connection attempt");
+        setIsOffline(true);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         // Compute roomId outside params function (YPartyKitProvider needs it at construction)
         const roomId = `${resourceType}-${resourceId}`;
@@ -155,6 +163,36 @@ export function useYjsProvider(opts: {
       setProvider(null);
     };
   }, [resourceType, resourceId, enabled, yDoc, getToken]);
+
+  // Listen for browser offline/online events (independent of WebSocket close events)
+  // This catches DevTools offline mode and airplane mode changes that don't close WebSockets
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const handleOffline = () => {
+      console.warn("Browser offline event detected");
+      setIsOffline(true);
+      setIsConnected(false);
+      isConnectedRef.current = false;
+    };
+
+    const handleOnline = () => {
+      console.info("Browser online event detected");
+      setIsOffline(false);
+      // Note: Don't set isConnected=true here. Let WebSocket sync/status events handle that.
+      // The provider will attempt reconnection automatically when network returns.
+    };
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [enabled]);
 
   // Cleanup yDoc on unmount or resourceId change
   useEffect(() => {
