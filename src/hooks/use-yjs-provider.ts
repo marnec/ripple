@@ -58,6 +58,26 @@ export function useYjsProvider(opts: {
         providerRef.current = newProvider;
         setProvider(newProvider);
 
+        // Handler for custom protocol messages (permission_revoked, etc.)
+        const handleProtocolMessage = (event: MessageEvent) => {
+          if (typeof event.data !== "string") return;
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "permission_revoked") {
+              console.warn("Permission revoked:", msg.reason);
+              if (!cancelled) {
+                setIsConnected(false);
+                newProvider.shouldConnect = false; // Prevent reconnection
+                newProvider.destroy();
+                providerRef.current = null;
+                setProvider(null);
+              }
+            }
+          } catch {
+            // Not JSON — skip binary messages
+          }
+        };
+
         newProvider.on("sync", (synced: boolean) => {
           if (!cancelled) {
             setIsConnected(synced);
@@ -68,6 +88,11 @@ export function useYjsProvider(opts: {
         newProvider.on("status", ({ status }: { status: string }) => {
           if (!cancelled) {
             setIsConnected(status === "connected");
+
+            // Attach message listener when connected
+            if (status === "connected" && newProvider.ws) {
+              newProvider.ws.addEventListener("message", handleProtocolMessage);
+            }
           }
         });
       } catch (err) {

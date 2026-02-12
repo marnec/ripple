@@ -83,6 +83,49 @@ export default class CollaborationServer implements Party.Server {
   }
 
   /**
+   * Check permissions for all connected users.
+   * Disconnects users whose access has been revoked.
+   * Fails open (doesn't disconnect on check failure) to avoid disrupting legitimate users.
+   */
+  private async checkPermissions(): Promise<void> {
+    const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
+    const secret = this.room.env.PARTYKIT_SECRET as string;
+    if (!convexSiteUrl || !secret) return;
+
+    for (const conn of this.room.getConnections()) {
+      const state = conn.state as ConnectionState | undefined;
+      if (!state?.userId) continue;
+
+      try {
+        const url = new URL(`${convexSiteUrl}/collaboration/check-access`);
+        url.searchParams.set("roomId", this.room.id);
+        url.searchParams.set("userId", state.userId);
+
+        const response = await fetch(url.toString(), {
+          method: "GET",
+          headers: { "Authorization": `Bearer ${secret}` },
+        });
+
+        if (response.ok) {
+          const data = await response.json() as { hasAccess: boolean };
+          if (!data.hasAccess) {
+            console.log(`Permission revoked for user ${state.userId} in room ${this.room.id}`);
+            const msg: ServerMessage = {
+              type: "permission_revoked",
+              reason: "Your access to this resource has been revoked",
+            };
+            conn.send(JSON.stringify(msg));
+            conn.close(1008, "AUTH_FORBIDDEN");
+          }
+        }
+      } catch (error) {
+        // Don't disconnect on check failure — fail open to avoid disrupting legitimate users
+        console.error(`Permission check failed for user ${state.userId}:`, error);
+      }
+    }
+  }
+
+  /**
    * Save Yjs snapshot to Convex.
    * Logs errors but does not throw (fails gracefully).
    */
@@ -262,6 +305,7 @@ export default class CollaborationServer implements Party.Server {
         // Someone reconnected -- cancel disconnect save
         console.log(`User reconnected to room ${this.room.id} during debounce, cancelling save`);
         this.saveAlarmScheduled = false;
+        await this.checkPermissions();
         // Periodic alarm will be rescheduled by onConnect
       }
     } else if (alarmType === ALARM_TYPE_PERIODIC) {
@@ -274,6 +318,7 @@ export default class CollaborationServer implements Party.Server {
       if (connectionCount > 0) {
         console.log(`Periodic save triggered for room ${this.room.id}`);
         await this.saveSnapshotToConvex();
+        await this.checkPermissions();
         // Reschedule next periodic save
         await this.room.storage.put("alarmType", ALARM_TYPE_PERIODIC);
         await this.room.storage.setAlarm(Date.now() + PERIODIC_SAVE_INTERVAL);
