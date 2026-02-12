@@ -61,17 +61,19 @@ export function TaskDetailSheet({
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <div className="absolute right-14 top-4 flex items-center gap-2" style={{ zIndex: 10 }}>
             <ConnectionStatus isConnected={detail.isConnected} />
-            <ActiveUsers
-              remoteUsers={detail.remoteUsers}
-              currentUser={
-                detail.currentUser
-                  ? {
-                      name: detail.currentUser.name,
-                      color: getUserColor(detail.currentUser._id),
-                    }
-                  : undefined
-              }
-            />
+            {detail.isConnected && (
+              <ActiveUsers
+                remoteUsers={detail.remoteUsers}
+                currentUser={
+                  detail.currentUser
+                    ? {
+                        name: detail.currentUser.name,
+                        color: getUserColor(detail.currentUser._id),
+                      }
+                    : undefined
+                }
+              />
+            )}
           </div>
           <Button
             variant="ghost"

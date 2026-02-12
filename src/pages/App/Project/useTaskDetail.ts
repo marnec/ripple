@@ -30,7 +30,7 @@ export function useTaskDetail({
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Collaborative editor - Yjs handles sync automatically
-  const { editor, isLoading: editorLoading, isConnected, provider } = useDocumentCollaboration({
+  const { editor, isLoading: editorLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
     documentId: taskId ?? "",
     userName: currentUser?.name ?? "Anonymous",
     userId: currentUser?._id ?? "anonymous",
@@ -40,37 +40,6 @@ export function useTaskDetail({
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
-
-  const clearDescription = useMutation(api.tasks.clearDescription);
-
-  // One-time migration: Convex description -> Yjs
-  const migrationDoneRef = useRef(false);
-  useEffect(() => {
-    if (!editor || !provider || !task || !taskId || migrationDoneRef.current) return;
-    if (!isConnected) return; // Wait for provider to connect
-
-    // Check if Yjs document is empty (no content yet)
-    const doc = editor.document;
-    const isEmpty = doc.length === 0 ||
-      (doc.length === 1 && doc[0].type === "paragraph" &&
-       (!doc[0].content || (Array.isArray(doc[0].content) && doc[0].content.length === 0)));
-
-    // If Yjs empty AND Convex has description, migrate
-    if (isEmpty && task.description) {
-      migrationDoneRef.current = true;
-      try {
-        const blocks = JSON.parse(task.description);
-        editor.replaceBlocks(editor.document, blocks);
-        // Clear Convex description to mark as migrated
-        void clearDescription({ taskId });
-      } catch (err) {
-        console.error("Task description migration failed:", err);
-      }
-    } else {
-      // No migration needed (either Yjs has content or no Convex description)
-      migrationDoneRef.current = true;
-    }
-  }, [editor, provider, isConnected, task, taskId, clearDescription]);
 
   // Sync title when task loads
   useEffect(() => {
@@ -147,6 +116,7 @@ export function useTaskDetail({
     editor,
     editorLoading,
     isConnected,
+    isOffline,
     provider,
     remoteUsers,
     titleValue,

@@ -100,17 +100,19 @@ function TaskDetailPageContent({
       {/* Collaboration indicators */}
       <div className="flex items-center gap-3 mb-6">
         <ConnectionStatus isConnected={detail.isConnected} />
-        <ActiveUsers
-          remoteUsers={detail.remoteUsers}
-          currentUser={
-            detail.currentUser
-              ? {
-                  name: detail.currentUser.name,
-                  color: getUserColor(detail.currentUser._id),
-                }
-              : undefined
-          }
-        />
+        {detail.isConnected && (
+          <ActiveUsers
+            remoteUsers={detail.remoteUsers}
+            currentUser={
+              detail.currentUser
+                ? {
+                    name: detail.currentUser.name,
+                    color: getUserColor(detail.currentUser._id),
+                  }
+                : undefined
+            }
+          />
+        )}
       </div>
 
       <div className="space-y-8">
