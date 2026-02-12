@@ -75,7 +75,9 @@ jobs:
 
       - name: Health check PartyKit
         run: |
-          curl -f -s -o /dev/null -I "https://${{ secrets.VITE_PARTYKIT_HOST }}" || exit 1
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ secrets.VITE_PARTYKIT_HOST }}")
+          echo "PartyKit responded with HTTP $STATUS"
+          if [ "$STATUS" = "000" ]; then echo "PartyKit unreachable" && exit 1; fi
 
   deploy-frontend:
     needs: [deploy-convex, deploy-partykit]
