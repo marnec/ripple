@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-12)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 16 - Auth Resilience
+**Current focus:** Phase 17 - Graceful Degradation
 
 ## Current Position
 
-Phase: 16 of 17 (Auth Resilience)
-Plan: 2 of 2 in current phase
+Phase: 17 of 17 (Graceful Degradation)
+Plan: 1 of 2 in current phase
 Status: Complete
-Last activity: 2026-02-12 — Completed 16-02-PLAN.md (Permission Re-validation on Reconnect)
+Last activity: 2026-02-12 — Completed 17-01-PLAN.md (Offline Infrastructure Foundation)
 
-Progress: [███████████████████░░░░░░░░░] 74% (43/58 plans complete)
+Progress: [████████████████████░░░░░░░░] 76% (44/58 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 43
-- Average duration: 3.7 min
-- Total execution time: 175.7 min
+- Total plans completed: 44
+- Average duration: 3.8 min
+- Total execution time: 181.2 min
 
 **By Phase:**
 
@@ -48,9 +48,10 @@ Progress: [███████████████████░░░░
 | 14-protocol-foundation | 1 | 4 min | 4.0 min |
 | 15-persistence-layer | 2 | 5.4 min | 2.7 min |
 | 16-auth-resilience | 2 | 9.4 min | 4.7 min |
+| 17-graceful-degradation | 1 | 5.5 min | 5.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 4.0, 3.2, 2.2, 5.5, 3.9 min
+- Last 5 plans: 3.2, 2.2, 5.5, 3.9, 5.5 min
 - Trend: Consistently stable execution times (excluding deployment outlier)
 
 *Updated: 2026-02-12*
@@ -105,6 +106,10 @@ Recent decisions affecting v0.11 work:
 - [Phase 16-02]: Periodic permission re-validation every 30 seconds via piggyback on periodic alarm
 - [Phase 16-02]: Fail-open pattern for permission checks (availability over strict security)
 - [Phase 16-02]: Server-to-server auth via PARTYKIT_SECRET for permission validation endpoint
+- [Phase 17-01]: 4-second connection timeout (CONNECTION_TIMEOUT = 4000) for graceful degradation
+- [Phase 17-01]: IndexedDB initialization decoupled from provider lifecycle (offline-first loading)
+- [Phase 17-01]: Dual-source loading pattern: editor loads when EITHER provider OR IndexedDB syncs
+- [Phase 17-01]: Two-state connection indicator (connected/offline) replacing three-state design
 
 ### Pending Todos
 
@@ -128,6 +133,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 16-02-PLAN.md (Permission Re-validation on Reconnect)
+Stopped at: Completed 17-01-PLAN.md (Offline Infrastructure Foundation)
 Resume file: None
-Next step: Phase 16 complete — ready for Phase 17 (Graceful Degradation)
+Next step: Phase 17 continues — execute 17-02-PLAN.md (Read-Only Fallback)
