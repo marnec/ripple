@@ -238,3 +238,12 @@ Phases execute in numeric order: 11 → 12 → 13
 | 11. PartyKit Infrastructure & Persistence | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 13. Diagram Multiplayer Cursors | v0.10 | 2/2 | Complete | 2026-02-11 |
+
+### Phase 13.1: Fix deployment pipeline and environment configuration (INSERTED)
+
+**Goal:** Create CI/CD pipeline (GitHub Actions) for sequential multi-service deployment (Convex, PartyKit, Cloudflare Workers), document all environment variables, and enable reliable production deployments
+**Depends on:** Phase 13
+**Plans:** 1 plan
+
+Plans:
+- [ ] 13.1-01-PLAN.md — Environment config (.env.example, .gitignore) and GitHub Actions deployment workflow
