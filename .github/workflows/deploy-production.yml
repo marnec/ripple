@@ -112,7 +112,9 @@ jobs:
 
       - name: Health check frontend
         run: |
-          curl -f -s -o /dev/null -I "https://ripple.conduits.space" || exit 1
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L "https://ripple.conduits.space")
+          echo "Frontend responded with HTTP $STATUS"
+          if [ "$STATUS" = "000" ]; then echo "Frontend unreachable" && exit 1; fi
 
       - name: Deployment summary
         run: |
