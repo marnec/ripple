@@ -24,12 +24,9 @@ const DiagramView = ({
     }
   };
 
-  // Since Phase 15, diagrams use Yjs as single source of truth.
-  // The legacy content field was removed. Embedded diagrams can't show preview.
-  // Return null to trigger "empty diagram" placeholder (user must click to edit).
-  const parsedElements = null;
-
-  const isDiagramEmpty = diagram !== undefined && diagram !== null && !parsedElements;
+  // Check if SVG preview is available
+  const hasSvgPreview = diagram !== undefined && diagram !== null && !!diagram.svgPreview;
+  const isDiagramEmpty = diagram !== undefined && diagram !== null && !hasSvgPreview;
 
   if (diagram === undefined) {
     return <Skeleton className="h-40 w-full" />;
@@ -43,6 +40,16 @@ const DiagramView = ({
           Diagram not found. It may have been deleted.
         </p>
       </div>
+    );
+  }
+
+  if (hasSvgPreview && diagram.svgPreview) {
+    return (
+      <div
+        className="w-full cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto"
+        onClick={handleClick}
+        dangerouslySetInnerHTML={{ __html: diagram.svgPreview }}
+      />
     );
   }
 

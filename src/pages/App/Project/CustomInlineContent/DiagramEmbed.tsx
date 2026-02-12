@@ -33,13 +33,9 @@ const DiagramEmbedView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
   const navigate = useNavigate();
   const { workspaceId } = useParams();
 
-  // Since Phase 15, diagrams use Yjs as single source of truth.
-  // The legacy content field was removed. Embedded diagrams can't show preview.
-  // Return null to trigger "empty diagram" placeholder (user must click to view).
-  const parsedElements = null;
-
-  const isDiagramEmpty =
-    diagram !== undefined && diagram !== null && !parsedElements;
+  // Check if SVG preview is available
+  const hasSvgPreview = diagram !== undefined && diagram !== null && !!diagram.svgPreview;
+  const isDiagramEmpty = diagram !== undefined && diagram !== null && !hasSvgPreview;
 
   const handleClick = () => {
     if (diagram && workspaceId) {
@@ -51,6 +47,16 @@ const DiagramEmbedView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
   if (diagram === null) {
     return (
       <span className="text-muted-foreground italic">#deleted-diagram</span>
+    );
+  }
+  if (hasSvgPreview && diagram.svgPreview) {
+    return (
+      <div
+        className="my-2 border rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-40"
+        contentEditable={false}
+        onClick={handleClick}
+        dangerouslySetInnerHTML={{ __html: diagram.svgPreview }}
+      />
     );
   }
   if (isDiagramEmpty) {

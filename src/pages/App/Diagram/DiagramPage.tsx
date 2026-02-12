@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useEffect, useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -12,7 +12,7 @@ import { ActiveUsers } from "../Document/ActiveUsers";
 import { ConnectionStatus } from "../Document/ConnectionStatus";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import { getCameraFromAppState } from "@/lib/canvas-coordinates";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, exportToSvg } from "@excalidraw/excalidraw";
 import { Theme } from "@excalidraw/excalidraw/element/types";
 import { yjsToExcalidraw } from "y-excalidraw";
 import * as Y from "yjs";
@@ -22,6 +22,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   const { resolvedTheme } = useTheme();
   const isDarkTheme = resolvedTheme === "dark";
+  const updateSvgPreview = useMutation(api.diagrams.updateSvgPreview);
 
   // Set up Yjs collaboration
   const {
@@ -77,6 +78,45 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
       setSnapshotElements(null);
     };
   }, [snapshotUrl, isColdStart]);
+
+  // Generate and save SVG preview periodically while connected
+  useEffect(() => {
+    if (!excalidrawAPI || !isConnected) return;
+
+    const generateSvg = async () => {
+      try {
+        const elements = excalidrawAPI.getSceneElements();
+        if (elements.length === 0) return;
+
+        const svg = await exportToSvg({
+          elements,
+          appState: {
+            ...excalidrawAPI.getAppState(),
+            exportWithDarkMode: false,
+            exportBackground: false,
+          },
+          files: excalidrawAPI.getFiles(),
+        });
+
+        const svgString = svg.outerHTML;
+        if (svgString.length > 100) {
+          await updateSvgPreview({ id: diagramId, svgPreview: svgString });
+        }
+      } catch (error) {
+        console.error("Failed to generate SVG preview:", error);
+      }
+    };
+
+    // Generate immediately on first connect
+    void generateSvg();
+
+    // Then periodically while connected
+    const interval = setInterval(() => {
+      void generateSvg();
+    }, 10_000); // Every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [excalidrawAPI, isConnected, diagramId, updateSvgPreview]);
 
   // Jump to user's cursor position
   const handleJumpToUser = (user: { clientId: number }) => {
