@@ -36,6 +36,7 @@ export function useTaskDetail({
     userId: currentUser?._id ?? "anonymous",
     schema: taskDescriptionSchema,
     resourceType: "task",
+    enabled: !!taskId,
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);

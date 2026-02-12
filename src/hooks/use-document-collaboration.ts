@@ -15,6 +15,7 @@ export interface UseDocumentCollaborationOptions<
   userId: string;
   schema: BlockNoteSchema<BSchema, ISchema, SSchema>;
   resourceType?: "doc" | "diagram" | "task";
+  enabled?: boolean;
 }
 
 export interface UseDocumentCollaborationResult<
@@ -39,10 +40,12 @@ export function useDocumentCollaboration<
   userId,
   schema,
   resourceType = "doc",
+  enabled = true,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
   const { yDoc, provider, isConnected, isLoading: providerLoading } = useYjsProvider({
     resourceType,
     resourceId: documentId,
+    enabled,
   });
 
   const [indexedDbSynced, setIndexedDbSynced] = useState(false);
