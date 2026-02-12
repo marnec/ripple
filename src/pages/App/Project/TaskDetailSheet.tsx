@@ -60,7 +60,7 @@ export function TaskDetailSheet({
         <SheetContent className="w-full md:w-[44rem] overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           <div className="absolute right-14 top-4 flex items-center gap-2" style={{ zIndex: 10 }}>
-            <ConnectionStatus isConnected={detail.isConnected} provider={detail.provider} />
+            <ConnectionStatus isConnected={detail.isConnected} />
             <ActiveUsers
               remoteUsers={detail.remoteUsers}
               currentUser={

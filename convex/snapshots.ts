@@ -1,6 +1,7 @@
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 /**
  * Save a Yjs snapshot to Convex file storage and link it to a resource.
@@ -100,5 +101,44 @@ export const getSnapshot = internalQuery({
     }
 
     return resource.yjsSnapshotId ?? null;
+  },
+});
+
+/**
+ * Get the Yjs snapshot download URL for a resource.
+ *
+ * This is a PUBLIC query that clients can call for cold-start fallback
+ * when IndexedDB is empty and PartyKit is unreachable.
+ */
+export const getSnapshotUrl = query({
+  args: {
+    resourceType: v.union(
+      v.literal("doc"),
+      v.literal("diagram"),
+      v.literal("task")
+    ),
+    resourceId: v.string(),
+  },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { resourceType, resourceId }) => {
+    // Authentication check
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    // Get the resource document - cast resourceId to appropriate table type
+    let resource;
+    if (resourceType === "doc") {
+      resource = await ctx.db.get(resourceId as Id<"documents">);
+    } else if (resourceType === "diagram") {
+      resource = await ctx.db.get(resourceId as Id<"diagrams">);
+    } else {
+      resource = await ctx.db.get(resourceId as Id<"tasks">);
+    }
+
+    if (!resource || !resource.yjsSnapshotId) return null;
+
+    // Get the URL for the stored blob
+    const url = await ctx.storage.getUrl(resource.yjsSnapshotId);
+    return url;
   },
 });

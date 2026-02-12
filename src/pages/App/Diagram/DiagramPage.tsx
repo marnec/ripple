@@ -72,7 +72,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
     <div className="relative h-full w-full">
       {/* Header with collaboration UI */}
       <div className="absolute top-5 right-10 z-50 flex items-center gap-3">
-        <ConnectionStatus isConnected={isConnected} provider={provider} />
+        <ConnectionStatus isConnected={isConnected} />
         <ActiveUsers
           remoteUsers={remotePointers.map((p) => ({
             ...p,

@@ -77,7 +77,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   return (
     <div className="px-20 max-w-full flex-1 animate-fade-in relative">
       <div className="absolute top-5 right-10 z-10 flex items-center gap-3">
-        <ConnectionStatus isConnected={isConnected} provider={provider} />
+        <ConnectionStatus isConnected={isConnected} />
         <ActiveUsers
           remoteUsers={remoteUsers}
           currentUser={

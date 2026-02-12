@@ -99,7 +99,7 @@ function TaskDetailPageContent({
 
       {/* Collaboration indicators */}
       <div className="flex items-center gap-3 mb-6">
-        <ConnectionStatus isConnected={detail.isConnected} provider={detail.provider} />
+        <ConnectionStatus isConnected={detail.isConnected} />
         <ActiveUsers
           remoteUsers={detail.remoteUsers}
           currentUser={
