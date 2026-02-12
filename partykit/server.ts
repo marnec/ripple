@@ -10,6 +10,12 @@ const DISCONNECT_DEBOUNCE = 7_000; // 7 seconds
 const ALARM_TYPE_PERIODIC = "periodic";
 const ALARM_TYPE_DISCONNECT = "disconnect";
 
+// Per-connection state stored on each WebSocket connection
+interface ConnectionState {
+  userId: string;
+  userName: string;
+}
+
 export default class CollaborationServer implements Party.Server {
   private saveAlarmScheduled = false;
   private periodicAlarmScheduled = false;
@@ -188,6 +194,12 @@ export default class CollaborationServer implements Party.Server {
         userName: string;
       };
       console.log(`User ${userData.userName} (${userData.userId}) connected to room ${this.room.id}`);
+
+      // Store authenticated user identity on connection for downstream permission re-validation
+      conn.setState<ConnectionState>({
+        userId: userData.userId,
+        userName: userData.userName,
+      });
 
       // Auth successful - delegate to y-partykit with load callback
       await onConnect(conn, this.room, this.getYjsOptions());
