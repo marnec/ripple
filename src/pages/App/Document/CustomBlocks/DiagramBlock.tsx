@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "../../../../components/ui/skeleton";
 import { CircleSlash } from "lucide-react";
 import { defaultProps } from "@blocknote/core";
+import { useNavigate, useParams } from "react-router-dom";
 
 const DiagramView = ({
   diagramId,
@@ -14,6 +15,14 @@ const DiagramView = ({
   onAspectRatioChange?: (ratio: number) => void;
 }) => {
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
+  const navigate = useNavigate();
+  const { workspaceId } = useParams<{ workspaceId: string }>();
+
+  const handleClick = () => {
+    if (diagram && workspaceId) {
+      void navigate(`/workspaces/${workspaceId}/diagrams/${diagramId}`);
+    }
+  };
 
   // Since Phase 15, diagrams use Yjs as single source of truth.
   // The legacy content field was removed. Embedded diagrams can't show preview.
@@ -39,7 +48,10 @@ const DiagramView = ({
 
   if (isDiagramEmpty) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-4 text-center text-muted-foreground bg-secondary h-40 gap-2">
+      <div
+        className="w-full flex flex-col items-center justify-center p-4 text-center text-muted-foreground bg-secondary h-40 gap-2 cursor-pointer hover:bg-muted/50 transition-colors"
+        onClick={handleClick}
+      >
         <p>Click to view or edit this diagram.</p>
         <p className="text-sm text-muted-foreground">Diagrams use live collaboration and cannot be previewed inline.</p>
       </div>
