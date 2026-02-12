@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 16-auth-resilience
 source: 16-03-SUMMARY.md, 16-04-SUMMARY.md
 started: 2026-02-12T23:55:00Z
@@ -49,7 +49,11 @@ skipped: 0
   reason: "User reported: on setting throttling to offline the connection status indicator turned immediately to offline but upon removing throttling it never came back online"
   severity: major
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
+  root_cause: "Chrome DevTools offline mode does NOT close WebSocket connections (known Chromium limitation). The online event handler only sets isOffline=false but does not trigger reconnection. The y-partykit provider won't auto-reconnect because the stale WebSocket object still exists (provider checks ws === null before calling setupWS). No close event was fired, so exponential backoff reconnection never started."
+  artifacts:
+    - path: "src/hooks/use-yjs-provider.ts"
+      issue: "handleOnline only sets isOffline=false, does not destroy stale provider or trigger reconnection"
+  missing:
+    - "Add reconnectTrigger state to force connection useEffect to re-run on online event"
+    - "In handleOnline: destroy stale provider (providerRef.current.destroy()), null refs, then increment reconnectTrigger to re-run connection effect"
   debug_session: ""
