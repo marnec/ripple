@@ -106,6 +106,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 
 ### Roadmap Evolution
 
+- Phase 13.1 inserted after Phase 13: Fix deployment pipeline and environment configuration (URGENT)
 - v0.10 milestone started at Phase 11 (continues from v0.9)
 - Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
 - v0.9 milestone started at Phase 08 (continues from v0.8)
