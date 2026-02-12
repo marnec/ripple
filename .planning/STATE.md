@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-12)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 14 - Protocol Foundation
+**Current focus:** Phase 15 - Persistence Layer
 
 ## Current Position
 
-Phase: 14 of 17 (Protocol Foundation)
-Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-02-12 — Completed 14-01-PLAN.md (Protocol Foundation)
+Phase: 15 of 17 (Persistence Layer)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-12 — Completed 15-01-PLAN.md (Snapshot Persistence Infrastructure)
 
-Progress: [███████████████████░░░░░░░░░] 67% (39/58 plans complete)
+Progress: [███████████████████░░░░░░░░░] 69% (40/58 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 39
+- Total plans completed: 40
 - Average duration: 3.7 min
-- Total execution time: 160.9 min
+- Total execution time: 164.1 min
 
 **By Phase:**
 
@@ -46,10 +46,11 @@ Progress: [███████████████████░░░░
 | 13.1-fix-deployment-pipeline | 1 | 25 min | 25 min |
 | 13.2-add-document-like-collaboration-to-the-blocknote-editor-in-tasks | 2 | 9 min | 4.5 min |
 | 14-protocol-foundation | 1 | 4 min | 4.0 min |
+| 15-persistence-layer | 1 | 3.2 min | 3.2 min |
 
 **Recent Trend:**
-- Last 5 plans: 4.1, 4.5, 25, 4.5, 4.0 min
-- Trend: Back to stable after 13.1 deployment outlier
+- Last 5 plans: 4.5, 25, 4.5, 4.0, 3.2 min
+- Trend: Consistently stable execution times
 
 *Updated: 2026-02-12*
 
@@ -85,6 +86,11 @@ Recent decisions affecting v0.11 work:
 - npm overrides instead of --legacy-peer-deps for y-excalidraw peer deps
 - Committed package-lock.json for deterministic CI installs
 
+**From Phase 15:**
+- Use yjsSnapshotId field name to clarify Yjs-specific binary data
+- Inline roomId parsing in HTTP actions to avoid import resolution issues
+- Remove legacy diagrams.content field - Yjs is single source of truth
+
 ### Pending Todos
 
 None.
@@ -93,7 +99,7 @@ None.
 
 **Known Issues (v0.11 addresses):**
 - ~~Phase 14: No shared types between PartyKit and frontend~~ ✓ Resolved — shared/protocol module
-- Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)
+- ~~Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)~~ ✓ In progress — 15-01 complete (snapshot persistence infrastructure)
 - Phase 16: Token consumed on first connect (reconnection broken)
 - Phase 16: No permission re-validation (removed users can edit until disconnect)
 - Phase 17: No graceful degradation (editors crash if PartyKit unavailable)
@@ -107,6 +113,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 14-01-PLAN.md (Protocol Foundation)
+Stopped at: Completed 15-01-PLAN.md (Snapshot Persistence Infrastructure)
 Resume file: None
-Next step: `/gsd:plan-phase 15` (Persistence Sync)
+Next step: `/gsd:execute-plan 15-02` (PartyKit Snapshot Integration)
