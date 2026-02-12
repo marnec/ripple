@@ -240,7 +240,7 @@ Plans:
 
 </details>
 
-### 🚧 v0.11 Architectural Risk Mitigation (In Progress)
+### v0.11 Architectural Risk Mitigation (In Progress)
 
 **Milestone Goal:** Harden the PartyKit/Convex split persistence architecture — ensure data durability, fix auth gaps, and add graceful degradation so the collaboration layer is production-ready.
 
@@ -272,7 +272,7 @@ Plans:
 - [x] 15-01-PLAN.md -- Convex schema (yjsSnapshotId fields), snapshot mutations, and HTTP save/load endpoints
 - [x] 15-02-PLAN.md -- PartyKit periodic saves, disconnect debounce, cold-start loading from Convex snapshots
 
-#### Phase 16: Auth Resilience ✓
+#### Phase 16: Auth Resilience
 **Goal**: WebSocket connections survive token expiration and permission changes
 **Depends on**: Phase 15
 **Requirements**: AUTH-01, AUTH-02
@@ -280,11 +280,13 @@ Plans:
   1. When a WebSocket connection drops, the collaboration provider automatically reconnects without requiring page reload
   2. When a user's membership is revoked in Convex, their PartyKit connection terminates within 60 seconds
   3. User stays connected during extended editing sessions (beyond initial token expiration)
-**Plans**: 2 plans
+**Plans**: 4 plans
 
 Plans:
 - [x] 16-01-PLAN.md -- Token refresh and reconnection (dynamic params function, per-connection user state)
 - [x] 16-02-PLAN.md -- Permission re-validation (checkAccess endpoint, periodic membership checks, permission_revoked handler)
+- [ ] 16-03-PLAN.md -- Gap closure: connection indicator offline detection and DiagramBlock click-to-navigate
+- [ ] 16-04-PLAN.md -- Gap closure: SVG preview storage and rendering for diagram embeds
 
 #### Phase 17: Graceful Degradation
 **Goal**: Editors remain usable when PartyKit is unavailable
@@ -328,5 +330,5 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
 | 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
 | 15. Persistence Layer | v0.11 | 2/2 | Complete | 2026-02-12 |
-| 16. Auth Resilience | v0.11 | 2/2 | Complete | 2026-02-12 |
+| 16. Auth Resilience | v0.11 | 2/4 | Gap Closure | 2026-02-12 |
 | 17. Graceful Degradation | v0.11 | 2/2 | Complete | 2026-02-12 |
