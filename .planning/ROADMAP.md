@@ -252,10 +252,10 @@ Plans:
   1. Shared TypeScript types exist for all PartyKit WebSocket messages (auth, sync events, errors)
   2. Frontend and PartyKit server import types from a shared module (no duplicate type definitions)
   3. Compile-time type checking catches protocol mismatches between client and server
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 14-01: TBD
+- [ ] 14-01-PLAN.md — Shared protocol types, Zod schemas, error codes, and PartyKit/frontend integration
 
 #### Phase 15: Persistence Layer
 **Goal**: Full Yjs state persists to Convex when all users disconnect
