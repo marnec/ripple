@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-12)
 ## Current Position
 
 Phase: 16 of 17 (Auth Resilience)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-12 — Completed 16-01-PLAN.md (WebSocket Reconnection with Fresh Tokens)
+Plan: 2 of 2 in current phase
+Status: Complete
+Last activity: 2026-02-12 — Completed 16-02-PLAN.md (Permission Re-validation on Reconnect)
 
-Progress: [███████████████████░░░░░░░░░] 72% (42/58 plans complete)
+Progress: [███████████████████░░░░░░░░░] 74% (43/58 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 42
+- Total plans completed: 43
 - Average duration: 3.7 min
-- Total execution time: 171.8 min
+- Total execution time: 175.7 min
 
 **By Phase:**
 
@@ -47,10 +47,10 @@ Progress: [███████████████████░░░░
 | 13.2-add-document-like-collaboration-to-the-blocknote-editor-in-tasks | 2 | 9 min | 4.5 min |
 | 14-protocol-foundation | 1 | 4 min | 4.0 min |
 | 15-persistence-layer | 2 | 5.4 min | 2.7 min |
-| 16-auth-resilience | 1 | 5.5 min | 5.5 min |
+| 16-auth-resilience | 2 | 9.4 min | 4.7 min |
 
 **Recent Trend:**
-- Last 5 plans: 4.5, 4.0, 3.2, 2.2, 5.5 min
+- Last 5 plans: 4.0, 3.2, 2.2, 5.5, 3.9 min
 - Trend: Consistently stable execution times (excluding deployment outlier)
 
 *Updated: 2026-02-12*
@@ -102,6 +102,9 @@ Recent decisions affecting v0.11 work:
 - [Phase 16-01]: Dynamic token refresh via async params function in y-partykit
 - [Phase 16-01]: Connection state tracking via PartyKit setState API for per-connection userId/userName
 - [Phase 16-01]: Diagram embeds show placeholder after Phase 15 content field removal
+- [Phase 16-02]: Periodic permission re-validation every 30 seconds via piggyback on periodic alarm
+- [Phase 16-02]: Fail-open pattern for permission checks (availability over strict security)
+- [Phase 16-02]: Server-to-server auth via PARTYKIT_SECRET for permission validation endpoint
 
 ### Pending Todos
 
@@ -113,7 +116,7 @@ None.
 - ~~Phase 14: No shared types between PartyKit and frontend~~ ✓ Resolved — shared/protocol module
 - ~~Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)~~ ✓ Resolved — periodic saves + disconnect debounce + cold-start loading
 - ~~Phase 16-01: Token consumed on first connect (reconnection broken)~~ ✓ Resolved — dynamic token refresh via async params function
-- Phase 16-02: No permission re-validation (removed users can edit until disconnect)
+- ~~Phase 16-02: No permission re-validation (removed users can edit until disconnect)~~ ✓ Resolved — periodic checks every 30s with graceful disconnection
 - Phase 17: No graceful degradation (editors crash if PartyKit unavailable)
 
 **Resolved from v0.10:**
@@ -125,6 +128,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 16-01-PLAN.md (WebSocket Reconnection with Fresh Tokens)
+Stopped at: Completed 16-02-PLAN.md (Permission Re-validation on Reconnect)
 Resume file: None
-Next step: Continue Phase 16 with Plan 02 (Permission Re-validation on Reconnect)
+Next step: Phase 16 complete — ready for Phase 17 (Graceful Degradation)
