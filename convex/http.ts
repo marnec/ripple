@@ -360,4 +360,130 @@ http.route({
   }),
 });
 
+/**
+ * GET /collaboration/check-access
+ *
+ * Verify if a user still has access to a collaboration room.
+ * Called by PartyKit server for periodic permission re-validation.
+ *
+ * Authentication: Shared secret via Authorization: Bearer <PARTYKIT_SECRET>
+ * Query params:
+ *   - roomId (format: "{resourceType}-{resourceId}")
+ *   - userId (Convex user document ID)
+ *
+ * Response:
+ * - 200: { hasAccess: true } or { hasAccess: false }
+ * - 400: Missing parameters
+ * - 401: Unauthorized (missing/invalid secret)
+ * - 500: Internal server error
+ */
+http.route({
+  path: "/collaboration/check-access",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Validate shared secret
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.PARTYKIT_SECRET;
+
+      if (!expectedSecret) {
+        console.error(
+          "PARTYKIT_SECRET environment variable not configured"
+        );
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Missing authorization header" }),
+          {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const providedSecret = authHeader.substring(7); // Remove "Bearer "
+      if (providedSecret !== expectedSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Extract query params
+      const url = new URL(request.url);
+      const roomId = url.searchParams.get("roomId");
+      const userId = url.searchParams.get("userId");
+
+      if (!roomId || !userId) {
+        return new Response(
+          JSON.stringify({ error: "Missing roomId or userId" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Parse roomId to extract resourceType and resourceId
+      const dashIndex = roomId.indexOf("-");
+      if (dashIndex === -1) {
+        return new Response(
+          JSON.stringify({ error: "Invalid roomId format" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const resourceType = roomId.substring(0, dashIndex);
+      const resourceId = roomId.substring(dashIndex + 1);
+
+      // Validate resource type
+      if (
+        resourceType !== "doc" &&
+        resourceType !== "diagram" &&
+        resourceType !== "task"
+      ) {
+        return new Response(
+          JSON.stringify({ error: "Invalid resource type" }),
+          {
+            status: 400,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Check if user has access
+      const hasAccess = await ctx.runQuery(internal.collaboration.checkAccess, {
+        userId: userId as any,
+        resourceType: resourceType as any,
+        resourceId,
+      });
+
+      return new Response(JSON.stringify({ hasAccess }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Permission check error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+  }),
+});
+
 export default http;

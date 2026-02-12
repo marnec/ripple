@@ -215,3 +215,50 @@ export const getUserInfo = internalQuery({
     };
   },
 });
+
+/**
+ * Internal query: Check if user still has access to a resource.
+ *
+ * Used by PartyKit server for periodic permission re-validation.
+ * Consolidates the three resource-specific checks into one function.
+ */
+export const checkAccess = internalQuery({
+  args: {
+    userId: v.id("users"),
+    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task")),
+    resourceId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { userId, resourceType, resourceId }) => {
+    if (resourceType === "doc") {
+      // Check document membership
+      const member = await ctx.db
+        .query("documentMembers")
+        .withIndex("by_document_user", (q) =>
+          q.eq("documentId", resourceId as any).eq("userId", userId)
+        )
+        .first();
+      return member !== null;
+    } else if (resourceType === "diagram") {
+      // Check diagram membership
+      const member = await ctx.db
+        .query("diagramMembers")
+        .withIndex("by_diagram_user", (q) =>
+          q.eq("diagramId", resourceId as any).eq("userId", userId)
+        )
+        .first();
+      return member !== null;
+    } else {
+      // task: check project membership via task's projectId
+      const task = await ctx.db.get(resourceId as any) as any;
+      if (!task || !task.projectId) return false;
+      const member = await ctx.db
+        .query("projectMembers")
+        .withIndex("by_project_user", (q) =>
+          q.eq("projectId", task.projectId).eq("userId", userId)
+        )
+        .first();
+      return member !== null;
+    }
+  },
+});
