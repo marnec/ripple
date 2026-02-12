@@ -130,6 +130,7 @@ export default defineSchema({
     name: v.string(),
     tags: v.optional(v.array(v.string())),
     yjsSnapshotId: v.optional(v.id("_storage")),
+    svgPreview: v.optional(v.string()),
     roleCount: v.optional(v.object({
       [DiagramRole.ADMIN]: v.number(),
       [DiagramRole.MEMBER]: v.number(),

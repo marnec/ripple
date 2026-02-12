@@ -10,6 +10,7 @@ const diagramValidator = v.object({
   name: v.string(),
   tags: v.optional(v.array(v.string())),
   yjsSnapshotId: v.optional(v.id("_storage")),
+  svgPreview: v.optional(v.string()),
   roleCount: v.optional(v.object({
     admin: v.number(),
     member: v.number(),
@@ -179,6 +180,37 @@ export const remove = mutation({
       );
 
     await ctx.db.delete(id);
+    return null;
+  },
+});
+
+export const updateSvgPreview = mutation({
+  args: {
+    id: v.id("diagrams"),
+    svgPreview: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { id, svgPreview }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const diagram = await ctx.db.get(id);
+    if (!diagram) throw new ConvexError("Diagram not found");
+
+    // Check workspace membership
+    const workspaceMembership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId),
+      )
+      .first();
+
+    if (!workspaceMembership)
+      throw new ConvexError(
+        `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
+      );
+
+    await ctx.db.patch(id, { svgPreview });
     return null;
   },
 }); 
