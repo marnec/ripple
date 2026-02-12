@@ -298,8 +298,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 17-01-PLAN.md — Offline infrastructure (timeout fallback, IndexedDB-first loading, snapshot query, ConnectionStatus redesign)
-- [ ] 17-02-PLAN.md — Wire offline mode into document, diagram, and task editors with snapshot fallback and recovery
+- [x] 17-01-PLAN.md — Offline infrastructure (timeout fallback, IndexedDB-first loading, snapshot query, ConnectionStatus redesign)
+- [x] 17-02-PLAN.md — Wire offline mode into document, diagram, and task editors with snapshot fallback and recovery
 
 ## Progress
 
@@ -329,4 +329,4 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
 | 15. Persistence Layer | v0.11 | 2/2 | Complete | 2026-02-12 |
 | 16. Auth Resilience | v0.11 | 2/2 | Complete | 2026-02-12 |
-| 17. Graceful Degradation | v0.11 | 0/2 | Not started | - |
+| 17. Graceful Degradation | v0.11 | 2/2 | Complete | 2026-02-12 |
