@@ -10,7 +10,7 @@ NEXT STEPS:
 - [x] fix broken invitation flow (link only works if registered/logged)
 - [x] fix no default taskstatus
 - [x] fix task detail view
-- [ ] see pending invitations in app (not only email)
+- [x] see pending invitations in app (not only email)
 - [x] fix breadcrumb on mobile
 - [x] fix doc visibility and permissions
 - [ ] rethink hirarchy (workspace -> project -> {channels,docs,diagrams,tasks})
@@ -20,8 +20,8 @@ NEXT STEPS:
     - [ ] searchable / scrollable subsections
     - [ ] project membership add users manually with roles
     - [ ] subsection membership opt-in
-- [ ] realtime cursor tracking in documents
-- [ ] realtime cursor tracking in excalidraw
+- [x] realtime cursor tracking in documents
+- [x] realtime cursor tracking in excalidraw
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
