@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-12)
 ## Current Position
 
 Phase: 17 of 17 (Graceful Degradation)
-Plan: 1 of 2 in current phase
+Plan: 2 of 2 in current phase
 Status: Complete
-Last activity: 2026-02-12 — Completed 17-01-PLAN.md (Offline Infrastructure Foundation)
+Last activity: 2026-02-12 — Completed 17-02-PLAN.md (Read-Only Fallback)
 
-Progress: [████████████████████░░░░░░░░] 76% (44/58 plans complete)
+Progress: [████████████████████░░░░░░░░] 78% (45/58 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 44
+- Total plans completed: 45
 - Average duration: 3.8 min
-- Total execution time: 181.2 min
+- Total execution time: 186.4 min
 
 **By Phase:**
 
@@ -48,10 +48,10 @@ Progress: [████████████████████░░░
 | 14-protocol-foundation | 1 | 4 min | 4.0 min |
 | 15-persistence-layer | 2 | 5.4 min | 2.7 min |
 | 16-auth-resilience | 2 | 9.4 min | 4.7 min |
-| 17-graceful-degradation | 1 | 5.5 min | 5.5 min |
+| 17-graceful-degradation | 2 | 10.7 min | 5.4 min |
 
 **Recent Trend:**
-- Last 5 plans: 3.2, 2.2, 5.5, 3.9, 5.5 min
+- Last 5 plans: 2.2, 5.5, 3.9, 5.5, 5.2 min
 - Trend: Consistently stable execution times (excluding deployment outlier)
 
 *Updated: 2026-02-12*
@@ -110,6 +110,10 @@ Recent decisions affecting v0.11 work:
 - [Phase 17-01]: IndexedDB initialization decoupled from provider lifecycle (offline-first loading)
 - [Phase 17-01]: Dual-source loading pattern: editor loads when EITHER provider OR IndexedDB syncs
 - [Phase 17-01]: Two-state connection indicator (connected/offline) replacing three-state design
+- [Phase 17-02]: Read-only snapshot mode for cold-start (no IndexedDB cache available)
+- [Phase 17-02]: ActiveUsers hidden when offline, ConnectionStatus always visible
+- [Phase 17-02]: Separate SnapshotFallback component for documents to avoid conditional hook calls
+- [Phase 17-02]: Inline snapshot rendering for diagrams using Excalidraw viewModeEnabled
 
 ### Pending Todos
 
@@ -122,7 +126,7 @@ None.
 - ~~Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)~~ ✓ Resolved — periodic saves + disconnect debounce + cold-start loading
 - ~~Phase 16-01: Token consumed on first connect (reconnection broken)~~ ✓ Resolved — dynamic token refresh via async params function
 - ~~Phase 16-02: No permission re-validation (removed users can edit until disconnect)~~ ✓ Resolved — periodic checks every 30s with graceful disconnection
-- Phase 17: No graceful degradation (editors crash if PartyKit unavailable)
+- ~~Phase 17: No graceful degradation (editors crash if PartyKit unavailable)~~ ✓ Resolved — timeout fallback + IndexedDB caching + snapshot fallback + offline UI
 
 **Resolved from v0.10:**
 - Snapshot compaction implemented (Phase 11-01)
@@ -133,6 +137,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 17-01-PLAN.md (Offline Infrastructure Foundation)
+Stopped at: Completed 17-02-PLAN.md (Read-Only Fallback)
 Resume file: None
-Next step: Phase 17 continues — execute 17-02-PLAN.md (Read-Only Fallback)
+Next step: Phase 17 complete — all plans executed
