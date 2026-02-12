@@ -257,7 +257,7 @@ Plans:
 Plans:
 - [x] 14-01-PLAN.md — Shared protocol types, Zod schemas, error codes, and PartyKit/frontend integration
 
-#### Phase 15: Persistence Layer
+#### Phase 15: Persistence Layer ✓
 **Goal**: Full Yjs state persists to Convex when all users disconnect
 **Depends on**: Phase 14
 **Requirements**: PERSIST-01, PERSIST-02, PERSIST-03
@@ -269,8 +269,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md -- Convex schema (yjsSnapshotId fields), snapshot mutations, and HTTP save/load endpoints
-- [ ] 15-02-PLAN.md -- PartyKit periodic saves, disconnect debounce, cold-start loading from Convex snapshots
+- [x] 15-01-PLAN.md -- Convex schema (yjsSnapshotId fields), snapshot mutations, and HTTP save/load endpoints
+- [x] 15-02-PLAN.md -- PartyKit periodic saves, disconnect debounce, cold-start loading from Convex snapshots
 
 #### Phase 16: Auth Resilience
 **Goal**: WebSocket connections survive token expiration and permission changes
@@ -325,6 +325,6 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 13.1. Fix deployment pipeline (INSERTED) | v0.10 | 1/1 | Complete | 2026-02-11 |
 | 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
 | 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
-| 15. Persistence Layer | v0.11 | 0/2 | Not started | - |
+| 15. Persistence Layer | v0.11 | 2/2 | Complete | 2026-02-12 |
 | 16. Auth Resilience | v0.11 | 0/1 | Not started | - |
 | 17. Graceful Degradation | v0.11 | 0/1 | Not started | - |
