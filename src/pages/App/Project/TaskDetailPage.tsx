@@ -11,6 +11,9 @@ import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
 import { useTaskDetail } from "./useTaskDetail";
+import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
+import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
+import { getUserColor } from "@/lib/user-colors";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -94,6 +97,22 @@ function TaskDetailPageContent({
         </Button>
       </div>
 
+      {/* Collaboration indicators */}
+      <div className="flex items-center gap-3 mb-6">
+        <ConnectionStatus isConnected={detail.isConnected} provider={detail.provider} />
+        <ActiveUsers
+          remoteUsers={detail.remoteUsers}
+          currentUser={
+            detail.currentUser
+              ? {
+                  name: detail.currentUser.name,
+                  color: getUserColor(detail.currentUser._id),
+                }
+              : undefined
+          }
+        />
+      </div>
+
       <div className="space-y-8">
         <TaskProperties
           task={detail.task}
@@ -108,7 +127,6 @@ function TaskDetailPageContent({
 
         <TaskDescriptionEditor
           editor={detail.editor}
-          onChange={detail.handleDescriptionChange}
           documents={detail.documents}
           diagrams={detail.diagrams}
           members={detail.members}

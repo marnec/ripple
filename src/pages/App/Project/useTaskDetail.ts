@@ -5,7 +5,6 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
-import { getUserColor } from "../../../lib/user-colors";
 
 export function useTaskDetail({
   taskId,
@@ -31,7 +30,7 @@ export function useTaskDetail({
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Collaborative editor - Yjs handles sync automatically
-  const { editor, isLoading: editorLoading, isConnected, provider, yDoc } = useDocumentCollaboration({
+  const { editor, isLoading: editorLoading, isConnected, provider } = useDocumentCollaboration({
     documentId: taskId ?? "",
     userName: currentUser?.name ?? "Anonymous",
     userId: currentUser?._id ?? "anonymous",

@@ -8,7 +8,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Maximize2, Trash2 } from "lucide-react";
-import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskComments } from "./TaskComments";
@@ -16,6 +15,9 @@ import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
 import { useTaskDetail } from "./useTaskDetail";
+import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
+import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
+import { getUserColor } from "@/lib/user-colors";
 
 type TaskDetailSheetProps = {
   taskId: Id<"tasks"> | null;
@@ -34,12 +36,6 @@ export function TaskDetailSheet({
 }: TaskDetailSheetProps) {
   const { titleInputRef, ...detail } = useTaskDetail({ taskId, workspaceId, projectId });
   const navigate = useNavigate();
-
-  // Reset editor state when sheet closes so re-opening reloads content
-  useEffect(() => {
-    if (!open) detail.resetEditor();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   if (!taskId || !detail.task) {
     return null;
@@ -63,6 +59,20 @@ export function TaskDetailSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-full md:w-[44rem] overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
+          <div className="absolute right-14 top-4 flex items-center gap-2" style={{ zIndex: 10 }}>
+            <ConnectionStatus isConnected={detail.isConnected} provider={detail.provider} />
+            <ActiveUsers
+              remoteUsers={detail.remoteUsers}
+              currentUser={
+                detail.currentUser
+                  ? {
+                      name: detail.currentUser.name,
+                      color: getUserColor(detail.currentUser._id),
+                    }
+                  : undefined
+              }
+            />
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -113,7 +123,6 @@ export function TaskDetailSheet({
 
             <TaskDescriptionEditor
               editor={detail.editor}
-              onChange={detail.handleDescriptionChange}
               documents={detail.documents}
               diagrams={detail.diagrams}
               members={detail.members}
