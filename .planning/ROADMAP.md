@@ -280,10 +280,11 @@ Plans:
   1. When a WebSocket connection drops, the collaboration provider automatically reconnects without requiring page reload
   2. When a user's membership is revoked in Convex, their PartyKit connection terminates within 60 seconds
   3. User stays connected during extended editing sessions (beyond initial token expiration)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 16-01: TBD
+- [ ] 16-01-PLAN.md -- Token refresh and reconnection (dynamic params function, per-connection user state)
+- [ ] 16-02-PLAN.md -- Permission re-validation (checkAccess endpoint, periodic membership checks, permission_revoked handler)
 
 #### Phase 17: Graceful Degradation
 **Goal**: Editors remain usable when PartyKit is unavailable
