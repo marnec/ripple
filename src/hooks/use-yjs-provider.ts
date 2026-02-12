@@ -3,8 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import YPartyKitProvider from "y-partykit/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
-
-type ResourceType = "doc" | "diagram" | "task";
+import type { ResourceType, ErrorCode } from "@shared/protocol";
+import { ERROR_SEVERITY } from "@shared/protocol";
 
 export function useYjsProvider(opts: {
   resourceType: ResourceType;
@@ -62,6 +62,14 @@ export function useYjsProvider(opts: {
         });
       } catch (err) {
         console.error("Failed to connect to collaboration server:", err);
+
+        // Check if error contains a recognized error code
+        if (err && typeof err === "object" && "code" in err) {
+          const errorCode = err.code as ErrorCode;
+          const severity = ERROR_SEVERITY[errorCode];
+          console.error(`Collaboration error: ${errorCode} (${severity})`);
+        }
+
         if (!cancelled) setIsLoading(false);
       }
     };

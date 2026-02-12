@@ -1,5 +1,6 @@
 import type * as Party from "partykit/server";
 import { onConnect } from "y-partykit";
+import type { ErrorCode, ServerMessage } from "@shared/protocol";
 
 export default class CollaborationServer implements Party.Server {
   constructor(readonly room: Party.Room) {}
@@ -20,7 +21,10 @@ export default class CollaborationServer implements Party.Server {
 
     if (!token) {
       console.error("Missing auth token for room", this.room.id);
-      conn.close(1008, "Missing auth token");
+      const errorCode: ErrorCode = "AUTH_MISSING";
+      const errorMessage: ServerMessage = { type: "auth_error", code: errorCode };
+      conn.send(JSON.stringify(errorMessage));
+      conn.close(1008, errorCode);
       return;
     }
 
@@ -28,7 +32,10 @@ export default class CollaborationServer implements Party.Server {
     const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
     if (!convexSiteUrl) {
       console.error("CONVEX_SITE_URL not configured");
-      conn.close(1011, "Server configuration error");
+      const errorCode: ErrorCode = "SERVER_CONFIG_ERROR";
+      const errorMessage: ServerMessage = { type: "error", code: errorCode };
+      conn.send(JSON.stringify(errorMessage));
+      conn.close(1011, errorCode);
       return;
     }
 
@@ -46,11 +53,17 @@ export default class CollaborationServer implements Party.Server {
         console.error(
           `Auth failed for room ${this.room.id}: ${response.status} ${response.statusText}`
         );
-        conn.close(1008, "Unauthorized");
+        const errorCode: ErrorCode = "AUTH_INVALID";
+        const errorMessage: ServerMessage = { type: "auth_error", code: errorCode };
+        conn.send(JSON.stringify(errorMessage));
+        conn.close(1008, errorCode);
         return;
       }
 
-      const userData = await response.json();
+      const userData = (await response.json()) as {
+        userId: string;
+        userName: string;
+      };
       console.log(`User ${userData.userName} (${userData.userId}) connected to room ${this.room.id}`);
 
       // Auth successful - delegate to y-partykit
@@ -59,7 +72,10 @@ export default class CollaborationServer implements Party.Server {
       });
     } catch (error) {
       console.error("Auth verification error:", error);
-      conn.close(1011, "Auth verification failed");
+      const errorCode: ErrorCode = "SERVER_INTERNAL_ERROR";
+      const errorMessage: ServerMessage = { type: "error", code: errorCode };
+      conn.send(JSON.stringify(errorMessage));
+      conn.close(1011, errorCode);
     }
   }
 }
