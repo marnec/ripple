@@ -11,7 +11,7 @@ cleanupOutdatedCaches();
 
 // Activate new service worker immediately (skip waiting for old tabs to close)
 self.addEventListener("install", () => {
-  self.skipWaiting();
+  void self.skipWaiting();
 });
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());

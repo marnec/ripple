@@ -19,7 +19,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useContext, useState } from "react";
-import { PendingInvitesDialog, usePendingInvites } from "./Workspace/PendingInvites";
+import { PendingInvitesDialog } from "./Workspace/PendingInvites";
+import { usePendingInvites } from "@/hooks/use-pending-invites";
 import { Badge } from "../../components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
 import {

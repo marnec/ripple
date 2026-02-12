@@ -7,15 +7,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { Check, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-
-export function usePendingInvites() {
-  return useQuery(api.workspaceInvites.listByEmail) ?? [];
-}
+import { usePendingInvites } from "@/hooks/use-pending-invites";
 
 export function PendingInvitesDialog({
   open,

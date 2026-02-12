@@ -15,7 +15,7 @@ import { internal } from "./_generated/api";
  */
 export const getCollaborationToken = action({
   args: {
-    resourceType: v.union(v.literal("doc"), v.literal("diagram")),
+    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task")),
     resourceId: v.string(),
   },
   returns: v.object({ token: v.string(), roomId: v.string() }),
@@ -33,6 +33,14 @@ export const getCollaborationToken = action({
       });
       if (!hasAccess) {
         throw new ConvexError("You do not have access to this document");
+      }
+    } else if (resourceType === "task") {
+      const hasAccess = await ctx.runQuery(internal.collaboration.checkTaskAccess, {
+        userId,
+        taskId: resourceId,
+      });
+      if (!hasAccess) {
+        throw new ConvexError("You do not have access to this task");
       }
     } else {
       const hasAccess = await ctx.runQuery(internal.collaboration.checkDiagramAccess, {
@@ -95,6 +103,28 @@ export const checkDiagramAccess = internalQuery({
       .query("diagramMembers")
       .withIndex("by_diagram_user", (q) =>
         q.eq("diagramId", diagramId as any).eq("userId", userId)
+      )
+      .first();
+    return member !== null;
+  },
+});
+
+/**
+ * Internal query: Check if user has access to a task.
+ */
+export const checkTaskAccess = internalQuery({
+  args: {
+    userId: v.id("users"),
+    taskId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { userId, taskId }) => {
+    const task = await ctx.db.get(taskId as any) as any;
+    if (!task || !task.projectId) return false;
+    const member = await ctx.db
+      .query("projectMembers")
+      .withIndex("by_project_user", (q) =>
+        q.eq("projectId", task.projectId).eq("userId", userId)
       )
       .first();
     return member !== null;

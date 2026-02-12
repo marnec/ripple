@@ -4,7 +4,7 @@ import YPartyKitProvider from "y-partykit/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
 
-type ResourceType = "doc" | "diagram";
+type ResourceType = "doc" | "diagram" | "task";
 
 export function useYjsProvider(opts: {
   resourceType: ResourceType;
