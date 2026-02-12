@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-12)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** Phase 15 - Persistence Layer
+**Current focus:** Phase 16 - Auth Resilience
 
 ## Current Position
 
-Phase: 15 of 17 (Persistence Layer)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-12 — Completed 15-02-PLAN.md (PartyKit Snapshot Integration)
+Phase: 16 of 17 (Auth Resilience)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-12 — Completed 16-01-PLAN.md (WebSocket Reconnection with Fresh Tokens)
 
-Progress: [███████████████████░░░░░░░░░] 71% (41/58 plans complete)
+Progress: [███████████████████░░░░░░░░░] 72% (42/58 plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 41
+- Total plans completed: 42
 - Average duration: 3.7 min
-- Total execution time: 166.3 min
+- Total execution time: 171.8 min
 
 **By Phase:**
 
@@ -47,13 +47,13 @@ Progress: [███████████████████░░░░
 | 13.2-add-document-like-collaboration-to-the-blocknote-editor-in-tasks | 2 | 9 min | 4.5 min |
 | 14-protocol-foundation | 1 | 4 min | 4.0 min |
 | 15-persistence-layer | 2 | 5.4 min | 2.7 min |
+| 16-auth-resilience | 1 | 5.5 min | 5.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 25, 4.5, 4.0, 3.2, 2.2 min
+- Last 5 plans: 4.5, 4.0, 3.2, 2.2, 5.5 min
 - Trend: Consistently stable execution times (excluding deployment outlier)
 
 *Updated: 2026-02-12*
-| Phase 15 P02 | 2.2 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -99,6 +99,9 @@ Recent decisions affecting v0.11 work:
 - [Phase 15-02]: Disconnect debounce window: 7 seconds after last user disconnects before saving
 - [Phase 15-02]: Cold-start loading via y-partykit load callback fetching from Convex GET endpoint
 - [Phase 15-02]: Save failure handling: log errors but don't crash server (PartyKit storage is fallback)
+- [Phase 16-01]: Dynamic token refresh via async params function in y-partykit
+- [Phase 16-01]: Connection state tracking via PartyKit setState API for per-connection userId/userName
+- [Phase 16-01]: Diagram embeds show placeholder after Phase 15 content field removal
 
 ### Pending Todos
 
@@ -109,8 +112,8 @@ None.
 **Known Issues (v0.11 addresses):**
 - ~~Phase 14: No shared types between PartyKit and frontend~~ ✓ Resolved — shared/protocol module
 - ~~Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)~~ ✓ Resolved — periodic saves + disconnect debounce + cold-start loading
-- Phase 16: Token consumed on first connect (reconnection broken)
-- Phase 16: No permission re-validation (removed users can edit until disconnect)
+- ~~Phase 16-01: Token consumed on first connect (reconnection broken)~~ ✓ Resolved — dynamic token refresh via async params function
+- Phase 16-02: No permission re-validation (removed users can edit until disconnect)
 - Phase 17: No graceful degradation (editors crash if PartyKit unavailable)
 
 **Resolved from v0.10:**
@@ -122,6 +125,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Completed 15-02-PLAN.md (PartyKit Snapshot Integration)
+Stopped at: Completed 16-01-PLAN.md (WebSocket Reconnection with Fresh Tokens)
 Resume file: None
-Next step: Phase 15 complete — ready for Phase 16 (Token Refresh & Permission Validation)
+Next step: Continue Phase 16 with Plan 02 (Permission Re-validation on Reconnect)
