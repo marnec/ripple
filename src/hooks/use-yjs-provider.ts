@@ -30,14 +30,24 @@ export function useYjsProvider(opts: {
 
     const connect = async () => {
       try {
-        const { token, roomId } = await getToken({ resourceType, resourceId });
-        if (cancelled) return;
-
+        // Compute roomId outside params function (YPartyKitProvider needs it at construction)
+        const roomId = `${resourceType}-${resourceId}`;
         const host = import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
 
+        // Create provider with dynamic params function that fetches fresh token on each connection/reconnection
         const newProvider = new YPartyKitProvider(host, roomId, yDoc, {
           connect: true,
-          params: { token },
+          params: async () => {
+            try {
+              const { token } = await getToken({ resourceType, resourceId });
+              return { token };
+            } catch (err) {
+              // If getToken fails (user logged out, no access), return empty token
+              // Server will reject with AUTH_INVALID rather than provider throwing
+              console.error("Failed to get collaboration token:", err);
+              return { token: "" };
+            }
+          },
         });
 
         if (cancelled) {
@@ -84,8 +94,7 @@ export function useYjsProvider(opts: {
       }
       setProvider(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resourceType, resourceId, enabled, yDoc]);
+  }, [resourceType, resourceId, enabled, yDoc, getToken]);
 
   // Cleanup yDoc on unmount or resourceId change
   useEffect(() => {

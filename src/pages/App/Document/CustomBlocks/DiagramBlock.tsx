@@ -2,88 +2,25 @@ import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/re
 import { useQuery } from "convex/react";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
-import { exportToSvg } from "@excalidraw/excalidraw";
 import { useEffect, useRef, useState } from "react";
-import {
-  ExcalidrawElement,
-  NonDeleted,
-} from "@excalidraw/excalidraw/element/types";
-import { AppState } from "@excalidraw/excalidraw/types";
-import { useSanitize } from "../../../../hooks/use-sanitize";
 import { Skeleton } from "../../../../components/ui/skeleton";
-import { useTheme } from "next-themes";
 import { CircleSlash } from "lucide-react";
 import { defaultProps } from "@blocknote/core";
 
 const DiagramView = ({
   diagramId,
-  onAspectRatioChange,
 }: {
   diagramId: Id<"diagrams">;
   onAspectRatioChange?: (ratio: number) => void;
 }) => {
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
-  const [svg, setSvg] = useState<string | null>(null);
-  const sanitize = useSanitize();
-  const sanitizedSvg = svg ? sanitize(svg) : "";
-  const { resolvedTheme } = useTheme();
 
-  // Derive whether the diagram has renderable elements (no Effect needed)
-  const parsedElements = (() => {
-    if (!diagram?.content) return null;
-    try {
-      const scene = JSON.parse(diagram.content);
-      const elements = (scene.elements as NonDeleted<ExcalidrawElement>[])
-        .filter((e) => e.isDeleted !== true);
-      return elements.length > 0 ? elements : null;
-    } catch (e) {
-      console.error("Failed to parse diagram", e);
-      return null;
-    }
-  })();
+  // Since Phase 15, diagrams use Yjs as single source of truth.
+  // The legacy content field was removed. Embedded diagrams can't show preview.
+  // Return null to trigger "empty diagram" placeholder (user must click to edit).
+  const parsedElements = null;
 
   const isDiagramEmpty = diagram !== undefined && diagram !== null && !parsedElements;
-
-  useEffect(() => {
-    if (!parsedElements) return;
-
-    let cancelled = false;
-    const isDarkMode = resolvedTheme === "dark";
-    const appState: Partial<AppState> = {
-      theme: isDarkMode ? "dark" : "light",
-      exportBackground: false,
-      exportWithDarkMode: isDarkMode,
-      exportEmbedScene: true,
-    };
-
-    exportToSvg({
-      elements: parsedElements,
-      appState,
-      files: {},
-      exportingFrame: null,
-    }).then((svgElement: SVGSVGElement) => {
-      if (cancelled) return;
-      const svgWidth = parseFloat(svgElement.getAttribute("width") || "0");
-      const svgHeight = parseFloat(svgElement.getAttribute("height") || "0");
-      if (onAspectRatioChange && svgWidth > 0 && svgHeight > 0) {
-        onAspectRatioChange(svgHeight / svgWidth);
-      }
-      svgElement.setAttribute("width", "100%");
-      svgElement.setAttribute("height", "100%");
-      // Excalidraw's export function can leave the font as "Virgil", but the web-font is "Virgil, Segoe UI Emoji"
-      // We need to replace it to make sure the font is rendered correctly.
-      const svgString = svgElement.outerHTML.replace(
-        /font-family: Virgil/g,
-        'font-family: "Virgil, Segoe UI Emoji"',
-      );
-      setSvg(svgString);
-    }).catch((e: unknown) => {
-      if (cancelled) return;
-      console.error("Failed to render diagram", e);
-    });
-
-    return () => { cancelled = true; };
-  }, [parsedElements, resolvedTheme, onAspectRatioChange]);
 
   if (diagram === undefined) {
     return <Skeleton className="h-40 w-full" />;
@@ -103,22 +40,13 @@ const DiagramView = ({
   if (isDiagramEmpty) {
     return (
       <div className="w-full flex flex-col items-center justify-center p-4 text-center text-muted-foreground bg-secondary h-40 gap-2">
-        <p>This diagram is empty.</p>
-        <p className="text-sm">Edit the diagram to add content.</p>
+        <p>Click to view or edit this diagram.</p>
+        <p className="text-sm text-muted-foreground">Diagrams use live collaboration and cannot be previewed inline.</p>
       </div>
     );
   }
 
-  if (!svg || !sanitizedSvg) {
-    return <Skeleton className="h-40 w-full" />;
-  }
-
-  return (
-    <div
-      className="w-full h-full"
-      dangerouslySetInnerHTML={{ __html: sanitizedSvg }}
-    />
-  );
+  return null;
 };
 
 const diagramPropSchema = {
