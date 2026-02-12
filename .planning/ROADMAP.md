@@ -244,7 +244,7 @@ Plans:
 
 **Milestone Goal:** Harden the PartyKit/Convex split persistence architecture — ensure data durability, fix auth gaps, and add graceful degradation so the collaboration layer is production-ready.
 
-#### Phase 14: Protocol Foundation
+#### Phase 14: Protocol Foundation ✓
 **Goal**: Type-safe contract between PartyKit server and frontend clients
 **Depends on**: Phase 13.2
 **Requirements**: OPS-02
@@ -255,7 +255,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 14-01-PLAN.md — Shared protocol types, Zod schemas, error codes, and PartyKit/frontend integration
+- [x] 14-01-PLAN.md — Shared protocol types, Zod schemas, error codes, and PartyKit/frontend integration
 
 #### Phase 15: Persistence Layer
 **Goal**: Full Yjs state persists to Convex when all users disconnect
@@ -323,7 +323,7 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 13. Diagram Multiplayer Cursors | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 13.1. Fix deployment pipeline (INSERTED) | v0.10 | 1/1 | Complete | 2026-02-11 |
 | 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
-| 14. Protocol Foundation | v0.11 | 0/1 | Not started | - |
+| 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
 | 15. Persistence Layer | v0.11 | 0/1 | Not started | - |
 | 16. Auth Resilience | v0.11 | 0/1 | Not started | - |
 | 17. Graceful Degradation | v0.11 | 0/1 | Not started | - |

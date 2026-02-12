@@ -92,7 +92,7 @@ None.
 ### Blockers/Concerns
 
 **Known Issues (v0.11 addresses):**
-- Phase 14: No shared types between PartyKit and frontend (type safety gap)
+- ~~Phase 14: No shared types between PartyKit and frontend~~ ✓ Resolved — shared/protocol module
 - Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)
 - Phase 16: Token consumed on first connect (reconnection broken)
 - Phase 16: No permission re-validation (removed users can edit until disconnect)
