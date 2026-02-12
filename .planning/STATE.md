@@ -5,15 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-12)
 
 **Core value:** Seamless integration between all workspace features — users, documents, diagrams, and tasks can reference and embed each other, creating a connected workspace rather than isolated tools.
-**Current focus:** v0.11 Architectural Risk Mitigation
+**Current focus:** Phase 14 - Protocol Foundation
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Progress: [░░░░░░░░░░] 0%
-Last activity: 2026-02-12 — Milestone v0.11 started
+Phase: 14 of 17 (Protocol Foundation)
+Plan: 0 of 1 in current phase
+Status: Ready to plan
+Last activity: 2026-02-12 — Roadmap created for v0.11 milestone
+
+Progress: [███████████████████░░░░░░░░░] 66% (38/58 plans complete)
 
 ## Performance Metrics
 
@@ -45,95 +46,37 @@ Last activity: 2026-02-12 — Milestone v0.11 started
 | 13.1-fix-deployment-pipeline | 1 | 25 min | 25 min |
 | 13.2-add-document-like-collaboration-to-the-blocknote-editor-in-tasks | 2 | 9 min | 4.5 min |
 
+**Recent Trend:**
+- Last 5 plans: 4.3, 4.1, 4.5, 25, 4.5 min
+- Trend: Stable (except 13.1 deployment pipeline which was complex)
+
+*Updated: 2026-02-12*
+
 ## Accumulated Context
 
 ### Decisions
 
-Recent decisions from Phase 13.2-02:
-- Client-side migration from Convex to Yjs happens on first editor load (incremental, not batch)
+Decisions are logged in PROJECT.md Key Decisions table.
+
+Recent decisions affecting v0.11 work:
+
+**From v0.10 architecture:**
+- PartyKit snapshot persistence (no write-through to Convex — content lives only in PartyKit + IndexedDB)
+- One-time token auth consumed on connect (causes reconnection issues — addressed in Phase 16)
+- No permission re-validation after initial connect (security gap — addressed in Phase 16)
+- Legacy ProseMirror JSON content field still exists in documents table (cleanup opportunity)
+
+**From Phase 13.2:**
+- Client-side migration from Convex to Yjs on first editor load (incremental, not batch)
 - Migration emptiness check prevents overwriting existing Yjs content
 - clearDescription mutation called after successful migration (Yjs becomes single source of truth)
-- Absolute imports (@/pages, @/lib) used for collaboration components across directories
+- Absolute imports (@/pages, @/lib) for collaboration components
 
-Recent decisions from Phase 13.2-01:
-- Task collaboration validates project membership (tasks inherit access from their project)
-- useDocumentCollaboration defaults resourceType to "doc" for backward compatibility
-- IndexedDB cache keys use resource type prefix (task-{id}, doc-{id}) to prevent collisions
-- clearDescription mutation provided for post-migration Convex cleanup
-
-Recent decisions from Phase 13.1-01:
-- Separate Cloudflare tokens: CLOUDFLARE_WORKERS_API_TOKEN for wrangler, CLOUDFLARE_API_TOKEN for RTK
-- PartyKit CI auth via GitHub token (Clerk tokens hang — tries browser-based session refresh)
-- npm overrides instead of --legacy-peer-deps for y-excalidraw peer dep resolution
+**From Phase 13.1:**
+- Separate Cloudflare tokens for Workers vs PartyKit deployment
+- PartyKit CI auth via GitHub token (Clerk tokens hang)
+- npm overrides instead of --legacy-peer-deps for y-excalidraw peer deps
 - Committed package-lock.json for deterministic CI installs
-- Relaxed health checks for WebSocket servers and SPA redirects
-
-Recent decisions from Phase 13-02:
-- No off-screen cursor indicators (cursors hidden when outside viewport per user decision)
-- Lock badges always visible (not hover-only) for simplicity in typical 1-3 locked elements scenario
-- Pointer tracking via pointermove event on excalidraw-wrapper (not via Excalidraw onChange)
-- ActiveUsers onUserClick prop added as backwards-compatible enhancement (documents don't use it)
-- Removed all Convex presence system (useEnhancedPresence, FacePile) in favor of Yjs Awareness
-
-Recent decisions from Phase 13-01:
-- Installed y-excalidraw with --legacy-peer-deps due to Excalidraw 0.18.0 vs ^0.17.6 peer dependency mismatch
-- Store canvas coordinates in awareness (not screen coords) to prevent cross-viewport rendering issues
-- ExcalidrawBinding creation deferred to component (requires excalidrawAPI available after mount)
-- Reused Phase 12 timeouts: 10s stale client removal, 30s idle pointer detection
-
-Recent decisions from Phase 12-02:
-- BlockNote handles cursor rendering automatically via y-prosemirror (no custom overlay needed)
-- 10s stale client removal in avatar stack (more aggressive than 30s in-editor timeout)
-- Simple sync state heuristic with 500ms debounce (Yjs syncs near-instantly)
-- Removed old Convex presence system from DocumentEditor (Yjs Awareness more accurate)
-
-Recent decisions from Phase 12-01:
-- Complete removal of ProseMirror Sync (clean break to Yjs, no hybrid state)
-- IndexedDB persistence from day one (prevents data loss, improves load performance)
-- Singleton ColorHash instance (consistent configuration for documents and future diagrams)
-- Schema passed as parameter to collaboration hook (enables custom blocks with Yjs)
-
-Recent decisions from Phase 11-02:
-- One-time token authentication for PartyKit (simpler than JWT, leverages Convex built-in auth)
-- Auth verification in PartyKit onConnect handler (y-partykit uses onConnect function pattern)
-- Complete removal of RTK cursor tracking system (Phase 12 will use Yjs Awareness-based cursors)
-
-Recent decisions from Phase 11-01:
-- Snapshot mode persistence for Yjs documents (automatic compaction on last client disconnect)
-- y-partykit onConnect handler pattern (y-partykit exports onConnect function, not YPartyKitServer class)
-- Environment variables deferred to Plan 02 (PartyKit define field doesn't support env: prefix)
-
-Recent decisions from v0.10 roadmap:
-- Phase 11: PartyKit infrastructure must be deployed before any cursor work (blocks all other phases)
-- Phase 12: Document cursors + full Yjs migration combined (BlockNote has first-class Yjs support, proven path)
-- Phase 13: Diagram multiplayer isolated (y-excalidraw is community library, higher risk)
-- Snapshot compaction implemented in Phase 11 (research pitfall: prevents unbounded Yjs history growth)
-- User colors established in Phase 12 and reused in Phase 13 (AWARE-03)
-
-Recent decisions from Phase 03.2:
-- TaskStatuses migrated from workspace-scoped to project-scoped (each project independent)
-- Legacy fields kept optional in schema for backward compatibility during migration
-- Cascade-to-default on status deletion: tasks move to project default instead of blocking
-- Full cascade delete on project removal: taskComments → tasks → taskStatuses → project
-- Frontend uses project-scoped taskStatus APIs (listByProject)
-- Cascade delete UX messaging informs users tasks move to default status
-
-Recent decisions from Phase 03.1:
-- Default statuses (Todo, In Progress, Done) seeded at project creation (workspace-scoped, idempotent)
-- One-way completed sync: moving TO Done sets completed=true, moving OUT does not reset
-- User must explicitly uncomplete tasks that move out of Done status
-
-All decisions logged in PROJECT.md Key Decisions table.
-
-### Roadmap Evolution
-
-- Phase 13.2 inserted after Phase 13: add document-like collaboration to the blocknote editor in tasks (URGENT)
-- Phase 13.1 inserted after Phase 13: Fix deployment pipeline and environment configuration (URGENT)
-- v0.10 milestone started at Phase 11 (continues from v0.9)
-- Phase 6.1 inserted after Phase 6: Mention people in task comments (URGENT)
-- v0.9 milestone started at Phase 08 (continues from v0.8)
-- Phase 03.1 inserted after Phase 03: default taskStatus logic (URGENT)
-- Phase 03.2 inserted after Phase 03: taskStatus per project scope and cascade delete (URGENT)
 
 ### Pending Todos
 
@@ -141,36 +84,22 @@ None.
 
 ### Blockers/Concerns
 
-Research notes for v0.10:
-- INFRA-04 (snapshot compaction): ✅ RESOLVED - Implemented in Phase 11-01
-- DCOL-02 (ProseMirror to Yjs migration): ⚠️ FOLLOW-UP NEEDED - Migration script required if production has existing documents
-- DCOL-03 (custom inline content with Yjs): ✅ RESOLVED - Verified in Phase 12-01, custom blocks work correctly
-- DIAG-03 (y-excalidraw): ✅ RESOLVED - Installed with --legacy-peer-deps for Excalidraw 0.18.0 compatibility, build/lint pass
-- Phase 12 combines cursors + full Yjs migration: ✅ COMPLETE - All plans executed, Yjs collaboration + cursor awareness live
+**Known Issues (v0.11 addresses):**
+- Phase 14: No shared types between PartyKit and frontend (type safety gap)
+- Phase 15: No Yjs→Convex sync (data loss risk on PartyKit restart)
+- Phase 16: Token consumed on first connect (reconnection broken)
+- Phase 16: No permission re-validation (removed users can edit until disconnect)
+- Phase 17: No graceful degradation (editors crash if PartyKit unavailable)
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 1 | Fix Block doesn't have id error when clicking on a task | 2026-02-10 | 96bdc3a | [1-fix-block-doesn-t-have-id-error-when-cli](./quick/1-fix-block-doesn-t-have-id-error-when-cli/) |
+**Resolved from v0.10:**
+- Snapshot compaction implemented (Phase 11-01)
+- ProseMirror to Yjs migration complete (Phase 12-01)
+- Custom inline content works with Yjs (Phase 12-01)
+- y-excalidraw compatibility verified (Phase 13-01)
 
 ## Session Continuity
 
 Last session: 2026-02-12
-Stopped at: Starting milestone v0.11 — defining requirements
+Stopped at: ROADMAP.md and STATE.md created for v0.11 milestone
 Resume file: None
-Next step: Complete requirements definition and roadmap creation
-
-Config:
-{
-  "mode": "yolo",
-  "depth": "standard",
-  "parallelization": true,
-  "commit_docs": true,
-  "model_profile": "balanced",
-  "workflow": {
-    "research": true,
-    "plan_check": true,
-    "verifier": false
-  }
-}
+Next step: `/gsd:plan-phase 14`

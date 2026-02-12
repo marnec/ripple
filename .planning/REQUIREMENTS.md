@@ -84,19 +84,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PERSIST-01 | — | Pending |
-| PERSIST-02 | — | Pending |
-| PERSIST-03 | — | Pending |
-| AUTH-01 | — | Pending |
-| AUTH-02 | — | Pending |
-| OPS-01 | — | Pending |
-| OPS-02 | — | Pending |
+| OPS-02 | Phase 14 | Pending |
+| PERSIST-01 | Phase 15 | Pending |
+| PERSIST-02 | Phase 15 | Pending |
+| PERSIST-03 | Phase 15 | Pending |
+| AUTH-01 | Phase 16 | Pending |
+| AUTH-02 | Phase 16 | Pending |
+| OPS-01 | Phase 17 | Pending |
 
 **Coverage:**
 - v0.11 requirements: 7 total
-- Mapped to phases: 0
-- Unmapped: 7
+- Mapped to phases: 7/7
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-12*
-*Last updated: 2026-02-12 after initial definition*
+*Last updated: 2026-02-12 after roadmap creation*

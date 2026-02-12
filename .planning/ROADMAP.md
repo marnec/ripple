@@ -5,12 +5,15 @@
 - ✅ **v0.8 Task Management** - Phases 01-07 (shipped 2026-02-07)
 - ✅ **v0.9 Chat Features** - Phases 08-10 (shipped 2026-02-07)
 - ✅ **v0.10 Multiplayer Cursors & Collaboration** - Phases 11-13 (shipped 2026-02-11)
+- 🚧 **v0.11 Architectural Risk Mitigation** - Phases 14-17 (in progress)
 
 ## Overview
 
 v0.9 brings Ripple's chat interactions up to modern standards with emoji reactions, @user mentions, and inline reply-to. These three features transform chat from basic messaging into a rich communication layer comparable to Slack and Teams, completing the core workspace collaboration toolkit.
 
 v0.10 adds real-time multiplayer cursor awareness to documents and diagrams, backed by WebSocket infrastructure (PartyKit + Yjs). Users will see each other's cursor positions and selections in real-time, dramatically improving collaborative editing awareness. The infrastructure evaluation also explores migrating from ProseMirror Sync to Yjs for unified collaboration architecture.
+
+v0.11 hardens the PartyKit/Convex split persistence architecture — ensuring data durability, fixing auth gaps, and adding graceful degradation so the collaboration layer is production-ready.
 
 ## Phases
 
@@ -160,11 +163,12 @@ Plans:
 
 </details>
 
-### ✅ v0.10 Multiplayer Cursors & Collaboration — SHIPPED 2026-02-11
+<details>
+<summary>✅ v0.10 Multiplayer Cursors & Collaboration - SHIPPED 2026-02-11</summary>
 
 **Milestone Goal:** Add real-time multiplayer cursor awareness to documents and diagrams, backed by proper WebSocket infrastructure — and evaluate whether the new infra should also replace/improve the existing collaborative editing approach.
 
-#### Phase 11: PartyKit Infrastructure & Persistence
+### Phase 11: PartyKit Infrastructure & Persistence
 **Goal**: Deploy PartyKit server with Yjs persistence and snapshot compaction
 **Depends on**: Phase 10
 **Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04
@@ -179,7 +183,7 @@ Plans:
 - [x] 11-01-PLAN.md — PartyKit server setup with Yjs snapshot persistence and dev workflow
 - [x] 11-02-PLAN.md — Auth integration, frontend useYjsProvider hook, and RTK cursor cleanup
 
-#### Phase 12: Document Multiplayer Cursors & Yjs Migration
+### Phase 12: Document Multiplayer Cursors & Yjs Migration
 **Goal**: Real-time cursor awareness and Yjs-based collaboration for BlockNote documents
 **Depends on**: Phase 11
 **Requirements**: DCUR-01, DCUR-02, DCUR-03, DCUR-04, DCOL-01, DCOL-02, DCOL-03, DCOL-04, AWARE-01, AWARE-03
@@ -199,7 +203,7 @@ Plans:
 - [x] 12-01-PLAN.md — ProseMirror Sync removal, Yjs dependencies, and BlockNote Yjs collaboration rewrite
 - [x] 12-02-PLAN.md — Cursor awareness UI, active users avatar stack, and connection status indicators
 
-#### Phase 13: Diagram Multiplayer Cursors
+### Phase 13: Diagram Multiplayer Cursors
 **Goal**: Real-time cursor awareness and element sync for Excalidraw diagrams
 **Depends on**: Phase 12
 **Requirements**: DIAG-01, DIAG-02, DIAG-03, DIAG-04, AWARE-02
@@ -215,10 +219,89 @@ Plans:
 - [x] 13-01-PLAN.md — Install y-excalidraw, canvas coordinate utilities, diagram collaboration and cursor awareness hooks
 - [x] 13-02-PLAN.md — Cursor overlay UI, lock indicators, ExcalidrawEditor rewrite, DiagramPage multiplayer integration
 
+### Phase 13.1: Fix deployment pipeline and environment configuration (INSERTED)
+
+**Goal:** Create CI/CD pipeline (GitHub Actions) for sequential multi-service deployment (Convex, PartyKit, Cloudflare Workers), document all environment variables, and enable reliable production deployments
+**Depends on:** Phase 13
+**Plans:** 1 plan
+
+Plans:
+- [x] 13.1-01-PLAN.md — Environment config (.env.example, .gitignore) and GitHub Actions deployment workflow
+
+### Phase 13.2: add document-like collaboration to the blocknote editor in tasks (INSERTED)
+
+**Goal:** Add real-time collaborative Yjs-based editing to task descriptions, reusing PartyKit/Yjs infrastructure from Phases 11-13, with live cursors, active users UI, and migration from Convex-stored descriptions
+**Depends on:** Phase 13
+**Plans:** 2 plans
+
+Plans:
+- [x] 13.2-01-PLAN.md — Backend task collaboration tokens, generalize useDocumentCollaboration hook, clearDescription mutation
+- [x] 13.2-02-PLAN.md — Rewrite useTaskDetail for Yjs collaboration, add ActiveUsers/ConnectionStatus to sheet and full-page views
+
+</details>
+
+### 🚧 v0.11 Architectural Risk Mitigation (In Progress)
+
+**Milestone Goal:** Harden the PartyKit/Convex split persistence architecture — ensure data durability, fix auth gaps, and add graceful degradation so the collaboration layer is production-ready.
+
+#### Phase 14: Protocol Foundation
+**Goal**: Type-safe contract between PartyKit server and frontend clients
+**Depends on**: Phase 13.2
+**Requirements**: OPS-02
+**Success Criteria** (what must be TRUE):
+  1. Shared TypeScript types exist for all PartyKit WebSocket messages (auth, sync events, errors)
+  2. Frontend and PartyKit server import types from a shared module (no duplicate type definitions)
+  3. Compile-time type checking catches protocol mismatches between client and server
+**Plans**: TBD
+
+Plans:
+- [ ] 14-01: TBD
+
+#### Phase 15: Persistence Layer
+**Goal**: Full Yjs state persists to Convex when all users disconnect
+**Depends on**: Phase 14
+**Requirements**: PERSIST-01, PERSIST-02, PERSIST-03
+**Success Criteria** (what must be TRUE):
+  1. When the last user closes a document, the full Yjs state saves to Convex as a binary snapshot
+  2. When a user opens a document with no active PartyKit state, the editor loads content from the Convex snapshot
+  3. User can recover full document content from Convex after a PartyKit server restart (no data loss)
+  4. Same persistence behavior works for diagrams and task descriptions (all three resource types)
+**Plans**: TBD
+
+Plans:
+- [ ] 15-01: TBD
+
+#### Phase 16: Auth Resilience
+**Goal**: WebSocket connections survive token expiration and permission changes
+**Depends on**: Phase 15
+**Requirements**: AUTH-01, AUTH-02
+**Success Criteria** (what must be TRUE):
+  1. When a WebSocket connection drops, the collaboration provider automatically reconnects without requiring page reload
+  2. When a user's membership is revoked in Convex, their PartyKit connection terminates within 60 seconds
+  3. User stays connected during extended editing sessions (beyond initial token expiration)
+**Plans**: TBD
+
+Plans:
+- [ ] 16-01: TBD
+
+#### Phase 17: Graceful Degradation
+**Goal**: Editors remain usable when PartyKit is unavailable
+**Depends on**: Phase 16
+**Requirements**: OPS-01
+**Success Criteria** (what must be TRUE):
+  1. When PartyKit is unreachable, document editor shows read-only mode with the last Convex snapshot
+  2. When PartyKit is unreachable, diagram viewer shows read-only mode with the last Convex snapshot
+  3. When PartyKit is unreachable, task description shows read-only mode with the last Convex snapshot
+  4. User sees a clear indicator when collaboration features are degraded (connection status UI)
+**Plans**: TBD
+
+Plans:
+- [ ] 17-01: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 11 → 12 → 13
+Phases execute in numeric order: 14 → 15 → 16 → 17
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -238,23 +321,9 @@ Phases execute in numeric order: 11 → 12 → 13
 | 11. PartyKit Infrastructure & Persistence | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 12. Document Multiplayer Cursors & Yjs Migration | v0.10 | 2/2 | Complete | 2026-02-11 |
 | 13. Diagram Multiplayer Cursors | v0.10 | 2/2 | Complete | 2026-02-11 |
+| 13.1. Fix deployment pipeline (INSERTED) | v0.10 | 1/1 | Complete | 2026-02-11 |
 | 13.2. Task collaborative editing (INSERTED) | v0.10 | 2/2 | Complete | 2026-02-12 |
-
-### Phase 13.2: add document-like collaboration to the blocknote editor in tasks (INSERTED)
-
-**Goal:** Add real-time collaborative Yjs-based editing to task descriptions, reusing PartyKit/Yjs infrastructure from Phases 11-13, with live cursors, active users UI, and migration from Convex-stored descriptions
-**Depends on:** Phase 13
-**Plans:** 2 plans
-
-Plans:
-- [x] 13.2-01-PLAN.md — Backend task collaboration tokens, generalize useDocumentCollaboration hook, clearDescription mutation
-- [x] 13.2-02-PLAN.md — Rewrite useTaskDetail for Yjs collaboration, add ActiveUsers/ConnectionStatus to sheet and full-page views
-
-### Phase 13.1: Fix deployment pipeline and environment configuration (INSERTED)
-
-**Goal:** Create CI/CD pipeline (GitHub Actions) for sequential multi-service deployment (Convex, PartyKit, Cloudflare Workers), document all environment variables, and enable reliable production deployments
-**Depends on:** Phase 13
-**Plans:** 1 plan
-
-Plans:
-- [x] 13.1-01-PLAN.md — Environment config (.env.example, .gitignore) and GitHub Actions deployment workflow
+| 14. Protocol Foundation | v0.11 | 0/1 | Not started | - |
+| 15. Persistence Layer | v0.11 | 0/1 | Not started | - |
+| 16. Auth Resilience | v0.11 | 0/1 | Not started | - |
+| 17. Graceful Degradation | v0.11 | 0/1 | Not started | - |
