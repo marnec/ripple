@@ -75,6 +75,14 @@ export function ExcalidrawEditor({
 
   return (
     <div className="h-full w-full">
+      <style>{`
+        .excalidraw .App-toolbar__extra-tools-trigger { display: none !important; }
+        .excalidraw .ToolIcon__LaserPointer { display: none !important; }
+        .excalidraw .default-sidebar-trigger { display: none !important; }
+        .excalidraw .dropdown-menu-group:has(.dropdown-menu-group-title) { display: none !important; }
+        .excalidraw .dropdown-menu-separator:has(+ .dropdown-menu-group .dropdown-menu-group-title) { display: none !important; }
+        .excalidraw .dropdown-menu-group:has(.dropdown-menu-group-title) + .dropdown-menu-separator { display: none !important; }
+      `}</style>
       <Excalidraw
         excalidrawAPI={(api) => setExcalidrawAPI(api)}
         isCollaborating={true}
@@ -84,9 +92,10 @@ export function ExcalidrawEditor({
         }}
         onPointerUpdate={handlePointerUpdate}
         viewModeEnabled={viewModeEnabled}
-        zenModeEnabled={true}
+        validateEmbeddable={false}
+        aiEnabled={false}
         UIOptions={{
-          tools: { image: false },
+          tools: { image: false, eraser: false } as { image: boolean } & Record<string, boolean>,
           canvasActions: {
             loadScene: false,
             export: {
