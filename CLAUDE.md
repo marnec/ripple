@@ -56,6 +56,13 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 - **Channels** can be public or private within a workspace
 - Messages have full-text search via `searchIndex`
 
+### Permissions & Collaboration
+- **Channels/Documents**: Access via per-resource membership tables (`channelMembers`, `documentMembers`)
+- **Diagrams**: Access via **workspace membership** (all workspace members can access all diagrams)
+- **Tasks**: Access via **project membership** (`projectMembers`)
+- Collaboration tokens (`convex/collaboration.ts`) must match the same access model as the resource's query functions — e.g. `diagrams.get` checks workspace membership, so `checkDiagramAccess` must too
+- Real-time collaboration uses PartyKit (Yjs sync). Token flow: client calls `getCollaborationToken` action → receives one-time token → connects to PartyKit with token → PartyKit server verifies via Convex HTTP endpoint
+
 ### Path Aliases
 - `@/*` → `./src/*`
 - `@shared/*` → `./shared/*`
