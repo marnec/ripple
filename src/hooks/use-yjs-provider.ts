@@ -96,25 +96,18 @@ export function useYjsProvider(opts: {
         // (auth_error handler + status:disconnected can both trigger it)
         let recreationTriggered = false;
 
-        // Create provider with valid token; params function fetches fresh tokens on reconnection
+        // Create provider with pre-fetched token (static params).
+        // IMPORTANT: Do NOT use async params function here. y-partykit's connect()
+        // resolves async params in a .then() that calls super.connect() which sets
+        // shouldConnect=true. If destroy() runs before .then() resolves, the .then()
+        // creates a zombie WebSocket that is never cleaned up (awareness listener
+        // already removed by destroy), causing ghost avatars in the facepile.
+        // Tokens are reusable for 5 minutes, so y-partykit's auto-reconnect works
+        // with the same token. For expiration beyond 5min, auth_error → triggerRecreation
+        // handles it by creating a fresh provider with a new token.
         const newProvider = new YPartyKitProvider(host, roomId, yDoc, {
           connect: true,
-          params: async () => {
-            try {
-              const { token } = await getToken({ resourceType, resourceId });
-              return { token };
-            } catch {
-              // Token refresh failed during reconnection — stop provider to prevent auth storm
-              console.error("Token refresh failed, stopping provider");
-              queueMicrotask(() => {
-                if (!cancelled && !recreationTriggered) {
-                  triggerRecreation(newProvider);
-                }
-              });
-              // Return last token; won't actually be used since we're stopping
-              return { token: initialToken };
-            }
-          },
+          params: { token: initialToken },
         });
 
         if (cancelled) {
@@ -278,6 +271,9 @@ export function useYjsProvider(opts: {
         timeoutRef.current = null;
       }
       if (providerRef.current) {
+        // Stop auto-reconnect before cleanup to prevent y-partykit from
+        // creating new connections during the destroy sequence
+        providerRef.current.shouldConnect = false;
         // Clear awareness state before destroying so other clients
         // immediately remove this user's presence (prevents ghost avatars
         // when rapidly switching between documents)
@@ -313,6 +309,7 @@ export function useYjsProvider(opts: {
       rapidDisconnectsRef.current = []; // Clean slate for storm detection
       // Destroy the stale provider (its WebSocket is dead but Chrome didn't close it)
       if (providerRef.current) {
+        providerRef.current.shouldConnect = false;
         try {
           providerRef.current.awareness.setLocalState(null);
         } catch {
