@@ -4,14 +4,12 @@ import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 import { generateKeyBetween } from "fractional-indexing";
-import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
 
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
     title: v.string(),
-    description: v.optional(v.string()), // BlockNote JSON
     statusId: v.optional(v.id("taskStatuses")),
     assigneeId: v.optional(v.id("users")),
     priority: v.optional(
@@ -90,7 +88,6 @@ export const create = mutation({
       projectId: args.projectId,
       workspaceId: project.workspaceId,
       title: args.title,
-      description: args.description,
       statusId,
       assigneeId: args.assigneeId,
       priority: args.priority ?? "medium",
@@ -114,24 +111,6 @@ export const create = mutation({
           id: userId,
         },
       });
-    }
-
-    // Description mention notification
-    if (args.description) {
-      const mentionedUserIds = extractMentionedUserIds(args.description);
-      const filteredMentions = mentionedUserIds.filter(id => id !== userId);
-      if (filteredMentions.length > 0) {
-        await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
-          taskId,
-          mentionedUserIds: filteredMentions,
-          taskTitle: args.title,
-          mentionedBy: {
-            name: getUserDisplayName(user),
-            id: userId,
-          },
-          context: "task description",
-        });
-      }
     }
 
     return taskId;
@@ -290,7 +269,6 @@ export const update = mutation({
   args: {
     taskId: v.id("tasks"),
     title: v.optional(v.string()),
-    description: v.optional(v.string()),
     statusId: v.optional(v.id("taskStatuses")),
     assigneeId: v.optional(v.union(v.id("users"), v.null())),
     priority: v.optional(
@@ -305,7 +283,7 @@ export const update = mutation({
     position: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, title, description, statusId, assigneeId, priority, labels, position }) => {
+  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, labels, position }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -328,7 +306,6 @@ export const update = mutation({
     const patch: Record<string, any> = {};
 
     if (title !== undefined) patch.title = title;
-    if (description !== undefined) patch.description = description;
     if (assigneeId === null) patch.assigneeId = undefined;
     else if (assigneeId !== undefined) patch.assigneeId = assigneeId;
     if (priority !== undefined) patch.priority = priority;
@@ -369,26 +346,6 @@ export const update = mutation({
           id: userId,
         },
       });
-    }
-
-    // Description mention notification (diff-based)
-    if (description !== undefined) {
-      const oldMentions = new Set(task.description ? extractMentionedUserIds(task.description) : []);
-      const newMentions = extractMentionedUserIds(description);
-      const addedMentions = newMentions.filter(id => !oldMentions.has(id) && id !== userId);
-      if (addedMentions.length > 0) {
-        currentUser = currentUser ?? await ctx.db.get(userId);
-        await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
-          taskId,
-          mentionedUserIds: addedMentions,
-          taskTitle: title ?? task.title,
-          mentionedBy: {
-            name: getUserDisplayName(currentUser),
-            id: userId,
-          },
-          context: "task description",
-        });
-      }
     }
 
     return null;
@@ -460,31 +417,6 @@ export const remove = mutation({
 
     // Delete the task document
     await ctx.db.delete(taskId);
-    return null;
-  },
-});
-
-export const clearDescription = mutation({
-  args: { taskId: v.id("tasks") },
-  returns: v.null(),
-  handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const task = await ctx.db.get(taskId);
-    if (!task) throw new ConvexError("Task not found");
-
-    // Auth: validate membership
-    const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this project");
-
-    // Clear the description field (content now lives in Yjs/PartyKit)
-    await ctx.db.patch(taskId, { description: undefined });
     return null;
   },
 });

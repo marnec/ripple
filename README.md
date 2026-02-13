@@ -12,8 +12,10 @@ NEXT STEPS:
 - [x] fix task detail view
 - [x] see pending invitations in app (not only email)
 - [x] fix breadcrumb on mobile
+- [ ] improve breadcrumb on desktop
 - [x] fix doc visibility and permissions
-- [ ] rethink hirarchy (workspace -> project -> {channels,docs,diagrams,tasks})
+- [ ] add error boundaries for better UX on exceptions
+- [ ] rethink hierarchy: workspace -> project -> subsection (channels,docs,diagrams,tasks)
     - [ ] on workspace creation create default project
     - [ ] sidebar combobox project -> selection cascades subsections
     - [ ] collapsible subsections

@@ -154,8 +154,10 @@ export const storeToken = internalMutation({
 });
 
 /**
- * Internal mutation: Consume (validate and delete) a one-time token.
- * Returns user info if valid, null if invalid/expired.
+ * Internal mutation: Verify a collaboration token.
+ * Tokens are reusable within their 5-minute validity window to support
+ * y-partykit's built-in auto-reconnect (which reuses the same URL/token).
+ * Expired tokens are cleaned up on access.
  */
 export const consumeToken = internalMutation({
   args: {
@@ -178,14 +180,13 @@ export const consumeToken = internalMutation({
       return null;
     }
 
-    // Check expiration
+    // Check expiration - clean up expired tokens
     if (tokenDoc.expiresAt < Date.now()) {
       await ctx.db.delete(tokenDoc._id);
       return null;
     }
 
-    // Valid token - delete it (one-time use) and return user info
-    await ctx.db.delete(tokenDoc._id);
+    // Valid token - allow reuse within validity window
     return {
       userId: tokenDoc.userId,
       roomId: tokenDoc.roomId,

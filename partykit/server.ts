@@ -19,6 +19,7 @@ interface ConnectionState {
 export default class CollaborationServer implements Party.Server {
   private saveAlarmScheduled = false;
   private periodicAlarmScheduled = false;
+  private yDocRef: Y.Doc | null = null;
 
   constructor(readonly room: Party.Room) {}
 
@@ -131,9 +132,12 @@ export default class CollaborationServer implements Party.Server {
    */
   private async saveSnapshotToConvex(roomId: string): Promise<void> {
     try {
-      // Get the current Yjs document state
-      const yDoc = await unstable_getYDoc(this.room, this.getYjsOptions());
-      const update = Y.encodeStateAsUpdate(yDoc);
+      // Use cached yDoc reference (avoids accessing Party.id which throws in onAlarm)
+      if (!this.yDocRef) {
+        console.warn(`No yDoc reference for room ${roomId}, skipping save`);
+        return;
+      }
+      const update = Y.encodeStateAsUpdate(this.yDocRef);
 
       // Skip save if document is empty
       if (update.length === 0) {
@@ -250,6 +254,9 @@ export default class CollaborationServer implements Party.Server {
       // Auth successful - delegate to y-partykit with load callback
       await onConnect(conn, this.room, this.getYjsOptions());
 
+      // Cache yDoc reference for alarm handler (avoids Party.id access limitation in onAlarm)
+      this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions());
+
       // Schedule periodic save alarm if not already scheduled
       if (!this.periodicAlarmScheduled) {
         await this.room.storage.put("alarmType", ALARM_TYPE_PERIODIC);
@@ -279,7 +286,11 @@ export default class CollaborationServer implements Party.Server {
     if (connectionCount === 0) {
       // Last user disconnected -- schedule debounced save
       const roomId = await this.room.storage.get("roomId");
-      console.log(`Last user disconnected from room ${(roomId as string) ?? "unknown"}, scheduling debounced save`);
+      if (!roomId) {
+        // No roomId cached — no successful connections have been made, skip save
+        return;
+      }
+      console.log(`Last user disconnected from room ${roomId as string}, scheduling debounced save`);
       await this.room.storage.put("alarmType", ALARM_TYPE_DISCONNECT);
       await this.room.storage.setAlarm(Date.now() + DISCONNECT_DEBOUNCE);
       this.saveAlarmScheduled = true;

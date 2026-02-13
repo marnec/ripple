@@ -8,12 +8,16 @@ import { ERROR_SEVERITY } from "@shared/protocol";
 
 // Connection timeout: 4 seconds (within the 3-5s user decision range)
 const CONNECTION_TIMEOUT = 4000;
-// Max unsuccessful reconnects before giving up and recreating provider
-const MAX_UNSUCCESSFUL_RECONNECTS = 5;
+// Max short-lived connections (< 2s) within RAPID_WINDOW before triggering storm detection
+const MAX_RAPID_DISCONNECTS = 3;
+// Time window for rapid-disconnect detection
+const RAPID_DISCONNECT_WINDOW = 15_000; // 15 seconds
 // Max provider recreations before stopping (prevents infinite auth storm)
 const MAX_RECREATIONS = 3;
 // Base delay for exponential backoff on provider recreation
 const BASE_RECREATION_DELAY = 2000; // 2s, 4s, 8s
+// A connection shorter than this is considered a failure (auth rejected etc.)
+const SHORT_LIVED_THRESHOLD = 2000;
 
 export function useYjsProvider(opts: {
   resourceType: ResourceType;
@@ -30,9 +34,10 @@ export function useYjsProvider(opts: {
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const providerRef = useRef<YPartyKitProvider | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectCheckRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
   const recreationCountRef = useRef(0);
+  const lastConnectTimeRef = useRef(0);
+  const rapidDisconnectsRef = useRef<number[]>([]);
 
   // Create stable Y.Doc per resourceId
   const yDoc = useMemo(() => new Y.Doc(), []);
@@ -58,18 +63,56 @@ export function useYjsProvider(opts: {
         const roomId = `${resourceType}-${resourceId}`;
         const host = import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
 
-        // Create provider with dynamic params function that fetches fresh token on each connection/reconnection
+        // Fetch token BEFORE creating provider. If token fetch fails, there's no point
+        // creating a WebSocket connection that will just be rejected by the server.
+        let initialToken: string;
+        try {
+          const result = await getToken({ resourceType, resourceId });
+          initialToken = result.token;
+        } catch (err) {
+          console.error("Failed to get collaboration token:", err);
+          if (cancelled) return;
+          setIsOffline(true);
+          setIsLoading(false);
+          // Schedule retry with backoff
+          if (recreationCountRef.current < MAX_RECREATIONS) {
+            const delay = BASE_RECREATION_DELAY * Math.pow(2, recreationCountRef.current);
+            recreationCountRef.current += 1;
+            console.warn(`Token fetch failed, retrying in ${delay}ms (attempt ${recreationCountRef.current}/${MAX_RECREATIONS})`);
+            setTimeout(() => {
+              if (!cancelled) {
+                setReconnectTrigger((prev) => prev + 1);
+              }
+            }, delay);
+          } else {
+            console.warn(`Max retries (${MAX_RECREATIONS}) reached — staying offline`);
+          }
+          return;
+        }
+
+        if (cancelled) return;
+
+        // Guard flag: prevent triggerRecreation from firing multiple times per provider
+        // (auth_error handler + status:disconnected can both trigger it)
+        let recreationTriggered = false;
+
+        // Create provider with valid token; params function fetches fresh tokens on reconnection
         const newProvider = new YPartyKitProvider(host, roomId, yDoc, {
           connect: true,
           params: async () => {
             try {
               const { token } = await getToken({ resourceType, resourceId });
               return { token };
-            } catch (err) {
-              // If getToken fails (user logged out, no access), return empty token
-              // Server will reject with AUTH_INVALID rather than provider throwing
-              console.error("Failed to get collaboration token:", err);
-              return { token: "" };
+            } catch {
+              // Token refresh failed during reconnection — stop provider to prevent auth storm
+              console.error("Token refresh failed, stopping provider");
+              queueMicrotask(() => {
+                if (!cancelled && !recreationTriggered) {
+                  triggerRecreation(newProvider);
+                }
+              });
+              // Return last token; won't actually be used since we're stopping
+              return { token: initialToken };
             }
           },
         });
@@ -91,7 +134,7 @@ export function useYjsProvider(opts: {
           }
         }, CONNECTION_TIMEOUT);
 
-        // Handler for custom protocol messages (permission_revoked, etc.)
+        // Handler for custom protocol messages (permission_revoked, auth_error, etc.)
         const handleProtocolMessage = (event: MessageEvent) => {
           if (typeof event.data !== "string") return;
           try {
@@ -99,16 +142,13 @@ export function useYjsProvider(opts: {
             if (msg.type === "permission_revoked") {
               console.warn("Permission revoked:", msg.reason);
               if (!cancelled) {
-                setIsConnected(false);
-                newProvider.shouldConnect = false; // Prevent reconnection
-                try {
-                  newProvider.awareness.setLocalState(null);
-                } catch {
-                  // Awareness may already be destroyed
-                }
-                newProvider.destroy();
-                providerRef.current = null;
-                setProvider(null);
+                destroyProvider(newProvider);
+              }
+            } else if (msg.type === "auth_error") {
+              // Server rejected auth — stop reconnecting immediately to avoid storm
+              console.warn("Auth error from server:", msg.code);
+              if (!cancelled && !recreationTriggered) {
+                triggerRecreation(newProvider);
               }
             }
           } catch {
@@ -116,56 +156,55 @@ export function useYjsProvider(opts: {
           }
         };
 
-        // Safety net: if too many reconnects fail (e.g. token fully expired),
-        // destroy and recreate provider to get a fresh token via params().
-        // Uses polling since connection-close has timing issues with y-partykit internals.
-        reconnectCheckRef.current = setInterval(() => {
-          if (cancelled || newProvider.wsconnected) {
-            if (reconnectCheckRef.current) clearInterval(reconnectCheckRef.current);
-            reconnectCheckRef.current = null;
+        // Destroy provider permanently (permission revoked — no recreation)
+        const destroyProvider = (p: YPartyKitProvider) => {
+          recreationTriggered = true; // Prevent any other triggers
+          setIsConnected(false);
+          p.shouldConnect = false;
+          try { p.awareness.setLocalState(null); } catch { /* already destroyed */ }
+          p.destroy();
+          providerRef.current = null;
+          setProvider(null);
+        };
+
+        // Destroy and recreate provider with exponential backoff.
+        // Guarded by recreationTriggered to prevent double-fire from
+        // auth_error + status:disconnected both calling this.
+        const triggerRecreation = (p: YPartyKitProvider) => {
+          if (recreationTriggered) return;
+          recreationTriggered = true;
+
+          p.shouldConnect = false;
+          try { p.awareness.setLocalState(null); } catch { /* already destroyed */ }
+          p.destroy();
+          providerRef.current = null;
+          setProvider(null);
+
+          if (recreationCountRef.current >= MAX_RECREATIONS) {
+            console.warn(`Max provider recreations (${MAX_RECREATIONS}) reached — staying offline`);
+            setIsOffline(true);
+            setIsLoading(false);
             return;
           }
-          if (newProvider.wsUnsuccessfulReconnects >= MAX_UNSUCCESSFUL_RECONNECTS) {
-            if (reconnectCheckRef.current) clearInterval(reconnectCheckRef.current);
-            reconnectCheckRef.current = null;
 
-            // Check if we've exceeded max recreations
-            if (recreationCountRef.current >= MAX_RECREATIONS) {
-              console.warn(`Max provider recreations (${MAX_RECREATIONS}) reached — pausing reconnection`);
-              setIsOffline(true);
-              setIsLoading(false);
-              return;
-            }
-
-            newProvider.shouldConnect = false;
-            try {
-              newProvider.awareness.setLocalState(null);
-            } catch {
-              // Awareness may already be destroyed
-            }
-            newProvider.destroy();
-            providerRef.current = null;
-            setProvider(null);
-
+          const delay = BASE_RECREATION_DELAY * Math.pow(2, recreationCountRef.current);
+          recreationCountRef.current += 1;
+          console.warn(`Recreating provider in ${delay}ms (attempt ${recreationCountRef.current}/${MAX_RECREATIONS})`);
+          setTimeout(() => {
             if (!cancelled) {
-              const delay = BASE_RECREATION_DELAY * Math.pow(2, recreationCountRef.current);
-              recreationCountRef.current += 1;
-              console.warn(`Recreating provider in ${delay}ms (attempt ${recreationCountRef.current}/${MAX_RECREATIONS})`);
-              setTimeout(() => {
-                if (!cancelled) {
-                  setReconnectTrigger((prev) => prev + 1);
-                }
-              }, delay);
+              rapidDisconnectsRef.current = [];
+              setReconnectTrigger((prev) => prev + 1);
             }
-          }
-        }, 2000);
+          }, delay);
+        };
 
         newProvider.on("sync", (synced: boolean) => {
           if (!cancelled) {
             isConnectedRef.current = synced;
             setIsConnected(synced);
             if (synced) {
-              recreationCountRef.current = 0; // Reset recreation counter on successful connection
+              recreationCountRef.current = 0; // Reset counters on successful sync
+              rapidDisconnectsRef.current = [];
               // Connection succeeded - clear timeout and offline state
               if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current);
@@ -178,18 +217,40 @@ export function useYjsProvider(opts: {
         });
 
         newProvider.on("status", ({ status }: { status: string }) => {
-          if (!cancelled) {
-            const connected = status === "connected";
-            isConnectedRef.current = connected;
-            setIsConnected(connected);
+          if (cancelled) return;
 
-            if (connected) {
-              // Connection succeeded - clear offline state
-              setIsOffline(false);
+          if (status === "connected") {
+            isConnectedRef.current = true;
+            setIsConnected(true);
+            setIsOffline(false);
+            lastConnectTimeRef.current = Date.now();
 
-              // Attach message listener when connected
-              if (newProvider.ws) {
-                newProvider.ws.addEventListener("message", handleProtocolMessage);
+            // Attach message listener when connected
+            if (newProvider.ws) {
+              newProvider.ws.addEventListener("message", handleProtocolMessage);
+            }
+          } else if (status === "disconnected") {
+            isConnectedRef.current = false;
+            setIsConnected(false);
+
+            // Detect rapid connect→disconnect cycles (auth storm indicator).
+            // wsUnsuccessfulReconnects resets on ws.onopen (101 Switching Protocols)
+            // so it never reaches the threshold — use time-based detection instead.
+            const now = Date.now();
+            const connectionDuration = now - lastConnectTimeRef.current;
+
+            if (lastConnectTimeRef.current > 0 && connectionDuration < SHORT_LIVED_THRESHOLD) {
+              rapidDisconnectsRef.current.push(now);
+              // Prune entries outside the window
+              const cutoff = now - RAPID_DISCONNECT_WINDOW;
+              rapidDisconnectsRef.current = rapidDisconnectsRef.current.filter(t => t > cutoff);
+
+              if (rapidDisconnectsRef.current.length >= MAX_RAPID_DISCONNECTS && !recreationTriggered) {
+                console.warn(
+                  `Detected ${rapidDisconnectsRef.current.length} rapid disconnects in ` +
+                  `${RAPID_DISCONNECT_WINDOW / 1000}s — stopping reconnection storm`
+                );
+                triggerRecreation(newProvider);
               }
             }
           }
@@ -215,10 +276,6 @@ export function useYjsProvider(opts: {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
-      }
-      if (reconnectCheckRef.current) {
-        clearInterval(reconnectCheckRef.current);
-        reconnectCheckRef.current = null;
       }
       if (providerRef.current) {
         // Clear awareness state before destroying so other clients
@@ -253,6 +310,7 @@ export function useYjsProvider(opts: {
     const handleOnline = () => {
       console.info("Browser online event detected - triggering reconnection");
       recreationCountRef.current = 0; // Reset on explicit online event
+      rapidDisconnectsRef.current = []; // Clean slate for storm detection
       // Destroy the stale provider (its WebSocket is dead but Chrome didn't close it)
       if (providerRef.current) {
         try {

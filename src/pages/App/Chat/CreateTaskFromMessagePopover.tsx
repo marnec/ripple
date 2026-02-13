@@ -59,14 +59,10 @@ function CreateTaskFromMessagePopoverContent({
 
     setIsCreating(true);
 
-    // Body is already BlockNote JSON
-    const description = message.body;
-
-    // Create task with message content as description
+    // Create task (description now lives in Yjs, not Convex)
     void createTask({
       projectId: effectiveProjectId,
       title: taskTitle,
-      description,
     })
       .then((taskId) => {
         toast({
