@@ -54,6 +54,10 @@ export function useDocumentCollaboration<
   // Set up IndexedDB persistence for offline cache
   // CRITICAL: Decouple from provider - IndexedDB initializes independently
   useEffect(() => {
+    if (!enabled || !documentId) {
+      return;
+    }
+
     const persistence = new IndexeddbPersistence(`${resourceType}-${documentId}`, yDoc);
 
     persistence.on("synced", () => {
@@ -65,7 +69,7 @@ export function useDocumentCollaboration<
       void persistence.destroy();
       setIndexedDbSynced(false);
     };
-  }, [documentId, resourceType, yDoc]);
+  }, [documentId, resourceType, yDoc, enabled]);
 
   // Get deterministic user color
   const userColor = getUserColor(userId);
