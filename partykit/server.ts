@@ -87,7 +87,7 @@ export default class CollaborationServer implements Party.Server {
    * Disconnects users whose access has been revoked.
    * Fails open (doesn't disconnect on check failure) to avoid disrupting legitimate users.
    */
-  private async checkPermissions(): Promise<void> {
+  private async checkPermissions(roomId: string): Promise<void> {
     const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
     const secret = this.room.env.PARTYKIT_SECRET as string;
     if (!convexSiteUrl || !secret) return;
@@ -98,7 +98,7 @@ export default class CollaborationServer implements Party.Server {
 
       try {
         const url = new URL(`${convexSiteUrl}/collaboration/check-access`);
-        url.searchParams.set("roomId", this.room.id);
+        url.searchParams.set("roomId", roomId);
         url.searchParams.set("userId", state.userId);
 
         const response = await fetch(url.toString(), {
@@ -109,7 +109,7 @@ export default class CollaborationServer implements Party.Server {
         if (response.ok) {
           const data = await response.json() as { hasAccess: boolean };
           if (!data.hasAccess) {
-            console.log(`Permission revoked for user ${state.userId} in room ${this.room.id}`);
+            console.log(`Permission revoked for user ${state.userId} in room ${roomId}`);
             const msg: ServerMessage = {
               type: "permission_revoked",
               reason: "Your access to this resource has been revoked",
@@ -129,7 +129,7 @@ export default class CollaborationServer implements Party.Server {
    * Save Yjs snapshot to Convex.
    * Logs errors but does not throw (fails gracefully).
    */
-  private async saveSnapshotToConvex(): Promise<void> {
+  private async saveSnapshotToConvex(roomId: string): Promise<void> {
     try {
       // Get the current Yjs document state
       const yDoc = await unstable_getYDoc(this.room, this.getYjsOptions());
@@ -137,7 +137,7 @@ export default class CollaborationServer implements Party.Server {
 
       // Skip save if document is empty
       if (update.length === 0) {
-        console.log(`Skipping save for room ${this.room.id}: empty document`);
+        console.log(`Skipping save for room ${roomId}: empty document`);
         return;
       }
 
@@ -152,7 +152,7 @@ export default class CollaborationServer implements Party.Server {
 
       // POST snapshot to Convex
       const response = await fetch(
-        `${convexSiteUrl}/collaboration/snapshot?roomId=${encodeURIComponent(this.room.id)}`,
+        `${convexSiteUrl}/collaboration/snapshot?roomId=${encodeURIComponent(roomId)}`,
         {
           method: "POST",
           headers: {
@@ -166,14 +166,14 @@ export default class CollaborationServer implements Party.Server {
       if (!response.ok) {
         const text = await response.text();
         console.error(
-          `Failed to save snapshot for room ${this.room.id}: ${response.status} ${text}`
+          `Failed to save snapshot for room ${roomId}: ${response.status} ${text}`
         );
         return;
       }
 
-      console.log(`Snapshot saved for room ${this.room.id}`);
+      console.log(`Snapshot saved for room ${roomId}`);
     } catch (error) {
-      console.error(`Error saving snapshot for room ${this.room.id}:`, error);
+      console.error(`Error saving snapshot for room ${roomId}:`, error);
     }
   }
 
@@ -244,6 +244,9 @@ export default class CollaborationServer implements Party.Server {
         userName: userData.userName,
       });
 
+      // Cache roomId in durable storage for alarm handler access
+      await this.room.storage.put("roomId", this.room.id);
+
       // Auth successful - delegate to y-partykit with load callback
       await onConnect(conn, this.room, this.getYjsOptions());
 
@@ -275,7 +278,8 @@ export default class CollaborationServer implements Party.Server {
 
     if (connectionCount === 0) {
       // Last user disconnected -- schedule debounced save
-      console.log(`Last user disconnected from room ${this.room.id}, scheduling debounced save`);
+      const roomId = await this.room.storage.get("roomId") as string | undefined;
+      console.log(`Last user disconnected from room ${roomId ?? "unknown"}, scheduling debounced save`);
       await this.room.storage.put("alarmType", ALARM_TYPE_DISCONNECT);
       await this.room.storage.setAlarm(Date.now() + DISCONNECT_DEBOUNCE);
       this.saveAlarmScheduled = true;
@@ -287,6 +291,12 @@ export default class CollaborationServer implements Party.Server {
    * Handle alarms for both periodic saves and disconnect debounce.
    */
   async onAlarm() {
+    const roomId = await this.room.storage.get("roomId") as string | undefined;
+    if (!roomId) {
+      console.error("No cached roomId in storage — cannot process alarm");
+      return;
+    }
+
     const alarmType = await this.room.storage.get("alarmType");
 
     if (alarmType === ALARM_TYPE_DISCONNECT) {
@@ -298,14 +308,14 @@ export default class CollaborationServer implements Party.Server {
 
       if (connectionCount === 0) {
         // Still no connections -- save snapshot
-        console.log(`Debounce expired for room ${this.room.id}, saving final snapshot`);
-        await this.saveSnapshotToConvex();
+        console.log(`Debounce expired for room ${roomId}, saving final snapshot`);
+        await this.saveSnapshotToConvex(roomId);
         this.saveAlarmScheduled = false;
       } else {
         // Someone reconnected -- cancel disconnect save
-        console.log(`User reconnected to room ${this.room.id} during debounce, cancelling save`);
+        console.log(`User reconnected to room ${roomId} during debounce, cancelling save`);
         this.saveAlarmScheduled = false;
-        await this.checkPermissions();
+        await this.checkPermissions(roomId);
         // Periodic alarm will be rescheduled by onConnect
       }
     } else if (alarmType === ALARM_TYPE_PERIODIC) {
@@ -316,16 +326,16 @@ export default class CollaborationServer implements Party.Server {
       }
 
       if (connectionCount > 0) {
-        console.log(`Periodic save triggered for room ${this.room.id}`);
-        await this.saveSnapshotToConvex();
-        await this.checkPermissions();
+        console.log(`Periodic save triggered for room ${roomId}`);
+        await this.saveSnapshotToConvex(roomId);
+        await this.checkPermissions(roomId);
         // Reschedule next periodic save
         await this.room.storage.put("alarmType", ALARM_TYPE_PERIODIC);
         await this.room.storage.setAlarm(Date.now() + PERIODIC_SAVE_INTERVAL);
       } else {
         // No connections, don't reschedule periodic. Disconnect handler will trigger save.
         this.periodicAlarmScheduled = false;
-        console.log(`No connections for room ${this.room.id}, stopping periodic saves`);
+        console.log(`No connections for room ${roomId}, stopping periodic saves`);
       }
     }
   }
