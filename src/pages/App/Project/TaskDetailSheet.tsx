@@ -59,22 +59,6 @@ export function TaskDetailSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-full md:w-[44rem] overflow-y-auto">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
-          <div className="absolute right-14 top-4 flex items-center gap-2" style={{ zIndex: 10 }}>
-            <ConnectionStatus isConnected={detail.isConnected} />
-            {detail.isConnected && (
-              <ActiveUsers
-                remoteUsers={detail.remoteUsers}
-                currentUser={
-                  detail.currentUser
-                    ? {
-                        name: detail.currentUser.name,
-                        color: getUserColor(detail.currentUser._id),
-                      }
-                    : undefined
-                }
-              />
-            )}
-          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -123,13 +107,37 @@ export function TaskDetailSheet({
               onRemoveLabel={detail.handleRemoveLabel}
             />
 
-            <TaskDescriptionEditor
-              editor={detail.editor}
-              documents={detail.documents}
-              diagrams={detail.diagrams}
-              members={detail.members}
-              className="min-h-50"
-            />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-muted-foreground">
+                  Description
+                </h3>
+                <div className="flex items-center gap-2">
+                  <ConnectionStatus isConnected={detail.isConnected} />
+                  {detail.isConnected && (
+                    <ActiveUsers
+                      remoteUsers={detail.remoteUsers}
+                      currentUser={
+                        detail.currentUser
+                          ? {
+                              name: detail.currentUser.name,
+                              color: getUserColor(detail.currentUser._id),
+                            }
+                          : undefined
+                      }
+                    />
+                  )}
+                </div>
+              </div>
+              <TaskDescriptionEditor
+                editor={detail.editor}
+                documents={detail.documents}
+                diagrams={detail.diagrams}
+                members={detail.members}
+                className="min-h-50"
+                hideLabel
+              />
+            </div>
 
             {detail.currentUser && (
               <div className="space-y-2">

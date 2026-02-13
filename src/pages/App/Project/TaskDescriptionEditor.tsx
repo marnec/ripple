@@ -14,6 +14,7 @@ type TaskDescriptionEditorProps = {
   diagrams?: Array<{ _id: string; name: string }>;
   members?: Array<{ userId: string; name?: string | null; image?: string }>;
   className?: string;
+  hideLabel?: boolean;
 };
 
 export function TaskDescriptionEditor({
@@ -22,13 +23,14 @@ export function TaskDescriptionEditor({
   diagrams,
   members,
   className,
+  hideLabel,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
 
   if (!editor) {
     return (
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-muted-foreground">Description</h3>
+      <div className={hideLabel ? undefined : "space-y-2"}>
+        {!hideLabel && <h3 className="text-sm font-semibold text-muted-foreground">Description</h3>}
         <div className={cn("task-description-editor border rounded-md p-4 animate-pulse", className)}>
           <div className="h-6 bg-muted rounded w-3/4" />
         </div>
@@ -37,10 +39,12 @@ export function TaskDescriptionEditor({
   }
 
   return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-muted-foreground">
-        Description
-      </h3>
+    <div className={hideLabel ? undefined : "space-y-2"}>
+      {!hideLabel && (
+        <h3 className="text-sm font-semibold text-muted-foreground">
+          Description
+        </h3>
+      )}
       <div
         className={cn(
           "task-description-editor border rounded-md p-4",

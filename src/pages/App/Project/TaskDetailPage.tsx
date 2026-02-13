@@ -97,24 +97,6 @@ function TaskDetailPageContent({
         </Button>
       </div>
 
-      {/* Collaboration indicators */}
-      <div className="flex items-center gap-3 mb-6">
-        <ConnectionStatus isConnected={detail.isConnected} />
-        {detail.isConnected && (
-          <ActiveUsers
-            remoteUsers={detail.remoteUsers}
-            currentUser={
-              detail.currentUser
-                ? {
-                    name: detail.currentUser.name,
-                    color: getUserColor(detail.currentUser._id),
-                  }
-                : undefined
-            }
-          />
-        )}
-      </div>
-
       <div className="space-y-8">
         <TaskProperties
           task={detail.task}
@@ -127,13 +109,37 @@ function TaskDetailPageContent({
           onRemoveLabel={detail.handleRemoveLabel}
         />
 
-        <TaskDescriptionEditor
-          editor={detail.editor}
-          documents={detail.documents}
-          diagrams={detail.diagrams}
-          members={detail.members}
-          className="min-h-75"
-        />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Description
+            </h3>
+            <div className="flex items-center gap-2">
+              <ConnectionStatus isConnected={detail.isConnected} />
+              {detail.isConnected && (
+                <ActiveUsers
+                  remoteUsers={detail.remoteUsers}
+                  currentUser={
+                    detail.currentUser
+                      ? {
+                          name: detail.currentUser.name,
+                          color: getUserColor(detail.currentUser._id),
+                        }
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+          </div>
+          <TaskDescriptionEditor
+            editor={detail.editor}
+            documents={detail.documents}
+            diagrams={detail.diagrams}
+            members={detail.members}
+            className="min-h-75"
+            hideLabel
+          />
+        </div>
 
         {detail.currentUser && (
           <div className="space-y-2">
