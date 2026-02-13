@@ -1,9 +1,8 @@
 import { createReactInlineContentSpec } from "@blocknote/react";
-import { useQuery } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useParams } from "react-router-dom";
+import { useDiagramPreview } from "@/hooks/use-diagram-preview";
 
 export const DiagramEmbed = createReactInlineContentSpec(
   {
@@ -29,13 +28,10 @@ export const DiagramEmbed = createReactInlineContentSpec(
 );
 
 const DiagramEmbedView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
-  const diagram = useQuery(api.diagrams.get, { id: diagramId });
+  const { svgHtml, isLoading, diagram } =
+    useDiagramPreview(diagramId);
   const navigate = useNavigate();
   const { workspaceId } = useParams();
-
-  // Check if SVG preview is available
-  const hasSvgPreview = diagram !== undefined && diagram !== null && !!diagram.svgPreview;
-  const isDiagramEmpty = diagram !== undefined && diagram !== null && !hasSvgPreview;
 
   const handleClick = () => {
     if (diagram && workspaceId) {
@@ -43,33 +39,31 @@ const DiagramEmbedView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
     }
   };
 
-  if (diagram === undefined) return <Skeleton className="h-20 w-full" />;
+  if (isLoading) return <Skeleton className="h-20 w-full" />;
   if (diagram === null) {
     return (
       <span className="text-muted-foreground italic">#deleted-diagram</span>
     );
   }
-  if (hasSvgPreview && diagram.svgPreview) {
+
+  if (svgHtml) {
     return (
       <div
         className="my-2 border rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-40"
         contentEditable={false}
         onClick={handleClick}
-        dangerouslySetInnerHTML={{ __html: diagram.svgPreview }}
+        dangerouslySetInnerHTML={{ __html: svgHtml }}
       />
     );
   }
-  if (isDiagramEmpty) {
-    return (
-      <div
-        className="my-2 border rounded-lg p-2 cursor-pointer hover:bg-muted/50 transition-colors h-20 flex items-center justify-center text-muted-foreground text-sm"
-        contentEditable={false}
-        onClick={handleClick}
-      >
-        Click to view diagram
-      </div>
-    );
-  }
 
-  return null;
+  return (
+    <div
+      className="my-2 border rounded-lg p-2 cursor-pointer hover:bg-muted/50 transition-colors h-20 flex items-center justify-center text-muted-foreground text-sm"
+      contentEditable={false}
+      onClick={handleClick}
+    >
+      Click to view diagram
+    </div>
+  );
 };

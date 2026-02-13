@@ -96,13 +96,16 @@ export function TaskDescriptionEditor({
                     items.push({
                       title: d.name,
                       onItemClick: () => {
-                        editor.insertInlineContent([
-                          {
-                            type: "diagramEmbed",
-                            props: { diagramId: d._id },
-                          },
-                          " ",
-                        ]);
+                        editor.insertBlocks(
+                          [
+                            {
+                              type: "diagram",
+                              props: { diagramId: d._id },
+                            },
+                          ],
+                          editor.getTextCursorPosition().block,
+                          "after"
+                        );
                       },
                       icon: <PenTool className="h-4 w-4" />,
                       group: "Diagrams",
