@@ -172,5 +172,5 @@ export function DiagramPage() {
   if (!diagramId) {
     return null;
   }
-  return <DiagramPageContent diagramId={diagramId} />;
+  return <DiagramPageContent diagramId={diagramId} key={diagramId} />;
 }

@@ -99,13 +99,16 @@ export const checkDiagramAccess = internalQuery({
   },
   returns: v.boolean(),
   handler: async (ctx, { userId, diagramId }) => {
-    const member = await ctx.db
-      .query("diagramMembers")
-      .withIndex("by_diagram_user", (q) =>
-        q.eq("diagramId", diagramId as any).eq("userId", userId)
+    // Check workspace membership (diagrams are accessible to all workspace members)
+    const diagram = await ctx.db.get(diagramId as any) as { workspaceId: any } | null;
+    if (!diagram) return false;
+    const workspaceMember = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId)
       )
       .first();
-    return member !== null;
+    return workspaceMember !== null;
   },
 });
 
@@ -241,14 +244,16 @@ export const checkAccess = internalQuery({
         .first();
       return member !== null;
     } else if (resourceType === "diagram") {
-      // Check diagram membership
-      const member = await ctx.db
-        .query("diagramMembers")
-        .withIndex("by_diagram_user", (q) =>
-          q.eq("diagramId", resourceId as any).eq("userId", userId)
+      // Check workspace membership (diagrams are accessible to all workspace members)
+      const diagram = await ctx.db.get(resourceId as any);
+      if (!diagram) return false;
+      const workspaceMember = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", (diagram as any).workspaceId).eq("userId", userId)
         )
         .first();
-      return member !== null;
+      return workspaceMember !== null;
     } else {
       // task: check project membership via task's projectId
       const task = await ctx.db.get(resourceId as any) as any;
