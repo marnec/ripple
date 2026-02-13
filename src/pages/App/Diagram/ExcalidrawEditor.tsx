@@ -1,6 +1,6 @@
 "use client";
 
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import {
   ExcalidrawImperativeAPI,
@@ -12,6 +12,7 @@ import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
 import type { Awareness } from "y-protocols/awareness";
 import type YPartyKitProvider from "y-partykit/provider";
 import * as Y from "yjs";
+
 
 interface ExcalidrawEditorProps {
   yElements: Y.Array<Y.Map<any>>;
@@ -74,21 +75,20 @@ export function ExcalidrawEditor({
   );
 
   return (
-    <div className="h-full w-full">
+    <div className="relative h-full w-full">
       <style>{`
         .excalidraw .App-toolbar__extra-tools-trigger { display: none !important; }
         .excalidraw .ToolIcon__LaserPointer { display: none !important; }
         .excalidraw .default-sidebar-trigger { display: none !important; }
-        .excalidraw .dropdown-menu-group:has(.dropdown-menu-group-title) { display: none !important; }
-        .excalidraw .dropdown-menu-separator:has(+ .dropdown-menu-group .dropdown-menu-group-title) { display: none !important; }
-        .excalidraw .dropdown-menu-group:has(.dropdown-menu-group-title) + .dropdown-menu-separator { display: none !important; }
       `}</style>
+      
       <Excalidraw
         excalidrawAPI={(api) => setExcalidrawAPI(api)}
         isCollaborating={true}
         theme={resolvedTheme as Theme}
         initialData={{
           elements: yElements ? yjsToExcalidraw(yElements) : [],
+          appState: { viewBackgroundColor: "transparent" },
         }}
         onPointerUpdate={handlePointerUpdate}
         viewModeEnabled={viewModeEnabled}
@@ -97,13 +97,18 @@ export function ExcalidrawEditor({
         UIOptions={{
           tools: { image: false, eraser: false } as { image: boolean } & Record<string, boolean>,
           canvasActions: {
+            changeViewBackgroundColor: false,
             loadScene: false,
             export: {
               saveFileToDisk: true,
             },
           },
         }}
-      />
+      >
+        <MainMenu>
+          <MainMenu.DefaultItems.SaveAsImage />
+        </MainMenu>
+      </Excalidraw>
     </div>
   );
 }
