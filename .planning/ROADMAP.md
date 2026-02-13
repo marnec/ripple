@@ -5,7 +5,7 @@
 - ✅ **v0.8 Task Management** - Phases 01-07 (shipped 2026-02-07)
 - ✅ **v0.9 Chat Features** - Phases 08-10 (shipped 2026-02-07)
 - ✅ **v0.10 Multiplayer Cursors & Collaboration** - Phases 11-13 (shipped 2026-02-11)
-- 🚧 **v0.11 Architectural Risk Mitigation** - Phases 14-17 (in progress)
+- ✅ **v0.11 Architectural Risk Mitigation** - Phases 14-17 (shipped 2026-02-13)
 
 ## Overview
 
@@ -303,8 +303,8 @@ Plans:
 Plans:
 - [x] 17-01-PLAN.md — Offline infrastructure (timeout fallback, IndexedDB-first loading, snapshot query, ConnectionStatus redesign)
 - [x] 17-02-PLAN.md — Wire offline mode into document, diagram, and task editors with snapshot fallback and recovery
-- [ ] 17-03-PLAN.md — Gap closure: cache roomId in PartyKit storage for onAlarm snapshot saves
-- [ ] 17-04-PLAN.md — Gap closure: IndexedDB guard for empty documentId and reconnection backoff
+- [x] 17-03-PLAN.md — Gap closure: cache roomId in PartyKit storage for onAlarm snapshot saves
+- [x] 17-04-PLAN.md — Gap closure: IndexedDB guard for empty documentId and reconnection backoff
 
 ## Progress
 
@@ -334,4 +334,4 @@ Phases execute in numeric order: 14 → 15 → 16 → 17
 | 14. Protocol Foundation | v0.11 | 1/1 | Complete | 2026-02-12 |
 | 15. Persistence Layer | v0.11 | 2/2 | Complete | 2026-02-12 |
 | 16. Auth Resilience | v0.11 | 5/5 | Complete | 2026-02-12 |
-| 17. Graceful Degradation | v0.11 | 2/4 | In Progress | — |
+| 17. Graceful Degradation | v0.11 | 4/4 | Complete | 2026-02-13 |
