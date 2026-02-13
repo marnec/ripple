@@ -278,8 +278,8 @@ export default class CollaborationServer implements Party.Server {
 
     if (connectionCount === 0) {
       // Last user disconnected -- schedule debounced save
-      const roomId = await this.room.storage.get("roomId") as string | undefined;
-      console.log(`Last user disconnected from room ${roomId ?? "unknown"}, scheduling debounced save`);
+      const roomId = await this.room.storage.get("roomId");
+      console.log(`Last user disconnected from room ${(roomId as string) ?? "unknown"}, scheduling debounced save`);
       await this.room.storage.put("alarmType", ALARM_TYPE_DISCONNECT);
       await this.room.storage.setAlarm(Date.now() + DISCONNECT_DEBOUNCE);
       this.saveAlarmScheduled = true;
@@ -291,11 +291,12 @@ export default class CollaborationServer implements Party.Server {
    * Handle alarms for both periodic saves and disconnect debounce.
    */
   async onAlarm() {
-    const roomId = await this.room.storage.get("roomId") as string | undefined;
-    if (!roomId) {
+    const roomIdRaw = await this.room.storage.get("roomId");
+    if (!roomIdRaw) {
       console.error("No cached roomId in storage — cannot process alarm");
       return;
     }
+    const roomId = roomIdRaw as string;
 
     const alarmType = await this.room.storage.get("alarmType");
 

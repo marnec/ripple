@@ -1,4 +1,4 @@
-import { useAction } from "convex/react";
+import { useAction, useConvexAuth } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import YPartyKitProvider from "y-partykit/provider";
 import * as Y from "yjs";
@@ -8,6 +8,12 @@ import { ERROR_SEVERITY } from "@shared/protocol";
 
 // Connection timeout: 4 seconds (within the 3-5s user decision range)
 const CONNECTION_TIMEOUT = 4000;
+// Max unsuccessful reconnects before giving up and recreating provider
+const MAX_UNSUCCESSFUL_RECONNECTS = 5;
+// Max provider recreations before stopping (prevents infinite auth storm)
+const MAX_RECREATIONS = 3;
+// Base delay for exponential backoff on provider recreation
+const BASE_RECREATION_DELAY = 2000; // 2s, 4s, 8s
 
 export function useYjsProvider(opts: {
   resourceType: ResourceType;
@@ -15,6 +21,7 @@ export function useYjsProvider(opts: {
   enabled?: boolean;
 }) {
   const { resourceType, resourceId, enabled = true } = opts;
+  const { isAuthenticated } = useConvexAuth();
   const getToken = useAction(api.collaboration.getCollaborationToken);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(enabled);
@@ -23,13 +30,15 @@ export function useYjsProvider(opts: {
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const providerRef = useRef<YPartyKitProvider | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectCheckRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
+  const recreationCountRef = useRef(0);
 
   // Create stable Y.Doc per resourceId
   const yDoc = useMemo(() => new Y.Doc(), []);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !isAuthenticated) {
       return;
     }
 
@@ -92,6 +101,11 @@ export function useYjsProvider(opts: {
               if (!cancelled) {
                 setIsConnected(false);
                 newProvider.shouldConnect = false; // Prevent reconnection
+                try {
+                  newProvider.awareness.setLocalState(null);
+                } catch {
+                  // Awareness may already be destroyed
+                }
                 newProvider.destroy();
                 providerRef.current = null;
                 setProvider(null);
@@ -102,11 +116,56 @@ export function useYjsProvider(opts: {
           }
         };
 
+        // Safety net: if too many reconnects fail (e.g. token fully expired),
+        // destroy and recreate provider to get a fresh token via params().
+        // Uses polling since connection-close has timing issues with y-partykit internals.
+        reconnectCheckRef.current = setInterval(() => {
+          if (cancelled || newProvider.wsconnected) {
+            if (reconnectCheckRef.current) clearInterval(reconnectCheckRef.current);
+            reconnectCheckRef.current = null;
+            return;
+          }
+          if (newProvider.wsUnsuccessfulReconnects >= MAX_UNSUCCESSFUL_RECONNECTS) {
+            if (reconnectCheckRef.current) clearInterval(reconnectCheckRef.current);
+            reconnectCheckRef.current = null;
+
+            // Check if we've exceeded max recreations
+            if (recreationCountRef.current >= MAX_RECREATIONS) {
+              console.warn(`Max provider recreations (${MAX_RECREATIONS}) reached — pausing reconnection`);
+              setIsOffline(true);
+              setIsLoading(false);
+              return;
+            }
+
+            newProvider.shouldConnect = false;
+            try {
+              newProvider.awareness.setLocalState(null);
+            } catch {
+              // Awareness may already be destroyed
+            }
+            newProvider.destroy();
+            providerRef.current = null;
+            setProvider(null);
+
+            if (!cancelled) {
+              const delay = BASE_RECREATION_DELAY * Math.pow(2, recreationCountRef.current);
+              recreationCountRef.current += 1;
+              console.warn(`Recreating provider in ${delay}ms (attempt ${recreationCountRef.current}/${MAX_RECREATIONS})`);
+              setTimeout(() => {
+                if (!cancelled) {
+                  setReconnectTrigger((prev) => prev + 1);
+                }
+              }, delay);
+            }
+          }
+        }, 2000);
+
         newProvider.on("sync", (synced: boolean) => {
           if (!cancelled) {
             isConnectedRef.current = synced;
             setIsConnected(synced);
             if (synced) {
+              recreationCountRef.current = 0; // Reset recreation counter on successful connection
               // Connection succeeded - clear timeout and offline state
               if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current);
@@ -157,13 +216,25 @@ export function useYjsProvider(opts: {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
+      if (reconnectCheckRef.current) {
+        clearInterval(reconnectCheckRef.current);
+        reconnectCheckRef.current = null;
+      }
       if (providerRef.current) {
+        // Clear awareness state before destroying so other clients
+        // immediately remove this user's presence (prevents ghost avatars
+        // when rapidly switching between documents)
+        try {
+          providerRef.current.awareness.setLocalState(null);
+        } catch {
+          // Awareness may already be destroyed
+        }
         providerRef.current.destroy();
         providerRef.current = null;
       }
       setProvider(null);
     };
-  }, [resourceType, resourceId, enabled, yDoc, getToken, reconnectTrigger]);
+  }, [resourceType, resourceId, enabled, yDoc, getToken, reconnectTrigger, isAuthenticated]);
 
   // Listen for browser offline/online events (independent of WebSocket close events)
   // This catches DevTools offline mode and airplane mode changes that don't close WebSockets
@@ -181,8 +252,14 @@ export function useYjsProvider(opts: {
 
     const handleOnline = () => {
       console.info("Browser online event detected - triggering reconnection");
+      recreationCountRef.current = 0; // Reset on explicit online event
       // Destroy the stale provider (its WebSocket is dead but Chrome didn't close it)
       if (providerRef.current) {
+        try {
+          providerRef.current.awareness.setLocalState(null);
+        } catch {
+          // Awareness may already be destroyed
+        }
         providerRef.current.destroy();
         providerRef.current = null;
       }
