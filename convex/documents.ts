@@ -15,23 +15,13 @@ export const create = mutation({
 
     if (!userId) throw new ConvexError("Not authenticated");
 
-    const match = await ctx.db
-      .query("documents")
-      .withSearchIndex("by_name", (q) =>
-        q.search("name", DEFAULT_DOC_NAME).eq("workspaceId", workspaceId),
-      )
-      .collect();
-
-    const lastUntitledCount =
-      match
-        .map(({ name }) => parseInt(name.split("_").at(1) || ""))
-        .filter(Boolean)
-        .sort((a, b) => b - a)
-        .at(0) || 0;
+    const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    const documentName = `${DEFAULT_DOC_NAME} ${date} ${time}`;
 
     const documentId = await ctx.db.insert("documents", {
       workspaceId,
-      name: `${DEFAULT_DOC_NAME}_${lastUntitledCount + 1}`,
+      name: documentName,
       roleCount: {
         [DocumentRole.ADMIN]: 1,
         [DocumentRole.MEMBER]: 0,

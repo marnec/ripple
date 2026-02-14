@@ -13,7 +13,10 @@ NEXT STEPS:
 - [x] see pending invitations in app (not only email)
 - [x] fix breadcrumb on mobile
 - [ ] improve breadcrumb on desktop
+- [ ] improve light theme sidebar colors
+- [ ] fix autonumbering issue on diagrams (and docs?)
 - [x] fix doc visibility and permissions
+- [ ] remove file snapshots on doc/diagram/task removal
 - [ ] add error boundaries for better UX on exceptions
 - [ ] rethink hierarchy: workspace -> project -> subsection (channels,docs,diagrams,tasks)
     - [ ] on workspace creation create default project
@@ -35,6 +38,7 @@ NEXT STEPS:
     - [ ] project diagrams?
 - [ ] dashboard pages (channels, projects, documents, diagrams)
 - [ ] PLANE.so inspired features:
+    - [ ] add id to tasks
     - [ ] cycles
     - [ ] task dependencies
     - [ ] deadlines & estimates

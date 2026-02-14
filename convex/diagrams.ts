@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { DiagramRole } from "@shared/enums";
+import { DEFAULT_DIAGRAM_NAME } from "@shared/constants";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -95,14 +96,10 @@ export const create = mutation({
         `User="${userId}" is not a member of workspace="${workspaceId}"`,
       );
 
-    // Generate a default name if none provided
-    const diagramCount = await ctx.db
-      .query("diagrams")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect()
-      .then(diagrams => diagrams.length);
-
-    const diagramName = name || `Diagram ${diagramCount + 1}`;
+    // Generate a default name with timestamp if none provided
+    const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    const diagramName = name || `${DEFAULT_DIAGRAM_NAME} ${date} ${time}`;
 
     const diagramId = await ctx.db.insert("diagrams", {
       workspaceId,

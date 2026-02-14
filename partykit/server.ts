@@ -163,7 +163,7 @@ export default class CollaborationServer implements Party.Server {
             "Authorization": `Bearer ${secret}`,
             "Content-Type": "application/octet-stream",
           },
-          body: update.buffer,
+          body: update as Uint8Array<ArrayBuffer>,
         }
       );
 
@@ -243,7 +243,7 @@ export default class CollaborationServer implements Party.Server {
       console.log(`User ${userData.userName} (${userData.userId}) connected to room ${this.room.id}`);
 
       // Store authenticated user identity on connection for downstream permission re-validation
-      conn.setState<ConnectionState>({
+      conn.setState({
         userId: userData.userId,
         userName: userData.userName,
       });
