@@ -77,3 +77,32 @@
 **What's next:** v0.11 — architectural risk mitigation for PartyKit/Convex split persistence
 
 ---
+
+## v0.11 Architectural Risk Mitigation (Shipped: 2026-02-14)
+
+**Delivered:** Production-hardened collaboration layer — Yjs→Convex snapshot persistence, WebSocket reconnection with token refresh, permission re-validation, and graceful degradation to read-only mode when PartyKit is unavailable.
+
+**Phases completed:** 14-17 (12 plans total)
+
+**Key accomplishments:**
+
+- Shared TypeScript protocol types with Zod validation for type-safe WebSocket communication between PartyKit and frontend
+- Full Yjs→Convex snapshot persistence (periodic 30s saves, 7s disconnect debounce, cold-start loading from Convex)
+- Dynamic token refresh for seamless WebSocket reconnection without page reload
+- Periodic permission re-validation every 30s with graceful disconnection of revoked users
+- Graceful degradation to read-only mode when PartyKit unavailable (IndexedDB cache + Convex snapshot fallback)
+- SVG preview storage for diagram embeds and exponential backoff on reconnection failures
+
+**Stats:**
+
+- 75 files modified
+- +8,749 / -922 net lines of TypeScript
+- 4 phases, 12 plans, 7 requirements
+- 2 days from start to ship (48.4 min execution time)
+
+**Git range:** `feat(14-01)` → `fix(17-04)`
+
+**What's next:** Planning next milestone
+
+---
+

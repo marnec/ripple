@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A real-time collaborative workspace that aims to be a focused, better-integrated alternative to MS Teams. Features chat, video calls, documents, diagrams, and task management that seamlessly interconnect — where everything can reference and embed everything else.
+A real-time collaborative workspace that aims to be a focused, better-integrated alternative to MS Teams. Features chat, video calls, documents, diagrams, and task management that seamlessly interconnect — where everything can reference and embed everything else. Production-ready collaboration with data durability, automatic reconnection, and graceful offline degradation.
 
 ## Core Value
 
@@ -43,16 +43,17 @@ Seamless integration between all workspace features — users, documents, diagra
 - ✓ Collaborative Yjs-based task description editing — v0.10
 - ✓ Active users avatar stacks and connection status indicators — v0.10
 - ✓ CI/CD pipeline for multi-service deployment — v0.10
+- ✓ Yjs→Convex snapshot persistence on session close (content recovery) — v0.11
+- ✓ Token refresh mechanism for WebSocket reconnection without page reload — v0.11
+- ✓ Permission re-validation in PartyKit (periodic membership re-check) — v0.11
+- ✓ Content recovery path from Convex backup — v0.11
+- ✓ Graceful degradation on PartyKit unavailability — v0.11
+- ✓ Shared TypeScript protocol types for collaboration layer — v0.11
 
 ### Active
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] Yjs→Convex snapshot persistence on session close (content recovery)
-- [ ] Token refresh mechanism for WebSocket reconnection without page reload
-- [ ] Permission re-validation in PartyKit (TTL-based membership re-check)
-- [ ] Content recovery path from Convex backup
-- [ ] Graceful degradation on PartyKit unavailability
 - [ ] Due dates on tasks
 - [ ] Board filters (by assignee, priority, labels)
 - [ ] Configurable views (list view, calendar view)
@@ -71,27 +72,20 @@ Seamless integration between all workspace features — users, documents, diagra
 - Recurring tasks — edge cases for scheduling logic; wait for user requests
 - Gantt charts — implies false precision; Kanban is more flexible
 - External task sharing — security complexity; workspace members only
-
-## Current Milestone: v0.11 Architectural Risk Mitigation
-
-**Goal:** Harden the PartyKit/Convex split persistence architecture — ensure data durability, fix auth gaps, and add graceful degradation so the collaboration layer is production-ready.
-
-**Target features:**
-- Yjs→Convex snapshot persistence (flush full Yjs state to Convex on last client disconnect)
-- Token refresh mechanism (WebSocket reconnection without page reload)
-- PartyKit permission re-validation (periodic membership checks against Convex)
-- Content recovery from Convex backup (fallback when PartyKit state is lost)
-- Graceful degradation (read-only mode when PartyKit is unavailable)
-- Shared types and protocol versioning between PartyKit and Convex
+- Periodic flush during editing — snapshot-only on disconnect; periodic flush adds write load
+- Active push revocation (Convex→PartyKit) — pull-based re-validation is simpler and sufficient
+- Version history / audit trail — snapshot backup is for recovery, not versioning
+- Sync health monitoring dashboard — defer to ops milestone
 
 ## Context
 
-Shipped v0.10 with full Yjs/PartyKit collaboration (multiplayer cursors in documents, diagrams, and task descriptions).
-Tech stack: Convex, React 18, React Router v6, Tailwind CSS, shadcn/ui, BlockNote, Excalidraw, PartyKit, Yjs, y-partykit, y-indexeddb.
-Collaborative editing uses Yjs CRDTs via PartyKit WebSocket. Presence uses Yjs Awareness (replaced Convex Presence).
-PartyKit persists via snapshot mode (Durable Objects). No write-through to Convex — content lives only in PartyKit + IndexedDB.
-Token auth is one-time-use (consumed on connect). Reconnection after disconnect requires page reload.
-No permission re-validation after initial connect. Removed users can edit until they disconnect.
+Shipped v0.11 with production-ready collaboration layer.
+Tech stack: Convex, React 18, React Router v6, Tailwind CSS, shadcn/ui, BlockNote, Excalidraw, PartyKit, Yjs, y-partykit, y-indexeddb, Zod.
+Collaborative editing uses Yjs CRDTs via PartyKit WebSocket. Presence uses Yjs Awareness.
+Yjs state persists to Convex as binary snapshots (periodic 30s saves + disconnect debounce). Cold-start loads from Convex when PartyKit storage empty.
+Token refresh via async params function enables seamless WebSocket reconnection.
+Permission re-validation every 30s disconnects revoked users gracefully.
+Graceful degradation: 4s timeout → IndexedDB cache fallback → Convex snapshot read-only mode.
 CI/CD deploys Convex, PartyKit, and Cloudflare Workers sequentially via GitHub Actions.
 
 ## Constraints
@@ -120,6 +114,17 @@ CI/CD deploys Convex, PartyKit, and Cloudflare Workers sequentially via GitHub A
 | Chat mentions: create-only notifications | v1 simplification - only notify on new messages, not edits | ✓ Good |
 | Separate chat notification action | Chat needs different context (#channel) than tasks | ✓ Good |
 | Pass plainText to notification action | Simpler than querying message by ID for preview | ✓ Good |
+| Discriminated union for WebSocket messages | TypeScript narrowing in switch statements; compile-time protocol safety | ✓ Good |
+| Error severity classification (terminal vs recoverable) | Guides retry vs user notification logic in graceful degradation | ✓ Good |
+| yjsSnapshotId field naming | Clarifies Yjs-specific binary data vs potential future snapshot types | ✓ Good |
+| Periodic save interval 30s + disconnect debounce 7s | Balances data durability with Convex write load | ✓ Good |
+| Dynamic token refresh via async params function | y-partykit calls params on each reconnect; fresh token without page reload | ✓ Good |
+| Fail-open pattern for permission checks | Availability over strict security; only disconnect on explicit access revocation | ✓ Good |
+| Server-to-server auth via PARTYKIT_SECRET | Shared secret for Convex HTTP endpoints; prevents client spoofing | ✓ Good |
+| 4-second connection timeout for graceful degradation | Within 3-5s user decision threshold; non-blocking (provider keeps trying) | ✓ Good |
+| Dual-source loading (provider OR IndexedDB) | Fastest-source-wins for optimal perceived performance | ✓ Good |
+| SVG preview storage for diagram embeds | Excalidraw exportToSvg every 10s; renders inline in documents and tasks | ✓ Good |
+| Exponential backoff on reconnection (max 3 attempts) | Prevents auth storms; 2s, 4s, 8s then offline mode | ✓ Good |
 
 ---
-*Last updated: 2026-02-12 after v0.11 milestone start*
+*Last updated: 2026-02-14 after v0.11 milestone*
