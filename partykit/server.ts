@@ -26,11 +26,11 @@ export default class CollaborationServer implements Party.Server {
   /**
    * Get y-partykit options with cold-start loading from Convex.
    */
-  private getYjsOptions(): YPartyKitOptions {
+  private getYjsOptions(roomId: string): YPartyKitOptions {
     return {
       persist: { mode: "snapshot" },
       load: async () => {
-        return this.loadSnapshotFromConvex();
+        return this.loadSnapshotFromConvex(roomId);
       },
     };
   }
@@ -39,7 +39,7 @@ export default class CollaborationServer implements Party.Server {
    * Load Yjs snapshot from Convex on cold-start.
    * Returns null if no snapshot exists (new document) or on error.
    */
-  private async loadSnapshotFromConvex(): Promise<Y.Doc | null> {
+  private async loadSnapshotFromConvex(roomId: string): Promise<Y.Doc | null> {
     const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
     const secret = this.room.env.PARTYKIT_SECRET as string;
 
@@ -50,7 +50,7 @@ export default class CollaborationServer implements Party.Server {
 
     try {
       const response = await fetch(
-        `${convexSiteUrl}/collaboration/snapshot?roomId=${encodeURIComponent(this.room.id)}`,
+        `${convexSiteUrl}/collaboration/snapshot?roomId=${encodeURIComponent(roomId)}`,
         {
           method: "GET",
           headers: {
@@ -61,12 +61,12 @@ export default class CollaborationServer implements Party.Server {
 
       if (response.status === 404) {
         // No snapshot exists -- new document
-        console.log(`No snapshot found for room ${this.room.id} (new document)`);
+        console.log(`No snapshot found for room ${roomId} (new document)`);
         return null;
       }
 
       if (!response.ok) {
-        console.error(`Failed to load snapshot for room ${this.room.id}: ${response.status}`);
+        console.error(`Failed to load snapshot for room ${roomId}: ${response.status}`);
         return null;
       }
 
@@ -75,10 +75,10 @@ export default class CollaborationServer implements Party.Server {
 
       const yDoc = new Y.Doc();
       Y.applyUpdate(yDoc, update);
-      console.log(`Loaded snapshot for room ${this.room.id}`);
+      console.log(`Loaded snapshot for room ${roomId}`);
       return yDoc;
     } catch (error) {
-      console.error(`Error loading snapshot for room ${this.room.id}:`, error);
+      console.error(`Error loading snapshot for room ${roomId}:`, error);
       return null;
     }
   }
@@ -249,13 +249,22 @@ export default class CollaborationServer implements Party.Server {
       });
 
       // Cache roomId in durable storage for alarm handler access
-      await this.room.storage.put("roomId", this.room.id);
+      const roomId = this.room.id;
+      await this.room.storage.put("roomId", roomId);
 
-      // Auth successful - delegate to y-partykit with load callback
-      await onConnect(conn, this.room, this.getYjsOptions());
+      // Auth successful - delegate to y-partykit with load callback.
+      // If the client disconnects mid-setup (fast navigation), y-partykit throws
+      // "Network connection lost" at the workerd level. Catch it gracefully —
+      // onClose will still fire and handle cleanup/save scheduling.
+      try {
+        await onConnect(conn, this.room, this.getYjsOptions(roomId));
+      } catch {
+        console.log(`Connection dropped during Yjs setup for room ${roomId}`);
+        return;
+      }
 
       // Cache yDoc reference for alarm handler (avoids Party.id access limitation in onAlarm)
-      this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions());
+      this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
 
       // Schedule periodic save alarm if not already scheduled
       if (!this.periodicAlarmScheduled) {
@@ -265,11 +274,17 @@ export default class CollaborationServer implements Party.Server {
         console.log(`Scheduled periodic save alarm for room ${this.room.id}`);
       }
     } catch (error) {
-      console.error("Auth verification error:", error);
-      const errorCode: ErrorCode = "SERVER_INTERNAL_ERROR";
-      const errorMessage: ServerMessage = { type: "error", code: errorCode };
-      conn.send(JSON.stringify(errorMessage));
-      conn.close(1011, errorCode);
+      // If the connection was already dropped (user navigated away fast),
+      // sending to a dead socket would throw again — guard against that.
+      try {
+        console.error("Auth verification error:", error);
+        const errorCode: ErrorCode = "SERVER_INTERNAL_ERROR";
+        const errorMessage: ServerMessage = { type: "error", code: errorCode };
+        conn.send(JSON.stringify(errorMessage));
+        conn.close(1011, errorCode);
+      } catch {
+        console.log(`Connection already closed for room ${this.room.id}, skipping error send`);
+      }
     }
   }
 

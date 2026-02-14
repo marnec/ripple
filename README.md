@@ -4,9 +4,10 @@ NEXT STEPS:
 - [x] migrate from netlify to cloudflare hosting
 - [x] fix videocalls and activate cloudflare STUN servers
     - [x] lobby page to join call
-    - [ ] docs in call
-    - [ ] diagrams in call
     - [ ] call panels layout
+    - [ ] float videocall when navigating away (teams style)
+    - [ ] follow user function
+- [ ] command palette
 - [x] fix broken invitation flow (link only works if registered/logged)
 - [x] fix no default taskstatus
 - [x] fix task detail view
