@@ -175,6 +175,18 @@ export const remove = mutation({
         `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
       );
 
+    // Clean up diagram members
+    const diagramMembers = await ctx.db
+      .query("diagramMembers")
+      .withIndex("by_diagram", (q) => q.eq("diagramId", id))
+      .collect();
+    await Promise.all(diagramMembers.map((member) => ctx.db.delete(member._id)));
+
+    // Clean up Yjs snapshot from storage
+    if (diagram.yjsSnapshotId) {
+      await ctx.storage.delete(diagram.yjsSnapshotId);
+    }
+
     await ctx.db.delete(id);
     return null;
   },

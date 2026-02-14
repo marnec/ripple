@@ -415,6 +415,18 @@ export const remove = mutation({
       throw new ConvexError("Not a member of this project");
     }
 
+    // Clean up task comments
+    const taskComments = await ctx.db
+      .query("taskComments")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .collect();
+    await Promise.all(taskComments.map((comment) => ctx.db.delete(comment._id)));
+
+    // Clean up Yjs snapshot from storage
+    if (task.yjsSnapshotId) {
+      await ctx.storage.delete(task.yjsSnapshotId);
+    }
+
     // Delete the task document
     await ctx.db.delete(taskId);
     return null;

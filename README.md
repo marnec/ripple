@@ -14,7 +14,7 @@ NEXT STEPS:
 - [x] fix breadcrumb on mobile
 - [ ] improve breadcrumb on desktop
 - [ ] improve light theme sidebar colors
-- [ ] fix autonumbering issue on diagrams (and docs?)
+- [x] fix autonumbering issue on diagrams (and docs?)
 - [x] fix doc visibility and permissions
 - [ ] remove file snapshots on doc/diagram/task removal
 - [ ] add error boundaries for better UX on exceptions

@@ -182,6 +182,11 @@ export const remove = mutation({
 
     await Promise.all(documentMembers.map((member) => ctx.db.delete(member._id)));
 
+    // Clean up Yjs snapshot from storage
+    if (document.yjsSnapshotId) {
+      await ctx.storage.delete(document.yjsSnapshotId);
+    }
+
     await ctx.db.delete(id);
     return null;
   },

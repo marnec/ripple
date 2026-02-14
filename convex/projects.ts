@@ -270,8 +270,15 @@ export const remove = mutation({
       })
     );
 
-    // 2. Delete all tasks in the project
-    await Promise.all(tasks.map((task) => ctx.db.delete(task._id)));
+    // 2. Clean up task Yjs snapshots from storage and delete tasks
+    await Promise.all(
+      tasks.map(async (task) => {
+        if (task.yjsSnapshotId) {
+          await ctx.storage.delete(task.yjsSnapshotId);
+        }
+        await ctx.db.delete(task._id);
+      })
+    );
 
     // 3. Delete all taskStatuses for the project
     const taskStatuses = await ctx.db
