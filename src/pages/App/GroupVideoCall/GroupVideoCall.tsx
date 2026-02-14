@@ -319,6 +319,14 @@ const GroupVideoCall = ({
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Cleanup: leave meeting on unmount (e.g. navigation away without clicking Leave)
+  useEffect(() => {
+    if (!meeting) return;
+    return () => {
+      void meeting.leave();
+    };
+  }, [meeting]);
+
   const handleLeave = useCallback(() => {
     void navigate(
       `/workspaces/${workspaceId}/channels/${channelId}`,
