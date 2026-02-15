@@ -9,7 +9,9 @@ NEXT STEPS:
     - [x] follow user function
     - [x] fix ghost facepile presence in diagrams
     - [x] improve follow-user UX (clear warning, auto-unfollow, ...)
-- [ ] command palette
+- [ ] fix scroll behavior on documents
+- [ ] fix some strange behaviour on enlarge call from pip when last user
+- [ ] discord-like info about call participants beisde channel name
 - [x] fix broken invitation flow (link only works if registered/logged)
 - [x] fix no default taskstatus
 - [x] fix task detail view
@@ -54,3 +56,4 @@ NEXT STEPS:
     - [ ] AI tasks agent
 - [ ] External integrations
     - [ ] github issues
+- [ ] command palette
