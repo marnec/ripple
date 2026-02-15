@@ -29,6 +29,7 @@ export type {
   AuthMessage,
   TokenRefreshMessage,
   SyncRequestMessage,
+  PresenceUpdateMessage,
   AuthOkMessage,
   AuthErrorMessage,
   ErrorMessage,
@@ -37,6 +38,9 @@ export type {
   SyncCompleteMessage,
   PermissionRevokedMessage,
   ServiceStatusMessage,
+  PresenceSnapshotMessage,
+  PresenceChangedMessage,
+  UserLeftPresenceMessage,
 } from "./messages";
 
 export { PROTOCOL_VERSION, PROTOCOL_HEADER } from "./messages";

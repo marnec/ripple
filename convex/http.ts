@@ -451,7 +451,8 @@ http.route({
       if (
         resourceType !== "doc" &&
         resourceType !== "diagram" &&
-        resourceType !== "task"
+        resourceType !== "task" &&
+        resourceType !== "presence"
       ) {
         return new Response(
           JSON.stringify({ error: "Invalid resource type" }),

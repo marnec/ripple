@@ -1,6 +1,9 @@
 {
   "name": "ripple-collaboration",
   "main": "partykit/server.ts",
+  "parties": {
+    "presence": "partykit/presence-server.ts"
+  },
   "port": 1999,
   "persist": ".partykit/state",
   "compatibilityDate": "2026-02-11"

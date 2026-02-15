@@ -65,12 +65,23 @@ const syncRequestMessageSchema = z.object({
 });
 
 /**
+ * Schema for client-to-server presence update message.
+ */
+const presenceUpdateMessageSchema = z.object({
+  type: z.literal("presence_update"),
+  currentPath: z.string().min(1),
+  resourceType: z.string().optional(),
+  resourceId: z.string().optional(),
+});
+
+/**
  * Schema for all client-to-server messages.
  */
 export const clientMessageSchema = z.discriminatedUnion("type", [
   authMessageSchema,
   tokenRefreshMessageSchema,
   syncRequestMessageSchema,
+  presenceUpdateMessageSchema,
 ]) satisfies z.ZodType<ClientMessage>;
 
 /**
@@ -142,6 +153,44 @@ const serviceStatusMessageSchema = z.object({
 });
 
 /**
+ * Schema for server-to-client presence snapshot message.
+ */
+const presenceSnapshotMessageSchema = z.object({
+  type: z.literal("presence_snapshot"),
+  users: z.array(
+    z.object({
+      userId: z.string().min(1),
+      userName: z.string(),
+      userImage: z.string().nullable(),
+      currentPath: z.string(),
+      resourceType: z.string().optional(),
+      resourceId: z.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * Schema for server-to-client presence changed message.
+ */
+const presenceChangedMessageSchema = z.object({
+  type: z.literal("presence_changed"),
+  userId: z.string().min(1),
+  userName: z.string(),
+  userImage: z.string().nullable(),
+  currentPath: z.string(),
+  resourceType: z.string().optional(),
+  resourceId: z.string().optional(),
+});
+
+/**
+ * Schema for server-to-client user left presence message.
+ */
+const userLeftPresenceMessageSchema = z.object({
+  type: z.literal("user_left_presence"),
+  userId: z.string().min(1),
+});
+
+/**
  * Schema for all server-to-client messages.
  */
 export const serverMessageSchema = z.discriminatedUnion("type", [
@@ -153,6 +202,9 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
   syncCompleteMessageSchema,
   permissionRevokedMessageSchema,
   serviceStatusMessageSchema,
+  presenceSnapshotMessageSchema,
+  presenceChangedMessageSchema,
+  userLeftPresenceMessageSchema,
 ]) satisfies z.ZodType<ServerMessage>;
 
 /**
@@ -163,7 +215,7 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
  */
 export const roomIdSchema = z
   .string()
-  .regex(/^(doc|diagram|task)-.+$/, "Room ID must be {resourceType}-{resourceId}");
+  .regex(/^(doc|diagram|task|presence)-.+$/, "Room ID must be {resourceType}-{resourceId}");
 
 /**
  * Parse and validate a client message, throwing on invalid data.

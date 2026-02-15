@@ -5,8 +5,10 @@ NEXT STEPS:
 - [x] fix videocalls and activate cloudflare STUN servers
     - [x] lobby page to join call
     - [ ] call panels layout
-    - [ ] float videocall when navigating away (teams style)
-    - [ ] follow user function
+    - [x] float videocall when navigating away (teams style)
+    - [x] follow user function
+    - [x] fix ghost facepile presence in diagrams
+    - [ ] improve follow-user UX (clear warning, auto-unfollow, ...)
 - [ ] command palette
 - [x] fix broken invitation flow (link only works if registered/logged)
 - [x] fix no default taskstatus

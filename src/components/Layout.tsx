@@ -1,12 +1,32 @@
 import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
+import { Phone } from "lucide-react";
 import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { useActiveCall } from "../contexts/ActiveCallContext";
 import { cn } from "../lib/utils";
 import { DynamicBreadcrumb } from "./Breadcrumb";
 import { Separator } from "./ui/separator";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppSidebar } from "@/pages/App/AppSidebar";
+
+function CallIndicator() {
+  const { status, isFloating, returnToCall } = useActiveCall();
+  if (status !== "joined") return null;
+  // Only show when on the call route (not floating — floating has its own window)
+  if (isFloating) return null;
+
+  return (
+    <button
+      onClick={returnToCall}
+      className="flex items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-medium text-green-600 dark:text-green-400"
+      title="In call"
+    >
+      <Phone className="h-3 w-3" />
+      In call
+    </button>
+  );
+}
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -27,7 +47,10 @@ export function Layout() {
 
             <DynamicBreadcrumb />
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <CallIndicator />
+            <ThemeToggle />
+          </div>
         </header>
         {/* this solution is from https://github.com/shadcn-ui/ui/issues/5545 */}
         <div

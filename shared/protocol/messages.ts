@@ -34,7 +34,8 @@ export const PROTOCOL_HEADER = "x-ripple-protocol";
 export type ClientMessage =
   | AuthMessage
   | TokenRefreshMessage
-  | SyncRequestMessage;
+  | SyncRequestMessage
+  | PresenceUpdateMessage;
 
 /**
  * Client sends authentication token.
@@ -96,7 +97,10 @@ export type ServerMessage =
   | UserLeftMessage
   | SyncCompleteMessage
   | PermissionRevokedMessage
-  | ServiceStatusMessage;
+  | ServiceStatusMessage
+  | PresenceSnapshotMessage
+  | PresenceChangedMessage
+  | UserLeftPresenceMessage;
 
 /**
  * Server confirms successful authentication.
@@ -229,4 +233,79 @@ export interface ServiceStatusMessage {
   available: boolean;
   /** Reason for degradation if available=false (e.g., "Convex unavailable", "High load") */
   degradedReason?: string;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Presence messages (workspace-level navigation tracking via PartyKit)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Client sends its current location within the workspace.
+ *
+ * Sent on route change while connected to the presence party.
+ * No debounce needed — WebSocket messages are cheap.
+ *
+ * **Sender**: Client (frontend)
+ * **Receiver**: PartyKit presence server
+ * **Response**: Server broadcasts `presence_changed` to all other connections
+ */
+export interface PresenceUpdateMessage {
+  type: "presence_update";
+  /** Current route path (e.g., "/workspaces/123/channels/456") */
+  currentPath: string;
+  /** Type of resource being viewed */
+  resourceType?: string;
+  /** ID of the specific resource */
+  resourceId?: string;
+}
+
+/**
+ * Server sends full presence snapshot on initial connect.
+ *
+ * Contains all currently-online users and their locations.
+ *
+ * **Sender**: PartyKit presence server
+ * **Receiver**: Newly connected client
+ */
+export interface PresenceSnapshotMessage {
+  type: "presence_snapshot";
+  users: Array<{
+    userId: string;
+    userName: string;
+    userImage: string | null;
+    currentPath: string;
+    resourceType?: string;
+    resourceId?: string;
+  }>;
+}
+
+/**
+ * Server broadcasts when any user's location changes.
+ *
+ * Sent to all connections except the sender.
+ *
+ * **Sender**: PartyKit presence server
+ * **Receiver**: All other clients in the presence room
+ */
+export interface PresenceChangedMessage {
+  type: "presence_changed";
+  userId: string;
+  userName: string;
+  userImage: string | null;
+  currentPath: string;
+  resourceType?: string;
+  resourceId?: string;
+}
+
+/**
+ * Server broadcasts when a user disconnects from the presence room.
+ *
+ * Only sent when the user's last connection closes (supports multi-tab).
+ *
+ * **Sender**: PartyKit presence server
+ * **Receiver**: All remaining clients in the presence room
+ */
+export interface UserLeftPresenceMessage {
+  type: "user_left_presence";
+  userId: string;
 }

@@ -15,7 +15,7 @@ import { internal } from "./_generated/api";
  */
 export const getCollaborationToken = action({
   args: {
-    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task")),
+    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence")),
     resourceId: v.string(),
   },
   returns: v.object({ token: v.string(), roomId: v.string() }),
@@ -42,13 +42,22 @@ export const getCollaborationToken = action({
       if (!hasAccess) {
         throw new ConvexError("You do not have access to this task");
       }
-    } else {
+    } else if (resourceType === "diagram") {
       const hasAccess = await ctx.runQuery(internal.collaboration.checkDiagramAccess, {
         userId,
         diagramId: resourceId,
       });
       if (!hasAccess) {
         throw new ConvexError("You do not have access to this diagram");
+      }
+    } else {
+      // presence: check workspace membership
+      const hasAccess = await ctx.runQuery(internal.collaboration.checkWorkspaceAccess, {
+        userId,
+        workspaceId: resourceId,
+      });
+      if (!hasAccess) {
+        throw new ConvexError("You do not have access to this workspace");
       }
     }
 
@@ -66,6 +75,26 @@ export const getCollaborationToken = action({
     });
 
     return { token, roomId };
+  },
+});
+
+/**
+ * Internal query: Check if user has access to a workspace.
+ */
+export const checkWorkspaceAccess = internalQuery({
+  args: {
+    userId: v.id("users"),
+    workspaceId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { userId, workspaceId }) => {
+    const member = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId as any).eq("userId", userId)
+      )
+      .first();
+    return member !== null;
   },
 });
 
@@ -207,6 +236,7 @@ export const getUserInfo = internalQuery({
   returns: v.object({
     userId: v.id("users"),
     userName: v.optional(v.string()),
+    userImage: v.optional(v.string()),
   }),
   handler: async (ctx, { userId }) => {
     const user = await ctx.db.get(userId);
@@ -216,6 +246,7 @@ export const getUserInfo = internalQuery({
     return {
       userId: user._id,
       userName: user.name,
+      userImage: user.image,
     };
   },
 });
@@ -229,7 +260,7 @@ export const getUserInfo = internalQuery({
 export const checkAccess = internalQuery({
   args: {
     userId: v.id("users"),
-    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task")),
+    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence")),
     resourceId: v.string(),
   },
   returns: v.boolean(),
@@ -254,7 +285,7 @@ export const checkAccess = internalQuery({
         )
         .first();
       return workspaceMember !== null;
-    } else {
+    } else if (resourceType === "task") {
       // task: check project membership via task's projectId
       const task = await ctx.db.get(resourceId as any) as any;
       if (!task || !task.projectId) return false;
@@ -262,6 +293,15 @@ export const checkAccess = internalQuery({
         .query("projectMembers")
         .withIndex("by_project_user", (q) =>
           q.eq("projectId", task.projectId).eq("userId", userId)
+        )
+        .first();
+      return member !== null;
+    } else {
+      // presence: check workspace membership
+      const member = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", resourceId as any).eq("userId", userId)
         )
         .first();
       return member !== null;

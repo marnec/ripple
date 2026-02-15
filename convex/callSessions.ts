@@ -19,7 +19,7 @@ export const getActiveSession = internalQuery({
       .withIndex("by_channel_active", (q) =>
         q.eq("channelId", channelId).eq("active", true),
       )
-      .unique();
+      .first();
   },
 });
 
@@ -28,8 +28,20 @@ export const createSession = internalMutation({
     channelId: v.id("channels"),
     cloudflareMeetingId: v.string(),
   },
-  returns: v.null(),
+  returns: v.union(v.null(), v.string()),
   handler: async (ctx, { channelId, cloudflareMeetingId }) => {
+    // Check inside the mutation (transactional) to prevent duplicate sessions
+    const existing = await ctx.db
+      .query("callSessions")
+      .withIndex("by_channel_active", (q) =>
+        q.eq("channelId", channelId).eq("active", true),
+      )
+      .first();
+
+    if (existing) {
+      return existing.cloudflareMeetingId;
+    }
+
     await ctx.db.insert("callSessions", {
       channelId,
       cloudflareMeetingId,
@@ -46,14 +58,14 @@ export const endSession = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    const session = await ctx.db
+    const sessions = await ctx.db
       .query("callSessions")
       .withIndex("by_channel_active", (q) =>
         q.eq("channelId", channelId).eq("active", true),
       )
-      .unique();
+      .collect();
 
-    if (session) {
+    for (const session of sessions) {
       await ctx.db.patch(session._id, { active: false });
     }
     return null;
@@ -116,11 +128,18 @@ export const joinCall = action({
       const createData = await createRes.json();
       meetingId = (createData as { data: { id: string } }).data.id;
 
-      // Store the session
-      await ctx.runMutation(internal.callSessions.createSession, {
-        channelId,
-        cloudflareMeetingId: meetingId,
-      });
+      // Store the session — if another user raced us, use their session instead
+      const existingMeetingId = await ctx.runMutation(
+        internal.callSessions.createSession,
+        {
+          channelId,
+          cloudflareMeetingId: meetingId,
+        },
+      );
+
+      if (existingMeetingId) {
+        meetingId = existingMeetingId;
+      }
     }
 
     // Add this user as a participant

@@ -22,6 +22,8 @@ export interface DevicePreferences {
   audioDeviceId?: string;
   videoDeviceId?: string;
   audioOutputDeviceId?: string;
+  userName?: string;
+  userImage?: string;
 }
 
 function loadPreferences(): DevicePreferences {

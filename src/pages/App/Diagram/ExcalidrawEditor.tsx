@@ -80,6 +80,7 @@ export function ExcalidrawEditor({
         .excalidraw .App-toolbar__extra-tools-trigger { display: none !important; }
         .excalidraw .ToolIcon__LaserPointer { display: none !important; }
         .excalidraw .default-sidebar-trigger { display: none !important; }
+        .excalidraw .UserList__wrapper { display: none !important; }
       `}</style>
       
       <Excalidraw
