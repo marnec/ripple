@@ -75,11 +75,11 @@ function SnapshotFallback({
   });
 
   return (
-    <div className="px-20 max-w-full flex-1 animate-fade-in relative">
-      <div className="absolute top-5 right-10 z-10 flex items-center gap-3">
+    <div className="px-20 max-w-full flex-1 animate-fade-in">
+      <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2">
         <ConnectionStatus isConnected={false} />
       </div>
-      <h2 className="text-3xl py-12 font-semibold">{documentName}</h2>
+      <h2 className="text-3xl pb-12 font-semibold">{documentName}</h2>
       <p className="text-sm text-muted-foreground mb-4">
         Viewing saved version (offline)
       </p>
@@ -165,8 +165,8 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   }
 
   return (
-    <div className="px-20 max-w-full flex-1 animate-fade-in relative">
-      <div className="absolute top-5 right-10 z-10 flex items-center gap-3">
+    <div className="px-20 max-w-full flex-1 animate-fade-in">
+      <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2 bg-background/80 backdrop-blur-sm">
         <ConnectionStatus isConnected={isConnected} />
         {isConnected && (
           <ActiveUsers
@@ -182,7 +182,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           />
         )}
       </div>
-      <h2 className="text-3xl py-12 font-semibold">{document?.name}</h2>
+      <h2 className="text-3xl pb-12 font-semibold">{document?.name}</h2>
       <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController
               triggerCharacter={"#"}

@@ -325,6 +325,38 @@ body {
   opacity: 0.5;
 }
 
+/* Sleek scrollbar — thin gutter, thumb appears on hover */
+.scrollbar-sleek {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-sleek:hover {
+  scrollbar-color: hsl(var(--foreground) / 0.15) transparent;
+}
+
+.scrollbar-sleek::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-sleek::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-sleek::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-sleek:hover::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.15);
+}
+
+.scrollbar-sleek::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground) / 0.3);
+}
+
 /* BlockNote editor transparent backgrounds */
 .bn-shadcn {
   --bn-colors-editor-background: transparent !important;
