@@ -1,11 +1,11 @@
-import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
-import { Id } from "../../../../../convex/_generated/dataModel";
-import { useEffect, useRef, useState } from "react";
-import { Skeleton } from "../../../../components/ui/skeleton";
-import { CircleSlash, RefreshCw } from "lucide-react";
-import { defaultProps } from "@blocknote/core";
-import { useNavigate, useParams } from "react-router-dom";
 import { useDiagramPreview } from "@/hooks/use-diagram-preview";
+import { defaultProps } from "@blocknote/core";
+import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
+import { CircleSlash } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Id } from "../../../../../convex/_generated/dataModel";
+import { Skeleton } from "../../../../components/ui/skeleton";
 
 const DiagramView = ({
   diagramId,
@@ -42,21 +42,16 @@ const DiagramView = ({
   if (svgHtml) {
     return (
       <div className="relative group">
+        <div className="w-full flex justify-end">
+          <div className="text-sm text-muted-foreground bg-muted text-right -mt-4 -mr-4 px-2 rounded-tr rounded-bl">
+            {diagram?.name}
+            </div>
+        </div>
         <div
           className="w-full cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
           onClick={handleClick}
           dangerouslySetInnerHTML={{ __html: svgHtml }}
         />
-        <button
-          className="absolute top-2 right-2 p-1 rounded bg-background/80 border opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={(e) => {
-            e.stopPropagation();
-            refresh();
-          }}
-          title="Refresh preview"
-        >
-          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-        </button>
       </div>
     );
   }

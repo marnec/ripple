@@ -9,8 +9,9 @@ NEXT STEPS:
     - [x] follow user function
     - [x] fix ghost facepile presence in diagrams
     - [x] improve follow-user UX (clear warning, auto-unfollow, ...)
-- [ ] fix scroll behavior on documents
+- [x] fix scroll behavior on documents
 - [ ] fix some strange behaviour on enlarge call from pip when last user
+- [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name
 - [x] fix broken invitation flow (link only works if registered/logged)
 - [x] fix no default taskstatus
