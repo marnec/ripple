@@ -4,8 +4,10 @@ import { Phone } from "lucide-react";
 import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useActiveCall } from "../contexts/ActiveCallContext";
+import { useFollowMode } from "../contexts/FollowModeContext";
 import { cn } from "../lib/utils";
 import { DynamicBreadcrumb } from "./Breadcrumb";
+import { FollowModeIndicator } from "./FollowModeIndicator";
 import { Separator } from "./ui/separator";
 import { ThemeToggle } from "./ThemeToggle";
 import { AppSidebar } from "@/pages/App/AppSidebar";
@@ -31,6 +33,7 @@ function CallIndicator() {
 export function Layout() {
   const { pathname } = useLocation();
   const { isMobile, state, setOpenMobile } = useSidebar();
+  const { isFollowing, followColor } = useFollowMode();
 
   useEffect(() => {
     if (pathname === "/") setOpenMobile(true);
@@ -48,18 +51,24 @@ export function Layout() {
             <DynamicBreadcrumb />
           </div>
           <div className="flex items-center gap-2">
+            <FollowModeIndicator />
             <CallIndicator />
             <ThemeToggle />
           </div>
         </header>
         {/* this solution is from https://github.com/shadcn-ui/ui/issues/5545 */}
         <div
-          className={cn("flex h-[calc(100svh-4rem-var(--safe-area-top))]", {
+          className={cn("relative flex h-[calc(100svh-4rem-var(--safe-area-top))]", {
             "w-svw": isMobile,
             "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
             "w-[calc(100svw-var(--sidebar-width-icon))]": !isMobile && state === "collapsed",
           })}
         >
+          {isFollowing && followColor && (
+            <div
+              className={`pointer-events-none absolute inset-0 z-30 ring-2 ring-inset ${followColor.ring}`}
+            />
+          )}
           <Outlet />
         </div>
       </SidebarInset>

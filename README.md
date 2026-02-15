@@ -8,7 +8,7 @@ NEXT STEPS:
     - [x] float videocall when navigating away (teams style)
     - [x] follow user function
     - [x] fix ghost facepile presence in diagrams
-    - [ ] improve follow-user UX (clear warning, auto-unfollow, ...)
+    - [x] improve follow-user UX (clear warning, auto-unfollow, ...)
 - [ ] command palette
 - [x] fix broken invitation flow (link only works if registered/logged)
 - [x] fix no default taskstatus

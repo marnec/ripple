@@ -3,10 +3,12 @@ import {
   useRealtimeKitMeeting,
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
-import { LogOut, Maximize2, Mic, MicOff, Video, VideoOff } from "lucide-react";
+import { Eye, LogOut, Maximize2, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useActiveCall } from "../contexts/ActiveCallContext";
+import { useFollowMode } from "../contexts/FollowModeContext";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "./ui/button";
 
 const PIP_WIDTH = 320;
@@ -16,6 +18,7 @@ const MARGIN = 16;
 function FloatingCallContent() {
   const { meeting } = useRealtimeKitMeeting();
   const { leaveCall, returnToCall } = useActiveCall();
+  const { startFollowing, isFollowing, followingUserId } = useFollowMode();
 
   const audioEnabled = useRealtimeKitSelector((m) => m.self.audioEnabled);
   const videoEnabled = useRealtimeKitSelector((m) => m.self.videoEnabled);
@@ -65,10 +68,14 @@ function FloatingCallContent() {
     };
   }, [firstRemote, firstRemote?.videoTrack]);
 
+  const firstRemoteUserId = firstRemote?.customParticipantId;
+  const isFollowingFirst =
+    isFollowing && followingUserId === firstRemoteUserId;
+
   return (
     <>
       {/* Main video area */}
-      <div className="relative flex-1 overflow-hidden bg-muted">
+      <div className="group/pip relative flex-1 overflow-hidden bg-muted">
         {/* Show remote participant as main view, or self if alone */}
         {firstRemote?.videoEnabled ? (
           <video
@@ -104,6 +111,31 @@ function FloatingCallContent() {
               muted
               className="h-full w-full -scale-x-100 object-cover"
             />
+          </div>
+        )}
+
+        {/* Follow button on remote participant (top-left, show on hover) */}
+        {firstRemoteUserId && !isFollowingFirst && (
+          <button
+            className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition-opacity hover:bg-black/80 group-hover/pip:opacity-100"
+            onClick={() =>
+              startFollowing(
+                firstRemoteUserId as Id<"users">,
+                firstRemote.name || "Participant",
+              )
+            }
+            title={`Follow ${firstRemote.name}`}
+          >
+            <Eye className="h-2.5 w-2.5" />
+            Follow
+          </button>
+        )}
+
+        {/* Following badge */}
+        {isFollowingFirst && (
+          <div className="absolute left-1.5 top-1.5 flex items-center gap-1 rounded bg-blue-500/80 px-1.5 py-0.5 text-[10px] text-white">
+            <Eye className="h-2.5 w-2.5" />
+            Following
           </div>
         )}
 

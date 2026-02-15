@@ -4,17 +4,42 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Id } from "../../convex/_generated/dataModel";
+import { useActiveCall } from "./ActiveCallContext";
 import { usePresence } from "./WorkspacePresenceContext";
+
+// 8 distinct accent colors for follow mode identity
+const FOLLOW_COLORS = [
+  { bg: "bg-blue-500", ring: "ring-blue-500", text: "text-blue-500", hex: "#3b82f6" },
+  { bg: "bg-violet-500", ring: "ring-violet-500", text: "text-violet-500", hex: "#8b5cf6" },
+  { bg: "bg-amber-500", ring: "ring-amber-500", text: "text-amber-500", hex: "#f59e0b" },
+  { bg: "bg-emerald-500", ring: "ring-emerald-500", text: "text-emerald-500", hex: "#10b981" },
+  { bg: "bg-rose-500", ring: "ring-rose-500", text: "text-rose-500", hex: "#f43f5e" },
+  { bg: "bg-cyan-500", ring: "ring-cyan-500", text: "text-cyan-500", hex: "#06b6d4" },
+  { bg: "bg-orange-500", ring: "ring-orange-500", text: "text-orange-500", hex: "#f97316" },
+  { bg: "bg-pink-500", ring: "ring-pink-500", text: "text-pink-500", hex: "#ec4899" },
+] as const;
+
+type FollowColor = (typeof FOLLOW_COLORS)[number];
+
+function getUserColor(userId: string): FollowColor {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash * 31 + userId.charCodeAt(i)) | 0;
+  }
+  return FOLLOW_COLORS[Math.abs(hash) % FOLLOW_COLORS.length];
+}
 
 interface FollowModeContextValue {
   followingUserId: Id<"users"> | null;
   followingUserName: string | null;
   isFollowing: boolean;
+  followColor: FollowColor | null;
   startFollowing: (userId: Id<"users">, userName: string) => void;
   stopFollowing: () => void;
 }
@@ -44,6 +69,13 @@ export function FollowModeProvider({
   const location = useLocation();
   const { toast } = useToast();
   const { presenceMap } = usePresence();
+  const { status: callStatus } = useActiveCall();
+
+  // Deterministic color from followed user ID
+  const followColor = useMemo(
+    () => (followingUserId ? getUserColor(followingUserId) : null),
+    [followingUserId],
+  );
 
   // Track whether the last navigation was triggered by follow mode
   const followNavRef = useRef(false);
@@ -68,6 +100,45 @@ export function FollowModeProvider({
     setFollowingUserName(null);
     lastFollowedPathRef.current = null;
   }, []);
+
+  // --- Escape key to stop following ---
+  useEffect(() => {
+    if (!followingUserId) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        toast({
+          title: "Stopped following",
+          description: `No longer following ${followingUserNameRef.current}`,
+        });
+        clearFollowState();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [followingUserId, toast, clearFollowState]);
+
+  // --- Auto-unfollow when leaving call ---
+  const prevCallStatusRef = useRef(callStatus);
+  useEffect(() => {
+    const prev = prevCallStatusRef.current;
+    prevCallStatusRef.current = callStatus;
+
+    if (
+      prev === "joined" &&
+      callStatus !== "joined" &&
+      followingUserIdRef.current
+    ) {
+      requestAnimationFrame(() => {
+        if (!followingUserIdRef.current) return;
+        toast({
+          title: "Stopped following",
+          description: `You left the call`,
+        });
+        clearFollowState();
+      });
+    }
+  }, [callStatus, toast, clearFollowState]);
 
   // Handle presence changes: navigate or stop following
   // undefined = initial/reset state (prevents false "went offline" toast on follow start)
@@ -168,6 +239,7 @@ export function FollowModeProvider({
         followingUserId,
         followingUserName,
         isFollowing: followingUserId !== null,
+        followColor,
         startFollowing,
         stopFollowing,
       }}

@@ -5,7 +5,6 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useReadLocalStorage } from "usehooks-ts";
 import { api } from "../../../convex/_generated/api";
 import { FloatingCallWindow } from "../../components/FloatingCallWindow";
-import { FollowModeIndicator } from "../../components/FollowModeIndicator";
 import { ActiveCallProvider } from "../../contexts/ActiveCallContext";
 import { FollowModeProvider } from "../../contexts/FollowModeContext";
 import { WorkspacePresenceProvider } from "../../contexts/WorkspacePresenceContext";
@@ -36,7 +35,6 @@ export default function App() {
                 <SidebarProvider>
                 <Layout />
                 <FloatingCallWindow />
-                <FollowModeIndicator />
                 </SidebarProvider>
               </FollowModeProvider>
             </WorkspacePresenceProvider>
