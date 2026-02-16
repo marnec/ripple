@@ -159,6 +159,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     tags: v.optional(v.array(v.string())),
+    yjsSnapshotId: v.optional(v.id("_storage")),
     roleCount: v.optional(v.object({
       [SpreadsheetRole.ADMIN]: v.number(),
       [SpreadsheetRole.MEMBER]: v.number(),

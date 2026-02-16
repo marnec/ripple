@@ -178,7 +178,8 @@ http.route({
       if (
         resourceType !== "doc" &&
         resourceType !== "diagram" &&
-        resourceType !== "task"
+        resourceType !== "task" &&
+        resourceType !== "spreadsheet"
       ) {
         return new Response(
           JSON.stringify({ error: "Invalid resource type" }),
@@ -305,7 +306,8 @@ http.route({
       if (
         resourceType !== "doc" &&
         resourceType !== "diagram" &&
-        resourceType !== "task"
+        resourceType !== "task" &&
+        resourceType !== "spreadsheet"
       ) {
         return new Response(
           JSON.stringify({ error: "Invalid resource type" }),
@@ -452,7 +454,8 @@ http.route({
         resourceType !== "doc" &&
         resourceType !== "diagram" &&
         resourceType !== "task" &&
-        resourceType !== "presence"
+        resourceType !== "presence" &&
+        resourceType !== "spreadsheet"
       ) {
         return new Response(
           JSON.stringify({ error: "Invalid resource type" }),

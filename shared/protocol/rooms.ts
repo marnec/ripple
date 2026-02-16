@@ -8,7 +8,7 @@
 /**
  * Resource types that support real-time collaboration via PartyKit.
  */
-export type ResourceType = "doc" | "diagram" | "task" | "presence";
+export type ResourceType = "doc" | "diagram" | "task" | "presence" | "spreadsheet";
 
 /**
  * Build a PartyKit room ID from a resource type and ID.
@@ -54,7 +54,8 @@ export function parseRoomId(roomId: string): {
     resourceType !== "doc" &&
     resourceType !== "diagram" &&
     resourceType !== "task" &&
-    resourceType !== "presence"
+    resourceType !== "presence" &&
+    resourceType !== "spreadsheet"
   ) {
     throw new Error(`Invalid resource type in room ID: ${resourceType}`);
   }

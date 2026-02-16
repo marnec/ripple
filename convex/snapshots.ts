@@ -14,7 +14,8 @@ export const saveSnapshot = internalMutation({
     resourceType: v.union(
       v.literal("doc"),
       v.literal("diagram"),
-      v.literal("task")
+      v.literal("task"),
+      v.literal("spreadsheet")
     ),
     resourceId: v.string(),
     storageId: v.id("_storage"),
@@ -27,6 +28,8 @@ export const saveSnapshot = internalMutation({
       resource = await ctx.db.get(resourceId as Id<"documents">);
     } else if (resourceType === "diagram") {
       resource = await ctx.db.get(resourceId as Id<"diagrams">);
+    } else if (resourceType === "spreadsheet") {
+      resource = await ctx.db.get(resourceId as Id<"spreadsheets">);
     } else {
       resource = await ctx.db.get(resourceId as Id<"tasks">);
     }
@@ -60,6 +63,10 @@ export const saveSnapshot = internalMutation({
       await ctx.db.patch(resourceId as Id<"diagrams">, {
         yjsSnapshotId: storageId,
       });
+    } else if (resourceType === "spreadsheet") {
+      await ctx.db.patch(resourceId as Id<"spreadsheets">, {
+        yjsSnapshotId: storageId,
+      });
     } else {
       await ctx.db.patch(resourceId as Id<"tasks">, {
         yjsSnapshotId: storageId,
@@ -80,7 +87,8 @@ export const getSnapshot = internalQuery({
     resourceType: v.union(
       v.literal("doc"),
       v.literal("diagram"),
-      v.literal("task")
+      v.literal("task"),
+      v.literal("spreadsheet")
     ),
     resourceId: v.string(),
   },
@@ -92,6 +100,8 @@ export const getSnapshot = internalQuery({
       resource = await ctx.db.get(resourceId as Id<"documents">);
     } else if (resourceType === "diagram") {
       resource = await ctx.db.get(resourceId as Id<"diagrams">);
+    } else if (resourceType === "spreadsheet") {
+      resource = await ctx.db.get(resourceId as Id<"spreadsheets">);
     } else {
       resource = await ctx.db.get(resourceId as Id<"tasks">);
     }
@@ -115,7 +125,8 @@ export const getSnapshotUrl = query({
     resourceType: v.union(
       v.literal("doc"),
       v.literal("diagram"),
-      v.literal("task")
+      v.literal("task"),
+      v.literal("spreadsheet")
     ),
     resourceId: v.string(),
   },
@@ -131,6 +142,8 @@ export const getSnapshotUrl = query({
       resource = await ctx.db.get(resourceId as Id<"documents">);
     } else if (resourceType === "diagram") {
       resource = await ctx.db.get(resourceId as Id<"diagrams">);
+    } else if (resourceType === "spreadsheet") {
+      resource = await ctx.db.get(resourceId as Id<"spreadsheets">);
     } else {
       resource = await ctx.db.get(resourceId as Id<"tasks">);
     }

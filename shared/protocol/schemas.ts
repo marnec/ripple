@@ -215,7 +215,7 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
  */
 export const roomIdSchema = z
   .string()
-  .regex(/^(doc|diagram|task|presence)-.+$/, "Room ID must be {resourceType}-{resourceId}");
+  .regex(/^(doc|diagram|task|presence|spreadsheet)-.+$/, "Room ID must be {resourceType}-{resourceId}");
 
 /**
  * Parse and validate a client message, throwing on invalid data.

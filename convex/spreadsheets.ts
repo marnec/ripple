@@ -10,6 +10,7 @@ const spreadsheetValidator = v.object({
   workspaceId: v.id("workspaces"),
   name: v.string(),
   tags: v.optional(v.array(v.string())),
+  yjsSnapshotId: v.optional(v.id("_storage")),
   roleCount: v.optional(v.object({
     admin: v.number(),
     member: v.number(),

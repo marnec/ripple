@@ -15,7 +15,7 @@ import { internal } from "./_generated/api";
  */
 export const getCollaborationToken = action({
   args: {
-    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence")),
+    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence"), v.literal("spreadsheet")),
     resourceId: v.string(),
   },
   returns: v.object({ token: v.string(), roomId: v.string() }),
@@ -49,6 +49,14 @@ export const getCollaborationToken = action({
       });
       if (!hasAccess) {
         throw new ConvexError("You do not have access to this diagram");
+      }
+    } else if (resourceType === "spreadsheet") {
+      const hasAccess = await ctx.runQuery(internal.collaboration.checkSpreadsheetAccess, {
+        userId,
+        spreadsheetId: resourceId,
+      });
+      if (!hasAccess) {
+        throw new ConvexError("You do not have access to this spreadsheet");
       }
     } else {
       // presence: check workspace membership
@@ -164,6 +172,26 @@ export const checkTaskAccess = internalQuery({
 });
 
 /**
+ * Internal query: Check if user has access to a spreadsheet.
+ */
+export const checkSpreadsheetAccess = internalQuery({
+  args: {
+    userId: v.id("users"),
+    spreadsheetId: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { userId, spreadsheetId }) => {
+    const member = await ctx.db
+      .query("spreadsheetMembers")
+      .withIndex("by_spreadsheet_user", (q) =>
+        q.eq("spreadsheetId", spreadsheetId as any).eq("userId", userId)
+      )
+      .first();
+    return member !== null;
+  },
+});
+
+/**
  * Internal mutation: Store a collaboration token.
  */
 export const storeToken = internalMutation({
@@ -260,7 +288,7 @@ export const getUserInfo = internalQuery({
 export const checkAccess = internalQuery({
   args: {
     userId: v.id("users"),
-    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence")),
+    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence"), v.literal("spreadsheet")),
     resourceId: v.string(),
   },
   returns: v.boolean(),
@@ -293,6 +321,15 @@ export const checkAccess = internalQuery({
         .query("projectMembers")
         .withIndex("by_project_user", (q) =>
           q.eq("projectId", task.projectId).eq("userId", userId)
+        )
+        .first();
+      return member !== null;
+    } else if (resourceType === "spreadsheet") {
+      // spreadsheet: check spreadsheet membership
+      const member = await ctx.db
+        .query("spreadsheetMembers")
+        .withIndex("by_spreadsheet_user", (q) =>
+          q.eq("spreadsheetId", resourceId as any).eq("userId", userId)
         )
         .first();
       return member !== null;

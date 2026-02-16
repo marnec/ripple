@@ -1,4 +1,6 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
+import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
@@ -11,13 +13,17 @@ import {
   ArrowLeftToLine,
   ArrowRightToLine,
   ArrowUpToLine,
+  Circle,
   Columns3,
   Rows3,
   Trash2,
+  WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
+import type { Awareness } from "y-protocols/awareness";
+import * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 
@@ -113,16 +119,53 @@ function MenuSeparator() {
 }
 
 // ---------------------------------------------------------------------------
+// Connection Status Badge
+// ---------------------------------------------------------------------------
+
+function ConnectionStatus({
+  isConnected,
+  isOffline,
+}: {
+  isConnected: boolean;
+  isOffline: boolean;
+}) {
+  if (isOffline) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <WifiOff className="h-3 w-3" />
+        Offline
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <Circle
+        className={`h-2 w-2 fill-current ${isConnected ? "text-green-500" : "text-yellow-500"}`}
+      />
+      {isConnected ? "Connected" : "Connecting..."}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Grid Component
 // ---------------------------------------------------------------------------
 
-function JSpreadsheetGrid() {
+function JSpreadsheetGrid({
+  yDoc,
+  awareness,
+}: {
+  yDoc: Y.Doc;
+  awareness: Awareness | null;
+}) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const worksheetRef = useRef<Worksheet>(null);
+  const bindingRef = useRef<SpreadsheetYjsBinding | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
 
-  // --- Initialise jspreadsheet ---
+  // --- Initialise jspreadsheet + Yjs binding ---
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
@@ -131,18 +174,58 @@ function JSpreadsheetGrid() {
     const container = document.createElement("div");
     wrapper.appendChild(container);
 
+    // Create a binding reference to wire up events
+    let binding: SpreadsheetYjsBinding | null = null;
+
     const instance = jspreadsheet(container, {
       worksheets: [{ minDimensions: [30, 100] }],
       tabs: false,
       toolbar: false,
       contextMenu: () => null,
+      // Wire jspreadsheet v5 events to the Yjs binding
+      onchange(instance: any, cell: any, col: any, row: any, val: any) {
+        binding?.onchange(instance, cell, col, row, val);
+      },
+      onafterchanges(instance: any, changes: any) {
+        binding?.onafterchanges(instance, changes);
+      },
+      oninsertrow(instance: any, rows: any) {
+        binding?.oninsertrow(instance, rows);
+      },
+      ondeleterow(instance: any, removedRows: any) {
+        binding?.ondeleterow(instance, removedRows);
+      },
+      oninsertcolumn(instance: any, columns: any) {
+        binding?.oninsertcolumn(instance, columns);
+      },
+      ondeletecolumn(instance: any, removedColumns: any) {
+        binding?.ondeletecolumn(instance, removedColumns);
+      },
+      onchangestyle(instance: any, changes: any) {
+        binding?.onchangestyle(instance, changes);
+      },
+      onresizecolumn(instance: any, col: any, newW: any) {
+        binding?.onresizecolumn(instance, col, newW);
+      },
+      onresizerow(instance: any, row: any, newH: any) {
+        binding?.onresizerow(instance, row, newH);
+      },
+      onmerge(instance: any, merges: any) {
+        binding?.onmerge(instance, merges);
+      },
+      onselection(instance: any, x1: any, y1: any, x2: any, y2: any) {
+        binding?.onselection(instance, x1, y1, x2, y2);
+      },
     });
 
-    worksheetRef.current = Array.isArray(instance) ? instance[0] : instance;
+    const worksheet = Array.isArray(instance) ? instance[0] : instance;
+    worksheetRef.current = worksheet;
+
+    // Create the two-way Yjs binding
+    binding = new SpreadsheetYjsBinding(worksheet, yDoc, awareness);
+    bindingRef.current = binding;
 
     // Capture-phase listener: fires before jspreadsheet can intercept.
-    // preventDefault kills the browser menu; stopPropagation kills
-    // jspreadsheet's internal handler. We manage our own menu via state.
     const onContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -151,8 +234,7 @@ function JSpreadsheetGrid() {
       const table = wrapper.querySelector(".jss_worksheet") as HTMLElement;
       const ctx = resolveClickContext(target, table);
       if (ctx) {
-        // Clamp to viewport so menu doesn't overflow off-screen
-        const menuW = 220; // min-w-52 ≈ 13rem ≈ 208px + padding
+        const menuW = 220;
         const menuH = ctx.type === "cell" ? 240 : 130;
         const x = Math.min(e.clientX, window.innerWidth - menuW);
         const y = Math.min(e.clientY, window.innerHeight - menuH);
@@ -166,7 +248,15 @@ function JSpreadsheetGrid() {
 
     return () => {
       wrapper.removeEventListener("contextmenu", onContextMenu, true);
+
+      // Destroy binding before jspreadsheet
+      if (bindingRef.current) {
+        bindingRef.current.destroy();
+        bindingRef.current = null;
+      }
+      binding = null;
       worksheetRef.current = null;
+
       try {
         jspreadsheet.destroy(
           container as unknown as jspreadsheet.JspreadsheetInstanceElement,
@@ -176,7 +266,7 @@ function JSpreadsheetGrid() {
       }
       wrapper.innerHTML = "";
     };
-  }, []);
+  }, [yDoc, awareness]);
 
   // --- Close menu on click-away / Escape ---
   useEffect(() => {
@@ -187,7 +277,6 @@ function JSpreadsheetGrid() {
       if (e.key === "Escape") close();
     };
     const onMouseDown = (e: MouseEvent) => {
-      // Don't close if clicking inside the menu itself
       if (menuRef.current?.contains(e.target as Node)) return;
       close();
     };
@@ -353,8 +442,21 @@ function SpreadsheetEditor({
   spreadsheetId: Id<"spreadsheets">;
 }) {
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
+  const viewer = useQuery(api.users.viewer);
 
-  if (spreadsheet === undefined) {
+  const {
+    yDoc,
+    awareness,
+    isConnected,
+    isOffline,
+    isLoading: collabLoading,
+  } = useSpreadsheetCollaboration({
+    spreadsheetId: spreadsheetId as string,
+    userName: viewer?.name ?? "Anonymous",
+    userId: viewer?._id ?? "unknown",
+  });
+
+  if (spreadsheet === undefined || viewer === undefined) {
     return (
       <div className="flex items-center justify-center h-full">
         <LoadingSpinner />
@@ -366,10 +468,21 @@ function SpreadsheetEditor({
     return <SomethingWentWrong />;
   }
 
+  if (collabLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-full flex-col">
+      <div className="flex items-center justify-end px-3 py-1.5 border-b">
+        <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
+      </div>
       <div className="flex-1 overflow-hidden">
-        <JSpreadsheetGrid />
+        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} />
       </div>
     </div>
   );
