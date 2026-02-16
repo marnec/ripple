@@ -374,3 +374,332 @@ body {
 
 /* PWA safe area handling — applied via var(--safe-area-top) / var(--safe-area-bottom)
    defined in :root. Components that touch viewport edges use these in inline styles. */
+
+/* ─── jspreadsheet-ce theme ──────────────────────────────────────────────
+   Maps jspreadsheet theme CSS variables → app design tokens.
+   Requires jspreadsheet.themes.css to be imported alongside jspreadsheet.css.
+   ────────────────────────────────────────────────────────────────────── */
+
+/* Light mode — warm neutral palette matching shadcn stone theme */
+:root {
+  --border_color: hsl(var(--border));
+  --header_background: hsl(var(--muted));
+  --header_color: hsl(var(--muted-foreground));
+  --header_background_highlighted: hsl(var(--accent));
+  --header_color_highlighted: hsl(var(--accent-foreground));
+  --content_background: hsl(var(--background));
+  --content_color: hsl(var(--foreground));
+  --content_background_highlighted: hsl(var(--accent));
+  --content_color_highlighted: hsl(var(--accent-foreground));
+  --selection: hsl(215 80% 60% / 0.08);
+  --cursor: hsl(215 80% 60% / 0.04);
+  --border_color_highlighted: hsl(215 80% 55%);
+  --menu_background: hsl(var(--popover));
+  --menu_color: hsl(var(--popover-foreground));
+  --menu_background_highlighted: hsl(var(--accent));
+  --menu_color_highlighted: hsl(var(--accent-foreground));
+  --menu_box_shadow: 0 4px 12px hsl(0 0% 0% / 0.08), 0 1px 3px hsl(0 0% 0% / 0.06);
+}
+
+.dark {
+  --selection: hsl(215 70% 55% / 0.12);
+  --cursor: hsl(215 70% 55% / 0.06);
+  --border_color_highlighted: hsl(215 65% 50%);
+  --menu_box_shadow: 0 4px 16px hsl(0 0% 0% / 0.4), 0 1px 4px hsl(0 0% 0% / 0.3);
+}
+
+/* Worksheet — override non-themed hardcoded styles */
+.jss_worksheet {
+  border-color: hsl(var(--border)) !important;
+  border-top-color: transparent !important;
+  border-left-color: transparent !important;
+  background-color: hsl(var(--background)) !important;
+  font-size: 13px;
+}
+
+/* Selection box-shadows — base CSS uses hardcoded #ccc */
+.jss_worksheet .highlight-top {
+  box-shadow: 0px -1px hsl(var(--border)) !important;
+}
+
+.jss_worksheet .highlight-left {
+  box-shadow: -1px 0px hsl(var(--border)) !important;
+}
+
+.jss_worksheet .highlight-top.highlight-left {
+  box-shadow: -1px -1px hsl(var(--border)) !important;
+}
+
+.jss_worksheet > thead > tr > td {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.jss_worksheet > tbody > tr > td {
+  padding: 4px 6px;
+  line-height: 1.4em;
+}
+
+.jss_worksheet > tbody > tr > td.readonly {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Editor cell — ensure bg/fg contrast in both modes */
+.jss_worksheet > tbody > tr > td.editor {
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground));
+}
+
+/* Selection border highlight — use a clean blue accent */
+.jss_corner {
+  background-color: hsl(215 80% 55%) !important;
+  border-color: hsl(var(--background)) !important;
+}
+
+.dark .jss_corner {
+  background-color: hsl(215 65% 60%) !important;
+  border-color: hsl(var(--background)) !important;
+}
+
+/* Fill handle drag selection — override hardcoded black for dark mode */
+.dark .jss_worksheet .selection {
+  background-color: hsl(215 70% 55% / 0.18) !important;
+}
+
+.dark .jss_worksheet .selection-left {
+  border-left: 1px dotted hsl(215 65% 65%) !important;
+}
+
+.dark .jss_worksheet .selection-right {
+  border-right: 1px dotted hsl(215 65% 65%) !important;
+}
+
+.dark .jss_worksheet .selection-top {
+  border-top: 1px dotted hsl(215 65% 65%) !important;
+}
+
+.dark .jss_worksheet .selection-bottom {
+  border-bottom: 1px dotted hsl(215 65% 65%) !important;
+}
+
+/* Frozen columns — match background with proper depth */
+.jss_worksheet tbody .jss_freezed {
+  background-color: hsl(var(--background));
+  box-shadow: 2px 0 4px hsl(0 0% 0% / 0.06) !important;
+}
+
+.dark .jss_worksheet tbody .jss_freezed {
+  box-shadow: 2px 0 6px hsl(0 0% 0% / 0.3) !important;
+}
+
+.jss_worksheet thead .jss_freezed,
+.jss_worksheet tfoot .jss_freezed {
+  box-shadow: 2px 0 4px hsl(0 0% 0% / 0.06) !important;
+}
+
+.dark .jss_worksheet thead .jss_freezed,
+.dark .jss_worksheet tfoot .jss_freezed {
+  box-shadow: 2px 0 6px hsl(0 0% 0% / 0.3) !important;
+}
+
+/* Toolbar — refined spacing and borders */
+.jss_toolbar {
+  padding: 4px 6px;
+  gap: 2px;
+  border-radius: 0;
+  margin: 0 0 0 0;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+}
+
+.jss_toolbar .jtoolbar-divisor {
+  background: hsl(var(--border));
+  width: 1px;
+  margin: 2px 4px;
+}
+
+.jss_toolbar .jtoolbar-item:not(.jtoolbar-divisor) {
+  border-radius: var(--radius-sm);
+  padding: 3px 5px;
+}
+
+/* Scrollbar — match app's sleek scrollbar style */
+.jss_content {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--foreground) / 0.15) transparent;
+}
+
+.jss_content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.jss_content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.jss_content::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.15);
+  border-radius: 3px;
+}
+
+.jss_content::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground) / 0.3);
+}
+
+/* Editor inputs — inherit app typography */
+.jss_worksheet .editor > input,
+.jss_worksheet > tbody > tr > td > input,
+.jss_worksheet > tbody > tr > td > textarea,
+.jss_worksheet > tbody > tr > td > select {
+  color: hsl(var(--foreground));
+  font-size: 13px;
+}
+
+.jss_worksheet .editor .jss_richtext,
+.jss_worksheet .editor .jupload {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px hsl(0 0% 0% / 0.1), 0 1px 3px hsl(0 0% 0% / 0.06);
+  border: 1px solid hsl(var(--border));
+}
+
+.dark .jss_worksheet .editor .jss_richtext,
+.dark .jss_worksheet .editor .jupload {
+  box-shadow: 0 4px 16px hsl(0 0% 0% / 0.4);
+}
+
+/* Filter row inputs */
+.jss_worksheet > thead > tr.jss_filter > td > input {
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+}
+
+/* Pagination */
+.jss_pagination {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+
+.jss_page_selected {
+  background-color: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground));
+}
+
+/* Error state */
+.jss_worksheet .error {
+  border-color: hsl(var(--destructive));
+}
+
+/* ─── jsuites context menu ─────────────────────────────────────────── */
+.jcontextmenu {
+  background: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px hsl(0 0% 0% / 0.08), 0 1px 3px hsl(0 0% 0% / 0.06);
+  font-size: 12px;
+  padding: 4px;
+}
+
+.dark .jcontextmenu {
+  box-shadow: 0 4px 16px hsl(0 0% 0% / 0.4), 0 1px 4px hsl(0 0% 0% / 0.3);
+}
+
+.jcontextmenu > div {
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  padding: 6px 8px 6px 30px;
+}
+
+.jcontextmenu > div a {
+  color: hsl(var(--popover-foreground));
+}
+
+.jcontextmenu > div:not(.contextmenu-line):hover {
+  background: hsl(var(--accent));
+}
+
+.jcontextmenu > div:not(.contextmenu-line):hover a {
+  color: hsl(var(--accent-foreground));
+}
+
+.jcontextmenu > div::before {
+  color: hsl(var(--muted-foreground));
+}
+
+.jcontextmenu hr {
+  border-color: hsl(var(--border));
+  margin: 2px 4px;
+}
+
+.jcontextmenu .jcontextmenu-disabled a {
+  color: hsl(var(--muted-foreground));
+  opacity: 0.5;
+}
+
+/* Nested context menu */
+.jcontextmenu .jcontextmenu {
+  border-radius: var(--radius-md);
+}
+
+/* ─── jsuites tabs (worksheet tabs) ────────────────────────────────── */
+.jtabs .jtabs-headers-container {
+  border-top: 1px solid hsl(var(--border));
+}
+
+.jtabs .jtabs-headers > div:not(.jtabs-border) {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  padding: 6px 14px;
+  margin: 0;
+  border-right: 1px solid hsl(var(--border));
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.jtabs .jtabs-headers > div:not(.jtabs-border):hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.jtabs .jtabs-headers > div.jtabs-selected {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.jtabs .jtabs-headers > div > div {
+  color: inherit;
+}
+
+.jtabs .jtabs-border {
+  background-color: hsl(215 80% 55%);
+  height: 2px;
+}
+
+.jtabs .jtabs-controls > div {
+  opacity: 0.5;
+  transition: opacity 0.15s ease;
+}
+
+.jtabs .jtabs-controls > div:hover {
+  opacity: 1;
+}
+
+/* ─── jsuites color picker inside spreadsheet ──────────────────────── */
+.dark .jcolor-content {
+  background: hsl(var(--popover));
+}
+
+/* ─── About link — hide completely ─────────────────────────────────── */
+.jss_about {
+  display: none !important;
+}
+
+/* ─── Fullscreen override ──────────────────────────────────────────── */
+.fullscreen {
+  background-color: hsl(var(--background));
+}

@@ -7,6 +7,9 @@ import { ChatContainer } from "./pages/App/Chat/ChatContainer";
 import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
 import { Diagrams } from "./pages/App/Diagram/Diagrams";
 import { DiagramSettings } from "./pages/App/Diagram/DiagramSettings";
+import { SpreadsheetPage } from "./pages/App/Spreadsheet/SpreadsheetPage";
+import { Spreadsheets } from "./pages/App/Spreadsheet/Spreadsheets";
+import { SpreadsheetSettings } from "./pages/App/Spreadsheet/SpreadsheetSettings";
 import { DocumentEditorContainer } from "./pages/App/Document/DocumentEditor";
 import { Documents } from "./pages/App/Document/Documents";
 import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
@@ -124,6 +127,23 @@ export const router = createBrowserRouter(
                 {
                   path: ":diagramId/settings",
                   element: <DiagramSettings />,
+                },
+              ],
+            },
+            {
+              path: "spreadsheets",
+              children: [
+                {
+                  index: true,
+                  element: <Spreadsheets />,
+                },
+                {
+                  path: ":spreadsheetId",
+                  element: <SpreadsheetPage />,
+                },
+                {
+                  path: ":spreadsheetId/settings",
+                  element: <SpreadsheetSettings />,
                 },
               ],
             },

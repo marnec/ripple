@@ -29,6 +29,8 @@ import type * as projects from "../projects.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as pushSubscription from "../pushSubscription.js";
 import type * as snapshots from "../snapshots.js";
+import type * as spreadsheetMembers from "../spreadsheetMembers.js";
+import type * as spreadsheets from "../spreadsheets.js";
 import type * as taskComments from "../taskComments.js";
 import type * as taskNotifications from "../taskNotifications.js";
 import type * as taskStatuses from "../taskStatuses.js";
@@ -67,6 +69,8 @@ declare const fullApi: ApiFromModules<{
   pushNotifications: typeof pushNotifications;
   pushSubscription: typeof pushSubscription;
   snapshots: typeof snapshots;
+  spreadsheetMembers: typeof spreadsheetMembers;
+  spreadsheets: typeof spreadsheets;
   taskComments: typeof taskComments;
   taskNotifications: typeof taskNotifications;
   taskStatuses: typeof taskStatuses;

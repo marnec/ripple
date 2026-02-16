@@ -5,6 +5,7 @@ export type QueryParams = {
   channelId: Id<"channels">
   documentId: Id<"documents">
   diagramId: Id<"diagrams">
+  spreadsheetId: Id<"spreadsheets">
   projectId: Id<"projects">
   taskId: Id<"tasks">
 }

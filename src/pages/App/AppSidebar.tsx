@@ -21,6 +21,7 @@ import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
 import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { ProjectSelectorList } from "./Project/ProjectSelectorList";
+import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 
 export function AppSidebar() {
@@ -28,7 +29,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
-  const { workspaceId, channelId, documentId, diagramId, projectId } = useParams<QueryParams>();
+  const { workspaceId, channelId, documentId, diagramId, spreadsheetId, projectId } = useParams<QueryParams>();
 
   const { subscribeUser } = usePushNotifications();
 
@@ -62,6 +63,16 @@ export function AppSidebar() {
       void navigate(`/workspaces/${workspaceId}/diagrams`);
     } else {
       void navigate(`/workspaces/${workspaceId}/diagrams/${id}`);
+    }
+  };
+
+  const handleSpreadsheetSelect = (id: string | null) => {
+    setOpenMobile(false);
+
+    if (!id) {
+      void navigate(`/workspaces/${workspaceId}/spreadsheets`);
+    } else {
+      void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}`);
     }
   };
 
@@ -134,6 +145,11 @@ export function AppSidebar() {
                 workspaceId={workspaceId}
                 diagramId={diagramId}
                 onDiagramSelect={handleDiagramSelect}
+              />
+              <SpreadsheetSelectorList
+                workspaceId={workspaceId}
+                spreadsheetId={spreadsheetId}
+                onSpreadsheetSelect={handleSpreadsheetSelect}
               />
             </>
           )}

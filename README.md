@@ -22,6 +22,7 @@ NEXT STEPS:
 - [ ] improve light theme sidebar colors
 - [x] fix autonumbering issue on diagrams (and docs?)
 - [x] fix doc visibility and permissions
+- [ ] fix [ERROR] No yDoc reference for room doc-md76q23q7xvw1ge86cyndc38xn8151sq, skipping save
 - [ ] remove file snapshots on doc/diagram/task removal
 - [ ] add error boundaries for better UX on exceptions
 - [ ] rethink hierarchy: workspace -> project -> subsection (channels,docs,diagrams,tasks)
@@ -58,3 +59,4 @@ NEXT STEPS:
 - [ ] External integrations
     - [ ] github issues
 - [ ] command palette
+- [ ] optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
