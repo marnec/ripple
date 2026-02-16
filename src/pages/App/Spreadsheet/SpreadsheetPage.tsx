@@ -269,7 +269,9 @@ function JSpreadsheetGrid() {
   const deleteTab = act((w, ctx) => {
     if (ctx.type !== "tab-header") return;
     // Don't delete the last remaining sheet
-    const tabs = wrapperRef.current?.querySelectorAll(".jtabs-headers > div");
+    const tabs = wrapperRef.current?.querySelectorAll(
+      ".jtabs-headers > div:not(.jtabs-border)",
+    );
     if (!tabs || tabs.length <= 1) return;
     w.deleteWorksheet(ctx.tabIndex);
   });
@@ -352,13 +354,22 @@ function JSpreadsheetGrid() {
 
       case "tab-header": {
         const tabCount =
-          wrapperRef.current?.querySelectorAll(".jtabs-headers > div").length ??
-          0;
+          wrapperRef.current?.querySelectorAll(
+            ".jtabs-headers > div:not(.jtabs-border)",
+          ).length ?? 0;
         const isLastTab = tabCount <= 1;
+        if (isLastTab) {
+          return (
+            <div className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-muted-foreground cursor-not-allowed">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Can't delete last sheet
+            </div>
+          );
+        }
         return (
           <MenuItem onClick={deleteTab} destructive>
             <Trash2 className="mr-2 h-4 w-4" />
-            {isLastTab ? "Can't delete last sheet" : "Delete sheet"}
+            Delete sheet
           </MenuItem>
         );
       }
