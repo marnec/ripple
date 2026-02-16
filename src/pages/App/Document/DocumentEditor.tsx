@@ -75,19 +75,21 @@ function SnapshotFallback({
   });
 
   return (
-    <div className="px-20 max-w-full flex-1 animate-fade-in">
-      <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2">
-        <ConnectionStatus isConnected={false} />
+    <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-sleek">
+      <div className="px-20 max-w-full animate-fade-in">
+        <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2">
+          <ConnectionStatus isConnected={false} />
+        </div>
+        <h2 className="text-3xl pb-12 font-semibold">{documentName}</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Viewing saved version (offline)
+        </p>
+        <BlockNoteView
+          editor={snapshotEditor}
+          editable={false}
+          theme={resolvedTheme === "dark" ? "dark" : "light"}
+        />
       </div>
-      <h2 className="text-3xl pb-12 font-semibold">{documentName}</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Viewing saved version (offline)
-      </p>
-      <BlockNoteView
-        editor={snapshotEditor}
-        editable={false}
-        theme={resolvedTheme === "dark" ? "dark" : "light"}
-      />
     </div>
   );
 }
@@ -165,90 +167,92 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   }
 
   return (
-    <div className="px-20 max-w-full flex-1 animate-fade-in">
-      <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2 bg-background/80 backdrop-blur-sm">
-        <ConnectionStatus isConnected={isConnected} />
-        {isConnected && (
-          <ActiveUsers
-            remoteUsers={remoteUsers}
-            currentUser={
-              viewer
-                ? {
-                    name: viewer.name,
-                    color: getUserColor(viewer._id),
-                  }
-                : undefined
-            }
-          />
-        )}
-      </div>
-      <h2 className="text-3xl pb-12 font-semibold">{document?.name}</h2>
-      <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
-            <SuggestionMenuController
-              triggerCharacter={"#"}
-              getItems={async (query) => {
-                if (!diagrams) return [];
-                return diagrams
-                  .map((diagram) => ({
-                    title: diagram.name,
-                    onItemClick: () => {
-                      editor.insertBlocks(
-                        [
+    <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-sleek">
+      <div className="px-20 max-w-full animate-fade-in">
+        <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2 bg-background/80 backdrop-blur-sm">
+          <ConnectionStatus isConnected={isConnected} />
+          {isConnected && (
+            <ActiveUsers
+              remoteUsers={remoteUsers}
+              currentUser={
+                viewer
+                  ? {
+                      name: viewer.name,
+                      color: getUserColor(viewer._id),
+                    }
+                  : undefined
+              }
+            />
+          )}
+        </div>
+        <h2 className="text-3xl pb-12 font-semibold">{document?.name}</h2>
+        <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
+              <SuggestionMenuController
+                triggerCharacter={"#"}
+                getItems={async (query) => {
+                  if (!diagrams) return [];
+                  return diagrams
+                    .map((diagram) => ({
+                      title: diagram.name,
+                      onItemClick: () => {
+                        editor.insertBlocks(
+                          [
+                            {
+                              type: "diagram",
+                              props: {
+                                diagramId: diagram._id,
+                              },
+                            },
+                          ],
+                          editor.getTextCursorPosition().block,
+                          "after"
+                        );
+                      },
+                      icon: <PenTool />,
+                      group: "Workspace diagrams",
+                      key: diagram._id,
+                    }))
+                    .filter((item) =>
+                      item.title.toLowerCase().includes(query.toLowerCase())
+                    );
+                }}
+              />
+              <SuggestionMenuController
+                triggerCharacter={"@"}
+                getItems={async (query: string) => {
+                  if (!workspaceMembers) return [];
+                  return workspaceMembers
+                    .filter((member) =>
+                      member.name?.toLowerCase().includes(query.toLowerCase())
+                    )
+                    .map((member) => ({
+                      title: member.name ?? "Unknown User",
+                      onItemClick: () => {
+                        editor.insertInlineContent([
                           {
-                            type: "diagram",
+                            type: "mention",
                             props: {
-                              diagramId: diagram._id,
+                              userId: member._id,
                             },
                           },
-                        ],
-                        editor.getTextCursorPosition().block,
-                        "after"
-                      );
-                    },
-                    icon: <PenTool />,
-                    group: "Workspace diagrams",
-                    key: diagram._id,
-                  }))
-                  .filter((item) =>
-                    item.title.toLowerCase().includes(query.toLowerCase())
-                  );
-              }}
-            />
-            <SuggestionMenuController
-              triggerCharacter={"@"}
-              getItems={async (query: string) => {
-                if (!workspaceMembers) return [];
-                return workspaceMembers
-                  .filter((member) =>
-                    member.name?.toLowerCase().includes(query.toLowerCase())
-                  )
-                  .map((member) => ({
-                    title: member.name ?? "Unknown User",
-                    onItemClick: () => {
-                      editor.insertInlineContent([
-                        {
-                          type: "mention",
-                          props: {
-                            userId: member._id,
-                          },
-                        },
-                        " ",
-                      ]);
-                    },
-                    icon: (
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage src={member.image} />
-                        <AvatarFallback>
-                          {member.name?.charAt(0).toLocaleUpperCase() || "U"}
-                        </AvatarFallback>
-                      </Avatar>
-                    ),
-                    group: "Workspace members",
-                    key: member._id,
-                  }));
-              }}
-            />
-          </BlockNoteView>
+                          " ",
+                        ]);
+                      },
+                      icon: (
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={member.image} />
+                          <AvatarFallback>
+                            {member.name?.charAt(0).toLocaleUpperCase() || "U"}
+                          </AvatarFallback>
+                        </Avatar>
+                      ),
+                      group: "Workspace members",
+                      key: member._id,
+                    }));
+                }}
+              />
+            </BlockNoteView>
+      </div>
     </div>
   );
 }

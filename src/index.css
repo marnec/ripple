@@ -382,18 +382,18 @@ body {
 
 /* Light mode — warm neutral palette matching shadcn stone theme */
 :root {
-  --border_color: hsl(var(--border));
-  --header_background: hsl(var(--muted));
-  --header_color: hsl(var(--muted-foreground));
-  --header_background_highlighted: hsl(var(--accent));
-  --header_color_highlighted: hsl(var(--accent-foreground));
+  --border_color: hsl(20 5.9% 88%);
+  --header_background: hsl(40 6% 95%);
+  --header_color: hsl(25 5% 38%);
+  --header_background_highlighted: hsl(215 40% 94%);
+  --header_color_highlighted: hsl(215 50% 35%);
   --content_background: hsl(var(--background));
   --content_color: hsl(var(--foreground));
-  --content_background_highlighted: hsl(var(--accent));
+  --content_background_highlighted: hsl(215 60% 97%);
   --content_color_highlighted: hsl(var(--accent-foreground));
   --selection: hsl(215 80% 60% / 0.08);
   --cursor: hsl(215 80% 60% / 0.04);
-  --border_color_highlighted: hsl(215 80% 55%);
+  --border_color_highlighted: hsl(215 75% 58%);
   --menu_background: hsl(var(--popover));
   --menu_color: hsl(var(--popover-foreground));
   --menu_background_highlighted: hsl(var(--accent));
@@ -402,6 +402,12 @@ body {
 }
 
 .dark {
+  --border_color: hsl(0 0% 16%);
+  --header_background: hsl(0 0% 11%);
+  --header_color: hsl(0 0% 55%);
+  --header_background_highlighted: hsl(215 25% 18%);
+  --header_color_highlighted: hsl(215 50% 70%);
+  --content_background_highlighted: hsl(215 30% 14%);
   --selection: hsl(215 70% 55% / 0.12);
   --cursor: hsl(215 70% 55% / 0.06);
   --border_color_highlighted: hsl(215 65% 50%);
@@ -410,35 +416,64 @@ body {
 
 /* Worksheet — override non-themed hardcoded styles */
 .jss_worksheet {
-  border-color: hsl(var(--border)) !important;
-  border-top-color: transparent !important;
-  border-left-color: transparent !important;
+  border: none !important;
   background-color: hsl(var(--background)) !important;
   font-size: 13px;
+  font-feature-settings: "tnum" 1;
+  border-collapse: collapse;
 }
 
 /* Selection box-shadows — base CSS uses hardcoded #ccc */
 .jss_worksheet .highlight-top {
-  box-shadow: 0px -1px hsl(var(--border)) !important;
+  box-shadow: 0px -1px var(--border_color) !important;
 }
 
 .jss_worksheet .highlight-left {
-  box-shadow: -1px 0px hsl(var(--border)) !important;
+  box-shadow: -1px 0px var(--border_color) !important;
 }
 
 .jss_worksheet .highlight-top.highlight-left {
-  box-shadow: -1px -1px hsl(var(--border)) !important;
+  box-shadow: -1px -1px var(--border_color) !important;
 }
 
+/* Column headers (A, B, C…) */
 .jss_worksheet > thead > tr > td {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border_color) !important;
+  position: relative;
+  user-select: none;
 }
 
+/* Subtle vertical divider between column headers */
+.jss_worksheet > thead > tr > td + td {
+  border-left: 1px solid var(--border_color) !important;
+}
+
+/* Row number cells — first column of each body row */
+.jss_worksheet > tbody > tr > td:first-child {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--header_color);
+  text-align: center;
+  min-width: 40px;
+  border-right: 1px solid var(--border_color) !important;
+  user-select: none;
+}
+
+/* Data cells */
 .jss_worksheet > tbody > tr > td {
-  padding: 4px 6px;
-  line-height: 1.4em;
+  padding: 5px 8px;
+  line-height: 1.45;
+  border-color: var(--border_color);
+}
+
+/* Subtle row hover for readability */
+.jss_worksheet > tbody > tr:hover > td {
+  background-color: var(--content_background_highlighted);
 }
 
 .jss_worksheet > tbody > tr > td.readonly {
@@ -449,6 +484,7 @@ body {
 .jss_worksheet > tbody > tr > td.editor {
   background-color: hsl(var(--background)) !important;
   color: hsl(var(--foreground));
+  box-shadow: inset 0 0 0 2px var(--border_color_highlighted);
 }
 
 /* Selection border highlight — use a clean blue accent */
@@ -503,30 +539,78 @@ body {
   box-shadow: 2px 0 6px hsl(0 0% 0% / 0.3) !important;
 }
 
-/* Toolbar — refined spacing and borders */
+/* Toolbar — refined compact strip */
 .jss_toolbar {
-  padding: 4px 6px;
-  gap: 2px;
+  padding: 3px 8px;
+  gap: 1px;
   border-radius: 0;
-  margin: 0 0 0 0;
-  border-left: none;
-  border-right: none;
-  border-top: none;
+  margin: 0;
+  border: none;
+  border-bottom: 1px solid var(--border_color);
+  background: var(--header_background) !important;
+  min-height: 36px;
+  align-items: center;
 }
 
 .jss_toolbar .jtoolbar-divisor {
-  background: hsl(var(--border));
+  background: var(--border_color);
   width: 1px;
-  margin: 2px 4px;
+  margin: 4px 6px;
+  align-self: stretch;
 }
 
 .jss_toolbar .jtoolbar-item:not(.jtoolbar-divisor) {
-  border-radius: var(--radius-sm);
-  padding: 3px 5px;
+  border-radius: 4px;
+  padding: 4px 6px;
+  transition: background-color 0.12s ease;
+  opacity: 0.7;
 }
 
-/* Scrollbar — match app's sleek scrollbar style */
+.jss_toolbar .jtoolbar-item:not(.jtoolbar-divisor):hover {
+  background: var(--content_background_highlighted);
+  opacity: 1;
+}
+
+/* Toolbar selects (font picker, size, etc.) */
+.jss_toolbar select {
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid var(--border_color);
+  border-radius: 4px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+
+.jss_toolbar select:focus {
+  outline: none;
+  border-color: var(--border_color_highlighted);
+}
+
+/* Container chain — fill available space and enable scroll */
+.jss_spreadsheet {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.jss_container {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1;
+  min-height: 0;
+}
+
 .jss_content {
+  overflow: auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  display: block !important;
+  border: 1px solid var(--border_color);
+  border-top: none;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--foreground) / 0.15) transparent;
 }
@@ -598,7 +682,7 @@ body {
 .jcontextmenu {
   background: hsl(var(--popover));
   color: hsl(var(--popover-foreground));
-  border: 1px solid hsl(var(--border));
+  border: 1px solid var(--border_color);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px hsl(0 0% 0% / 0.08), 0 1px 3px hsl(0 0% 0% / 0.06);
   font-size: 12px;
@@ -632,7 +716,7 @@ body {
 }
 
 .jcontextmenu hr {
-  border-color: hsl(var(--border));
+  border-color: var(--border_color);
   margin: 2px 4px;
 }
 
@@ -646,40 +730,64 @@ body {
   border-radius: var(--radius-md);
 }
 
-/* ─── jsuites tabs (worksheet tabs) ────────────────────────────────── */
+/* ─── jsuites tabs — layout fill ───────────────────────────────────── */
+.jtabs {
+  height: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.jtabs .jtabs-content {
+  flex: 1 !important;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.jtabs .jtabs-content > div.jtabs-selected {
+  height: 100% !important;
+}
+
+/* ─── jsuites tabs — styling ──────────────────────────────────────── */
 .jtabs .jtabs-headers-container {
-  border-top: 1px solid hsl(var(--border));
+  border-top: 1px solid var(--border_color) !important;
+  background: var(--header_background) !important;
 }
 
 .jtabs .jtabs-headers > div:not(.jtabs-border) {
-  background-color: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-  font-size: 12px;
-  padding: 6px 14px;
-  margin: 0;
-  border-right: 1px solid hsl(var(--border));
-  transition: background-color 0.1s ease, color 0.1s ease;
+  background-color: transparent !important;
+  color: var(--header_color) !important;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 7px 16px !important;
+  margin: 0 !important;
+  border-right: 1px solid var(--border_color) !important;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  letter-spacing: 0.01em;
 }
 
 .jtabs .jtabs-headers > div:not(.jtabs-border):hover {
-  background-color: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
+  background-color: var(--content_background_highlighted) !important;
+  color: hsl(var(--foreground)) !important;
 }
 
 .jtabs .jtabs-headers > div.jtabs-selected {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--border_color_highlighted);
 }
 
 .jtabs .jtabs-headers > div > div {
-  color: inherit;
+  color: inherit !important;
 }
 
 .jtabs .jtabs-border {
-  background-color: hsl(215 80% 55%);
+  background-color: var(--border_color_highlighted) !important;
   height: 2px;
 }
 
+/* Tab control icons (add / prev / next) — override hardcoded gray SVGs */
 .jtabs .jtabs-controls > div {
   opacity: 0.5;
   transition: opacity 0.15s ease;
@@ -687,6 +795,26 @@ body {
 
 .jtabs .jtabs-controls > div:hover {
   opacity: 1;
+}
+
+.dark .jtabs .jtabs-add {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 height=%2724%27 viewBox=%270 0 24 24%27 width=%2724%27%3E%3Cpath d=%27M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z%27 fill=%27%23888888%27/%3E%3Cpath d=%27M0 0h24v24H0z%27 fill=%27none%27/%3E%3C/svg%3E") !important;
+}
+
+.dark .jtabs .jtabs-prev {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27%23888888%27 width=%2718px%27 height=%2718px%27%3E%3Cpath d=%27M0 0h24v24H0z%27 fill=%27none%27/%3E%3Cpath d=%27M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z%27/%3E%3C/svg%3E") !important;
+}
+
+.dark .jtabs .jtabs-prev.disabled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27%23444444%27 width=%2718px%27 height=%2718px%27%3E%3Cpath d=%27M0 0h24v24H0z%27 fill=%27none%27/%3E%3Cpath d=%27M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z%27/%3E%3C/svg%3E") !important;
+}
+
+.dark .jtabs .jtabs-next {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27%23888888%27 width=%2718px%27 height=%2718px%27%3E%3Cpath d=%27M0 0h24v24H0z%27 fill=%27none%27/%3E%3Cpath d=%27M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z%27/%3E%3C/svg%3E") !important;
+}
+
+.dark .jtabs .jtabs-next.disabled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27%23444444%27 width=%2718px%27 height=%2718px%27%3E%3Cpath d=%27M0 0h24v24H0z%27 fill=%27none%27/%3E%3Cpath d=%27M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z%27/%3E%3C/svg%3E") !important;
 }
 
 /* ─── jsuites color picker inside spreadsheet ──────────────────────── */
@@ -702,4 +830,48 @@ body {
 /* ─── Fullscreen override ──────────────────────────────────────────── */
 .fullscreen {
   background-color: hsl(var(--background));
+}
+
+/* ─── Spreadsheet mobile responsive ───────────────────────────────── */
+@media (max-width: 640px) {
+  /* Larger touch targets for column headers */
+  .jss_worksheet > thead > tr > td {
+    padding: 10px 6px;
+    font-size: 11px;
+  }
+
+  /* Larger touch targets for cells */
+  .jss_worksheet > tbody > tr > td {
+    padding: 8px 8px;
+    font-size: 14px;
+    min-height: 36px;
+  }
+
+  /* Wider row number column for easy tap */
+  .jss_worksheet > tbody > tr > td:first-child {
+    min-width: 44px;
+    padding: 8px 4px;
+  }
+
+  /* Taller tabs for touch */
+  .jtabs .jtabs-headers > div:not(.jtabs-border) {
+    padding: 10px 14px !important;
+    font-size: 12px;
+  }
+
+  /* Bigger tab controls */
+  .jtabs .jtabs-controls > div {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  /* Thicker scrollbars for touch */
+  .jss_content::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .jss_content {
+    scrollbar-width: auto;
+  }
 }

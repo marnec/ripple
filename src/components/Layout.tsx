@@ -56,9 +56,8 @@ export function Layout() {
             <ThemeToggle />
           </div>
         </header>
-        {/* this solution is from https://github.com/shadcn-ui/ui/issues/5545 */}
         <div
-          className={cn("relative flex overflow-y-scroll scrollbar-sleek h-[calc(100svh-4rem-var(--safe-area-top))]", {
+          className={cn("relative flex overflow-y-auto scrollbar-sleek h-[calc(100svh-4rem-var(--safe-area-top))]", {
             "w-svw": isMobile,
             "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
             "w-[calc(100svw-var(--sidebar-width-icon))]": !isMobile && state === "collapsed",
