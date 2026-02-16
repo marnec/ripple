@@ -28,8 +28,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 type ClickContext =
   | { type: "cell"; row: number; col: number }
   | { type: "row-header"; row: number }
-  | { type: "col-header"; col: number }
-  | { type: "tab-header"; tabIndex: number };
+  | { type: "col-header"; col: number };
 
 interface MenuState {
   x: number;
@@ -134,7 +133,7 @@ function JSpreadsheetGrid() {
 
     const instance = jspreadsheet(container, {
       worksheets: [{ minDimensions: [30, 100] }],
-      tabs: true,
+      tabs: false,
       toolbar: false,
       contextMenu: () => null,
     });
@@ -149,25 +148,6 @@ function JSpreadsheetGrid() {
       e.stopPropagation();
 
       const target = e.target as HTMLElement;
-
-      // Check for tab header right-click (tabs live outside the worksheet table)
-      const tabEl = target.closest(".jtabs-headers > div") as HTMLElement;
-      if (tabEl?.parentElement) {
-        const tabIndex = Array.from(tabEl.parentElement.children).indexOf(tabEl);
-        if (tabIndex >= 0) {
-          const menuW = 220;
-          const menuH = 50;
-          const x = Math.min(e.clientX, window.innerWidth - menuW);
-          const y = Math.min(e.clientY, window.innerHeight - menuH);
-          setMenu({
-            x: Math.max(0, x),
-            y: Math.max(0, y),
-            ctx: { type: "tab-header", tabIndex },
-          });
-          return;
-        }
-      }
-
       const table = wrapper.querySelector(".jss_worksheet") as HTMLElement;
       const ctx = resolveClickContext(target, table);
       if (ctx) {
@@ -266,16 +246,6 @@ function JSpreadsheetGrid() {
     w.deleteColumn(col, 1);
   });
 
-  const deleteTab = act((w, ctx) => {
-    if (ctx.type !== "tab-header") return;
-    // Don't delete the last remaining sheet
-    const tabs = wrapperRef.current?.querySelectorAll(
-      ".jtabs-headers > div:not(.jtabs-border)",
-    );
-    if (!tabs || tabs.length <= 1) return;
-    w.deleteWorksheet(ctx.tabIndex);
-  });
-
   // --- Render ---
 
   const renderMenuContent = () => {
@@ -352,27 +322,6 @@ function JSpreadsheetGrid() {
           </>
         );
 
-      case "tab-header": {
-        const tabCount =
-          wrapperRef.current?.querySelectorAll(
-            ".jtabs-headers > div:not(.jtabs-border)",
-          ).length ?? 0;
-        const isLastTab = tabCount <= 1;
-        if (isLastTab) {
-          return (
-            <div className="flex w-full items-center rounded-sm px-2 py-1.5 text-sm text-muted-foreground cursor-not-allowed">
-              <Trash2 className="mr-2 h-4 w-4" />
-              Can't delete last sheet
-            </div>
-          );
-        }
-        return (
-          <MenuItem onClick={deleteTab} destructive>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete sheet
-          </MenuItem>
-        );
-      }
     }
   };
 
