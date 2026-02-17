@@ -129,7 +129,6 @@ function SpreadsheetCellRefView({
     }
   };
 
-  // Deleted spreadsheet
   if (spreadsheet === null) {
     return (
       <span className="text-muted-foreground italic align-middle">
@@ -138,40 +137,48 @@ function SpreadsheetCellRefView({
     );
   }
 
-  const tooltipLabel = spreadsheet
-    ? `${spreadsheet.name} \u2023 ${cellRef}`
-    : cellRef;
+  const single = isSingleCell(cellRef);
 
   // Loading state
   if (spreadsheet === undefined || cellData === undefined) {
+    if (single) {
+      return (
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-sm font-mono align-middle">
+          <Skeleton className="h-4 w-8 rounded inline-block" />
+        </span>
+      );
+    }
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-sm font-mono align-middle">
-        <Table className="h-3 w-3 shrink-0 text-blue-500" />
-        <Skeleton className="h-4 w-10 rounded inline-block" />
+      <span className="block my-1.5" contentEditable={false}>
+        <Skeleton className="h-16 w-48 rounded-lg" />
       </span>
     );
   }
 
   const values: string[][] = cellData?.values ?? [[""]];
-  const single = isSingleCell(cellRef);
+  const caption = `${spreadsheet.name} \u203A ${cellRef}`;
 
   if (single) {
     return (
       <CellValueChip
         value={values[0]?.[0] ?? ""}
-        tooltip={tooltipLabel}
+        tooltip={caption}
         onClick={handleClick}
       />
     );
   }
 
   return (
-    <MiniTable values={values} tooltip={tooltipLabel} onClick={handleClick} />
+    <RangeTable
+      values={values}
+      caption={caption}
+      onClick={handleClick}
+    />
   );
 }
 
 // ---------------------------------------------------------------------------
-// CellValueChip: single-cell inline chip
+// CellValueChip: single-cell inline chip (no icon, clean mono value)
 // ---------------------------------------------------------------------------
 
 function CellValueChip({
@@ -188,12 +195,11 @@ function CellValueChip({
       <Tooltip>
         <TooltipTrigger asChild>
           <span
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-sm font-mono cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/80 transition-colors align-middle"
+            className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-sm font-mono cursor-pointer hover:bg-muted/80 transition-colors align-middle"
             contentEditable={false}
             onClick={onClick}
           >
-            <Table className="h-3 w-3 shrink-0 text-blue-500" />
-            <span className="max-w-32 truncate">{value || "\u00A0"}</span>
+            {value || "\u00A0"}
           </span>
         </TooltipTrigger>
         <TooltipContent side="top">
@@ -205,49 +211,47 @@ function CellValueChip({
 }
 
 // ---------------------------------------------------------------------------
-// MiniTable: range display as inline readonly table
+// RangeTable: block-level readonly table with caption (matches native BN table)
 // ---------------------------------------------------------------------------
 
-function MiniTable({
+function RangeTable({
   values,
-  tooltip,
+  caption,
   onClick,
 }: {
   values: string[][];
-  tooltip: string;
+  caption: string;
   onClick: (e: React.MouseEvent) => void;
 }) {
   return (
-    <TooltipProvider delayDuration={300}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            className="inline-block align-middle cursor-pointer"
-            contentEditable={false}
-            onClick={onClick}
-          >
-            <table className="border-collapse text-xs font-mono border border-blue-200 dark:border-blue-800 rounded overflow-hidden">
-              <tbody>
-                {values.map((row, ri) => (
-                  <tr key={ri}>
-                    {row.map((cell, ci) => (
-                      <td
-                        key={ci}
-                        className="border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 max-w-24 truncate bg-blue-50/50 dark:bg-blue-950/30"
-                      >
-                        {cell || "\u00A0"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <span
+      className="block my-1.5 cursor-pointer"
+      contentEditable={false}
+      onClick={onClick}
+    >
+      <span className="block border border-border rounded-lg overflow-hidden">
+        <span className="flex justify-end">
+          <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-bl">
+            {caption}
           </span>
-        </TooltipTrigger>
-        <TooltipContent side="top">
-          <span className="text-xs">{tooltip}</span>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+        </span>
+        <table className="border-collapse w-full">
+          <tbody>
+            {values.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td
+                    key={ci}
+                    className="border border-border px-3 py-1.5 text-sm"
+                  >
+                    {cell || "\u00A0"}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </span>
+    </span>
   );
 }
