@@ -5,6 +5,31 @@ const DEFAULT_ROWS = 100;
 const DEFAULT_COLS = 30;
 
 /**
+ * Idempotent template update for initializing empty spreadsheets.
+ * Uses a fixed Yjs client ID so applying it multiple times (or from different
+ * clients) is a no-op — prevents Y.Array row accumulation from concurrent init.
+ */
+const EMPTY_SPREADSHEET_UPDATE: Uint8Array = (() => {
+  const doc = new Y.Doc();
+  doc.clientID = 1; // Fixed ID → applying this update is always idempotent
+  const data = doc.getArray<Y.Map<string>>("data");
+  const meta = doc.getMap<any>("meta");
+  doc.transact(() => {
+    meta.set("colCount", DEFAULT_COLS);
+    for (let r = 0; r < DEFAULT_ROWS; r++) {
+      const rowMap = new Y.Map<string>();
+      for (let c = 0; c < DEFAULT_COLS; c++) {
+        rowMap.set(String(c), "");
+      }
+      data.push([rowMap]);
+    }
+  });
+  const update = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+})();
+
+/**
  * Spreadsheet cursor/selection state shared via Yjs Awareness.
  */
 export interface SpreadsheetCursor {
@@ -22,6 +47,8 @@ interface AwarenessState {
 interface RemoteCursorOverlay {
   cells: HTMLElement[];
   label: HTMLElement | null;
+  labelHost: HTMLElement | null;
+  labelTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /**
@@ -58,11 +85,27 @@ export class SpreadsheetYjsBinding {
   private remoteCursors = new Map<number, RemoteCursorOverlay>();
   private styleElement: HTMLStyleElement | null = null;
 
+  /** Throttle: pending selection for rAF-based awareness broadcast */
+  private pendingSelection: SpreadsheetCursor | null = null;
+  private selectionRafId: number | null = null;
+
+  /** Throttle: pending rAF id for cursor rendering */
+  private cursorRafId: number | null = null;
+
+  /** Cache: Y.Map → row index for fast lookups in applyCellChanges */
+  private rowIndexCache = new WeakMap<Y.Map<string>, number>();
+
+  /** Cache: last rendered cursor state per remote client (for dirty-checking) */
+  private lastCursorState = new Map<number, string>();
+
+  /** Set of remote client IDs considered "active" by the facepile.
+   *  When set, cursors for clients not in this set are removed. */
+  private activeClientIds: Set<number> | null = null;
+
   constructor(
     worksheet: any,
     yDoc: Y.Doc,
     awareness: Awareness | null,
-    opts?: { defaultCols?: number; defaultRows?: number },
   ) {
     this.worksheet = worksheet;
     this.awareness = awareness;
@@ -74,14 +117,18 @@ export class SpreadsheetYjsBinding {
     this.yMerges = yDoc.getMap<string>("merges");
     this.yMeta = yDoc.getMap<any>("meta");
 
-    const defaultCols = opts?.defaultCols ?? DEFAULT_COLS;
-    const defaultRows = opts?.defaultRows ?? DEFAULT_ROWS;
-
+    // Idempotent init: applying the same fixed-clientID update is a no-op if
+    // already present, so concurrent clients can't duplicate rows.
     if (this.yData.length === 0) {
-      this.initializeYjsFromGrid(defaultRows, defaultCols);
-    } else {
-      this.loadGridFromYjs();
+      Y.applyUpdate(yDoc, EMPTY_SPREADSHEET_UPDATE);
     }
+
+    // Compact rows accumulated by the previous (non-idempotent) init bug.
+    if (this.yData.length > DEFAULT_ROWS) {
+      this.compactRows();
+    }
+
+    this.loadGridFromYjs();
 
     // Set up Yjs → jspreadsheet observers
     this.dataObserver = this.handleDataChange.bind(this);
@@ -108,17 +155,45 @@ export class SpreadsheetYjsBinding {
   // Initialization
   // ---------------------------------------------------------------------------
 
-  private initializeYjsFromGrid(rows: number, cols: number) {
-    this.yData.doc!.transact(() => {
-      this.yMeta.set("colCount", cols);
-      for (let r = 0; r < rows; r++) {
-        const rowMap = new Y.Map<string>();
-        for (let c = 0; c < cols; c++) {
-          rowMap.set(String(c), "");
+  /** Remove trailing empty rows beyond DEFAULT_ROWS (fixes prior accumulation bug). */
+  private compactRows() {
+    const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
+    let lastNonEmpty = DEFAULT_ROWS - 1;
+
+    for (let r = this.yData.length - 1; r >= DEFAULT_ROWS; r--) {
+      const rowMap = this.yData.get(r);
+      let hasContent = false;
+      for (let c = 0; c < colCount; c++) {
+        if (rowMap.get(String(c))) {
+          hasContent = true;
+          break;
         }
-        this.yData.push([rowMap]);
       }
-    });
+      if (hasContent) {
+        lastNonEmpty = r;
+        break;
+      }
+    }
+
+    const keepRows = lastNonEmpty + 1;
+    if (this.yData.length > keepRows) {
+      this.yData.doc!.transact(() => {
+        this.yData.delete(keepRows, this.yData.length - keepRows);
+      });
+    }
+  }
+
+  /** Lazily grow yData to include the given row index (for edits beyond current range). */
+  private ensureRows(upToIndex: number) {
+    const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
+    while (this.yData.length <= upToIndex) {
+      const rowMap = new Y.Map<string>();
+      for (let c = 0; c < colCount; c++) {
+        rowMap.set(String(c), "");
+      }
+      this.yData.push([rowMap]);
+      this.rowIndexCache.set(rowMap, this.yData.length - 1);
+    }
   }
 
   private loadGridFromYjs() {
@@ -128,6 +203,7 @@ export class SpreadsheetYjsBinding {
       const data: string[][] = [];
       for (let r = 0; r < this.yData.length; r++) {
         const rowMap = this.yData.get(r);
+        this.rowIndexCache.set(rowMap, r);
         const row: string[] = [];
         for (let c = 0; c < colCount; c++) {
           row.push(rowMap.get(String(c)) ?? "");
@@ -162,22 +238,9 @@ export class SpreadsheetYjsBinding {
   // All signatures match jspreadsheet-ce v5 typings.
   // ---------------------------------------------------------------------------
 
-  /** v5: onchange(instance, cell, colIndex, rowIndex, newValue, oldValue) */
-  onchange(
-    _instance: any,
-    _cell: any,
-    colIndex: string | number,
-    rowIndex: string | number,
-    newValue: any,
-  ) {
-    if (this.isApplyingRemote) return;
-    const col = Number(colIndex);
-    const row = Number(rowIndex);
-    if (row < this.yData.length) {
-      const rowMap = this.yData.get(row);
-      rowMap?.set(String(col), String(newValue ?? ""));
-    }
-  }
+  /** v5: onchange — intentionally a no-op. onafterchanges handles all cell
+   *  edits in a single Yjs transaction, avoiding double-writes. */
+  onchange() {}
 
   /** v5: onafterchanges(instance, changes: CellChange[]) */
   onafterchanges(
@@ -187,13 +250,13 @@ export class SpreadsheetYjsBinding {
     if (this.isApplyingRemote) return;
     if (!changes || changes.length === 0) return;
     this.yData.doc!.transact(() => {
+      const maxRow = Math.max(...changes.map(c => Number(c.y)));
+      this.ensureRows(maxRow);
       for (const c of changes) {
         const row = Number(c.y);
         const col = Number(c.x);
-        if (row < this.yData.length) {
-          const rowMap = this.yData.get(row);
-          rowMap?.set(String(col), String(c.value ?? ""));
-        }
+        const rowMap = this.yData.get(row);
+        rowMap?.set(String(col), String(c.value ?? ""));
       }
     });
   }
@@ -211,11 +274,14 @@ export class SpreadsheetYjsBinding {
       // Rows are sorted by index; insert from lowest to highest
       const sorted = [...rows].sort((a, b) => a.row - b.row);
       for (let i = 0; i < sorted.length; i++) {
+        const insertAt = sorted[i].row + i;
+        // Grow yData if the insert position is beyond current length
+        this.ensureRows(insertAt > 0 ? insertAt - 1 : 0);
         const rowMap = new Y.Map<string>();
         for (let c = 0; c < colCount; c++) {
           rowMap.set(String(c), "");
         }
-        this.yData.insert(sorted[i].row + i, [rowMap]);
+        this.yData.insert(insertAt, [rowMap]);
       }
     });
   }
@@ -363,7 +429,8 @@ export class SpreadsheetYjsBinding {
     });
   }
 
-  /** v5: onselection(instance, x1, y1, x2, y2, origin) */
+  /** v5: onselection(instance, x1, y1, x2, y2, origin)
+   *  Throttled via rAF to avoid flooding awareness during drag-select. */
   onselection(
     _instance: any,
     x1: number,
@@ -372,7 +439,16 @@ export class SpreadsheetYjsBinding {
     y2: number,
   ) {
     if (!this.awareness) return;
-    this.awareness.setLocalStateField("cursor", { x1, y1, x2, y2 } satisfies SpreadsheetCursor);
+    this.pendingSelection = { x1, y1, x2, y2 };
+    if (this.selectionRafId === null) {
+      this.selectionRafId = requestAnimationFrame(() => {
+        this.selectionRafId = null;
+        if (this.pendingSelection && this.awareness) {
+          this.awareness.setLocalStateField("cursor", this.pendingSelection);
+          this.pendingSelection = null;
+        }
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -422,17 +498,19 @@ export class SpreadsheetYjsBinding {
         } catch { /* */ }
       }
     }
+    // Rebuild row index cache after structural changes
+    this.rebuildRowIndexCache();
+  }
+
+  private rebuildRowIndexCache() {
+    for (let r = 0; r < this.yData.length; r++) {
+      this.rowIndexCache.set(this.yData.get(r), r);
+    }
   }
 
   private applyCellChanges(event: Y.YMapEvent<string>) {
     const rowMap = event.target;
-    let rowIndex = -1;
-    for (let r = 0; r < this.yData.length; r++) {
-      if (this.yData.get(r) === rowMap) {
-        rowIndex = r;
-        break;
-      }
-    }
+    const rowIndex = this.rowIndexCache.get(rowMap) ?? -1;
     if (rowIndex === -1) return;
 
     event.changes.keys.forEach((change, key) => {
@@ -523,6 +601,13 @@ export class SpreadsheetYjsBinding {
   // Remote cursor awareness
   // ---------------------------------------------------------------------------
 
+  /** Update the set of active remote client IDs (mirrors the facepile).
+   *  Cursors for clients not in this set will be removed. */
+  setActiveClients(ids: Set<number>) {
+    this.activeClientIds = ids;
+    this.renderRemoteCursors();
+  }
+
   private injectCursorStyles() {
     this.styleElement = document.createElement("style");
     this.styleElement.textContent = `
@@ -539,17 +624,31 @@ export class SpreadsheetYjsBinding {
         pointer-events: none;
         z-index: 10;
         font-family: system-ui, sans-serif;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
+      .jss-remote-cursor-label.jss-label-hidden {
+        opacity: 0;
       }
     `;
     document.head.appendChild(this.styleElement);
   }
 
   private handleAwarenessChange() {
-    this.renderRemoteCursors();
+    // Coalesce rapid awareness updates into a single render pass
+    if (this.cursorRafId === null) {
+      this.cursorRafId = requestAnimationFrame(() => {
+        this.cursorRafId = null;
+        this.renderRemoteCursors();
+      });
+    }
   }
 
   private renderRemoteCursors() {
     if (!this.awareness) return;
+
+    const table = this.getWorksheetTable();
+    if (!table) return;
 
     const states = this.awareness.getStates();
     const localClientId = this.awareness.clientID;
@@ -558,16 +657,22 @@ export class SpreadsheetYjsBinding {
     states.forEach((state: AwarenessState, clientId: number) => {
       if (clientId === localClientId) return;
       if (!state.user || !state.cursor) return;
+      // Skip clients that are no longer shown in the facepile (stale)
+      if (this.activeClientIds && !this.activeClientIds.has(clientId)) return;
 
       activeClientIds.add(clientId);
       const { cursor, user } = state;
 
+      // Dirty check: skip full teardown/rebuild if cursor hasn't moved
+      const stateKey = `${cursor.x1},${cursor.y1},${cursor.x2},${cursor.y2},${user.color}`;
+      if (this.lastCursorState.get(clientId) === stateKey && this.remoteCursors.has(clientId)) {
+        return;
+      }
+      this.lastCursorState.set(clientId, stateKey);
+
       this.clearRemoteCursor(clientId);
 
-      const table = this.getWorksheetTable();
-      if (!table) return;
-
-      const overlay: RemoteCursorOverlay = { cells: [], label: null };
+      const overlay: RemoteCursorOverlay = { cells: [], label: null, labelHost: null, labelTimer: null };
       const minRow = Math.min(cursor.y1, cursor.y2);
       const maxRow = Math.max(cursor.y1, cursor.y2);
       const minCol = Math.min(cursor.x1, cursor.x2);
@@ -597,8 +702,13 @@ export class SpreadsheetYjsBinding {
         label.style.backgroundColor = user.color;
         label.textContent = user.name;
         topLeftTd.style.position = "relative";
+        topLeftTd.style.overflow = "visible";
         topLeftTd.appendChild(label);
         overlay.label = label;
+        overlay.labelHost = topLeftTd;
+        overlay.labelTimer = setTimeout(() => {
+          label.classList.add("jss-label-hidden");
+        }, 2000);
       }
 
       this.remoteCursors.set(clientId, overlay);
@@ -608,6 +718,7 @@ export class SpreadsheetYjsBinding {
       if (!activeClientIds.has(clientId)) {
         this.clearRemoteCursor(clientId);
         this.remoteCursors.delete(clientId);
+        this.lastCursorState.delete(clientId);
       }
     }
   }
@@ -619,8 +730,15 @@ export class SpreadsheetYjsBinding {
       cell.style.boxShadow = "";
       cell.style.backgroundColor = "";
     }
+    if (overlay.labelTimer) {
+      clearTimeout(overlay.labelTimer);
+    }
     if (overlay.label) {
       overlay.label.remove();
+    }
+    if (overlay.labelHost) {
+      overlay.labelHost.style.overflow = "";
+      overlay.labelHost.style.position = "";
     }
   }
 
@@ -687,10 +805,15 @@ export class SpreadsheetYjsBinding {
       this.awareness.off("change", this.awarenessHandler);
     }
 
+    // Cancel pending rAF callbacks
+    if (this.selectionRafId !== null) cancelAnimationFrame(this.selectionRafId);
+    if (this.cursorRafId !== null) cancelAnimationFrame(this.cursorRafId);
+
     for (const [clientId] of this.remoteCursors) {
       this.clearRemoteCursor(clientId);
     }
     this.remoteCursors.clear();
+    this.lastCursorState.clear();
 
     if (this.styleElement) {
       this.styleElement.remove();

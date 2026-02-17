@@ -1,6 +1,8 @@
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
+import { getUserColor } from "@/lib/user-colors";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
@@ -19,13 +21,14 @@ import {
   Trash2,
   WifiOff,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { ActiveUsers } from "../Document/ActiveUsers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -152,12 +155,14 @@ function ConnectionStatus({
 // Grid Component
 // ---------------------------------------------------------------------------
 
-function JSpreadsheetGrid({
+const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   yDoc,
   awareness,
+  remoteUserClientIds,
 }: {
   yDoc: Y.Doc;
   awareness: Awareness | null;
+  remoteUserClientIds: Set<number>;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const worksheetRef = useRef<Worksheet>(null);
@@ -183,8 +188,8 @@ function JSpreadsheetGrid({
       toolbar: false,
       contextMenu: () => null,
       // Wire jspreadsheet v5 events to the Yjs binding
-      onchange(instance: any, cell: any, col: any, row: any, val: any) {
-        binding?.onchange(instance, cell, col, row, val);
+      onchange() {
+        binding?.onchange();
       },
       onafterchanges(instance: any, changes: any) {
         binding?.onafterchanges(instance, changes);
@@ -267,6 +272,11 @@ function JSpreadsheetGrid({
       wrapper.innerHTML = "";
     };
   }, [yDoc, awareness]);
+
+  // --- Sync active client IDs to binding (remove stale cursors) ---
+  useEffect(() => {
+    bindingRef.current?.setActiveClients(remoteUserClientIds);
+  }, [remoteUserClientIds]);
 
   // --- Close menu on click-away / Escape ---
   useEffect(() => {
@@ -430,7 +440,7 @@ function JSpreadsheetGrid({
         )}
     </>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Page Components
@@ -456,6 +466,13 @@ function SpreadsheetEditor({
     userId: viewer?._id ?? "unknown",
   });
 
+  const { remoteUsers } = useCursorAwareness(awareness);
+
+  const remoteUserClientIds = useMemo(
+    () => new Set(remoteUsers.map((u) => u.clientId)),
+    [remoteUsers],
+  );
+
   if (spreadsheet === undefined || viewer === undefined) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -478,11 +495,21 @@ function SpreadsheetEditor({
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex items-center justify-end px-3 py-1.5 border-b">
+      <div className="flex items-center justify-end gap-3 px-3 py-1.5 border-b">
         <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
+        {isConnected && (
+          <ActiveUsers
+            remoteUsers={remoteUsers}
+            currentUser={
+              viewer
+                ? { name: viewer.name, color: getUserColor(viewer._id) }
+                : undefined
+            }
+          />
+        )}
       </div>
       <div className="flex-1 overflow-hidden">
-        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} />
+        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} />
       </div>
     </div>
   );

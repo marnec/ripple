@@ -39,6 +39,8 @@ export function useCursorAwareness(awareness: Awareness | null) {
   const [remoteUsers, setRemoteUsers] = useState<RemoteUser[]>([]);
   const clientTimestampsRef = useRef<Map<number, number>>(new Map());
   const cursorPositionsRef = useRef<Map<number, { position: CursorPosition; timestamp: number }>>(new Map());
+  /** Fingerprint of previous setRemoteUsers call to skip no-op updates */
+  const lastFingerprintRef = useRef("");
 
   const updateRemoteUsers = useCallback(() => {
     if (!awareness) return;
@@ -85,7 +87,16 @@ export function useCursorAwareness(awareness: Awareness | null) {
       }
     });
 
-    setRemoteUsers(users);
+    // Build a fingerprint to avoid triggering React re-renders when nothing changed.
+    // Intentionally excludes lastUpdate (always changes) — only tracks identity + cursor + idle.
+    const fingerprint = users
+      .map(u => `${u.clientId}:${u.name}:${u.isIdle}:${u.cursor?.anchor},${u.cursor?.head}`)
+      .join("|");
+
+    if (fingerprint !== lastFingerprintRef.current) {
+      lastFingerprintRef.current = fingerprint;
+      setRemoteUsers(users);
+    }
   }, [awareness]);
 
   useEffect(() => {
