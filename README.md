@@ -10,6 +10,9 @@ NEXT STEPS:
     - [x] fix ghost facepile presence in diagrams
     - [x] improve follow-user UX (clear warning, auto-unfollow, ...)
 - [x] fix scroll behavior on documents
+- [ ] fix layout shift in docs and sheets on facepile appear
+- [ ] fix cell height lower than line-height in sheets
+- [ ] fix user-follow not following anymore
 - [ ] fix some strange behaviour on enlarge call from pip when last user
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name
@@ -22,8 +25,7 @@ NEXT STEPS:
 - [ ] improve light theme sidebar colors
 - [x] fix autonumbering issue on diagrams (and docs?)
 - [x] fix doc visibility and permissions
-- [ ] fix [ERROR] No yDoc reference for room doc-md76q23q7xvw1ge86cyndc38xn8151sq, skipping save
-- [ ] remove file snapshots on doc/diagram/task removal
+- [x] remove file snapshots on doc/diagram/task removal
 - [ ] add error boundaries for better UX on exceptions
 - [ ] rethink hierarchy: workspace -> project -> subsection (channels,docs,diagrams,tasks)
     - [ ] on workspace creation create default project
