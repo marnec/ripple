@@ -490,4 +490,154 @@ http.route({
   }),
 });
 
+/**
+ * POST /collaboration/cell-values
+ *
+ * Push updated cell values from PartyKit when spreadsheet data changes.
+ * Called by PartyKit server with debounced batches of changed cells.
+ *
+ * Authentication: Shared secret via Authorization: Bearer <PARTYKIT_SECRET>
+ * Body: { spreadsheetId: string, updates: Array<{ cellRef: string, values: string }> }
+ *
+ * Response:
+ * - 200: { success: true }
+ * - 401: Unauthorized
+ * - 500: Internal server error
+ */
+http.route({
+  path: "/collaboration/cell-values",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.PARTYKIT_SECRET;
+
+      if (!expectedSecret) {
+        console.error("PARTYKIT_SECRET environment variable not configured");
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Missing authorization header" }),
+          { status: 401, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      const providedSecret = authHeader.substring(7);
+      if (providedSecret !== expectedSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const body = (await request.json()) as {
+        spreadsheetId: string;
+        updates: Array<{ cellRef: string; values: string }>;
+      };
+
+      if (!body.spreadsheetId || !Array.isArray(body.updates)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid request body" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      await ctx.runMutation(internal.spreadsheetCellRefs.upsertCellValues, {
+        spreadsheetId: body.spreadsheetId as any,
+        updates: body.updates,
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Cell values update error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }),
+});
+
+/**
+ * GET /collaboration/cell-refs
+ *
+ * Get list of tracked cell references for a spreadsheet.
+ * Called by PartyKit to know which cells to monitor and push updates for.
+ *
+ * Authentication: Shared secret via Authorization: Bearer <PARTYKIT_SECRET>
+ * Query params: spreadsheetId
+ *
+ * Response:
+ * - 200: Array<{ cellRef: string }>
+ * - 401: Unauthorized
+ * - 500: Internal server error
+ */
+http.route({
+  path: "/collaboration/cell-refs",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.PARTYKIT_SECRET;
+
+      if (!expectedSecret) {
+        console.error("PARTYKIT_SECRET environment variable not configured");
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ error: "Missing authorization header" }),
+          { status: 401, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      const providedSecret = authHeader.substring(7);
+      if (providedSecret !== expectedSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const url = new URL(request.url);
+      const spreadsheetId = url.searchParams.get("spreadsheetId");
+
+      if (!spreadsheetId) {
+        return new Response(
+          JSON.stringify({ error: "Missing spreadsheetId" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      const refs = await ctx.runQuery(
+        internal.spreadsheetCellRefs.getReferencedCellRefs,
+        { spreadsheetId: spreadsheetId as any },
+      );
+
+      return new Response(JSON.stringify(refs), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Cell refs query error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }),
+});
+
 export default http;

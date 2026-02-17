@@ -258,6 +258,15 @@ export default defineSchema({
   })
     .index("by_channel_active", ["channelId", "active"]),
 
+  spreadsheetCellRefs: defineTable({
+    spreadsheetId: v.id("spreadsheets"),
+    cellRef: v.string(),       // "A1" or "A1:C3" (normalized uppercase)
+    values: v.string(),        // JSON-serialized string[][] (e.g., [["42"]] or [["a","b"],["c","d"]])
+    updatedAt: v.number(),
+  })
+    .index("by_spreadsheet", ["spreadsheetId"])
+    .index("by_spreadsheet_cellRef", ["spreadsheetId", "cellRef"]),
+
   collaborationTokens: defineTable({
     token: v.string(),
     userId: v.id("users"),

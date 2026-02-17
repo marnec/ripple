@@ -182,6 +182,13 @@ export const remove = mutation({
       .collect();
     await Promise.all(spreadsheetMembers.map((member) => ctx.db.delete(member._id)));
 
+    // Clean up cached cell references
+    const cellRefs = await ctx.db
+      .query("spreadsheetCellRefs")
+      .withIndex("by_spreadsheet", (q) => q.eq("spreadsheetId", id))
+      .collect();
+    await Promise.all(cellRefs.map((ref) => ctx.db.delete(ref._id)));
+
     await ctx.db.delete(id);
     return null;
   },

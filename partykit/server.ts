@@ -3,10 +3,13 @@ import { onConnect, unstable_getYDoc } from "y-partykit";
 import type { YPartyKitOptions } from "y-partykit";
 import * as Y from "yjs";
 import type { ErrorCode, ServerMessage } from "@shared/protocol";
+import { parseCellName, parseRange } from "@shared/cellRef";
 
 // Constants
 const PERIODIC_SAVE_INTERVAL = 30_000; // 30 seconds
 const DISCONNECT_DEBOUNCE = 7_000; // 7 seconds
+const CELL_REF_DEBOUNCE = 2_000; // 2 seconds
+const CELL_REF_CACHE_TTL = 60_000; // 1 minute
 const ALARM_TYPE_PERIODIC = "periodic";
 const ALARM_TYPE_DISCONNECT = "disconnect";
 
@@ -20,6 +23,12 @@ export default class CollaborationServer implements Party.Server {
   private saveAlarmScheduled = false;
   private periodicAlarmScheduled = false;
   private yDocRef: Y.Doc | null = null;
+
+  // Cell reference observer state (spreadsheet rooms only)
+  private cellRefObserver: ((events: Y.YEvent<any>[], tx: Y.Transaction) => void) | null = null;
+  private cellRefPushTimeout: ReturnType<typeof setTimeout> | null = null;
+  private trackedCellRefs: Array<{ cellRef: string }> | null = null;
+  private trackedCellRefsLastFetch = 0;
 
   constructor(readonly room: Party.Room) {}
 
@@ -181,6 +190,141 @@ export default class CollaborationServer implements Party.Server {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Cell reference observer (spreadsheet rooms only)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Attach a Yjs deep observer on the spreadsheet data array.
+   * On any cell change, debounce and push updated values to Convex.
+   */
+  private setupCellRefObserver(roomId: string): void {
+    if (!this.yDocRef) return;
+    if (this.cellRefObserver) return; // Already attached
+
+    const yData = this.yDocRef.getArray("data");
+
+    this.cellRefObserver = () => {
+      if (this.cellRefPushTimeout) clearTimeout(this.cellRefPushTimeout);
+      this.cellRefPushTimeout = setTimeout(() => {
+        void this.pushCellRefUpdates(roomId);
+      }, CELL_REF_DEBOUNCE);
+    };
+
+    yData.observeDeep(this.cellRefObserver);
+    console.log(`Cell ref observer attached for room ${roomId}`);
+  }
+
+  /**
+   * Fetch tracked cell refs from Convex (with TTL cache), read current values
+   * from the Yjs document, and push updates to Convex if any are tracked.
+   */
+  private async pushCellRefUpdates(roomId: string): Promise<void> {
+    if (!this.yDocRef) return;
+
+    const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
+    const secret = this.room.env.PARTYKIT_SECRET as string;
+    if (!convexSiteUrl || !secret) return;
+
+    const spreadsheetId = roomId.replace("spreadsheet-", "");
+
+    // Fetch tracked cell refs (with TTL caching)
+    if (
+      !this.trackedCellRefs ||
+      Date.now() - this.trackedCellRefsLastFetch > CELL_REF_CACHE_TTL
+    ) {
+      try {
+        const response = await fetch(
+          `${convexSiteUrl}/collaboration/cell-refs?spreadsheetId=${encodeURIComponent(spreadsheetId)}`,
+          { headers: { Authorization: `Bearer ${secret}` } },
+        );
+        if (response.ok) {
+          this.trackedCellRefs = (await response.json()) as Array<{ cellRef: string }>;
+          this.trackedCellRefsLastFetch = Date.now();
+        }
+      } catch (e) {
+        console.error("Failed to fetch tracked cell refs:", e);
+        return;
+      }
+    }
+
+    if (!this.trackedCellRefs || this.trackedCellRefs.length === 0) return;
+
+    // Extract current values from Yjs for each tracked reference
+    const yData = this.yDocRef.getArray<Y.Map<string>>("data");
+
+    const updates: Array<{ cellRef: string; values: string }> = [];
+
+    for (const { cellRef } of this.trackedCellRefs) {
+      const values = this.extractCellValues(yData, cellRef);
+      if (values) {
+        updates.push({ cellRef, values: JSON.stringify(values) });
+      }
+    }
+
+    if (updates.length === 0) return;
+
+    // Push to Convex
+    try {
+      await fetch(`${convexSiteUrl}/collaboration/cell-values`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ spreadsheetId, updates }),
+      });
+    } catch (e) {
+      console.error("Failed to push cell ref updates:", e);
+    }
+  }
+
+  /**
+   * Read cell values from the Yjs data array for a given cell ref.
+   * Returns a 2D string array, or null if the ref is invalid.
+   */
+  private extractCellValues(
+    yData: Y.Array<Y.Map<string>>,
+    cellRef: string,
+  ): string[][] | null {
+    if (cellRef.includes(":")) {
+      const range = parseRange(cellRef);
+      if (!range) return null;
+      const result: string[][] = [];
+      for (let r = range.startRow; r <= range.endRow && r < yData.length; r++) {
+        const row: string[] = [];
+        const rowMap = yData.get(r);
+        for (let c = range.startCol; c <= range.endCol; c++) {
+          row.push(rowMap?.get(String(c)) ?? "");
+        }
+        result.push(row);
+      }
+      return result;
+    } else {
+      const cell = parseCellName(cellRef);
+      if (!cell) return null;
+      if (cell.row >= yData.length) return [[""]];
+      const rowMap = yData.get(cell.row);
+      return [[rowMap?.get(String(cell.col)) ?? ""]];
+    }
+  }
+
+  /**
+   * Clean up cell ref observer and pending timeout.
+   */
+  private cleanupCellRefObserver(): void {
+    if (this.cellRefObserver && this.yDocRef) {
+      this.yDocRef.getArray("data").unobserveDeep(this.cellRefObserver);
+      this.cellRefObserver = null;
+    }
+    if (this.cellRefPushTimeout) {
+      clearTimeout(this.cellRefPushTimeout);
+      this.cellRefPushTimeout = null;
+    }
+    this.trackedCellRefs = null;
+    this.trackedCellRefsLastFetch = 0;
+  }
+
   /**
    * Auth gate: Verify token before allowing Yjs connection.
    *
@@ -266,6 +410,11 @@ export default class CollaborationServer implements Party.Server {
       // Cache yDoc reference for alarm handler (avoids Party.id access limitation in onAlarm)
       this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
 
+      // Attach cell ref observer for spreadsheet rooms
+      if (roomId.startsWith("spreadsheet-")) {
+        this.setupCellRefObserver(roomId);
+      }
+
       // Schedule periodic save alarm if not already scheduled
       if (!this.periodicAlarmScheduled) {
         await this.room.storage.put("alarmType", ALARM_TYPE_PERIODIC);
@@ -334,9 +483,10 @@ export default class CollaborationServer implements Party.Server {
       }
 
       if (connectionCount === 0) {
-        // Still no connections -- save snapshot
+        // Still no connections -- save snapshot and clean up observers
         console.log(`Debounce expired for room ${roomId}, saving final snapshot`);
         await this.saveSnapshotToConvex(roomId);
+        this.cleanupCellRefObserver();
         this.saveAlarmScheduled = false;
       } else {
         // Someone reconnected -- cancel disconnect save
