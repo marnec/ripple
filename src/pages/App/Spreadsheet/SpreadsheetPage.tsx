@@ -495,18 +495,20 @@ function SpreadsheetEditor({
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="flex items-center justify-end gap-3 px-3 py-1.5 border-b">
-        <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
-        {isConnected && (
-          <ActiveUsers
-            remoteUsers={remoteUsers}
-            currentUser={
-              viewer
-                ? { name: viewer.name, color: getUserColor(viewer._id) }
-                : undefined
-            }
-          />
-        )}
+      <div className="flex items-center justify-end px-3 py-1.5 border-b">
+        <div className="flex h-8 items-center gap-3">
+          <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
+          {isConnected && (
+            <ActiveUsers
+              remoteUsers={remoteUsers}
+              currentUser={
+                viewer
+                  ? { name: viewer.name, color: getUserColor(viewer._id) }
+                  : undefined
+              }
+            />
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-hidden">
         <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} />

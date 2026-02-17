@@ -10,7 +10,7 @@ NEXT STEPS:
     - [x] fix ghost facepile presence in diagrams
     - [x] improve follow-user UX (clear warning, auto-unfollow, ...)
 - [x] fix scroll behavior on documents
-- [ ] fix layout shift in docs and sheets on facepile appear
+- [x] fix layout shift in docs and sheets on facepile appear
 - [ ] fix cell height lower than line-height in sheets
 - [ ] fix user-follow not following anymore
 - [ ] fix some strange behaviour on enlarge call from pip when last user
@@ -60,5 +60,6 @@ NEXT STEPS:
     - [ ] AI tasks agent
 - [ ] External integrations
     - [ ] github issues
+    - [ ] add sentry
 - [ ] command palette
 - [ ] optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
