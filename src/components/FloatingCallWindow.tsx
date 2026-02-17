@@ -11,9 +11,20 @@ import { useFollowMode } from "../contexts/FollowModeContext";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "./ui/button";
 
-const PIP_WIDTH = 320;
-const PIP_HEIGHT = 200;
+const PIP_WIDTH_LG = 320;
+const PIP_WIDTH_SM = 240;
+const PIP_HEIGHT_LG = 200;
+const PIP_HEIGHT_SM = 150;
+const BREAKPOINT = 480;
 const MARGIN = 16;
+
+function getPipSize() {
+  const isSmall = window.innerWidth < BREAKPOINT;
+  return {
+    width: isSmall ? PIP_WIDTH_SM : PIP_WIDTH_LG,
+    height: isSmall ? PIP_HEIGHT_SM : PIP_HEIGHT_LG,
+  };
+}
 
 function FloatingCallContent() {
   const { meeting } = useRealtimeKitMeeting();
@@ -205,14 +216,39 @@ function FloatingCallContent() {
 export function FloatingCallWindow() {
   const { meeting, isFloating } = useActiveCall();
 
+  // Responsive PIP size
+  const [pipSize, setPipSize] = useState(getPipSize);
+
   // Drag state
-  const [position, setPosition] = useState({
-    x: window.innerWidth - PIP_WIDTH - MARGIN,
-    y: window.innerHeight - PIP_HEIGHT - MARGIN,
-  });
+  const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
+
+  // Snap to bottom-right whenever the PIP becomes visible
+  useEffect(() => {
+    if (!isFloating) return;
+    const size = getPipSize();
+    setPipSize(size);
+    setPosition({
+      x: Math.max(MARGIN, window.innerWidth - size.width - MARGIN),
+      y: Math.max(MARGIN, window.innerHeight - size.height - MARGIN),
+    });
+  }, [isFloating]);
+
+  // Re-clamp position and update size when viewport resizes
+  useEffect(() => {
+    const onResize = () => {
+      const size = getPipSize();
+      setPipSize(size);
+      setPosition((prev) => ({
+        x: Math.max(0, Math.min(prev.x, window.innerWidth - size.width - MARGIN)),
+        y: Math.max(0, Math.min(prev.y, window.innerHeight - size.height - MARGIN)),
+      }));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     // Only drag from the window chrome, not from buttons
@@ -228,8 +264,9 @@ export function FloatingCallWindow() {
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragging.current) return;
-    const x = Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - PIP_WIDTH));
-    const y = Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - PIP_HEIGHT));
+    const { width, height } = getPipSize();
+    const x = Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - width));
+    const y = Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - height));
     setPosition({ x, y });
   }, []);
 
@@ -244,8 +281,8 @@ export function FloatingCallWindow() {
     <div
       className="fixed z-50 flex flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
       style={{
-        width: PIP_WIDTH,
-        height: PIP_HEIGHT,
+        width: pipSize.width,
+        height: pipSize.height,
         left: position.x,
         top: position.y,
         cursor: isDragging ? "grabbing" : "grab",

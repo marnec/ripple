@@ -11,8 +11,9 @@ NEXT STEPS:
     - [x] improve follow-user UX (clear warning, auto-unfollow, ...)
 - [x] fix scroll behavior on documents
 - [x] fix layout shift in docs and sheets on facepile appear
-- [ ] fix cell height lower than line-height in sheets
-- [ ] fix user-follow not following anymore
+- [x] fix cell height lower than line-height in sheets
+- [x] fix user-follow not following anymore
+- [ ] fix pip position on small width screen
 - [ ] fix some strange behaviour on enlarge call from pip when last user
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name

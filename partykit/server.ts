@@ -33,11 +33,43 @@ export default class CollaborationServer implements Party.Server {
   constructor(readonly room: Party.Room) {}
 
   /**
+   * Pre-load the Y.Doc before any connections arrive.
+   * PartyKit guarantees onStart completes before onConnect is called,
+   * so the doc is cached in y-partykit's internal Map by the time the
+   * first WebSocket connects — eliminating the async window that causes
+   * "Connection dropped during Yjs setup" failures.
+   */
+  async onStart() {
+    const roomId = this.room.id;
+    await this.room.storage.put("roomId", roomId);
+
+    try {
+      this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
+      console.log(`Pre-loaded Y.Doc for room ${roomId}`);
+
+      // Attach cell ref observer early for spreadsheet rooms
+      if (roomId.startsWith("spreadsheet-")) {
+        this.setupCellRefObserver(roomId);
+      }
+    } catch (e) {
+      console.warn(`Failed to pre-load Y.Doc for room ${roomId}:`, e);
+    }
+  }
+
+  /**
    * Get y-partykit options with cold-start loading from Convex.
    */
   private getYjsOptions(roomId: string): YPartyKitOptions {
     return {
-      persist: { mode: "snapshot" },
+      // NOTE: Do NOT set `persist` here. We handle persistence ourselves via
+      // Convex snapshot save/load. With `persist: { mode: "snapshot" }`,
+      // y-partykit destroys and evicts the Y.Doc from its internal cache the
+      // instant the last connection closes. This forces a full async re-load
+      // from Convex on the next connection, creating a window during which the
+      // new connection can also drop (e.g. React StrictMode mount/unmount/mount
+      // cycle), causing a cascading failure where no sync ever completes.
+      // Without `persist`, the doc stays cached in memory between connections
+      // so auto-reconnects resolve the doc instantly with zero async wait.
       load: async () => {
         return this.loadSnapshotFromConvex(roomId);
       },
@@ -404,13 +436,22 @@ export default class CollaborationServer implements Party.Server {
         await onConnect(conn, this.room, this.getYjsOptions(roomId));
       } catch {
         console.log(`Connection dropped during Yjs setup for room ${roomId}`);
+        // Ensure yDocRef is set even on failure — the doc was likely loaded
+        // by onStart() or a previous connection. This keeps saves working.
+        if (!this.yDocRef) {
+          try {
+            this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
+          } catch { /* doc not loaded yet — will be loaded on next connection */ }
+        }
         return;
       }
 
-      // Cache yDoc reference for alarm handler (avoids Party.id access limitation in onAlarm)
-      this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
+      // Ensure yDocRef is set (might already be set by onStart)
+      if (!this.yDocRef) {
+        this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
+      }
 
-      // Attach cell ref observer for spreadsheet rooms
+      // Attach cell ref observer for spreadsheet rooms (might already be attached by onStart)
       if (roomId.startsWith("spreadsheet-")) {
         this.setupCellRefObserver(roomId);
       }
