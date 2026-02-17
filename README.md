@@ -13,9 +13,9 @@ NEXT STEPS:
 - [x] fix layout shift in docs and sheets on facepile appear
 - [x] fix cell height lower than line-height in sheets
 - [x] fix user-follow not following anymore
-- [ ] fix pip position on small width screen
+- [x] fix pip position on small width screen
 - [ ] fix some strange behaviour on enlarge call from pip when last user
-- [ ] decide what to do when a user navigates while following
+- [x] decide what to do when a user navigates while following
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name
 - [x] fix broken invitation flow (link only works if registered/logged)

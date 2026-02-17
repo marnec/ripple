@@ -174,7 +174,33 @@ export function FollowModeProvider({
     if (!presence) return;
 
     const targetPath = presence.currentPath;
-    if (targetPath === location.pathname) return;
+
+    // Detect whether the current location change was manual (user) or programmatic (follow).
+    // Must run here — before any re-navigation — to avoid the race where the presence effect
+    // reverses a manual navigation before the separate manual-nav effect can stop following.
+    if (lastFollowedPathRef.current !== null && location.pathname !== lastFollowedPathRef.current) {
+      if (followNavRef.current) {
+        // Our own follow-navigation just landed — consume the flag and continue
+        followNavRef.current = false;
+      } else {
+        // User navigated manually → stop following without reversing their navigation
+        requestAnimationFrame(() => {
+          if (!followingUserIdRef.current) return;
+          toast({
+            title: "Stopped following",
+            description: `You navigated away from ${followingUserNameRef.current}`,
+          });
+          clearFollowState();
+        });
+        return;
+      }
+    }
+
+    // Consume a pending follow-nav flag when we've already arrived at the target
+    if (targetPath === location.pathname) {
+      followNavRef.current = false;
+      return;
+    }
 
     // Navigate to followed user's location
     followNavRef.current = true;
@@ -188,31 +214,6 @@ export function FollowModeProvider({
     toast,
     clearFollowState,
   ]);
-
-  // Detect manual navigation (user navigated themselves, not via follow)
-  useEffect(() => {
-    if (!followingUserId) return;
-
-    if (followNavRef.current) {
-      followNavRef.current = false;
-      return;
-    }
-
-    if (
-      lastFollowedPathRef.current &&
-      location.pathname !== lastFollowedPathRef.current
-    ) {
-      // Defer to avoid synchronous setState in effect
-      requestAnimationFrame(() => {
-        if (!followingUserIdRef.current) return;
-        toast({
-          title: "Stopped following",
-          description: `You navigated away from ${followingUserNameRef.current}`,
-        });
-        clearFollowState();
-      });
-    }
-  }, [location.pathname, followingUserId, toast, clearFollowState]);
 
   const startFollowing = useCallback(
     (userId: Id<"users">, userName: string) => {
