@@ -1,32 +1,11 @@
 NEXT STEPS:
 
-- [x] pwa
-- [x] migrate from netlify to cloudflare hosting
 - [x] fix videocalls and activate cloudflare STUN servers
-    - [x] lobby page to join call
     - [ ] call panels layout
-    - [x] float videocall when navigating away (teams style)
-    - [x] follow user function
-    - [x] fix ghost facepile presence in diagrams
-    - [x] improve follow-user UX (clear warning, auto-unfollow, ...)
-- [x] fix scroll behavior on documents
-- [x] fix layout shift in docs and sheets on facepile appear
-- [x] fix cell height lower than line-height in sheets
-- [x] fix user-follow not following anymore
-- [x] fix pip position on small width screen
-- [ ] fix some strange behaviour on enlarge call from pip when last user
-- [x] decide what to do when a user navigates while following
+- [ ] fix some strange behaviour on enlarge call from pip when last user 
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name
-- [x] fix broken invitation flow (link only works if registered/logged)
-- [x] fix no default taskstatus
-- [x] fix task detail view
-- [x] see pending invitations in app (not only email)
-- [x] fix breadcrumb on mobile
 - [ ] improve breadcrumb on desktop
-- [x] fix autonumbering issue on diagrams (and docs?)
-- [x] fix doc visibility and permissions
-- [x] remove file snapshots on doc/diagram/task removal
 - [ ] add error boundaries for better UX on exceptions
 - [ ] rethink hierarchy: workspace -> project -> subsection (channels,docs,diagrams,tasks)
     - [ ] on workspace creation create default project
@@ -35,8 +14,6 @@ NEXT STEPS:
     - [ ] searchable / scrollable subsections
     - [ ] project membership add users manually with roles
     - [ ] subsection membership opt-in
-- [x] realtime cursor tracking in documents
-- [x] realtime cursor tracking in excalidraw
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
