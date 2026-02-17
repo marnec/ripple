@@ -115,7 +115,7 @@ export default class CollaborationServer implements Party.Server {
       const update = new Uint8Array(buffer);
 
       const yDoc = new Y.Doc();
-      Y.applyUpdate(yDoc, update);
+      Y.applyUpdateV2(yDoc, update);
       console.log(`Loaded snapshot for room ${roomId}`);
       return yDoc;
     } catch (error) {
@@ -168,7 +168,16 @@ export default class CollaborationServer implements Party.Server {
   }
 
   /**
-   * Save Yjs snapshot to Convex.
+   * Save Yjs snapshot to Convex using V2 encoding.
+   *
+   * V2 encoding is used because Yjs V1's binary layout can trigger a memory
+   * corruption bug in workerd's TCMalloc allocator when passed as a large fetch
+   * body inside a Durable Object alarm handler. V2 uses delta-encoded clocks and
+   * a different byte layout that avoids the problematic patterns.
+   *
+   * Snapshot format: 1-byte version prefix (0x02) + V2-encoded update bytes.
+   * The prefix allows the loader to detect V2 vs legacy V1 snapshots.
+   *
    * Logs errors but does not throw (fails gracefully).
    */
   private async saveSnapshotToConvex(roomId: string): Promise<void> {
@@ -178,13 +187,18 @@ export default class CollaborationServer implements Party.Server {
         console.warn(`No yDoc reference for room ${roomId}, skipping save`);
         return;
       }
-      const update = Y.encodeStateAsUpdate(this.yDocRef);
+
+      // Use V2 encoding: more compact and avoids a workerd TCMalloc corruption
+      // bug triggered by certain Yjs V1 byte patterns in large fetch bodies.
+      const updateV2 = Y.encodeStateAsUpdateV2(this.yDocRef);
 
       // Skip save if document is empty
-      if (update.length === 0) {
+      if (updateV2.length === 0) {
         console.log(`Skipping save for room ${roomId}: empty document`);
         return;
       }
+
+      console.log(`Snapshot size for room ${roomId}: ${updateV2.length} bytes (V2)`);
 
       // Get Convex configuration
       const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
@@ -204,7 +218,7 @@ export default class CollaborationServer implements Party.Server {
             "Authorization": `Bearer ${secret}`,
             "Content-Type": "application/octet-stream",
           },
-          body: update as Uint8Array<ArrayBuffer>,
+          body: updateV2 as Uint8Array<ArrayBuffer>,
         }
       );
 

@@ -67,6 +67,13 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 - `@/*` → `./src/*`
 - `@shared/*` → `./shared/*`
 
+## PartyKit / Yjs Snapshot Encoding
+
+- Snapshots are saved with `Y.encodeStateAsUpdateV2` and loaded with `Y.applyUpdateV2`
+- **Do not revert to V1** (`encodeStateAsUpdate` / `applyUpdate`) — Yjs V1 binary patterns trigger a TCMalloc memory corruption bug in workerd when used as a large fetch body inside a Durable Object alarm handler, causing the process to crash with `Unable to allocate <huge number> (new failed)`
+- All three read sites must stay in sync: `partykit/server.ts` (load), `DiagramPage.tsx` (cold-start), `DocumentEditor.tsx` (cold-start)
+- To wipe snapshot data: locally `rm -rf .partykit/state`; in prod clear `yjsSnapshotId` fields + delete the linked `_storage` blobs from Convex
+
 ## Convex Guidelines
 
 ### Function Syntax

@@ -61,7 +61,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
         const response = await fetch(snapshotUrl);
         const arrayBuffer = await response.arrayBuffer();
         const tempDoc = new Y.Doc();
-        Y.applyUpdate(tempDoc, new Uint8Array(arrayBuffer));
+        Y.applyUpdateV2(tempDoc, new Uint8Array(arrayBuffer));
         const yElementsArray = tempDoc.getArray<Y.Map<any>>("elements");
         const elements = yjsToExcalidraw(yElementsArray);
         setSnapshotElements(elements);

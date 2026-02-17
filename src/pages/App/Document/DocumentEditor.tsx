@@ -212,7 +212,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         const response = await fetch(snapshotUrl);
         const arrayBuffer = await response.arrayBuffer();
         const tempDoc = new Y.Doc();
-        Y.applyUpdate(tempDoc, new Uint8Array(arrayBuffer));
+        Y.applyUpdateV2(tempDoc, new Uint8Array(arrayBuffer));
         setSnapshotDoc(tempDoc);
       } catch (error) {
         console.error("Failed to load snapshot:", error);
