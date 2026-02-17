@@ -15,6 +15,7 @@ NEXT STEPS:
 - [x] fix user-follow not following anymore
 - [ ] fix pip position on small width screen
 - [ ] fix some strange behaviour on enlarge call from pip when last user
+- [ ] decide what to do when a user navigates while following
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name
 - [x] fix broken invitation flow (link only works if registered/logged)
@@ -23,7 +24,6 @@ NEXT STEPS:
 - [x] see pending invitations in app (not only email)
 - [x] fix breadcrumb on mobile
 - [ ] improve breadcrumb on desktop
-- [ ] improve light theme sidebar colors
 - [x] fix autonumbering issue on diagrams (and docs?)
 - [x] fix doc visibility and permissions
 - [x] remove file snapshots on doc/diagram/task removal
