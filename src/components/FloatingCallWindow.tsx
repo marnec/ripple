@@ -219,22 +219,17 @@ export function FloatingCallWindow() {
   // Responsive PIP size
   const [pipSize, setPipSize] = useState(getPipSize);
 
-  // Drag state
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  // Drag state — initialize to bottom-right corner so no effect is needed
+  const [position, setPosition] = useState(() => {
+    const { width, height } = getPipSize();
+    return {
+      x: Math.max(MARGIN, window.innerWidth - width - MARGIN),
+      y: Math.max(MARGIN, window.innerHeight - height - MARGIN),
+    };
+  });
   const [isDragging, setIsDragging] = useState(false);
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
-
-  // Snap to bottom-right whenever the PIP becomes visible
-  useEffect(() => {
-    if (!isFloating) return;
-    const size = getPipSize();
-    setPipSize(size);
-    setPosition({
-      x: Math.max(MARGIN, window.innerWidth - size.width - MARGIN),
-      y: Math.max(MARGIN, window.innerHeight - size.height - MARGIN),
-    });
-  }, [isFloating]);
 
   // Re-clamp position and update size when viewport resizes
   useEffect(() => {

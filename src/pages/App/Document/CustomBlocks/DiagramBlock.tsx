@@ -13,7 +13,7 @@ const DiagramView = ({
   diagramId: Id<"diagrams">;
   onAspectRatioChange?: (ratio: number) => void;
 }) => {
-  const { svgHtml, isLoading, refresh, diagram } =
+  const { svgHtml, isLoading, diagram } =
     useDiagramPreview(diagramId);
   const navigate = useNavigate();
   const { workspaceId } = useParams<{ workspaceId: string }>();
