@@ -468,6 +468,7 @@ body {
 .jss_worksheet > tbody > tr > td {
   padding: 5px 8px;
   line-height: 1.45;
+  height: 29px; /* 13px font × 1.45 lh ≈ 19px + 10px padding — prevents layout shift on empty→filled */
   border-color: var(--border_color);
 }
 
