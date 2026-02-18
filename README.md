@@ -1,13 +1,13 @@
 NEXT STEPS:
-- [x] improve entry UI in docs, diagrams, and spreadsheet. Prevent pop in (also for embedded resources), exploit locally stored data, add entry animation as for the channels chat
 - [ ] reference docs, diagrams and sheets in messages
 - [ ] fix some strange behaviour on enlarge call from pip when last user 
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
-- [ ] collapsible subsections
-- [ ] searchable / scrollable subsections
+- sections
+    - [ ] collapsible section
+    - [ ] searchable / scrollable section
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
