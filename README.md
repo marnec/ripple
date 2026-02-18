@@ -1,5 +1,5 @@
 NEXT STEPS:
-
+- [ ] migrate abandoded partykit to the new worker version
 - [x] fix videocalls and activate cloudflare STUN servers
     - [ ] call panels layout
 - [ ] fix some strange behaviour on enlarge call from pip when last user 

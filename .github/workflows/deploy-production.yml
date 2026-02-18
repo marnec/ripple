@@ -76,7 +76,7 @@ jobs:
           timeout_minutes: 5
           max_attempts: 3
           retry_wait_seconds: 10
-          command: npx partykit deploy --var CONVEX_SITE_URL=${{ secrets.CONVEX_SITE_URL }}
+          command: npx partykit deploy --var CONVEX_SITE_URL=${{ secrets.CONVEX_SITE_URL }} --var PARTYKIT_SECRET=${{ secrets.PARTYKIT_SECRET }}
 
       - name: Health check PartyKit
         run: |
