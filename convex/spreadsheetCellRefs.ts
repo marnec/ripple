@@ -43,6 +43,36 @@ export const getCellRef = query({
 });
 
 /**
+ * List all cell refs tracked for a spreadsheet (for highlighting in the grid).
+ * Access check: workspace membership (consistent with spreadsheets.get).
+ */
+export const listBySpreadsheet = query({
+  args: { spreadsheetId: v.id("spreadsheets") },
+  returns: v.array(v.object({ cellRef: v.string() })),
+  handler: async (ctx, { spreadsheetId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const spreadsheet = await ctx.db.get(spreadsheetId);
+    if (!spreadsheet) return [];
+
+    const workspaceMember = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", spreadsheet.workspaceId).eq("userId", userId),
+      )
+      .first();
+    if (!workspaceMember) return [];
+
+    const refs = await ctx.db
+      .query("spreadsheetCellRefs")
+      .withIndex("by_spreadsheet", (q) => q.eq("spreadsheetId", spreadsheetId))
+      .collect();
+    return refs.map((r) => ({ cellRef: r.cellRef }));
+  },
+});
+
+/**
  * Create a placeholder cache entry when a user inserts a cell reference.
  * If the entry already exists, this is a no-op.
  */

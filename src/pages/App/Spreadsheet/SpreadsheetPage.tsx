@@ -17,6 +17,8 @@ import {
   ArrowUpToLine,
   Circle,
   Columns3,
+  Eye,
+  EyeOff,
   Rows3,
   Trash2,
   WifiOff,
@@ -159,10 +161,12 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   yDoc,
   awareness,
   remoteUserClientIds,
+  referencedCellRefs,
 }: {
   yDoc: Y.Doc;
   awareness: Awareness | null;
   remoteUserClientIds: Set<number>;
+  referencedCellRefs: { cellRef: string }[];
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const worksheetRef = useRef<Worksheet>(null);
@@ -277,6 +281,13 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   useEffect(() => {
     bindingRef.current?.setActiveClients(remoteUserClientIds);
   }, [remoteUserClientIds]);
+
+  // --- Sync referenced cell refs to binding (highlight referenced cells) ---
+  // Depends on yDoc/awareness because those trigger binding re-creation;
+  // without them, the new binding would never receive the refs.
+  useEffect(() => {
+    bindingRef.current?.setReferencedCells(referencedCellRefs);
+  }, [referencedCellRefs, yDoc, awareness]);
 
   // --- Close menu on click-away / Escape ---
   useEffect(() => {
@@ -453,6 +464,17 @@ function SpreadsheetEditor({
 }) {
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   const viewer = useQuery(api.users.viewer);
+  const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
+  const [showRefHighlights, setShowRefHighlights] = useState(true);
+
+  // Stabilize ref identity to prevent unnecessary JSpreadsheetGrid re-renders
+  const referencedCellRefs = useMemo(
+    () => (showRefHighlights ? rawRefs ?? [] : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(rawRefs), showRefHighlights],
+  );
+
+  const hasRefs = (rawRefs?.length ?? 0) > 0;
 
   const {
     yDoc,
@@ -487,7 +509,20 @@ function SpreadsheetEditor({
 
   return (
     <div className="flex h-full w-full flex-col animate-fade-in">
-      <div className="flex items-center justify-end px-3 py-1.5 border-b">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b">
+        <div className="flex h-8 items-center">
+          {hasRefs && (
+            <button
+              type="button"
+              onClick={() => setShowRefHighlights((v) => !v)}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title={showRefHighlights ? "Hide reference highlights" : "Show reference highlights"}
+            >
+              {showRefHighlights ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              References
+            </button>
+          )}
+        </div>
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
           {isConnected && (
@@ -503,7 +538,7 @@ function SpreadsheetEditor({
         </div>
       </div>
       <div className="flex-1 overflow-hidden">
-        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} />
+        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} referencedCellRefs={referencedCellRefs} />
       </div>
     </div>
   );

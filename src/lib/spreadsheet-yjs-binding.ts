@@ -1,3 +1,4 @@
+import { isSingleCell, parseCellName, parseRange } from "@shared/cellRef";
 import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 
@@ -104,6 +105,15 @@ export class SpreadsheetYjsBinding {
    *  When set, cursors for clients not in this set are removed. */
   private activeClientIds: Set<number> | null = null;
 
+  /** Currently highlighted cells (for efficient cleanup) */
+  private highlightedCells: HTMLElement[] = [];
+
+  /** Currently highlighted indicator cells (top-right cells with corner triangle) */
+  private indicatorCells: HTMLElement[] = [];
+
+  /** Stored cell refs from the server */
+  private referencedCellRefs: { cellRef: string }[] = [];
+
   /** Set of "row,col" keys for cells containing formulas */
   private formulaCells = new Set<string>();
 
@@ -152,8 +162,9 @@ export class SpreadsheetYjsBinding {
     this.yRowHeights.observe(this.rowHeightsObserver);
     this.yMerges.observe(this.mergesObserver);
 
+    this.injectStyles();
+
     if (this.awareness) {
-      this.injectCursorStyles();
       this.awarenessHandler = this.handleAwarenessChange.bind(this);
       this.awareness.on("change", this.awarenessHandler);
       this.renderRemoteCursors();
@@ -254,6 +265,8 @@ export class SpreadsheetYjsBinding {
     if (this.formulaCells.size > 0) {
       this.scheduleFormulaRefresh();
     }
+
+    this.renderCellRefHighlights();
   }
 
   // ---------------------------------------------------------------------------
@@ -534,6 +547,7 @@ export class SpreadsheetYjsBinding {
     // Rebuild row index cache and formula tracking after structural changes
     this.rebuildRowIndexCache();
     this.rebuildFormulaCellTracking();
+    this.renderCellRefHighlights();
   }
 
   private rebuildRowIndexCache() {
@@ -643,7 +657,65 @@ export class SpreadsheetYjsBinding {
     this.renderRemoteCursors();
   }
 
-  private injectCursorStyles() {
+  /** Update the set of cell refs referenced by documents. Triggers re-render of highlights. */
+  setReferencedCells(refs: { cellRef: string }[]) {
+    this.referencedCellRefs = refs;
+    this.renderCellRefHighlights();
+  }
+
+  private renderCellRefHighlights() {
+    const table = this.getWorksheetTable();
+    if (!table) return;
+
+    this.clearCellRefHighlights();
+
+    for (const { cellRef } of this.referencedCellRefs) {
+      if (isSingleCell(cellRef)) {
+        const coords = parseCellName(cellRef);
+        if (!coords) continue;
+
+        const td = this.getCellElement(table, coords.row, coords.col);
+        if (td) {
+          td.classList.add("jss-cell-ref-highlight", "jss-cell-ref-indicator");
+          this.highlightedCells.push(td);
+          this.indicatorCells.push(td);
+        }
+      } else {
+        const range = parseRange(cellRef);
+        if (!range) continue;
+
+        for (let r = range.startRow; r <= range.endRow; r++) {
+          for (let c = range.startCol; c <= range.endCol; c++) {
+            const td = this.getCellElement(table, r, c);
+            if (td) {
+              td.classList.add("jss-cell-ref-highlight");
+              this.highlightedCells.push(td);
+            }
+          }
+        }
+
+        // Indicator on top-right cell (avoids collision with cursor labels on top-left)
+        const topRightTd = this.getCellElement(table, range.startRow, range.endCol);
+        if (topRightTd) {
+          topRightTd.classList.add("jss-cell-ref-indicator");
+          this.indicatorCells.push(topRightTd);
+        }
+      }
+    }
+  }
+
+  private clearCellRefHighlights() {
+    for (const cell of this.highlightedCells) {
+      cell.classList.remove("jss-cell-ref-highlight");
+    }
+    for (const cell of this.indicatorCells) {
+      cell.classList.remove("jss-cell-ref-indicator");
+    }
+    this.highlightedCells = [];
+    this.indicatorCells = [];
+  }
+
+  private injectStyles() {
     this.styleElement = document.createElement("style");
     this.styleElement.textContent = `
       .jss-remote-cursor-label {
@@ -664,6 +736,25 @@ export class SpreadsheetYjsBinding {
       }
       .jss-remote-cursor-label.jss-label-hidden {
         opacity: 0;
+      }
+      .jss-cell-ref-highlight {
+        background-color: rgba(251, 191, 36, 0.12) !important;
+      }
+      .jss-cell-ref-indicator {
+        position: relative !important;
+        overflow: visible !important;
+      }
+      .jss-cell-ref-indicator::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 0 6px 6px 0;
+        border-color: transparent #f59e0b transparent transparent;
+        pointer-events: none;
       }
     `;
     document.head.appendChild(this.styleElement);
@@ -941,6 +1032,8 @@ export class SpreadsheetYjsBinding {
     if (this.formulaRefreshTimer !== null) clearTimeout(this.formulaRefreshTimer);
     if (this.selectionRafId !== null) cancelAnimationFrame(this.selectionRafId);
     if (this.cursorRafId !== null) cancelAnimationFrame(this.cursorRafId);
+
+    this.clearCellRefHighlights();
 
     for (const [clientId] of this.remoteCursors) {
       this.clearRemoteCursor(clientId);
