@@ -39,6 +39,7 @@ jobs:
           npx convex env set VAPID_PRIVATE_KEY "${{ secrets.VAPID_PRIVATE_KEY }}"
           npx convex env set CLOUDFLARE_ACCOUNT_ID "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
           npx convex env set CLOUDFLARE_RTK_APP_ID "${{ secrets.CLOUDFLARE_RTK_APP_ID }}"
+          npx convex env set PARTYKIT_SECRET "${{ secrets.PARTYKIT_SECRET }}"
 
       - name: Deploy Convex backend
         env:
