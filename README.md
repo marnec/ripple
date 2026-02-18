@@ -1,29 +1,17 @@
 NEXT STEPS:
-- [ ] migrate abandoded partykit to the new worker version
-- [x] fix videocalls and activate cloudflare STUN servers
-    - [ ] call panels layout
-- [ ] improve entry UI in docs, diagrams, and spreadsheet. Prevent pop in (also for embedded resources), exploit locally stored data, add entry animation as for the channels chat
+- [x] improve entry UI in docs, diagrams, and spreadsheet. Prevent pop in (also for embedded resources), exploit locally stored data, add entry animation as for the channels chat
+- [ ] reference docs, diagrams and sheets in messages
 - [ ] fix some strange behaviour on enlarge call from pip when last user 
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
-- [ ] rethink hierarchy: workspace -> project -> subsection (channels,docs,diagrams,tasks)
-    - [ ] on workspace creation create default project
-    - [ ] sidebar combobox project -> selection cascades subsections
-    - [ ] collapsible subsections
-    - [ ] searchable / scrollable subsections
-    - [ ] project membership add users manually with roles
-    - [ ] subsection membership opt-in
+- [ ] collapsible subsections
+- [ ] searchable / scrollable subsections
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
     - [ ] language preference
-- [ ] sidebar organization
-    - [ ] channels grouping and personal channels
-    - [ ] documents folders?
-    - [ ] project documents?
-    - [ ] project diagrams?
 - [ ] dashboard pages (channels, projects, documents, diagrams)
 - [ ] PLANE.so inspired features:
     - [ ] add id to tasks
@@ -41,4 +29,6 @@ NEXT STEPS:
     - [ ] github issues
     - [ ] add sentry
 - [ ] command palette
-- [ ] optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
+- partykit 
+    - [ ] migrate abandoded partykit to the new worker version
+    - [ ] partykit optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room

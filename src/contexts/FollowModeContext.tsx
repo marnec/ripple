@@ -77,9 +77,11 @@ export function FollowModeProvider({
     [followingUserId],
   );
 
-  // Track whether the last navigation was triggered by follow mode
-  const followNavRef = useRef(false);
-  const lastFollowedPathRef = useRef<string | null>(null);
+  // Track follow-mode navigation:
+  // pendingNavTargetRef = path we called navigate() to but location hasn't arrived yet
+  // confirmedPathRef = path where the follower is confirmed to be (last landed follow-nav)
+  const pendingNavTargetRef = useRef<string | null>(null);
+  const confirmedPathRef = useRef<string | null>(null);
 
   // Stable refs for use in callbacks
   const followingUserIdRef = useRef(followingUserId);
@@ -98,7 +100,8 @@ export function FollowModeProvider({
   const clearFollowState = useCallback(() => {
     setFollowingUserId(null);
     setFollowingUserName(null);
-    lastFollowedPathRef.current = null;
+    pendingNavTargetRef.current = null;
+    confirmedPathRef.current = null;
   }, []);
 
   // --- Escape key to stop following ---
@@ -147,6 +150,8 @@ export function FollowModeProvider({
   useEffect(() => {
     if (!followingUserId) {
       prevPresenceRef.current = presence;
+      pendingNavTargetRef.current = null;
+      confirmedPathRef.current = null;
       return;
     }
 
@@ -157,7 +162,6 @@ export function FollowModeProvider({
       prevPresenceRef.current !== undefined
     ) {
       prevPresenceRef.current = presence;
-      // Defer to avoid synchronous setState in effect
       requestAnimationFrame(() => {
         if (!followingUserIdRef.current) return;
         toast({
@@ -175,15 +179,24 @@ export function FollowModeProvider({
 
     const targetPath = presence.currentPath;
 
-    // Detect whether the current location change was manual (user) or programmatic (follow).
-    // Must run here — before any re-navigation — to avoid the race where the presence effect
-    // reverses a manual navigation before the separate manual-nav effect can stop following.
-    if (lastFollowedPathRef.current !== null && location.pathname !== lastFollowedPathRef.current) {
-      if (followNavRef.current) {
-        // Our own follow-navigation just landed — consume the flag and continue
-        followNavRef.current = false;
-      } else {
-        // User navigated manually → stop following without reversing their navigation
+    // --- Confirm pending follow-nav if it landed ---
+    if (
+      pendingNavTargetRef.current !== null &&
+      location.pathname === pendingNavTargetRef.current
+    ) {
+      confirmedPathRef.current = pendingNavTargetRef.current;
+      pendingNavTargetRef.current = null;
+    }
+
+    // --- Manual navigation detection ---
+    // If there's a pending follow-nav, the follower is still in transit — skip detection.
+    // Otherwise, if we have a confirmed path and the follower drifted away from it
+    // (and isn't heading to the current target), the user navigated manually.
+    if (pendingNavTargetRef.current === null && confirmedPathRef.current !== null) {
+      if (
+        location.pathname !== confirmedPathRef.current &&
+        location.pathname !== targetPath
+      ) {
         requestAnimationFrame(() => {
           if (!followingUserIdRef.current) return;
           toast({
@@ -196,15 +209,15 @@ export function FollowModeProvider({
       }
     }
 
-    // Consume a pending follow-nav flag when we've already arrived at the target
+    // Already at target — confirm and skip
     if (targetPath === location.pathname) {
-      followNavRef.current = false;
+      confirmedPathRef.current = targetPath;
+      pendingNavTargetRef.current = null;
       return;
     }
 
     // Navigate to followed user's location
-    followNavRef.current = true;
-    lastFollowedPathRef.current = targetPath;
+    pendingNavTargetRef.current = targetPath;
     void navigate(targetPath);
   }, [
     presence,
@@ -219,8 +232,8 @@ export function FollowModeProvider({
     (userId: Id<"users">, userName: string) => {
       setFollowingUserId(userId);
       setFollowingUserName(userName);
-      lastFollowedPathRef.current = null;
-      followNavRef.current = false;
+      pendingNavTargetRef.current = null;
+      confirmedPathRef.current = null;
       prevPresenceRef.current = undefined;
       toast({
         title: "Following",
