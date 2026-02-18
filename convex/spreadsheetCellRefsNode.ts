@@ -38,10 +38,11 @@ export const populateFromSnapshot = internalAction({
     const yDoc = new Y.Doc();
     Y.applyUpdateV2(yDoc, new Uint8Array(arrayBuffer));
     const yData = yDoc.getArray<Y.Map<string>>("data");
+    const yFormulaValues = yDoc.getMap<string>("formulaValues");
 
-    // Extract cell values
+    // Extract cell values (resolves formulas to computed display values)
     const normalized = normalizeCellRef(cellRef);
-    const values = extractCellValues(yData, normalized);
+    const values = extractCellValues(yData, normalized, yFormulaValues);
     yDoc.destroy();
 
     if (!values) return null;
@@ -56,9 +57,27 @@ export const populateFromSnapshot = internalAction({
   },
 });
 
+/**
+ * If the raw cell value is a formula (starts with "="), return the computed
+ * display value from formulaValues. Falls back to raw value if not available.
+ */
+function resolveDisplayValue(
+  rawValue: string,
+  row: number,
+  col: number,
+  yFormulaValues?: Y.Map<string>,
+): string {
+  if (rawValue.startsWith("=") && yFormulaValues) {
+    const computed = yFormulaValues.get(`${row},${col}`);
+    if (computed !== undefined) return computed;
+  }
+  return rawValue;
+}
+
 function extractCellValues(
   yData: Y.Array<Y.Map<string>>,
   cellRef: string,
+  yFormulaValues?: Y.Map<string>,
 ): string[][] | null {
   if (cellRef.includes(":")) {
     const range = parseRange(cellRef);
@@ -68,7 +87,8 @@ function extractCellValues(
       const row: string[] = [];
       const rowMap = yData.get(r);
       for (let c = range.startCol; c <= range.endCol; c++) {
-        row.push(rowMap?.get(String(c)) ?? "");
+        const raw = rowMap?.get(String(c)) ?? "";
+        row.push(resolveDisplayValue(raw, r, c, yFormulaValues));
       }
       result.push(row);
     }
@@ -78,6 +98,7 @@ function extractCellValues(
     if (!cell) return null;
     if (cell.row >= yData.length) return [[""]];
     const rowMap = yData.get(cell.row);
-    return [[rowMap?.get(String(cell.col)) ?? ""]];
+    const raw = rowMap?.get(String(cell.col)) ?? "";
+    return [[resolveDisplayValue(raw, cell.row, cell.col, yFormulaValues)]];
   }
 }

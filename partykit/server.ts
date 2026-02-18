@@ -5,6 +5,23 @@ import * as Y from "yjs";
 import type { ErrorCode, ServerMessage } from "@shared/protocol";
 import { parseCellName, parseRange } from "@shared/cellRef";
 
+/**
+ * If the raw cell value is a formula (starts with "="), return the computed
+ * display value from formulaValues. Falls back to raw value if not available.
+ */
+function resolveDisplayValue(
+  rawValue: string,
+  row: number,
+  col: number,
+  yFormulaValues?: Y.Map<string>,
+): string {
+  if (rawValue.startsWith("=") && yFormulaValues) {
+    const computed = yFormulaValues.get(`${row},${col}`);
+    if (computed !== undefined) return computed;
+  }
+  return rawValue;
+}
+
 // Constants
 const PERIODIC_SAVE_INTERVAL = 120_000; // 2 minutes
 const DISCONNECT_DEBOUNCE = 7_000; // 7 seconds
@@ -28,6 +45,7 @@ export default class CollaborationServer implements Party.Server {
 
   // Cell reference observer state (spreadsheet rooms only)
   private cellRefObserver: ((events: Y.YEvent<any>[], tx: Y.Transaction) => void) | null = null;
+  private formulaValuesObserver: ((event: Y.YMapEvent<string>) => void) | null = null;
   private cellRefPushTimeout: ReturnType<typeof setTimeout> | null = null;
   private trackedCellRefs: Array<{ cellRef: string }> | null = null;
   private trackedCellRefsLastFetch = 0;
@@ -280,6 +298,17 @@ export default class CollaborationServer implements Party.Server {
     };
 
     yData.observeDeep(this.cellRefObserver);
+
+    // Also observe formulaValues changes so computed values trigger cell ref pushes
+    const yFormulaValues = this.yDocRef.getMap<string>("formulaValues");
+    this.formulaValuesObserver = () => {
+      if (this.cellRefPushTimeout) clearTimeout(this.cellRefPushTimeout);
+      this.cellRefPushTimeout = setTimeout(() => {
+        void this.pushCellRefUpdates(roomId);
+      }, CELL_REF_DEBOUNCE);
+    };
+    yFormulaValues.observe(this.formulaValuesObserver);
+
     console.log(`Cell ref observer attached for room ${roomId}`);
   }
 
@@ -320,11 +349,12 @@ export default class CollaborationServer implements Party.Server {
 
     // Extract current values from Yjs for each tracked reference
     const yData = this.yDocRef.getArray<Y.Map<string>>("data");
+    const yFormulaValues = this.yDocRef.getMap<string>("formulaValues");
 
     const updates: Array<{ cellRef: string; values: string }> = [];
 
     for (const { cellRef } of this.trackedCellRefs) {
-      const values = this.extractCellValues(yData, cellRef);
+      const values = this.extractCellValues(yData, cellRef, yFormulaValues);
       if (values) {
         updates.push({ cellRef, values: JSON.stringify(values) });
       }
@@ -349,11 +379,14 @@ export default class CollaborationServer implements Party.Server {
 
   /**
    * Read cell values from the Yjs data array for a given cell ref.
+   * For formula cells (starting with "="), returns the computed display value
+   * from the formulaValues map instead of the raw formula string.
    * Returns a 2D string array, or null if the ref is invalid.
    */
   private extractCellValues(
     yData: Y.Array<Y.Map<string>>,
     cellRef: string,
+    yFormulaValues?: Y.Map<string>,
   ): string[][] | null {
     if (cellRef.includes(":")) {
       const range = parseRange(cellRef);
@@ -363,7 +396,8 @@ export default class CollaborationServer implements Party.Server {
         const row: string[] = [];
         const rowMap = yData.get(r);
         for (let c = range.startCol; c <= range.endCol; c++) {
-          row.push(rowMap?.get(String(c)) ?? "");
+          const raw = rowMap?.get(String(c)) ?? "";
+          row.push(resolveDisplayValue(raw, r, c, yFormulaValues));
         }
         result.push(row);
       }
@@ -373,7 +407,8 @@ export default class CollaborationServer implements Party.Server {
       if (!cell) return null;
       if (cell.row >= yData.length) return [[""]];
       const rowMap = yData.get(cell.row);
-      return [[rowMap?.get(String(cell.col)) ?? ""]];
+      const raw = rowMap?.get(String(cell.col)) ?? "";
+      return [[resolveDisplayValue(raw, cell.row, cell.col, yFormulaValues)]];
     }
   }
 
@@ -384,6 +419,10 @@ export default class CollaborationServer implements Party.Server {
     if (this.cellRefObserver && this.yDocRef) {
       this.yDocRef.getArray("data").unobserveDeep(this.cellRefObserver);
       this.cellRefObserver = null;
+    }
+    if (this.formulaValuesObserver && this.yDocRef) {
+      this.yDocRef.getMap<string>("formulaValues").unobserve(this.formulaValuesObserver);
+      this.formulaValuesObserver = null;
     }
     if (this.cellRefPushTimeout) {
       clearTimeout(this.cellRefPushTimeout);

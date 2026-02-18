@@ -60,7 +60,8 @@ interface RemoteCursorOverlay {
  *   "colWidths"  → Y.Map<number>             (col index → width px)
  *   "rowHeights" → Y.Map<number>             (row index → height px)
  *   "merges"     → Y.Map<string>             (cellName → "colspan,rowspan")
- *   "meta"       → Y.Map<any>                ("colCount" → number)
+ *   "meta"           → Y.Map<any>                ("colCount" → number)
+ *   "formulaValues"  → Y.Map<string>             ("row,col" → computed display value)
  */
 export class SpreadsheetYjsBinding {
   private worksheet: any;
@@ -70,6 +71,7 @@ export class SpreadsheetYjsBinding {
   private yRowHeights: Y.Map<number>;
   private yMerges: Y.Map<string>;
   private yMeta: Y.Map<any>;
+  private yFormulaValues: Y.Map<string>;
   private awareness: Awareness | null;
 
   /** Guard flag to prevent feedback loops */
@@ -102,6 +104,12 @@ export class SpreadsheetYjsBinding {
    *  When set, cursors for clients not in this set are removed. */
   private activeClientIds: Set<number> | null = null;
 
+  /** Set of "row,col" keys for cells containing formulas */
+  private formulaCells = new Set<string>();
+
+  /** Pending deferred formula refresh timer */
+  private formulaRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     worksheet: any,
     yDoc: Y.Doc,
@@ -116,6 +124,7 @@ export class SpreadsheetYjsBinding {
     this.yRowHeights = yDoc.getMap<number>("rowHeights");
     this.yMerges = yDoc.getMap<string>("merges");
     this.yMeta = yDoc.getMap<any>("meta");
+    this.yFormulaValues = yDoc.getMap<string>("formulaValues");
 
     // Idempotent init: applying the same fixed-clientID update is a no-op if
     // already present, so concurrent clients can't duplicate rows.
@@ -213,6 +222,16 @@ export class SpreadsheetYjsBinding {
 
       this.worksheet.setData(data);
 
+      // Build initial formula cell tracking set
+      this.formulaCells.clear();
+      for (let r = 0; r < data.length; r++) {
+        for (let c = 0; c < data[r].length; c++) {
+          if (data[r][c].startsWith("=")) {
+            this.formulaCells.add(`${r},${c}`);
+          }
+        }
+      }
+
       this.yColWidths.forEach((width: number, col: string) => {
         try { this.worksheet.setWidth(Number(col), width); } catch { /* */ }
       });
@@ -229,6 +248,11 @@ export class SpreadsheetYjsBinding {
       });
     } finally {
       this.isApplyingRemote = false;
+    }
+
+    // Capture formula display values after jspreadsheet finishes evaluation
+    if (this.formulaCells.size > 0) {
+      this.scheduleFormulaRefresh();
     }
   }
 
@@ -259,6 +283,13 @@ export class SpreadsheetYjsBinding {
         rowMap?.set(String(col), String(c.value ?? ""));
       }
     });
+
+    // Track formula cells and refresh computed display values.
+    // Any change may cascade to dependent formula cells, so always refresh.
+    for (const c of changes) {
+      this.updateFormulaCellTracking(Number(c.y), Number(c.x), String(c.value ?? ""));
+    }
+    this.scheduleFormulaRefresh();
   }
 
   /** v5: oninsertrow(instance, rows: { row: number; data: CellValue[] }[]) */
@@ -469,6 +500,8 @@ export class SpreadsheetYjsBinding {
     } finally {
       this.isApplyingRemote = false;
     }
+    // Remote data changes may trigger formula recalculation in jspreadsheet
+    this.scheduleFormulaRefresh();
   }
 
   private applyRowChanges(event: Y.YArrayEvent<Y.Map<string>>) {
@@ -498,8 +531,9 @@ export class SpreadsheetYjsBinding {
         } catch { /* */ }
       }
     }
-    // Rebuild row index cache after structural changes
+    // Rebuild row index cache and formula tracking after structural changes
     this.rebuildRowIndexCache();
+    this.rebuildFormulaCellTracking();
   }
 
   private rebuildRowIndexCache() {
@@ -518,6 +552,7 @@ export class SpreadsheetYjsBinding {
         const col = Number(key);
         const value = rowMap.get(key) ?? "";
         try { this.worksheet.setValueFromCoords(col, rowIndex, value); } catch { /* */ }
+        this.updateFormulaCellTracking(rowIndex, col, value);
       }
     });
   }
@@ -757,6 +792,103 @@ export class SpreadsheetYjsBinding {
   }
 
   // ---------------------------------------------------------------------------
+  // Formula value tracking
+  //
+  // Captures computed display values for formula cells (those starting with "=")
+  // and stores them in the "formulaValues" Y.Map so server-side extraction
+  // functions (PartyKit + Convex) can read computed values instead of raw formulas.
+  // ---------------------------------------------------------------------------
+
+  /** Track or untrack a cell as a formula cell based on its value. */
+  private updateFormulaCellTracking(row: number, col: number, value: string) {
+    const key = `${row},${col}`;
+    if (typeof value === "string" && value.startsWith("=")) {
+      this.formulaCells.add(key);
+    } else {
+      this.formulaCells.delete(key);
+    }
+  }
+
+  /** Full scan to rebuild formula cell tracking after structural changes (row/col insert/delete). */
+  private rebuildFormulaCellTracking() {
+    this.formulaCells.clear();
+    const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
+    for (let r = 0; r < this.yData.length; r++) {
+      const rowMap = this.yData.get(r);
+      for (let c = 0; c < colCount; c++) {
+        const val = rowMap.get(String(c)) ?? "";
+        if (val.startsWith("=")) {
+          this.formulaCells.add(`${r},${c}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Schedule a deferred formula display value refresh.
+   * Uses setTimeout(0) to run after jspreadsheet finishes evaluating formulas
+   * and after the current Yjs transaction completes.
+   */
+  private scheduleFormulaRefresh() {
+    if (this.formulaRefreshTimer !== null) {
+      clearTimeout(this.formulaRefreshTimer);
+    }
+    this.formulaRefreshTimer = setTimeout(() => {
+      this.formulaRefreshTimer = null;
+      this.refreshFormulaDisplayValues();
+    }, 0);
+  }
+
+  /**
+   * Read computed display values for all tracked formula cells and update
+   * the yFormulaValues map. Uses jspreadsheet's getValueFromCoords(x, y, true)
+   * to get the processed (computed) value rather than the raw formula.
+   */
+  private refreshFormulaDisplayValues() {
+    if (!this.worksheet) return;
+
+    const updates: Array<[string, string]> = [];
+    const removals: string[] = [];
+
+    for (const key of this.formulaCells) {
+      const [rowStr, colStr] = key.split(",");
+      const row = Number(rowStr);
+      const col = Number(colStr);
+
+      let displayValue: string;
+      try {
+        const val = this.worksheet.getValueFromCoords(col, row, true);
+        displayValue = val != null ? String(val) : "";
+      } catch {
+        continue;
+      }
+
+      const current = this.yFormulaValues.get(key);
+      if (current !== displayValue) {
+        updates.push([key, displayValue]);
+      }
+    }
+
+    // Clean up entries for cells no longer containing formulas
+    this.yFormulaValues.forEach((_value: string, key: string) => {
+      if (!this.formulaCells.has(key)) {
+        removals.push(key);
+      }
+    });
+
+    if (updates.length === 0 && removals.length === 0) return;
+
+    this.yData.doc!.transact(() => {
+      for (const [key, value] of updates) {
+        this.yFormulaValues.set(key, value);
+      }
+      for (const key of removals) {
+        this.yFormulaValues.delete(key);
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Utilities
   // ---------------------------------------------------------------------------
 
@@ -805,7 +937,8 @@ export class SpreadsheetYjsBinding {
       this.awareness.off("change", this.awarenessHandler);
     }
 
-    // Cancel pending rAF callbacks
+    // Cancel pending timers and rAF callbacks
+    if (this.formulaRefreshTimer !== null) clearTimeout(this.formulaRefreshTimer);
     if (this.selectionRafId !== null) cancelAnimationFrame(this.selectionRafId);
     if (this.cursorRafId !== null) cancelAnimationFrame(this.cursorRafId);
 

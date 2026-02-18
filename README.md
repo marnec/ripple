@@ -1,9 +1,16 @@
 NEXT STEPS:
 - [x] reference docs, diagrams and sheets in messages
-- [ ] insert medias in all places where there's a blocknote editor
-- [ ] fix some strange behaviour on enlarge call from pip when last user 
-- [ ] add jump-to-collaborator onclick facepile avatar in docs
-- [ ] discord-like info about call participants beisde channel name
+- [x] insert medias in all places where there's a blocknote editor
+- [x] formula result in embedded sheets
+- [ ] highlight referenced ranges in spreadsheet
+- improve spreadsheet embed
+    - [ ] ditch inline for dedicated spreadsheet range block
+    - [ ] resizeable and aligneable container (like diagram block)
+    - [ ] resizeable col sizes
+    - [ ] show / hide coordinates row/col headers
+- [ ] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
+- [ ] formula picker?
+- [ ] improve image attachment in messages
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
 - sections
