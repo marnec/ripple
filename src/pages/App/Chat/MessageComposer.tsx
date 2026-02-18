@@ -104,7 +104,7 @@ function blocksToPlainText(
 
 export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
-  channelId,
+  channelId: _channelId,
   workspaceId,
   showCallButton = true,
 }: MessageComposerProps) => {
@@ -112,19 +112,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const navigate = useNavigate();
   const { editingMessage, replyingTo, setReplyingTo } = useChatContext();
 
-  // Query projects to determine linked project scope
-  const projects = useQuery(api.projects.listByUserMembership, { workspaceId });
-  const linkedProject = projects?.find(p => p.linkedChannelId === channelId);
+  // Query projects for # autocomplete
+  const projects = useQuery(api.projects.list, { workspaceId });
 
   // Query tasks for autocomplete
-  const projectTasks = useQuery(
-    api.tasks.listByProject,
-    linkedProject ? { projectId: linkedProject._id, hideCompleted: true } : "skip"
-  );
-  const myTasks = useQuery(
-    api.tasks.listByAssignee,
-    !linkedProject ? { workspaceId, hideCompleted: true } : "skip"
-  );
+  const tasks = useQuery(api.tasks.listByWorkspace, { workspaceId, hideCompleted: true });
 
   // Query workspace members for @ autocomplete
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
@@ -338,10 +330,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             getItems={async (query) => {
               const items: Array<{title: string; onItemClick: () => void; icon: React.JSX.Element; group: string}> = [];
 
-              // Task mentions (existing logic)
-              const tasksToSearch = linkedProject ? projectTasks : myTasks;
-              if (tasksToSearch) {
-                tasksToSearch
+              // Task mentions
+              if (tasks) {
+                tasks
                   .filter((task) =>
                     task.title.toLowerCase().includes(query.toLowerCase())
                   )
@@ -369,7 +360,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
                           )}
                         />
                       ),
-                      group: linkedProject ? "Project tasks" : "My tasks",
+                      group: "Tasks",
                     });
                   });
               }

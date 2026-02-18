@@ -1,7 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { DiagramRole } from "@shared/enums";
 import { DEFAULT_DIAGRAM_NAME } from "@shared/constants";
 
 const diagramValidator = v.object({
@@ -11,10 +10,6 @@ const diagramValidator = v.object({
   name: v.string(),
   tags: v.optional(v.array(v.string())),
   yjsSnapshotId: v.optional(v.id("_storage")),
-  roleCount: v.optional(v.object({
-    admin: v.number(),
-    member: v.number(),
-  })),
 });
 
 export const list = query({
@@ -104,16 +99,6 @@ export const create = mutation({
     const diagramId = await ctx.db.insert("diagrams", {
       workspaceId,
       name: diagramName,
-      roleCount: {
-        [DiagramRole.ADMIN]: 1,
-        [DiagramRole.MEMBER]: 0,
-      },
-    });
-
-    await ctx.db.insert("diagramMembers", {
-      diagramId,
-      userId,
-      role: DiagramRole.ADMIN,
     });
 
     return diagramId;
@@ -175,13 +160,6 @@ export const remove = mutation({
         `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
       );
 
-    // Clean up diagram members
-    const diagramMembers = await ctx.db
-      .query("diagramMembers")
-      .withIndex("by_diagram", (q) => q.eq("diagramId", id))
-      .collect();
-    await Promise.all(diagramMembers.map((member) => ctx.db.delete(member._id)));
-
     // Clean up Yjs snapshot from storage
     if (diagram.yjsSnapshotId) {
       await ctx.storage.delete(diagram.yjsSnapshotId);
@@ -191,4 +169,3 @@ export const remove = mutation({
     return null;
   },
 });
- 

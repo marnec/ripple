@@ -17,7 +17,7 @@ export function Documents() {
   const { workspaceId } = useParams<QueryParams>();
   const id = workspaceId as Id<"workspaces">;
 
-  const documents = useQuery(api.documents.listByUserMembership, { workspaceId: id });
+  const documents = useQuery(api.documents.list, { workspaceId: id });
 
   return (
     <div className="container mx-auto p-4">
@@ -37,7 +37,7 @@ export function Documents() {
                     <CardHeader>
                       <CardTitle>{document.name}</CardTitle>
                       <CardDescription>
-                        {(document.roleCount.admin || 0) + (document.roleCount.member || 0)} members
+                        Document
                       </CardDescription>
                     </CardHeader>
                     <CardContent>

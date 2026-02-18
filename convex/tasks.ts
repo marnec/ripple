@@ -9,6 +9,7 @@ import { getUserDisplayName } from "@shared/displayName";
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
+    workspaceId: v.id("workspaces"),
     title: v.string(),
     statusId: v.optional(v.id("taskStatuses")),
     assigneeId: v.optional(v.id("users")),
@@ -28,16 +29,16 @@ export const create = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    // Validate project membership via projectMembers.by_project_user
+    // Validate workspace membership
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", args.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("userId", userId)
       )
       .first();
 
     if (!membership) {
-      throw new ConvexError("Not a member of this project");
+      throw new ConvexError("Not a member of this workspace");
     }
 
     // Get project to access workspaceId
@@ -127,11 +128,11 @@ export const get = query({
     const task = await ctx.db.get(taskId);
     if (!task) return null;
 
-    // Validate membership on its project
+    // Validate workspace membership using task's denormalized workspaceId
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
       )
       .first();
 
@@ -159,11 +160,15 @@ export const listByProject = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    // Validate project membership
+    // Resolve the project to get workspaceId for membership check
+    const project = await ctx.db.get(projectId);
+    if (!project) return [];
+
+    // Validate workspace membership
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
 
@@ -211,6 +216,52 @@ export const listByProject = query({
     });
 
     return enrichedTasks;
+  },
+});
+
+export const listByWorkspace = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    hideCompleted: v.optional(v.boolean()),
+  },
+  returns: v.array(v.any()),
+  handler: async (ctx, { workspaceId, hideCompleted }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) return [];
+
+    // Use the existing by_workspace index
+    let tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+
+    if (hideCompleted) {
+      tasks = tasks.filter((t) => !t.completed);
+    }
+
+    // Cap at 200 for performance (used for autocomplete)
+    tasks = tasks.slice(0, 200);
+
+    // Enrich with status info
+    return Promise.all(
+      tasks.map(async (task) => {
+        const status = await ctx.db.get(task.statusId);
+        return {
+          ...task,
+          status: status
+            ? { name: status.name, color: status.color, isCompleted: status.isCompleted }
+            : null,
+        };
+      })
+    );
   },
 });
 
@@ -290,16 +341,16 @@ export const update = mutation({
     const task = await ctx.db.get(taskId);
     if (!task) throw new ConvexError("Task not found");
 
-    // Auth: validate membership on task's project
+    // Auth: validate workspace membership using task's denormalized workspaceId
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
       )
       .first();
 
     if (!membership) {
-      throw new ConvexError("Not a member of this project");
+      throw new ConvexError("Not a member of this workspace");
     }
 
     // Build patch object with only provided fields
@@ -366,14 +417,14 @@ export const updatePosition = mutation({
     const task = await ctx.db.get(taskId);
     if (!task) throw new ConvexError("Task not found");
 
-    // Auth: validate membership
+    // Auth: validate workspace membership using task's denormalized workspaceId
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
       )
       .first();
-    if (!membership) throw new ConvexError("Not a member of this project");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Look up status to update completed field (one-way sync)
     const newStatus = await ctx.db.get(statusId);
@@ -403,16 +454,16 @@ export const remove = mutation({
     const task = await ctx.db.get(taskId);
     if (!task) throw new ConvexError("Task not found");
 
-    // Auth: validate membership on task's project
+    // Auth: validate workspace membership using task's denormalized workspaceId
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
       )
       .first();
 
     if (!membership) {
-      throw new ConvexError("Not a member of this project");
+      throw new ConvexError("Not a member of this workspace");
     }
 
     // Clean up task comments

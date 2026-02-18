@@ -9,12 +9,11 @@ import { ScrollArea } from "../../../components/ui/scroll-area";
 interface MessageContextProps {
   messageId: Id<"messages">;
   channelId: Id<"channels">;
-  workspaceId: Id<"workspaces">;
   onClose: () => void;
   onBackToChat: () => void;
 }
 
-export function MessageContext({ messageId, channelId, workspaceId, onClose, onBackToChat }: MessageContextProps) {
+export function MessageContext({ messageId, channelId: _channelId, onClose, onBackToChat }: MessageContextProps) {
   const contextData = useQuery(api.messages.getMessageContext, { messageId });
 
   if (!contextData) {
@@ -63,7 +62,7 @@ export function MessageContext({ messageId, channelId, workspaceId, onClose, onB
                     : ""
                 }
               >
-                <Message message={message} channelId={channelId} workspaceId={workspaceId} onTaskCreated={() => {}} />
+                <Message message={message} />
               </div>
             </div>
           ))}

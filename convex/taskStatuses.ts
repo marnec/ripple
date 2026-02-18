@@ -9,15 +9,17 @@ export const listByProject = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    // Validate user is project member
+    // Validate user is workspace member (via project)
+    const project = await ctx.db.get(projectId);
+    if (!project) throw new ConvexError("Project not found");
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this project");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Query with by_project_order index, sorted by order
     const statuses = await ctx.db
@@ -41,15 +43,17 @@ export const create = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    // Permission: must be project member
+    // Permission: must be workspace member (via project)
+    const project = await ctx.db.get(projectId);
+    if (!project) throw new ConvexError("Project not found");
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this project");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Calculate next order number (max existing order + 1)
     const existingStatuses = await ctx.db
@@ -88,15 +92,17 @@ export const update = mutation({
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
 
-    // Permission: must be project member
+    // Permission: must be workspace member (via project)
+    const project = await ctx.db.get(status.projectId);
+    if (!project) throw new ConvexError("Project not found");
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", status.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this project");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Build patch object with only provided fields
     const patch: { name?: string; color?: string; order?: number } = {};
@@ -127,14 +133,16 @@ export const reorderColumns = mutation({
     const firstStatus = await ctx.db.get(statusIds[0]);
     if (!firstStatus) throw new ConvexError("Status not found");
 
-    // Permission check
+    // Permission check: must be workspace member (via project)
+    const project = await ctx.db.get(firstStatus.projectId);
+    if (!project) throw new ConvexError("Project not found");
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", firstStatus.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
-    if (!membership) throw new ConvexError("Not a member of this project");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Reassign order values sequentially
     for (let i = 0; i < statusIds.length; i++) {
@@ -155,15 +163,17 @@ export const remove = mutation({
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
 
-    // Permission: must be project member
+    // Permission: must be workspace member (via project)
+    const project = await ctx.db.get(status.projectId);
+    if (!project) throw new ConvexError("Project not found");
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", status.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
 
-    if (!membership) throw new ConvexError("Not a member of this project");
+    if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Cannot remove if it's the default status
     if (status.isDefault) {

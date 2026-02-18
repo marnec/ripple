@@ -146,7 +146,7 @@ function TaskDetailPageContent({
             <TaskComments
               taskId={taskId}
               currentUserId={detail.currentUser._id}
-              projectId={projectId}
+              workspaceId={workspaceId}
             />
           </div>
         )}

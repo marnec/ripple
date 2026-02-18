@@ -28,7 +28,7 @@ export function ProjectSelectorList({
   const navigate = useNavigate();
   const deleteProject = useMutation(api.projects.remove);
 
-  const projects = useQuery(api.projects.listByUserMembership, {
+  const projects = useQuery(api.projects.list, {
     workspaceId,
   });
 

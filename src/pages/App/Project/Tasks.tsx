@@ -67,7 +67,7 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
       </div>
 
       {/* Inline Task Creation */}
-      <CreateTaskInline projectId={projectId} />
+      <CreateTaskInline projectId={projectId} workspaceId={workspaceId} />
 
       {/* Task List */}
       {tasks.length === 0 ? (

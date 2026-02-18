@@ -105,10 +105,6 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
     }
   };
 
-  const handleTaskCreated = (_taskId: Id<"tasks">, _taskTitle: string) => {
-    // no-op: task creation is silent in chat
-  };
-
   if (!workspaceId) {
     return <div>Error: Workspace ID not found</div>;
   }
@@ -120,7 +116,6 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
         <MessageContext
           messageId={contextMessageId}
           channelId={channelId}
-          workspaceId={workspaceId as Id<"workspaces">}
           onClose={handleBackToChat}
           onBackToChat={handleBackToChat}
         />
@@ -175,9 +170,6 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
             )}
             <Message
               message={message}
-              channelId={channelId}
-              workspaceId={workspaceId as Id<"workspaces">}
-              onTaskCreated={handleTaskCreated}
             />
           </Fragment>
         ))}

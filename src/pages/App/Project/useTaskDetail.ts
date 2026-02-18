@@ -17,9 +17,10 @@ export function useTaskDetail({
 }) {
   const task = useQuery(api.tasks.get, taskId ? { taskId } : "skip");
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
-  const members = useQuery(api.projectMembers.membersByProject, { projectId });
+  const rawMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  const members = rawMembers?.map((m) => ({ ...m, userId: m._id }));
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
-  const documents = useQuery(api.documents.listByUserMembership, { workspaceId });
+  const documents = useQuery(api.documents.list, { workspaceId });
   const currentUser = useQuery(api.users.viewer);
 
   const updateTask = useMutation(api.tasks.update);

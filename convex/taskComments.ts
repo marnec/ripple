@@ -17,16 +17,18 @@ export const list = query({
     const task = await ctx.db.get(taskId);
     if (!task) throw new ConvexError("Task not found");
 
-    // Check project membership via projectMembers.by_project_user index
+    // Check workspace membership (via project)
+    const project = await ctx.db.get(task.projectId);
+    if (!project) throw new ConvexError("Project not found");
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
 
     if (!membership) {
-      throw new ConvexError("Not a member of this project");
+      throw new ConvexError("Not a member of this workspace");
     }
 
     // Query comments using undeleted_by_task index
@@ -71,16 +73,18 @@ export const create = mutation({
     const task = await ctx.db.get(taskId);
     if (!task) throw new ConvexError("Task not found");
 
-    // Check project membership
+    // Check workspace membership (via project)
+    const project = await ctx.db.get(task.projectId);
+    if (!project) throw new ConvexError("Project not found");
     const membership = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
       )
       .first();
 
     if (!membership) {
-      throw new ConvexError("Not a member of this project");
+      throw new ConvexError("Not a member of this workspace");
     }
 
     // Insert comment

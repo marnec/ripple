@@ -2,8 +2,6 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { DEFAULT_DOC_NAME } from "@shared/constants";
-import { DocumentRole } from "@shared/enums";
-import { getAll } from "convex-helpers/server/relationships";
 
 export const create = mutation({
   args: {
@@ -22,16 +20,6 @@ export const create = mutation({
     const documentId = await ctx.db.insert("documents", {
       workspaceId,
       name: documentName,
-      roleCount: {
-        [DocumentRole.ADMIN]: 1,
-        [DocumentRole.MEMBER]: 0,
-      },
-    });
-
-    await ctx.db.insert("documentMembers", {
-      documentId,
-      userId,
-      role: DocumentRole.ADMIN,
     });
 
     return documentId;
@@ -49,18 +37,20 @@ export const rename = mutation({
 
     if (!userId) throw new ConvexError("Not authenticated");
 
-    const membership = await ctx.db
-      .query("documentMembers")
-      .withIndex("by_document_user", (q) => q.eq("documentId", id).eq("userId", userId))
-      .first();
-
-    if (membership?.role !== DocumentRole.ADMIN) {
-      throw new ConvexError("You are not an admin of this document");
-    }
-
     const document = await ctx.db.get(id);
 
     if (!document) throw new ConvexError("Document not found");
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
+      )
+      .first();
+
+    if (!membership) {
+      throw new ConvexError("You are not a member of this workspace");
+    }
 
     const match = await ctx.db
       .query("documents")
@@ -83,10 +73,6 @@ const documentValidator = v.object({
   name: v.string(),
   tags: v.optional(v.array(v.string())),
   yjsSnapshotId: v.optional(v.id("_storage")),
-  roleCount: v.object({
-    admin: v.number(),
-    member: v.number(),
-  }),
 });
 
 export const list = query({
@@ -103,30 +89,6 @@ export const list = query({
   },
 });
 
-export const listByUserMembership = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(documentValidator),
-  handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const documentMembers = await ctx.db
-      .query("documentMembers")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-
-    const documentIds = documentMembers.map((m) => m.documentId);
-
-    // Use getAll helper to batch fetch documents
-    const documents = await getAll(ctx.db, documentIds);
-
-    return documents
-      .filter((d): d is NonNullable<typeof d> => d !== null)
-      .filter((document) => document.workspaceId === workspaceId);
-  },
-});
-
 export const get = query({
   args: { id: v.id("documents") },
   returns: documentValidator,
@@ -135,18 +97,20 @@ export const get = query({
 
     if (!userId) throw new ConvexError("Not authenticated");
 
-    const membership = await ctx.db
-      .query("documentMembers")
-      .withIndex("by_document_user", (q) => q.eq("documentId", id).eq("userId", userId))
-      .first();
-
-    if (!membership) {
-      throw new ConvexError("You are not a member of this document");
-    }
-
     const document = await ctx.db.get(id);
 
     if (!document) throw new ConvexError("Document not found");
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
+      )
+      .first();
+
+    if (!membership) {
+      throw new ConvexError("You are not a member of this workspace");
+    }
 
     return document;
   },
@@ -164,23 +128,16 @@ export const remove = mutation({
 
     if (!document) throw new ConvexError("Document not found");
 
-    // Check if user is admin of this document
     const membership = await ctx.db
-      .query("documentMembers")
-      .withIndex("by_document_user", (q) => q.eq("documentId", id).eq("userId", userId))
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
+      )
       .first();
 
-    if (membership?.role !== DocumentRole.ADMIN) {
+    if (!membership) {
       throw new ConvexError("Not authorized to delete this document");
     }
-
-    // Clean up all document members
-    const documentMembers = await ctx.db
-      .query("documentMembers")
-      .withIndex("by_document", (q) => q.eq("documentId", id))
-      .collect();
-
-    await Promise.all(documentMembers.map((member) => ctx.db.delete(member._id)));
 
     // Clean up Yjs snapshot from storage
     if (document.yjsSnapshotId) {

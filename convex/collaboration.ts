@@ -116,13 +116,15 @@ export const checkDocumentAccess = internalQuery({
   },
   returns: v.boolean(),
   handler: async (ctx, { userId, documentId }) => {
-    const member = await ctx.db
-      .query("documentMembers")
-      .withIndex("by_document_user", (q) =>
-        q.eq("documentId", documentId as any).eq("userId", userId)
+    const document = await ctx.db.get(documentId as any);
+    if (!document) return false;
+    const workspaceMember = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", (document as any).workspaceId).eq("userId", userId)
       )
       .first();
-    return member !== null;
+    return workspaceMember !== null;
   },
 });
 
@@ -160,11 +162,11 @@ export const checkTaskAccess = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { userId, taskId }) => {
     const task = await ctx.db.get(taskId as any) as any;
-    if (!task || !task.projectId) return false;
+    if (!task || !task.workspaceId) return false;
     const member = await ctx.db
-      .query("projectMembers")
-      .withIndex("by_project_user", (q) =>
-        q.eq("projectId", task.projectId).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
       )
       .first();
     return member !== null;
@@ -181,10 +183,12 @@ export const checkSpreadsheetAccess = internalQuery({
   },
   returns: v.boolean(),
   handler: async (ctx, { userId, spreadsheetId }) => {
+    const spreadsheet = await ctx.db.get(spreadsheetId as any);
+    if (!spreadsheet) return false;
     const member = await ctx.db
-      .query("spreadsheetMembers")
-      .withIndex("by_spreadsheet_user", (q) =>
-        q.eq("spreadsheetId", spreadsheetId as any).eq("userId", userId)
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", (spreadsheet as any).workspaceId).eq("userId", userId)
       )
       .first();
     return member !== null;
@@ -294,14 +298,16 @@ export const checkAccess = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { userId, resourceType, resourceId }) => {
     if (resourceType === "doc") {
-      // Check document membership
-      const member = await ctx.db
-        .query("documentMembers")
-        .withIndex("by_document_user", (q) =>
-          q.eq("documentId", resourceId as any).eq("userId", userId)
+      // Check workspace membership (documents are accessible to all workspace members)
+      const document = await ctx.db.get(resourceId as any);
+      if (!document) return false;
+      const workspaceMember = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", (document as any).workspaceId).eq("userId", userId)
         )
         .first();
-      return member !== null;
+      return workspaceMember !== null;
     } else if (resourceType === "diagram") {
       // Check workspace membership (diagrams are accessible to all workspace members)
       const diagram = await ctx.db.get(resourceId as any);
@@ -314,22 +320,22 @@ export const checkAccess = internalQuery({
         .first();
       return workspaceMember !== null;
     } else if (resourceType === "task") {
-      // task: check project membership via task's projectId
-      const task = await ctx.db.get(resourceId as any) as any;
-      if (!task || !task.projectId) return false;
+      const task = await ctx.db.get(resourceId as any);
+      if (!task) return false;
       const member = await ctx.db
-        .query("projectMembers")
-        .withIndex("by_project_user", (q) =>
-          q.eq("projectId", task.projectId).eq("userId", userId)
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", (task as any).workspaceId).eq("userId", userId)
         )
         .first();
       return member !== null;
     } else if (resourceType === "spreadsheet") {
-      // spreadsheet: check spreadsheet membership
+      const spreadsheet = await ctx.db.get(resourceId as any);
+      if (!spreadsheet) return false;
       const member = await ctx.db
-        .query("spreadsheetMembers")
-        .withIndex("by_spreadsheet_user", (q) =>
-          q.eq("spreadsheetId", resourceId as any).eq("userId", userId)
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", (spreadsheet as any).workspaceId).eq("userId", userId)
         )
         .first();
       return member !== null;

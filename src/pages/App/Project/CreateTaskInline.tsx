@@ -8,9 +8,10 @@ import { Id } from "../../../../convex/_generated/dataModel";
 
 type CreateTaskInlineProps = {
   projectId: Id<"projects">;
+  workspaceId: Id<"workspaces">;
 };
 
-export function CreateTaskInline({ projectId }: CreateTaskInlineProps) {
+export function CreateTaskInline({ projectId, workspaceId }: CreateTaskInlineProps) {
   const [title, setTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,6 +28,7 @@ export function CreateTaskInline({ projectId }: CreateTaskInlineProps) {
 
     createTask({
       projectId,
+      workspaceId,
       title: trimmedTitle,
     })
       .then(() => {

@@ -82,3 +82,75 @@ export const migrateTaskStatusesToProject = migrations.define({
 });
 
 export const run = migrations.runner();
+
+/**
+ * Strip deprecated fields from existing documents after removing
+ * per-resource membership tables.
+ *
+ * - projects: remove linkedChannelId, memberCount
+ * - documents: remove roleCount
+ * - diagrams: remove roleCount
+ * - spreadsheets: remove roleCount
+ *
+ * Run from the Convex dashboard after deploying the schema changes.
+ */
+export const stripDeprecatedFields = migrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    const legacy = project as Record<string, unknown>;
+    if (legacy.linkedChannelId !== undefined || legacy.memberCount !== undefined) {
+      await ctx.db.replace(project._id, {
+        name: project.name,
+        description: project.description,
+        color: project.color,
+        workspaceId: project.workspaceId,
+        creatorId: project.creatorId,
+      });
+    }
+  },
+});
+
+export const stripDocumentFields = migrations.define({
+  table: "documents",
+  migrateOne: async (ctx, doc) => {
+    const legacy = doc as Record<string, unknown>;
+    if (legacy.roleCount !== undefined) {
+      await ctx.db.replace(doc._id, {
+        workspaceId: doc.workspaceId,
+        name: doc.name,
+        tags: doc.tags,
+        yjsSnapshotId: doc.yjsSnapshotId,
+      });
+    }
+  },
+});
+
+export const stripDiagramFields = migrations.define({
+  table: "diagrams",
+  migrateOne: async (ctx, doc) => {
+    const legacy = doc as Record<string, unknown>;
+    if (legacy.roleCount !== undefined) {
+      await ctx.db.replace(doc._id, {
+        workspaceId: doc.workspaceId,
+        name: doc.name,
+        tags: doc.tags,
+        yjsSnapshotId: doc.yjsSnapshotId,
+      });
+    }
+  },
+});
+
+export const stripSpreadsheetFields = migrations.define({
+  table: "spreadsheets",
+  migrateOne: async (ctx, doc) => {
+    const legacy = doc as Record<string, unknown>;
+    if (legacy.roleCount !== undefined) {
+      await ctx.db.replace(doc._id, {
+        workspaceId: doc.workspaceId,
+        name: doc.name,
+        tags: doc.tags,
+        yjsSnapshotId: doc.yjsSnapshotId,
+      });
+    }
+  },
+});

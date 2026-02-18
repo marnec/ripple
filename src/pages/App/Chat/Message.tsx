@@ -2,10 +2,9 @@ import { UserContext } from "@/pages/App/UserContext";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
-import { CornerUpLeft, ListTodo, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import React, { Suspense, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { CornerUpLeft, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import React, { Suspense, useCallback, useContext, useMemo, useRef } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,7 +16,6 @@ import {
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu";
 import { useChatContext } from "./ChatContext";
-import { CreateTaskFromMessagePopover } from "./CreateTaskFromMessagePopover";
 import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
@@ -36,18 +34,14 @@ const QUICK_EMOJIS = [
 
 type MessageProps = {
   message: MessageWithAuthor;
-  channelId: Id<"channels">;
-  workspaceId: Id<"workspaces">;
-  onTaskCreated: (taskId: Id<"tasks">, taskTitle: string) => void;
 };
 
-export function Message({ message, channelId, workspaceId, onTaskCreated }: MessageProps) {
+export function Message({ message }: MessageProps) {
   const { author, body, userId, _creationTime } = message;
   const user = useContext(UserContext);
 
   const userIsAuthor = userId === user?._id;
   const messageRef = useRef<HTMLLIElement>(null);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
 
   const { setEditingMessage, setReplyingTo } = useChatContext()
   const deleteMessage = useMutation(api.messages.remove)
@@ -71,7 +65,6 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
   }, [message, setEditingMessage, setReplyingTo]);
 
   const handleDelete = useCallback(() => void deleteMessage({ id: message._id }), [message, deleteMessage])
-  const handleCreateTask = useCallback(() => setIsCreatingTask(true), [])
 
   const handleQuickReaction = useCallback(
     (unified: string, native: string) => {
@@ -186,27 +179,8 @@ export function Message({ message, channelId, workspaceId, onTaskCreated }: Mess
               Reply
             </ContextMenuItem>
           )}
-          <ContextMenuItem onClick={handleCreateTask}>
-            <ListTodo className="mr-2 h-4 w-4" />
-            Create task from message
-          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-
-      {isCreatingTask && (
-        <CreateTaskFromMessagePopover
-          message={message}
-          channelId={channelId}
-          workspaceId={workspaceId}
-          open={isCreatingTask}
-          onOpenChange={setIsCreatingTask}
-          anchorRef={messageRef as React.RefObject<HTMLElement>}
-          onTaskCreated={(taskId, taskTitle) => {
-            onTaskCreated(taskId, taskTitle);
-            setIsCreatingTask(false);
-          }}
-        />
-      )}
     </>
   );
 }

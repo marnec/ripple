@@ -1,23 +1,11 @@
 import { authTables } from "@convex-dev/auth/server";
 import { InviteStatus } from "@shared/enums/inviteStatus";
-import { ChannelRole, DiagramRole, DocumentRole, SpreadsheetRole, WorkspaceRole } from "@shared/enums/roles";
+import { ChannelRole, WorkspaceRole } from "@shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
 import { v, VFloat64 } from "convex/values";
 
 export const channelRoleSchema = v.union(
   ...Object.values(ChannelRole).map((role) => v.literal(role)),
-);
-
-export const documentRoleSchema = v.union(
-  ...Object.values(DocumentRole).map((role) => v.literal(role)),
-);
-
-export const diagramRoleSchema = v.union(
-  ...Object.values(DiagramRole).map((role) => v.literal(role)),
-);
-
-export const spreadsheetRoleSchema = v.union(
-  ...Object.values(SpreadsheetRole).map((role) => v.literal(role)),
 );
 
 // The schema is normally optional, but Convex Auth
@@ -108,102 +96,37 @@ export default defineSchema({
     name: v.string(),
     tags: v.optional(v.array(v.string())),
     yjsSnapshotId: v.optional(v.id("_storage")),
-    roleCount: v.object({
-      [DocumentRole.ADMIN]: v.number(),
-      [DocumentRole.MEMBER]: v.number(),
-    } satisfies Record<
-      (typeof DocumentRole)[keyof typeof DocumentRole],
-      VFloat64<number, "required">
-    >),
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
-
-  documentMembers: defineTable({
-    documentId: v.id("documents"),
-    userId: v.id("users"),
-    role: documentRoleSchema,
-  })
-    .index("by_user", ["userId"])
-    .index("by_document", ["documentId"])
-    .index("by_document_user", ["documentId", "userId"])
-    .index("by_document_role", ["documentId", "role"]),
 
   diagrams: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     tags: v.optional(v.array(v.string())),
     yjsSnapshotId: v.optional(v.id("_storage")),
-    roleCount: v.optional(v.object({
-      [DiagramRole.ADMIN]: v.number(),
-      [DiagramRole.MEMBER]: v.number(),
-    } satisfies Record<
-      (typeof DiagramRole)[keyof typeof DiagramRole],
-      VFloat64<number, "required">
-    >)),
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
-
-  diagramMembers: defineTable({
-    diagramId: v.id("diagrams"),
-    userId: v.id("users"),
-    role: diagramRoleSchema,
-  })
-    .index("by_user", ["userId"])
-    .index("by_diagram", ["diagramId"])
-    .index("by_diagram_user", ["diagramId", "userId"])
-    .index("by_diagram_role", ["diagramId", "role"]),
 
   spreadsheets: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
     tags: v.optional(v.array(v.string())),
     yjsSnapshotId: v.optional(v.id("_storage")),
-    roleCount: v.optional(v.object({
-      [SpreadsheetRole.ADMIN]: v.number(),
-      [SpreadsheetRole.MEMBER]: v.number(),
-    } satisfies Record<
-      (typeof SpreadsheetRole)[keyof typeof SpreadsheetRole],
-      VFloat64<number, "required">
-    >)),
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
-
-  spreadsheetMembers: defineTable({
-    spreadsheetId: v.id("spreadsheets"),
-    userId: v.id("users"),
-    role: spreadsheetRoleSchema,
-  })
-    .index("by_user", ["userId"])
-    .index("by_spreadsheet", ["spreadsheetId"])
-    .index("by_spreadsheet_user", ["spreadsheetId", "userId"])
-    .index("by_spreadsheet_role", ["spreadsheetId", "role"]),
 
   projects: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
     color: v.string(), // Tailwind color class like "bg-blue-500"
     workspaceId: v.id("workspaces"),
-    linkedChannelId: v.id("channels"), // auto-created discussion channel
     creatorId: v.id("users"), // the user who created the project (the admin)
-    memberCount: v.number(), // total members including creator
   })
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
-
-  projectMembers: defineTable({
-    projectId: v.id("projects"),
-    workspaceId: v.id("workspaces"), // denormalized for efficient queries
-    userId: v.id("users"),
-    // No role field - per CONTEXT.md: "No project-specific roles for v1 - just membership"
-    // The creator stored in projects.creatorId is the only one who can manage the project
-  })
-    .index("by_user", ["userId"])
-    .index("by_project", ["projectId"])
-    .index("by_project_user", ["projectId", "userId"])
-    .index("by_workspace_user", ["workspaceId", "userId"]),
 
   taskStatuses: defineTable({
     projectId: v.id("projects"),

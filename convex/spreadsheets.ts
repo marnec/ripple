@@ -1,7 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { SpreadsheetRole } from "@shared/enums";
 import { DEFAULT_SPREADSHEET_NAME } from "@shared/constants";
 
 const spreadsheetValidator = v.object({
@@ -11,10 +10,6 @@ const spreadsheetValidator = v.object({
   name: v.string(),
   tags: v.optional(v.array(v.string())),
   yjsSnapshotId: v.optional(v.id("_storage")),
-  roleCount: v.optional(v.object({
-    admin: v.number(),
-    member: v.number(),
-  })),
 });
 
 export const list = query({
@@ -104,16 +99,6 @@ export const create = mutation({
     const spreadsheetId = await ctx.db.insert("spreadsheets", {
       workspaceId,
       name: spreadsheetName,
-      roleCount: {
-        [SpreadsheetRole.ADMIN]: 1,
-        [SpreadsheetRole.MEMBER]: 0,
-      },
-    });
-
-    await ctx.db.insert("spreadsheetMembers", {
-      spreadsheetId,
-      userId,
-      role: SpreadsheetRole.ADMIN,
     });
 
     return spreadsheetId;
@@ -174,13 +159,6 @@ export const remove = mutation({
       throw new ConvexError(
         `User="${userId}" is not a member of workspace="${spreadsheet.workspaceId}"`,
       );
-
-    // Clean up spreadsheet members
-    const spreadsheetMembers = await ctx.db
-      .query("spreadsheetMembers")
-      .withIndex("by_spreadsheet", (q) => q.eq("spreadsheetId", id))
-      .collect();
-    await Promise.all(spreadsheetMembers.map((member) => ctx.db.delete(member._id)));
 
     // Clean up cached cell references
     const cellRefs = await ctx.db

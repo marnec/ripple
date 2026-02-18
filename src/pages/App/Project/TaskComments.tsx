@@ -20,7 +20,7 @@ import { getUserDisplayName } from "@shared/displayName";
 type TaskCommentsProps = {
   taskId: Id<"tasks">;
   currentUserId: Id<"users">;
-  projectId: Id<"projects">;
+  workspaceId: Id<"workspaces">;
 };
 
 // Parse comment body - backwards compatible with plain text
@@ -45,9 +45,9 @@ function isEditorEmpty(blocks: unknown[]): boolean {
   return false;
 }
 
-export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsProps) {
+export function TaskComments({ taskId, currentUserId, workspaceId }: TaskCommentsProps) {
   const comments = useQuery(api.taskComments.list, { taskId });
-  const projectMembers = useQuery(api.projectMembers.membersByProject, { projectId });
+  const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const createComment = useMutation(api.taskComments.create);
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);
@@ -88,7 +88,7 @@ export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsP
   };
 
   // Loading state
-  if (comments === undefined || projectMembers === undefined) {
+  if (comments === undefined || workspaceMembers === undefined) {
     return <LoadingSpinner />;
   }
 
@@ -127,8 +127,7 @@ export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsP
                   <EditCommentEditor
                     commentId={comment._id}
                     initialBody={comment.body}
-                    projectId={projectId}
-                    projectMembers={projectMembers}
+                    workspaceMembers={workspaceMembers}
                     onSave={(id, body) => {
                       void updateComment({ id, body }).then(() => {
                         setEditingCommentId(null);
@@ -185,8 +184,8 @@ export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsP
             <SuggestionMenuController
               triggerCharacter="@"
               getItems={async (query) => {
-                if (!projectMembers) return [];
-                return projectMembers
+                if (!workspaceMembers) return [];
+                return workspaceMembers
                   .filter((m) =>
                     m.name?.toLowerCase().includes(query.toLowerCase())
                   )
@@ -197,7 +196,7 @@ export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsP
                       editor.insertInlineContent([
                         {
                           type: "userMention",
-                          props: { userId: m.userId },
+                          props: { userId: m._id },
                         },
                         " ",
                       ]);
@@ -210,7 +209,7 @@ export function TaskComments({ taskId, currentUserId, projectId }: TaskCommentsP
                         </AvatarFallback>
                       </Avatar>
                     ),
-                    group: "Project members",
+                    group: "Workspace members",
                   }));
               }}
             />
@@ -248,8 +247,7 @@ function CommentBody({ body }: { body: string }) {
 type EditCommentEditorProps = {
   commentId: Id<"taskComments">;
   initialBody: string;
-  projectId: Id<"projects">;
-  projectMembers: Array<{ userId: Id<"users">; name: string; image?: string }>;
+  workspaceMembers: Array<{ _id: Id<"users">; name?: string; image?: string }>;
   onSave: (id: Id<"taskComments">, body: string) => void;
   onCancel: () => void;
 };
@@ -257,7 +255,7 @@ type EditCommentEditorProps = {
 function EditCommentEditor({
   commentId,
   initialBody,
-  projectMembers,
+  workspaceMembers,
   onSave,
   onCancel,
 }: EditCommentEditorProps) {
@@ -285,8 +283,8 @@ function EditCommentEditor({
           <SuggestionMenuController
             triggerCharacter="@"
             getItems={async (query) => {
-              if (!projectMembers) return [];
-              return projectMembers
+              if (!workspaceMembers) return [];
+              return workspaceMembers
                 .filter((m) =>
                   m.name?.toLowerCase().includes(query.toLowerCase())
                 )
@@ -297,7 +295,7 @@ function EditCommentEditor({
                     editEditor.insertInlineContent([
                       {
                         type: "userMention",
-                        props: { userId: m.userId },
+                        props: { userId: m._id },
                       },
                       " ",
                     ]);
@@ -310,7 +308,7 @@ function EditCommentEditor({
                       </AvatarFallback>
                     </Avatar>
                   ),
-                  group: "Project members",
+                  group: "Workspace members",
                 }));
             }}
           />

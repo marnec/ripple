@@ -2,20 +2,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
-import { getUserDisplayName } from "@shared/displayName";
 import { useMutation, useQuery } from "convex/react";
-import { Trash2, UserMinus, UserPlus } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -59,22 +51,17 @@ function ProjectSettingsContent({
 
   // Queries
   const project = useQuery(api.projects.get, { id: projectId });
-  const projectMembers = useQuery(api.projectMembers.membersByProject, { projectId });
-  const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const currentUser = useQuery(api.users.viewer);
 
   // Mutations
   const updateProject = useMutation(api.projects.update);
   const deleteProject = useMutation(api.projects.remove);
-  const addMember = useMutation(api.projectMembers.addToProject);
-  const removeMember = useMutation(api.projectMembers.removeFromProject);
 
   // Local state
   const [projectName, setProjectName] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
 
-  if (project === undefined || projectMembers === undefined || workspaceMembers === undefined || currentUser === undefined) {
+  if (project === undefined || currentUser === undefined) {
     return (
       <div className="flex items-center justify-center h-full">
         <LoadingSpinner />
@@ -92,11 +79,6 @@ function ProjectSettingsContent({
   // Check if current user is the project creator (admin)
   const isCreator = currentUser._id === project.creatorId;
 
-  // Find workspace members not in project (for add dropdown)
-  // workspaceMembers returns user objects where _id is the user's _id
-  const projectMemberIds = new Set(projectMembers.map((m) => m.userId));
-  const availableMembers = workspaceMembers.filter((m) => !projectMemberIds.has(m._id));
-
   const handleSaveDetails = async () => {
     try {
       await updateProject({
@@ -110,37 +92,6 @@ function ProjectSettingsContent({
     } catch (error) {
       toast({
         title: "Error updating project",
-        description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleAddMember = async () => {
-    if (!selectedUserId) return;
-    try {
-      await addMember({
-        userId: selectedUserId as Id<"users">,
-        projectId,
-      });
-      toast({ title: "Member added" });
-      setSelectedUserId("");
-    } catch (error) {
-      toast({
-        title: "Error adding member",
-        description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleRemoveMember = async (userId: Id<"users">) => {
-    try {
-      await removeMember({ userId, projectId });
-      toast({ title: "Member removed" });
-    } catch (error) {
-      toast({
-        title: "Error removing member",
         description: error instanceof Error ? error.message : "Please try again",
         variant: "destructive",
       });
@@ -209,71 +160,6 @@ function ProjectSettingsContent({
         </div>
       </section>
 
-      <Separator className="my-6" />
-
-      {/* Members Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Members</h2>
-
-        {/* Add Member - only visible to creator */}
-        {isCreator && availableMembers.length > 0 && (
-          <div className="flex gap-2 mb-4">
-            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select a member to add" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableMembers.map((member) => (
-                  <SelectItem key={member._id} value={member._id}>
-                    {getUserDisplayName(member)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={() => void handleAddMember()} disabled={!selectedUserId}>
-              <UserPlus className="w-4 h-4 mr-2" />
-              Add
-            </Button>
-          </div>
-        )}
-
-        {/* Member List */}
-        <div className="space-y-2">
-          {projectMembers.map((member) => {
-            // Determine if remove button should be shown:
-            // 1. Current user must be the creator (admin)
-            // 2. Cannot remove the creator (they must delete the project)
-            // 3. Cannot remove yourself (members cannot remove themselves per CONTEXT.md)
-            const canRemove = isCreator && !member.isCreator && member.userId !== currentUser._id;
-
-            return (
-              <div
-                key={member._id}
-                className="flex items-center justify-between p-3 rounded-lg border"
-              >
-                <div>
-                  <span className="font-medium">{member.name}</span>
-                  {member.isCreator && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      Creator
-                    </span>
-                  )}
-                </div>
-                {canRemove && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => void handleRemoveMember(member.userId)}
-                  >
-                    <UserMinus className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
       {/* Danger Zone - only visible to creator */}
       {isCreator && (
         <>
@@ -286,7 +172,7 @@ function ProjectSettingsContent({
               Delete Project
             </Button>
             <p className="text-sm text-muted-foreground mt-2">
-              This will permanently delete the project and its linked discussion channel.
+              This will permanently delete the project and all its tasks.
             </p>
           </section>
         </>
