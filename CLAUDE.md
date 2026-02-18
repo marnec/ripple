@@ -70,10 +70,13 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 ## PartyKit / Yjs Snapshot Encoding
 
 - Snapshots are saved with `Y.encodeStateAsUpdateV2` and loaded with `Y.applyUpdateV2`
-- **Do not revert to V1** (`encodeStateAsUpdate` / `applyUpdate`) — Yjs V1 binary patterns trigger a TCMalloc memory corruption bug in workerd, causing the process to crash with `Unable to allocate <huge number> (new failed)`
 - **Do not use y-partykit's `load` callback** — it internally V1-encodes the returned Y.Doc (`encodeStateAsUpdate` + `applyUpdate`), bypassing our V2 encoding. Instead, create the doc empty and apply V2 bytes directly via `Y.applyUpdateV2`
 - All three read sites must stay in sync: `partykit/server.ts` (load), `DiagramPage.tsx` (cold-start), `DocumentEditor.tsx` (cold-start)
 - To wipe snapshot data: locally `rm -rf .partykit/state`; in prod clear `yjsSnapshotId` fields + delete the linked `_storage` blobs from Convex
+
+### workerd TCMalloc crash (dev-only)
+
+The local `partykit dev` server crashes with `Unable to allocate <huge number> (new failed)` — a TCMalloc memory corruption bug in the workerd binary bundled with partykit 0.0.115. This is **dev-environment only**; production on Cloudflare's edge is not affected (each Durable Object runs in its own isolate with a current workerd version). The crash persists across workerd versions (tested 2024-07-18, 2025-01-29, 2025-02-24) and is likely platform-specific (Fedora 42, kernel 6.18). The `dev:partykit` script auto-restarts on crash. A miniflare override to 3.20250224.0 is kept in `package.json` overrides as a best-effort mitigation.
 
 ## Convex Guidelines
 
