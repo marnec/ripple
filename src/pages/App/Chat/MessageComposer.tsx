@@ -11,7 +11,7 @@ import {
   UnderlineIcon,
 } from "@radix-ui/react-icons";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
@@ -21,12 +21,13 @@ import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { File, FolderKanban, PenTool, Phone, Table2, User } from "lucide-react";
+import { File, FolderKanban, ImageIcon, PenTool, Phone, Table2, User } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@shared/displayName";
+import { useUploadFile } from "../../../hooks/use-upload-file";
 
 interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
@@ -54,7 +55,7 @@ const editorClear = (editor: BlockNoteEditor<any, any, any>) => {
   editor.removeBlocks(editor.document.map((b) => b.id));
 };
 
-const { audio: _audio, image: _image, heading: _heading, ...remainingBlockSpecs } = defaultBlockSpecs;
+const { audio: _audio, heading: _heading, ...remainingBlockSpecs } = defaultBlockSpecs;
 const schema = BlockNoteSchema.create({
   blockSpecs: { ...remainingBlockSpecs },
   inlineContentSpecs: {
@@ -144,6 +145,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const currentUser = useQuery(api.users.viewer);
 
+  const uploadFile = useUploadFile(workspaceId);
+
   // Name lookup maps for mention text extraction (used in send + reply preview)
   const { userNames, projectNames } = useMemo(() => {
     const u = new Map<string, string>();
@@ -170,8 +173,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       schema,
       trailingBlock: false,
       dictionary,
+      uploadFile,
     }),
-    [],
+    [uploadFile],
   );
 
   useEffect(() => {
@@ -187,6 +191,25 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, [editingMessage]);
 
   const editor = useCreateBlockNote(editorConfig);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadFile) return;
+    try {
+      const url = await uploadFile(file);
+      editor.insertBlocks(
+        [{ type: "image" as const, props: { url } }],
+        editor.getTextCursorPosition().block,
+        "after"
+      );
+    } catch (err) {
+      console.error("Image upload failed:", err);
+    }
+    // Reset so the same file can be re-selected
+    e.target.value = "";
+  };
 
   const [isBold, setIsBold] = useState(false);
   const [isItalic, setIsItalic] = useState(false);
@@ -305,6 +328,23 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           >
             <Link1Icon />
           </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            title="Attach image"
+            disabled={!uploadFile}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <ImageIcon className="h-4 w-4" />
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => void handleAttachImage(e)}
+          />
         </div>
         {showCallButton && (
           <Button variant="ghost" size="icon" onClick={() => void navigate("videocall")} title="Start a call">
@@ -329,7 +369,6 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           className="w-full grow min-w-0 box-border border rounded-md px-2 transition-shadow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1"
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
-          filePanel={false}
           emojiPicker={false}
           slashMenu={false}
           formattingToolbar={false}

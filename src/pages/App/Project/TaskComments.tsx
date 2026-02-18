@@ -15,6 +15,7 @@ import { useTheme } from "next-themes";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { getUserDisplayName } from "@shared/displayName";
+import { useUploadFile } from "../../../hooks/use-upload-file";
 
 
 type TaskCommentsProps = {
@@ -52,6 +53,8 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);
 
+  const uploadFile = useUploadFile(workspaceId);
+
   const [editingCommentId, setEditingCommentId] = useState<Id<"taskComments"> | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
 
@@ -60,6 +63,7 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
   // New comment editor
   const editor = useCreateBlockNote({
     schema: taskCommentSchema,
+    uploadFile,
   });
 
   // Handle submitting new comment
@@ -128,6 +132,7 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
                     commentId={comment._id}
                     initialBody={comment.body}
                     workspaceMembers={workspaceMembers}
+                    uploadFile={uploadFile}
                     onSave={(id, body) => {
                       void updateComment({ id, body }).then(() => {
                         setEditingCommentId(null);
@@ -248,6 +253,7 @@ type EditCommentEditorProps = {
   commentId: Id<"taskComments">;
   initialBody: string;
   workspaceMembers: Array<{ _id: Id<"users">; name?: string; image?: string }>;
+  uploadFile?: (file: File) => Promise<string>;
   onSave: (id: Id<"taskComments">, body: string) => void;
   onCancel: () => void;
 };
@@ -256,6 +262,7 @@ function EditCommentEditor({
   commentId,
   initialBody,
   workspaceMembers,
+  uploadFile,
   onSave,
   onCancel,
 }: EditCommentEditorProps) {
@@ -264,6 +271,7 @@ function EditCommentEditor({
   const editEditor = useCreateBlockNote({
     schema: taskCommentSchema,
     initialContent: parseCommentBody(initialBody),
+    uploadFile,
   });
 
   const handleSave = () => {

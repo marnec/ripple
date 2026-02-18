@@ -19,6 +19,7 @@ import type * as diagrams from "../diagrams.js";
 import type * as documents from "../documents.js";
 import type * as emails from "../emails.js";
 import type * as http from "../http.js";
+import type * as medias from "../medias.js";
 import type * as messageReactions from "../messageReactions.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   documents: typeof documents;
   emails: typeof emails;
   http: typeof http;
+  medias: typeof medias;
   messageReactions: typeof messageReactions;
   messages: typeof messages;
   migrations: typeof migrations;

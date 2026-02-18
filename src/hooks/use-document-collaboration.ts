@@ -17,6 +17,7 @@ export interface UseDocumentCollaborationOptions<
   schema: BlockNoteSchema<BSchema, ISchema, SSchema>;
   resourceType?: "doc" | "diagram" | "task";
   enabled?: boolean;
+  uploadFile?: (file: File) => Promise<string>;
 }
 
 export interface UseDocumentCollaborationResult<
@@ -43,6 +44,7 @@ export function useDocumentCollaboration<
   schema,
   resourceType = "doc",
   enabled = true,
+  uploadFile,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
   const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
     resourceType,
@@ -86,6 +88,7 @@ export function useDocumentCollaboration<
   const editor = useCreateBlockNote(
     {
       schema,
+      uploadFile,
       collaboration: {
         provider: provider ?? { awareness: localAwareness },
         fragment: yDoc.getXmlFragment("document-store"),
@@ -95,7 +98,7 @@ export function useDocumentCollaboration<
         },
       },
     },
-    [provider, localAwareness, userName, userColor, schema]
+    [provider, localAwareness, userName, userColor, schema, uploadFile]
   );
 
   // Loading completes when EITHER provider syncs OR IndexedDB syncs

@@ -190,6 +190,18 @@ export default defineSchema({
     .index("by_spreadsheet", ["spreadsheetId"])
     .index("by_spreadsheet_cellRef", ["spreadsheetId", "cellRef"]),
 
+  medias: defineTable({
+    storageId: v.id("_storage"),
+    workspaceId: v.id("workspaces"),
+    uploadedBy: v.id("users"),
+    fileName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    type: v.union(v.literal("image")), // extend later: "video", "file", etc.
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_storage_id", ["storageId"]),
+
   collaborationTokens: defineTable({
     token: v.string(),
     userId: v.id("users"),

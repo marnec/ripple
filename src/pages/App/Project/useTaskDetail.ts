@@ -5,6 +5,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
+import { useUploadFile } from "../../../hooks/use-upload-file";
 
 export function useTaskDetail({
   taskId,
@@ -30,6 +31,8 @@ export function useTaskDetail({
   const [titleValue, setTitleValue] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
 
+  const uploadFile = useUploadFile(workspaceId);
+
   // Collaborative editor - Yjs handles sync automatically
   const { editor, isLoading: editorLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
     documentId: taskId ?? "",
@@ -38,6 +41,7 @@ export function useTaskDetail({
     schema: taskDescriptionSchema,
     resourceType: "task",
     enabled: !!taskId,
+    uploadFile,
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);

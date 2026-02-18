@@ -25,6 +25,7 @@ import {
 } from "../../../components/ui/avatar";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
+import { useUploadFile } from "../../../hooks/use-upload-file";
 import { getUserColor } from "../../../lib/user-colors";
 import { ActiveUsers } from "./ActiveUsers";
 import { CellRefDialog } from "./CellRefDialog";
@@ -154,11 +155,14 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     spreadsheetName: string;
   } | null>(null);
 
+  const uploadFile = useUploadFile(document?.workspaceId);
+
   const { editor, isLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
     documentId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "anonymous",
     schema,
+    uploadFile,
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);

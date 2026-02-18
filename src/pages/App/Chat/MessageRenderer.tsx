@@ -167,6 +167,18 @@ function BlockRenderer({ block }: { block: Block }) {
     case "divider":
       return <hr className="my-2 border-muted-foreground/20" />;
 
+    case "image": {
+      const url = (block.props as { url?: string })?.url;
+      const caption = (block.props as { caption?: string })?.caption;
+      if (!url) return null;
+      return (
+        <figure className="my-2">
+          <img src={url} alt={caption || ""} className="max-w-full rounded-md max-h-96" loading="lazy" />
+          {caption && <figcaption className="text-xs text-muted-foreground mt-1">{caption}</figcaption>}
+        </figure>
+      );
+    }
+
     case "table":
       return <TableRenderer content={block.content} />;
 
