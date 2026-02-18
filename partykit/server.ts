@@ -6,7 +6,7 @@ import type { ErrorCode, ServerMessage } from "@shared/protocol";
 import { parseCellName, parseRange } from "@shared/cellRef";
 
 // Constants
-const PERIODIC_SAVE_INTERVAL = 30_000; // 30 seconds
+const PERIODIC_SAVE_INTERVAL = 120_000; // 2 minutes
 const DISCONNECT_DEBOUNCE = 7_000; // 7 seconds
 const CELL_REF_DEBOUNCE = 2_000; // 2 seconds
 const CELL_REF_CACHE_TTL = 60_000; // 1 minute
@@ -23,6 +23,8 @@ export default class CollaborationServer implements Party.Server {
   private saveAlarmScheduled = false;
   private periodicAlarmScheduled = false;
   private yDocRef: Y.Doc | null = null;
+  private dirty = false; // Tracks whether the doc has changed since last save
+  private cachedRoomId: string | null = null; // Avoids this.room.id in alarm context
 
   // Cell reference observer state (spreadsheet rooms only)
   private cellRefObserver: ((events: Y.YEvent<any>[], tx: Y.Transaction) => void) | null = null;
@@ -38,13 +40,34 @@ export default class CollaborationServer implements Party.Server {
    * so the doc is cached in y-partykit's internal Map by the time the
    * first WebSocket connects — eliminating the async window that causes
    * "Connection dropped during Yjs setup" failures.
+   *
+   * IMPORTANT: We do NOT use y-partykit's `load` callback because it
+   * internally V1-encodes the returned Y.Doc (encodeStateAsUpdate + applyUpdate),
+   * which triggers a TCMalloc memory corruption bug in workerd. Instead we
+   * create the doc empty via unstable_getYDoc, then apply V2 bytes directly.
    */
   async onStart() {
     const roomId = this.room.id;
+    this.cachedRoomId = roomId;
     await this.room.storage.put("roomId", roomId);
 
     try {
-      this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
+      // Create empty Y.Doc in y-partykit's cache (no load callback = no V1 encoding)
+      this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions());
+
+      // Load V2 snapshot from Convex and apply directly — bypasses y-partykit's
+      // internal V1 encodeStateAsUpdate/applyUpdate that causes workerd OOM crashes
+      const snapshotV2 = await this.fetchSnapshotV2FromConvex(roomId);
+      if (snapshotV2) {
+        Y.applyUpdateV2(this.yDocRef, snapshotV2);
+        console.log(`Loaded snapshot for room ${roomId}`);
+      }
+
+      // Track document changes so we only save when dirty
+      this.yDocRef.on("update", () => {
+        this.dirty = true;
+      });
+
       console.log(`Pre-loaded Y.Doc for room ${roomId}`);
 
       // Attach cell ref observer early for spreadsheet rooms
@@ -57,30 +80,27 @@ export default class CollaborationServer implements Party.Server {
   }
 
   /**
-   * Get y-partykit options with cold-start loading from Convex.
+   * Get y-partykit options.
+   *
+   * NOTE: No `load` callback and no `persist`. We handle persistence ourselves
+   * via Convex snapshot save/load. The `load` callback is intentionally omitted
+   * because y-partykit internally V1-encodes the returned Y.Doc, which triggers
+   * a workerd TCMalloc memory corruption bug. Without `persist`, the doc stays
+   * cached in memory between connections so auto-reconnects resolve instantly.
    */
-  private getYjsOptions(roomId: string): YPartyKitOptions {
-    return {
-      // NOTE: Do NOT set `persist` here. We handle persistence ourselves via
-      // Convex snapshot save/load. With `persist: { mode: "snapshot" }`,
-      // y-partykit destroys and evicts the Y.Doc from its internal cache the
-      // instant the last connection closes. This forces a full async re-load
-      // from Convex on the next connection, creating a window during which the
-      // new connection can also drop (e.g. React StrictMode mount/unmount/mount
-      // cycle), causing a cascading failure where no sync ever completes.
-      // Without `persist`, the doc stays cached in memory between connections
-      // so auto-reconnects resolve the doc instantly with zero async wait.
-      load: async () => {
-        return this.loadSnapshotFromConvex(roomId);
-      },
-    };
+  private getYjsOptions(): YPartyKitOptions {
+    return {};
   }
 
   /**
-   * Load Yjs snapshot from Convex on cold-start.
+   * Fetch raw V2-encoded Yjs snapshot bytes from Convex.
    * Returns null if no snapshot exists (new document) or on error.
+   *
+   * Unlike the old loadSnapshotFromConvex which returned a Y.Doc (triggering
+   * y-partykit's internal V1 re-encoding), this returns raw bytes so callers
+   * can apply them directly via Y.applyUpdateV2.
    */
-  private async loadSnapshotFromConvex(roomId: string): Promise<Y.Doc | null> {
+  private async fetchSnapshotV2FromConvex(roomId: string): Promise<Uint8Array | null> {
     const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
     const secret = this.room.env.PARTYKIT_SECRET as string;
 
@@ -101,7 +121,6 @@ export default class CollaborationServer implements Party.Server {
       );
 
       if (response.status === 404) {
-        // No snapshot exists -- new document
         console.log(`No snapshot found for room ${roomId} (new document)`);
         return null;
       }
@@ -112,12 +131,7 @@ export default class CollaborationServer implements Party.Server {
       }
 
       const buffer = await response.arrayBuffer();
-      const update = new Uint8Array(buffer);
-
-      const yDoc = new Y.Doc();
-      Y.applyUpdateV2(yDoc, update);
-      console.log(`Loaded snapshot for room ${roomId}`);
-      return yDoc;
+      return new Uint8Array(buffer);
     } catch (error) {
       console.error(`Error loading snapshot for room ${roomId}:`, error);
       return null;
@@ -188,6 +202,13 @@ export default class CollaborationServer implements Party.Server {
         return;
       }
 
+      // Skip save if nothing changed since last save — avoids unnecessary fetch()
+      // calls that accumulate and eventually trigger a workerd TCMalloc corruption bug
+      if (!this.dirty) {
+        console.log(`Skipping save for room ${roomId}: no changes since last save`);
+        return;
+      }
+
       // Use V2 encoding: more compact and avoids a workerd TCMalloc corruption
       // bug triggered by certain Yjs V1 byte patterns in large fetch bodies.
       const updateV2 = Y.encodeStateAsUpdateV2(this.yDocRef);
@@ -230,6 +251,7 @@ export default class CollaborationServer implements Party.Server {
         return;
       }
 
+      this.dirty = false;
       console.log(`Snapshot saved for room ${roomId}`);
     } catch (error) {
       console.error(`Error saving snapshot for room ${roomId}:`, error);
@@ -372,21 +394,25 @@ export default class CollaborationServer implements Party.Server {
   }
 
   /**
-   * Auth gate: Verify token before allowing Yjs connection.
-   *
-   * Flow:
-   * 1. Extract token from connection URL query params
-   * 2. Call Convex HTTP endpoint to verify token and room access
-   * 3. If valid, allow connection and delegate to y-partykit
-   * 4. If invalid, close connection
+   * Safe room ID accessor. Uses the in-memory cache set during onStart.
+   * Falls back to this.room.id, which throws in onAlarm context but is fine
+   * everywhere else. Never accesses durable storage (async).
    */
+  private getRoomId(): string {
+    return this.cachedRoomId ?? this.room.id;
+  }
+
   async onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
+    // Use cached roomId — this.room.id can throw if an alarm handler is
+    // concurrently executing in the same Durable Object isolate.
+    const roomId = this.getRoomId();
+
     // Extract token from query params
     const url = new URL(ctx.request.url);
     const token = url.searchParams.get("token");
 
     if (!token) {
-      console.error("Missing auth token for room", this.room.id);
+      console.error("Missing auth token for room", roomId);
       const errorCode: ErrorCode = "AUTH_MISSING";
       const errorMessage: ServerMessage = { type: "auth_error", code: errorCode };
       conn.send(JSON.stringify(errorMessage));
@@ -412,12 +438,12 @@ export default class CollaborationServer implements Party.Server {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify({ roomId: this.room.id }),
+        body: JSON.stringify({ roomId }),
       });
 
       if (!response.ok) {
         console.error(
-          `Auth failed for room ${this.room.id}: ${response.status} ${response.statusText}`
+          `Auth failed for room ${roomId}: ${response.status} ${response.statusText}`
         );
         const errorCode: ErrorCode = "AUTH_INVALID";
         const errorMessage: ServerMessage = { type: "auth_error", code: errorCode };
@@ -430,7 +456,7 @@ export default class CollaborationServer implements Party.Server {
         userId: string;
         userName: string;
       };
-      console.log(`User ${userData.userName} (${userData.userId}) connected to room ${this.room.id}`);
+      console.log(`User ${userData.userName} (${userData.userId}) connected to room ${roomId}`);
 
       // Store authenticated user identity on connection for downstream permission re-validation
       conn.setState({
@@ -438,23 +464,19 @@ export default class CollaborationServer implements Party.Server {
         userName: userData.userName,
       });
 
-      // Cache roomId in durable storage for alarm handler access
-      const roomId = this.room.id;
-      await this.room.storage.put("roomId", roomId);
-
-      // Auth successful - delegate to y-partykit with load callback.
+      // Auth successful - delegate to y-partykit (no load callback — doc already hydrated in onStart).
       // If the client disconnects mid-setup (fast navigation), y-partykit throws
       // "Network connection lost" at the workerd level. Catch it gracefully —
       // onClose will still fire and handle cleanup/save scheduling.
       try {
-        await onConnect(conn, this.room, this.getYjsOptions(roomId));
+        await onConnect(conn, this.room, this.getYjsOptions());
       } catch {
         console.log(`Connection dropped during Yjs setup for room ${roomId}`);
         // Ensure yDocRef is set even on failure — the doc was likely loaded
         // by onStart() or a previous connection. This keeps saves working.
         if (!this.yDocRef) {
           try {
-            this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
+            this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions());
           } catch { /* doc not loaded yet — will be loaded on next connection */ }
         }
         return;
@@ -462,7 +484,11 @@ export default class CollaborationServer implements Party.Server {
 
       // Ensure yDocRef is set (might already be set by onStart)
       if (!this.yDocRef) {
-        this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions(roomId));
+        this.yDocRef = await unstable_getYDoc(this.room, this.getYjsOptions());
+        // Wire up dirty tracking if we just got the doc reference
+        this.yDocRef.on("update", () => {
+          this.dirty = true;
+        });
       }
 
       // Attach cell ref observer for spreadsheet rooms (might already be attached by onStart)
@@ -475,7 +501,7 @@ export default class CollaborationServer implements Party.Server {
         await this.room.storage.put("alarmType", ALARM_TYPE_PERIODIC);
         await this.room.storage.setAlarm(Date.now() + PERIODIC_SAVE_INTERVAL);
         this.periodicAlarmScheduled = true;
-        console.log(`Scheduled periodic save alarm for room ${this.room.id}`);
+        console.log(`Scheduled periodic save alarm for room ${roomId}`);
       }
     } catch (error) {
       // If the connection was already dropped (user navigated away fast),
@@ -487,7 +513,7 @@ export default class CollaborationServer implements Party.Server {
         conn.send(JSON.stringify(errorMessage));
         conn.close(1011, errorCode);
       } catch {
-        console.log(`Connection already closed for room ${this.room.id}, skipping error send`);
+        console.log(`Connection already closed for room ${roomId}, skipping error send`);
       }
     }
   }
@@ -538,7 +564,9 @@ export default class CollaborationServer implements Party.Server {
       }
 
       if (connectionCount === 0) {
-        // Still no connections -- save snapshot and clean up observers
+        // Still no connections -- save final snapshot and clean up observers.
+        // Force dirty so the disconnect save always persists any pending state.
+        this.dirty = true;
         console.log(`Debounce expired for room ${roomId}, saving final snapshot`);
         await this.saveSnapshotToConvex(roomId);
         this.cleanupCellRefObserver();
@@ -559,8 +587,13 @@ export default class CollaborationServer implements Party.Server {
 
       if (connectionCount > 0) {
         console.log(`Periodic save triggered for room ${roomId}`);
+        const wasDirty = this.dirty;
         await this.saveSnapshotToConvex(roomId);
-        await this.checkPermissions(roomId);
+        // Only check permissions when we actually saved — avoids extra fetch()
+        // calls that accumulate and trigger workerd TCMalloc corruption
+        if (wasDirty) {
+          await this.checkPermissions(roomId);
+        }
         // Reschedule next periodic save
         await this.room.storage.put("alarmType", ALARM_TYPE_PERIODIC);
         await this.room.storage.setAlarm(Date.now() + PERIODIC_SAVE_INTERVAL);

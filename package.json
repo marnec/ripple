@@ -7,7 +7,7 @@
     "dev": "npm-run-all --parallel dev:frontend dev:backend dev:partykit",
     "dev:frontend": "vite --open",
     "dev:backend": "convex dev",
-    "dev:partykit": "partykit dev",
+    "dev:partykit": "while true; do partykit dev; echo '[partykit] workerd crashed, restarting in 2s...'; sleep 2; done",
     "predev": "convex dev --until-success && node setup.mjs --once && convex dashboard",
     "build": "tsc -b && vite build",
     "lint": "tsc -b && eslint . --report-unused-disable-directives --max-warnings 0",
@@ -86,6 +86,9 @@
   "overrides": {
     "y-excalidraw": {
       "@excalidraw/excalidraw": "$@excalidraw/excalidraw"
+    },
+    "partykit": {
+      "miniflare": "3.20250224.0"
     }
   },
   "devDependencies": {
