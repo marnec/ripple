@@ -15,6 +15,7 @@ type InlineContent =
   | { type: "userMention"; props: { userId: string } }
   | { type: "taskMention"; props: { taskId: string; taskTitle?: string } }
   | { type: "projectReference"; props: { projectId: string } }
+  | { type: "resourceReference"; props: { resourceId: string; resourceType: string; resourceName: string } }
   | { type: string; [key: string]: unknown };
 
 /**
@@ -88,6 +89,11 @@ function inlineContentToPlainText(
         const mention = item as { type: "projectReference"; props: { projectId: string } };
         const name = projectNames?.get(mention.props.projectId);
         text += `#${name || "project"}`;
+        break;
+      }
+      case "resourceReference": {
+        const ref = item as { type: "resourceReference"; props: { resourceName?: string } };
+        text += `#${ref.props.resourceName || "resource"}`;
         break;
       }
     }
@@ -223,6 +229,47 @@ export function extractMentionedUserIds(documentJson: string): string[] {
     return Array.from(userIds);
   } catch {
     // Gracefully handle parse failures - return empty array
+    return [];
+  }
+}
+
+/**
+ * Extract all resource references (documents, diagrams, spreadsheets) from BlockNote JSON.
+ * Returns array of { id, type } pairs.
+ */
+export function extractResourceReferenceIds(documentJson: string): Array<{ id: string; type: string }> {
+  try {
+    const blocks: BlockNoteBlock[] = JSON.parse(documentJson);
+    const refs = new Map<string, string>(); // id → type (deduplicates)
+
+    function traverse(blocks: BlockNoteBlock[]): void {
+      for (const block of blocks) {
+        if (block.content) {
+          for (const item of block.content) {
+            if (item.type === "resourceReference") {
+              const ref = item as { type: "resourceReference"; props: { resourceId: string; resourceType: string } };
+              if (ref.props?.resourceId) refs.set(ref.props.resourceId, ref.props.resourceType);
+            }
+            if (item.type === "link") {
+              const link = item as { type: "link"; content: InlineContent[] };
+              if (Array.isArray(link.content)) {
+                for (const c of link.content) {
+                  if (c.type === "resourceReference") {
+                    const ref = c as { type: "resourceReference"; props: { resourceId: string; resourceType: string } };
+                    if (ref.props?.resourceId) refs.set(ref.props.resourceId, ref.props.resourceType);
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (block.children) traverse(block.children);
+      }
+    }
+
+    traverse(blocks);
+    return Array.from(refs.entries()).map(([id, type]) => ({ id, type }));
+  } catch {
     return [];
   }
 }

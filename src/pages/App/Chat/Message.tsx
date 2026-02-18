@@ -16,7 +16,7 @@ import {
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu";
 import { useChatContext } from "./ChatContext";
-import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext } from "./MentionedUsersContext";
+import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
 import { MessageQuotePreview } from "./MessageQuotePreview";
@@ -105,6 +105,7 @@ export function Message({ message }: MessageProps) {
             <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
             <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
             <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
+            <MentionedResourcesContext.Provider value={message.mentionedResources ?? {}}>
               <div
                 className={cn(
                   "max-w-[85%] w-fit rounded-xl bg-muted px-3 py-2 transition-all",
@@ -116,6 +117,7 @@ export function Message({ message }: MessageProps) {
                 )}
                 <MessageRenderer blocks={blocks} />
               </div>
+            </MentionedResourcesContext.Provider>
             </MentionedProjectsContext.Provider>
             </MentionedTasksContext.Provider>
             </MentionedUsersContext.Provider>

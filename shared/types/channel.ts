@@ -13,6 +13,7 @@ export type ReplyToInfo = {
 export type MentionedUser = { name: string | null; email?: string | null; image?: string };
 export type MentionedTask = { title: string; projectId: string; statusColor?: string };
 export type MentionedProject = { name: string; color: string };
+export type MentionedResource = { name: string; type: "document" | "diagram" | "spreadsheet" };
 
 export interface MessageWithAuthor extends Doc<"messages"> {
   author: string;
@@ -20,4 +21,5 @@ export interface MessageWithAuthor extends Doc<"messages"> {
   mentionedUsers: Record<string, MentionedUser>;
   mentionedTasks: Record<string, MentionedTask>;
   mentionedProjects: Record<string, MentionedProject>;
+  mentionedResources: Record<string, MentionedResource>;
 }

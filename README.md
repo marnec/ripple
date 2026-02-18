@@ -1,5 +1,6 @@
 NEXT STEPS:
 - [ ] reference docs, diagrams and sheets in messages
+- [ ] insert medias in all places where there's a blocknote editor
 - [ ] fix some strange behaviour on enlarge call from pip when last user 
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name

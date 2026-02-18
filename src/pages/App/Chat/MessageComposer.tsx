@@ -17,10 +17,11 @@ import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
 import { useChatContext } from "./ChatContext";
 import { TaskMention } from "./CustomInlineContent/TaskMention";
+import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { FolderKanban, Phone, User } from "lucide-react";
+import { File, FolderKanban, PenTool, Phone, Table2, User } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -48,6 +49,7 @@ const schema = BlockNoteSchema.create({
     ...defaultInlineContentSpecs,
     taskMention: TaskMention,
     projectReference: ProjectReference,
+    resourceReference: ResourceReference,
     userMention: UserMention,
   },
 });
@@ -91,6 +93,9 @@ function blocksToPlainText(
             line += `#${name || "project"}`;
             break;
           }
+          case "resourceReference":
+            line += `#${inline.props.resourceName || "resource"}`;
+            break;
         }
       }
     }
@@ -117,6 +122,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   // Query tasks for autocomplete
   const tasks = useQuery(api.tasks.listByWorkspace, { workspaceId, hideCompleted: true });
+
+  // Query resources for # autocomplete
+  const documents = useQuery(api.documents.list, { workspaceId });
+  const diagrams = useQuery(api.diagrams.list, { workspaceId });
+  const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
 
   // Query workspace members for @ autocomplete
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
@@ -365,7 +375,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
                   });
               }
 
-              // Project references (NEW)
+              // Project references
               if (projects) {
                 projects
                   .filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
@@ -381,6 +391,66 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
                       },
                       icon: <FolderKanban className="h-4 w-4" />,
                       group: "Projects",
+                    });
+                  });
+              }
+
+              // Document references
+              if (documents) {
+                documents
+                  .filter((d) => d.name.toLowerCase().includes(query.toLowerCase()))
+                  .slice(0, 5)
+                  .forEach((d) => {
+                    items.push({
+                      title: d.name,
+                      onItemClick: () => {
+                        editor.insertInlineContent([
+                          { type: "resourceReference", props: { resourceId: d._id, resourceType: "document", resourceName: d.name } },
+                          " ",
+                        ]);
+                      },
+                      icon: <File className="h-4 w-4" />,
+                      group: "Documents",
+                    });
+                  });
+              }
+
+              // Diagram references
+              if (diagrams) {
+                diagrams
+                  .filter((d) => d.name.toLowerCase().includes(query.toLowerCase()))
+                  .slice(0, 5)
+                  .forEach((d) => {
+                    items.push({
+                      title: d.name,
+                      onItemClick: () => {
+                        editor.insertInlineContent([
+                          { type: "resourceReference", props: { resourceId: d._id, resourceType: "diagram", resourceName: d.name } },
+                          " ",
+                        ]);
+                      },
+                      icon: <PenTool className="h-4 w-4" />,
+                      group: "Diagrams",
+                    });
+                  });
+              }
+
+              // Spreadsheet references
+              if (spreadsheets) {
+                spreadsheets
+                  .filter((s) => s.name.toLowerCase().includes(query.toLowerCase()))
+                  .slice(0, 5)
+                  .forEach((s) => {
+                    items.push({
+                      title: s.name,
+                      onItemClick: () => {
+                        editor.insertInlineContent([
+                          { type: "resourceReference", props: { resourceId: s._id, resourceType: "spreadsheet", resourceName: s.name } },
+                          " ",
+                        ]);
+                      },
+                      icon: <Table2 className="h-4 w-4" />,
+                      group: "Spreadsheets",
                     });
                   });
               }

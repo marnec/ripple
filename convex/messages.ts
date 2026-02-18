@@ -5,7 +5,7 @@ import { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
-import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractTaskMentionIds } from "./utils/blocknote";
+import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
 import { DatabaseReader } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
@@ -135,6 +135,65 @@ async function enrichWithMentionedProjects<T extends { body: string }>(
 }
 
 /**
+ * Enrich messages with mentionedResources record, batch-resolving
+ * document, diagram, and spreadsheet references.
+ */
+async function enrichWithMentionedResources<T extends { body: string }>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+): Promise<(T & { mentionedResources: Record<string, { name: string; type: "document" | "diagram" | "spreadsheet" }> })[]> {
+  // Collect all resource refs across all messages
+  const allRefs = new Map<string, string>(); // id → type
+  for (const msg of messages) {
+    for (const ref of extractResourceReferenceIds(msg.body)) {
+      allRefs.set(ref.id, ref.type);
+    }
+  }
+
+  // Group IDs by table for batch fetching
+  const docIds: string[] = [];
+  const diagramIds: string[] = [];
+  const sheetIds: string[] = [];
+  for (const [id, type] of allRefs) {
+    if (type === "document") docIds.push(id);
+    else if (type === "diagram") diagramIds.push(id);
+    else if (type === "spreadsheet") sheetIds.push(id);
+  }
+
+  // Batch-fetch from each table
+  const resourceMap = new Map<string, { name: string; type: "document" | "diagram" | "spreadsheet" }>();
+
+  if (docIds.length > 0) {
+    const docs = await getAll(ctx.db, docIds as Id<"documents">[]);
+    docs.forEach((d, i) => {
+      if (d) resourceMap.set(docIds[i], { name: d.name, type: "document" });
+    });
+  }
+  if (diagramIds.length > 0) {
+    const diagrams = await getAll(ctx.db, diagramIds as Id<"diagrams">[]);
+    diagrams.forEach((d, i) => {
+      if (d) resourceMap.set(diagramIds[i], { name: d.name, type: "diagram" });
+    });
+  }
+  if (sheetIds.length > 0) {
+    const sheets = await getAll(ctx.db, sheetIds as Id<"spreadsheets">[]);
+    sheets.forEach((s, i) => {
+      if (s) resourceMap.set(sheetIds[i], { name: s.name, type: "spreadsheet" });
+    });
+  }
+
+  return messages.map(msg => {
+    const refs = extractResourceReferenceIds(msg.body);
+    const mentionedResources: Record<string, { name: string; type: "document" | "diagram" | "spreadsheet" }> = {};
+    for (const ref of refs) {
+      const r = resourceMap.get(ref.id);
+      if (r) mentionedResources[ref.id] = r;
+    }
+    return { ...msg, mentionedResources };
+  });
+}
+
+/**
  * Enrich messages with replyTo info, resolving mention text from parent bodies.
  * Shared by list, search, and getMessageContext queries.
  */
@@ -226,6 +285,7 @@ export const list = query({
       mentionedUsers: v.any(),
       mentionedTasks: v.any(),
       mentionedProjects: v.any(),
+      mentionedResources: v.any(),
     })),
     isDone: v.boolean(),
     continueCursor: v.string(),
@@ -274,10 +334,11 @@ export const list = query({
     const messagesWithMentions = await enrichWithMentionedUsers(ctx, messagesWithReplyTo, userMap);
     const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
     const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
+    const messagesWithResources = await enrichWithMentionedResources(ctx, messagesWithProjects);
 
     return {
       ...messagesPage,
-      page: messagesWithProjects,
+      page: messagesWithResources,
     };
   },
 });
@@ -405,6 +466,7 @@ export const search = query({
     mentionedUsers: v.any(),
     mentionedTasks: v.any(),
     mentionedProjects: v.any(),
+    mentionedResources: v.any(),
   })),
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
     const userId = await getAuthUserId(ctx);
@@ -449,8 +511,9 @@ export const search = query({
     const searchResultsWithMentions = await enrichWithMentionedUsers(ctx, searchResultsWithReplyTo, userMap);
     const searchResultsWithTasks = await enrichWithMentionedTasks(ctx, searchResultsWithMentions);
     const searchResultsWithProjects = await enrichWithMentionedProjects(ctx, searchResultsWithTasks);
+    const searchResultsWithResources = await enrichWithMentionedResources(ctx, searchResultsWithProjects);
 
-    return searchResultsWithProjects;
+    return searchResultsWithResources;
   },
 });
 
@@ -475,6 +538,7 @@ export const getMessageContext = query({
       mentionedUsers: v.any(),
       mentionedTasks: v.any(),
       mentionedProjects: v.any(),
+      mentionedResources: v.any(),
     })),
     targetMessageId: v.id("messages"),
     targetIndex: v.number(),
@@ -537,9 +601,10 @@ export const getMessageContext = query({
     const messagesWithMentions = await enrichWithMentionedUsers(ctx, messagesWithReplyTo, userMap);
     const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
     const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
+    const messagesWithResources = await enrichWithMentionedResources(ctx, messagesWithProjects);
 
     return {
-      messages: messagesWithProjects,
+      messages: messagesWithResources,
       targetMessageId: messageId,
       targetIndex: messagesBefore.length // Index of the target message in the results
     };
