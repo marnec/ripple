@@ -103,11 +103,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
   };
 
   if (!viewer) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
+    return <div className="h-full w-full" />;
   }
 
   // Show snapshot fallback in cold-start offline mode
@@ -131,7 +127,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden animate-fade-in">
       {/* Header with collaboration UI */}
       <div className="absolute top-5 right-10 z-50 flex items-center gap-3">
         <ConnectionStatus isConnected={isConnected} />
@@ -158,11 +154,7 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
         />
       )}
 
-      {isLoading && (
-        <div className="flex items-center justify-center h-full">
-          <div className="text-muted-foreground animate-pulse">Loading diagram...</div>
-        </div>
-      )}
+      {isLoading && <div className="h-full w-full" />}
     </div>
   );
 }

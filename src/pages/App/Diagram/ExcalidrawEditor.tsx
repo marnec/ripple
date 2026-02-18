@@ -75,7 +75,7 @@ export function ExcalidrawEditor({
   );
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full overflow-hidden">
       <style>{`
         .excalidraw .App-toolbar__extra-tools-trigger { display: none !important; }
         .excalidraw .ToolIcon__LaserPointer { display: none !important; }

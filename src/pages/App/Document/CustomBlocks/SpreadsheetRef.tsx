@@ -4,7 +4,7 @@ import { Table } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
-import { Skeleton } from "@/components/ui/skeleton";
+
 import {
   Tooltip,
   TooltipContent,
@@ -52,7 +52,7 @@ function SpreadsheetLinkView({ spreadsheetId }: { spreadsheetId: Id<"spreadsheet
   };
 
   if (spreadsheet === undefined) {
-    return <Skeleton className="h-5 w-24 rounded inline-block align-middle" />;
+    return <span className="inline-block h-5 w-24 align-middle" />;
   }
 
   if (spreadsheet === null) {
@@ -65,7 +65,7 @@ function SpreadsheetLinkView({ spreadsheetId }: { spreadsheetId: Id<"spreadsheet
 
   return (
     <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-sm font-medium cursor-pointer hover:bg-muted/80 transition-colors align-middle"
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-sm font-medium cursor-pointer hover:bg-muted/80 transition-colors align-middle animate-fade-in"
       contentEditable={false}
       onClick={handleClick}
     >
@@ -142,17 +142,9 @@ function SpreadsheetCellRefView({
   // Loading state
   if (spreadsheet === undefined || cellData === undefined) {
     if (single) {
-      return (
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-sm font-mono align-middle">
-          <Skeleton className="h-4 w-8 rounded inline-block" />
-        </span>
-      );
+      return <span className="inline-block h-5 w-8 align-middle" />;
     }
-    return (
-      <span className="block my-1.5" contentEditable={false}>
-        <Skeleton className="h-16 w-48 rounded-lg" />
-      </span>
-    );
+    return <span className="block my-1.5 h-16 w-48" />;
   }
 
   const values: string[][] = cellData?.values ?? [[""]];
@@ -195,7 +187,7 @@ function CellValueChip({
       <Tooltip>
         <TooltipTrigger asChild>
           <span
-            className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-sm font-mono cursor-pointer hover:bg-muted/80 transition-colors align-middle"
+            className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-sm font-mono cursor-pointer hover:bg-muted/80 transition-colors align-middle animate-fade-in"
             contentEditable={false}
             onClick={onClick}
           >
@@ -225,13 +217,13 @@ function RangeTable({
 }) {
   return (
     <span
-      className="block my-1.5 cursor-pointer"
+      className="block my-1.5 cursor-pointer animate-fade-in"
       contentEditable={false}
       onClick={onClick}
     >
-      <span className="block border border-border rounded-lg overflow-hidden">
+      <span className="block border-border">
         <span className="flex justify-end">
-          <span className="text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded-bl">
+          <span className="text-sm px-2 py-0.5 rounded-bl">
             {caption}
           </span>
         </span>

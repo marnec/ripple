@@ -5,7 +5,7 @@ import { CircleSlash } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../../convex/_generated/dataModel";
-import { Skeleton } from "../../../../components/ui/skeleton";
+
 
 const DiagramView = ({
   diagramId,
@@ -25,7 +25,7 @@ const DiagramView = ({
   };
 
   if (isLoading) {
-    return <Skeleton className="h-40 w-full" />;
+    return <div className="h-40 w-full" />;
   }
 
   if (diagram === null) {
@@ -41,11 +41,11 @@ const DiagramView = ({
 
   if (svgHtml) {
     return (
-      <div className="relative group">
+      <div className="relative group animate-fade-in">
         <div className="w-full flex justify-end">
-          <div className="text-sm text-muted-foreground bg-muted text-right -mt-4 -mr-4 px-2 rounded-tr rounded-bl">
+          <div className="text-sm text-right -mt-4 -mr-4 px-2 rounded-tr rounded-bl min-h-lh animate-fade-in">
             {diagram?.name}
-            </div>
+          </div>
         </div>
         <div
           className="w-full cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
@@ -59,7 +59,7 @@ const DiagramView = ({
   // No SVG available — empty diagram or never generated
   return (
     <div
-      className="w-full flex flex-col items-center justify-center p-4 text-center text-muted-foreground bg-secondary h-40 gap-2 cursor-pointer hover:bg-muted/50 transition-colors"
+      className="w-full flex flex-col items-center justify-center p-4 text-center text-muted-foreground bg-secondary h-40 gap-2 cursor-pointer hover:bg-muted/50 transition-colors animate-fade-in"
       onClick={handleClick}
     >
       <p>Click to view or edit this diagram.</p>

@@ -2,6 +2,7 @@ NEXT STEPS:
 - [ ] migrate abandoded partykit to the new worker version
 - [x] fix videocalls and activate cloudflare STUN servers
     - [ ] call panels layout
+- [ ] improve entry UI in docs, diagrams, and spreadsheet. Prevent pop in (also for embedded resources), exploit locally stored data, add entry animation as for the channels chat
 - [ ] fix some strange behaviour on enlarge call from pip when last user 
 - [ ] add jump-to-collaborator onclick facepile avatar in docs
 - [ ] discord-like info about call participants beisde channel name

@@ -1,4 +1,4 @@
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
@@ -474,11 +474,7 @@ function SpreadsheetEditor({
   );
 
   if (spreadsheet === undefined || viewer === undefined) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <LoadingSpinner />
-      </div>
-    );
+    return <div className="h-full w-full" />;
   }
 
   if (spreadsheet === null) {
@@ -486,15 +482,11 @@ function SpreadsheetEditor({
   }
 
   if (collabLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <LoadingSpinner />
-      </div>
-    );
+    return <div className="h-full w-full" />;
   }
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div className="flex h-full w-full flex-col animate-fade-in">
       <div className="flex items-center justify-end px-3 py-1.5 border-b">
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />

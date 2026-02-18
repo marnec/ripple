@@ -1,6 +1,7 @@
 import { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Awareness } from "y-protocols/awareness";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { getUserColor } from "../lib/user-colors";
 import { useYjsProvider } from "./use-yjs-provider";
@@ -74,22 +75,27 @@ export function useDocumentCollaboration<
   // Get deterministic user color
   const userColor = getUserColor(userId);
 
-  // Create BlockNote editor with Yjs collaboration
+  // Local awareness fallback: allows the editor to bind to the Yjs fragment
+  // immediately (before the PartyKit provider connects). When IndexedDB syncs,
+  // content appears in the editor right away instead of showing an empty state.
+  const localAwareness = useMemo(() => new Awareness(yDoc), [yDoc]);
+
+  // Always create editor with Yjs collaboration so the fragment binding is
+  // established from mount. When provider arrives later, editor recreates with
+  // the real awareness (content is already in the fragment, so no visual pop).
   const editor = useCreateBlockNote(
     {
       schema,
-      collaboration: provider
-        ? {
-            provider,
-            fragment: yDoc.getXmlFragment("document-store"),
-            user: {
-              name: userName,
-              color: userColor,
-            },
-          }
-        : undefined,
+      collaboration: {
+        provider: provider ?? { awareness: localAwareness },
+        fragment: yDoc.getXmlFragment("document-store"),
+        user: {
+          name: userName,
+          color: userColor,
+        },
+      },
     },
-    [provider, userName, userColor, schema]
+    [provider, localAwareness, userName, userColor, schema]
   );
 
   // Loading completes when EITHER provider syncs OR IndexedDB syncs

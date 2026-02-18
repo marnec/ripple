@@ -238,8 +238,8 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     );
   }
 
-  if (isLoading || !editor) {
-    return <div className="p-20 animate-pulse">Loading document...</div>;
+  if (isLoading || !editor || !document) {
+    return <div className="h-full flex-1 min-w-0" />;
   }
 
   return (
@@ -263,7 +263,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             )}
           </div>
         </div>
-        <h2 className="text-3xl pb-12 font-semibold">{document?.name}</h2>
+        <h2 className="text-3xl pb-12 font-semibold">{document.name}</h2>
         <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
               <SuggestionMenuController
                 triggerCharacter={"#"}
