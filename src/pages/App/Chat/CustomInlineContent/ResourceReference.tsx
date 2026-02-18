@@ -42,7 +42,7 @@ export const ResourceReference = createReactInlineContentSpec(
           data-resource-id={resourceId}
           data-resource-type={resourceType}
           data-content-type="resource-reference"
-          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted text-sm font-medium cursor-default"
+          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted text-sm font-medium cursor-default align-middle"
         >
           <Icon className="h-3 w-3 shrink-0" />
           <span className="max-w-50 truncate">{resourceName || "Resource"}</span>

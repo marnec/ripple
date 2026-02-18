@@ -35,8 +35,20 @@ interface MessageComposerProps {
   showCallButton?: boolean;
 }
 
-const editorIsEmpty = (editor: BlockNoteEditor<any, any, any>) =>
-  !editor._tiptapEditor.state.doc.textContent.trim().length;
+const editorIsEmpty = (editor: BlockNoteEditor<any, any, any>) => {
+  const doc = editor._tiptapEditor.state.doc;
+  // textContent only covers text nodes — also check for inline nodes (mentions, references)
+  if (doc.textContent.trim().length > 0) return false;
+  let hasInlineContent = false;
+  doc.descendants((node) => {
+    if (hasInlineContent) return false;
+    if (node.isInline && !node.isText) {
+      hasInlineContent = true;
+      return false;
+    }
+  });
+  return !hasInlineContent;
+};
 
 const editorClear = (editor: BlockNoteEditor<any, any, any>) => {
   editor.removeBlocks(editor.document.map((b) => b.id));

@@ -34,7 +34,7 @@ export const TaskMention = createReactInlineContentSpec(
           data-task-id={taskId}
           data-content-type="task-mention"
           className={cn(
-            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted text-sm font-medium cursor-default"
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-muted text-sm font-medium cursor-default align-middle"
           )}
         >
           <span className="h-2 w-2 rounded-full bg-gray-400" />
