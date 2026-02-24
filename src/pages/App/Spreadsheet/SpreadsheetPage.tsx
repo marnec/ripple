@@ -31,6 +31,10 @@ import * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ActiveUsers } from "../Document/ActiveUsers";
+import {
+  FormulaPickerDropdown,
+  type FormulaPickerHandle,
+} from "./FormulaPickerDropdown";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -174,6 +178,17 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   const menuRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
 
+  // --- Formula picker state ---
+  const [formulaPicker, setFormulaPicker] = useState<{
+    visible: boolean;
+    position: { x: number; y: number };
+    query: string;
+  } | null>(null);
+  const editorInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const inputListenerRef = useRef<(() => void) | null>(null);
+  const scrollListenerRef = useRef<(() => void) | null>(null);
+  const formulaPickerHandleRef = useRef<FormulaPickerHandle>(null);
+
   // --- Initialise jspreadsheet + Yjs binding ---
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -224,6 +239,66 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
       },
       onselection(instance: any, x1: any, y1: any, x2: any, y2: any) {
         binding?.onselection(instance, x1, y1, x2, y2);
+      },
+      oneditionstart(_instance: any, td: HTMLTableCellElement) {
+        // Wait a frame for jspreadsheet to create the editor inside the td.
+        // Default cells use <input>, wordWrap cells use <textarea>.
+        requestAnimationFrame(() => {
+          const editorEl =
+            td.querySelector<HTMLInputElement>("input") ??
+            td.querySelector<HTMLTextAreaElement>("textarea");
+          if (!editorEl) return;
+          editorInputRef.current = editorEl;
+
+          const onInput = () => {
+            const value = editorEl.value;
+            if (value.startsWith("=") && value.length >= 1) {
+              const query = value.substring(1);
+              // Only show picker while typing the formula name (before first paren)
+              if (!query.includes("(")) {
+                const rect = td.getBoundingClientRect();
+                setFormulaPicker({
+                  visible: true,
+                  position: { x: rect.left, y: rect.bottom + 2 },
+                  query,
+                });
+              } else {
+                setFormulaPicker(null);
+              }
+            } else {
+              setFormulaPicker(null);
+            }
+          };
+
+          editorEl.addEventListener("input", onInput);
+          inputListenerRef.current = onInput;
+
+          // Dismiss on scroll
+          const scrollContainer =
+            wrapper.querySelector(".jss_content") || wrapper;
+          const onScroll = () => setFormulaPicker(null);
+          scrollContainer.addEventListener("scroll", onScroll, {
+            passive: true,
+          });
+          scrollListenerRef.current = () =>
+            scrollContainer.removeEventListener("scroll", onScroll);
+
+          // Check initial value (user may have typed "=" to trigger editor)
+          onInput();
+        });
+      },
+      oneditionend() {
+        if (editorInputRef.current && inputListenerRef.current) {
+          editorInputRef.current.removeEventListener(
+            "input",
+            inputListenerRef.current,
+          );
+        }
+        scrollListenerRef.current?.();
+        editorInputRef.current = null;
+        inputListenerRef.current = null;
+        scrollListenerRef.current = null;
+        setFormulaPicker(null);
       },
     });
 
@@ -309,6 +384,46 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
       window.removeEventListener("keydown", onKey);
     };
   }, [menu]);
+
+  // --- Formula picker keyboard interception ---
+  useEffect(() => {
+    if (!formulaPicker?.visible) return;
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.stopPropagation();
+        e.preventDefault();
+        formulaPickerHandleRef.current?.handleKey(e.key);
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.stopPropagation();
+        e.preventDefault();
+        const selected = formulaPickerHandleRef.current?.handleKey("Enter");
+        if (selected) insertFormula(selected);
+      } else if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        setFormulaPicker(null);
+      }
+    };
+
+    // Capture phase fires before jspreadsheet's own keydown handler
+    wrapper.addEventListener("keydown", onKeyDown, true);
+    return () => wrapper.removeEventListener("keydown", onKeyDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formulaPicker?.visible]);
+
+  const insertFormula = useCallback((formulaName: string) => {
+    const el = editorInputRef.current;
+    if (!el) return;
+    el.value = `=${formulaName}(`;
+    el.selectionStart = el.value.length;
+    el.selectionEnd = el.value.length;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.focus();
+    setFormulaPicker(null);
+  }, []);
 
   // --- Action helpers ---
 
@@ -449,6 +564,14 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
           </div>,
           document.body,
         )}
+      <FormulaPickerDropdown
+        ref={formulaPickerHandleRef}
+        position={formulaPicker?.position ?? { x: 0, y: 0 }}
+        query={formulaPicker?.query ?? ""}
+        onSelect={insertFormula}
+        onDismiss={() => setFormulaPicker(null)}
+        visible={!!formulaPicker?.visible}
+      />
     </>
   );
 });

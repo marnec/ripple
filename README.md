@@ -2,7 +2,7 @@ NEXT STEPS:
 - [x] reference docs, diagrams and sheets in messages
 - [x] insert medias in all places where there's a blocknote editor
 - [x] formula result in embedded sheets
-- [ ] highlight referenced ranges in spreadsheet
+- [x] highlight referenced ranges in spreadsheet
 - improve spreadsheet embed
     - [ ] ditch inline for dedicated spreadsheet range block
     - [ ] resizeable and aligneable container (like diagram block)
