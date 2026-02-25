@@ -21,6 +21,8 @@ export const notifyMessageMentions = internalAction({
   returns: v.null(),
   handler: async (ctx, { mentionedUserIds, channelId, plainText, mentionedBy }) => {
     // Get channel to build notification
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — TS2589: deep type instantiation from Convex schema size
     const channel = await ctx.runQuery(internal.channels.getInternal, { id: channelId });
     if (!channel) {
       console.error(`Channel ${channelId} not found for mention notification`);
@@ -40,6 +42,8 @@ export const notifyMessageMentions = internalAction({
     });
 
     // Get mentioned users' push subscriptions
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — TS2589: deep type instantiation from Convex schema size
     const subscriptions = await ctx.runQuery(api.pushSubscription.usersSubscriptions, {
       usersIds: mentionedUserIds as any,
     });

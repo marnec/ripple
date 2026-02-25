@@ -11,6 +11,8 @@ const projectValidator = v.object({
   color: v.string(),
   workspaceId: v.id("workspaces"),
   creatorId: v.id("users"),
+  key: v.optional(v.string()),
+  taskCounter: v.optional(v.number()),
 });
 
 export const create = mutation({
@@ -37,12 +39,34 @@ export const create = mutation({
       throw new ConvexError("Only workspace admins can create projects");
     }
 
+    // Auto-generate a unique project key from the name
+    const baseKey = name
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 3)
+      .toUpperCase() || "PRJ";
+
+    let key = baseKey;
+    let suffix = 1;
+    while (true) {
+      const existing = await ctx.db
+        .query("projects")
+        .withIndex("by_workspace_key", (q) =>
+          q.eq("workspaceId", workspaceId).eq("key", key)
+        )
+        .first();
+      if (!existing) break;
+      key = `${baseKey}${suffix}`;
+      suffix++;
+    }
+
     // Create the project
     const projectId = await ctx.db.insert("projects", {
       name,
       color,
       workspaceId,
       creatorId: userId,
+      key,
+      taskCounter: 0,
     });
 
     // Seed default task statuses for this project
@@ -132,9 +156,10 @@ export const update = mutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     color: v.optional(v.string()),
+    key: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { id, name, description, color }) => {
+  handler: async (ctx, { id, name, description, color, key }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -147,10 +172,29 @@ export const update = mutation({
     }
 
     // Build patch object with only provided fields
-    const patch: { name?: string; description?: string; color?: string } = {};
+    const patch: { name?: string; description?: string; color?: string; key?: string } = {};
     if (name !== undefined) patch.name = name;
     if (description !== undefined) patch.description = description;
     if (color !== undefined) patch.color = color;
+
+    // Validate and set project key
+    if (key !== undefined) {
+      const normalized = key.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+      if (normalized.length < 2 || normalized.length > 5) {
+        throw new ConvexError("Project key must be 2-5 alphanumeric characters");
+      }
+      // Check uniqueness within workspace
+      const existing = await ctx.db
+        .query("projects")
+        .withIndex("by_workspace_key", (q) =>
+          q.eq("workspaceId", project.workspaceId).eq("key", normalized)
+        )
+        .first();
+      if (existing && existing._id !== id) {
+        throw new ConvexError("Project key already in use");
+      }
+      patch.key = normalized;
+    }
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(id, patch);
@@ -192,9 +236,20 @@ export const remove = mutation({
       })
     );
 
-    // 2. Clean up task Yjs snapshots from storage and delete tasks
+    // 2. Clean up task dependencies, Yjs snapshots, and delete tasks
     await Promise.all(
       tasks.map(async (task) => {
+        // Delete dependencies (both directions)
+        const outDeps = await ctx.db
+          .query("taskDependencies")
+          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+          .collect();
+        const inDeps = await ctx.db
+          .query("taskDependencies")
+          .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", task._id))
+          .collect();
+        await Promise.all([...outDeps, ...inDeps].map((d) => ctx.db.delete(d._id)));
+
         if (task.yjsSnapshotId) {
           await ctx.storage.delete(task.yjsSnapshotId);
         }

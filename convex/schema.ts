@@ -124,8 +124,11 @@ export default defineSchema({
     color: v.string(), // Tailwind color class like "bg-blue-500"
     workspaceId: v.id("workspaces"),
     creatorId: v.id("users"), // the user who created the project (the admin)
+    key: v.optional(v.string()), // 2-5 char uppercase identifier (e.g., "ENG")
+    taskCounter: v.optional(v.number()), // auto-increment counter for task numbers
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_key", ["workspaceId", "key"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
   taskStatuses: defineTable({
@@ -156,6 +159,10 @@ export default defineSchema({
     creatorId: v.id("users"), // who created the task
     position: v.optional(v.string()), // fractional index for ordering within status column
     yjsSnapshotId: v.optional(v.id("_storage")),
+    number: v.optional(v.number()), // sequential task number within project (e.g., 42 for ENG-42)
+    dueDate: v.optional(v.string()), // ISO date string "2026-03-15"
+    startDate: v.optional(v.string()), // ISO date string
+    estimate: v.optional(v.number()), // effort estimate in hours
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
@@ -163,7 +170,8 @@ export default defineSchema({
     .index("by_assignee_completed", ["assigneeId", "completed"])
     .index("by_project_status", ["projectId", "statusId"])
     .index("by_workspace", ["workspaceId"])
-    .index("by_project_status_position", ["projectId", "statusId", "position"]),
+    .index("by_project_status_position", ["projectId", "statusId", "position"])
+    .index("by_project_number", ["projectId", "number"]),
 
   taskComments: defineTable({
     taskId: v.id("tasks"),
@@ -173,6 +181,16 @@ export default defineSchema({
   })
     .index("by_task", ["taskId"])
     .index("undeleted_by_task", ["taskId", "deleted"]),
+
+  taskDependencies: defineTable({
+    taskId: v.id("tasks"), // source task
+    dependsOnTaskId: v.id("tasks"), // target task
+    type: v.union(v.literal("blocks"), v.literal("relates_to")),
+    creatorId: v.id("users"),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_depends_on", ["dependsOnTaskId"])
+    .index("by_pair", ["taskId", "dependsOnTaskId"]),
 
   callSessions: defineTable({
     channelId: v.id("channels"),

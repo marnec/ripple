@@ -1,33 +1,20 @@
 NEXT STEPS:
-- [x] reference docs, diagrams and sheets in messages
-- [x] insert medias in all places where there's a blocknote editor
-- [x] formula result in embedded sheets
-- [x] highlight referenced ranges in spreadsheet
-- [x] fix a spreadsheet reference should update from local storage first as for diagrams
-- improve spreadsheet embed
-    - [x] replace inline for dedicated spreadsheet range block
-    - [x] use inline only for spreadsheet reference (link)
-    - [x] resizeable and aligneable container (like diagram block)
-    - [x] resizeable column sizes
-    - [x] show / hide coordinates row/col headers
-- [x] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
-- [x] formula picker?
-- [ ] improve image attachment in messages
+- [ ] PLANE.so inspired features:
+    - [x] add id to tasks
+    - [ ] cycles
+    - [x] task dependencies
+    - [x] deadlines & estimates
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
 - sections
     - [ ] collapsible section
     - [ ] searchable / scrollable section
+    - [ ] tag filtering (tags still don't exist)
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
     - [ ] language preference
 - [ ] dashboard pages (channels, projects, documents, diagrams)
-- [ ] PLANE.so inspired features:
-    - [ ] add id to tasks
-    - [ ] cycles
-    - [ ] task dependencies
-    - [ ] deadlines & estimates
 - [ ] AI integrations
     - [ ] AI bot in chat (called on mention)
     - [ ] AI dictate content

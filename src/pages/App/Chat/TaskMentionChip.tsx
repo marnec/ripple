@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { formatTaskId } from "@/lib/task-utils";
 import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -60,6 +61,8 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
     });
   };
 
+  const taskIdStr = formatTaskId(task.projectKey, task.number);
+
   return (
     <button
       onClick={handleClick}
@@ -71,6 +74,9 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
           task.status?.color || "bg-gray-500"
         )}
       />
+      {taskIdStr && (
+        <span className="text-muted-foreground font-mono text-xs">{taskIdStr}</span>
+      )}
       <span className="max-w-50 truncate">{task.title}</span>
     </button>
   );

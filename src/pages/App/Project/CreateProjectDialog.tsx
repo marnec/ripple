@@ -42,6 +42,10 @@ const formSchema = z.object({
   color: z.string().min(1, { message: "Color is required" }),
 });
 
+function deriveProjectKey(name: string): string {
+  return name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3).toUpperCase() || "PRJ";
+}
+
 export function CreateProjectDialog({
   workspaceId,
   open,
@@ -51,6 +55,8 @@ export function CreateProjectDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore — TS2589: deep type instantiation from Convex schema size
   const createProject = useMutation(api.projects.create);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -125,6 +131,11 @@ export function CreateProjectDialog({
                       placeholder="Enter project name"
                     />
                   </FormControl>
+                  {field.value && (
+                    <p className="text-xs text-muted-foreground">
+                      Task IDs will use prefix <span className="font-mono font-medium">{deriveProjectKey(field.value)}</span> (e.g., {deriveProjectKey(field.value)}-1). You can change this later in project settings.
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

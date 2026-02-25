@@ -1,8 +1,14 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -11,10 +17,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ESTIMATE_PRESETS, formatEstimate, isOverdue } from "@/lib/task-utils";
 import {
   AlertCircle,
   ArrowDown,
   ArrowUp,
+  CalendarIcon,
+  Clock,
   Minus,
   X,
 } from "lucide-react";
@@ -40,6 +49,20 @@ function getPriorityLabel(priority: string) {
   return priority.charAt(0).toUpperCase() + priority.slice(1);
 }
 
+/** Convert Date to ISO date string (YYYY-MM-DD) in local timezone */
+function toISODateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Parse ISO date string to Date in local timezone */
+function parseISODate(str: string): Date {
+  const [y, m, d] = str.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 type TaskPropertiesProps = {
   task: {
     statusId: Id<"taskStatuses">;
@@ -48,6 +71,9 @@ type TaskPropertiesProps = {
     assigneeId?: Id<"users"> | null;
     assignee: { name?: string | null; image?: string } | null;
     labels?: string[];
+    dueDate?: string;
+    startDate?: string;
+    estimate?: number;
   };
   statuses: Array<{ _id: Id<"taskStatuses">; name: string; color: string }>;
   members: Array<{ userId: Id<"users">; name?: string | null; image?: string }>;
@@ -56,6 +82,9 @@ type TaskPropertiesProps = {
   onAssigneeChange: (value: string) => void;
   onAddLabel: (label: string) => void;
   onRemoveLabel: (label: string) => void;
+  onDueDateChange: (date: string | null) => void;
+  onStartDateChange: (date: string | null) => void;
+  onEstimateChange: (value: number | null) => void;
 };
 
 export function TaskProperties({
@@ -67,6 +96,9 @@ export function TaskProperties({
   onAssigneeChange,
   onAddLabel,
   onRemoveLabel,
+  onDueDateChange,
+  onStartDateChange,
+  onEstimateChange,
 }: TaskPropertiesProps) {
   const [newLabel, setNewLabel] = useState("");
 
@@ -207,6 +239,137 @@ export function TaskProperties({
                     </Avatar>
                     <span>{member.name}</span>
                   </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Due Date */}
+      <div className="grid grid-cols-3 gap-4 items-center">
+        <Label className="text-sm">Due Date</Label>
+        <div className="col-span-2 flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !task.dueDate && "text-muted-foreground",
+                  task.dueDate && isOverdue(task.dueDate) && "text-red-500 border-red-500/50"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {task.dueDate
+                  ? parseISODate(task.dueDate).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  : "No due date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={task.dueDate ? parseISODate(task.dueDate) : undefined}
+                onSelect={(date) =>
+                  onDueDateChange(date ? toISODateString(date) : null)
+                }
+                autoFocus
+              />
+            </PopoverContent>
+          </Popover>
+          {task.dueDate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => onDueDateChange(null)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Start Date */}
+      <div className="grid grid-cols-3 gap-4 items-center">
+        <Label className="text-sm">Start Date</Label>
+        <div className="col-span-2 flex items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !task.startDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {task.startDate
+                  ? parseISODate(task.startDate).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  : "No start date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={task.startDate ? parseISODate(task.startDate) : undefined}
+                onSelect={(date) =>
+                  onStartDateChange(date ? toISODateString(date) : null)
+                }
+                autoFocus
+              />
+            </PopoverContent>
+          </Popover>
+          {task.startDate && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => onStartDateChange(null)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Estimate */}
+      <div className="grid grid-cols-3 gap-4 items-center">
+        <Label className="text-sm">Estimate</Label>
+        <div className="col-span-2 flex items-center gap-2">
+          <Select
+            value={task.estimate != null ? String(task.estimate) : "none"}
+            onValueChange={(val) =>
+              onEstimateChange(val === "none" ? null : Number(val))
+            }
+          >
+            <SelectTrigger>
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {task.estimate != null
+                      ? formatEstimate(task.estimate)
+                      : "No estimate"}
+                  </span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                <span className="text-muted-foreground">No estimate</span>
+              </SelectItem>
+              {ESTIMATE_PRESETS.map((hours) => (
+                <SelectItem key={hours} value={String(hours)}>
+                  {formatEstimate(hours)}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -1,7 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { AlertCircle, ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { formatTaskId, formatDueDate, formatEstimate, isOverdue } from "@/lib/task-utils";
+import { AlertCircle, ArrowDown, ArrowUp, Ban, Minus } from "lucide-react";
 
 type TaskRowProps = {
   task: {
@@ -9,6 +10,11 @@ type TaskRowProps = {
     title: string;
     priority: "urgent" | "high" | "medium" | "low";
     completed: boolean;
+    number?: number;
+    projectKey?: string;
+    dueDate?: string;
+    estimate?: number;
+    hasBlockers?: boolean;
     status: {
       name: string;
       color: string;
@@ -43,6 +49,18 @@ export function TaskRow({ task, onClick }: TaskRowProps) {
         )}
       </div>
 
+      {/* Blocked indicator */}
+      {task.hasBlockers && (
+        <span title="Blocked"><Ban className="w-3 h-3 text-red-500 shrink-0" /></span>
+      )}
+
+      {/* Task ID */}
+      {formatTaskId(task.projectKey, task.number) && (
+        <span className="text-xs text-muted-foreground font-mono shrink-0">
+          {formatTaskId(task.projectKey, task.number)}
+        </span>
+      )}
+
       {/* Title */}
       <div
         className={cn(
@@ -52,6 +70,23 @@ export function TaskRow({ task, onClick }: TaskRowProps) {
       >
         {task.title}
       </div>
+
+      {/* Due Date */}
+      {task.dueDate && (
+        <span className={cn(
+          "text-xs shrink-0",
+          isOverdue(task.dueDate) ? "text-red-500 font-medium" : "text-muted-foreground"
+        )}>
+          {formatDueDate(task.dueDate)}
+        </span>
+      )}
+
+      {/* Estimate */}
+      {task.estimate != null && (
+        <span className="text-xs text-muted-foreground shrink-0">
+          {formatEstimate(task.estimate)}
+        </span>
+      )}
 
       {/* Status Badge */}
       {task.status && (

@@ -175,6 +175,18 @@ export function useTaskDetail({
     }
   };
 
+  const handleDueDateChange = (date: string | null) => {
+    if (taskId) void updateTask({ taskId, dueDate: date });
+  };
+
+  const handleStartDateChange = (date: string | null) => {
+    if (taskId) void updateTask({ taskId, startDate: date });
+  };
+
+  const handleEstimateChange = (value: number | null) => {
+    if (taskId) void updateTask({ taskId, estimate: value });
+  };
+
   const handleDelete = (onDeleted: () => void) => {
     if (taskId) {
       void removeTask({ taskId }).then(() => {
@@ -210,5 +222,8 @@ export function useTaskDetail({
     showDeleteDialog,
     setShowDeleteDialog,
     handleDelete,
+    handleDueDateChange,
+    handleStartDateChange,
+    handleEstimateChange,
   };
 }

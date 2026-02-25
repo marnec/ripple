@@ -8,12 +8,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskComments } from "./TaskComments";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
+import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
 import { useTaskDetail } from "./useTaskDetail";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
 import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { getUserColor } from "@/lib/user-colors";
+import { formatTaskId } from "@/lib/task-utils";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -76,6 +78,14 @@ function TaskDetailPageContent({
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="flex-1 min-w-0">
+            {(() => {
+              const taskIdStr = formatTaskId(detail.task.projectKey, detail.task.number);
+              return taskIdStr ? (
+                <span className="text-xs text-muted-foreground font-mono ml-1">
+                  {taskIdStr}
+                </span>
+              ) : null;
+            })()}
             <Input
               ref={titleInputRef}
               value={detail.titleValue}
@@ -107,6 +117,14 @@ function TaskDetailPageContent({
           onAssigneeChange={detail.handleAssigneeChange}
           onAddLabel={detail.handleAddLabel}
           onRemoveLabel={detail.handleRemoveLabel}
+          onDueDateChange={detail.handleDueDateChange}
+          onStartDateChange={detail.handleStartDateChange}
+          onEstimateChange={detail.handleEstimateChange}
+        />
+
+        <TaskDependencies
+          taskId={taskId}
+          workspaceId={workspaceId}
         />
 
         <div className="space-y-2">

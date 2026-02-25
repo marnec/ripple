@@ -2,7 +2,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { AlertCircle, ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { formatTaskId, formatDueDate, formatEstimate, isOverdue } from "@/lib/task-utils";
+import { AlertCircle, ArrowDown, ArrowUp, Ban, CalendarIcon, Minus } from "lucide-react";
 
 type KanbanCardPresenterProps = {
   task: {
@@ -10,6 +11,11 @@ type KanbanCardPresenterProps = {
     title: string;
     priority: "urgent" | "high" | "medium" | "low";
     labels?: string[];
+    number?: number;
+    projectKey?: string;
+    dueDate?: string;
+    estimate?: number;
+    hasBlockers?: boolean;
     status: {
       name: string;
       color: string;
@@ -37,6 +43,16 @@ export function KanbanCardPresenter({
       )}
     >
       <CardHeader className="py-2 px-3">
+        <div className="flex items-center gap-1.5">
+          {task.hasBlockers && (
+            <span title="Blocked"><Ban className="h-3 w-3 text-red-500 shrink-0" /></span>
+          )}
+          {formatTaskId(task.projectKey, task.number) && (
+            <span className="text-xs text-muted-foreground font-mono">
+              {formatTaskId(task.projectKey, task.number)}
+            </span>
+          )}
+        </div>
         <h3 className="text-sm font-medium truncate">{task.title}</h3>
       </CardHeader>
       <CardContent className="py-2 px-3 pt-0">
@@ -78,6 +94,26 @@ export function KanbanCardPresenter({
                 {label}
               </Badge>
             ))}
+          </div>
+        )}
+
+        {/* Due date & Estimate */}
+        {(task.dueDate || task.estimate != null) && (
+          <div className="flex items-center gap-2 mt-1">
+            {task.dueDate && (
+              <span className={cn(
+                "flex items-center gap-1 text-xs",
+                isOverdue(task.dueDate) ? "text-red-500 font-medium" : "text-muted-foreground"
+              )}>
+                <CalendarIcon className="h-3 w-3" />
+                {formatDueDate(task.dueDate)}
+              </span>
+            )}
+            {task.estimate != null && (
+              <span className="text-xs text-muted-foreground">
+                {formatEstimate(task.estimate)}
+              </span>
+            )}
           </div>
         )}
       </CardContent>

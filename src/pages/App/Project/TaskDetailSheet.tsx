@@ -13,11 +13,13 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskComments } from "./TaskComments";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
+import { TaskDependencies } from "./TaskDependencies";
 import { TaskProperties } from "./TaskProperties";
 import { useTaskDetail } from "./useTaskDetail";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
 import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { getUserColor } from "@/lib/user-colors";
+import { formatTaskId } from "@/lib/task-utils";
 
 type TaskDetailSheetProps = {
   taskId: Id<"tasks"> | null;
@@ -73,6 +75,14 @@ export function TaskDetailSheet({
             <Maximize2 className="h-4 w-4" />
           </Button>
           <SheetHeader>
+            {(() => {
+              const taskIdStr = formatTaskId(detail.task.projectKey, detail.task.number);
+              return taskIdStr ? (
+                <span className="text-xs text-muted-foreground font-mono ml-1">
+                  {taskIdStr}
+                </span>
+              ) : null;
+            })()}
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
@@ -105,6 +115,14 @@ export function TaskDetailSheet({
               onAssigneeChange={detail.handleAssigneeChange}
               onAddLabel={detail.handleAddLabel}
               onRemoveLabel={detail.handleRemoveLabel}
+              onDueDateChange={detail.handleDueDateChange}
+              onStartDateChange={detail.handleStartDateChange}
+              onEstimateChange={detail.handleEstimateChange}
+            />
+
+            <TaskDependencies
+              taskId={taskId}
+              workspaceId={workspaceId}
             />
 
             <div className="space-y-2">

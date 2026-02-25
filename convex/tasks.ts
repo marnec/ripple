@@ -23,6 +23,9 @@ export const create = mutation({
     ),
     labels: v.optional(v.array(v.string())),
     position: v.optional(v.string()),
+    dueDate: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    estimate: v.optional(v.number()),
   },
   returns: v.id("tasks"),
   handler: async (ctx, args) => {
@@ -84,6 +87,11 @@ export const create = mutation({
       position = generateKeyBetween(lastTask?.position ?? null, null);
     }
 
+    // Atomically assign sequential task number
+    const counter = project.taskCounter ?? 0;
+    const nextNumber = counter + 1;
+    await ctx.db.patch(args.projectId, { taskCounter: nextNumber });
+
     // Create task with all fields
     const taskId = await ctx.db.insert("tasks", {
       projectId: args.projectId,
@@ -96,6 +104,10 @@ export const create = mutation({
       completed: status.isCompleted,
       creatorId: userId,
       position,
+      number: nextNumber,
+      dueDate: args.dueDate,
+      startDate: args.startDate,
+      estimate: args.estimate,
     });
 
     // Schedule notifications after database write
@@ -103,15 +115,21 @@ export const create = mutation({
 
     // Assignment notification
     if (args.assigneeId && args.assigneeId !== userId) {
-      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskAssignment, {
-        taskId,
-        assigneeId: args.assigneeId,
-        taskTitle: args.title,
-        assignedBy: {
-          name: getUserDisplayName(user),
-          id: userId,
+      await ctx.scheduler.runAfter(
+        0,
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore — TS2589: deep type instantiation from Convex schema size
+        internal.taskNotifications.notifyTaskAssignment,
+        {
+          taskId,
+          assigneeId: args.assigneeId,
+          taskTitle: args.title,
+          assignedBy: {
+            name: getUserDisplayName(user),
+            id: userId,
+          },
         },
-      });
+      );
     }
 
     return taskId;
@@ -138,14 +156,24 @@ export const get = query({
 
     if (!membership) return null;
 
-    // Enrich with status and assignee data
+    // Enrich with status, assignee, project key, and blocker status
     const status = await ctx.db.get(task.statusId);
     const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
+    const project = await ctx.db.get(task.projectId);
+
+    // Check if this task has any blockers (incoming "blocks" dependencies)
+    const blocker = await ctx.db
+      .query("taskDependencies")
+      .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", taskId))
+      .first();
+    const hasBlockers = blocker?.type === "blocks";
 
     return {
       ...task,
       status,
       assignee,
+      projectKey: project?.key,
+      hasBlockers,
     };
   },
 });
@@ -194,16 +222,22 @@ export const listByProject = query({
         .collect();
     }
 
-    // Enrich each task with status and assignee data
+    // Enrich each task with status, assignee, project key, and blocker status
     const enrichedTasks = await Promise.all(
       tasks.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
         const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
+        const blocker = await ctx.db
+          .query("taskDependencies")
+          .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", task._id))
+          .first();
 
         return {
           ...task,
           status,
           assignee,
+          projectKey: project.key,
+          hasBlockers: blocker?.type === "blocks",
         };
       })
     );
@@ -250,15 +284,27 @@ export const listByWorkspace = query({
     // Cap at 200 for performance (used for autocomplete)
     tasks = tasks.slice(0, 200);
 
-    // Enrich with status info
+    // Batch project lookups via cache for efficiency
+    const projectCache = new Map<string, any>();
+    const getProject = async (projectId: any) => {
+      const key = projectId.toString();
+      if (!projectCache.has(key)) {
+        projectCache.set(key, await ctx.db.get(projectId));
+      }
+      return projectCache.get(key);
+    };
+
+    // Enrich with status and project key info
     return Promise.all(
       tasks.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
+        const proj = await getProject(task.projectId);
         return {
           ...task,
           status: status
             ? { name: status.name, color: status.color, isCompleted: status.isCompleted }
             : null,
+          projectKey: proj?.key,
         };
       })
     );
@@ -308,6 +354,7 @@ export const listByAssignee = query({
           status,
           assignee,
           project,
+          projectKey: project?.key,
         };
       })
     );
@@ -332,9 +379,12 @@ export const update = mutation({
     ),
     labels: v.optional(v.array(v.string())),
     position: v.optional(v.string()),
+    dueDate: v.optional(v.union(v.string(), v.null())),
+    startDate: v.optional(v.union(v.string(), v.null())),
+    estimate: v.optional(v.union(v.number(), v.null())),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, labels, position }) => {
+  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, labels, position, dueDate, startDate, estimate }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -362,6 +412,12 @@ export const update = mutation({
     if (priority !== undefined) patch.priority = priority;
     if (labels !== undefined) patch.labels = labels;
     if (position !== undefined) patch.position = position;
+    if (dueDate === null) patch.dueDate = undefined;
+    else if (dueDate !== undefined) patch.dueDate = dueDate;
+    if (startDate === null) patch.startDate = undefined;
+    else if (startDate !== undefined) patch.startDate = startDate;
+    if (estimate === null) patch.estimate = undefined;
+    else if (estimate !== undefined) patch.estimate = estimate;
 
     // If statusId changed: look up new status, one-way sync for completed field
     if (statusId !== undefined) {
@@ -484,6 +540,19 @@ export const remove = mutation({
       .withIndex("by_source", (q) => q.eq("sourceId", taskId))
       .collect();
     await Promise.all(outgoingRefs.map((r) => ctx.db.delete(r._id)));
+
+    // Clean up task dependencies (both directions)
+    const outgoingDeps = await ctx.db
+      .query("taskDependencies")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .collect();
+    const incomingDeps = await ctx.db
+      .query("taskDependencies")
+      .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", taskId))
+      .collect();
+    await Promise.all(
+      [...outgoingDeps, ...incomingDeps].map((dep) => ctx.db.delete(dep._id))
+    );
 
     // Delete the task document
     await ctx.db.delete(taskId);

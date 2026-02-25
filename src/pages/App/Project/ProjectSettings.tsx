@@ -60,6 +60,7 @@ function ProjectSettingsContent({
   // Local state
   const [projectName, setProjectName] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [projectKey, setProjectKey] = useState<string | null>(null);
 
   if (project === undefined || currentUser === undefined) {
     return (
@@ -75,6 +76,7 @@ function ProjectSettingsContent({
 
   const displayName = projectName ?? project.name;
   const displayColor = selectedColor ?? project.color;
+  const displayKey = projectKey ?? project.key ?? "";
 
   // Check if current user is the project creator (admin)
   const isCreator = currentUser._id === project.creatorId;
@@ -85,10 +87,12 @@ function ProjectSettingsContent({
         id: projectId,
         ...(projectName !== null && { name: projectName }),
         ...(selectedColor !== null && { color: selectedColor }),
+        ...(projectKey !== null && { key: projectKey }),
       });
       toast({ title: "Project updated" });
       setProjectName(null);
       setSelectedColor(null);
+      setProjectKey(null);
     } catch (error) {
       toast({
         title: "Error updating project",
@@ -115,7 +119,7 @@ function ProjectSettingsContent({
     }
   };
 
-  const hasChanges = projectName !== null || selectedColor !== null;
+  const hasChanges = projectName !== null || selectedColor !== null || projectKey !== null;
 
   return (
     <div className="container mx-auto py-6 max-w-2xl">
@@ -134,6 +138,21 @@ function ProjectSettingsContent({
               placeholder="Enter project name"
               disabled={!isCreator}
             />
+          </div>
+          <div>
+            <Label htmlFor="project-key">Project Key</Label>
+            <Input
+              id="project-key"
+              value={displayKey}
+              onChange={(e) => setProjectKey(e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 5))}
+              placeholder="e.g., ENG"
+              disabled={!isCreator}
+              maxLength={5}
+              className="font-mono uppercase"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              2-5 character identifier used in task IDs (e.g., {displayKey || "ENG"}-1)
+            </p>
           </div>
           <div>
             <Label>Color</Label>
