@@ -3,18 +3,16 @@ NEXT STEPS:
 - [x] insert medias in all places where there's a blocknote editor
 - [x] formula result in embedded sheets
 - [x] highlight referenced ranges in spreadsheet
-- [ ] fix a spreadsheet reference should update from local storage first as for diagrams
+- [x] fix a spreadsheet reference should update from local storage first as for diagrams
 - improve spreadsheet embed
     - [ ] replace inline for dedicated spreadsheet range block
     - [ ] use inline only for spreadsheet reference (link)
     - [ ] resizeable and aligneable container (like diagram block)
     - [ ] resizeable column sizes
     - [ ] show / hide coordinates row/col headers
+- [x] add a backlink section that shows the referencing docs
 - [x] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
 - [x] formula picker?
-- spreadsheet qol
-    - [ ] improve formula picker to trigger for nested functions
-    - [ ] 
 - [ ] improve image attachment in messages
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
@@ -45,3 +43,8 @@ NEXT STEPS:
 - partykit 
     - [ ] migrate abandoded partykit to the new worker version
     - [ ] partykit optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
+- spreadsheet qol
+    - [ ] improve formula picker to trigger for nested functions
+    - [ ] prompt for coordinates
+    - [ ] mouse pick coords?
+    - [ ] reintroduce formatting?

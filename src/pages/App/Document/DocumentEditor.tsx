@@ -10,6 +10,7 @@ import {
 import { BlockNoteView } from "@blocknote/shadcn";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
+import { isSingleCell } from "@shared/cellRef";
 import { PenTool, Table } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useParams } from "react-router-dom";
@@ -32,6 +33,7 @@ import { CellRefDialog } from "./CellRefDialog";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
 import { SpreadsheetLink, SpreadsheetCellRef } from "./CustomBlocks/SpreadsheetRef";
+import { SpreadsheetRangeBlock } from "./CustomBlocks/SpreadsheetRangeBlock";
 import { User } from "./CustomBlocks/UserBlock";
 
 export function DocumentEditorContainer() {
@@ -48,6 +50,7 @@ const schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
     diagram: DiagramBlock(),
+    spreadsheetRange: SpreadsheetRangeBlock(),
   },
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,
@@ -61,9 +64,12 @@ const schema = BlockNoteSchema.create({
 function extractHardEmbeds(blocks: any[]): Set<string> {
   const refs = new Set<string>();
   for (const block of blocks) {
-    // Block-level: diagram blocks
+    // Block-level: diagram blocks and spreadsheet range blocks
     if (block.type === "diagram" && block.props?.diagramId) {
       refs.add(`diagram|${block.props.diagramId}`);
+    }
+    if (block.type === "spreadsheetRange" && block.props?.spreadsheetId) {
+      refs.add(`spreadsheet|${block.props.spreadsheetId}`);
     }
     // Inline content
     if (Array.isArray(block.content)) {
@@ -103,6 +109,10 @@ function extractHardEmbeds(blocks: any[]): Set<string> {
 function extractCellRefs(blocks: any[]): Set<string> {
   const refs = new Set<string>();
   for (const block of blocks) {
+    // Block-level: spreadsheetRange blocks
+    if (block.type === "spreadsheetRange" && block.props?.spreadsheetId && block.props?.cellRef) {
+      refs.add(`${block.props.spreadsheetId}|${block.props.cellRef}`);
+    }
     if (Array.isArray(block.content)) {
       for (const ic of block.content) {
         if (ic.type === "spreadsheetCellRef" && ic.props) {
@@ -378,7 +388,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
                         [
                           {
                             type: "diagram" as const,
-                            props: { diagramId: diagram._id },
+                            props: { diagramId: diagram._id } as any,
                           },
                         ],
                         editor.getTextCursorPosition().block,
@@ -454,13 +464,28 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               const { spreadsheetId } = cellRefDialog;
               editor.focus();
               if (cellRef) {
-                editor.insertInlineContent([
-                  {
-                    type: "spreadsheetCellRef",
-                    props: { spreadsheetId, cellRef },
-                  },
-                  " ",
-                ]);
+                if (isSingleCell(cellRef)) {
+                  // Single cell → inline content
+                  editor.insertInlineContent([
+                    {
+                      type: "spreadsheetCellRef",
+                      props: { spreadsheetId, cellRef },
+                    },
+                    " ",
+                  ]);
+                } else {
+                  // Range → block
+                  editor.insertBlocks(
+                    [
+                      {
+                        type: "spreadsheetRange" as const,
+                        props: { spreadsheetId, cellRef } as any,
+                      },
+                    ],
+                    editor.getTextCursorPosition().block,
+                    "after",
+                  );
+                }
                 void ensureCellRef({ spreadsheetId, cellRef });
               } else {
                 editor.insertInlineContent([

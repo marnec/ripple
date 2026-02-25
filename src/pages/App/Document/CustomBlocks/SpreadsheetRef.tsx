@@ -12,7 +12,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview";
-import { isSingleCell } from "@shared/cellRef";
 
 // ---------------------------------------------------------------------------
 // spreadsheetLink: navigable link to a spreadsheet (no cell reference)
@@ -136,33 +135,18 @@ function SpreadsheetCellRefView({
     );
   }
 
-  const single = isSingleCell(cellRef);
-
   // Loading state — show skeleton only when both local and metadata are loading
   if (spreadsheet === undefined || (localLoading && !localValues)) {
-    if (single) {
-      return <span className="inline-block h-5 w-8 align-middle" />;
-    }
-    return <span className="block my-1.5 h-16 w-48" />;
+    return <span className="inline-block h-5 w-8 align-middle" />;
   }
 
   const values: string[][] = localValues ?? [[""]];
   const caption = `${spreadsheet.name} \u203A ${cellRef}`;
 
-  if (single) {
-    return (
-      <CellValueChip
-        value={values[0]?.[0] ?? ""}
-        tooltip={caption}
-        onClick={handleClick}
-      />
-    );
-  }
-
   return (
-    <RangeTable
-      values={values}
-      caption={caption}
+    <CellValueChip
+      value={values[0]?.[0] ?? ""}
+      tooltip={caption}
       onClick={handleClick}
     />
   );
@@ -201,48 +185,3 @@ function CellValueChip({
   );
 }
 
-// ---------------------------------------------------------------------------
-// RangeTable: block-level readonly table with caption (matches native BN table)
-// ---------------------------------------------------------------------------
-
-function RangeTable({
-  values,
-  caption,
-  onClick,
-}: {
-  values: string[][];
-  caption: string;
-  onClick: (e: React.MouseEvent) => void;
-}) {
-  return (
-    <span
-      className="block my-1.5 cursor-pointer animate-fade-in"
-      contentEditable={false}
-      onClick={onClick}
-    >
-      <span className="block border-border">
-        <span className="flex justify-end">
-          <span className="text-sm px-2 py-0.5 rounded-bl">
-            {caption}
-          </span>
-        </span>
-        <table className="border-collapse w-full">
-          <tbody>
-            {values.map((row, ri) => (
-              <tr key={ri}>
-                {row.map((cell, ci) => (
-                  <td
-                    key={ci}
-                    className="border border-border px-3 py-1.5 text-sm"
-                  >
-                    {cell || "\u00A0"}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </span>
-    </span>
-  );
-}
