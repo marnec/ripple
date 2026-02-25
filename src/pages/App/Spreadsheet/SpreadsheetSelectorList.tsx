@@ -1,7 +1,7 @@
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useMutation, useQuery } from "convex/react";
 import { Table2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -22,14 +22,21 @@ export function SpreadsheetSelectorList({
 }: SpreadsheetSelectorProps) {
   const [selectedSpreadsheetForRename, setSelectedSpreadsheetForRename] = useState<Id<"spreadsheets"> | null>(null);
   const navigate = useNavigate();
+  const deletingIdRef = useRef<string | null>(null);
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
   const createNewSpreadsheet = useMutation(api.spreadsheets.create);
   const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("spreadsheet", {
-    onDeleted: () => onSpreadsheetSelect(null),
+    onDeleted: () => {
+      if (deletingIdRef.current && window.location.pathname.includes(deletingIdRef.current)) {
+        onSpreadsheetSelect(null);
+      }
+      deletingIdRef.current = null;
+    },
   });
 
   const handleSpreadsheetDelete = (id: Id<"spreadsheets">) => {
+    deletingIdRef.current = id;
     const spreadsheet = spreadsheets?.find((s) => s._id === id);
     void requestDelete(id, spreadsheet?.name ?? "Untitled");
   };

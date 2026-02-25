@@ -35,8 +35,11 @@ export function DocumentSelectorList({
   };
 
   const handleDocumentDelete = async (id: Id<"documents">) => {
-    onDocumentSelect(null);
+    const shouldNavigate = window.location.pathname.includes(id);
     await deleteDocument({ id });
+    if (shouldNavigate) {
+      onDocumentSelect(null);
+    }
   };
 
   const navigateToDocumentSettings = (id: Id<"documents">) => {

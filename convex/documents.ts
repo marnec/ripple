@@ -91,7 +91,7 @@ export const list = query({
 
 export const get = query({
   args: { id: v.id("documents") },
-  returns: documentValidator,
+  returns: v.union(documentValidator, v.null()),
   handler: async (ctx, { id }) => {
     const userId = await getAuthUserId(ctx);
 
@@ -99,7 +99,7 @@ export const get = query({
 
     const document = await ctx.db.get(id);
 
-    if (!document) throw new ConvexError("Document not found");
+    if (!document) return null;
 
     const membership = await ctx.db
       .query("workspaceMembers")

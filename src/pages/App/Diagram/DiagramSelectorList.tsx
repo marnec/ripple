@@ -1,7 +1,7 @@
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useMutation, useQuery } from "convex/react";
 import { PenTool } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -22,14 +22,21 @@ export function DiagramSelectorList({
 }: DiagramSelectorProps) {
   const [selectedDiagramForRename, setSelectedDiagramForRename] = useState<Id<"diagrams"> | null>(null);
   const navigate = useNavigate();
+  const deletingIdRef = useRef<string | null>(null);
 
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const createNewDiagram = useMutation(api.diagrams.create);
   const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", {
-    onDeleted: () => onDiagramSelect(null),
+    onDeleted: () => {
+      if (deletingIdRef.current && window.location.pathname.includes(deletingIdRef.current)) {
+        onDiagramSelect(null);
+      }
+      deletingIdRef.current = null;
+    },
   });
 
   const handleDiagramDelete = (id: Id<"diagrams">) => {
+    deletingIdRef.current = id;
     const diagram = diagrams?.find((d) => d._id === id);
     void requestDelete(id, diagram?.name ?? "Untitled");
   };
