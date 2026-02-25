@@ -11,6 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview";
 import { isSingleCell } from "@shared/cellRef";
 
 // ---------------------------------------------------------------------------
@@ -114,10 +115,8 @@ function SpreadsheetCellRefView({
   cellRef: string;
 }) {
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
-  const cellData = useQuery(api.spreadsheetCellRefs.getCellRef, {
-    spreadsheetId,
-    cellRef,
-  });
+  const { values: localValues, isLoading: localLoading } =
+    useSpreadsheetCellPreview(spreadsheetId, cellRef);
   const navigate = useNavigate();
   const { workspaceId } = useParams();
 
@@ -139,15 +138,15 @@ function SpreadsheetCellRefView({
 
   const single = isSingleCell(cellRef);
 
-  // Loading state
-  if (spreadsheet === undefined || cellData === undefined) {
+  // Loading state — show skeleton only when both local and metadata are loading
+  if (spreadsheet === undefined || (localLoading && !localValues)) {
     if (single) {
       return <span className="inline-block h-5 w-8 align-middle" />;
     }
     return <span className="block my-1.5 h-16 w-48" />;
   }
 
-  const values: string[][] = cellData?.values ?? [[""]];
+  const values: string[][] = localValues ?? [[""]];
   const caption = `${spreadsheet.name} \u203A ${cellRef}`;
 
   if (single) {
