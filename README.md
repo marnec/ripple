@@ -4,12 +4,17 @@ NEXT STEPS:
     - [ ] cycles
     - [x] task dependencies
     - [x] deadlines & estimates
+    - [ ] comments can be expanded into full task history   (diplay all actions related to that task, comments are interleaved to other events, all events are logged somewhere with timestamp)
+    - [ ] a column can be configured to autoset start date
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
-- sections
-    - [ ] collapsible section
-    - [ ] searchable / scrollable section
-    - [ ] tag filtering (tags still don't exist)
+- resources
+    - [ ] each resource can be tagged with workspace-level tags
+    - [ ] a resource can be marked as favorite
+    - [ ] max n favorites are pinned and always visible in sidebar
+    - [ ] #tag mixed to text-search search input in sidebar
+    - [ ] "search input" in sidebar on submit shows research results in the resource-list page (e.g. ...<workspace-id>/{projects,documents,spreadsheets,diagrams})
+    - [ ] all favorites are always visible in resource-list page
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
