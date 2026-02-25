@@ -12,7 +12,6 @@ NEXT STEPS:
     - [x] show / hide coordinates row/col headers
 - [x] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
 - [x] formula picker?
-- [ ] add a backlink section that shows the referencing docs
 - [ ] improve image attachment in messages
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
@@ -48,3 +47,4 @@ NEXT STEPS:
     - [ ] prompt for coordinates
     - [ ] mouse pick coords?
     - [ ] reintroduce formatting?
+- [ ] add a backlink section that shows the referencing docs

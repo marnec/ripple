@@ -21,7 +21,7 @@ import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { File, FolderKanban, ImageIcon, PenTool, Phone, Table2, User } from "lucide-react";
+import { File, FolderKanban, ImageIcon, PenTool, Phone, Table2, User, X } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -55,7 +55,7 @@ const editorClear = (editor: BlockNoteEditor<any, any, any>) => {
   editor.removeBlocks(editor.document.map((b) => b.id));
 };
 
-const { audio: _audio, heading: _heading, ...remainingBlockSpecs } = defaultBlockSpecs;
+const { audio: _audio, heading: _heading, image: _image, ...remainingBlockSpecs } = defaultBlockSpecs;
 const schema = BlockNoteSchema.create({
   blockSpecs: { ...remainingBlockSpecs },
   inlineContentSpecs: {
@@ -173,19 +173,30 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       schema,
       trailingBlock: false,
       dictionary,
-      uploadFile,
     }),
-    [uploadFile],
+    [],
   );
+
+  // Attached image lives outside the editor — max one per message
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editor?._tiptapEditor?.isInitialized) return;
 
     editor._tiptapEditor.commands.clearContent();
+    setAttachedImage(null);
 
     if (editingMessage.id && editingMessage.body) {
-      const blocks = JSON.parse(editingMessage.body);
-      editor.replaceBlocks(editor.document, blocks);
+      const blocks: any[] = JSON.parse(editingMessage.body);
+      // Extract image attachment from body (always first block if present)
+      const imageBlock = blocks.find((b: any) => b.type === "image");
+      if (imageBlock?.props?.url) {
+        setAttachedImage(imageBlock.props.url);
+      }
+      const textBlocks = blocks.filter((b: any) => b.type !== "image");
+      if (textBlocks.length > 0) {
+        editor.replaceBlocks(editor.document, textBlocks);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);
@@ -199,11 +210,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     if (!file || !uploadFile) return;
     try {
       const url = await uploadFile(file);
-      editor.insertBlocks(
-        [{ type: "image" as const, props: { url } }],
-        editor.getTextCursorPosition().block,
-        "after"
-      );
+      setAttachedImage(url);
     } catch (err) {
       console.error("Image upload failed:", err);
     }
@@ -218,13 +225,20 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const [isUnderline, setIsUnderline] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
 
+  const canSend = !isEmpty || !!attachedImage;
+
   const sendMessage = () => {
-    if (isEmpty || !editor) return;
-    const body = JSON.stringify(editor.document);
+    if (!canSend || !editor) return;
+    const blocks: any[] = [...editor.document];
+    if (attachedImage) {
+      blocks.unshift({ type: "image", props: { url: attachedImage } });
+    }
+    const body = JSON.stringify(blocks);
     const plainText = blocksToPlainText(editor.document, userNames, projectNames);
 
     handleSubmit(body, plainText);
     editorClear(editor);
+    setAttachedImage(null);
   };
 
   const updateActiveStyles = () => {
@@ -361,6 +375,18 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           }}
           onCancel={() => setReplyingTo(null)}
         />
+      )}
+      {attachedImage && (
+        <div className="relative w-fit">
+          <img src={attachedImage} alt="" className="max-h-32 rounded-md object-contain" />
+          <button
+            type="button"
+            onClick={() => setAttachedImage(null)}
+            className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
       )}
       <div className="flex gap-2">
         <BlockNoteView
@@ -534,7 +560,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             }}
           />
         </BlockNoteView>
-        <Button disabled={isEmpty} onClick={sendMessage} className="shrink-0 transition-transform active:scale-95">
+        <Button disabled={!canSend} onClick={sendMessage} className="shrink-0 transition-transform active:scale-95">
           Send
         </Button>
       </div>

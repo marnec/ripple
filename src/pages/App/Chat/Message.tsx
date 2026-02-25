@@ -2,8 +2,8 @@ import { UserContext } from "@/pages/App/UserContext";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
-import { CornerUpLeft, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import React, { Suspense, useCallback, useContext, useMemo, useRef } from "react";
+import { CornerUpLeft, Loader2, Pencil, Plus, Trash2, X as XIcon } from "lucide-react";
+import React, { Suspense, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import {
   ContextMenu,
@@ -15,10 +15,12 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu";
+import { Dialog, DialogOverlay, DialogPortal } from "../../../components/ui/dialog";
 import { useChatContext } from "./ChatContext";
 import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
+import { hasImageBlocks } from "./messageUtils";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
@@ -83,6 +85,8 @@ export function Message({ message }: MessageProps) {
   );
 
   const blocks = useMemo(() => JSON.parse(body), [body]);
+  const messageHasImages = useMemo(() => hasImageBlocks(blocks), [blocks]);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   return (
     <>
@@ -108,14 +112,17 @@ export function Message({ message }: MessageProps) {
             <MentionedResourcesContext.Provider value={message.mentionedResources ?? {}}>
               <div
                 className={cn(
-                  "max-w-[85%] w-fit rounded-xl bg-muted px-3 py-2 transition-all",
-                  userIsAuthor ? "rounded-tr-none ml-auto" : "rounded-tl-none"
+                  "max-w-[85%] w-fit rounded-xl bg-muted transition-all",
+                  userIsAuthor ? "rounded-tr-none ml-auto" : "rounded-tl-none",
+                  messageHasImages ? "overflow-hidden" : "px-3 py-2",
                 )}
               >
                 {message.replyToId && (
-                  <MessageQuotePreview message={message.replyTo ?? null} compact />
+                  <div className={messageHasImages ? "px-3 pt-2" : undefined}>
+                    <MessageQuotePreview message={message.replyTo ?? null} compact />
+                  </div>
                 )}
-                <MessageRenderer blocks={blocks} />
+                <MessageRenderer blocks={blocks} onImageClick={setLightboxUrl} />
               </div>
             </MentionedResourcesContext.Provider>
             </MentionedProjectsContext.Provider>
@@ -183,6 +190,27 @@ export function Message({ message }: MessageProps) {
           )}
         </ContextMenuContent>
       </ContextMenu>
+
+      <Dialog open={!!lightboxUrl} onOpenChange={() => setLightboxUrl(null)}>
+        <DialogPortal>
+          <DialogOverlay className="cursor-zoom-out" onClick={() => setLightboxUrl(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+            <img
+              src={lightboxUrl!}
+              alt=""
+              className="max-w-[90vw] max-h-[90vh] object-contain pointer-events-auto"
+            />
+          </div>
+          <button
+            type="button"
+            autoFocus
+            onClick={() => setLightboxUrl(null)}
+            className="fixed right-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white ring-1 ring-white/20 hover:bg-black/80 hover:ring-white/40 transition-all focus:outline-none focus:ring-2 focus:ring-white/50"
+          >
+            <XIcon className="h-5 w-5" />
+          </button>
+        </DialogPortal>
+      </Dialog>
     </>
   );
 }

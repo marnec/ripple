@@ -65,10 +65,47 @@ type TableCell = InlineContent[][];
 
 interface MessageRendererProps {
   blocks: Block[];
+  onImageClick?: (url: string) => void;
 }
 
-export function MessageRenderer({ blocks }: MessageRendererProps) {
-  return <>{renderBlockGroups(blocks)}</>;
+/**
+ * Telegram-style renderer: image renders full-bleed (no padding),
+ * remaining blocks render below with normal padding.
+ */
+export function MessageRenderer({ blocks, onImageClick }: MessageRendererProps) {
+  const imageBlock = blocks.find((b) => b.type === "image");
+  const rest = blocks.filter((b) => b.type !== "image");
+  const hasText = rest.some((b) => {
+    if (b.type === "paragraph" && Array.isArray(b.content) && b.content.length > 0) return true;
+    if (b.type !== "paragraph") return true;
+    return false;
+  });
+
+  const imageUrl = (imageBlock?.props as { url?: string })?.url;
+
+  return (
+    <>
+      {imageUrl && (
+        <button
+          type="button"
+          className="block cursor-pointer"
+          onClick={() => onImageClick?.(imageUrl)}
+        >
+          <img
+            src={imageUrl}
+            alt=""
+            className="max-w-xs sm:max-w-sm max-h-80 rounded-sm hover:brightness-90 transition-[filter]"
+            loading="lazy"
+          />
+        </button>
+      )}
+      {hasText && (
+        <div className={imageUrl ? "px-3 pb-2 pt-1.5" : undefined}>
+          {renderBlockGroups(rest)}
+        </div>
+      )}
+    </>
+  );
 }
 
 /** Group consecutive list items and render all blocks */
@@ -167,17 +204,9 @@ function BlockRenderer({ block }: { block: Block }) {
     case "divider":
       return <hr className="my-2 border-muted-foreground/20" />;
 
-    case "image": {
-      const url = (block.props as { url?: string })?.url;
-      const caption = (block.props as { caption?: string })?.caption;
-      if (!url) return null;
-      return (
-        <figure className="my-2">
-          <img src={url} alt={caption || ""} className="max-w-full rounded-md max-h-96" loading="lazy" />
-          {caption && <figcaption className="text-xs text-muted-foreground mt-1">{caption}</figcaption>}
-        </figure>
-      );
-    }
+    case "image":
+      // Images are rendered full-bleed at the top level by MessageRenderer
+      return null;
 
     case "table":
       return <TableRenderer content={block.content} />;
