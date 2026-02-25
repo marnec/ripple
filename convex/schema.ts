@@ -190,6 +190,16 @@ export default defineSchema({
     .index("by_spreadsheet", ["spreadsheetId"])
     .index("by_spreadsheet_cellRef", ["spreadsheetId", "cellRef"]),
 
+  contentReferences: defineTable({
+    sourceType: v.union(v.literal("document"), v.literal("task")),
+    sourceId: v.string(),
+    targetType: v.union(v.literal("diagram"), v.literal("spreadsheet")),
+    targetId: v.string(),
+    workspaceId: v.id("workspaces"),
+  })
+    .index("by_target", ["targetId"])
+    .index("by_source", ["sourceId"]),
+
   medias: defineTable({
     storageId: v.id("_storage"),
     workspaceId: v.id("workspaces"),

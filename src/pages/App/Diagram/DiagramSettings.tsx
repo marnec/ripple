@@ -4,6 +4,8 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
@@ -31,7 +33,11 @@ function DiagramSettingsContent({
 
   // Mutations
   const renameDiagram = useMutation(api.diagrams.rename);
-  const deleteDiagram = useMutation(api.diagrams.remove);
+
+  // Confirmed delete hook
+  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", {
+    onDeleted: () => void navigate(`/workspaces/${workspaceId}/diagrams`),
+  });
 
   // Local state
   const [diagramName, setDiagramName] = useState<string | null>(null);
@@ -44,8 +50,12 @@ function DiagramSettingsContent({
     );
   }
 
-  if (diagram === null || currentUser === null) {
+  if (currentUser === null) {
     return <SomethingWentWrong />;
+  }
+
+  if (diagram === null) {
+    return <ResourceDeleted resourceType="diagram" />;
   }
 
   const displayName = diagramName ?? diagram.name;
@@ -59,27 +69,6 @@ function DiagramSettingsContent({
     } catch (error) {
       toast({
         title: "Error updating diagram",
-        description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteDiagram = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this diagram? All content will be permanently lost.",
-      )
-    ) {
-      return;
-    }
-    try {
-      await deleteDiagram({ id: diagramId });
-      toast({ title: "Diagram deleted" });
-      void navigate(`/workspaces/${workspaceId}/diagrams`);
-    } catch (error) {
-      toast({
-        title: "Error deleting diagram",
         description: error instanceof Error ? error.message : "Please try again",
         variant: "destructive",
       });
@@ -119,7 +108,7 @@ function DiagramSettingsContent({
         </h2>
         <Button
           variant="destructive"
-          onClick={() => void handleDeleteDiagram()}
+          onClick={() => void requestDelete(diagramId, diagram.name)}
         >
           <Trash2 className="w-4 h-4 mr-2" />
           Delete Diagram
@@ -127,6 +116,7 @@ function DiagramSettingsContent({
         <p className="text-sm text-muted-foreground mt-2">
           This will permanently delete the diagram and all its content.
         </p>
+        {deleteDialog}
       </section>
     </div>
   );

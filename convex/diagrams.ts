@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { DEFAULT_DIAGRAM_NAME } from "@shared/constants";
+import { getEnrichedReferencesTo } from "./contentReferences";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -136,9 +137,9 @@ export const rename = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.id("diagrams") },
-  returns: v.null(),
-  handler: async (ctx, { id }) => {
+  args: { id: v.id("diagrams"), force: v.optional(v.boolean()) },
+  returns: v.any(),
+  handler: async (ctx, { id, force }) => {
     const userId = await getAuthUserId(ctx);
 
     if (!userId) throw new ConvexError("Not authenticated");
@@ -160,12 +161,27 @@ export const remove = mutation({
         `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
       );
 
+    // Check for references unless force-deleting
+    if (!force) {
+      const references = await getEnrichedReferencesTo(ctx, id);
+      if (references.length > 0) {
+        return { status: "has_references" as const, references };
+      }
+    }
+
     // Clean up Yjs snapshot from storage
     if (diagram.yjsSnapshotId) {
       await ctx.storage.delete(diagram.yjsSnapshotId);
     }
 
+    // Clean up incoming content references pointing to this diagram
+    const incomingRefs = await ctx.db
+      .query("contentReferences")
+      .withIndex("by_target", (q) => q.eq("targetId", id))
+      .collect();
+    await Promise.all(incomingRefs.map((r) => ctx.db.delete(r._id)));
+
     await ctx.db.delete(id);
-    return null;
+    return { status: "deleted" as const };
   },
 });

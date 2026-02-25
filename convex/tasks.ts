@@ -478,6 +478,13 @@ export const remove = mutation({
       await ctx.storage.delete(task.yjsSnapshotId);
     }
 
+    // Clean up outgoing content references from this task
+    const outgoingRefs = await ctx.db
+      .query("contentReferences")
+      .withIndex("by_source", (q) => q.eq("sourceId", taskId))
+      .collect();
+    await Promise.all(outgoingRefs.map((r) => ctx.db.delete(r._id)));
+
     // Delete the task document
     await ctx.db.delete(taskId);
     return null;

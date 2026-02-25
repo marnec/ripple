@@ -15,6 +15,7 @@ import type * as channelMembers from "../channelMembers.js";
 import type * as channels from "../channels.js";
 import type * as chatNotifications from "../chatNotifications.js";
 import type * as collaboration from "../collaboration.js";
+import type * as contentReferences from "../contentReferences.js";
 import type * as diagrams from "../diagrams.js";
 import type * as documents from "../documents.js";
 import type * as emails from "../emails.js";
@@ -54,6 +55,7 @@ declare const fullApi: ApiFromModules<{
   channels: typeof channels;
   chatNotifications: typeof chatNotifications;
   collaboration: typeof collaboration;
+  contentReferences: typeof contentReferences;
   diagrams: typeof diagrams;
   documents: typeof documents;
   emails: typeof emails;

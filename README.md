@@ -3,13 +3,14 @@ NEXT STEPS:
 - [x] insert medias in all places where there's a blocknote editor
 - [x] formula result in embedded sheets
 - [x] highlight referenced ranges in spreadsheet
+- [ ] fix a spreadsheet reference should update from local storage first as for diagrams
 - improve spreadsheet embed
     - [ ] ditch inline for dedicated spreadsheet range block
     - [ ] resizeable and aligneable container (like diagram block)
     - [ ] resizeable col sizes
     - [ ] show / hide coordinates row/col headers
 - [ ] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
-- [ ] formula picker?
+- [x] formula picker?
 - [ ] improve image attachment in messages
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions

@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { DEFAULT_SPREADSHEET_NAME } from "@shared/constants";
+import { getEnrichedReferencesTo } from "./contentReferences";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -136,9 +137,9 @@ export const rename = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.id("spreadsheets") },
-  returns: v.null(),
-  handler: async (ctx, { id }) => {
+  args: { id: v.id("spreadsheets"), force: v.optional(v.boolean()) },
+  returns: v.any(),
+  handler: async (ctx, { id, force }) => {
     const userId = await getAuthUserId(ctx);
 
     if (!userId) throw new ConvexError("Not authenticated");
@@ -160,6 +161,14 @@ export const remove = mutation({
         `User="${userId}" is not a member of workspace="${spreadsheet.workspaceId}"`,
       );
 
+    // Check for references unless force-deleting
+    if (!force) {
+      const references = await getEnrichedReferencesTo(ctx, id);
+      if (references.length > 0) {
+        return { status: "has_references" as const, references };
+      }
+    }
+
     // Clean up cached cell references
     const cellRefs = await ctx.db
       .query("spreadsheetCellRefs")
@@ -167,7 +176,14 @@ export const remove = mutation({
       .collect();
     await Promise.all(cellRefs.map((ref) => ctx.db.delete(ref._id)));
 
+    // Clean up incoming content references pointing to this spreadsheet
+    const incomingRefs = await ctx.db
+      .query("contentReferences")
+      .withIndex("by_target", (q) => q.eq("targetId", id))
+      .collect();
+    await Promise.all(incomingRefs.map((r) => ctx.db.delete(r._id)));
+
     await ctx.db.delete(id);
-    return null;
+    return { status: "deleted" as const };
   },
 });

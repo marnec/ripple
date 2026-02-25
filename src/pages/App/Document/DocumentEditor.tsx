@@ -57,6 +57,48 @@ const schema = BlockNoteSchema.create({
   },
 });
 
+/** Extract all hard-embed reference keys (diagram blocks, spreadsheet refs) from the editor document tree. */
+function extractHardEmbeds(blocks: any[]): Set<string> {
+  const refs = new Set<string>();
+  for (const block of blocks) {
+    // Block-level: diagram blocks
+    if (block.type === "diagram" && block.props?.diagramId) {
+      refs.add(`diagram|${block.props.diagramId}`);
+    }
+    // Inline content
+    if (Array.isArray(block.content)) {
+      for (const ic of block.content) {
+        if (ic.type === "spreadsheetCellRef" && ic.props?.spreadsheetId) {
+          refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
+        }
+        if (ic.type === "spreadsheetLink" && ic.props?.spreadsheetId) {
+          refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
+        }
+      }
+    }
+    if (block.content?.type === "tableContent") {
+      for (const row of block.content.rows) {
+        for (const cell of row.cells) {
+          for (const ic of cell.content) {
+            if (ic.type === "spreadsheetCellRef" && ic.props?.spreadsheetId) {
+              refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
+            }
+            if (ic.type === "spreadsheetLink" && ic.props?.spreadsheetId) {
+              refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
+            }
+          }
+        }
+      }
+    }
+    if (block.children) {
+      for (const key of extractHardEmbeds(block.children)) {
+        refs.add(key);
+      }
+    }
+  }
+  return refs;
+}
+
 /** Extract all spreadsheetCellRef keys from the editor document tree. */
 function extractCellRefs(blocks: any[]): Set<string> {
   const refs = new Set<string>();
@@ -148,6 +190,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const viewer = useQuery(api.users.viewer);
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const removeCellRef = useMutation(api.spreadsheetCellRefs.removeCellRef);
+  const syncReferences = useMutation(api.contentReferences.syncReferences);
 
   const [cellRefDialog, setCellRefDialog] = useState<{
     open: boolean;
@@ -195,6 +238,62 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [editor, removeCellRef]);
+
+  // Sync hard-embed references (diagrams, spreadsheets) to contentReferences table
+  const prevEmbedsRef = useRef<Set<string>>(new Set());
+  const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!editor || !document) return;
+    const initial = extractHardEmbeds(editor.document);
+    prevEmbedsRef.current = initial;
+
+    // Sync on mount so pre-existing embeds get tracked
+    if (initial.size > 0) {
+      const references = [...initial].map((key) => {
+        const sep = key.indexOf("|");
+        return {
+          targetType: key.slice(0, sep) as "diagram" | "spreadsheet",
+          targetId: key.slice(sep + 1),
+        };
+      });
+      void syncReferences({
+        sourceType: "document",
+        sourceId: documentId,
+        references,
+        workspaceId: document.workspaceId,
+      });
+    }
+
+    const unsubscribe = editor.onChange(() => {
+      if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current);
+      embedDebounceRef.current = setTimeout(() => {
+        const current = extractHardEmbeds(editor.document);
+        // Only sync if the set changed
+        if (current.size !== prevEmbedsRef.current.size ||
+            [...current].some((k) => !prevEmbedsRef.current.has(k))) {
+          const references = [...current].map((key) => {
+            const sep = key.indexOf("|");
+            return {
+              targetType: key.slice(0, sep) as "diagram" | "spreadsheet",
+              targetId: key.slice(sep + 1),
+            };
+          });
+          void syncReferences({
+            sourceType: "document",
+            sourceId: documentId,
+            references,
+            workspaceId: document.workspaceId,
+          });
+        }
+        prevEmbedsRef.current = current;
+      }, 2000);
+    });
+
+    return () => {
+      unsubscribe();
+      if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current);
+    };
+  }, [editor, document, documentId, syncReferences]);
 
   // Cold-start snapshot fallback: offline + no editor from IndexedDB
   const isColdStart = isOffline && !editor;

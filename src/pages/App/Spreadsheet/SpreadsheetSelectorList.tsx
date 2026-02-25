@@ -1,3 +1,4 @@
+import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useMutation, useQuery } from "convex/react";
 import { Table2 } from "lucide-react";
 import { useState } from "react";
@@ -24,11 +25,13 @@ export function SpreadsheetSelectorList({
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
   const createNewSpreadsheet = useMutation(api.spreadsheets.create);
-  const deleteSpreadsheet = useMutation(api.spreadsheets.remove);
+  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("spreadsheet", {
+    onDeleted: () => onSpreadsheetSelect(null),
+  });
 
-  const handleSpreadsheetDelete = async (id: Id<"spreadsheets">) => {
-    await deleteSpreadsheet({ id });
-    onSpreadsheetSelect(null);
+  const handleSpreadsheetDelete = (id: Id<"spreadsheets">) => {
+    const spreadsheet = spreadsheets?.find((s) => s._id === id);
+    void requestDelete(id, spreadsheet?.name ?? "Untitled");
   };
 
   const navigateToSpreadsheetSettings = (id: Id<"spreadsheets">) => {
@@ -61,10 +64,11 @@ export function SpreadsheetSelectorList({
             onSpreadsheetSelect={onSpreadsheetSelect}
             onRenameSpreadsheet={setSelectedSpreadsheetForRename}
             onManageSpreadsheet={navigateToSpreadsheetSettings}
-            onDeleteSpreadsheet={(id) => void handleSpreadsheetDelete(id)}
+            onDeleteSpreadsheet={(id) => handleSpreadsheetDelete(id)}
           />
         ))}
       </SidebarMenu>
+      {deleteDialog}
       {!!selectedSpreadsheetForRename && (
         <RenameSpreadsheetDialog
           spreadsheetId={selectedSpreadsheetForRename}

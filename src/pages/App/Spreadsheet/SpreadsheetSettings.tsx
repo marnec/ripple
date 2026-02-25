@@ -4,6 +4,8 @@ import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
+import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
@@ -31,7 +33,11 @@ function SpreadsheetSettingsContent({
 
   // Mutations
   const renameSpreadsheet = useMutation(api.spreadsheets.rename);
-  const deleteSpreadsheet = useMutation(api.spreadsheets.remove);
+
+  // Confirmed delete hook
+  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("spreadsheet", {
+    onDeleted: () => void navigate(`/workspaces/${workspaceId}/spreadsheets`),
+  });
 
   // Local state
   const [spreadsheetName, setSpreadsheetName] = useState<string | null>(null);
@@ -44,8 +50,12 @@ function SpreadsheetSettingsContent({
     );
   }
 
-  if (spreadsheet === null || currentUser === null) {
+  if (currentUser === null) {
     return <SomethingWentWrong />;
+  }
+
+  if (spreadsheet === null) {
+    return <ResourceDeleted resourceType="spreadsheet" />;
   }
 
   const displayName = spreadsheetName ?? spreadsheet.name;
@@ -59,27 +69,6 @@ function SpreadsheetSettingsContent({
     } catch (error) {
       toast({
         title: "Error updating spreadsheet",
-        description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteSpreadsheet = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this spreadsheet? All content will be permanently lost.",
-      )
-    ) {
-      return;
-    }
-    try {
-      await deleteSpreadsheet({ id: spreadsheetId });
-      toast({ title: "Spreadsheet deleted" });
-      void navigate(`/workspaces/${workspaceId}/spreadsheets`);
-    } catch (error) {
-      toast({
-        title: "Error deleting spreadsheet",
         description: error instanceof Error ? error.message : "Please try again",
         variant: "destructive",
       });
@@ -119,7 +108,7 @@ function SpreadsheetSettingsContent({
         </h2>
         <Button
           variant="destructive"
-          onClick={() => void handleDeleteSpreadsheet()}
+          onClick={() => void requestDelete(spreadsheetId, spreadsheet.name)}
         >
           <Trash2 className="w-4 h-4 mr-2" />
           Delete Spreadsheet
@@ -127,6 +116,7 @@ function SpreadsheetSettingsContent({
         <p className="text-sm text-muted-foreground mt-2">
           This will permanently delete the spreadsheet and all its content.
         </p>
+        {deleteDialog}
       </section>
     </div>
   );

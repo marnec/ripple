@@ -3,6 +3,7 @@ import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import { getUserColor } from "@/lib/user-colors";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
@@ -623,7 +624,7 @@ function SpreadsheetEditor({
   }
 
   if (spreadsheet === null) {
-    return <SomethingWentWrong />;
+    return <ResourceDeleted resourceType="spreadsheet" />;
   }
 
   if (collabLoading) {

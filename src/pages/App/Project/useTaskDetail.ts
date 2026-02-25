@@ -7,6 +7,29 @@ import { useDocumentCollaboration } from "../../../hooks/use-document-collaborat
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 
+/** Extract diagram references (diagram blocks + diagramEmbed inline) from task description. */
+function extractTaskDiagramEmbeds(blocks: any[]): Set<string> {
+  const refs = new Set<string>();
+  for (const block of blocks) {
+    if (block.type === "diagram" && block.props?.diagramId) {
+      refs.add(block.props.diagramId);
+    }
+    if (Array.isArray(block.content)) {
+      for (const ic of block.content) {
+        if (ic.type === "diagramEmbed" && ic.props?.diagramId) {
+          refs.add(ic.props.diagramId);
+        }
+      }
+    }
+    if (block.children) {
+      for (const key of extractTaskDiagramEmbeds(block.children)) {
+        refs.add(key);
+      }
+    }
+  }
+  return refs;
+}
+
 export function useTaskDetail({
   taskId,
   workspaceId,
@@ -26,6 +49,7 @@ export function useTaskDetail({
 
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
+  const syncReferences = useMutation(api.contentReferences.syncReferences);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [titleValue, setTitleValue] = useState("");
@@ -45,6 +69,55 @@ export function useTaskDetail({
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
+
+  // Sync diagram embed references to contentReferences table
+  const prevDiagramEmbedsRef = useRef<Set<string>>(new Set());
+  const diagramEmbedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!editor || !taskId) return;
+    const initial = extractTaskDiagramEmbeds(editor.document);
+    prevDiagramEmbedsRef.current = initial;
+
+    // Sync on mount so pre-existing embeds get tracked
+    if (initial.size > 0) {
+      const references = [...initial].map((diagramId) => ({
+        targetType: "diagram" as const,
+        targetId: diagramId,
+      }));
+      void syncReferences({
+        sourceType: "task",
+        sourceId: taskId,
+        references,
+        workspaceId,
+      });
+    }
+
+    const unsubscribe = editor.onChange(() => {
+      if (diagramEmbedDebounceRef.current) clearTimeout(diagramEmbedDebounceRef.current);
+      diagramEmbedDebounceRef.current = setTimeout(() => {
+        const current = extractTaskDiagramEmbeds(editor.document);
+        if (current.size !== prevDiagramEmbedsRef.current.size ||
+            [...current].some((k) => !prevDiagramEmbedsRef.current.has(k))) {
+          const references = [...current].map((diagramId) => ({
+            targetType: "diagram" as const,
+            targetId: diagramId,
+          }));
+          void syncReferences({
+            sourceType: "task",
+            sourceId: taskId,
+            references,
+            workspaceId,
+          });
+        }
+        prevDiagramEmbedsRef.current = current;
+      }, 2000);
+    });
+
+    return () => {
+      unsubscribe();
+      if (diagramEmbedDebounceRef.current) clearTimeout(diagramEmbedDebounceRef.current);
+    };
+  }, [editor, taskId, workspaceId, syncReferences]);
 
   // Sync title when task loads
   useEffect(() => {

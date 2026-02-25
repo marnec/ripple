@@ -1,9 +1,11 @@
+import { DeleteWarningDialog } from "@/components/DeleteWarningDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
@@ -35,6 +37,7 @@ function DocumentSettingsContent({
 
   // Local state
   const [documentName, setDocumentName] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   if (document === undefined || currentUser === undefined) {
     return (
@@ -44,8 +47,12 @@ function DocumentSettingsContent({
     );
   }
 
-  if (document === null || currentUser === null) {
+  if (currentUser === null) {
     return <SomethingWentWrong />;
+  }
+
+  if (document === null) {
+    return <ResourceDeleted resourceType="document" />;
   }
 
   const displayName = documentName ?? document.name;
@@ -66,13 +73,6 @@ function DocumentSettingsContent({
   };
 
   const handleDeleteDocument = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this document? All content will be permanently lost.",
-      )
-    ) {
-      return;
-    }
     try {
       await deleteDocument({ id: documentId });
       toast({ title: "Document deleted" });
@@ -119,7 +119,7 @@ function DocumentSettingsContent({
         </h2>
         <Button
           variant="destructive"
-          onClick={() => void handleDeleteDocument()}
+          onClick={() => setDeleteDialogOpen(true)}
         >
           <Trash2 className="w-4 h-4 mr-2" />
           Delete Document
@@ -127,6 +127,14 @@ function DocumentSettingsContent({
         <p className="text-sm text-muted-foreground mt-2">
           This will permanently delete the document and all its content.
         </p>
+        <DeleteWarningDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onConfirm={() => void handleDeleteDocument()}
+          resourceId={documentId}
+          resourceType="document"
+          resourceName={document.name}
+        />
       </section>
     </div>
   );

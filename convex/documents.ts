@@ -144,6 +144,13 @@ export const remove = mutation({
       await ctx.storage.delete(document.yjsSnapshotId);
     }
 
+    // Clean up outgoing content references from this document
+    const outgoingRefs = await ctx.db
+      .query("contentReferences")
+      .withIndex("by_source", (q) => q.eq("sourceId", id))
+      .collect();
+    await Promise.all(outgoingRefs.map((r) => ctx.db.delete(r._id)));
+
     await ctx.db.delete(id);
     return null;
   },

@@ -1,3 +1,4 @@
+import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useMutation, useQuery } from "convex/react";
 import { PenTool } from "lucide-react";
 import { useState } from "react";
@@ -24,11 +25,13 @@ export function DiagramSelectorList({
 
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const createNewDiagram = useMutation(api.diagrams.create);
-  const deleteDiagram = useMutation(api.diagrams.remove);
+  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", {
+    onDeleted: () => onDiagramSelect(null),
+  });
 
-  const handleDiagramDelete = async (id: Id<"diagrams">) => {
-    await deleteDiagram({ id });
-    onDiagramSelect(null);
+  const handleDiagramDelete = (id: Id<"diagrams">) => {
+    const diagram = diagrams?.find((d) => d._id === id);
+    void requestDelete(id, diagram?.name ?? "Untitled");
   };
 
   const navigateToDiagramSettings = (id: Id<"diagrams">) => {
@@ -61,10 +64,11 @@ export function DiagramSelectorList({
             onDiagramSelect={onDiagramSelect}
             onRenameDiagram={setSelectedDiagramForRename}
             onManageDiagram={navigateToDiagramSettings}
-            onDeleteDiagram={(id) => void handleDiagramDelete(id)}
+            onDeleteDiagram={(id) => handleDiagramDelete(id)}
           />
         ))}
       </SidebarMenu>
+      {deleteDialog}
       {!!selectedDiagramForRename && (
         <RenameDiagramDialog
           diagramId={selectedDiagramForRename}
