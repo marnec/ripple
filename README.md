@@ -9,7 +9,7 @@ NEXT STEPS:
     - [ ] resizeable and aligneable container (like diagram block)
     - [ ] resizeable col sizes
     - [ ] show / hide coordinates row/col headers
-- [ ] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
+- [x] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
 - [x] formula picker?
 - [ ] improve image attachment in messages
 - [ ] improve breadcrumb on desktop
