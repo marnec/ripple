@@ -5,14 +5,14 @@ NEXT STEPS:
 - [x] highlight referenced ranges in spreadsheet
 - [x] fix a spreadsheet reference should update from local storage first as for diagrams
 - improve spreadsheet embed
-    - [ ] replace inline for dedicated spreadsheet range block
-    - [ ] use inline only for spreadsheet reference (link)
-    - [ ] resizeable and aligneable container (like diagram block)
-    - [ ] resizeable column sizes
-    - [ ] show / hide coordinates row/col headers
-- [x] add a backlink section that shows the referencing docs
+    - [x] replace inline for dedicated spreadsheet range block
+    - [x] use inline only for spreadsheet reference (link)
+    - [x] resizeable and aligneable container (like diagram block)
+    - [x] resizeable column sizes
+    - [x] show / hide coordinates row/col headers
 - [x] warning for deleting content referenced elsewhere (e.g. diagrams referencd in docs)
 - [x] formula picker?
+- [ ] add a backlink section that shows the referencing docs
 - [ ] improve image attachment in messages
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
