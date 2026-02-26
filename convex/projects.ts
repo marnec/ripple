@@ -77,6 +77,7 @@ export const create = mutation({
       order: 0,
       isDefault: true,
       isCompleted: false,
+      setsStartDate: false,
     });
 
     await ctx.db.insert("taskStatuses", {
@@ -86,6 +87,7 @@ export const create = mutation({
       order: 1,
       isDefault: false,
       isCompleted: false,
+      setsStartDate: true,
     });
 
     await ctx.db.insert("taskStatuses", {
@@ -95,6 +97,7 @@ export const create = mutation({
       order: 2,
       isDefault: false,
       isCompleted: true,
+      setsStartDate: false,
     });
 
     return projectId;

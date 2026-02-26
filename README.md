@@ -4,8 +4,8 @@ NEXT STEPS:
     - [ ] cycles
     - [x] task dependencies
     - [x] deadlines & estimates
-    - [ ] comments can be expanded into full task history   (diplay all actions related to that task, comments are interleaved to other events, all events are logged somewhere with timestamp)
-    - [ ] a column can be configured to autoset start date
+    - [x] comments can be expanded into full task history   (diplay all actions related to that task, comments are interleaved to other events, all events are logged somewhere with timestamp)
+    - [ ] a column/status can be configured to autoset start date
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
 - resources

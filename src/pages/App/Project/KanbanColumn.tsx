@@ -20,7 +20,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
-import { ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { CalendarClock, Check, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -33,6 +33,7 @@ type KanbanColumnProps = {
     color: string;
     order: number;
     isDefault: boolean;
+    setsStartDate?: boolean;
   };
   tasks: Array<{
     _id: string;
@@ -162,6 +163,17 @@ export function KanbanColumn({
               >
                 <ChevronRight className="h-4 w-4 mr-2" />
                 Move Right
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => void updateStatus({
+                  statusId: status._id,
+                  setsStartDate: !status.setsStartDate,
+                })}
+              >
+                <CalendarClock className="h-4 w-4 mr-2" />
+                Auto-set start date
+                {status.setsStartDate && <Check className="h-4 w-4 ml-auto" />}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

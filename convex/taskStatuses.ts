@@ -37,9 +37,10 @@ export const create = mutation({
     name: v.string(),
     color: v.string(),
     isCompleted: v.boolean(),
+    setsStartDate: v.optional(v.boolean()),
   },
   returns: v.id("taskStatuses"),
-  handler: async (ctx, { projectId, name, color, isCompleted }) => {
+  handler: async (ctx, { projectId, name, color, isCompleted, setsStartDate }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -71,6 +72,7 @@ export const create = mutation({
       order: maxOrder + 1,
       isDefault: false,
       isCompleted,
+      setsStartDate: setsStartDate ?? false,
     });
 
     return statusId;
@@ -83,9 +85,10 @@ export const update = mutation({
     name: v.optional(v.string()),
     color: v.optional(v.string()),
     order: v.optional(v.number()),
+    setsStartDate: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, { statusId, name, color, order }) => {
+  handler: async (ctx, { statusId, name, color, order, setsStartDate }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -105,10 +108,11 @@ export const update = mutation({
     if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Build patch object with only provided fields
-    const patch: { name?: string; color?: string; order?: number } = {};
+    const patch: { name?: string; color?: string; order?: number; setsStartDate?: boolean } = {};
     if (name !== undefined) patch.name = name;
     if (color !== undefined) patch.color = color;
     if (order !== undefined) patch.order = order;
+    if (setsStartDate !== undefined) patch.setsStartDate = setsStartDate;
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(statusId, patch);

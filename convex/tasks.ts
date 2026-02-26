@@ -435,6 +435,10 @@ export const update = mutation({
       if (newStatus.isCompleted) {
         patch.completed = true;
       }
+      // Auto-set startDate when moving to a status with setsStartDate, if not already set
+      if (newStatus.setsStartDate && !task.startDate && startDate === undefined) {
+        patch.startDate = new Date().toISOString().slice(0, 10);
+      }
     }
 
     if (Object.keys(patch).length > 0) {
@@ -484,11 +488,12 @@ export const update = mutation({
         newValue: dueDate ?? undefined,
       });
     }
-    if (startDate !== undefined && startDate !== task.startDate) {
+    if ((startDate !== undefined && startDate !== task.startDate) ||
+        (patch.startDate !== undefined && !task.startDate)) {
       await insertActivity(ctx, {
         taskId, userId, type: "start_date_change",
         oldValue: task.startDate ?? undefined,
-        newValue: startDate ?? undefined,
+        newValue: (startDate ?? patch.startDate) ?? undefined,
       });
     }
     if (estimate !== undefined && estimate !== task.estimate) {
@@ -556,6 +561,10 @@ export const updatePosition = mutation({
     if (newStatus.isCompleted) {
       patchData.completed = true;
     }
+    // Auto-set startDate when moving to a status with setsStartDate, if not already set
+    if (newStatus.setsStartDate && !task.startDate) {
+      patchData.startDate = new Date().toISOString().slice(0, 10);
+    }
     await ctx.db.patch(taskId, patchData);
 
     // Log status change if status actually changed (kanban drag)
@@ -566,6 +575,13 @@ export const updatePosition = mutation({
         oldValue: oldStatus?.name ?? "Unknown",
         newValue: newStatus.name,
       });
+      // Log auto-set start date
+      if (patchData.startDate && !task.startDate) {
+        await insertActivity(ctx, {
+          taskId, userId, type: "start_date_change",
+          newValue: patchData.startDate,
+        });
+      }
     }
 
     return null;

@@ -138,6 +138,7 @@ export default defineSchema({
     order: v.number(), // display order (0, 1, 2...)
     isDefault: v.boolean(), // marks the default status for new tasks (only one per project)
     isCompleted: v.boolean(), // when true, tasks with this status are considered completed
+    setsStartDate: v.optional(v.boolean()), // when true, auto-sets startDate on tasks entering this status
   })
     .index("by_project", ["projectId"])
     .index("by_project_order", ["projectId", "order"]),

@@ -41,7 +41,9 @@ export function AddColumnDialog({
   const [name, setName] = useState("");
   const [selectedColor, setSelectedColor] = useState("bg-blue-500");
   const [isCompleted, setIsCompleted] = useState(false);
+  const [setsStartDate, setSetsStartDate] = useState(false);
 
+  // @ts-expect-error — TS2589: deep type instantiation from Convex schema size
   const createStatus = useMutation(api.taskStatuses.create);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -55,11 +57,13 @@ export function AddColumnDialog({
       name: trimmedName,
       color: selectedColor,
       isCompleted,
+      setsStartDate,
     }).then(() => {
       // Reset form and close dialog
       setName("");
       setSelectedColor("bg-blue-500");
       setIsCompleted(false);
+      setSetsStartDate(false);
       onOpenChange(false);
     });
   };
@@ -115,13 +119,35 @@ export function AddColumnDialog({
               <Checkbox
                 id="is-completed"
                 checked={isCompleted}
-                onCheckedChange={(checked) => setIsCompleted(checked === true)}
+                onCheckedChange={(checked) => {
+                  setIsCompleted(checked === true);
+                  if (checked) setSetsStartDate(false);
+                }}
               />
               <Label
                 htmlFor="is-completed"
                 className="text-sm font-normal cursor-pointer"
               >
                 Marks tasks as completed
+              </Label>
+            </div>
+
+            {/* Start Date Toggle */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="sets-start-date"
+                checked={setsStartDate}
+                disabled={isCompleted}
+                onCheckedChange={(checked) => setSetsStartDate(checked === true)}
+              />
+              <Label
+                htmlFor="sets-start-date"
+                className={cn(
+                  "text-sm font-normal cursor-pointer",
+                  isCompleted && "text-muted-foreground"
+                )}
+              >
+                Sets start date for tasks
               </Label>
             </div>
           </div>
