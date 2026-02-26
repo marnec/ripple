@@ -13,6 +13,7 @@ const projectValidator = v.object({
   creatorId: v.id("users"),
   key: v.optional(v.string()),
   taskCounter: v.optional(v.number()),
+  tags: v.optional(v.array(v.string())),
 });
 
 export const create = mutation({
@@ -104,6 +105,42 @@ export const create = mutation({
   },
 });
 
+export const search = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    searchText: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+  },
+  returns: v.any(),
+  handler: async (ctx, { workspaceId, searchText, tags }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    let results;
+    if (searchText?.trim()) {
+      results = await ctx.db
+        .query("projects")
+        .withSearchIndex("by_name", (q) =>
+          q.search("name", searchText).eq("workspaceId", workspaceId),
+        )
+        .collect();
+    } else {
+      results = await ctx.db
+        .query("projects")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .collect();
+    }
+
+    if (tags && tags.length > 0) {
+      results = results.filter(
+        (p) => p.tags && tags.every((t) => p.tags!.includes(t)),
+      );
+    }
+
+    return results;
+  },
+});
+
 export const get = query({
   args: { id: v.id("projects") },
   returns: v.union(projectValidator, v.null()),
@@ -160,9 +197,10 @@ export const update = mutation({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     key: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
   },
   returns: v.null(),
-  handler: async (ctx, { id, name, description, color, key }) => {
+  handler: async (ctx, { id, name, description, color, key, tags }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -175,10 +213,11 @@ export const update = mutation({
     }
 
     // Build patch object with only provided fields
-    const patch: { name?: string; description?: string; color?: string; key?: string } = {};
+    const patch: { name?: string; description?: string; color?: string; key?: string; tags?: string[] } = {};
     if (name !== undefined) patch.name = name;
     if (description !== undefined) patch.description = description;
     if (color !== undefined) patch.color = color;
+    if (tags !== undefined) patch.tags = tags;
 
     // Validate and set project key
     if (key !== undefined) {

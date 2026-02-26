@@ -1,4 +1,5 @@
 import { DeleteWarningDialog } from "@/components/DeleteWarningDialog";
+import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +35,7 @@ function DocumentSettingsContent({
   // Mutations
   const renameDocument = useMutation(api.documents.rename);
   const deleteDocument = useMutation(api.documents.remove);
+  const updateTags = useMutation(api.documents.updateTags);
 
   // Local state
   const [documentName, setDocumentName] = useState<string | null>(null);
@@ -108,6 +110,17 @@ function DocumentSettingsContent({
             <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
           )}
         </div>
+      </section>
+
+      {/* Tags Section */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-4">Tags</h2>
+        <TagInput
+          value={document.tags ?? []}
+          onChange={(tags) => void updateTags({ id: documentId, tags })}
+          workspaceId={workspaceId}
+          placeholder="Add tags to organize this document..."
+        />
       </section>
 
       <Separator className="my-6" />

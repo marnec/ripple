@@ -1,3 +1,4 @@
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
@@ -17,7 +18,7 @@ import { Theme } from "@excalidraw/excalidraw/element/types";
 import { yjsToExcalidraw } from "y-excalidraw";
 import * as Y from "yjs";
 
-function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
+function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
   const viewer = useQuery(api.users.viewer);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   const { resolvedTheme } = useTheme();
@@ -130,6 +131,11 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
     <div className="relative h-full w-full overflow-hidden animate-fade-in">
       {/* Header with collaboration UI */}
       <div className="absolute top-5 right-10 z-50 flex items-center gap-3">
+        <FavoriteButton
+          resourceType="diagram"
+          resourceId={diagramId}
+          workspaceId={workspaceId}
+        />
         <ConnectionStatus isConnected={isConnected} />
         {isConnected && (
           <ActiveUsers
@@ -160,9 +166,9 @@ function DiagramPageContent({ diagramId }: { diagramId: Id<"diagrams"> }) {
 }
 
 export function DiagramPage() {
-  const { diagramId } = useParams<{ diagramId: Id<"diagrams"> }>();
-  if (!diagramId) {
+  const { diagramId, workspaceId } = useParams<{ diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }>();
+  if (!diagramId || !workspaceId) {
     return null;
   }
-  return <DiagramPageContent diagramId={diagramId} key={diagramId} />;
+  return <DiagramPageContent diagramId={diagramId} workspaceId={workspaceId} key={diagramId} />;
 }

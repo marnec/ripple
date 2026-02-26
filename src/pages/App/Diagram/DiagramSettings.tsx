@@ -1,3 +1,4 @@
+import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,7 @@ function DiagramSettingsContent({
 
   // Mutations
   const renameDiagram = useMutation(api.diagrams.rename);
+  const updateTags = useMutation(api.diagrams.updateTags);
 
   // Confirmed delete hook
   const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", {
@@ -97,6 +99,17 @@ function DiagramSettingsContent({
             <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
           )}
         </div>
+      </section>
+
+      {/* Tags Section */}
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-4">Tags</h2>
+        <TagInput
+          value={diagram.tags ?? []}
+          onChange={(tags) => void updateTags({ id: diagramId, tags })}
+          workspaceId={workspaceId}
+          placeholder="Add tags to organize this diagram..."
+        />
       </section>
 
       <Separator className="my-6" />

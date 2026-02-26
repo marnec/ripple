@@ -1,4 +1,5 @@
 
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
@@ -634,12 +635,18 @@ function SpreadsheetEditor({
   return (
     <div className="flex h-full w-full flex-col animate-fade-in">
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <div className="flex h-8 items-center">
+        <div className="flex h-8 items-center gap-2">
+          <FavoriteButton
+            resourceType="spreadsheet"
+            resourceId={spreadsheetId}
+            workspaceId={spreadsheet.workspaceId}
+          />
+          <h1 className="text-lg font-semibold truncate">{spreadsheet.name}</h1>
           {hasRefs && (
             <button
               type="button"
               onClick={() => setShowRefHighlights((v) => !v)}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-2"
               title={showRefHighlights ? "Hide reference highlights" : "Show reference highlights"}
             >
               {showRefHighlights ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}

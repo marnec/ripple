@@ -1,5 +1,6 @@
 import { QueryParams } from "@shared/types/routes";
 import { useParams } from "react-router-dom";
+import { ResourceListPage } from "../Resources/ResourceListPage";
 
 export function Spreadsheets() {
   const { workspaceId } = useParams<QueryParams>();
@@ -9,8 +10,10 @@ export function Spreadsheets() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center text-muted-foreground">
-      Select a spreadsheet from the sidebar or create a new one
-    </div>
+    <ResourceListPage
+      resourceType="spreadsheet"
+      title="Spreadsheets"
+      workspaceId={workspaceId}
+    />
   );
 }

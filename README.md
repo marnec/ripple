@@ -1,25 +1,20 @@
 NEXT STEPS:
-- [ ] PLANE.so inspired features:
-    - [x] add id to tasks
-    - [ ] cycles
-    - [x] task dependencies
-    - [x] deadlines & estimates
-    - [x] comments can be expanded into full task history   (diplay all actions related to that task, comments are interleaved to other events, all events are logged somewhere with timestamp)
-    - [ ] a column/status can be configured to autoset start date
+- [ ] PLANE.so inspired cycles:
 - [ ] improve breadcrumb on desktop
 - [ ] add error boundaries for better UX on exceptions
 - resources
-    - [ ] each resource can be tagged with workspace-level tags
-    - [ ] a resource can be marked as favorite
-    - [ ] max n favorites are pinned and always visible in sidebar
-    - [ ] #tag mixed to text-search search input in sidebar
-    - [ ] "search input" in sidebar on submit shows research results in the resource-list page (e.g. .../<workspace-id>/{projects,documents,spreadsheets,diagrams})
-    - [ ] resource-list page is divided in two tabs, "favorites" and "search"
-    - [ ] when navigating to resource-list page the default tab is "favorites"
-    - [ ] when navigating from sidebar "search input" submit the resource-list page opens on "search" tab
-    - [ ] the "favorites" tab shows a paginated list of favorites, sorted by most recent
-    - [ ] the search state in "search" tabs is stored in url params
+    - [x] each resource can be tagged with workspace-level tags
+    - [x] a resource can be marked as favorite
+    - [x] max n favorites are pinned and always visible in sidebar
+    - [x] #tag mixed to text-search search input in sidebar
+    - [x] "search input" in sidebar on submit shows research results in the resource-list page (e.g. .../<workspace-id>/{projects,documents,spreadsheets,diagrams})
+    - [x] resource-list page is divided in two tabs, "favorites" and "search"
+    - [x] when navigating to resource-list page the default tab is "favorites"
+    - [x] when navigating from sidebar "search input" submit the resource-list page opens on "search" tab
+    - [x] the "favorites" tab shows a paginated list of favorites, sorted by most recent
+    - [x] the search state in "search" tabs is stored in url params
     - [ ] the back / forward browser and app navigation ignores the search params and navigates consistently with app page structure
+- [ ] improve spreadsheet reference highlight (border)
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
@@ -45,4 +40,4 @@ NEXT STEPS:
     - [ ] prompt for coordinates
     - [ ] mouse pick coords?
     - [ ] reintroduce formatting?
-- [ ] add a backlink section that shows the referencing docs
+- [ ] add a backlink section that shows cross-references

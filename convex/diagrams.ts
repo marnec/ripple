@@ -42,6 +42,69 @@ export const list = query({
   },
 });
 
+export const search = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    searchText: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+  },
+  returns: v.any(),
+  handler: async (ctx, { workspaceId, searchText, tags }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    let results;
+    if (searchText?.trim()) {
+      results = await ctx.db
+        .query("diagrams")
+        .withSearchIndex("by_name", (q) =>
+          q.search("name", searchText).eq("workspaceId", workspaceId),
+        )
+        .collect();
+    } else {
+      results = await ctx.db
+        .query("diagrams")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .order("desc")
+        .collect();
+    }
+
+    if (tags && tags.length > 0) {
+      results = results.filter(
+        (doc) => doc.tags && tags.every((t) => doc.tags!.includes(t)),
+      );
+    }
+
+    return results;
+  },
+});
+
+export const updateTags = mutation({
+  args: {
+    id: v.id("diagrams"),
+    tags: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { id, tags }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const diagram = await ctx.db.get(id);
+    if (!diagram) throw new ConvexError("Diagram not found");
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId),
+      )
+      .first();
+    if (!membership) throw new ConvexError("Not a member of this workspace");
+
+    await ctx.db.patch(id, { tags });
+    return null;
+  },
+});
+
 export const get = query({
   args: { id: v.id("diagrams") },
   returns: v.union(diagramValidator, v.null()),

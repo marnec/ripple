@@ -126,6 +126,7 @@ export default defineSchema({
     creatorId: v.id("users"), // the user who created the project (the admin)
     key: v.optional(v.string()), // 2-5 char uppercase identifier (e.g., "ENG")
     taskCounter: v.optional(v.number()), // auto-increment counter for task numbers
+    tags: v.optional(v.array(v.string())),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_key", ["workspaceId", "key"])
@@ -232,6 +233,22 @@ export default defineSchema({
   })
     .index("by_spreadsheet", ["spreadsheetId"])
     .index("by_spreadsheet_cellRef", ["spreadsheetId", "cellRef"]),
+
+  favorites: defineTable({
+    userId: v.id("users"),
+    workspaceId: v.id("workspaces"),
+    resourceType: v.union(
+      v.literal("document"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+      v.literal("project"),
+    ),
+    resourceId: v.string(), // polymorphic ID stored as string
+    favoritedAt: v.number(),
+  })
+    .index("by_workspace_user", ["workspaceId", "userId"])
+    .index("by_workspace_user_type", ["workspaceId", "userId", "resourceType"])
+    .index("by_user_resource", ["userId", "resourceId"]),
 
   contentReferences: defineTable({
     sourceType: v.union(v.literal("document"), v.literal("task")),

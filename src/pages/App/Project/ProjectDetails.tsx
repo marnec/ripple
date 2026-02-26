@@ -1,3 +1,4 @@
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   Tabs,
@@ -59,16 +60,30 @@ function ProjectDetailsContent({
     <div
       className={
         view === "board"
-          ? "container mx-auto p-3 md:p-6 max-w-full"
-          : "container mx-auto p-3 md:p-6 max-w-5xl"
+          ? "flex h-full flex-col"
+          : "flex h-full flex-col"
       }
     >
       {/* Project Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <span className={`w-4 h-4 rounded-full ${project.color}`} />
-        <h1 className="text-2xl font-bold">{project.name}</h1>
+      <div className="flex items-center justify-between px-3 py-1.5 border-b">
+        <div className="flex h-8 items-center gap-2">
+          <FavoriteButton
+            resourceType="project"
+            resourceId={projectId}
+            workspaceId={workspaceId}
+          />
+          <h1 className="text-lg font-semibold truncate">{project.name}</h1>
+          {project.color && (
+            <span className={`w-2.5 h-2.5 rounded-full ${project.color} ml-1`} />
+          )}
+        </div>
       </div>
 
+      <div className={
+        view === "board"
+          ? "flex-1 overflow-auto p-3 md:p-6"
+          : "flex-1 overflow-auto p-3 md:p-6 max-w-5xl mx-auto w-full"
+      }>
       {project.description && (
         <p className="text-muted-foreground mb-6">{project.description}</p>
       )}
@@ -96,6 +111,7 @@ function ProjectDetailsContent({
           <Tasks projectId={projectId} workspaceId={workspaceId} />
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }

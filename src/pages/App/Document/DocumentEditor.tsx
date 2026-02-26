@@ -1,3 +1,4 @@
+import { FavoriteButton } from "@/components/FavoriteButton";
 import {
   BlockNoteSchema,
   defaultBlockSpecs,
@@ -358,7 +359,15 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   return (
     <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-sleek">
       <div className="px-20 max-w-full animate-fade-in">
-        <div className="sticky top-0 z-10 flex items-center justify-end pt-5 pb-2 bg-background/80 backdrop-blur-sm">
+        <div className="sticky top-0 z-10 flex items-center justify-between pt-5 pb-2 bg-background/80 backdrop-blur-sm">
+          <div className="flex h-8 items-center gap-2">
+            <FavoriteButton
+              resourceType="document"
+              resourceId={documentId}
+              workspaceId={document.workspaceId}
+            />
+            <h1 className="text-lg font-semibold truncate">{document.name}</h1>
+          </div>
           <div className="flex h-8 items-center gap-3">
             <ConnectionStatus isConnected={isConnected} />
             {isConnected && (
@@ -376,7 +385,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             )}
           </div>
         </div>
-        <h2 className="text-3xl pb-12 font-semibold">{document.name}</h2>
         <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
               <SuggestionMenuController
                 triggerCharacter={"#"}

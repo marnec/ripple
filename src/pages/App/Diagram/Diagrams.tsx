@@ -1,5 +1,6 @@
 import { QueryParams } from "@shared/types/routes";
 import { useParams } from "react-router-dom";
+import { ResourceListPage } from "../Resources/ResourceListPage";
 
 export function Diagrams() {
   const { workspaceId } = useParams<QueryParams>();
@@ -9,8 +10,10 @@ export function Diagrams() {
   }
 
   return (
-    <div className="flex h-full w-full flex-col">
-      The dev was lazy
-    </div>
+    <ResourceListPage
+      resourceType="diagram"
+      title="Diagrams"
+      workspaceId={workspaceId}
+    />
   );
-} 
+}
