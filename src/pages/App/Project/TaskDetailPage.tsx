@@ -6,7 +6,7 @@ import { QueryParams } from "@shared/types/routes";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { TaskComments } from "./TaskComments";
+import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
@@ -161,7 +161,7 @@ function TaskDetailPageContent({
 
         {detail.currentUser && (
           <div className="space-y-2">
-            <TaskComments
+            <TaskActivityTimeline
               taskId={taskId}
               currentUserId={detail.currentUser._id}
               workspaceId={workspaceId}

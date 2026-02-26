@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { insertActivity } from "./taskActivity";
 
 export const listByTask = query({
   args: { taskId: v.id("tasks") },
@@ -129,10 +130,21 @@ export const create = mutation({
       if (reverse) throw new ConvexError("Relationship already exists");
     }
 
-    return ctx.db.insert("taskDependencies", {
+    const depId = await ctx.db.insert("taskDependencies", {
       ...args,
       creatorId: userId,
     });
+
+    // Log activity
+    const targetTask = await ctx.db.get(args.dependsOnTaskId);
+    await insertActivity(ctx, {
+      taskId: args.taskId,
+      userId,
+      type: "dependency_add",
+      newValue: `${args.type}:${targetTask?.title ?? "Unknown"}`,
+    });
+
+    return depId;
   },
 });
 
@@ -157,6 +169,15 @@ export const remove = mutation({
       )
       .first();
     if (!membership) throw new ConvexError("Not a member of this workspace");
+
+    // Log activity before deleting
+    const targetTask = await ctx.db.get(dep.dependsOnTaskId);
+    await insertActivity(ctx, {
+      taskId: dep.taskId,
+      userId,
+      type: "dependency_remove",
+      oldValue: `${dep.type}:${targetTask?.title ?? "Unknown"}`,
+    });
 
     await ctx.db.delete(dependencyId);
     return null;

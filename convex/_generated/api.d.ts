@@ -32,6 +32,7 @@ import type * as snapshots from "../snapshots.js";
 import type * as spreadsheetCellRefs from "../spreadsheetCellRefs.js";
 import type * as spreadsheetCellRefsNode from "../spreadsheetCellRefsNode.js";
 import type * as spreadsheets from "../spreadsheets.js";
+import type * as taskActivity from "../taskActivity.js";
 import type * as taskComments from "../taskComments.js";
 import type * as taskDependencies from "../taskDependencies.js";
 import type * as taskNotifications from "../taskNotifications.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   spreadsheetCellRefs: typeof spreadsheetCellRefs;
   spreadsheetCellRefsNode: typeof spreadsheetCellRefsNode;
   spreadsheets: typeof spreadsheets;
+  taskActivity: typeof taskActivity;
   taskComments: typeof taskComments;
   taskDependencies: typeof taskDependencies;
   taskNotifications: typeof taskNotifications;

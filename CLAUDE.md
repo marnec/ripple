@@ -113,3 +113,8 @@ export const myQuery = query({
 - Use `Id<"tableName">` for document ID types
 - Use `Doc<"tableName">` for document types
 - Functions returning nothing should have `returns: v.null()`
+
+### UX principles
+ - This app is opinionated on many topics, we don't want to please every possible user
+ - Users should not be flooded with information, by default only essential information is visible
+ - If the user desires more information it should be available and intuitively toggled / retrieved

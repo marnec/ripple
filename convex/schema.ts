@@ -182,6 +182,30 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("undeleted_by_task", ["taskId", "deleted"]),
 
+  taskActivity: defineTable({
+    taskId: v.id("tasks"),
+    userId: v.id("users"),
+    type: v.union(
+      v.literal("created"),
+      v.literal("status_change"),
+      v.literal("priority_change"),
+      v.literal("assignee_change"),
+      v.literal("label_add"),
+      v.literal("label_remove"),
+      v.literal("title_change"),
+      v.literal("due_date_change"),
+      v.literal("start_date_change"),
+      v.literal("estimate_change"),
+      v.literal("dependency_add"),
+      v.literal("dependency_remove"),
+      v.literal("comment_edit"),
+      v.literal("comment_delete"),
+    ),
+    oldValue: v.optional(v.string()),
+    newValue: v.optional(v.string()),
+  })
+    .index("by_task", ["taskId"]),
+
   taskDependencies: defineTable({
     taskId: v.id("tasks"), // source task
     dependsOnTaskId: v.id("tasks"), // target task

@@ -10,7 +10,7 @@ import {
 import { Maximize2, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { TaskComments } from "./TaskComments";
+import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskDependencies } from "./TaskDependencies";
@@ -159,7 +159,7 @@ export function TaskDetailSheet({
 
             {detail.currentUser && (
               <div className="space-y-2">
-                <TaskComments
+                <TaskActivityTimeline
                   taskId={taskId}
                   currentUserId={detail.currentUser._id}
                   workspaceId={workspaceId}

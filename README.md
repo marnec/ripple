@@ -13,13 +13,19 @@ NEXT STEPS:
     - [ ] a resource can be marked as favorite
     - [ ] max n favorites are pinned and always visible in sidebar
     - [ ] #tag mixed to text-search search input in sidebar
-    - [ ] "search input" in sidebar on submit shows research results in the resource-list page (e.g. ...<workspace-id>/{projects,documents,spreadsheets,diagrams})
-    - [ ] all favorites are always visible in resource-list page
+    - [ ] "search input" in sidebar on submit shows research results in the resource-list page (e.g. .../<workspace-id>/{projects,documents,spreadsheets,diagrams})
+    - [ ] resource-list page is divided in two tabs, "favorites" and "search"
+    - [ ] when navigating to resource-list page the default tab is "favorites"
+    - [ ] when navigating from sidebar "search input" submit the resource-list page opens on "search" tab
+    - [ ] the "favorites" tab shows a paginated list of favorites, sorted by most recent
+    - [ ] the search state in "search" tabs is stored in url params
+    - [ ] the back / forward browser and app navigation ignores the search params and navigates consistently with app page structure
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
     - [ ] language preference
 - [ ] dashboard pages (channels, projects, documents, diagrams)
+- [ ] create a logo-themed spinner
 - [ ] AI integrations
     - [ ] AI bot in chat (called on mention)
     - [ ] AI dictate content

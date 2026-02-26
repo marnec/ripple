@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
+import { insertActivity } from "./taskActivity";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -100,6 +101,8 @@ export const create = mutation({
     const filteredMentions = mentionedUserIds.filter(id => id !== userId);
     if (filteredMentions.length > 0) {
       const user = await ctx.db.get(userId);
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore — TS2589: deep type instantiation from Convex schema size
       await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
         taskId,
         mentionedUserIds: filteredMentions,
@@ -137,6 +140,9 @@ export const update = mutation({
 
     // Update body with trimmed value
     await ctx.db.patch(id, { body: body.trim() });
+
+    // Log comment edit activity
+    await insertActivity(ctx, { taskId: comment.taskId, userId, type: "comment_edit" });
 
     // Schedule mention notifications for newly added mentions after database write
     const oldMentions = new Set(comment.body ? extractMentionedUserIds(comment.body) : []);
@@ -179,6 +185,10 @@ export const remove = mutation({
 
     // Soft delete
     await ctx.db.patch(id, { deleted: true });
+
+    // Log comment delete activity
+    await insertActivity(ctx, { taskId: comment.taskId, userId, type: "comment_delete" });
+
     return null;
   },
 });
