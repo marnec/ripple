@@ -1,7 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
-import { FolderPlus, Search } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -9,9 +8,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
 } from "../../../components/ui/sidebar";
-import { CreateProjectDialog } from "./CreateProjectDialog";
 import { ProjectSelectorItem } from "./ProjectSelectorItem";
-import { SidebarSearchInput } from "../Sidebar/SidebarSearchInput";
 
 export interface ProjectSelectorListProps {
   workspaceId: Id<"workspaces">;
@@ -24,8 +21,6 @@ export function ProjectSelectorList({
   projectId,
   onProjectSelect,
 }: ProjectSelectorListProps) {
-  const [showCreateProject, setShowCreateProject] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const navigate = useNavigate();
   const deleteProject = useMutation(api.projects.remove);
 
@@ -51,22 +46,9 @@ export function ProjectSelectorList({
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Projects</SidebarGroupLabel>
-      <div className="absolute right-3 top-3.5 flex items-center gap-0.5 group-data-[collapsible=icon]:hidden">
-        <button onClick={() => setShowSearch((s) => !s)} title="Search projects" className="flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-4">
-          <Search />
-        </button>
-        <button onClick={() => setShowCreateProject(true)} title="Create project" className="flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-4">
-          <FolderPlus />
-        </button>
-      </div>
-      {showSearch && (
-        <SidebarSearchInput
-          workspaceId={workspaceId}
-          resourceRoute="projects"
-          onClose={() => setShowSearch(false)}
-        />
-      )}
+      <SidebarGroupLabel asChild>
+        <Link to={`/workspaces/${workspaceId}/projects`}>Projects</Link>
+      </SidebarGroupLabel>
       <SidebarMenu>
         {favoriteProjects?.length === 0 && (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">No starred projects</p>
@@ -82,11 +64,6 @@ export function ProjectSelectorList({
           />
         ))}
       </SidebarMenu>
-      <CreateProjectDialog
-        workspaceId={workspaceId}
-        open={showCreateProject}
-        onOpenChange={setShowCreateProject}
-      />
     </SidebarGroup>
   );
 }

@@ -11,16 +11,15 @@ import {
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePaginatedQuery, useQuery } from "convex/react";
-import { FileText, Folder, PenTool, Table2 } from "lucide-react";
+import { FileText, Folder, PenTool, Plus, Table2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
-  useMemo,
   useReducer,
   useRef,
   useState,
 } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -34,6 +33,7 @@ const RESOURCE_ICONS: Record<ResourceType, typeof FileText> = {
   project: Folder,
 };
 
+
 const SEARCH_APIS = {
   document: api.documents.search,
   diagram: api.diagrams.search,
@@ -45,61 +45,86 @@ type ResourceListPageProps = {
   resourceType: ResourceType;
   title: string;
   workspaceId: string;
+  onCreate?: () => void;
+  createLabel?: string;
+  createDialog?: React.ReactNode;
 };
+
+function getStorageKey(workspaceId: string, resourceType: ResourceType) {
+  return `ripple:search:${workspaceId}:${resourceType}`;
+}
+
+function readSearchState(workspaceId: string, resourceType: ResourceType) {
+  try {
+    const raw = localStorage.getItem(getStorageKey(workspaceId, resourceType));
+    if (!raw) return { tab: "favorites", q: "", tags: [] as string[] };
+    const parsed = JSON.parse(raw) as { tab?: string; q?: string; tags?: string[] };
+    return {
+      tab: parsed.tab || "favorites",
+      q: parsed.q || "",
+      tags: parsed.tags ?? [],
+    };
+  } catch {
+    return { tab: "favorites", q: "", tags: [] as string[] };
+  }
+}
+
+function writeSearchState(
+  workspaceId: string,
+  resourceType: ResourceType,
+  state: { tab: string; q: string; tags: string[] },
+) {
+  localStorage.setItem(getStorageKey(workspaceId, resourceType), JSON.stringify(state));
+}
 
 export function ResourceListPage({
   resourceType,
   title,
   workspaceId,
+  onCreate,
+  createLabel,
+  createDialog,
 }: ResourceListPageProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
   const wsId = workspaceId as Id<"workspaces">;
 
-  const tab = searchParams.get("tab") || "favorites";
-  const searchQuery = searchParams.get("q") || "";
-  const tagsParam = searchParams.get("tags") || "";
-  const tags = useMemo(
-    () => (tagsParam ? tagsParam.split(",").filter(Boolean) : []),
-    [tagsParam],
-  );
+  // Read initial state from localStorage once
+  const [stored] = useState(() => readSearchState(workspaceId, resourceType));
+  const [tab, setTab] = useState(stored.tab);
+  const [searchQuery, setSearchQuery] = useState(stored.q);
+  const [tags, setTags] = useState(stored.tags);
 
-  const searchValueFromUrl = useMemo(
-    () => buildSearchString(searchQuery, tags),
-    [searchQuery, tags],
+  const [localSearchValue, setLocalSearchValue] = useState(
+    () => buildSearchString(stored.q, stored.tags),
   );
-
-  // Local input state for responsive typing; URL params are debounced
-  const [localSearchValue, setLocalSearchValue] = useState(searchValueFromUrl);
   const [isSearchDebouncing, setIsSearchDebouncing] = useState(false);
   const [isSearchLoading, setIsSearchLoading] = useState(true);
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync local state when URL params change externally (e.g. navigating from sidebar search)
-  useEffect(() => {
-    setLocalSearchValue(searchValueFromUrl);
-  }, [searchValueFromUrl]);
-
-  const flushToUrl = useCallback(
+  const flushSearch = useCallback(
     (value: string) => {
       const parsed = parseSearchInput(value);
-      const params = new URLSearchParams();
-      params.set("tab", "search");
-      if (parsed.searchText) params.set("q", parsed.searchText);
-      if (parsed.tags.length > 0) params.set("tags", parsed.tags.join(","));
-      setSearchParams(params, { replace: true });
+      setSearchQuery(parsed.searchText);
+      setTags(parsed.tags);
+      writeSearchState(workspaceId, resourceType, {
+        tab: "search",
+        q: parsed.searchText,
+        tags: parsed.tags,
+      });
     },
-    [setSearchParams],
+    [workspaceId, resourceType],
   );
 
   const handleTabChange = (value: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    setTab(value);
     if (value === "favorites") {
-      setSearchParams({}, { replace: true });
+      writeSearchState(workspaceId, resourceType, { tab: "favorites", q: "", tags: [] });
+      setSearchQuery("");
+      setTags([]);
+      setLocalSearchValue("");
     } else {
-      const params = new URLSearchParams(searchParams);
-      params.set("tab", value);
-      setSearchParams(params, { replace: true });
+      writeSearchState(workspaceId, resourceType, { tab: value, q: searchQuery, tags });
     }
   };
 
@@ -110,10 +135,10 @@ export function ResourceListPage({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         setIsSearchDebouncing(false);
-        flushToUrl(value);
+        flushSearch(value);
       }, 300);
     },
-    [flushToUrl],
+    [flushSearch],
   );
 
   const handleSearchSubmit = useCallback(
@@ -122,9 +147,9 @@ export function ResourceListPage({
       const value = buildSearchString(parsed.searchText, parsed.tags);
       setLocalSearchValue(value);
       setIsSearchDebouncing(false);
-      flushToUrl(value);
+      flushSearch(value);
     },
-    [flushToUrl],
+    [flushSearch],
   );
 
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
@@ -141,11 +166,19 @@ export function ResourceListPage({
   return (
     <div className="container mx-auto p-4">
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{title}</h1>
-          <p className="text-sm text-muted-foreground">
-            {title} in this workspace.
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">{title}</h1>
+            <p className="text-sm text-muted-foreground">
+              {title} in this workspace.
+            </p>
+          </div>
+          {onCreate && (
+            <Button onClick={onCreate} size="sm">
+              <Plus className="mr-1.5 h-4 w-4" />
+              {createLabel ?? `New ${resourceType}`}
+            </Button>
+          )}
         </div>
         <Tabs value={tab} onValueChange={handleTabChange}>
           <div className="flex items-center gap-2">
@@ -171,6 +204,8 @@ export function ResourceListPage({
               workspaceId={wsId}
               resourceType={resourceType}
               onLoadingChange={setIsFavoritesLoading}
+              onCreate={onCreate}
+              createLabel={createLabel}
             />
           </TabsContent>
           <TabsContent value="search" className="mt-4">
@@ -193,6 +228,7 @@ export function ResourceListPage({
           </TabsContent>
         </Tabs>
       </div>
+      {createDialog}
     </div>
   );
 }
@@ -201,10 +237,14 @@ function FavoritesTab({
   workspaceId,
   resourceType,
   onLoadingChange,
+  onCreate,
+  createLabel,
 }: {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
   onLoadingChange?: (loading: boolean) => void;
+  onCreate?: () => void;
+  createLabel?: string;
 }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.favorites.listByType,
@@ -236,9 +276,17 @@ function FavoritesTab({
 
   if (items.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        No favorites yet. Star a {resourceType} to pin it here.
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          No favorites yet. Star a {resourceType} to pin it here.
+        </p>
+        {onCreate && (
+          <Button variant="outline" onClick={onCreate}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            {createLabel ?? `Create a ${resourceType}`}
+          </Button>
+        )}
+      </div>
     );
   }
 

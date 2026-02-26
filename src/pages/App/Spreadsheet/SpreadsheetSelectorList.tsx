@@ -1,14 +1,12 @@
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
-import { useMutation, useQuery } from "convex/react";
-import { Search, Table2 } from "lucide-react";
+import { useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
 import { SpreadsheetSelectorItem } from "./SpreadsheetSelectorItem";
 import { RenameSpreadsheetDialog } from "./RenameSpreadsheetDialog";
-import { SidebarSearchInput } from "../Sidebar/SidebarSearchInput";
 
 export type SpreadsheetSelectorProps = {
   workspaceId: Id<"workspaces">;
@@ -22,13 +20,11 @@ export function SpreadsheetSelectorList({
   onSpreadsheetSelect,
 }: SpreadsheetSelectorProps) {
   const [selectedSpreadsheetForRename, setSelectedSpreadsheetForRename] = useState<Id<"spreadsheets"> | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
   const navigate = useNavigate();
   const deletingIdRef = useRef<string | null>(null);
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
   const favoriteIds = useQuery(api.favorites.listIdsForType, { workspaceId, resourceType: "spreadsheet" });
-  const createNewSpreadsheet = useMutation(api.spreadsheets.create);
 
   const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
   const favoriteSheets = useMemo(
@@ -54,31 +50,11 @@ export function SpreadsheetSelectorList({
     void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}/settings`);
   };
 
-  const handleSpreadsheetCreate = async () => {
-    if (!workspaceId) return;
-
-    const id = await createNewSpreadsheet({ workspaceId });
-    onSpreadsheetSelect(id);
-  };
-
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Spreadsheets</SidebarGroupLabel>
-      <div className="absolute right-3 top-3.5 flex items-center gap-0.5 group-data-[collapsible=icon]:hidden">
-        <button onClick={() => setShowSearch((s) => !s)} title="Search spreadsheets" className="flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-4">
-          <Search />
-        </button>
-        <button onClick={() => void handleSpreadsheetCreate()} title="Create spreadsheet" className="flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&>svg]:size-4">
-          <Table2 />
-        </button>
-      </div>
-      {showSearch && (
-        <SidebarSearchInput
-          workspaceId={workspaceId}
-          resourceRoute="spreadsheets"
-          onClose={() => setShowSearch(false)}
-        />
-      )}
+      <SidebarGroupLabel asChild>
+        <Link to={`/workspaces/${workspaceId}/spreadsheets`}>Spreadsheets</Link>
+      </SidebarGroupLabel>
       <SidebarMenu>
         {favoriteSheets?.length === 0 && (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">No starred spreadsheets</p>
