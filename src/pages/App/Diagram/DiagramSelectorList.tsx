@@ -1,10 +1,15 @@
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
+import { PenTool } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
+import {
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+} from "../../../components/ui/sidebar";
 import { DiagramSelectorItem } from "./DiagramSelectorItem";
 import { RenameDiagramDialog } from "./RenameDiagramDialog";
 
@@ -23,7 +28,6 @@ export function DiagramSelectorList({
   const navigate = useNavigate();
   const deletingIdRef = useRef<string | null>(null);
 
-  // @ts-expect-error TS2589 deep type instantiation with Convex query
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const favoriteIds = useQuery(api.favorites.listIdsForType, { workspaceId, resourceType: "diagram" });
 
@@ -52,13 +56,16 @@ export function DiagramSelectorList({
   };
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel asChild>
-        <Link to={`/workspaces/${workspaceId}/diagrams`}>Diagrams</Link>
-      </SidebarGroupLabel>
-      <SidebarMenu>
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild tooltip="Diagrams">
+        <Link to={`/workspaces/${workspaceId}/diagrams`} className="font-medium">
+          <PenTool className="size-4" />
+          Diagrams
+        </Link>
+      </SidebarMenuButton>
+      <SidebarMenuSub>
         {favoriteDiagrams?.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No starred diagrams</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground">No starred diagrams</p>
         )}
         {favoriteDiagrams?.map((diagram: any) => (
           <DiagramSelectorItem
@@ -71,7 +78,7 @@ export function DiagramSelectorList({
             onDeleteDiagram={(id) => handleDiagramDelete(id)}
           />
         ))}
-      </SidebarMenu>
+      </SidebarMenuSub>
       {deleteDialog}
       {!!selectedDiagramForRename && (
         <RenameDiagramDialog
@@ -80,6 +87,6 @@ export function DiagramSelectorList({
           onOpenChange={(open: boolean) => !open && setSelectedDiagramForRename(null)}
         />
       )}
-    </SidebarGroup>
+    </SidebarMenuItem>
   );
 }

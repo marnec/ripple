@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { File, FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
+import { FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -9,9 +9,8 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu";
 import {
-  SidebarMenuAction,
-  SidebarMenuButton,
-  SidebarMenuItem
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "../../../components/ui/sidebar";
 
 export interface DocumentSelectorItemProps {
@@ -34,22 +33,20 @@ export function DocumentSelectorItem({
   const isMobile = useIsMobile();
 
   return (
-    <SidebarMenuItem key={document._id}>
-      <SidebarMenuButton
+    <SidebarMenuSubItem className="group/subitem relative">
+      <SidebarMenuSubButton
         asChild
-        variant={document._id === documentId ? "outline" : "default"}
-        onClick={() => onDocumentSelect(document._id)}
+        isActive={document._id === documentId}
       >
-        <div>
-          <File /> {document.name}
+        <div onClick={() => onDocumentSelect(document._id)} className="cursor-pointer pr-6">
+          <span className="truncate">{document.name}</span>
         </div>
-      </SidebarMenuButton>
+      </SidebarMenuSubButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover>
-            <MoreHorizontal />
-            <span className="sr-only">More</span>
-          </SidebarMenuAction>
+          <button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover/subitem:opacity-100 data-[state=open]:opacity-100">
+            <MoreHorizontal className="size-3.5" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-48 rounded-lg"
@@ -71,6 +68,6 @@ export function DocumentSelectorItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </SidebarMenuItem>
+    </SidebarMenuSubItem>
   );
 }

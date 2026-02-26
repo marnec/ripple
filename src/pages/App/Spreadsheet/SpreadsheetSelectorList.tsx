@@ -1,10 +1,15 @@
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
+import { Table2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
+import {
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+} from "../../../components/ui/sidebar";
 import { SpreadsheetSelectorItem } from "./SpreadsheetSelectorItem";
 import { RenameSpreadsheetDialog } from "./RenameSpreadsheetDialog";
 
@@ -51,13 +56,16 @@ export function SpreadsheetSelectorList({
   };
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel asChild>
-        <Link to={`/workspaces/${workspaceId}/spreadsheets`}>Spreadsheets</Link>
-      </SidebarGroupLabel>
-      <SidebarMenu>
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild tooltip="Spreadsheets">
+        <Link to={`/workspaces/${workspaceId}/spreadsheets`} className="font-medium">
+          <Table2 className="size-4" />
+          Spreadsheets
+        </Link>
+      </SidebarMenuButton>
+      <SidebarMenuSub>
         {favoriteSheets?.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No starred spreadsheets</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground">No starred spreadsheets</p>
         )}
         {favoriteSheets?.map((spreadsheet) => (
           <SpreadsheetSelectorItem
@@ -70,7 +78,7 @@ export function SpreadsheetSelectorList({
             onDeleteSpreadsheet={(id) => handleSpreadsheetDelete(id)}
           />
         ))}
-      </SidebarMenu>
+      </SidebarMenuSub>
       {deleteDialog}
       {!!selectedSpreadsheetForRename && (
         <RenameSpreadsheetDialog
@@ -79,6 +87,6 @@ export function SpreadsheetSelectorList({
           onOpenChange={(open: boolean) => !open && setSelectedSpreadsheetForRename(null)}
         />
       )}
-    </SidebarGroup>
+    </SidebarMenuItem>
   );
 }

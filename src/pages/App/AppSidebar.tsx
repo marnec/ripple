@@ -98,7 +98,7 @@ export function AppSidebar() {
   const isMyTasksActive = location.pathname.includes("/my-tasks");
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader>
         {workspaces && (
           <WorkspaceSwitcher
@@ -111,20 +111,18 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           {workspaceId && (
-            <>
+            <SidebarMenu>
               {/* My Tasks - Personal productivity shortcut above all sections */}
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={handleMyTasksClick}
-                    isActive={isMyTasksActive}
-                    tooltip="My Tasks"
-                  >
-                    <CheckSquare />
-                    <span>My Tasks</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={handleMyTasksClick}
+                  isActive={isMyTasksActive}
+                  tooltip="My Tasks"
+                >
+                  <CheckSquare />
+                  <span>My Tasks</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
               <ChannelSelectorList
                 channelId={channelId}
@@ -151,10 +149,9 @@ export function AppSidebar() {
                 spreadsheetId={spreadsheetId}
                 onSpreadsheetSelect={handleSpreadsheetSelect}
               />
-            </>
+            </SidebarMenu>
           )}
         </SidebarGroup>
-        <SidebarGroup />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

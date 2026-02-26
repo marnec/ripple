@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { PenTool, FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
+import { FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -8,9 +8,8 @@ import {
     DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu";
 import {
-    SidebarMenuAction,
-    SidebarMenuButton,
-    SidebarMenuItem
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
 } from "../../../components/ui/sidebar";
 
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -33,24 +32,22 @@ export function DiagramSelectorItem({
   onDeleteDiagram
 }: DiagramSelectorItemProps) {
   const isMobile = useIsMobile();
-  
+
   return (
-    <SidebarMenuItem key={diagram._id}>
-      <SidebarMenuButton
+    <SidebarMenuSubItem className="group/subitem relative">
+      <SidebarMenuSubButton
         asChild
-        variant={diagram._id === diagramId ? "outline" : "default"}
-        onClick={() => onDiagramSelect(diagram._id)}
+        isActive={diagram._id === diagramId}
       >
-        <div>
-          <PenTool /> {diagram.name}
+        <div onClick={() => onDiagramSelect(diagram._id)} className="cursor-pointer pr-6">
+          <span className="truncate">{diagram.name}</span>
         </div>
-      </SidebarMenuButton>
+      </SidebarMenuSubButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover>
-            <MoreHorizontal />
-            <span className="sr-only">More</span>
-          </SidebarMenuAction>
+          <button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover/subitem:opacity-100 data-[state=open]:opacity-100">
+            <MoreHorizontal className="size-3.5" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-48 rounded-lg"
@@ -72,6 +69,6 @@ export function DiagramSelectorItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </SidebarMenuItem>
+    </SidebarMenuSubItem>
   );
-} 
+}

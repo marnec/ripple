@@ -1,10 +1,14 @@
 import { useMutation, useQuery } from "convex/react";
-import { MessageSquarePlusIcon } from "lucide-react";
+import { MessageSquare, MessageSquarePlusIcon } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { SidebarGroup, SidebarGroupAction, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
+import {
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+} from "../../../components/ui/sidebar";
 import { ChannelSelectorItem } from "./ChannelSelectorItem";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 
@@ -21,6 +25,7 @@ export function ChannelSelectorList({
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const navigate = useNavigate();
+  // @ts-expect-error TS2589 deep type instantiation with Convex query
   const deleteChannel = useMutation(api.channels.remove);
 
   const channels = useQuery(api.channels.listByUserMembership, {
@@ -41,15 +46,21 @@ export function ChannelSelectorList({
   };
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Channels</SidebarGroupLabel>
-      <SidebarGroupAction title="Create channel" onClick={() => setShowCreateChannel(true)}>
-        <MessageSquarePlusIcon />
-        <span className="sr-only">Create channel</span>
-      </SidebarGroupAction>
-      <SidebarMenu>
+    <SidebarMenuItem>
+      <SidebarMenuButton tooltip="Channels">
+        <MessageSquare className="size-4" />
+        <span className="font-medium">Channels</span>
+      </SidebarMenuButton>
+      <button
+        onClick={() => setShowCreateChannel(true)}
+        className="absolute right-1 top-1.5 rounded-sm p-0.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+        title="Create channel"
+      >
+        <MessageSquarePlusIcon className="size-4" />
+      </button>
+      <SidebarMenuSub>
         {channels?.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No channels yet</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground">No channels yet</p>
         )}
         {channels?.map((channel) => (
           <ChannelSelectorItem
@@ -62,12 +73,12 @@ export function ChannelSelectorList({
             onDeleteChannel={(id) => void handleChannelDelete(id)}
           />
         ))}
-      </SidebarMenu>
+      </SidebarMenuSub>
       <CreateChannelDialog
         workspaceId={workspaceId}
         open={showCreateChannel}
         onOpenChange={setShowCreateChannel}
       />
-    </SidebarGroup>
+    </SidebarMenuItem>
   );
 }

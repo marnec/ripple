@@ -9,9 +9,8 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu";
 import {
-  SidebarMenuAction,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "../../../components/ui/sidebar";
 
 export interface ProjectSelectorItemProps {
@@ -32,24 +31,21 @@ export function ProjectSelectorItem({
   const isMobile = useIsMobile();
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
+    <SidebarMenuSubItem className="group/subitem relative">
+      <SidebarMenuSubButton
         asChild
-        variant={project._id === projectId ? "outline" : "default"}
-        onClick={() => onProjectSelect(project._id)}
+        isActive={project._id === projectId}
       >
-        <div className="flex flex-row items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${project.color}`} />
-          <Folder size={16} />
-          <span>{project.name}</span>
+        <div onClick={() => onProjectSelect(project._id)} className="cursor-pointer pr-6">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${project.color}`} />
+          <span className="truncate">{project.name}</span>
         </div>
-      </SidebarMenuButton>
+      </SidebarMenuSubButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover>
-            <MoreHorizontal />
-            <span className="sr-only">More</span>
-          </SidebarMenuAction>
+          <button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover/subitem:opacity-100 data-[state=open]:opacity-100">
+            <MoreHorizontal className="size-3.5" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-48 rounded-lg"
@@ -71,6 +67,6 @@ export function ProjectSelectorItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </SidebarMenuItem>
+    </SidebarMenuSubItem>
   );
 }

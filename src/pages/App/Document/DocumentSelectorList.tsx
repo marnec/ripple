@@ -1,9 +1,14 @@
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
+import { File } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu } from "../../../components/ui/sidebar";
+import {
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+} from "../../../components/ui/sidebar";
 import { DocumentSelectorItem } from "./DocumentSelectorItem";
 import { RenameDocumentDialog } from "./RenameDocumentDialog";
 
@@ -44,13 +49,16 @@ export function DocumentSelectorList({
   };
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel asChild>
-        <Link to={`/workspaces/${workspaceId}/documents`}>Documents</Link>
-      </SidebarGroupLabel>
-      <SidebarMenu>
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild tooltip="Documents">
+        <Link to={`/workspaces/${workspaceId}/documents`} className="font-medium">
+          <File className="size-4" />
+          Documents
+        </Link>
+      </SidebarMenuButton>
+      <SidebarMenuSub>
         {favoriteDocs?.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No starred documents</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground">No starred documents</p>
         )}
         {favoriteDocs?.map((document) => (
           <DocumentSelectorItem
@@ -63,7 +71,7 @@ export function DocumentSelectorList({
             onDeleteDocument={(id) => void handleDocumentDelete(id)}
           />
         ))}
-      </SidebarMenu>
+      </SidebarMenuSub>
       {!!selectedDocForRename && (
         <RenameDocumentDialog
           documentId={selectedDocForRename}
@@ -71,6 +79,6 @@ export function DocumentSelectorList({
           onOpenChange={(e) => !e && setSelectedDocForRename(null)}
         />
       )}
-    </SidebarGroup>
+    </SidebarMenuItem>
   );
 }

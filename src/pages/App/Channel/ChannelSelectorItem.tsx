@@ -10,9 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu";
 import {
-  SidebarMenuAction,
-  SidebarMenuButton,
-  SidebarMenuItem
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from "../../../components/ui/sidebar";
 
 export interface ChannelSelectorItemProps {
@@ -35,26 +34,24 @@ export function ChannelSelectorItem({
   const isMobile = useIsMobile();
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
+    <SidebarMenuSubItem className="group/subitem relative">
+      <SidebarMenuSubButton
         asChild
-        variant={channel._id === channelId ? "outline" : "default"}
-        onClick={() => onChannelSelect(channel._id)}
+        isActive={channel._id === channelId}
       >
-        <div className="flex flex-row items-center">
-          <div className="flex flex-row items-end">
-            <Hash size={18} />
-            <Lock className={cn("size-3", "-ml-1", channel.isPublic ? "invisible" : "")} />
+        <div onClick={() => onChannelSelect(channel._id)} className="cursor-pointer pr-6">
+          <div className="flex items-end shrink-0">
+            <Hash size={14} />
+            <Lock className={cn("size-2.5", "-ml-0.5", channel.isPublic ? "invisible" : "")} />
           </div>
-          <div>{channel.name}</div>
+          <span className="truncate">{channel.name}</span>
         </div>
-      </SidebarMenuButton>
+      </SidebarMenuSubButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover>
-            <MoreHorizontal />
-            <span className="sr-only">More</span>
-          </SidebarMenuAction>
+          <button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover/subitem:opacity-100 data-[state=open]:opacity-100">
+            <MoreHorizontal className="size-3.5" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-48 rounded-lg"
@@ -76,6 +73,6 @@ export function ChannelSelectorItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </SidebarMenuItem>
+    </SidebarMenuSubItem>
   );
 }

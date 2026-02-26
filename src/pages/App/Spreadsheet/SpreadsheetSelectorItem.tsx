@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Table2, FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
+import { FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -8,9 +8,8 @@ import {
     DropdownMenuTrigger,
 } from "../../../components/ui/dropdown-menu";
 import {
-    SidebarMenuAction,
-    SidebarMenuButton,
-    SidebarMenuItem
+    SidebarMenuSubButton,
+    SidebarMenuSubItem,
 } from "../../../components/ui/sidebar";
 
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -35,22 +34,20 @@ export function SpreadsheetSelectorItem({
   const isMobile = useIsMobile();
 
   return (
-    <SidebarMenuItem key={spreadsheet._id}>
-      <SidebarMenuButton
+    <SidebarMenuSubItem className="group/subitem relative">
+      <SidebarMenuSubButton
         asChild
-        variant={spreadsheet._id === spreadsheetId ? "outline" : "default"}
-        onClick={() => onSpreadsheetSelect(spreadsheet._id)}
+        isActive={spreadsheet._id === spreadsheetId}
       >
-        <div>
-          <Table2 /> {spreadsheet.name}
+        <div onClick={() => onSpreadsheetSelect(spreadsheet._id)} className="cursor-pointer pr-6">
+          <span className="truncate">{spreadsheet.name}</span>
         </div>
-      </SidebarMenuButton>
+      </SidebarMenuSubButton>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <SidebarMenuAction showOnHover>
-            <MoreHorizontal />
-            <span className="sr-only">More</span>
-          </SidebarMenuAction>
+          <button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover/subitem:opacity-100 data-[state=open]:opacity-100">
+            <MoreHorizontal className="size-3.5" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-48 rounded-lg"
@@ -72,6 +69,6 @@ export function SpreadsheetSelectorItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </SidebarMenuItem>
+    </SidebarMenuSubItem>
   );
 }

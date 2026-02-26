@@ -1,12 +1,13 @@
 import { useMutation, useQuery } from "convex/react";
 import { useMemo } from "react";
+import { Folder } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
 } from "../../../components/ui/sidebar";
 import { ProjectSelectorItem } from "./ProjectSelectorItem";
 
@@ -45,13 +46,16 @@ export function ProjectSelectorList({
   };
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel asChild>
-        <Link to={`/workspaces/${workspaceId}/projects`}>Projects</Link>
-      </SidebarGroupLabel>
-      <SidebarMenu>
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild tooltip="Projects">
+        <Link to={`/workspaces/${workspaceId}/projects`} className="font-medium">
+          <Folder className="size-4" />
+          Projects
+        </Link>
+      </SidebarMenuButton>
+      <SidebarMenuSub>
         {favoriteProjects?.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No starred projects</p>
+          <p className="px-2 py-1 text-xs text-muted-foreground">No starred projects</p>
         )}
         {favoriteProjects?.map((project) => (
           <ProjectSelectorItem
@@ -63,7 +67,7 @@ export function ProjectSelectorList({
             onDeleteProject={(id) => void handleProjectDelete(id)}
           />
         ))}
-      </SidebarMenu>
-    </SidebarGroup>
+      </SidebarMenuSub>
+    </SidebarMenuItem>
   );
 }
