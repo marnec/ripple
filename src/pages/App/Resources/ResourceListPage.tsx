@@ -12,7 +12,14 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { FileText, Folder, PenTool, Table2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -63,6 +70,9 @@ export function ResourceListPage({
 
   // Local input state for responsive typing; URL params are debounced
   const [localSearchValue, setLocalSearchValue] = useState(searchValueFromUrl);
+  const [isSearchDebouncing, setIsSearchDebouncing] = useState(false);
+  const [isSearchLoading, setIsSearchLoading] = useState(true);
+  const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync local state when URL params change externally (e.g. navigating from sidebar search)
@@ -96,8 +106,12 @@ export function ResourceListPage({
   const handleSearchChange = useCallback(
     (value: string) => {
       setLocalSearchValue(value);
+      setIsSearchDebouncing(true);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => flushToUrl(value), 300);
+      debounceRef.current = setTimeout(() => {
+        setIsSearchDebouncing(false);
+        flushToUrl(value);
+      }, 300);
     },
     [flushToUrl],
   );
@@ -107,10 +121,15 @@ export function ResourceListPage({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       const value = buildSearchString(parsed.searchText, parsed.tags);
       setLocalSearchValue(value);
+      setIsSearchDebouncing(false);
       flushToUrl(value);
     },
     [flushToUrl],
   );
+
+  const handleSearchLoadingChange = useCallback((loading: boolean) => {
+    setIsSearchLoading(loading);
+  }, []);
 
   // Cleanup debounce on unmount
   useEffect(() => {
@@ -129,14 +148,29 @@ export function ResourceListPage({
           </p>
         </div>
         <Tabs value={tab} onValueChange={handleTabChange}>
-          <TabsList>
-            <TabsTrigger value="favorites">Favorites</TabsTrigger>
-            <TabsTrigger value="search">Search</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center gap-2">
+            <TabsList>
+              <TabsTrigger value="favorites">Favorites</TabsTrigger>
+              <TabsTrigger value="search">Search</TabsTrigger>
+            </TabsList>
+            <div
+              className="transition-opacity duration-200"
+              style={{
+                opacity:
+                  (tab === "search" && (isSearchDebouncing || isSearchLoading)) ||
+                  (tab === "favorites" && isFavoritesLoading)
+                    ? 1
+                    : 0,
+              }}
+            >
+              <RippleSpinner size={40} />
+            </div>
+          </div>
           <TabsContent value="favorites" className="mt-4">
             <FavoritesTab
               workspaceId={wsId}
               resourceType={resourceType}
+              onLoadingChange={setIsFavoritesLoading}
             />
           </TabsContent>
           <TabsContent value="search" className="mt-4">
@@ -153,6 +187,7 @@ export function ResourceListPage({
                 resourceType={resourceType}
                 searchText={searchQuery || undefined}
                 tags={tags.length > 0 ? tags : undefined}
+                onLoadingChange={handleSearchLoadingChange}
               />
             </div>
           </TabsContent>
@@ -165,9 +200,11 @@ export function ResourceListPage({
 function FavoritesTab({
   workspaceId,
   resourceType,
+  onLoadingChange,
 }: {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
+  onLoadingChange?: (loading: boolean) => void;
 }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.favorites.listByType,
@@ -175,12 +212,17 @@ function FavoritesTab({
     { initialNumItems: 20 },
   );
 
-  if (status === "LoadingFirstPage") {
-    return (
-      <div className="flex justify-center py-12">
-        <RippleSpinner size={48} />
-      </div>
-    );
+  const isLoading = status === "LoadingFirstPage";
+  const prevLoading = useRef(isLoading);
+  useEffect(() => {
+    if (prevLoading.current !== isLoading) {
+      prevLoading.current = isLoading;
+      onLoadingChange?.(isLoading);
+    }
+  }, [isLoading, onLoadingChange]);
+
+  if (isLoading) {
+    return null;
   }
 
   // Filter out nulls (deleted resources)
@@ -203,13 +245,16 @@ function FavoritesTab({
 
 
   return (
-    <div className="space-y-4">
+    <div
+      className="space-y-4"
+      style={{ animation: "slide-up 250ms cubic-bezier(0.16, 1, 0.3, 1)" }}
+    >
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {items.map((fav) => {
           const Icon = RESOURCE_ICONS[fav.resourceType];
           return (
             <Card key={fav._id} className="flex flex-col">
-              <Link to={`${fav.resourceId}`} className="flex-grow">
+              <Link to={`${fav.resourceId}`} className="grow">
                 <CardHeader className="flex flex-row items-center gap-2">
                   <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <CardTitle className="truncate text-base">{fav.name}</CardTitle>
@@ -237,16 +282,62 @@ function FavoritesTab({
   );
 }
 
+type SearchResult = { _id: string; name: string; tags?: string[] };
+type CrossfadePhase = "spinner" | "content" | "content-exit" | "content-enter";
+type CrossfadeState = {
+  phase: CrossfadePhase;
+  displayed: SearchResult[] | undefined;
+  pending: SearchResult[] | undefined;
+};
+type CrossfadeAction =
+  | { type: "RESULTS_LOADING" }
+  | { type: "RESULTS_ARRIVED"; results: SearchResult[] }
+  | { type: "RESULTS_UPDATED"; results: SearchResult[] }
+  | { type: "EXIT_DONE" }
+  | { type: "ENTER_DONE" };
+
+function crossfadeReducer(
+  state: CrossfadeState,
+  action: CrossfadeAction,
+): CrossfadeState {
+  switch (action.type) {
+    case "RESULTS_LOADING":
+      if (state.phase === "content" || state.phase === "content-enter") {
+        return { ...state, phase: "content-exit", pending: undefined };
+      }
+      return state;
+    case "RESULTS_ARRIVED":
+      if (state.phase === "spinner") {
+        return { phase: "content-enter", displayed: action.results, pending: undefined };
+      }
+      if (state.phase === "content-exit") {
+        return { ...state, pending: action.results };
+      }
+      return { ...state, displayed: action.results };
+    case "RESULTS_UPDATED":
+      return { ...state, displayed: action.results };
+    case "EXIT_DONE":
+      if (state.pending) {
+        return { phase: "content-enter", displayed: state.pending, pending: undefined };
+      }
+      return { ...state, phase: "spinner", pending: undefined };
+    case "ENTER_DONE":
+      return { ...state, phase: "content" };
+  }
+}
+
 function SearchResults({
   workspaceId,
   resourceType,
   searchText,
   tags,
+  onLoadingChange,
 }: {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
   searchText?: string;
   tags?: string[];
+  onLoadingChange?: (loading: boolean) => void;
 }) {
   const searchApi = SEARCH_APIS[resourceType];
   const results = useQuery(searchApi as any, {
@@ -255,55 +346,115 @@ function SearchResults({
     tags,
   });
 
-  if (results === undefined) {
-    return (
-      <div className="flex justify-center py-12">
-        <RippleSpinner size={48} />
-      </div>
-    );
-  }
+  const [state, dispatch] = useReducer(crossfadeReducer, {
+    phase: results === undefined ? "spinner" : ("content-enter" as CrossfadePhase),
+    displayed: results as SearchResult[] | undefined,
+    pending: undefined,
+  });
 
-  if (results.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No results found.
-      </p>
-    );
-  }
+  // Track results changes
+  const prevResults = useRef(results);
+  useEffect(() => {
+    if (results === prevResults.current) return;
+    const wasUndefined = prevResults.current === undefined;
+    prevResults.current = results;
 
+    if (results === undefined) {
+      dispatch({ type: "RESULTS_LOADING" });
+    } else if (wasUndefined || state.phase === "spinner" || state.phase === "content-exit") {
+      dispatch({ type: "RESULTS_ARRIVED", results: results as SearchResult[] });
+    } else {
+      dispatch({ type: "RESULTS_UPDATED", results: results as SearchResult[] });
+    }
+  }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Report loading state to parent
+  const isLoading = state.phase === "spinner";
+  const prevIsLoading = useRef(isLoading);
+  useEffect(() => {
+    if (prevIsLoading.current !== isLoading) {
+      prevIsLoading.current = isLoading;
+      onLoadingChange?.(isLoading);
+    }
+  }, [isLoading, onLoadingChange]);
+
+  // Timed phase transitions
+  useEffect(() => {
+    if (state.phase === "content-exit") {
+      const t = setTimeout(() => dispatch({ type: "EXIT_DONE" }), 150);
+      return () => clearTimeout(t);
+    }
+    if (state.phase === "content-enter") {
+      const t = setTimeout(() => dispatch({ type: "ENTER_DONE" }), 250);
+      return () => clearTimeout(t);
+    }
+  }, [state.phase]);
 
   const Icon = RESOURCE_ICONS[resourceType];
 
-  return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {results.map((resource: { _id: string; name: string; tags?: string[] }) => (
-        <Card key={resource._id} className="flex flex-col">
-          <Link to={`${resource._id}`} className="flex-grow">
-            <CardHeader className="flex flex-row items-center gap-2">
-              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <CardTitle className="truncate text-base">{resource.name}</CardTitle>
-            </CardHeader>
-            {resource.tags && resource.tags.length > 0 && (
-              <CardContent className="pt-0">
-                <div className="flex flex-wrap gap-1">
-                  {resource.tags.map((tag: string) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            )}
-          </Link>
-          <CardContent className="flex items-center justify-end pt-0">
-            <FavoriteButton
-              resourceType={resourceType}
-              resourceId={resource._id}
-              workspaceId={workspaceId}
-            />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+  const renderContent = (items: SearchResult[] | undefined) => {
+    if (!items || items.length === 0) {
+      return (
+        <p className="text-sm text-muted-foreground">No results found.</p>
+      );
+    }
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {items.map((resource) => (
+          <Card key={resource._id} className="flex flex-col">
+            <Link to={`${resource._id}`} className="grow">
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <CardTitle className="truncate text-base">
+                  {resource.name}
+                </CardTitle>
+              </CardHeader>
+              {resource.tags && resource.tags.length > 0 && (
+                <CardContent className="pt-0">
+                  <div className="flex flex-wrap gap-1">
+                    {resource.tags.map((tag: string) => (
+                      <Badge key={tag} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
+            </Link>
+            <CardContent className="flex items-center justify-end pt-0">
+              <FavoriteButton
+                resourceType={resourceType}
+                resourceId={resource._id}
+                workspaceId={workspaceId}
+              />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
+  switch (state.phase) {
+    case "content-exit":
+      return (
+        <div style={{ animation: "fade-out 150ms ease forwards" }}>
+          {renderContent(state.displayed)}
+        </div>
+      );
+    case "spinner":
+      return null;
+    case "content-enter":
+      return (
+        <div
+          style={{
+            animation:
+              "slide-up 250ms cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          {renderContent(state.displayed)}
+        </div>
+      );
+    case "content":
+      return renderContent(state.displayed);
+  }
 }
