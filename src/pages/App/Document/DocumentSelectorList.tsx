@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
 import { File } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -11,6 +11,8 @@ import {
 } from "../../../components/ui/sidebar";
 import { DocumentSelectorItem } from "./DocumentSelectorItem";
 import { RenameDocumentDialog } from "./RenameDocumentDialog";
+import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
+import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
 export type DocumentSelectorProps = {
   workspaceId: Id<"workspaces">;
@@ -25,6 +27,8 @@ export function DocumentSelectorList({
 }: DocumentSelectorProps) {
   const [selectedDocForRename, setSelectedDocForRename] = useState<Id<"documents"> | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isListActive = location.pathname.endsWith("/documents");
 
   const documents = useQuery(api.documents.list, { workspaceId });
   const favoriteIds = useQuery(api.favorites.listIdsForType, { workspaceId, resourceType: "document" });
@@ -32,7 +36,7 @@ export function DocumentSelectorList({
 
   const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
   const favoriteDocs = useMemo(
-    () => documents?.filter((d) => favoriteSet.has(d._id)),
+    () => documents?.filter((d) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [documents, favoriteSet],
   );
 
@@ -48,18 +52,18 @@ export function DocumentSelectorList({
     void navigate(`/workspaces/${workspaceId}/documents/${id}/settings`);
   };
 
+  const handleHeaderClick = () => {
+    preselectSearchTab(workspaceId, "document");
+    onDocumentSelect(null);
+  };
+
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip="Documents">
-        <Link to={`/workspaces/${workspaceId}/documents`} className="font-medium">
-          <File className="size-4" />
-          Documents
-        </Link>
+      <SidebarMenuButton tooltip="Documents" onClick={handleHeaderClick} isActive={isListActive}>
+        <File className="size-4" />
+        <span className="font-medium">Documents</span>
       </SidebarMenuButton>
-      <SidebarMenuSub>
-        {favoriteDocs?.length === 0 && (
-          <p className="px-2 py-1 text-xs text-muted-foreground">No starred documents</p>
-        )}
+      <SidebarMenuSub className="gap-0">
         {favoriteDocs?.map((document) => (
           <DocumentSelectorItem
             key={document._id}
@@ -71,6 +75,7 @@ export function DocumentSelectorList({
             onDeleteDocument={(id) => void handleDocumentDelete(id)}
           />
         ))}
+        <EmptyFavoriteSlots filled={favoriteDocs?.length ?? 0} workspaceId={workspaceId} resourceType="document" />
       </SidebarMenuSub>
       {!!selectedDocForRename && (
         <RenameDocumentDialog

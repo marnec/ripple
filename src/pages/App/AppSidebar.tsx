@@ -108,50 +108,63 @@ export function AppSidebar() {
           />
         )}
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          {workspaceId && (
-            <SidebarMenu>
-              {/* My Tasks - Personal productivity shortcut above all sections */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={handleMyTasksClick}
-                  isActive={isMyTasksActive}
-                  tooltip="My Tasks"
-                >
-                  <CheckSquare />
-                  <span>My Tasks</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+      <SidebarContent className={isMobile ? "" : "h-full overflow-hidden!"}>
+        {workspaceId && (
+          <div className={isMobile ? "flex min-h-0 flex-1 flex-col" : "flex h-[75%] min-h-0 flex-col"}>
+            {/* My Tasks — fixed at top */}
+            <SidebarGroup className="flex-none pb-0">
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={handleMyTasksClick}
+                    isActive={isMyTasksActive}
+                    tooltip="My Tasks"
+                  >
+                    <CheckSquare />
+                    <span>My Tasks</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroup>
 
-              <ChannelSelectorList
-                channelId={channelId}
-                workspaceId={workspaceId}
-                onChannelSelect={handleChannelSelect}
-              />
-              <ProjectSelectorList
-                workspaceId={workspaceId}
-                projectId={projectId}
-                onProjectSelect={handleProjectSelect}
-              />
-              <DocumentSelectorList
-                workspaceId={workspaceId}
-                documentId={documentId}
-                onDocumentSelect={handleDocumentSelect}
-              />
-              <DiagramSelectorList
-                workspaceId={workspaceId}
-                diagramId={diagramId}
-                onDiagramSelect={handleDiagramSelect}
-              />
-              <SpreadsheetSelectorList
-                workspaceId={workspaceId}
-                spreadsheetId={spreadsheetId}
-                onSpreadsheetSelect={handleSpreadsheetSelect}
-              />
-            </SidebarMenu>
-          )}
-        </SidebarGroup>
+            {/* Channels — takes remaining vertical space, overflows internally */}
+            <SidebarGroup className="min-h-0 flex-1 overflow-hidden pb-0">
+              <SidebarMenu className="h-full">
+                <ChannelSelectorList
+                  channelId={channelId}
+                  workspaceId={workspaceId}
+                  onChannelSelect={handleChannelSelect}
+                />
+              </SidebarMenu>
+            </SidebarGroup>
+
+            {/* Favorites-based groups — fixed height for header + n slots each */}
+            <SidebarGroup className="flex-none">
+              <SidebarMenu>
+                <ProjectSelectorList
+                  workspaceId={workspaceId}
+                  projectId={projectId}
+                  onProjectSelect={handleProjectSelect}
+                />
+                <DocumentSelectorList
+                  workspaceId={workspaceId}
+                  documentId={documentId}
+                  onDocumentSelect={handleDocumentSelect}
+                />
+                <DiagramSelectorList
+                  workspaceId={workspaceId}
+                  diagramId={diagramId}
+                  onDiagramSelect={handleDiagramSelect}
+                />
+                <SpreadsheetSelectorList
+                  workspaceId={workspaceId}
+                  spreadsheetId={spreadsheetId}
+                  onSpreadsheetSelect={handleSpreadsheetSelect}
+                />
+              </SidebarMenu>
+            </SidebarGroup>
+          </div>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

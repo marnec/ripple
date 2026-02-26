@@ -45,9 +45,13 @@ export function ChannelSelectorList({
     void navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
   };
 
+  const handleHeaderClick = () => {
+    onChannelSelect(null);
+  };
+
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton tooltip="Channels">
+    <SidebarMenuItem className="flex h-full min-h-0 flex-col">
+      <SidebarMenuButton tooltip="Channels" onClick={handleHeaderClick}>
         <MessageSquare className="size-4" />
         <span className="font-medium">Channels</span>
       </SidebarMenuButton>
@@ -58,7 +62,7 @@ export function ChannelSelectorList({
       >
         <MessageSquarePlusIcon className="size-4" />
       </button>
-      <SidebarMenuSub>
+      <SidebarMenuSub className="min-h-0 flex-1 overflow-y-auto">
         {channels?.length === 0 && (
           <p className="px-2 py-1 text-xs text-muted-foreground">No channels yet</p>
         )}

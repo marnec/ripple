@@ -1,6 +1,15 @@
 NEXT STEPS:
-- [ ] PLANE.so inspired cycles:
+- tasks
+    - [ ] PLANE.so inspired cycles
+    - [ ] improve list view
+    - [ ] create tasks from any view
+    - [ ] fix task width on sidebar collapse
 - [ ] improve breadcrumb on desktop
+- [ ] uniform workspace thumbnail repr
+- excalidraw
+    - [ ] remove zoom and history controls
+    - [ ] fix facepile overlap native controls in mobile view
+    - [ ] uniform to standard resource page layout
 - [ ] add error boundaries for better UX on exceptions
 - resources
     - [x] each resource can be tagged with workspace-level tags
@@ -14,14 +23,14 @@ NEXT STEPS:
     - [x] the "favorites" tab shows a paginated list of favorites, sorted by most recent
     - [x] the search state in "search" tabs is stored in url params
     - [x] the back / forward browser and app navigation ignores the search params and navigates consistently with app page structure, to achieve this store searches in local storage instead that on search params
+- [x] dashboard pages (channels, projects, documents, diagrams)
+- [x] create a logo-themed spinner
 - [ ] improve spreadsheet reference highlight (border)
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
     - [ ] language preference
     - [ ] restore last search on resource-list page from local-storage
-- [ ] dashboard pages (channels, projects, documents, diagrams)
-- [ ] create a logo-themed spinner
 - [ ] AI integrations
     - [ ] AI bot in chat (called on mention)
     - [ ] AI dictate content

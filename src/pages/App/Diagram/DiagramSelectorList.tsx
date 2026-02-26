@@ -2,7 +2,7 @@ import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
 import { PenTool } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -12,6 +12,8 @@ import {
 } from "../../../components/ui/sidebar";
 import { DiagramSelectorItem } from "./DiagramSelectorItem";
 import { RenameDiagramDialog } from "./RenameDiagramDialog";
+import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
+import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
 export type DiagramSelectorProps = {
   workspaceId: Id<"workspaces">;
@@ -26,6 +28,8 @@ export function DiagramSelectorList({
 }: DiagramSelectorProps) {
   const [selectedDiagramForRename, setSelectedDiagramForRename] = useState<Id<"diagrams"> | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isListActive = location.pathname.endsWith("/diagrams");
   const deletingIdRef = useRef<string | null>(null);
 
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
@@ -33,7 +37,7 @@ export function DiagramSelectorList({
 
   const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
   const favoriteDiagrams = useMemo(
-    () => diagrams?.filter((d: { _id: string }) => favoriteSet.has(d._id)),
+    () => diagrams?.filter((d: { _id: string }) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [diagrams, favoriteSet],
   );
   const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", {
@@ -55,18 +59,18 @@ export function DiagramSelectorList({
     void navigate(`/workspaces/${workspaceId}/diagrams/${id}/settings`);
   };
 
+  const handleHeaderClick = () => {
+    preselectSearchTab(workspaceId, "diagram");
+    onDiagramSelect(null);
+  };
+
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip="Diagrams">
-        <Link to={`/workspaces/${workspaceId}/diagrams`} className="font-medium">
-          <PenTool className="size-4" />
-          Diagrams
-        </Link>
+      <SidebarMenuButton tooltip="Diagrams" onClick={handleHeaderClick} isActive={isListActive}>
+        <PenTool className="size-4" />
+        <span className="font-medium">Diagrams</span>
       </SidebarMenuButton>
-      <SidebarMenuSub>
-        {favoriteDiagrams?.length === 0 && (
-          <p className="px-2 py-1 text-xs text-muted-foreground">No starred diagrams</p>
-        )}
+      <SidebarMenuSub className="gap-0">
         {favoriteDiagrams?.map((diagram: any) => (
           <DiagramSelectorItem
             key={diagram._id}
@@ -78,6 +82,7 @@ export function DiagramSelectorList({
             onDeleteDiagram={(id) => handleDiagramDelete(id)}
           />
         ))}
+        <EmptyFavoriteSlots filled={favoriteDiagrams?.length ?? 0} workspaceId={workspaceId} resourceType="diagram" />
       </SidebarMenuSub>
       {deleteDialog}
       {!!selectedDiagramForRename && (

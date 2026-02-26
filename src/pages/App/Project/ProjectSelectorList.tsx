@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { useMemo } from "react";
 import { Folder } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -10,6 +10,8 @@ import {
   SidebarMenuSub,
 } from "../../../components/ui/sidebar";
 import { ProjectSelectorItem } from "./ProjectSelectorItem";
+import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
+import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
 export interface ProjectSelectorListProps {
   workspaceId: Id<"workspaces">;
@@ -23,6 +25,8 @@ export function ProjectSelectorList({
   onProjectSelect,
 }: ProjectSelectorListProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isListActive = location.pathname.endsWith("/projects");
   const deleteProject = useMutation(api.projects.remove);
 
   const projects = useQuery(api.projects.list, {
@@ -32,7 +36,7 @@ export function ProjectSelectorList({
 
   const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
   const favoriteProjects = useMemo(
-    () => projects?.filter((p) => favoriteSet.has(p._id)),
+    () => projects?.filter((p) => favoriteSet.has(p._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [projects, favoriteSet],
   );
 
@@ -45,18 +49,18 @@ export function ProjectSelectorList({
     void navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
   };
 
+  const handleHeaderClick = () => {
+    preselectSearchTab(workspaceId, "project");
+    onProjectSelect(null);
+  };
+
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip="Projects">
-        <Link to={`/workspaces/${workspaceId}/projects`} className="font-medium">
-          <Folder className="size-4" />
-          Projects
-        </Link>
+      <SidebarMenuButton tooltip="Projects" onClick={handleHeaderClick} isActive={isListActive}>
+        <Folder className="size-4" />
+        <span className="font-medium">Projects</span>
       </SidebarMenuButton>
-      <SidebarMenuSub>
-        {favoriteProjects?.length === 0 && (
-          <p className="px-2 py-1 text-xs text-muted-foreground">No starred projects</p>
-        )}
+      <SidebarMenuSub className="gap-0">
         {favoriteProjects?.map((project) => (
           <ProjectSelectorItem
             key={project._id}
@@ -67,6 +71,7 @@ export function ProjectSelectorList({
             onDeleteProject={(id) => void handleProjectDelete(id)}
           />
         ))}
+        <EmptyFavoriteSlots filled={favoriteProjects?.length ?? 0} workspaceId={workspaceId} resourceType="project" />
       </SidebarMenuSub>
     </SidebarMenuItem>
   );

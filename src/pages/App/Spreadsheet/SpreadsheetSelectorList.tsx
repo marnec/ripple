@@ -2,7 +2,7 @@ import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
 import { Table2 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -12,6 +12,8 @@ import {
 } from "../../../components/ui/sidebar";
 import { SpreadsheetSelectorItem } from "./SpreadsheetSelectorItem";
 import { RenameSpreadsheetDialog } from "./RenameSpreadsheetDialog";
+import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
+import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
 export type SpreadsheetSelectorProps = {
   workspaceId: Id<"workspaces">;
@@ -26,6 +28,8 @@ export function SpreadsheetSelectorList({
 }: SpreadsheetSelectorProps) {
   const [selectedSpreadsheetForRename, setSelectedSpreadsheetForRename] = useState<Id<"spreadsheets"> | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isListActive = location.pathname.endsWith("/spreadsheets");
   const deletingIdRef = useRef<string | null>(null);
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
@@ -33,7 +37,7 @@ export function SpreadsheetSelectorList({
 
   const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
   const favoriteSheets = useMemo(
-    () => spreadsheets?.filter((s) => favoriteSet.has(s._id)),
+    () => spreadsheets?.filter((s) => favoriteSet.has(s._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [spreadsheets, favoriteSet],
   );
   const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("spreadsheet", {
@@ -55,18 +59,18 @@ export function SpreadsheetSelectorList({
     void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}/settings`);
   };
 
+  const handleHeaderClick = () => {
+    preselectSearchTab(workspaceId, "spreadsheet");
+    onSpreadsheetSelect(null);
+  };
+
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild tooltip="Spreadsheets">
-        <Link to={`/workspaces/${workspaceId}/spreadsheets`} className="font-medium">
-          <Table2 className="size-4" />
-          Spreadsheets
-        </Link>
+      <SidebarMenuButton tooltip="Spreadsheets" onClick={handleHeaderClick} isActive={isListActive}>
+        <Table2 className="size-4" />
+        <span className="font-medium">Spreadsheets</span>
       </SidebarMenuButton>
-      <SidebarMenuSub>
-        {favoriteSheets?.length === 0 && (
-          <p className="px-2 py-1 text-xs text-muted-foreground">No starred spreadsheets</p>
-        )}
+      <SidebarMenuSub className="gap-0">
         {favoriteSheets?.map((spreadsheet) => (
           <SpreadsheetSelectorItem
             key={spreadsheet._id}
@@ -78,6 +82,7 @@ export function SpreadsheetSelectorList({
             onDeleteSpreadsheet={(id) => handleSpreadsheetDelete(id)}
           />
         ))}
+        <EmptyFavoriteSlots filled={favoriteSheets?.length ?? 0} workspaceId={workspaceId} resourceType="spreadsheet" />
       </SidebarMenuSub>
       {deleteDialog}
       {!!selectedSpreadsheetForRename && (
