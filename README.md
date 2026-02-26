@@ -13,12 +13,13 @@ NEXT STEPS:
     - [x] when navigating from sidebar "search input" submit the resource-list page opens on "search" tab
     - [x] the "favorites" tab shows a paginated list of favorites, sorted by most recent
     - [x] the search state in "search" tabs is stored in url params
-    - [ ] the back / forward browser and app navigation ignores the search params and navigates consistently with app page structure
+    - [ ] the back / forward browser and app navigation ignores the search params and navigates consistently with app page structure, to achieve this store searches in local storage instead that on search params
 - [ ] improve spreadsheet reference highlight (border)
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage  
     - [ ] user notification settings
     - [ ] language preference
+    - [ ] restore last search on resource-list page from local-storage
 - [ ] dashboard pages (channels, projects, documents, diagrams)
 - [ ] create a logo-themed spinner
 - [ ] AI integrations
