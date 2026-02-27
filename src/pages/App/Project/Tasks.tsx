@@ -1,3 +1,4 @@
+import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, useQuery } from "convex/react";
 import { CheckSquare } from "lucide-react";
@@ -26,11 +27,16 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
-  const allTasks = useQuery(api.tasks.listByProject, {
+  const liveTasks = useQuery(api.tasks.listByProject, {
     projectId,
     hideCompleted: false,
   });
 
+  const isSorting = sort !== null;
+  const allTasks = useAnimatedQuery(
+    liveTasks,
+    isSorting ? isPositionOnlyChange : undefined,
+  );
   const tasks = useFilteredTasks(allTasks, filters, sort);
 
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });

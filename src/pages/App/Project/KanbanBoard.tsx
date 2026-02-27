@@ -18,6 +18,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -55,10 +56,18 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const isSorting = sort !== null;
 
   // Always fetch all tasks — filter client-side to avoid flash on toggle
-  const allTasks = useQuery(api.tasks.listByProject, {
+  const liveTasks = useQuery(api.tasks.listByProject, {
     projectId,
     hideCompleted: false,
   });
+
+  // Buffer remote updates through View Transitions so cards animate.
+  // When sorting is active, absorb position-only reorders from other users
+  // since the sort override makes them invisible.
+  const allTasks = useAnimatedQuery(
+    liveTasks,
+    isSorting ? isPositionOnlyChange : undefined,
+  );
 
   // Apply assignee/priority filters + optional sort
   const tasks = useFilteredTasks(allTasks, filters, sort);
