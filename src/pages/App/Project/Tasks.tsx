@@ -8,14 +8,17 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { CreateTaskInline } from "./CreateTaskInline";
 import { TaskDetailSheet } from "./TaskDetailSheet";
 import { TaskRow } from "./TaskRow";
+import type { TaskFilters, TaskSort } from "./TaskToolbar";
+import { useFilteredTasks } from "./useTaskFilters";
 
 type TasksProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
-  hideCompleted: boolean;
+  filters: TaskFilters;
+  sort: TaskSort;
 };
 
-export function Tasks({ projectId, workspaceId, hideCompleted }: TasksProps) {
+export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(
     null
   );
@@ -29,10 +32,12 @@ export function Tasks({ projectId, workspaceId, hideCompleted }: TasksProps) {
     hideCompleted: false,
   });
 
+  const filteredTasks = useFilteredTasks(allTasks, filters, sort);
+
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
 
-  if (allTasks === undefined) {
+  if (allTasks === undefined || filteredTasks === undefined) {
     return null;
   }
 
@@ -54,36 +59,62 @@ export function Tasks({ projectId, workspaceId, hideCompleted }: TasksProps) {
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {allTasks.map((task) => {
-            const isHidden = hideCompleted && task.completed;
-            return (
-              <div
-                key={task._id}
-                className="grid transition-[grid-template-rows,opacity] duration-200 ease-in-out"
-                style={{
-                  gridTemplateRows: isHidden ? "0fr" : "1fr",
-                  opacity: isHidden ? 0 : 1,
-                }}
-              >
-                <div className="overflow-hidden">
-                  <TaskRow
-                    task={task}
-                    statuses={statuses ?? undefined}
-                    onStatusChange={(statusId) => {
-                      void updateTask({ taskId: task._id as Id<"tasks">, statusId: statusId as Id<"taskStatuses"> });
-                    }}
-                    onClick={() => {
-                      if (isMobile) {
-                        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
-                      } else {
-                        setSelectedTaskId(task._id as Id<"tasks">);
-                      }
-                    }}
-                  />
+          {sort ? (
+            // When sorting, render filtered+sorted list directly
+            filteredTasks
+              .filter((t) => !(filters.hideCompleted && t.completed))
+              .map((task) => (
+                <TaskRow
+                  key={task._id}
+                  task={task}
+                  statuses={statuses ?? undefined}
+                  onStatusChange={(statusId) => {
+                    void updateTask({ taskId: task._id as Id<"tasks">, statusId: statusId as Id<"taskStatuses"> });
+                  }}
+                  onClick={() => {
+                    if (isMobile) {
+                      void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
+                    } else {
+                      setSelectedTaskId(task._id as Id<"tasks">);
+                    }
+                  }}
+                />
+              ))
+          ) : (
+            // No sort — use original order with animated hide/show
+            allTasks.map((task) => {
+              const isHidden =
+                (filters.hideCompleted && task.completed) ||
+                !filteredTasks.some((ft) => ft._id === task._id);
+              return (
+                <div
+                  key={task._id}
+                  className="grid transition-[grid-template-rows,opacity] duration-200 ease-in-out"
+                  style={{
+                    gridTemplateRows: isHidden ? "0fr" : "1fr",
+                    opacity: isHidden ? 0 : 1,
+                  }}
+                >
+                  <div className="overflow-hidden">
+                    <TaskRow
+                      task={task}
+                      statuses={statuses ?? undefined}
+                      onStatusChange={(statusId) => {
+                        void updateTask({ taskId: task._id as Id<"tasks">, statusId: statusId as Id<"taskStatuses"> });
+                      }}
+                      onClick={() => {
+                        if (isMobile) {
+                          void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
+                        } else {
+                          setSelectedTaskId(task._id as Id<"tasks">);
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       )}
 

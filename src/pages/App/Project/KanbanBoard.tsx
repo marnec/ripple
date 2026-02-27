@@ -15,6 +15,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMutation, useQuery } from "convex/react";
 import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useToast } from "@/components/ui/use-toast";
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -25,11 +26,14 @@ import { CreateTaskInline } from "./CreateTaskInline";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskDetailSheet } from "./TaskDetailSheet";
+import type { TaskFilters, TaskSort } from "./TaskToolbar";
+import { useFilteredTasks } from "./useTaskFilters";
 
 type KanbanBoardProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
-  hideCompleted: boolean;
+  filters: TaskFilters;
+  sort: TaskSort;
 };
 
 // pointerWithin detects which column the pointer is in (works for empty columns);
@@ -40,15 +44,17 @@ const collisionDetection: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
-export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoardProps) {
+export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoardProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [activeDragId, setActiveDragId] = useState<Id<"tasks"> | null>(null);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [showAddColumn, setShowAddColumn] = useState(false);
+  const { toast } = useToast();
+  const isSorting = sort !== null;
 
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
-  const prevHideCompleted = useRef(hideCompleted);
+  const prevHideCompleted = useRef(filters.hideCompleted);
 
   // Always fetch all tasks — filter client-side to avoid flash on toggle
   const allTasks = useQuery(api.tasks.listByProject, {
@@ -56,10 +62,13 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
     hideCompleted: false,
   });
 
+  // Apply assignee/priority filters + optional sort
+  const filteredTasks = useFilteredTasks(allTasks, filters, sort);
+
   // When hideCompleted toggles on, mark completed tasks as exiting so they
   // can play a fade-out animation before being removed from the DOM.
   useEffect(() => {
-    if (hideCompleted && !prevHideCompleted.current && allTasks) {
+    if (filters.hideCompleted && !prevHideCompleted.current && allTasks) {
       const ids = new Set(
         allTasks.filter((t) => t.completed).map((t) => t._id)
       );
@@ -69,15 +78,15 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
         return () => clearTimeout(timer);
       }
     }
-    prevHideCompleted.current = hideCompleted;
-  }, [hideCompleted, allTasks]);
+    prevHideCompleted.current = filters.hideCompleted;
+  }, [filters.hideCompleted, allTasks]);
 
   const tasks = useMemo(() => {
-    if (!allTasks) return undefined;
-    if (!hideCompleted) return allTasks;
+    if (!filteredTasks) return undefined;
+    if (!filters.hideCompleted) return filteredTasks;
     // Keep exiting tasks in the list so they can animate out
-    return allTasks.filter((t) => !t.completed || exitingIds.has(t._id));
-  }, [allTasks, hideCompleted, exitingIds]);
+    return filteredTasks.filter((t) => !t.completed || exitingIds.has(t._id));
+  }, [filteredTasks, filters.hideCompleted, exitingIds]);
 
   const statuses = useQuery(api.taskStatuses.listByProject, {
     projectId,
@@ -110,7 +119,7 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Group tasks by status and sort by position
+  // Group tasks by status; when sort active, preserve sort order from useFilteredTasks
   const tasksByStatus = useMemo(() => {
     if (!tasks || !statuses) return {};
 
@@ -123,16 +132,18 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
         grouped[task.statusId].push(task);
       }
     }
-    // Sort each group by position
-    for (const key of Object.keys(grouped)) {
-      grouped[key].sort(
-        (a, b) =>
-          (a.position ?? "").localeCompare(b.position ?? "") ||
-          a._creationTime - b._creationTime
-      );
+    // Only apply position sort when no explicit sort is active
+    if (!isSorting) {
+      for (const key of Object.keys(grouped)) {
+        grouped[key].sort(
+          (a, b) =>
+            (a.position ?? "").localeCompare(b.position ?? "") ||
+            a._creationTime - b._creationTime
+        );
+      }
     }
     return grouped;
-  }, [tasks, statuses]);
+  }, [tasks, statuses, isSorting]);
 
   // Total task counts per status (always from allTasks, ignoring hide filter)
   const totalCountByStatus = useMemo(() => {
@@ -150,6 +161,13 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
   }, [allTasks, statuses]);
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (isSorting) {
+      toast({
+        description: "Clear sorting to reorder tasks by dragging.",
+        duration: 2500,
+      });
+      return;
+    }
     setActiveDragId(event.active.id as Id<"tasks">);
   };
 
@@ -157,7 +175,7 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
     const { active, over } = event;
     setActiveDragId(null);
 
-    if (!over || !tasks || !statuses) return;
+    if (isSorting || !over || !tasks || !statuses) return;
 
     const activeTaskId = active.id as Id<"tasks">;
     const activeTask = tasks.find((t) => t._id === activeTaskId);

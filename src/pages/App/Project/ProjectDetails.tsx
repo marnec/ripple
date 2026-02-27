@@ -1,7 +1,5 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Tabs,
   TabsList,
@@ -19,6 +17,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { KanbanBoard } from "./KanbanBoard";
 import { Tasks } from "./Tasks";
+import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 
 export function ProjectDetails() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -44,11 +43,17 @@ function ProjectDetailsContent({
 }) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<"list" | "board">(isMobile ? "list" : "board");
-  const [hideCompleted, setHideCompleted] = useState(true);
+  const [filters, setFilters] = useState<TaskFilters>({
+    hideCompleted: true,
+    assigneeIds: [],
+    priorities: [],
+  });
+  const [sort, setSort] = useState<TaskSort>(null);
   const project = useQuery(api.projects.get, { id: projectId });
   // Pre-fetch tasks to show a loading indicator beside the tabs
   const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
+  const members = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const contentLoading = tasks === undefined || statuses === undefined;
 
   if (project === null) {
@@ -105,26 +110,20 @@ function ProjectDetailsContent({
         </div>
 
         {/* Shared toolbar — stable across views */}
-        <div className="flex items-center gap-2 mb-4">
-          <Checkbox
-            id="hide-completed"
-            checked={hideCompleted}
-            onCheckedChange={(checked) => setHideCompleted(checked === true)}
-          />
-          <Label
-            htmlFor="hide-completed"
-            className="text-sm font-normal cursor-pointer"
-          >
-            Hide completed
-          </Label>
-        </div>
+        <TaskToolbar
+          filters={filters}
+          onFiltersChange={setFilters}
+          sort={sort}
+          onSortChange={setSort}
+          members={members ?? []}
+        />
 
         <TabsContent value="board" className="mt-0 flex-1 min-h-0">
-          <KanbanBoard projectId={projectId} workspaceId={workspaceId} hideCompleted={hideCompleted} />
+          <KanbanBoard projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} />
         </TabsContent>
 
         <TabsContent value="list" className="mt-0 overflow-auto">
-          <Tasks projectId={projectId} workspaceId={workspaceId} hideCompleted={hideCompleted} />
+          <Tasks projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} />
         </TabsContent>
       </Tabs>
       </div>
