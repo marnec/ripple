@@ -76,7 +76,8 @@ export default defineSchema({
     >),
   })
   .index("by_workspace", ["workspaceId"])
-  .index("by_isPublicInWorkspace", ["isPublic", "workspaceId"]),
+  .index("by_isPublicInWorkspace", ["isPublic", "workspaceId"])
+  .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
 
   channelMembers: defineTable({

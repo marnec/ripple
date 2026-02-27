@@ -24,7 +24,7 @@ NEXT STEPS:
     - [x] the search state in "search" tabs is stored in url params
     - [x] the back / forward browser and app navigation ignores the search params and navigates consistently with app page structure, to achieve this store searches in local storage instead that on search params
     - [x] replace favorite tab with filter "isFavorite" in resource-list pages
-    - [ ] uniform channels-list page to resource-list pages but no favorites
+    - [x] uniform channels-list page to resource-list pages but no favorites
     - [x] fix sidebar collapsed icons should also collapse vertically (the vertical spacing is unneded when collapsed)
 - [x] dashboard pages (channels, projects, documents, diagrams)
 - [x] create a logo-themed spinner

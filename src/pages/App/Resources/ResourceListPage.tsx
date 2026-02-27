@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { useQuery } from "convex/react";
-import { FileText, Folder, PenTool, Plus, Star, Table2 } from "lucide-react";
+import { FileText, Folder, MessageSquare, PenTool, Plus, Star, Table2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -23,13 +23,14 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 
-type ResourceType = "document" | "diagram" | "spreadsheet" | "project";
+type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
 
 const RESOURCE_ICONS: Record<ResourceType, typeof FileText> = {
   document: FileText,
   diagram: PenTool,
   spreadsheet: Table2,
   project: Folder,
+  channel: MessageSquare,
 };
 
 
@@ -38,6 +39,7 @@ const SEARCH_APIS = {
   diagram: api.diagrams.search,
   spreadsheet: api.spreadsheets.search,
   project: api.projects.search,
+  channel: api.channels.search,
 } as const;
 
 type ResourceListPageProps = {
@@ -47,6 +49,7 @@ type ResourceListPageProps = {
   onCreate?: () => void;
   createLabel?: string;
   createDialog?: React.ReactNode;
+  showFavorites?: boolean;
 };
 
 function getStorageKey(workspaceId: string, resourceType: ResourceType) {
@@ -83,13 +86,14 @@ export function ResourceListPage({
   onCreate,
   createLabel,
   createDialog,
+  showFavorites = true,
 }: ResourceListPageProps) {
   const wsId = workspaceId as Id<"workspaces">;
 
   const [stored] = useState(() => readSearchState(workspaceId, resourceType));
   const [searchQuery, setSearchQuery] = useState(stored.q);
   const [tags, setTags] = useState(stored.tags);
-  const [isFavorite, setIsFavorite] = useState(stored.isFavorite);
+  const [isFavorite, setIsFavorite] = useState(showFavorites ? stored.isFavorite : false);
 
   const [localSearchValue, setLocalSearchValue] = useState(
     () => buildSearchString(stored.q, stored.tags),
@@ -179,23 +183,25 @@ export function ResourceListPage({
               value={localSearchValue}
               onChange={handleSearchChange}
               onSubmit={handleSearchSubmit}
-              placeholder={`Search ${title.toLowerCase()}... #tag to filter`}
+              placeholder={`Search ${title.toLowerCase()}...${showFavorites ? " #tag to filter" : ""}`}
             />
           </div>
-          <button
-            type="button"
-            onClick={handleFavoriteToggle}
-            className={`flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
-              isFavorite
-                ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            }`}
-          >
-            <Star
-              className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
-            />
-            Favorites
-          </button>
+          {showFavorites && (
+            <button
+              type="button"
+              onClick={handleFavoriteToggle}
+              className={`flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
+                isFavorite
+                  ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                  : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              }`}
+            >
+              <Star
+                className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
+              />
+              Favorites
+            </button>
+          )}
           <div
             className="transition-opacity duration-200"
             style={{
@@ -214,6 +220,7 @@ export function ResourceListPage({
           onLoadingChange={handleLoadingChange}
           onCreate={onCreate}
           createLabel={createLabel}
+          showFavorites={showFavorites}
         />
       </div>
       {createDialog}
@@ -274,6 +281,7 @@ function SearchResults({
   onLoadingChange,
   onCreate,
   createLabel,
+  showFavorites,
 }: {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
@@ -283,6 +291,7 @@ function SearchResults({
   onLoadingChange?: (loading: boolean) => void;
   onCreate?: () => void;
   createLabel?: string;
+  showFavorites?: boolean;
 }) {
   const searchApi = SEARCH_APIS[resourceType];
   const results = useQuery(searchApi as any, {
@@ -376,13 +385,15 @@ function SearchResults({
                 </CardContent>
               )}
             </Link>
-            <CardContent className="flex items-center justify-end pt-0">
-              <FavoriteButton
-                resourceType={resourceType}
-                resourceId={resource._id}
-                workspaceId={workspaceId}
-              />
-            </CardContent>
+            {showFavorites !== false && (
+              <CardContent className="flex items-center justify-end pt-0">
+                <FavoriteButton
+                  resourceType={resourceType}
+                  resourceId={resource._id}
+                  workspaceId={workspaceId}
+                />
+              </CardContent>
+            )}
           </Card>
         ))}
       </div>

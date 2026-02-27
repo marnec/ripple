@@ -208,6 +208,44 @@ export const remove = mutation({
   },
 });
 
+export const search = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    searchText: v.optional(v.string()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { workspaceId, searchText }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
+      .first();
+    if (!membership) return [];
+
+    let results;
+    if (searchText?.trim()) {
+      results = await ctx.db
+        .query("channels")
+        .withSearchIndex("by_name", (q) =>
+          q.search("name", searchText).eq("workspaceId", workspaceId),
+        )
+        .collect();
+    } else {
+      results = await ctx.db
+        .query("channels")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .collect();
+    }
+
+    return results.map((c) => ({
+      _id: c._id,
+      name: c.name,
+    }));
+  },
+});
+
 const channelValidator = v.object({
   _id: v.id("channels"),
   _creationTime: v.number(),
