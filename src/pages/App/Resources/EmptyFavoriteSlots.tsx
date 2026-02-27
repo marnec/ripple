@@ -1,7 +1,7 @@
 import { Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SidebarMenuSubItem } from "@/components/ui/sidebar";
-import { MAX_SIDEBAR_FAVORITES, RESOURCE_ROUTES, preselectFavoritesTab } from "./sidebar-constants";
+import { MAX_SIDEBAR_FAVORITES, RESOURCE_ROUTES, preselectFavoriteFilter } from "./sidebar-constants";
 import type { ResourceType } from "./sidebar-constants";
 
 /**
@@ -23,7 +23,7 @@ export function EmptyFavoriteSlots({
   if (empty === 0) return null;
 
   const handleClick = () => {
-    preselectFavoritesTab(workspaceId, resourceType);
+    preselectFavoriteFilter(workspaceId, resourceType);
     void navigate(`/workspaces/${workspaceId}/${RESOURCE_ROUTES[resourceType]}`);
   };
 

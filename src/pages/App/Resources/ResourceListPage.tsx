@@ -9,9 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { usePaginatedQuery, useQuery } from "convex/react";
-import { FileText, Folder, PenTool, Plus, Table2 } from "lucide-react";
+import { useQuery } from "convex/react";
+import { FileText, Folder, PenTool, Plus, Star, Table2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -57,22 +56,22 @@ function getStorageKey(workspaceId: string, resourceType: ResourceType) {
 function readSearchState(workspaceId: string, resourceType: ResourceType) {
   try {
     const raw = localStorage.getItem(getStorageKey(workspaceId, resourceType));
-    if (!raw) return { tab: "favorites", q: "", tags: [] as string[] };
-    const parsed = JSON.parse(raw) as { tab?: string; q?: string; tags?: string[] };
+    if (!raw) return { q: "", tags: [] as string[], isFavorite: false };
+    const parsed = JSON.parse(raw) as { q?: string; tags?: string[]; isFavorite?: boolean };
     return {
-      tab: parsed.tab || "favorites",
       q: parsed.q || "",
       tags: parsed.tags ?? [],
+      isFavorite: parsed.isFavorite ?? false,
     };
   } catch {
-    return { tab: "favorites", q: "", tags: [] as string[] };
+    return { q: "", tags: [] as string[], isFavorite: false };
   }
 }
 
 function writeSearchState(
   workspaceId: string,
   resourceType: ResourceType,
-  state: { tab: string; q: string; tags: string[] },
+  state: { q: string; tags: string[]; isFavorite: boolean },
 ) {
   localStorage.setItem(getStorageKey(workspaceId, resourceType), JSON.stringify(state));
 }
@@ -87,46 +86,34 @@ export function ResourceListPage({
 }: ResourceListPageProps) {
   const wsId = workspaceId as Id<"workspaces">;
 
-  // Read initial state from localStorage once
   const [stored] = useState(() => readSearchState(workspaceId, resourceType));
-  const [tab, setTab] = useState(stored.tab);
   const [searchQuery, setSearchQuery] = useState(stored.q);
   const [tags, setTags] = useState(stored.tags);
+  const [isFavorite, setIsFavorite] = useState(stored.isFavorite);
 
   const [localSearchValue, setLocalSearchValue] = useState(
     () => buildSearchString(stored.q, stored.tags),
   );
   const [isSearchDebouncing, setIsSearchDebouncing] = useState(false);
-  const [isSearchLoading, setIsSearchLoading] = useState(true);
-  const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persistState = useCallback(
+    (q: string, t: string[], fav: boolean) => {
+      writeSearchState(workspaceId, resourceType, { q, tags: t, isFavorite: fav });
+    },
+    [workspaceId, resourceType],
+  );
 
   const flushSearch = useCallback(
     (value: string) => {
       const parsed = parseSearchInput(value);
       setSearchQuery(parsed.searchText);
       setTags(parsed.tags);
-      writeSearchState(workspaceId, resourceType, {
-        tab: "search",
-        q: parsed.searchText,
-        tags: parsed.tags,
-      });
+      persistState(parsed.searchText, parsed.tags, isFavorite);
     },
-    [workspaceId, resourceType],
+    [persistState, isFavorite],
   );
-
-  const handleTabChange = (value: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setTab(value);
-    if (value === "favorites") {
-      writeSearchState(workspaceId, resourceType, { tab: "favorites", q: "", tags: [] });
-      setSearchQuery("");
-      setTags([]);
-      setLocalSearchValue("");
-    } else {
-      writeSearchState(workspaceId, resourceType, { tab: value, q: searchQuery, tags });
-    }
-  };
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -152,11 +139,16 @@ export function ResourceListPage({
     [flushSearch],
   );
 
-  const handleSearchLoadingChange = useCallback((loading: boolean) => {
-    setIsSearchLoading(loading);
+  const handleFavoriteToggle = () => {
+    const next = !isFavorite;
+    setIsFavorite(next);
+    persistState(searchQuery, tags, next);
+  };
+
+  const handleLoadingChange = useCallback((loading: boolean) => {
+    setIsLoading(loading);
   }, []);
 
-  // Cleanup debounce on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -180,152 +172,51 @@ export function ResourceListPage({
             </Button>
           )}
         </div>
-        <Tabs value={tab} onValueChange={handleTabChange}>
-          <div className="flex items-center gap-2">
-            <TabsList>
-              <TabsTrigger value="favorites">Favorites</TabsTrigger>
-              <TabsTrigger value="search">Search</TabsTrigger>
-            </TabsList>
-            <div
-              className="transition-opacity duration-200"
-              style={{
-                opacity:
-                  (tab === "search" && (isSearchDebouncing || isSearchLoading)) ||
-                  (tab === "favorites" && isFavoritesLoading)
-                    ? 1
-                    : 0,
-              }}
-            >
-              <RippleSpinner size={40} />
-            </div>
-          </div>
-          <TabsContent value="favorites" className="mt-4">
-            <FavoritesTab
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <ResourceSearchInput
               workspaceId={wsId}
-              resourceType={resourceType}
-              onLoadingChange={setIsFavoritesLoading}
-              onCreate={onCreate}
-              createLabel={createLabel}
+              value={localSearchValue}
+              onChange={handleSearchChange}
+              onSubmit={handleSearchSubmit}
+              placeholder={`Search ${title.toLowerCase()}... #tag to filter`}
             />
-          </TabsContent>
-          <TabsContent value="search" className="mt-4">
-            <div className="space-y-4">
-              <ResourceSearchInput
-                workspaceId={wsId}
-                value={localSearchValue}
-                onChange={handleSearchChange}
-                onSubmit={handleSearchSubmit}
-                placeholder={`Search ${title.toLowerCase()}... #tag to filter`}
-              />
-              <SearchResults
-                workspaceId={wsId}
-                resourceType={resourceType}
-                searchText={searchQuery || undefined}
-                tags={tags.length > 0 ? tags : undefined}
-                onLoadingChange={handleSearchLoadingChange}
-              />
-            </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+          <button
+            type="button"
+            onClick={handleFavoriteToggle}
+            className={`flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
+              isFavorite
+                ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
+          >
+            <Star
+              className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
+            />
+            Favorites
+          </button>
+          <div
+            className="transition-opacity duration-200"
+            style={{
+              opacity: isSearchDebouncing || isLoading ? 1 : 0,
+            }}
+          >
+            <RippleSpinner size={40} />
+          </div>
+        </div>
+        <SearchResults
+          workspaceId={wsId}
+          resourceType={resourceType}
+          searchText={searchQuery || undefined}
+          tags={tags.length > 0 ? tags : undefined}
+          isFavorite={isFavorite || undefined}
+          onLoadingChange={handleLoadingChange}
+          onCreate={onCreate}
+          createLabel={createLabel}
+        />
       </div>
       {createDialog}
-    </div>
-  );
-}
-
-function FavoritesTab({
-  workspaceId,
-  resourceType,
-  onLoadingChange,
-  onCreate,
-  createLabel,
-}: {
-  workspaceId: Id<"workspaces">;
-  resourceType: ResourceType;
-  onLoadingChange?: (loading: boolean) => void;
-  onCreate?: () => void;
-  createLabel?: string;
-}) {
-  const { results, status, loadMore } = usePaginatedQuery(
-    api.favorites.listByType,
-    { workspaceId, resourceType },
-    { initialNumItems: 20 },
-  );
-
-  const isLoading = status === "LoadingFirstPage";
-  const prevLoading = useRef(isLoading);
-  useEffect(() => {
-    if (prevLoading.current !== isLoading) {
-      prevLoading.current = isLoading;
-      onLoadingChange?.(isLoading);
-    }
-  }, [isLoading, onLoadingChange]);
-
-  if (isLoading) {
-    return null;
-  }
-
-  // Filter out nulls (deleted resources)
-  const items = results.filter((r: unknown) => r !== null) as Array<{
-    _id: string;
-    resourceId: string;
-    name: string;
-    resourceType: ResourceType;
-    favoritedAt: number;
-  }>;
-
-  if (items.length === 0) {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          No favorites yet. Star a {resourceType} to pin it here.
-        </p>
-        {onCreate && (
-          <Button variant="outline" onClick={onCreate}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            {createLabel ?? `Create a ${resourceType}`}
-          </Button>
-        )}
-      </div>
-    );
-  }
-
-
-
-  return (
-    <div
-      className="space-y-4"
-      style={{ animation: "slide-up 250ms cubic-bezier(0.16, 1, 0.3, 1)" }}
-    >
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {items.map((fav) => {
-          const Icon = RESOURCE_ICONS[fav.resourceType];
-          return (
-            <Card key={fav._id} className="flex flex-col">
-              <Link to={`${fav.resourceId}`} className="grow">
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <CardTitle className="truncate text-base">{fav.name}</CardTitle>
-                </CardHeader>
-              </Link>
-              <CardContent className="flex items-center justify-end pt-0">
-                <FavoriteButton
-                  resourceType={resourceType}
-                  resourceId={fav.resourceId}
-                  workspaceId={workspaceId}
-                />
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      {status === "CanLoadMore" && (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={() => loadMore(20)}>
-            Load more
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
@@ -379,19 +270,26 @@ function SearchResults({
   resourceType,
   searchText,
   tags,
+  isFavorite,
   onLoadingChange,
+  onCreate,
+  createLabel,
 }: {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
   searchText?: string;
   tags?: string[];
+  isFavorite?: boolean;
   onLoadingChange?: (loading: boolean) => void;
+  onCreate?: () => void;
+  createLabel?: string;
 }) {
   const searchApi = SEARCH_APIS[resourceType];
   const results = useQuery(searchApi as any, {
     workspaceId,
     searchText,
     tags,
+    isFavorite,
   });
 
   const [state, dispatch] = useReducer(crossfadeReducer, {
@@ -400,7 +298,6 @@ function SearchResults({
     pending: undefined,
   });
 
-  // Track results changes
   const prevResults = useRef(results);
   useEffect(() => {
     if (results === prevResults.current) return;
@@ -416,7 +313,6 @@ function SearchResults({
     }
   }, [results]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Report loading state to parent
   const isLoading = state.phase === "spinner";
   const prevIsLoading = useRef(isLoading);
   useEffect(() => {
@@ -426,7 +322,6 @@ function SearchResults({
     }
   }, [isLoading, onLoadingChange]);
 
-  // Timed phase transitions
   useEffect(() => {
     if (state.phase === "content-exit") {
       const t = setTimeout(() => dispatch({ type: "EXIT_DONE" }), 150);
@@ -443,7 +338,19 @@ function SearchResults({
   const renderContent = (items: SearchResult[] | undefined) => {
     if (!items || items.length === 0) {
       return (
-        <p className="text-sm text-muted-foreground">No results found.</p>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {isFavorite
+              ? `No favorite ${resourceType}s yet. Star a ${resourceType} to see it here.`
+              : "No results found."}
+          </p>
+          {onCreate && (
+            <Button variant="outline" onClick={onCreate}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              {createLabel ?? `Create a ${resourceType}`}
+            </Button>
+          )}
+        </div>
       );
     }
     return (

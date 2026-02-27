@@ -23,19 +23,19 @@ export const RESOURCE_ROUTES: Record<ResourceType, string> = {
 };
 
 /**
- * Write "search" as the active tab to localStorage so ResourceListPage opens
- * on the search tab when navigated to from a sidebar header click.
+ * Clear search state so ResourceListPage opens fresh when navigated to
+ * from a sidebar header click.
  */
 export function preselectSearchTab(workspaceId: string, resourceType: ResourceType) {
   const key = `ripple:search:${workspaceId}:${resourceType}`;
-  localStorage.setItem(key, JSON.stringify({ tab: "search", q: "", tags: [] }));
+  localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: false }));
 }
 
 /**
- * Write "favorites" as the active tab to localStorage so ResourceListPage opens
- * on the favorites tab when navigated to from an empty favorite slot click.
+ * Pre-set the isFavorite filter so ResourceListPage opens filtered to favorites
+ * when navigated to from an empty favorite slot click.
  */
-export function preselectFavoritesTab(workspaceId: string, resourceType: ResourceType) {
+export function preselectFavoriteFilter(workspaceId: string, resourceType: ResourceType) {
   const key = `ripple:search:${workspaceId}:${resourceType}`;
-  localStorage.setItem(key, JSON.stringify({ tab: "favorites", q: "", tags: [] }));
+  localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: true }));
 }

@@ -94,9 +94,10 @@ export const search = query({
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
+    isFavorite: v.optional(v.boolean()),
   },
   returns: v.any(),
-  handler: async (ctx, { workspaceId, searchText, tags }) => {
+  handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -119,6 +120,17 @@ export const search = query({
       results = results.filter(
         (doc) => doc.tags && tags.every((t) => doc.tags!.includes(t)),
       );
+    }
+
+    if (isFavorite) {
+      const favs = await ctx.db
+        .query("favorites")
+        .withIndex("by_workspace_user_type", (q) =>
+          q.eq("workspaceId", workspaceId).eq("userId", userId).eq("resourceType", "document"),
+        )
+        .collect();
+      const favSet = new Set(favs.map((f) => f.resourceId));
+      results = results.filter((doc) => favSet.has(doc._id));
     }
 
     return results;
