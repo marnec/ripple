@@ -33,12 +33,13 @@ export function AppSidebar() {
 
   const { subscribeUser } = usePushNotifications();
 
+  // @ts-expect-error TS2589 deep type instantiation with Convex query
   const workspaces = useQuery(api.workspaces.list);
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
 
   const handleChannelSelect = (id: string | null) => {
     if (!id) {
-      void navigate(`/workspaces/${workspaceId}`);
+      void navigate(`/workspaces/${workspaceId}/channels`);
     } else {
       void navigate(`/workspaces/${workspaceId}/channels/${id}`);
       setOpenMobile(false);
@@ -110,7 +111,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent className={isMobile ? "" : "h-full overflow-hidden!"}>
         {workspaceId && (
-          <div className={isMobile ? "flex min-h-0 flex-1 flex-col" : "flex h-[75%] min-h-0 flex-col"}>
+          <div className={isMobile ? "flex min-h-0 flex-1 flex-col" : "flex h-[75%] min-h-0 flex-col group-data-[collapsible=icon]:h-auto"}>
             {/* My Tasks — fixed at top */}
             <SidebarGroup className="flex-none pb-0">
               <SidebarMenu>
@@ -128,7 +129,7 @@ export function AppSidebar() {
             </SidebarGroup>
 
             {/* Channels — takes remaining vertical space, overflows internally */}
-            <SidebarGroup className="min-h-0 flex-1 overflow-hidden pb-0">
+            <SidebarGroup className="min-h-0 flex-1 overflow-hidden pb-0 group-data-[collapsible=icon]:flex-none">
               <SidebarMenu className="h-full">
                 <ChannelSelectorList
                   channelId={channelId}
