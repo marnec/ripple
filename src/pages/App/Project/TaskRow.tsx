@@ -55,6 +55,10 @@ export function TaskRow({ task, statuses, onStatusChange, onClick }: TaskRowProp
     <Item
       size="sm"
       onClick={onClick}
+      style={{
+        viewTransitionName: `--task-${task._id}`,
+        viewTransitionClass: "task-card",
+      } as React.CSSProperties}
       className="cursor-pointer hover:bg-accent transition-colors border-input"
     >
       <ItemMedia>

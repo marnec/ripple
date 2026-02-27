@@ -55,7 +55,6 @@ type KanbanColumnProps = {
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
   onDelete?: () => void;
-  exitingIds?: Set<string>;
   isFirst: boolean;
   isLast: boolean;
   canDelete: boolean;
@@ -69,7 +68,6 @@ export function KanbanColumn({
   onMoveLeft,
   onMoveRight,
   onDelete,
-  exitingIds,
   isFirst,
   isLast,
   canDelete,
@@ -223,7 +221,6 @@ export function KanbanColumn({
                 key={task._id}
                 task={task}
                 onClick={() => onTaskClick(task._id)}
-                isExiting={exitingIds?.has(task._id) ?? false}
               />
             ))
           )}

@@ -23,6 +23,11 @@ export function useFilteredTasks<T extends FilterableTask>(
 
     let result = tasks;
 
+    // Filter completed
+    if (filters.hideCompleted) {
+      result = result.filter((t) => !t.completed);
+    }
+
     // Filter by assignee
     if (filters.assigneeIds.length > 0) {
       result = result.filter(
@@ -68,5 +73,5 @@ export function useFilteredTasks<T extends FilterableTask>(
     }
 
     return result;
-  }, [tasks, filters.assigneeIds, filters.priorities, sort]);
+  }, [tasks, filters.hideCompleted, filters.assigneeIds, filters.priorities, sort]);
 }

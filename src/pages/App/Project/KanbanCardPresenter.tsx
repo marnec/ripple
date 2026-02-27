@@ -37,6 +37,10 @@ export function KanbanCardPresenter({
   return (
     <Card
       onClick={onClick}
+      style={{
+        viewTransitionName: `--task-${task._id}`,
+        viewTransitionClass: "task-card",
+      } as React.CSSProperties}
       className={cn(
         "cursor-grab active:cursor-grabbing transition-all",
         isDragging && "shadow-lg rotate-2"

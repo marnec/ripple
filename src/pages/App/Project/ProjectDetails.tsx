@@ -11,7 +11,8 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { LayoutList, Kanban } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { startViewTransition } from "@/hooks/use-view-transition";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -49,6 +50,15 @@ function ProjectDetailsContent({
     priorities: [],
   });
   const [sort, setSort] = useState<TaskSort>(null);
+
+  const setFiltersAnimated = useCallback(
+    (next: TaskFilters) => startViewTransition(() => setFilters(next)),
+    []
+  );
+  const setSortAnimated = useCallback(
+    (next: TaskSort) => startViewTransition(() => setSort(next)),
+    []
+  );
   const project = useQuery(api.projects.get, { id: projectId });
   // Pre-fetch tasks to show a loading indicator beside the tabs
   const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
@@ -112,9 +122,9 @@ function ProjectDetailsContent({
         {/* Shared toolbar — stable across views */}
         <TaskToolbar
           filters={filters}
-          onFiltersChange={setFilters}
+          onFiltersChange={setFiltersAnimated}
           sort={sort}
-          onSortChange={setSort}
+          onSortChange={setSortAnimated}
           members={members ?? []}
         />
 

@@ -282,6 +282,44 @@ body {
   letter-spacing: -0.025em;
 }
 
+/* ─── View Transitions — task card reorder / filter animations ────── */
+::view-transition-group(.task-card) {
+  animation-duration: 250ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Fade out tasks removed from view (hide-completed, filter) */
+::view-transition-old(.task-card):only-child {
+  animation: vt-shrink 200ms ease forwards;
+}
+
+/* Fade in tasks entering view */
+::view-transition-new(.task-card):only-child {
+  animation: vt-grow 200ms ease;
+}
+
+@keyframes vt-shrink {
+  to {
+    opacity: 0;
+    scale: 0.95;
+  }
+}
+
+@keyframes vt-grow {
+  from {
+    opacity: 0;
+    scale: 0.95;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(.task-card),
+  ::view-transition-old(.task-card),
+  ::view-transition-new(.task-card) {
+    animation-duration: 0.01ms !important;
+  }
+}
+
 /* Interactive element improvements */
 .interactive-lift {
   transition: transform 0.15s ease, box-shadow 0.15s ease;

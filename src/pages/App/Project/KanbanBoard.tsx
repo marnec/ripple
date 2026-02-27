@@ -17,7 +17,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -53,9 +53,6 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoa
   const { toast } = useToast();
   const isSorting = sort !== null;
 
-  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
-  const prevHideCompleted = useRef(filters.hideCompleted);
-
   // Always fetch all tasks — filter client-side to avoid flash on toggle
   const allTasks = useQuery(api.tasks.listByProject, {
     projectId,
@@ -63,30 +60,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoa
   });
 
   // Apply assignee/priority filters + optional sort
-  const filteredTasks = useFilteredTasks(allTasks, filters, sort);
-
-  // When hideCompleted toggles on, mark completed tasks as exiting so they
-  // can play a fade-out animation before being removed from the DOM.
-  useEffect(() => {
-    if (filters.hideCompleted && !prevHideCompleted.current && allTasks) {
-      const ids = new Set(
-        allTasks.filter((t) => t.completed).map((t) => t._id)
-      );
-      if (ids.size > 0) {
-        setExitingIds(ids);
-        const timer = setTimeout(() => setExitingIds(new Set()), 250);
-        return () => clearTimeout(timer);
-      }
-    }
-    prevHideCompleted.current = filters.hideCompleted;
-  }, [filters.hideCompleted, allTasks]);
-
-  const tasks = useMemo(() => {
-    if (!filteredTasks) return undefined;
-    if (!filters.hideCompleted) return filteredTasks;
-    // Keep exiting tasks in the list so they can animate out
-    return filteredTasks.filter((t) => !t.completed || exitingIds.has(t._id));
-  }, [filteredTasks, filters.hideCompleted, exitingIds]);
+  const tasks = useFilteredTasks(allTasks, filters, sort);
 
   const statuses = useQuery(api.taskStatuses.listByProject, {
     projectId,
@@ -299,7 +273,6 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoa
               onMoveLeft={() => handleMoveColumn(status._id, "left")}
               onMoveRight={() => handleMoveColumn(status._id, "right")}
               onDelete={() => handleDeleteColumn(status._id)}
-              exitingIds={exitingIds}
               isFirst={index === 0}
               isLast={index === statuses.length - 1}
               canDelete={!status.isDefault}
