@@ -13,9 +13,13 @@ import usePushNotifications from "@/hooks/use-push-notifications";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import { CheckSquare } from "lucide-react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
+
+const workspacesListRef = makeFunctionReference<"query">("workspaces:list");
+const workspacesGetRef = makeFunctionReference<"query", { id: Id<"workspaces"> }>("workspaces:get");
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
@@ -33,8 +37,8 @@ export function AppSidebar() {
 
   const { subscribeUser } = usePushNotifications();
 
-  const workspaces = useQuery(api.workspaces.list);
-  const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
+  const workspaces = useQuery(workspacesListRef);
+  const activeWorkspace = useQuery(workspacesGetRef, workspaceId ? { id: workspaceId } : "skip");
 
   const handleChannelSelect = (id: string | null) => {
     if (!id) {
