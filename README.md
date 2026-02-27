@@ -1,7 +1,7 @@
 NEXT STEPS:
 - tasks
-    - [o] add filteing (by assignee, by priority)
-    - [o] add sorting (by start/end/creation date)
+    - [x] add filteing (by assignee, by priority)
+    - [x] add sorting (by start/end/creation date)
     - [ ] PLANE.so inspired cycles
 - [ ] improve breadcrumb on desktop
 - [ ] uniform workspace thumbnail repr

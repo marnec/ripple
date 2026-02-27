@@ -41,7 +41,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
       <div
         ref={setNodeRef}
         style={style}
-        className="h-24 border-2 border-dashed rounded-lg bg-muted/50"
+        className="h-36 border-2 border-dashed rounded-lg bg-muted/50"
       />
     );
   }

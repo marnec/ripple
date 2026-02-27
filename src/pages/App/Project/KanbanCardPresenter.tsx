@@ -47,14 +47,16 @@ export function KanbanCardPresenter({
       )}
     >
       <CardHeader className="py-2 px-3">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 min-h-4">
           {task.hasBlockers && (
             <span title="Blocked"><Ban className="h-3 w-3 text-red-500 shrink-0" /></span>
           )}
-          {formatTaskId(task.projectKey, task.number) && (
+          {formatTaskId(task.projectKey, task.number) ? (
             <span className="text-xs text-muted-foreground font-mono">
               {formatTaskId(task.projectKey, task.number)}
             </span>
+          ) : (
+            <span className="text-xs invisible" aria-hidden>&#8203;</span>
           )}
         </div>
         <h3 className="text-sm font-medium truncate">{task.title}</h3>
@@ -77,8 +79,8 @@ export function KanbanCardPresenter({
             )}
           </div>
 
-          {/* Assignee Avatar */}
-          {task.assignee && (
+          {/* Assignee Avatar — ghost placeholder keeps row height stable */}
+          {task.assignee ? (
             <Avatar className="h-6 w-6">
               {task.assignee.image && (
                 <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
@@ -87,39 +89,46 @@ export function KanbanCardPresenter({
                 {task.assignee.name?.slice(0, 2).toUpperCase() ?? "?"}
               </AvatarFallback>
             </Avatar>
+          ) : (
+            <div className="h-6 w-6" aria-hidden />
           )}
         </div>
 
-        {/* Labels */}
-        {task.labels && task.labels.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {task.labels.map((label, index) => (
+        {/* Labels — always reserve single row height */}
+        <div className="flex flex-wrap gap-1 overflow-hidden max-h-5">
+          {task.labels && task.labels.length > 0 ? (
+            task.labels.map((label, index) => (
               <Badge key={index} variant="secondary" className="text-xs py-0">
                 {label}
               </Badge>
-            ))}
-          </div>
-        )}
+            ))
+          ) : (
+            <span className="text-xs invisible py-0" aria-hidden>&#8203;</span>
+          )}
+        </div>
 
-        {/* Due date & Estimate */}
-        {(task.dueDate || task.estimate != null) && (
-          <div className="flex items-center gap-2 mt-1">
-            {task.dueDate && (
-              <span className={cn(
-                "flex items-center gap-1 text-xs",
-                isOverdue(task.dueDate) ? "text-red-500 font-medium" : "text-muted-foreground"
-              )}>
-                <CalendarIcon className="h-3 w-3" />
-                {formatDueDate(task.dueDate)}
-              </span>
-            )}
-            {task.estimate != null && (
-              <span className="text-xs text-muted-foreground">
-                {formatEstimate(task.estimate)}
-              </span>
-            )}
-          </div>
-        )}
+        {/* Due date & Estimate — ghost placeholder keeps card height stable */}
+        <div className="flex items-center gap-2 mt-1">
+          {task.dueDate ? (
+            <span className={cn(
+              "flex items-center gap-1 text-xs",
+              isOverdue(task.dueDate) ? "text-red-500 font-medium" : "text-muted-foreground"
+            )}>
+              <CalendarIcon className="h-3 w-3" />
+              {formatDueDate(task.dueDate)}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs invisible" aria-hidden>
+              <CalendarIcon className="h-3 w-3" />
+              &#8203;
+            </span>
+          )}
+          {task.estimate != null && (
+            <span className="text-xs text-muted-foreground">
+              {formatEstimate(task.estimate)}
+            </span>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
