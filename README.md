@@ -1,15 +1,7 @@
 NEXT STEPS:
 - tasks
-    - [x] the done counter should count also completed tasks (probably also the other counters?)
-    - [x] in mobile mode the sidebar tasks details should be prevented from kanban tasks too
-    - [x] slight restyle of task comments: align timestamps to other events; place subtle background behind comment text-box; place edit-delete buttons on bottom right corner of comment text-box, reduce vertical spacing between comment and next event
-    - [x] entering a project view should show it's layout immediately, then content can fade in when ready
-    - [x] toggling hide-completed filter should not flash the whole layout
-    - [x] toggleing hide-completed filter should only add/remove completed tasks, and not flash the other tasks. It would be nice if in list view (only there it's relevant) if completed and not completed tasks are interleaved, the non-completed-one slide up/down to leave/fill space. This is not an hard requirement and shouln't be done if too hard.
-    - [x] you should be able to quickly switch status from the list view
     - [ ] PLANE.so inspired cycles
     - [ ] create tasks from any view
-    - [ ] fix task width on sidebar collapse
 - [ ] improve breadcrumb on desktop
 - [ ] uniform workspace thumbnail repr
 - excalidraw

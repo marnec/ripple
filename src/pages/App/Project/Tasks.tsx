@@ -1,6 +1,3 @@
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, useQuery } from "convex/react";
 import { CheckSquare } from "lucide-react";
@@ -15,10 +12,10 @@ import { TaskRow } from "./TaskRow";
 type TasksProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
+  hideCompleted: boolean;
 };
 
-export function Tasks({ projectId, workspaceId }: TasksProps) {
-  const [hideCompleted, setHideCompleted] = useState(true);
+export function Tasks({ projectId, workspaceId, hideCompleted }: TasksProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(
     null
   );
@@ -42,31 +39,7 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
   const totalCount = allTasks.length;
 
   return (
-    <div className="border rounded-lg overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-semibold">Tasks</h2>
-          <Badge variant="secondary">{totalCount}</Badge>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="hide-completed"
-            checked={hideCompleted}
-            onCheckedChange={(checked) =>
-              setHideCompleted(checked === true)
-            }
-          />
-          <Label
-            htmlFor="hide-completed"
-            className="text-sm font-normal cursor-pointer"
-          >
-            Hide completed
-          </Label>
-        </div>
-      </div>
-
+    <div>
       {/* Inline Task Creation */}
       <CreateTaskInline projectId={projectId} workspaceId={workspaceId} />
 
@@ -80,7 +53,7 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
           </p>
         </div>
       ) : (
-        <div>
+        <div className="flex flex-col gap-1.5">
           {allTasks.map((task) => {
             const isHidden = hideCompleted && task.completed;
             return (

@@ -49,7 +49,7 @@ export function CreateTaskInline({ projectId, workspaceId }: CreateTaskInlinePro
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 px-4 py-2">
+    <form onSubmit={handleSubmit} className="flex items-center gap-2 py-2 px-px">
       <Plus className="w-4 h-4 text-muted-foreground flex-shrink-0" />
       <Input
         ref={inputRef}

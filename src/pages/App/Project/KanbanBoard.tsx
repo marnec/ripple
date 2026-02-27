@@ -1,5 +1,3 @@
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   DndContext,
   DragOverlay,
@@ -23,6 +21,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { AddColumnDialog } from "./AddColumnDialog";
+import { CreateTaskInline } from "./CreateTaskInline";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { KanbanColumn } from "./KanbanColumn";
 import { TaskDetailSheet } from "./TaskDetailSheet";
@@ -30,6 +29,7 @@ import { TaskDetailSheet } from "./TaskDetailSheet";
 type KanbanBoardProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
+  hideCompleted: boolean;
 };
 
 // pointerWithin detects which column the pointer is in (works for empty columns);
@@ -40,8 +40,7 @@ const collisionDetection: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
-export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
-  const [hideCompleted, setHideCompleted] = useState(true);
+export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoardProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [activeDragId, setActiveDragId] = useState<Id<"tasks"> | null>(null);
   const isMobile = useIsMobile();
@@ -233,22 +232,8 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="hide-completed-board"
-            checked={hideCompleted}
-            onCheckedChange={(checked) => setHideCompleted(checked === true)}
-          />
-          <Label
-            htmlFor="hide-completed-board"
-            className="text-sm font-normal cursor-pointer"
-          >
-            Hide completed
-          </Label>
-        </div>
-      </div>
+      {/* Create task — matches list view layout */}
+      <CreateTaskInline projectId={projectId} workspaceId={workspaceId} />
 
       {/* Kanban Board */}
       <DndContext

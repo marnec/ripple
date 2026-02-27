@@ -1,5 +1,7 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Tabs,
   TabsList,
@@ -42,6 +44,7 @@ function ProjectDetailsContent({
 }) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<"list" | "board">(isMobile ? "list" : "board");
+  const [hideCompleted, setHideCompleted] = useState(true);
   const project = useQuery(api.projects.get, { id: projectId });
   // Pre-fetch tasks to show a loading indicator beside the tabs
   const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
@@ -85,7 +88,7 @@ function ProjectDetailsContent({
 
       {/* View Toggle and Content — tabs always visible */}
       <Tabs value={view} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <TabsList>
               <TabsTrigger value="board" className="flex items-center gap-2">
@@ -101,12 +104,27 @@ function ProjectDetailsContent({
           </div>
         </div>
 
+        {/* Shared toolbar — stable across views */}
+        <div className="flex items-center gap-2 mb-4">
+          <Checkbox
+            id="hide-completed"
+            checked={hideCompleted}
+            onCheckedChange={(checked) => setHideCompleted(checked === true)}
+          />
+          <Label
+            htmlFor="hide-completed"
+            className="text-sm font-normal cursor-pointer"
+          >
+            Hide completed
+          </Label>
+        </div>
+
         <TabsContent value="board" className="mt-0 flex-1 min-h-0">
-          <KanbanBoard projectId={projectId} workspaceId={workspaceId} />
+          <KanbanBoard projectId={projectId} workspaceId={workspaceId} hideCompleted={hideCompleted} />
         </TabsContent>
 
         <TabsContent value="list" className="mt-0 overflow-auto">
-          <Tasks projectId={projectId} workspaceId={workspaceId} />
+          <Tasks projectId={projectId} workspaceId={workspaceId} hideCompleted={hideCompleted} />
         </TabsContent>
       </Tabs>
       </div>
