@@ -168,7 +168,7 @@ export function useTaskDetail({
 
   const handleRemoveLabel = (labelToRemove: string) => {
     if (taskId && task) {
-      const updatedLabels = (task.labels || []).filter(
+      const updatedLabels = ((task.labels || []) as string[]).filter(
         (l) => l !== labelToRemove
       );
       void updateTask({ taskId, labels: updatedLabels });

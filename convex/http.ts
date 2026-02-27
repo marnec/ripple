@@ -1,45 +1,7 @@
-import { httpRouter, makeFunctionReference } from "convex/server";
+import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { auth } from "./auth";
-
-const consumeTokenRef = makeFunctionReference<
-  "mutation",
-  { token: string }
->("collaboration:consumeToken");
-
-const getUserInfoRef = makeFunctionReference<
-  "query",
-  { userId: Id<"users"> }
->("collaboration:getUserInfo");
-
-const checkAccessRef = makeFunctionReference<
-  "query",
-  { userId: Id<"users">; resourceType: "doc" | "diagram" | "task" | "presence" | "spreadsheet"; resourceId: string },
-  boolean
->("collaboration:checkAccess");
-
-const saveSnapshotRef = makeFunctionReference<
-  "mutation",
-  { resourceType: "doc" | "diagram" | "task" | "spreadsheet"; resourceId: string; storageId: Id<"_storage"> },
-  null
->("snapshots:saveSnapshot");
-
-const getSnapshotRef = makeFunctionReference<
-  "query",
-  { resourceType: "doc" | "diagram" | "task" | "spreadsheet"; resourceId: string }
->("snapshots:getSnapshot");
-
-const upsertCellValuesRef = makeFunctionReference<
-  "mutation",
-  { spreadsheetId: Id<"spreadsheets">; updates: Array<{ cellRef: string; values: string }> },
-  null
->("spreadsheetCellRefs:upsertCellValues");
-
-const getReferencedCellRefsRef = makeFunctionReference<
-  "query",
-  { spreadsheetId: Id<"spreadsheets"> }
->("spreadsheetCellRefs:getReferencedCellRefs");
 
 const http = httpRouter();
 
@@ -88,7 +50,7 @@ http.route({
       }
 
       // Validate and consume token
-      const tokenData = await ctx.runMutation(consumeTokenRef, {
+      const tokenData = await ctx.runMutation(internal.collaboration.consumeToken, {
         token,
       });
 
@@ -108,7 +70,7 @@ http.route({
       }
 
       // Get user info
-      const userInfo = await ctx.runQuery(getUserInfoRef, {
+      const userInfo = await ctx.runQuery(internal.collaboration.getUserInfo, {
         userId: tokenData.userId,
       });
 
@@ -235,7 +197,7 @@ http.route({
       const storageId = await ctx.storage.store(blob);
 
       // Save snapshot reference to resource
-      await ctx.runMutation(saveSnapshotRef, {
+      await ctx.runMutation(internal.snapshots.saveSnapshot, {
         resourceType,
         resourceId,
         storageId,
@@ -357,7 +319,7 @@ http.route({
       }
 
       // Get snapshot storage ID
-      const storageId = await ctx.runQuery(getSnapshotRef, {
+      const storageId = await ctx.runQuery(internal.snapshots.getSnapshot, {
         resourceType,
         resourceId,
       });
@@ -505,7 +467,7 @@ http.route({
       }
 
       // Check if user has access
-      const hasAccess = await ctx.runQuery(checkAccessRef, {
+      const hasAccess = await ctx.runQuery(internal.collaboration.checkAccess, {
         userId: userId as any,
         resourceType: resourceType as any,
         resourceId,
@@ -585,7 +547,7 @@ http.route({
         );
       }
 
-      await ctx.runMutation(upsertCellValuesRef, {
+      await ctx.runMutation(internal.spreadsheetCellRefs.upsertCellValues, {
         spreadsheetId: body.spreadsheetId as any,
         updates: body.updates,
       });
@@ -660,7 +622,7 @@ http.route({
       }
 
       const refs = await ctx.runQuery(
-        getReferencedCellRefsRef,
+        internal.spreadsheetCellRefs.getReferencedCellRefs,
         { spreadsheetId: spreadsheetId as any },
       );
 

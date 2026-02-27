@@ -121,8 +121,6 @@ export const create = mutation({
     if (args.assigneeId && args.assigneeId !== userId) {
       await ctx.scheduler.runAfter(
         0,
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore — TS2589: deep type instantiation from Convex schema size
         internal.taskNotifications.notifyTaskAssignment,
         {
           taskId,

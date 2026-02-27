@@ -9,7 +9,16 @@ import { insertActivity } from "./taskActivity";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
-  returns: v.any(),
+  returns: v.array(v.object({
+    _id: v.id("taskComments"),
+    _creationTime: v.number(),
+    taskId: v.id("tasks"),
+    userId: v.id("users"),
+    body: v.string(),
+    deleted: v.boolean(),
+    author: v.string(),
+    image: v.optional(v.string()),
+  })),
   handler: async (ctx, { taskId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
@@ -101,8 +110,6 @@ export const create = mutation({
     const filteredMentions = mentionedUserIds.filter(id => id !== userId);
     if (filteredMentions.length > 0) {
       const user = await ctx.db.get(userId);
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore — TS2589: deep type instantiation from Convex schema size
       await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
         taskId,
         mentionedUserIds: filteredMentions,

@@ -40,7 +40,13 @@ export const toggle = mutation({
 
 export const listForMessage = query({
   args: { messageId: v.id("messages") },
-  returns: v.any(),
+  returns: v.array(v.object({
+    emoji: v.string(),
+    emojiNative: v.string(),
+    count: v.number(),
+    userIds: v.array(v.string()),
+    currentUserReacted: v.boolean(),
+  })),
   handler: async (ctx, { messageId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Unauthenticated");

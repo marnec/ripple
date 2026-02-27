@@ -55,8 +55,6 @@ export function CreateProjectDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore — TS2589: deep type instantiation from Convex schema size
   const createProject = useMutation(api.projects.create);
   const navigate = useNavigate();
   const { toast } = useToast();

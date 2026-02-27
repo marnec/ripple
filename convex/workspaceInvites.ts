@@ -77,6 +77,22 @@ export const create = mutation({
 
 export const listByEmail = query({
   args: {},
+  returns: v.array(v.object({
+    _id: v.id("workspaceInvites"),
+    _creationTime: v.number(),
+    workspaceId: v.id("workspaces"),
+    email: v.string(),
+    invitedBy: v.id("users"),
+    status: v.string(),
+    workspace: v.union(v.object({
+      _id: v.id("workspaces"),
+      _creationTime: v.number(),
+      name: v.string(),
+      description: v.optional(v.string()),
+      ownerId: v.id("users"),
+    }), v.null()),
+    inviterName: v.string(),
+  })),
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];

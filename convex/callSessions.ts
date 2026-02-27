@@ -1,5 +1,4 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import {
   action,
@@ -7,18 +6,7 @@ import {
   internalQuery,
   mutation,
 } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
-
-const getActiveSessionRef = makeFunctionReference<
-  "query",
-  { channelId: Id<"channels"> }
->("callSessions:getActiveSession");
-
-const createSessionRef = makeFunctionReference<
-  "mutation",
-  { channelId: Id<"channels">; cloudflareMeetingId: string },
-  string
->("callSessions:createSession");
+import { internal } from "./_generated/api";
 
 const CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
@@ -114,7 +102,7 @@ export const joinCall = action({
     };
 
     // Check for an existing active session
-    const session = await ctx.runQuery(getActiveSessionRef, {
+    const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
       channelId,
     });
     let meetingId: string;
@@ -142,7 +130,7 @@ export const joinCall = action({
 
       // Store the session — if another user raced us, use their session instead
       const existingMeetingId = await ctx.runMutation(
-        createSessionRef,
+        internal.callSessions.createSession,
         {
           channelId,
           cloudflareMeetingId: meetingId,

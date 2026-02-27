@@ -1,21 +1,9 @@
 "use node";
 
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import * as Y from "yjs";
-import { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
-
-const getSpreadsheetInternalRef = makeFunctionReference<
-  "query",
-  { id: Id<"spreadsheets"> }
->("spreadsheetCellRefs:getSpreadsheetInternal");
-
-const upsertCellValuesRef = makeFunctionReference<
-  "mutation",
-  { spreadsheetId: Id<"spreadsheets">; updates: Array<{ cellRef: string; values: string }> },
-  null
->("spreadsheetCellRefs:upsertCellValues");
+import { internal } from "./_generated/api";
 import { normalizeCellRef, parseCellName, parseRange } from "@shared/cellRef";
 
 /**
@@ -32,7 +20,7 @@ export const populateFromSnapshot = internalAction({
   handler: async (ctx, { spreadsheetId, cellRef }) => {
     // Get the spreadsheet to find its snapshot
     const spreadsheet = await ctx.runQuery(
-      getSpreadsheetInternalRef,
+      internal.spreadsheetCellRefs.getSpreadsheetInternal,
       { id: spreadsheetId },
     );
     if (!spreadsheet?.yjsSnapshotId) return null;
@@ -60,7 +48,7 @@ export const populateFromSnapshot = internalAction({
     if (!values) return null;
 
     // Update the cache entry
-    await ctx.runMutation(upsertCellValuesRef, {
+    await ctx.runMutation(internal.spreadsheetCellRefs.upsertCellValues, {
       spreadsheetId,
       updates: [{ cellRef: normalized, values: JSON.stringify(values) }],
     });

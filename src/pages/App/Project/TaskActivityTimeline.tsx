@@ -145,8 +145,6 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
 }
 
 export function TaskActivityTimeline({ taskId, currentUserId, workspaceId }: TaskActivityTimelineProps) {
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore — TS2589: deep type instantiation from Convex schema size
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const createComment = useMutation(api.taskComments.create);

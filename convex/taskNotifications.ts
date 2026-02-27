@@ -1,20 +1,9 @@
 "use node";
 
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import { internalAction } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { api } from "./_generated/api";
 import * as webpush from "web-push";
-
-const getTaskRef = makeFunctionReference<
-  "query",
-  { taskId: Id<"tasks"> }
->("tasks:get");
-
-const usersSubscriptionsRef = makeFunctionReference<
-  "query",
-  { usersIds: Id<"users">[] }
->("pushSubscription:usersSubscriptions");
 
 /**
  * Send push notification when a user is assigned to a task
@@ -32,7 +21,7 @@ export const notifyTaskAssignment = internalAction({
   returns: v.null(),
   handler: async (ctx, { taskId, assigneeId, taskTitle, assignedBy }) => {
     // Get task to build URL
-    const task = await ctx.runQuery(getTaskRef, { taskId });
+    const task = await ctx.runQuery(api.tasks.get, { taskId });
     if (!task) {
       console.error(`Task ${taskId} not found for assignment notification`);
       return null;
@@ -48,7 +37,7 @@ export const notifyTaskAssignment = internalAction({
     });
 
     // Get assignee's push subscriptions
-    const subscriptions = await ctx.runQuery(usersSubscriptionsRef, {
+    const subscriptions = await ctx.runQuery(api.pushSubscription.usersSubscriptions, {
       usersIds: [assigneeId],
     });
 
@@ -113,7 +102,7 @@ export const notifyUserMentions = internalAction({
   returns: v.null(),
   handler: async (ctx, { taskId, mentionedUserIds, taskTitle, mentionedBy, context }) => {
     // Get task to build URL
-    const task = await ctx.runQuery(getTaskRef, { taskId });
+    const task = await ctx.runQuery(api.tasks.get, { taskId });
     if (!task) {
       console.error(`Task ${taskId} not found for mention notification`);
       return null;
@@ -130,7 +119,7 @@ export const notifyUserMentions = internalAction({
 
     // Get mentioned users' push subscriptions
     // Note: mentionedUserIds are strings from JSON parsing, cast to Id array
-    const subscriptions = await ctx.runQuery(usersSubscriptionsRef, {
+    const subscriptions = await ctx.runQuery(api.pushSubscription.usersSubscriptions, {
       usersIds: mentionedUserIds as any,
     });
 

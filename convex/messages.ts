@@ -2,19 +2,8 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { makeFunctionReference, paginationOptsValidator } from "convex/server";
-
-const sendPushNotificationRef = makeFunctionReference<
-  "action",
-  { channelId: Id<"channels">; body: string; author: { name: string; id: Id<"users"> } },
-  null
->("pushNotifications:sendPushNotification");
-
-const notifyMessageMentionsRef = makeFunctionReference<
-  "action",
-  { mentionedUserIds: string[]; channelId: Id<"channels">; plainText: string; mentionedBy: { name: string; id: Id<"users"> } },
-  null
->("chatNotifications:notifyMessageMentions");
+import { paginationOptsValidator } from "convex/server";
+import { api, internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
@@ -400,7 +389,7 @@ export const send = mutation({
     const filteredMentions = mentionedUserIds.filter(id => id !== userId);
 
     if (filteredMentions.length > 0) {
-      await ctx.scheduler.runAfter(0, notifyMessageMentionsRef, {
+      await ctx.scheduler.runAfter(0, internal.chatNotifications.notifyMessageMentions, {
         mentionedUserIds: filteredMentions,
         channelId,
         plainText,
@@ -411,7 +400,7 @@ export const send = mutation({
       });
     }
 
-    await ctx.scheduler.runAfter(0, sendPushNotificationRef, {
+    await ctx.scheduler.runAfter(0, api.pushNotifications.sendPushNotification, {
       channelId,
       body: plainText,
       author: {
