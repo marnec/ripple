@@ -1,7 +1,6 @@
 import { QueryParams } from "@shared/types/routes";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceListPage } from "../Resources/ResourceListPage";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 
@@ -22,7 +21,7 @@ export function Projects() {
       createLabel="New project"
       createDialog={
         <CreateProjectDialog
-          workspaceId={workspaceId as Id<"workspaces">}
+          workspaceId={workspaceId}
           open={showCreate}
           onOpenChange={setShowCreate}
         />

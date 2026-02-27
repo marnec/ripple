@@ -2,6 +2,7 @@ import type RTKClient from "@cloudflare/realtimekit";
 import { useRealtimeKitClient } from "@cloudflare/realtimekit-react";
 import { RtkParticipantsAudio } from "@cloudflare/realtimekit-react-ui";
 import { useAction, useMutation } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import {
   createContext,
   useCallback,
@@ -11,8 +12,19 @@ import {
   useState,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+
+const joinCallRef = makeFunctionReference<
+  "action",
+  { channelId: Id<"channels">; userName: string; userImage?: string },
+  { authToken: string; meetingId: string }
+>("callSessions:joinCall");
+
+const endSessionRef = makeFunctionReference<
+  "mutation",
+  { channelId: Id<"channels"> },
+  null
+>("callSessions:endSession");
 import type { DevicePreferences } from "../pages/App/GroupVideoCall/CallLobby";
 
 type CallStatus = "idle" | "lobby" | "joining" | "joined" | "error";
@@ -51,8 +63,8 @@ export function ActiveCallProvider({
   const [status, setStatus] = useState<CallStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const joinCallAction = useAction(api.callSessions.joinCall);
-  const endSession = useMutation(api.callSessions.endSession);
+  const joinCallAction = useAction(joinCallRef);
+  const endSession = useMutation(endSessionRef);
   const navigate = useNavigate();
   const location = useLocation();
 

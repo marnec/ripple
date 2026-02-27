@@ -33,7 +33,6 @@ export function AppSidebar() {
 
   const { subscribeUser } = usePushNotifications();
 
-  // @ts-expect-error TS2589 deep type instantiation with Convex query
   const workspaces = useQuery(api.workspaces.list);
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
 

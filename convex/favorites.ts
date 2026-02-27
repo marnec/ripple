@@ -173,7 +173,7 @@ export const listIdsForType = query({
       )
       .collect();
 
-    return favorites.map((f) => f.resourceId);
+    return favorites.map((fav) => fav.resourceId);
   },
 });
 

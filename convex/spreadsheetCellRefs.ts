@@ -1,7 +1,14 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { makeFunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+
+const populateFromSnapshotRef = makeFunctionReference<
+  "action",
+  { spreadsheetId: Id<"spreadsheets">; cellRef: string },
+  null
+>("spreadsheetCellRefsNode:populateFromSnapshot");
 import { normalizeCellRef, isValidCellRef, exceedsMaxCells } from "@shared/cellRef";
 
 /**
@@ -117,7 +124,7 @@ export const ensureCellRef = mutation({
         updatedAt: Date.now(),
       });
       // Schedule snapshot read to populate actual values immediately
-      await ctx.scheduler.runAfter(0, internal.spreadsheetCellRefsNode.populateFromSnapshot, {
+      await ctx.scheduler.runAfter(0, populateFromSnapshotRef, {
         spreadsheetId,
         cellRef: normalized,
       });

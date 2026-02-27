@@ -1,7 +1,44 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { makeFunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { action, internalMutation, internalQuery } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
+
+const checkDocumentAccessRef = makeFunctionReference<
+  "query",
+  { userId: Id<"users">; documentId: string },
+  boolean
+>("collaboration:checkDocumentAccess");
+
+const checkTaskAccessRef = makeFunctionReference<
+  "query",
+  { userId: Id<"users">; taskId: string },
+  boolean
+>("collaboration:checkTaskAccess");
+
+const checkDiagramAccessRef = makeFunctionReference<
+  "query",
+  { userId: Id<"users">; diagramId: string },
+  boolean
+>("collaboration:checkDiagramAccess");
+
+const checkSpreadsheetAccessRef = makeFunctionReference<
+  "query",
+  { userId: Id<"users">; spreadsheetId: string },
+  boolean
+>("collaboration:checkSpreadsheetAccess");
+
+const checkWorkspaceAccessRef = makeFunctionReference<
+  "query",
+  { userId: Id<"users">; workspaceId: string },
+  boolean
+>("collaboration:checkWorkspaceAccess");
+
+const storeTokenRef = makeFunctionReference<
+  "mutation",
+  { token: string; userId: Id<"users">; roomId: string; expiresAt: number },
+  null
+>("collaboration:storeToken");
 
 /**
  * Generate a one-time collaboration token for PartyKit room access.
@@ -27,7 +64,7 @@ export const getCollaborationToken = action({
 
     // Verify user has access to the resource
     if (resourceType === "doc") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkDocumentAccess, {
+      const hasAccess = await ctx.runQuery(checkDocumentAccessRef, {
         userId,
         documentId: resourceId,
       });
@@ -35,7 +72,7 @@ export const getCollaborationToken = action({
         throw new ConvexError("You do not have access to this document");
       }
     } else if (resourceType === "task") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkTaskAccess, {
+      const hasAccess = await ctx.runQuery(checkTaskAccessRef, {
         userId,
         taskId: resourceId,
       });
@@ -43,7 +80,7 @@ export const getCollaborationToken = action({
         throw new ConvexError("You do not have access to this task");
       }
     } else if (resourceType === "diagram") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkDiagramAccess, {
+      const hasAccess = await ctx.runQuery(checkDiagramAccessRef, {
         userId,
         diagramId: resourceId,
       });
@@ -51,7 +88,7 @@ export const getCollaborationToken = action({
         throw new ConvexError("You do not have access to this diagram");
       }
     } else if (resourceType === "spreadsheet") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkSpreadsheetAccess, {
+      const hasAccess = await ctx.runQuery(checkSpreadsheetAccessRef, {
         userId,
         spreadsheetId: resourceId,
       });
@@ -60,7 +97,7 @@ export const getCollaborationToken = action({
       }
     } else {
       // presence: check workspace membership
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkWorkspaceAccess, {
+      const hasAccess = await ctx.runQuery(checkWorkspaceAccessRef, {
         userId,
         workspaceId: resourceId,
       });
@@ -75,7 +112,7 @@ export const getCollaborationToken = action({
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
     // Store token
-    await ctx.runMutation(internal.collaboration.storeToken, {
+    await ctx.runMutation(storeTokenRef, {
       token,
       userId,
       roomId,

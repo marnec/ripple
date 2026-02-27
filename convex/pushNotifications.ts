@@ -1,10 +1,25 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
-import { api, internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
+import { makeFunctionReference } from "convex/server";
+import { Doc, Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import * as webpush from "web-push";
+
+const getChannelInternalRef = makeFunctionReference<
+  "query",
+  { id: Id<"channels"> }
+>("channels:getInternal");
+
+const byWorkspaceRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> }
+>("workspaceMembers:byWorkspace");
+
+const usersSubscriptionsRef = makeFunctionReference<
+  "query",
+  { usersIds: Id<"users">[] }
+>("pushSubscription:usersSubscriptions");
 
 export const sendPushNotification = action({
   args: {
@@ -17,7 +32,7 @@ export const sendPushNotification = action({
   },
   returns: v.null(),
   handler: async (ctx, { author, body, channelId }) => {
-    const channel = await ctx.runQuery(internal.channels.getInternal, { id: channelId });
+    const channel = await ctx.runQuery(getChannelInternalRef, { id: channelId });
 
     if (!channel) throw new ConvexError(`Could not find channel=${channelId}`);
 
@@ -51,14 +66,14 @@ export const sendPushNotification = action({
     // when channelMembers will be done, I'll need to filter users by channel
     // for now I'll filter them by workspace
     const workspaceUsers: { userId: Doc<"users">["_id"] }[] = await ctx.runQuery(
-      api.workspaceMembers.byWorkspace,
+      byWorkspaceRef,
       {
         workspaceId: channel?.workspaceId,
       },
     );
 
     const workspaceSubscriptions: Doc<"pushSubscriptions">[] = await ctx.runQuery(
-      api.pushSubscription.usersSubscriptions,
+      usersSubscriptionsRef,
       {
         usersIds: workspaceUsers
           .map(({ userId }) => userId)

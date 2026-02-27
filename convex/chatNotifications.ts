@@ -1,9 +1,20 @@
 "use node";
 
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { internalAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 import * as webpush from "web-push";
+
+const getChannelInternalRef = makeFunctionReference<
+  "query",
+  { id: Id<"channels"> }
+>("channels:getInternal");
+
+const usersSubscriptionsRef = makeFunctionReference<
+  "query",
+  { usersIds: Id<"users">[] }
+>("pushSubscription:usersSubscriptions");
 
 /**
  * Send push notification when users are @mentioned in chat messages
@@ -21,9 +32,7 @@ export const notifyMessageMentions = internalAction({
   returns: v.null(),
   handler: async (ctx, { mentionedUserIds, channelId, plainText, mentionedBy }) => {
     // Get channel to build notification
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — TS2589: deep type instantiation from Convex schema size
-    const channel = await ctx.runQuery(internal.channels.getInternal, { id: channelId });
+    const channel = await ctx.runQuery(getChannelInternalRef, { id: channelId });
     if (!channel) {
       console.error(`Channel ${channelId} not found for mention notification`);
       return null;
@@ -44,7 +53,7 @@ export const notifyMessageMentions = internalAction({
     // Get mentioned users' push subscriptions
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore — TS2589: deep type instantiation from Convex schema size
-    const subscriptions = await ctx.runQuery(api.pushSubscription.usersSubscriptions, {
+    const subscriptions = await ctx.runQuery(usersSubscriptionsRef, {
       usersIds: mentionedUserIds as any,
     });
 
@@ -71,7 +80,7 @@ export const notifyMessageMentions = internalAction({
 
     // Send to all mentioned users' subscriptions
     await Promise.allSettled(
-      subscriptions.map(async (subscription) => {
+      subscriptions.map(async (subscription: any) => {
         const { endpoint, expirationTime, keys } = subscription;
         const id = endpoint.split("/").at(-1);
 

@@ -1,9 +1,21 @@
 import { useMutation, useQuery } from "convex/react";
-import { MessageSquare, MessageSquarePlusIcon } from "lucide-react";
+import { makeFunctionReference } from "convex/server";
+import { MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { Doc, Id } from "../../../../convex/_generated/dataModel";
+
+const channelsRemoveRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"channels"> },
+  null
+>("channels:remove");
+
+const channelsListByUserMembershipRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Doc<"channels">[]
+>("channels:listByUserMembership");
 import {
   SidebarMenuButton,
   SidebarMenuItem,
@@ -25,10 +37,9 @@ export function ChannelSelectorList({
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const navigate = useNavigate();
-  // @ts-expect-error TS2589 deep type instantiation with Convex query
-  const deleteChannel = useMutation(api.channels.remove);
+  const deleteChannel = useMutation(channelsRemoveRef);
 
-  const channels = useQuery(api.channels.listByUserMembership, {
+  const channels = useQuery(channelsListByUserMembershipRef, {
     workspaceId: workspaceId,
   });
 

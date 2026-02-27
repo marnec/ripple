@@ -43,7 +43,6 @@ export function AddColumnDialog({
   const [isCompleted, setIsCompleted] = useState(false);
   const [setsStartDate, setSetsStartDate] = useState(false);
 
-  // @ts-expect-error — TS2589: deep type instantiation from Convex schema size
   const createStatus = useMutation(api.taskStatuses.create);
 
   const handleSubmit = (e: React.FormEvent) => {

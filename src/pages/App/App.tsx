@@ -1,9 +1,11 @@
 import { Layout } from "@/components/Layout";
 import { Authenticated, Unauthenticated, useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import { useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useReadLocalStorage } from "usehooks-ts";
-import { api } from "../../../convex/_generated/api";
+
+const viewerRef = makeFunctionReference<"query">("users:viewer");
 import { FloatingCallWindow } from "../../components/FloatingCallWindow";
 import { ActiveCallProvider } from "../../contexts/ActiveCallContext";
 import { FollowModeProvider } from "../../contexts/FollowModeContext";
@@ -13,7 +15,7 @@ import { TooltipProvider } from "../../components/ui/tooltip";
 import { UserContext } from "./UserContext";
 
 export default function App() {
-  const user = useQuery(api.users.viewer);
+  const user = useQuery(viewerRef);
   const storedInviteId = useReadLocalStorage("inviteId");
 
   const navigate = useNavigate();

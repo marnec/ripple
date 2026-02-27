@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import { FileText, Folder, MessageSquare, PenTool, Plus, Star, Table2 } from "lucide-react";
 import {
   useCallback,
@@ -19,7 +20,6 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 
@@ -33,14 +33,13 @@ const RESOURCE_ICONS: Record<ResourceType, typeof FileText> = {
   channel: MessageSquare,
 };
 
-
-const SEARCH_APIS = {
-  document: api.documents.search,
-  diagram: api.diagrams.search,
-  spreadsheet: api.spreadsheets.search,
-  project: api.projects.search,
-  channel: api.channels.search,
-} as const;
+const SEARCH_APIS: Record<ResourceType, ReturnType<typeof makeFunctionReference<"query">>> = {
+  document: makeFunctionReference<"query">("documents:search"),
+  diagram: makeFunctionReference<"query">("diagrams:search"),
+  spreadsheet: makeFunctionReference<"query">("spreadsheets:search"),
+  project: makeFunctionReference<"query">("projects:search"),
+  channel: makeFunctionReference<"query">("channels:search"),
+};
 
 type ResourceListPageProps = {
   resourceType: ResourceType;
@@ -294,7 +293,7 @@ function SearchResults({
   showFavorites?: boolean;
 }) {
   const searchApi = SEARCH_APIS[resourceType];
-  const results = useQuery(searchApi as any, {
+  const results = useQuery(searchApi, {
     workspaceId,
     searchText,
     tags,
@@ -385,7 +384,7 @@ function SearchResults({
                 </CardContent>
               )}
             </Link>
-            {showFavorites !== false && (
+            {showFavorites !== false && resourceType !== "channel" && (
               <CardContent className="flex items-center justify-end pt-0">
                 <FavoriteButton
                   resourceType={resourceType}
