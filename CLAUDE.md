@@ -108,6 +108,17 @@ export const myQuery = query({
 ### Function References
 - Public: `api.filename.functionName`
 - Internal: `internal.filename.functionName`
+- **Do NOT use `makeFunctionReference`** — use `internal.*` / `api.*` directly (static codegen makes this safe)
+
+### Static Codegen (TS2589 fix)
+
+This project uses static code generation (`convex.json` → `staticApi: true, staticDataModel: true`) to avoid TS2589 "Type instantiation is excessively deep and possibly infinite". The root cause: Convex's default `ApiFromModules` type applies `FilterApi` recursively, and the generated `api`/`internal` declarations apply a second `FilterApi` pass on top, creating nested recursion that exceeds TypeScript's depth budget with 30+ modules. Static codegen pre-computes concrete `FunctionReference` types, bypassing `FilterApi` entirely.
+
+**Trade-offs:** types only update when `convex dev` is running; jump-to-definition doesn't work for `api.*`/`internal.*`; functions without a `returns` validator default to `any` on the client.
+
+**Future:** [convex-js#129](https://github.com/get-convex/convex-js/pull/129) replaces the double `FilterApi` with a single-pass `ByVisibility` type, which should fix TS2589 in dynamic codegen too. Once that ships (likely in a future convex-js release beyond 1.31.7), we can try removing `staticApi`/`staticDataModel` from `convex.json` and see if dynamic codegen works without TS2589. If it does, removing static codegen restores jump-to-definition and return type inference.
+
+**Return validators:** with static codegen, prefer concrete return validators over `v.any()` — `v.any()` produces literal `any` on the client, causing implicit-any errors in strict mode.
 
 ### TypeScript
 - Use `Id<"tableName">` for document ID types

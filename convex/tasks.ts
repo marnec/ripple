@@ -421,18 +421,15 @@ export const update = mutation({
     if (estimate === null) patch.estimate = undefined;
     else if (estimate !== undefined) patch.estimate = estimate;
 
-    // If statusId changed: look up new status, one-way sync for completed field
+    // If statusId changed: look up new status, sync completed field both ways
     if (statusId !== undefined) {
       const newStatus = await ctx.db.get(statusId);
       if (!newStatus) throw new ConvexError("Status not found");
 
       patch.statusId = statusId;
-      // One-way sync: only auto-set completed=true when moving TO a completed status.
-      // Moving OUT of a completed status does NOT auto-reset completed.
-      // User must explicitly uncomplete the task.
-      if (newStatus.isCompleted) {
-        patch.completed = true;
-      }
+      // Two-way sync: auto-complete when moving TO a completed status,
+      // auto-uncomplete when moving to a non-completed status
+      patch.completed = newStatus.isCompleted;
       // Auto-set startDate when moving to a status with setsStartDate, if not already set
       if (newStatus.setsStartDate && !task.startDate && startDate === undefined) {
         patch.startDate = new Date().toISOString().slice(0, 10);
@@ -547,7 +544,7 @@ export const updatePosition = mutation({
       .first();
     if (!membership) throw new ConvexError("Not a member of this workspace");
 
-    // Look up status to update completed field (one-way sync)
+    // Look up status to sync completed field both ways
     const newStatus = await ctx.db.get(statusId);
     if (!newStatus) throw new ConvexError("Status not found");
 
@@ -555,10 +552,8 @@ export const updatePosition = mutation({
       statusId,
       position,
     };
-    // One-way sync: only auto-set completed=true when moving TO a completed status
-    if (newStatus.isCompleted) {
-      patchData.completed = true;
-    }
+    // Two-way sync: auto-complete/uncomplete based on destination status
+    patchData.completed = newStatus.isCompleted;
     // Auto-set startDate when moving to a status with setsStartDate, if not already set
     if (newStatus.setsStartDate && !task.startDate) {
       patchData.startDate = new Date().toISOString().slice(0, 10);

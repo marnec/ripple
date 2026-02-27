@@ -86,9 +86,10 @@ export const update = mutation({
     color: v.optional(v.string()),
     order: v.optional(v.number()),
     setsStartDate: v.optional(v.boolean()),
+    isCompleted: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, { statusId, name, color, order, setsStartDate }) => {
+  handler: async (ctx, { statusId, name, color, order, setsStartDate, isCompleted }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -108,14 +109,28 @@ export const update = mutation({
     if (!membership) throw new ConvexError("Not a member of this workspace");
 
     // Build patch object with only provided fields
-    const patch: { name?: string; color?: string; order?: number; setsStartDate?: boolean } = {};
+    const patch: { name?: string; color?: string; order?: number; setsStartDate?: boolean; isCompleted?: boolean } = {};
     if (name !== undefined) patch.name = name;
     if (color !== undefined) patch.color = color;
     if (order !== undefined) patch.order = order;
     if (setsStartDate !== undefined) patch.setsStartDate = setsStartDate;
+    if (isCompleted !== undefined) patch.isCompleted = isCompleted;
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(statusId, patch);
+    }
+
+    // When toggling isCompleted, bulk-update all tasks in this status
+    if (isCompleted !== undefined) {
+      const tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_project_status", (q) =>
+          q.eq("projectId", status.projectId).eq("statusId", statusId)
+        )
+        .collect();
+      await Promise.all(
+        tasks.map((task) => ctx.db.patch(task._id, { completed: isCompleted }))
+      );
     }
 
     return null;

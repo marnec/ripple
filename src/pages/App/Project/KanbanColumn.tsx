@@ -20,7 +20,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
-import { CalendarClock, Check, ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -33,6 +33,7 @@ type KanbanColumnProps = {
     color: string;
     order: number;
     isDefault: boolean;
+    isCompleted: boolean;
     setsStartDate?: boolean;
   };
   tasks: Array<{
@@ -112,7 +113,7 @@ export function KanbanColumn({
 
   return (
     <>
-      <div className="flex flex-col w-64 md:w-72 bg-muted/30 rounded-lg p-2 flex-shrink-0">
+      <div className="flex flex-col w-72 shrink-0 bg-muted/30 rounded-lg p-2">
         {/* Column Header */}
         <div className="flex items-center gap-2 px-2 py-3 mb-2">
           <span className={cn("w-2 h-2 rounded-full", status.color)} />
@@ -175,6 +176,16 @@ export function KanbanColumn({
                 Auto-set start date
                 {status.setsStartDate && <Check className="h-4 w-4 ml-auto" />}
               </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => void updateStatus({
+                  statusId: status._id,
+                  isCompleted: !status.isCompleted,
+                })}
+              >
+                <CircleCheck className="h-4 w-4 mr-2" />
+                Auto-set completed
+                {status.isCompleted && <Check className="h-4 w-4 ml-auto" />}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => setShowDeleteDialog(true)}
@@ -191,8 +202,7 @@ export function KanbanColumn({
       {/* Task List */}
       <div
         ref={setNodeRef}
-        className="flex flex-col gap-2 overflow-y-auto"
-        style={{ maxHeight: "calc(100vh - 200px)" }}
+        className="flex flex-col flex-1 min-h-0 gap-2 overflow-y-auto"
       >
         <SortableContext
           id={status._id}

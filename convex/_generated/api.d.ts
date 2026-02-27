@@ -943,6 +943,7 @@ export declare const api: {
       "public",
       {
         color?: string;
+        isCompleted?: boolean;
         name?: string;
         order?: number;
         setsStartDate?: boolean;

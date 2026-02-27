@@ -5,12 +5,14 @@ import {
   DndContext,
   DragOverlay,
   closestCorners,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragStartEvent,
   DragEndEvent,
+  type CollisionDetection,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMutation, useQuery } from "convex/react";
@@ -29,6 +31,14 @@ import { TaskDetailSheet } from "./TaskDetailSheet";
 type KanbanBoardProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
+};
+
+// pointerWithin detects which column the pointer is in (works for empty columns);
+// fall back to closestCorners when pointer isn't inside any droppable
+const collisionDetection: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  if (within.length > 0) return within;
+  return closestCorners(args);
 };
 
 export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
@@ -205,7 +215,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
   }
 
   return (
-    <div>
+    <div className="flex flex-col h-full min-h-0">
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -226,13 +236,12 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
       {/* Kanban Board */}
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
         <div
-          className="flex gap-4 overflow-x-auto pb-4"
-          style={{ minHeight: "calc(100svh - 200px)" }}
+          className="flex flex-1 min-h-0 gap-4 overflow-x-auto pb-4"
         >
           {statuses.map((status, index) => (
             <KanbanColumn
@@ -258,7 +267,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
           {/* Add Column Button */}
           <button
             onClick={() => setShowAddColumn(true)}
-            className="flex flex-col w-64 md:w-72 h-32 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20 flex-shrink-0 items-center justify-center gap-2 hover:bg-muted/50 hover:border-muted-foreground/40 transition-colors cursor-pointer"
+            className="flex flex-col w-72 shrink-0 h-32 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20 items-center justify-center gap-2 hover:bg-muted/50 hover:border-muted-foreground/40 transition-colors cursor-pointer"
           >
             <Plus className="h-6 w-6 text-muted-foreground" />
             <span className="text-sm text-muted-foreground font-medium">
