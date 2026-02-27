@@ -53,6 +53,7 @@ type TaskToolbarProps = {
   sort: TaskSort;
   onSortChange: (sort: TaskSort) => void;
   members: Member[];
+  sortBlocked?: boolean;
 };
 
 const priorities: { value: TaskPriority; label: string; icon: React.ReactNode }[] = [
@@ -74,6 +75,7 @@ export function TaskToolbar({
   sort,
   onSortChange,
   members,
+  sortBlocked,
 }: TaskToolbarProps) {
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
@@ -126,7 +128,7 @@ export function TaskToolbar({
         <PopoverTrigger asChild>
           <button
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer",
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 h-7 text-xs font-medium transition-colors cursor-pointer",
               filters.assigneeIds.length > 0
                 ? "border-primary/50 bg-primary/10 text-primary"
                 : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -177,7 +179,7 @@ export function TaskToolbar({
         <PopoverTrigger asChild>
           <button
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer",
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 h-7 text-xs font-medium transition-colors cursor-pointer",
               filters.priorities.length > 0
                 ? "border-primary/50 bg-primary/10 text-primary"
                 : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -231,10 +233,16 @@ export function TaskToolbar({
       {/* Sort */}
       <div
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors",
-          sort && "bg-primary/10 ring-1 ring-primary/30"
+          "relative inline-flex items-center gap-1.5 rounded-md px-1.5 h-7 transition-colors",
+          sort && "bg-primary/10"
         )}
       >
+        {sortBlocked && (
+          <span className="absolute -top-1 -right-1 flex size-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
+            <span className="relative inline-flex size-2.5 rounded-full bg-destructive" />
+          </span>
+        )}
         <ArrowUpDown className={cn("w-3 h-3", sort ? "text-primary" : "text-muted-foreground")} />
         <Select
           value={sort?.field ?? ""}
@@ -271,7 +279,10 @@ export function TaskToolbar({
                   direction: sort.direction === "asc" ? "desc" : "asc",
                 })
               }
-              className="inline-flex items-center justify-center rounded-md border border-primary/50 h-7 w-7 text-xs text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+              className={cn(
+                "inline-flex items-center justify-center rounded-md border h-7 w-7 text-xs transition-colors cursor-pointer",
+                "border-primary/50 text-primary hover:bg-primary/20"
+              )}
               title={sort.direction === "asc" ? "Ascending" : "Descending"}
             >
               {sort.direction === "asc" ? (
@@ -282,7 +293,10 @@ export function TaskToolbar({
             </button>
             <button
               onClick={() => onSortChange(null)}
-              className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer"
+              className={cn(
+                "inline-flex items-center gap-1 text-xs transition-colors cursor-pointer",
+                "text-primary hover:text-primary/80"
+              )}
             >
               <X className="w-3 h-3" />
             </button>

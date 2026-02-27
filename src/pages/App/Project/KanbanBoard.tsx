@@ -34,6 +34,7 @@ type KanbanBoardProps = {
   workspaceId: Id<"workspaces">;
   filters: TaskFilters;
   sort: TaskSort;
+  onSortBlocked?: () => void;
 };
 
 // pointerWithin detects which column the pointer is in (works for empty columns);
@@ -44,7 +45,7 @@ const collisionDetection: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
-export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoardProps) {
+export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlocked }: KanbanBoardProps) {
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [activeDragId, setActiveDragId] = useState<Id<"tasks"> | null>(null);
   const isMobile = useIsMobile();
@@ -135,13 +136,6 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoa
   }, [allTasks, statuses]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    if (isSorting) {
-      toast({
-        description: "Clear sorting to reorder tasks by dragging.",
-        duration: 2500,
-      });
-      return;
-    }
     setActiveDragId(event.active.id as Id<"tasks">);
   };
 
@@ -149,7 +143,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoa
     const { active, over } = event;
     setActiveDragId(null);
 
-    if (isSorting || !over || !tasks || !statuses) return;
+    if (!over || !tasks || !statuses) return;
 
     const activeTaskId = active.id as Id<"tasks">;
     const activeTask = tasks.find((t) => t._id === activeTaskId);
@@ -167,25 +161,31 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort }: KanbanBoa
       destinationStatusId = over.id as Id<"taskStatuses">;
     }
 
+    // When sorting is active, allow cross-column moves (status change) but
+    // block same-column reorder since the sort overrides manual position.
+    if (isSorting && activeTask.statusId === destinationStatusId) {
+      toast({
+        description: "Clear sorting to reorder tasks within a column.",
+        variant: "destructive",
+        duration: 2500,
+      });
+      onSortBlocked?.();
+      return;
+    }
+
     // Get tasks in destination column, excluding the dragged task
     const columnTasks = (tasksByStatus[destinationStatusId] || []).filter(
       (t) => t._id !== activeTaskId
     );
 
-    // Calculate insertion index
+    // Calculate insertion index.
+    // overData.sortable.index is the over item's position in the original items
+    // array. When the active item is removed from columnTasks, items after it
+    // shift up by 1 — but for "drag down" we want to insert AFTER the over
+    // item, which naturally compensates. No adjustment is needed.
     let insertIndex = columnTasks.length; // default to end
     if (overData?.sortable?.index !== undefined) {
       insertIndex = overData.sortable.index;
-      // If moving within same column and dropping after original position, adjust index
-      if (
-        activeTask.statusId === destinationStatusId &&
-        overData.sortable.items
-      ) {
-        const originalIndex = overData.sortable.items.indexOf(activeTaskId);
-        if (originalIndex !== -1 && insertIndex > originalIndex) {
-          insertIndex -= 1;
-        }
-      }
     }
 
     // Calculate new position using fractional indexing

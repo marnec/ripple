@@ -11,7 +11,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { LayoutList, Kanban } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { startViewTransition } from "@/hooks/use-view-transition";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -50,6 +50,14 @@ function ProjectDetailsContent({
     priorities: [],
   });
   const [sort, setSort] = useState<TaskSort>(null);
+  const [sortBlocked, setSortBlocked] = useState(false);
+  const sortBlockedTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleSortBlocked = useCallback(() => {
+    setSortBlocked(true);
+    if (sortBlockedTimer.current) clearTimeout(sortBlockedTimer.current);
+    sortBlockedTimer.current = setTimeout(() => setSortBlocked(false), 2500);
+  }, []);
 
   const setFiltersAnimated = useCallback(
     (next: TaskFilters) => startViewTransition(() => setFilters(next)),
@@ -126,10 +134,11 @@ function ProjectDetailsContent({
           sort={sort}
           onSortChange={setSortAnimated}
           members={members ?? []}
+          sortBlocked={sortBlocked}
         />
 
         <TabsContent value="board" className="mt-0 flex-1 min-h-0">
-          <KanbanBoard projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} />
+          <KanbanBoard projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} onSortBlocked={handleSortBlocked} />
         </TabsContent>
 
         <TabsContent value="list" className="mt-0 overflow-auto">
