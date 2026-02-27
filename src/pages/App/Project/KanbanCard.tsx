@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
@@ -18,9 +19,10 @@ type KanbanCardProps = {
     } | null;
   };
   onClick: () => void;
+  isExiting?: boolean;
 };
 
-export function KanbanCard({ task, onClick }: KanbanCardProps) {
+export function KanbanCard({ task, onClick, isExiting = false }: KanbanCardProps) {
   const {
     attributes,
     listeners,
@@ -47,7 +49,17 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
   }
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        isExiting
+          ? "animate-out fade-out duration-200 fill-mode-forwards"
+          : "animate-in fade-in duration-200"
+      )}
+      {...attributes}
+      {...listeners}
+    >
       <KanbanCardPresenter task={task} onClick={onClick} />
     </div>
   );

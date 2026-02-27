@@ -16,7 +16,7 @@ import { useMutation, useQuery } from "convex/react";
 import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -47,17 +47,37 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
   const navigate = useNavigate();
   const [showAddColumn, setShowAddColumn] = useState(false);
 
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+  const prevHideCompleted = useRef(hideCompleted);
+
   // Always fetch all tasks — filter client-side to avoid flash on toggle
   const allTasks = useQuery(api.tasks.listByProject, {
     projectId,
     hideCompleted: false,
   });
 
+  // When hideCompleted toggles on, mark completed tasks as exiting so they
+  // can play a fade-out animation before being removed from the DOM.
+  useEffect(() => {
+    if (hideCompleted && !prevHideCompleted.current && allTasks) {
+      const ids = new Set(
+        allTasks.filter((t) => t.completed).map((t) => t._id)
+      );
+      if (ids.size > 0) {
+        setExitingIds(ids);
+        const timer = setTimeout(() => setExitingIds(new Set()), 250);
+        return () => clearTimeout(timer);
+      }
+    }
+    prevHideCompleted.current = hideCompleted;
+  }, [hideCompleted, allTasks]);
+
   const tasks = useMemo(() => {
     if (!allTasks) return undefined;
     if (!hideCompleted) return allTasks;
-    return allTasks.filter((t) => !t.completed);
-  }, [allTasks, hideCompleted]);
+    // Keep exiting tasks in the list so they can animate out
+    return allTasks.filter((t) => !t.completed || exitingIds.has(t._id));
+  }, [allTasks, hideCompleted, exitingIds]);
 
   const statuses = useQuery(api.taskStatuses.listByProject, {
     projectId,
@@ -261,6 +281,7 @@ export function KanbanBoard({ projectId, workspaceId, hideCompleted }: KanbanBoa
               onMoveLeft={() => handleMoveColumn(status._id, "left")}
               onMoveRight={() => handleMoveColumn(status._id, "right")}
               onDelete={() => handleDeleteColumn(status._id)}
+              exitingIds={exitingIds}
               isFirst={index === 0}
               isLast={index === statuses.length - 1}
               canDelete={!status.isDefault}
