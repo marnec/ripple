@@ -1,9 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { CheckSquare } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -27,18 +26,20 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
-  const tasks = useQuery(api.tasks.listByProject, {
+  // Always fetch all tasks — filter client-side to avoid flashing on toggle
+  const allTasks = useQuery(api.tasks.listByProject, {
     projectId,
-    hideCompleted,
+    hideCompleted: false,
   });
 
-  if (tasks === undefined) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner />
-      </div>
-    );
+  const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
+  const updateTask = useMutation(api.tasks.update);
+
+  if (allTasks === undefined) {
+    return null;
   }
+
+  const totalCount = allTasks.length;
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -46,7 +47,7 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
       <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/50">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Tasks</h2>
-          <Badge variant="secondary">{tasks.length}</Badge>
+          <Badge variant="secondary">{totalCount}</Badge>
         </div>
 
         <div className="flex items-center gap-2">
@@ -70,7 +71,7 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
       <CreateTaskInline projectId={projectId} workspaceId={workspaceId} />
 
       {/* Task List */}
-      {tasks.length === 0 ? (
+      {totalCount === 0 ? (
         <div className="py-12 text-center">
           <CheckSquare className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
           <h3 className="text-lg font-medium mb-1">No tasks yet</h3>
@@ -80,19 +81,36 @@ export function Tasks({ projectId, workspaceId }: TasksProps) {
         </div>
       ) : (
         <div>
-          {tasks.map((task) => (
-            <TaskRow
-              key={task._id}
-              task={task}
-              onClick={() => {
-                if (isMobile) {
-                  void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
-                } else {
-                  setSelectedTaskId(task._id);
-                }
-              }}
-            />
-          ))}
+          {allTasks.map((task) => {
+            const isHidden = hideCompleted && task.completed;
+            return (
+              <div
+                key={task._id}
+                className="grid transition-[grid-template-rows,opacity] duration-200 ease-in-out"
+                style={{
+                  gridTemplateRows: isHidden ? "0fr" : "1fr",
+                  opacity: isHidden ? 0 : 1,
+                }}
+              >
+                <div className="overflow-hidden">
+                  <TaskRow
+                    task={task}
+                    statuses={statuses ?? undefined}
+                    onStatusChange={(statusId) => {
+                      void updateTask({ taskId: task._id as Id<"tasks">, statusId: statusId as Id<"taskStatuses"> });
+                    }}
+                    onClick={() => {
+                      if (isMobile) {
+                        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
+                      } else {
+                        setSelectedTaskId(task._id as Id<"tasks">);
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

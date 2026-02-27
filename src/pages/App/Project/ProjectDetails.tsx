@@ -1,5 +1,5 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { RippleSpinner } from "@/components/RippleSpinner";
 import {
   Tabs,
   TabsList,
@@ -43,22 +43,21 @@ function ProjectDetailsContent({
   const isMobile = useIsMobile();
   const [view, setView] = useState<"list" | "board">(isMobile ? "list" : "board");
   const project = useQuery(api.projects.get, { id: projectId });
-
-  if (project === undefined) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <LoadingSpinner />
-      </div>
-    );
-  }
+  // Pre-fetch tasks to show a loading indicator beside the tabs
+  const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
+  const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
+  const contentLoading = tasks === undefined || statuses === undefined;
 
   if (project === null) {
     return <SomethingWentWrong />;
   }
 
+  // Show layout immediately — header skeleton while project loads, content fades in
+  const isLoading = project === undefined;
+
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Project Header */}
+      {/* Project Header — always rendered */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
         <div className="flex h-8 items-center gap-2">
           <FavoriteButton
@@ -66,31 +65,40 @@ function ProjectDetailsContent({
             resourceId={projectId}
             workspaceId={workspaceId}
           />
-          <h1 className="text-lg font-semibold truncate">{project.name}</h1>
-          {project.color && (
-            <span className={`w-2.5 h-2.5 rounded-full ${project.color} ml-1`} />
+          {isLoading ? (
+            <div className="h-5 w-40 bg-muted animate-pulse rounded" />
+          ) : (
+            <>
+              <h1 className="text-lg font-semibold truncate">{project.name}</h1>
+              {project.color && (
+                <span className={`w-2.5 h-2.5 rounded-full ${project.color} ml-1`} />
+              )}
+            </>
           )}
         </div>
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 p-3 md:p-6">
-      {project.description && (
+      {!isLoading && project.description && (
         <p className="text-muted-foreground mb-6">{project.description}</p>
       )}
 
-      {/* View Toggle and Content */}
+      {/* View Toggle and Content — tabs always visible */}
       <Tabs value={view} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-4">
-          <TabsList>
-            <TabsTrigger value="board" className="flex items-center gap-2">
-              <Kanban className="h-4 w-4" />
-              Board
-            </TabsTrigger>
-            <TabsTrigger value="list" className="flex items-center gap-2">
-              <LayoutList className="h-4 w-4" />
-              List
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex items-center gap-3">
+            <TabsList>
+              <TabsTrigger value="board" className="flex items-center gap-2">
+                <Kanban className="h-4 w-4" />
+                Board
+              </TabsTrigger>
+              <TabsTrigger value="list" className="flex items-center gap-2">
+                <LayoutList className="h-4 w-4" />
+                List
+              </TabsTrigger>
+            </TabsList>
+            {contentLoading && <RippleSpinner size={24} />}
+          </div>
         </div>
 
         <TabsContent value="board" className="mt-0 flex-1 min-h-0">

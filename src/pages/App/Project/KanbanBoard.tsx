@@ -1,6 +1,5 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   DndContext,
   DragOverlay,
@@ -49,10 +48,17 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
   const navigate = useNavigate();
   const [showAddColumn, setShowAddColumn] = useState(false);
 
-  const tasks = useQuery(api.tasks.listByProject, {
+  // Always fetch all tasks — filter client-side to avoid flash on toggle
+  const allTasks = useQuery(api.tasks.listByProject, {
     projectId,
-    hideCompleted,
+    hideCompleted: false,
   });
+
+  const tasks = useMemo(() => {
+    if (!allTasks) return undefined;
+    if (!hideCompleted) return allTasks;
+    return allTasks.filter((t) => !t.completed);
+  }, [allTasks, hideCompleted]);
 
   const statuses = useQuery(api.taskStatuses.listByProject, {
     projectId,
@@ -62,7 +68,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
     (localStore, { taskId, statusId, position }) => {
       const currentTasks = localStore.getQuery(api.tasks.listByProject, {
         projectId,
-        hideCompleted,
+        hideCompleted: false,
       });
       if (currentTasks === undefined) return;
 
@@ -71,7 +77,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
       );
       localStore.setQuery(
         api.tasks.listByProject,
-        { projectId, hideCompleted },
+        { projectId, hideCompleted: false },
         updatedTasks
       );
     }
@@ -108,6 +114,21 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
     }
     return grouped;
   }, [tasks, statuses]);
+
+  // Total task counts per status (always from allTasks, ignoring hide filter)
+  const totalCountByStatus = useMemo(() => {
+    if (!allTasks || !statuses) return {};
+    const counts: Record<string, number> = {};
+    for (const status of statuses) {
+      counts[status._id] = 0;
+    }
+    for (const task of allTasks) {
+      if (counts[task.statusId] !== undefined) {
+        counts[task.statusId]++;
+      }
+    }
+    return counts;
+  }, [allTasks, statuses]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragId(event.active.id as Id<"tasks">);
@@ -207,11 +228,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
   };
 
   if (tasks === undefined || statuses === undefined) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner />
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -248,6 +265,7 @@ export function KanbanBoard({ projectId, workspaceId }: KanbanBoardProps) {
               key={status._id}
               status={status}
               tasks={tasksByStatus[status._id] || []}
+              totalCount={totalCountByStatus[status._id] ?? 0}
               onTaskClick={(taskId) => {
                 if (isMobile) {
                   void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);

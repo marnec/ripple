@@ -50,6 +50,7 @@ type KanbanColumnProps = {
       image?: string;
     } | null;
   }>;
+  totalCount?: number;
   onTaskClick: (taskId: string) => void;
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
@@ -62,6 +63,7 @@ type KanbanColumnProps = {
 export function KanbanColumn({
   status,
   tasks,
+  totalCount,
   onTaskClick,
   onMoveLeft,
   onMoveRight,
@@ -133,7 +135,7 @@ export function KanbanColumn({
             <h3 className="font-semibold text-sm flex-1">{status.name}</h3>
           )}
           <Badge variant="secondary" className="text-xs">
-            {tasks.length}
+            {totalCount !== undefined ? totalCount : tasks.length}
           </Badge>
           {/* Column Actions */}
           <DropdownMenu>

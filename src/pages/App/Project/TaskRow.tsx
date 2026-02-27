@@ -1,5 +1,11 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { formatTaskId, formatDueDate, formatEstimate, isOverdue } from "@/lib/task-utils";
 import { AlertCircle, ArrowDown, ArrowUp, Ban, Minus } from "lucide-react";
@@ -24,10 +30,12 @@ type TaskRowProps = {
       image?: string;
     } | null;
   };
+  statuses?: Array<{ _id: string; name: string; color: string }>;
+  onStatusChange?: (statusId: string) => void;
   onClick: () => void;
 };
 
-export function TaskRow({ task, onClick }: TaskRowProps) {
+export function TaskRow({ task, statuses, onStatusChange, onClick }: TaskRowProps) {
   return (
     <div
       onClick={onClick}
@@ -88,8 +96,32 @@ export function TaskRow({ task, onClick }: TaskRowProps) {
         </span>
       )}
 
-      {/* Status Badge */}
-      {task.status && (
+      {/* Status Badge — clickable dropdown for quick status switch */}
+      {task.status && statuses && onStatusChange ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <button className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors">
+              <span
+                className={cn("w-1.5 h-1.5 rounded-full", task.status.color)}
+                aria-hidden="true"
+              />
+              {task.status.name}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            {statuses.map((s) => (
+              <DropdownMenuItem
+                key={s._id}
+                onClick={() => onStatusChange(s._id)}
+                className="flex items-center gap-2"
+              >
+                <span className={cn("w-2 h-2 rounded-full", s.color)} />
+                {s.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : task.status ? (
         <Badge variant="secondary" className="flex items-center gap-1">
           <span
             className={cn("w-1 h-1 rounded-full", task.status.color)}
@@ -97,7 +129,7 @@ export function TaskRow({ task, onClick }: TaskRowProps) {
           />
           {task.status.name}
         </Badge>
-      )}
+      ) : null}
 
       {/* Assignee Avatar */}
       {task.assignee && (

@@ -347,36 +347,13 @@ function CommentItem({
       </Avatar>
 
       <div className="flex-1 min-w-0">
-        {/* Name + timestamp + inline actions on one line */}
+        {/* Name + timestamp — aligned with activity events */}
         <div className="flex items-center gap-2 leading-6">
           <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" />
-          <span className="font-medium text-sm">{item.userName}</span>
-          <span className="text-xs text-muted-foreground">
+          <span className="font-medium text-sm flex-1 min-w-0">{item.userName}</span>
+          <span className="text-xs text-muted-foreground/60 shrink-0">
             {new Date(item._creationTime).toLocaleString()}
           </span>
-          {/* Inline edit/delete — icon-only, visible on hover */}
-          {!isEditing && item.userId === currentUserId && (
-            <div className="flex gap-0.5 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onEdit(commentId)}
-                className="h-5 w-5"
-                title="Edit comment"
-              >
-                <Pencil className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onDelete(commentId)}
-                className="h-5 w-5 text-destructive hover:text-destructive"
-                title="Delete comment"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
         </div>
 
         {/* Body or edit editor */}
@@ -390,7 +367,32 @@ function CommentItem({
             onCancel={onCancelEdit}
           />
         ) : (
-          <CommentBody body={item.body ?? ""} />
+          <div className="relative rounded-md bg-muted/50 px-3 py-1.5 mt-1">
+            <CommentBody body={item.body ?? ""} />
+            {/* Edit/delete — bottom-right of comment box */}
+            {item.userId === currentUserId && (
+              <div className="absolute bottom-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onEdit(commentId)}
+                  className="h-5 w-5"
+                  title="Edit comment"
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(commentId)}
+                  className="h-5 w-5 text-destructive hover:text-destructive"
+                  title="Delete comment"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
