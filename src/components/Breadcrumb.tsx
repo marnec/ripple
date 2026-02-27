@@ -8,8 +8,9 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { APP_NAME } from "@shared/constants";
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import { makeFunctionReference } from "convex/server";
+
+const getResourceNameRef = makeFunctionReference<"query", { resourceId: string }, string | null>("breadcrumb:getResourceName");
 import React from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ChevronLeft } from "lucide-react";
@@ -27,8 +28,8 @@ interface BreadcrumbLinkWithResourceProps {
 
 function NamedBreadcrumbItem({ item, onClick }: BreadcrumbLinkWithResourceProps) {
   const resourceName = useQuery(
-    api.breadcrumb.getResourceName,
-    item.resourceId ? { resourceId: item.resourceId as Id<"workspaces"> | Id<"channels"> | Id<"documents"> } : "skip"
+    getResourceNameRef,
+    item.resourceId ? { resourceId: item.resourceId } : "skip"
   );
 
   const handleClick = () => {
@@ -55,10 +56,8 @@ function NamedBreadcrumbItem({ item, onClick }: BreadcrumbLinkWithResourceProps)
 
 function MobileCurrentTitle({ item }: { item: BreadcrumbItemData }) {
   const resourceName = useQuery(
-    api.breadcrumb.getResourceName,
-    item.resourceId
-      ? { resourceId: item.resourceId as Id<"workspaces"> | Id<"channels"> | Id<"documents"> }
-      : "skip"
+    getResourceNameRef,
+    item.resourceId ? { resourceId: item.resourceId } : "skip"
   );
 
   let displayName;
