@@ -55,13 +55,6 @@ export function ChannelSelectorList({
         <MessageSquare className="size-4" />
         <span className="font-medium">Channels</span>
       </SidebarMenuButton>
-      <button
-        onClick={() => setShowCreateChannel(true)}
-        className="absolute right-1 top-1.5 rounded-sm p-0.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
-        title="Create channel"
-      >
-        <MessageSquarePlusIcon className="size-4" />
-      </button>
       <SidebarMenuSub className="min-h-0 flex-1 overflow-y-auto">
         {channels?.length === 0 && (
           <p className="px-2 py-1 text-xs text-muted-foreground">No channels yet</p>
