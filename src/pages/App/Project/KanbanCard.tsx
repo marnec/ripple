@@ -54,7 +54,6 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
     <div
       ref={setNodeRef}
       style={style}
-      data-task-id={task._id}
       {...attributes}
       {...listeners}
     >
