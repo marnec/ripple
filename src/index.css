@@ -293,18 +293,23 @@ body {
 }
 
 /*
- * resource-card: persisting cards (in both snapshots) stay visible and
- * translate to their new grid position — no cross-fade. The :only-child
- * rules below have higher specificity (0,2,0 vs 0,1,0), so enter/exit
+ * Persisting cards (in both snapshots) stay visible and translate to
+ * their new position — no cross-fade. Without this, the browser's
+ * default cross-fade renders new-snapshot images at full opacity above
+ * any overlays (e.g. the Sheet dimming layer). The :only-child rules
+ * below have higher specificity (0,2,0 vs 0,1,0), so enter/exit
  * animations still apply for cards that are added or removed.
  */
+::view-transition-image-pair(.task-card),
 ::view-transition-image-pair(.resource-card) {
   isolation: auto;
 }
+::view-transition-old(.task-card),
 ::view-transition-old(.resource-card) {
   animation: none;
   mix-blend-mode: normal;
 }
+::view-transition-new(.task-card),
 ::view-transition-new(.resource-card) {
   animation: none;
   mix-blend-mode: normal;

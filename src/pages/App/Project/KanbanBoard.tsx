@@ -59,7 +59,14 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
 
   // Suppress view transitions during DnD — set in handleDragStart,
   // auto-cleared by the hook after the post-drop optimistic update applies.
+  const dndSuppressRef = useRef(false);
+  const sheetOpen = selectedTaskId !== null;
+
+  // Also suppress when the detail sheet is open — view transition snapshots
+  // paint above top-layer overlays (the sheet backdrop), causing cards to
+  // flash at full opacity over the dimming layer.
   const suppressTransition = useRef(false);
+  suppressTransition.current = dndSuppressRef.current || sheetOpen;
 
   // Always fetch all tasks — filter client-side to avoid flash on toggle
   const liveTasks = useQuery(api.tasks.listByProject, {
@@ -156,7 +163,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   }, [allTasks, statuses]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    suppressTransition.current = true;
+    dndSuppressRef.current = true;
     setActiveDragId(event.active.id as Id<"tasks">);
   };
 
@@ -165,14 +172,14 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     setActiveDragId(null);
 
     if (!over || !tasks || !statuses) {
-      suppressTransition.current = false;
+      dndSuppressRef.current = false;
       return;
     }
 
     const activeTaskId = active.id as Id<"tasks">;
     const activeTask = tasks.find((t) => t._id === activeTaskId);
     if (!activeTask) {
-      suppressTransition.current = false;
+      dndSuppressRef.current = false;
       return;
     }
 
@@ -234,7 +241,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       position: newPosition,
     }).finally(() => {
       requestAnimationFrame(() => {
-        suppressTransition.current = false;
+        dndSuppressRef.current = false;
       });
     });
   };
