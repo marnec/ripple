@@ -230,10 +230,12 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       position: newPosition,
     });
 
-    // Clear suppress after the effect cycle has processed the optimistic update
-    requestAnimationFrame(() => {
+    // Keep view transitions suppressed until dnd-kit's default drop animation
+    // (~250ms) has fully completed — otherwise a Convex server update arriving
+    // mid-animation triggers a view-transition fade on the settling card.
+    setTimeout(() => {
       suppressTransition.current = false;
-    });
+    }, 300);
   };
 
   // Get active task for drag overlay
