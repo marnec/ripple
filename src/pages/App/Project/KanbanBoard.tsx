@@ -30,6 +30,8 @@ import { TaskDetailSheet } from "./TaskDetailSheet";
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 
+const ANIMATION_DURATION_MS = 80;
+
 type KanbanBoardProps = {
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
@@ -224,18 +226,17 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
 
     // Update position — suppress ref stays true through this render cycle
     // so the optimistic update applies without a view transition.
-    void updatePosition({
+    // Re-enable view transitions once the server confirms the mutation
+    // AND React has processed the resulting subscription update.
+    updatePosition({
       taskId: activeTaskId,
       statusId: destinationStatusId,
       position: newPosition,
+    }).finally(() => {
+      requestAnimationFrame(() => {
+        suppressTransition.current = false;
+      });
     });
-
-    // Keep view transitions suppressed until dnd-kit's default drop animation
-    // (~250ms) has fully completed — otherwise a Convex server update arriving
-    // mid-animation triggers a view-transition fade on the settling card.
-    setTimeout(() => {
-      suppressTransition.current = false;
-    }, 300);
   };
 
   // Get active task for drag overlay
@@ -325,12 +326,12 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
           </button>
         </div>
 
-        {/* Drag Overlay */}
-        <DragOverlay>
+        {/* Drag Overlay — near-instant drop so cards are immediately responsive */}
+        <DragOverlay dropAnimation={{ duration: ANIMATION_DURATION_MS, easing: "ease-out" }}>
           {activeTask && (
             <KanbanCardPresenter
               task={activeTask}
-              onClick={() => {}}
+              onClick={() => { }}
               isDragging
             />
           )}
