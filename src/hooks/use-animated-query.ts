@@ -118,7 +118,15 @@ export function isPositionOnlyChange(
     if (!p) return false; // task added or ID mismatch
     for (const key of Object.keys(n)) {
       if (key === "position") continue;
-      if (!Object.is(p[key], n[key])) return false;
+      if (Object.is(p[key], n[key])) continue;
+      // Enriched objects (status, assignee) get new references on every
+      // Convex query re-run even when content is identical — deep compare.
+      if (
+        typeof n[key] === "object" && n[key] !== null &&
+        typeof p[key] === "object" && p[key] !== null &&
+        JSON.stringify(p[key]) === JSON.stringify(n[key])
+      ) continue;
+      return false;
     }
   }
   return true;

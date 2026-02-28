@@ -1,7 +1,7 @@
 NEXT STEPS:
 - tasks
     - [ ] fix sort prevention not working anymore for changes from another user
-    - [ ] fix sort down somtimes not working probably due to Unexpected duplicate view-transition-name: --task-kh7cefx92642bxva03tppedxrs81tg8e
+    - [x] fix sort down somtimes not working probably due to Unexpected duplicate view-transition-name: --task-kh7cefx92642bxva03tppedxrs81tg8e
     - [ ] PLANE.so inspired cycles
 - [ ] improve breadcrumb on desktop
 - [ ] uniform workspace thumbnail repr
