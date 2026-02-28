@@ -283,19 +283,42 @@ body {
   letter-spacing: -0.025em;
 }
 
-/* ─── View Transitions — task card reorder / filter animations ────── */
-::view-transition-group(.task-card) {
+/* ─── View Transitions — card animations ─────────────────────────── */
+
+/* Shared: smooth position/size interpolation for all card types */
+::view-transition-group(.task-card),
+::view-transition-group(.resource-card) {
   animation-duration: 250ms;
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Fade out tasks removed from view (hide-completed, filter) */
-::view-transition-old(.task-card):only-child {
+/*
+ * resource-card: persisting cards (in both snapshots) stay visible and
+ * translate to their new grid position — no cross-fade. The :only-child
+ * rules below have higher specificity (0,2,0 vs 0,1,0), so enter/exit
+ * animations still apply for cards that are added or removed.
+ */
+::view-transition-image-pair(.resource-card) {
+  isolation: auto;
+}
+::view-transition-old(.resource-card) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(.resource-card) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Cards removed from view: shrink out */
+::view-transition-old(.task-card):only-child,
+::view-transition-old(.resource-card):only-child {
   animation: vt-shrink 200ms ease forwards;
 }
 
-/* Fade in tasks entering view */
-::view-transition-new(.task-card):only-child {
+/* Cards entering view: grow in */
+::view-transition-new(.task-card):only-child,
+::view-transition-new(.resource-card):only-child {
   animation: vt-grow 200ms ease;
 }
 
@@ -316,7 +339,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(.task-card),
   ::view-transition-old(.task-card),
-  ::view-transition-new(.task-card) {
+  ::view-transition-new(.task-card),
+  ::view-transition-group(.resource-card),
+  ::view-transition-old(.resource-card),
+  ::view-transition-new(.resource-card) {
     animation-duration: 0.01ms !important;
   }
 }

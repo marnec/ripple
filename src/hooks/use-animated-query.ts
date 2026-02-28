@@ -67,6 +67,12 @@ export function useAnimatedQuery<T>(
       return;
     }
 
+    // Buffer old data while query is loading (e.g. Convex re-subscribing
+    // after search param change). Keep showing stale results so persisting
+    // elements stay in the DOM and can animate to their new positions
+    // once fresh data arrives.
+    if (liveData == null) return;
+
     // Suppress handled during render — nothing to do here
     if (suppressRef?.current) return;
 
