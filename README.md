@@ -1,7 +1,9 @@
 NEXT STEPS:
 - tasks
     - [ ] PLANE.so inspired cycles
+- [ ] improve favorite user journey from sidebar
 - [ ] improve breadcrumb on desktop
+- [ ] improve header on mobile
 - [ ] uniform workspace thumbnail repr
 - excalidraw
     - [ ] remove zoom and history controls

@@ -36,7 +36,7 @@ export function EmptyFavoriteSlots({
             tabIndex={0}
             onClick={handleClick}
             onKeyDown={(e) => e.key === "Enter" && handleClick()}
-            className="flex h-6 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sidebar-foreground/25 hover:bg-sidebar-accent hover:text-sidebar-foreground/40"
+            className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sidebar-foreground/25 hover:bg-sidebar-accent hover:text-sidebar-foreground/40"
           >
             <Star className="size-3 shrink-0" />
             <span className="truncate text-xs italic">select a favorite</span>
