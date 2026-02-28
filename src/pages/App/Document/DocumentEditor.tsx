@@ -4,25 +4,20 @@ import {
   defaultBlockSpecs,
   defaultInlineContentSpecs,
 } from "@blocknote/core";
-import {
-  SuggestionMenuController,
-  useCreateBlockNote,
-} from "@blocknote/react";
+import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
-import { isSingleCell } from "@shared/cellRef";
-import { PenTool, Table } from "lucide-react";
+import { useCallback, useState } from "react";
 import { useTheme } from "next-themes";
 import { useParams } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
-import { Awareness } from "y-protocols/awareness";
-import * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import { useEditorTracking, extractCellRefs, extractHardEmbeds } from "../../../hooks/use-editor-tracking";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
+import { useSnapshotFallback } from "../../../hooks/use-snapshot-fallback";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { getUserColor } from "../../../lib/user-colors";
 import { ActiveUsers } from "./ActiveUsers";
@@ -32,6 +27,8 @@ import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
 import { SpreadsheetLink, SpreadsheetCellRef } from "./CustomBlocks/SpreadsheetRef";
 import { SpreadsheetRangeBlock } from "./CustomBlocks/SpreadsheetRangeBlock";
 import { User } from "./CustomBlocks/UserBlock";
+import { SnapshotFallback } from "./SnapshotFallback";
+import { useDocumentSuggestions } from "./useDocumentSuggestions";
 
 export function DocumentEditorContainer() {
   const { documentId } = useParams<QueryParams>();
@@ -57,142 +54,20 @@ const schema = BlockNoteSchema.create({
   },
 });
 
-/** Extract all hard-embed reference keys (diagram blocks, spreadsheet refs) from the editor document tree. */
-function extractHardEmbeds(blocks: any[]): Set<string> {
-  const refs = new Set<string>();
-  for (const block of blocks) {
-    // Block-level: diagram blocks and spreadsheet range blocks
-    if (block.type === "diagram" && block.props?.diagramId) {
-      refs.add(`diagram|${block.props.diagramId}`);
-    }
-    if (block.type === "spreadsheetRange" && block.props?.spreadsheetId) {
-      refs.add(`spreadsheet|${block.props.spreadsheetId}`);
-    }
-    // Inline content
-    if (Array.isArray(block.content)) {
-      for (const ic of block.content) {
-        if (ic.type === "spreadsheetCellRef" && ic.props?.spreadsheetId) {
-          refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-        }
-        if (ic.type === "spreadsheetLink" && ic.props?.spreadsheetId) {
-          refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-        }
-      }
-    }
-    if (block.content?.type === "tableContent") {
-      for (const row of block.content.rows) {
-        for (const cell of row.cells) {
-          for (const ic of cell.content) {
-            if (ic.type === "spreadsheetCellRef" && ic.props?.spreadsheetId) {
-              refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-            }
-            if (ic.type === "spreadsheetLink" && ic.props?.spreadsheetId) {
-              refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-            }
-          }
-        }
-      }
-    }
-    if (block.children) {
-      for (const key of extractHardEmbeds(block.children)) {
-        refs.add(key);
-      }
-    }
-  }
-  return refs;
-}
-
-/** Extract all spreadsheetCellRef keys from the editor document tree. */
-function extractCellRefs(blocks: any[]): Set<string> {
-  const refs = new Set<string>();
-  for (const block of blocks) {
-    // Block-level: spreadsheetRange blocks
-    if (block.type === "spreadsheetRange" && block.props?.spreadsheetId && block.props?.cellRef) {
-      refs.add(`${block.props.spreadsheetId}|${block.props.cellRef}`);
-    }
-    if (Array.isArray(block.content)) {
-      for (const ic of block.content) {
-        if (ic.type === "spreadsheetCellRef" && ic.props) {
-          refs.add(`${ic.props.spreadsheetId}|${ic.props.cellRef}`);
-        }
-      }
-    }
-    if (block.content?.type === "tableContent") {
-      for (const row of block.content.rows) {
-        for (const cell of row.cells) {
-          for (const ic of cell.content) {
-            if (ic.type === "spreadsheetCellRef" && ic.props) {
-              refs.add(`${ic.props.spreadsheetId}|${ic.props.cellRef}`);
-            }
-          }
-        }
-      }
-    }
-    if (block.children) {
-      for (const key of extractCellRefs(block.children)) {
-        refs.add(key);
-      }
-    }
-  }
-  return refs;
-}
-
-// Snapshot fallback component for cold-start read-only mode
-function SnapshotFallback({
-  snapshotDoc,
-  documentName,
-  resolvedTheme,
-}: {
-  snapshotDoc: Y.Doc;
-  documentName: string | undefined;
-  resolvedTheme: string | undefined;
-}) {
-  const fragment = snapshotDoc.getXmlFragment("document-store");
-  const fakeProvider = { awareness: new Awareness(snapshotDoc) } as any;
-
-  const snapshotEditor = useCreateBlockNote({
-    schema,
-    collaboration: {
-      fragment,
-      provider: fakeProvider,
-      user: { name: "", color: "" },
-    },
-  });
-
-  return (
-    <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-sleek">
-      <div className="px-20 max-w-full animate-fade-in">
-        <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2">
-          <ConnectionStatus isConnected={false} />
-        </div>
-        <h2 className="text-3xl pb-12 font-semibold">{documentName}</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Viewing saved version (offline)
-        </p>
-        <BlockNoteView
-          editor={snapshotEditor}
-          editable={false}
-          theme={resolvedTheme === "dark" ? "dark" : "light"}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { resolvedTheme } = useTheme();
   const document = useQuery(api.documents.get, { id: documentId });
   const diagrams = useQuery(
     api.diagrams.list,
-    document ? { workspaceId: document.workspaceId } : "skip"
+    document ? { workspaceId: document.workspaceId } : "skip",
   );
   const spreadsheets = useQuery(
     api.spreadsheets.list,
-    document ? { workspaceId: document.workspaceId } : "skip"
+    document ? { workspaceId: document.workspaceId } : "skip",
   );
   const workspaceMembers = useQuery(
     api.workspaceMembers.membersByWorkspace,
-    document ? { workspaceId: document.workspaceId } : "skip"
+    document ? { workspaceId: document.workspaceId } : "skip",
   );
   const viewer = useQuery(api.users.viewer);
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
@@ -224,45 +99,24 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   });
 
   // Track cell ref removals and clean up orphaned cache entries
-  const prevCellRefsRef = useRef<Set<string>>(new Set());
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!editor) return;
-    prevCellRefsRef.current = extractCellRefs(editor.document);
-
-    const unsubscribe = editor.onChange(() => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        const current = extractCellRefs(editor.document);
-        for (const key of prevCellRefsRef.current) {
-          if (!current.has(key)) {
-            const sep = key.indexOf("|");
-            const spreadsheetId = key.slice(0, sep) as Id<"spreadsheets">;
-            const cellRef = key.slice(sep + 1);
-            void removeCellRef({ spreadsheetId, cellRef });
-          }
-        }
-        prevCellRefsRef.current = current;
-      }, 2000);
-    });
-
-    return () => {
-      unsubscribe();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [editor, removeCellRef]);
+  const onCellRefsRemoved = useCallback(
+    (removed: Set<string>) => {
+      for (const key of removed) {
+        const sep = key.indexOf("|");
+        const spreadsheetId = key.slice(0, sep) as Id<"spreadsheets">;
+        const cellRef = key.slice(sep + 1);
+        void removeCellRef({ spreadsheetId, cellRef });
+      }
+    },
+    [removeCellRef],
+  );
+  useEditorTracking(editor, extractCellRefs, { onRemoved: onCellRefsRemoved });
 
   // Sync hard-embed references (diagrams, spreadsheets) to contentReferences table
-  const prevEmbedsRef = useRef<Set<string>>(new Set());
-  const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!editor || !document) return;
-    const initial = extractHardEmbeds(editor.document);
-    prevEmbedsRef.current = initial;
-
-    // Sync on mount so pre-existing embeds get tracked
-    if (initial.size > 0) {
-      const references = [...initial].map((key) => {
+  const onEmbedsChanged = useCallback(
+    (current: Set<string>) => {
+      if (!document) return;
+      const references = [...current].map((key) => {
         const sep = key.indexOf("|");
         return {
           targetType: key.slice(0, sep) as "diagram" | "spreadsheet",
@@ -275,75 +129,31 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         references,
         workspaceId: document.workspaceId,
       });
-    }
-
-    const unsubscribe = editor.onChange(() => {
-      if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current);
-      embedDebounceRef.current = setTimeout(() => {
-        const current = extractHardEmbeds(editor.document);
-        // Only sync if the set changed
-        if (current.size !== prevEmbedsRef.current.size ||
-            [...current].some((k) => !prevEmbedsRef.current.has(k))) {
-          const references = [...current].map((key) => {
-            const sep = key.indexOf("|");
-            return {
-              targetType: key.slice(0, sep) as "diagram" | "spreadsheet",
-              targetId: key.slice(sep + 1),
-            };
-          });
-          void syncReferences({
-            sourceType: "document",
-            sourceId: documentId,
-            references,
-            workspaceId: document.workspaceId,
-          });
-        }
-        prevEmbedsRef.current = current;
-      }, 2000);
-    });
-
-    return () => {
-      unsubscribe();
-      if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current);
-    };
-  }, [editor, document, documentId, syncReferences]);
+    },
+    [document, documentId, syncReferences],
+  );
+  useEditorTracking(editor, extractHardEmbeds, {
+    onChanged: onEmbedsChanged,
+    syncOnMount: true,
+  });
 
   // Cold-start snapshot fallback: offline + no editor from IndexedDB
-  const isColdStart = isOffline && !editor;
-  const snapshotUrl = useQuery(
-    api.snapshots.getSnapshotUrl,
-    isColdStart ? { resourceType: "doc", resourceId: documentId } : "skip"
-  );
+  const { isColdStart, snapshotDoc } = useSnapshotFallback({
+    isOffline,
+    hasContent: !!editor,
+    resourceType: "doc",
+    resourceId: documentId,
+  });
 
-  const [snapshotDoc, setSnapshotDoc] = useState<Y.Doc | null>(null);
+  // Suggestion menu items (#-trigger) and cell ref insert handler
+  const { getHashItems, handleCellRefInsert } = useDocumentSuggestions({
+    diagrams,
+    spreadsheets,
+    editor,
+    ensureCellRef,
+    setCellRefDialog,
+  });
 
-  // Fetch and apply snapshot when URL is available
-  useEffect(() => {
-    if (!snapshotUrl || !isColdStart) {
-      return;
-    }
-
-    const loadSnapshot = async () => {
-      try {
-        const response = await fetch(snapshotUrl);
-        const arrayBuffer = await response.arrayBuffer();
-        const tempDoc = new Y.Doc();
-        Y.applyUpdateV2(tempDoc, new Uint8Array(arrayBuffer));
-        setSnapshotDoc(tempDoc);
-      } catch (error) {
-        console.error("Failed to load snapshot:", error);
-      }
-    };
-
-    void loadSnapshot();
-
-    // Cleanup when conditions change
-    return () => {
-      setSnapshotDoc(null);
-    };
-  }, [snapshotUrl, isColdStart]);
-
-  // Show snapshot fallback in cold-start offline mode
   if (isColdStart && snapshotDoc) {
     return (
       <SnapshotFallback
@@ -388,50 +198,9 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           </div>
         </div>
         <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
-              <SuggestionMenuController
-                triggerCharacter={"#"}
-                getItems={async (query) => {
-                  const diagramItems = (diagrams ?? []).map((diagram) => ({
-                    title: diagram.name,
-                    onItemClick: () => {
-                      editor.insertBlocks(
-                        [
-                          {
-                            type: "diagram" as const,
-                            props: { diagramId: diagram._id } as any,
-                          },
-                        ],
-                        editor.getTextCursorPosition().block,
-                        "after"
-                      );
-                    },
-                    icon: <PenTool className="h-4 w-4" />,
-                    group: "Workspace diagrams",
-                  }));
-
-                  const spreadsheetItems = (spreadsheets ?? []).map((sheet) => ({
-                    title: sheet.name,
-                    onItemClick: () => {
-                      setCellRefDialog({
-                        open: true,
-                        spreadsheetId: sheet._id,
-                        spreadsheetName: sheet.name,
-                      });
-                    },
-                    icon: <Table className="h-4 w-4" />,
-                    group: "Spreadsheets",
-                  }));
-
-                  return [...diagramItems, ...spreadsheetItems].filter((item) =>
-                    item.title.toLowerCase().includes(query.toLowerCase())
-                  );
-                }}
-              />
-              <SuggestionMenuController
-                triggerCharacter={"@"}
-                getItems={getMemberItems}
-              />
-            </BlockNoteView>
+          <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
+          <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
+        </BlockNoteView>
         {cellRefDialog && (
           <CellRefDialog
             open={cellRefDialog.open}
@@ -441,42 +210,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             spreadsheetName={cellRefDialog.spreadsheetName}
             onInsert={(cellRef) => {
               if (!cellRefDialog) return;
-              const { spreadsheetId } = cellRefDialog;
-              editor.focus();
-              if (cellRef) {
-                if (isSingleCell(cellRef)) {
-                  // Single cell → inline content
-                  editor.insertInlineContent([
-                    {
-                      type: "spreadsheetCellRef",
-                      props: { spreadsheetId, cellRef },
-                    },
-                    " ",
-                  ]);
-                } else {
-                  // Range → block
-                  editor.insertBlocks(
-                    [
-                      {
-                        type: "spreadsheetRange" as const,
-                        props: { spreadsheetId, cellRef } as any,
-                      },
-                    ],
-                    editor.getTextCursorPosition().block,
-                    "after",
-                  );
-                }
-                void ensureCellRef({ spreadsheetId, cellRef });
-              } else {
-                editor.insertInlineContent([
-                  {
-                    type: "spreadsheetLink",
-                    props: { spreadsheetId },
-                  },
-                  " ",
-                ]);
-              }
-              setCellRefDialog(null);
+              handleCellRefInsert(cellRef, cellRefDialog);
             }}
           />
         )}
