@@ -1,9 +1,4 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
-import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  defaultInlineContentSpecs,
-} from "@blocknote/core";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { QueryParams } from "@shared/types/routes";
@@ -23,10 +18,7 @@ import { getUserColor } from "../../../lib/user-colors";
 import { ActiveUsers } from "./ActiveUsers";
 import { CellRefDialog } from "./CellRefDialog";
 import { ConnectionStatus } from "./ConnectionStatus";
-import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
-import { SpreadsheetLink, SpreadsheetCellRef } from "./CustomBlocks/SpreadsheetRef";
-import { SpreadsheetRangeBlock } from "./CustomBlocks/SpreadsheetRangeBlock";
-import { User } from "./CustomBlocks/UserBlock";
+import { documentSchema as schema } from "./schema";
 import { SnapshotFallback } from "./SnapshotFallback";
 import { useDocumentSuggestions } from "./useDocumentSuggestions";
 
@@ -39,20 +31,6 @@ export function DocumentEditorContainer() {
 
   return <DocumentEditor documentId={documentId} key={documentId} />;
 }
-
-const schema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...defaultBlockSpecs,
-    diagram: DiagramBlock(),
-    spreadsheetRange: SpreadsheetRangeBlock(),
-  },
-  inlineContentSpecs: {
-    ...defaultInlineContentSpecs,
-    mention: User,
-    spreadsheetLink: SpreadsheetLink,
-    spreadsheetCellRef: SpreadsheetCellRef,
-  },
-});
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { resolvedTheme } = useTheme();

@@ -2,18 +2,18 @@ import { isSingleCell } from "@shared/cellRef";
 import { PenTool, Table } from "lucide-react";
 import { useCallback, createElement } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
+import type { DocumentSchemaEditor } from "./schema";
 
-type Diagram = { _id: Id<"diagrams">; name: string };
-type Spreadsheet = { _id: Id<"spreadsheets">; name: string };
+interface Diagram { _id: Id<"diagrams">; name: string }
+interface Spreadsheet { _id: Id<"spreadsheets">; name: string }
 
-type CellRefDialogState = {
+interface CellRefDialogOpen {
   open: boolean;
   spreadsheetId: Id<"spreadsheets">;
   spreadsheetName: string;
-} | null;
+}
 
-// BlockNote editors use complex generics that don't simplify well.
-type Editor = any;
+type CellRefDialogState = CellRefDialogOpen | null;
 
 /**
  * Builds the `#`-trigger suggestion items (diagrams + spreadsheets) and the
@@ -28,7 +28,7 @@ export function useDocumentSuggestions({
 }: {
   diagrams: Diagram[] | undefined;
   spreadsheets: Spreadsheet[] | undefined;
-  editor: Editor;
+  editor: DocumentSchemaEditor | null;
   ensureCellRef: (args: { spreadsheetId: Id<"spreadsheets">; cellRef: string }) => Promise<null>;
   setCellRefDialog: (state: CellRefDialogState) => void;
 }) {
@@ -37,6 +37,7 @@ export function useDocumentSuggestions({
     const diagramItems = (diagrams ?? []).map((diagram) => ({
       title: diagram.name,
       onItemClick: () => {
+        if (!editor) return;
         editor.insertBlocks(
           [
             {
@@ -71,7 +72,7 @@ export function useDocumentSuggestions({
   };
 
   const handleCellRefInsert = useCallback(
-    (cellRef: string | null, cellRefDialog: NonNullable<CellRefDialogState>) => {
+    (cellRef: string | null, cellRefDialog: CellRefDialogOpen) => {
       if (!editor) return;
 
       const { spreadsheetId } = cellRefDialog;

@@ -85,12 +85,46 @@ export function useEditorTracking(
   }, [editor, debounceMs]);
 }
 
+// ── BlockNote document tree types ────────────────────────────────────
+
+/** Inline content node within a BlockNote block (e.g. mention, cell ref, link). */
+interface InlineNode {
+  type: string;
+  props?: Record<string, string>;
+}
+
+/** Table content shape nested inside a table block. */
+interface TableContent {
+  type: "tableContent";
+  rows: Array<{ cells: Array<{ content: InlineNode[] }> }>;
+}
+
+/** A single block in the BlockNote document tree. */
+interface EditorBlock {
+  type: string;
+  props?: Record<string, string>;
+  content?: InlineNode[] | TableContent;
+  children?: EditorBlock[];
+}
+
 // ── Pure extractors ──────────────────────────────────────────────────
+
+/** Collect inline refs matching spreadsheet types from a list of inline nodes. */
+function collectInlineSpreadsheetRefs(nodes: InlineNode[], refs: Set<string>) {
+  for (const ic of nodes) {
+    if (ic.type === "spreadsheetCellRef" && ic.props?.spreadsheetId) {
+      refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
+    }
+    if (ic.type === "spreadsheetLink" && ic.props?.spreadsheetId) {
+      refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
+    }
+  }
+}
 
 /** Extract all hard-embed reference keys (diagram blocks, spreadsheet refs) from the editor document tree. */
 export function extractHardEmbeds(blocks: unknown[]): Set<string> {
   const refs = new Set<string>();
-  for (const block of blocks as Record<string, any>[]) {
+  for (const block of blocks as EditorBlock[]) {
     if (block.type === "diagram" && block.props?.diagramId) {
       refs.add(`diagram|${block.props.diagramId}`);
     }
@@ -98,31 +132,17 @@ export function extractHardEmbeds(blocks: unknown[]): Set<string> {
       refs.add(`spreadsheet|${block.props.spreadsheetId}`);
     }
     if (Array.isArray(block.content)) {
-      for (const ic of block.content) {
-        if (ic.type === "spreadsheetCellRef" && ic.props?.spreadsheetId) {
-          refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-        }
-        if (ic.type === "spreadsheetLink" && ic.props?.spreadsheetId) {
-          refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-        }
-      }
+      collectInlineSpreadsheetRefs(block.content, refs);
     }
-    if (block.content?.type === "tableContent") {
+    if (block.content && !Array.isArray(block.content) && block.content.type === "tableContent") {
       for (const row of block.content.rows) {
         for (const cell of row.cells) {
-          for (const ic of cell.content) {
-            if (ic.type === "spreadsheetCellRef" && ic.props?.spreadsheetId) {
-              refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-            }
-            if (ic.type === "spreadsheetLink" && ic.props?.spreadsheetId) {
-              refs.add(`spreadsheet|${ic.props.spreadsheetId}`);
-            }
-          }
+          collectInlineSpreadsheetRefs(cell.content, refs);
         }
       }
     }
     if (block.children) {
-      for (const key of extractHardEmbeds(block.children as unknown[])) {
+      for (const key of extractHardEmbeds(block.children)) {
         refs.add(key);
       }
     }
@@ -130,33 +150,34 @@ export function extractHardEmbeds(blocks: unknown[]): Set<string> {
   return refs;
 }
 
+/** Collect cell ref keys from a list of inline nodes. */
+function collectInlineCellRefs(nodes: InlineNode[], refs: Set<string>) {
+  for (const ic of nodes) {
+    if (ic.type === "spreadsheetCellRef" && ic.props) {
+      refs.add(`${ic.props.spreadsheetId}|${ic.props.cellRef}`);
+    }
+  }
+}
+
 /** Extract all spreadsheetCellRef keys from the editor document tree. */
 export function extractCellRefs(blocks: unknown[]): Set<string> {
   const refs = new Set<string>();
-  for (const block of blocks as Record<string, any>[]) {
+  for (const block of blocks as EditorBlock[]) {
     if (block.type === "spreadsheetRange" && block.props?.spreadsheetId && block.props?.cellRef) {
       refs.add(`${block.props.spreadsheetId}|${block.props.cellRef}`);
     }
     if (Array.isArray(block.content)) {
-      for (const ic of block.content) {
-        if (ic.type === "spreadsheetCellRef" && ic.props) {
-          refs.add(`${ic.props.spreadsheetId}|${ic.props.cellRef}`);
-        }
-      }
+      collectInlineCellRefs(block.content, refs);
     }
-    if (block.content?.type === "tableContent") {
+    if (block.content && !Array.isArray(block.content) && block.content.type === "tableContent") {
       for (const row of block.content.rows) {
         for (const cell of row.cells) {
-          for (const ic of cell.content) {
-            if (ic.type === "spreadsheetCellRef" && ic.props) {
-              refs.add(`${ic.props.spreadsheetId}|${ic.props.cellRef}`);
-            }
-          }
+          collectInlineCellRefs(cell.content, refs);
         }
       }
     }
     if (block.children) {
-      for (const key of extractCellRefs(block.children as unknown[])) {
+      for (const key of extractCellRefs(block.children)) {
         refs.add(key);
       }
     }

@@ -1,31 +1,9 @@
-import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  defaultInlineContentSpecs,
-} from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import { ConnectionStatus } from "./ConnectionStatus";
-import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
-import { SpreadsheetLink, SpreadsheetCellRef } from "./CustomBlocks/SpreadsheetRef";
-import { SpreadsheetRangeBlock } from "./CustomBlocks/SpreadsheetRangeBlock";
-import { User } from "./CustomBlocks/UserBlock";
-
-const schema = BlockNoteSchema.create({
-  blockSpecs: {
-    ...defaultBlockSpecs,
-    diagram: DiagramBlock(),
-    spreadsheetRange: SpreadsheetRangeBlock(),
-  },
-  inlineContentSpecs: {
-    ...defaultInlineContentSpecs,
-    mention: User,
-    spreadsheetLink: SpreadsheetLink,
-    spreadsheetCellRef: SpreadsheetCellRef,
-  },
-});
+import { documentSchema } from "./schema";
 
 /** Read-only offline fallback for cold-start scenarios (no editor, no IndexedDB). */
 export function SnapshotFallback({
@@ -38,10 +16,10 @@ export function SnapshotFallback({
   resolvedTheme: string | undefined;
 }) {
   const fragment = snapshotDoc.getXmlFragment("document-store");
-  const fakeProvider = { awareness: new Awareness(snapshotDoc) } as any;
+  const fakeProvider = { awareness: new Awareness(snapshotDoc) };
 
   const snapshotEditor = useCreateBlockNote({
-    schema,
+    schema: documentSchema,
     collaboration: {
       fragment,
       provider: fakeProvider,
