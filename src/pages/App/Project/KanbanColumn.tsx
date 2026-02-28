@@ -204,7 +204,7 @@ export function KanbanColumn({
       {/* Task List */}
       <div
         ref={setNodeRef}
-        className="flex flex-col flex-1 min-h-0 gap-2 overflow-y-auto"
+        className="flex flex-col flex-1 min-h-0 gap-2 overflow-y-auto overflow-x-hidden"
       >
         <SortableContext
           id={status._id}

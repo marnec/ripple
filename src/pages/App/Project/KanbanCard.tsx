@@ -41,7 +41,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
       <div
         ref={setNodeRef}
         style={style}
-        className="relative border-2 border-dashed rounded-lg bg-muted/50"
+        className="relative overflow-hidden rounded-lg bg-muted/50 outline-dashed outline-2 outline-border -outline-offset-2"
       >
         <div className="invisible">
           <KanbanCardPresenter task={task} onClick={() => {}} />
