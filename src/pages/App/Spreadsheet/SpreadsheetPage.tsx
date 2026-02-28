@@ -1,32 +1,20 @@
 
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
+import { useFormulaPicker } from "@/hooks/use-formula-picker";
+import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
-import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
+import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
 import { getUserColor } from "@/lib/user-colors";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
-import jspreadsheet from "jspreadsheet-ce";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
-import {
-  ArrowDownToLine,
-  ArrowLeftToLine,
-  ArrowRightToLine,
-  ArrowUpToLine,
-  Circle,
-  Columns3,
-  Eye,
-  EyeOff,
-  Rows3,
-  Trash2,
-  WifiOff,
-} from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Circle, Eye, EyeOff, WifiOff } from "lucide-react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
@@ -35,99 +23,8 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { ActiveUsers } from "../Document/ActiveUsers";
 import {
   FormulaPickerDropdown,
-  type FormulaPickerHandle,
 } from "./FormulaPickerDropdown";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type ClickContext =
-  | { type: "cell"; row: number; col: number }
-  | { type: "row-header"; row: number }
-  | { type: "col-header"; col: number };
-
-interface MenuState {
-  x: number;
-  y: number;
-  ctx: ClickContext;
-}
-
-// jspreadsheet-ce doesn't export worksheet instance type cleanly
-type Worksheet = any;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Walk up from the event target to determine what region was right-clicked. */
-function resolveClickContext(
-  target: HTMLElement,
-  worksheetEl: HTMLElement | null,
-): ClickContext | null {
-  if (!worksheetEl) return null;
-
-  let el: HTMLElement | null = target;
-  while (el && el !== worksheetEl) {
-    if (el.tagName === "TD") {
-      const td = el as HTMLTableCellElement;
-      const tr = td.closest("tr");
-      if (!tr) return null;
-
-      const isHeader = !!td.closest("thead");
-      const isBody = !!td.closest("tbody");
-
-      if (isHeader) {
-        const col = td.cellIndex - 1;
-        if (col < 0) return null;
-        return { type: "col-header", col };
-      }
-
-      if (isBody) {
-        const row = tr.rowIndex - 1;
-        const col = td.cellIndex - 1;
-        if (col < 0) {
-          return { type: "row-header", row };
-        }
-        return { type: "cell", row, col };
-      }
-    }
-    el = el.parentElement;
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Menu Item Component
-// ---------------------------------------------------------------------------
-
-function MenuItem({
-  onClick,
-  destructive,
-  children,
-}: {
-  onClick: () => void;
-  destructive?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground ${
-        destructive
-          ? "text-destructive hover:text-destructive"
-          : ""
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function MenuSeparator() {
-  return <div className="-mx-1 my-1 h-px bg-border" />;
-}
+import { SpreadsheetContextMenu } from "./SpreadsheetContextMenu";
 
 // ---------------------------------------------------------------------------
 // Connection Status Badge
@@ -175,403 +72,70 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   referencedCellRefs: { cellRef: string }[];
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const worksheetRef = useRef<Worksheet>(null);
-  const bindingRef = useRef<SpreadsheetYjsBinding | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [menu, setMenu] = useState<MenuState | null>(null);
 
-  // --- Formula picker state ---
-  const [formulaPicker, setFormulaPicker] = useState<{
-    visible: boolean;
-    position: { x: number; y: number };
-    query: string;
-  } | null>(null);
-  const editorInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
-  const inputListenerRef = useRef<(() => void) | null>(null);
-  const scrollListenerRef = useRef<(() => void) | null>(null);
-  const formulaPickerHandleRef = useRef<FormulaPickerHandle>(null);
+  // Formula picker
+  const {
+    formulaPicker,
+    formulaPickerHandleRef,
+    insertFormula,
+    onEditionStart,
+    onEditionEnd,
+    registerKeyboardInterception,
+  } = useFormulaPicker();
 
-  // --- Initialise jspreadsheet + Yjs binding ---
+  // jspreadsheet + Yjs binding
+  const { worksheetRef, bindingRef } = useJSpreadsheetInstance({
+    wrapperRef,
+    yDoc,
+    awareness,
+    onEditionStart,
+    onEditionEnd,
+  });
+
+  // Context menu
+  const { menu, menuRef, registerContextMenu, actions } =
+    useSpreadsheetContextMenu(worksheetRef);
+
+  // Register context menu listener on the wrapper
   useEffect(() => {
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
+    return registerContextMenu(wrapper);
+  }, [registerContextMenu]);
 
-    wrapper.innerHTML = "";
-    const container = document.createElement("div");
-    wrapper.appendChild(container);
+  // Register formula picker keyboard interception
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    return registerKeyboardInterception(wrapper);
+  }, [registerKeyboardInterception]);
 
-    // Create a binding reference to wire up events
-    let binding: SpreadsheetYjsBinding | null = null;
-
-    const instance = jspreadsheet(container, {
-      worksheets: [{ minDimensions: [30, 100] }],
-      tabs: false,
-      toolbar: false,
-      contextMenu: () => null,
-      // Wire jspreadsheet v5 events to the Yjs binding
-      onchange() {
-        binding?.onchange();
-      },
-      onafterchanges(instance: any, changes: any) {
-        binding?.onafterchanges(instance, changes);
-      },
-      oninsertrow(instance: any, rows: any) {
-        binding?.oninsertrow(instance, rows);
-      },
-      ondeleterow(instance: any, removedRows: any) {
-        binding?.ondeleterow(instance, removedRows);
-      },
-      oninsertcolumn(instance: any, columns: any) {
-        binding?.oninsertcolumn(instance, columns);
-      },
-      ondeletecolumn(instance: any, removedColumns: any) {
-        binding?.ondeletecolumn(instance, removedColumns);
-      },
-      onchangestyle(instance: any, changes: any) {
-        binding?.onchangestyle(instance, changes);
-      },
-      onresizecolumn(instance: any, col: any, newW: any) {
-        binding?.onresizecolumn(instance, col, newW);
-      },
-      onresizerow(instance: any, row: any, newH: any) {
-        binding?.onresizerow(instance, row, newH);
-      },
-      onmerge(instance: any, merges: any) {
-        binding?.onmerge(instance, merges);
-      },
-      onselection(instance: any, x1: any, y1: any, x2: any, y2: any) {
-        binding?.onselection(instance, x1, y1, x2, y2);
-      },
-      oneditionstart(_instance: any, td: HTMLTableCellElement) {
-        // Wait a frame for jspreadsheet to create the editor inside the td.
-        // Default cells use <input>, wordWrap cells use <textarea>.
-        requestAnimationFrame(() => {
-          const editorEl =
-            td.querySelector<HTMLInputElement>("input") ??
-            td.querySelector<HTMLTextAreaElement>("textarea");
-          if (!editorEl) return;
-          editorInputRef.current = editorEl;
-
-          const onInput = () => {
-            const value = editorEl.value;
-            if (value.startsWith("=") && value.length >= 1) {
-              const query = value.substring(1);
-              // Only show picker while typing the formula name (before first paren)
-              if (!query.includes("(")) {
-                const rect = td.getBoundingClientRect();
-                setFormulaPicker({
-                  visible: true,
-                  position: { x: rect.left, y: rect.bottom + 2 },
-                  query,
-                });
-              } else {
-                setFormulaPicker(null);
-              }
-            } else {
-              setFormulaPicker(null);
-            }
-          };
-
-          editorEl.addEventListener("input", onInput);
-          inputListenerRef.current = onInput;
-
-          // Dismiss on scroll
-          const scrollContainer =
-            wrapper.querySelector(".jss_content") || wrapper;
-          const onScroll = () => setFormulaPicker(null);
-          scrollContainer.addEventListener("scroll", onScroll, {
-            passive: true,
-          });
-          scrollListenerRef.current = () =>
-            scrollContainer.removeEventListener("scroll", onScroll);
-
-          // Check initial value (user may have typed "=" to trigger editor)
-          onInput();
-        });
-      },
-      oneditionend() {
-        if (editorInputRef.current && inputListenerRef.current) {
-          editorInputRef.current.removeEventListener(
-            "input",
-            inputListenerRef.current,
-          );
-        }
-        scrollListenerRef.current?.();
-        editorInputRef.current = null;
-        inputListenerRef.current = null;
-        scrollListenerRef.current = null;
-        setFormulaPicker(null);
-      },
-    });
-
-    const worksheet = Array.isArray(instance) ? instance[0] : instance;
-    worksheetRef.current = worksheet;
-
-    // Create the two-way Yjs binding
-    binding = new SpreadsheetYjsBinding(worksheet, yDoc, awareness);
-    bindingRef.current = binding;
-
-    // Capture-phase listener: fires before jspreadsheet can intercept.
-    const onContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const target = e.target as HTMLElement;
-      const table = wrapper.querySelector(".jss_worksheet") as HTMLElement;
-      const ctx = resolveClickContext(target, table);
-      if (ctx) {
-        const menuW = 220;
-        const menuH = ctx.type === "cell" ? 240 : 130;
-        const x = Math.min(e.clientX, window.innerWidth - menuW);
-        const y = Math.min(e.clientY, window.innerHeight - menuH);
-        setMenu({ x: Math.max(0, x), y: Math.max(0, y), ctx });
-      } else {
-        setMenu(null);
-      }
-    };
-
-    wrapper.addEventListener("contextmenu", onContextMenu, true);
-
-    return () => {
-      wrapper.removeEventListener("contextmenu", onContextMenu, true);
-
-      // Destroy binding before jspreadsheet
-      if (bindingRef.current) {
-        bindingRef.current.destroy();
-        bindingRef.current = null;
-      }
-      binding = null;
-      worksheetRef.current = null;
-
-      try {
-        jspreadsheet.destroy(
-          container as unknown as jspreadsheet.JspreadsheetInstanceElement,
-        );
-      } catch {
-        // jspreadsheet-ce may throw during destroy
-      }
-      wrapper.innerHTML = "";
-    };
-  }, [yDoc, awareness]);
-
-  // --- Sync active client IDs to binding (remove stale cursors) ---
+  // Sync active client IDs to binding (remove stale cursors)
   useEffect(() => {
     bindingRef.current?.setActiveClients(remoteUserClientIds);
-  }, [remoteUserClientIds]);
+  }, [remoteUserClientIds, bindingRef]);
 
-  // --- Sync referenced cell refs to binding (highlight referenced cells) ---
-  // Depends on yDoc/awareness because those trigger binding re-creation;
-  // without them, the new binding would never receive the refs.
+  // Sync referenced cell refs to binding (highlight referenced cells)
   useEffect(() => {
     bindingRef.current?.setReferencedCells(referencedCellRefs);
-  }, [referencedCellRefs, yDoc, awareness]);
-
-  // --- Close menu on click-away / Escape ---
-  useEffect(() => {
-    if (!menu) return;
-
-    const close = () => setMenu(null);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    const onMouseDown = (e: MouseEvent) => {
-      if (menuRef.current?.contains(e.target as Node)) return;
-      close();
-    };
-
-    window.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [menu]);
-
-  // --- Formula picker keyboard interception ---
-  useEffect(() => {
-    if (!formulaPicker?.visible) return;
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.stopPropagation();
-        e.preventDefault();
-        formulaPickerHandleRef.current?.handleKey(e.key);
-      } else if (e.key === "Enter" || e.key === "Tab") {
-        e.stopPropagation();
-        e.preventDefault();
-        const selected = formulaPickerHandleRef.current?.handleKey("Enter");
-        if (selected) insertFormula(selected);
-      } else if (e.key === "Escape") {
-        e.stopPropagation();
-        e.preventDefault();
-        setFormulaPicker(null);
-      }
-    };
-
-    // Capture phase fires before jspreadsheet's own keydown handler
-    wrapper.addEventListener("keydown", onKeyDown, true);
-    return () => wrapper.removeEventListener("keydown", onKeyDown, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formulaPicker?.visible]);
-
-  const insertFormula = useCallback((formulaName: string) => {
-    const el = editorInputRef.current;
-    if (!el) return;
-    el.value = `=${formulaName}(`;
-    el.selectionStart = el.value.length;
-    el.selectionEnd = el.value.length;
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-    el.focus();
-    setFormulaPicker(null);
-  }, []);
-
-  // --- Action helpers ---
-
-  const ws = () => worksheetRef.current;
-
-  const act = useCallback(
-    (fn: (w: Worksheet, ctx: ClickContext) => void) => {
-      return () => {
-        const w = ws();
-        if (!w || !menu) return;
-        fn(w, menu.ctx);
-        setMenu(null);
-      };
-    },
-    [menu],
-  );
-
-  const insertRowAbove = act((w, ctx) => {
-    const row = ctx.type === "col-header" ? 0 : ctx.row;
-    w.insertRow(1, row, true);
-  });
-
-  const insertRowBelow = act((w, ctx) => {
-    const row = ctx.type === "col-header" ? 0 : ctx.row;
-    w.insertRow(1, row, false);
-  });
-
-  const deleteRow = act((w, ctx) => {
-    const row = ctx.type === "col-header" ? 0 : ctx.row;
-    w.deleteRow(row, 1);
-  });
-
-  const insertColLeft = act((w, ctx) => {
-    const col = ctx.type === "row-header" ? 0 : ctx.col;
-    w.insertColumn(1, col, true);
-  });
-
-  const insertColRight = act((w, ctx) => {
-    const col = ctx.type === "row-header" ? 0 : ctx.col;
-    w.insertColumn(1, col, false);
-  });
-
-  const deleteCol = act((w, ctx) => {
-    const col = ctx.type === "row-header" ? 0 : ctx.col;
-    w.deleteColumn(col, 1);
-  });
-
-  // --- Render ---
-
-  const renderMenuContent = () => {
-    if (!menu) return null;
-
-    switch (menu.ctx.type) {
-      case "row-header":
-        return (
-          <>
-            <MenuItem onClick={insertRowAbove}>
-              <ArrowUpToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert row above
-            </MenuItem>
-            <MenuItem onClick={insertRowBelow}>
-              <ArrowDownToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert row below
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem onClick={deleteRow} destructive>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete row
-            </MenuItem>
-          </>
-        );
-
-      case "col-header":
-        return (
-          <>
-            <MenuItem onClick={insertColLeft}>
-              <ArrowLeftToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert column left
-            </MenuItem>
-            <MenuItem onClick={insertColRight}>
-              <ArrowRightToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert column right
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem onClick={deleteCol} destructive>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete column
-            </MenuItem>
-          </>
-        );
-
-      case "cell":
-        return (
-          <>
-            <MenuItem onClick={insertRowAbove}>
-              <ArrowUpToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert row above
-            </MenuItem>
-            <MenuItem onClick={insertRowBelow}>
-              <ArrowDownToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert row below
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem onClick={insertColLeft}>
-              <ArrowLeftToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert column left
-            </MenuItem>
-            <MenuItem onClick={insertColRight}>
-              <ArrowRightToLine className="mr-2 h-4 w-4 text-muted-foreground" />
-              Insert column right
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem onClick={deleteRow} destructive>
-              <Rows3 className="mr-2 h-4 w-4" />
-              Delete row
-            </MenuItem>
-            <MenuItem onClick={deleteCol} destructive>
-              <Columns3 className="mr-2 h-4 w-4" />
-              Delete column
-            </MenuItem>
-          </>
-        );
-
-    }
-  };
+  }, [referencedCellRefs, yDoc, awareness, bindingRef]);
 
   return (
     <>
       <div ref={wrapperRef} className="h-full" />
-      {menu &&
-        createPortal(
-          <div
-            ref={menuRef}
-            className="fixed z-50 min-w-52 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95"
-            style={{ top: menu.y, left: menu.x }}
-          >
-            {renderMenuContent()}
-          </div>,
-          document.body,
-        )}
+      {menu && (
+        <SpreadsheetContextMenu
+          menu={menu}
+          menuRef={menuRef}
+          actions={actions}
+        />
+      )}
       <FormulaPickerDropdown
         ref={formulaPickerHandleRef}
         position={formulaPicker?.position ?? { x: 0, y: 0 }}
         query={formulaPicker?.query ?? ""}
         onSelect={insertFormula}
-        onDismiss={() => setFormulaPicker(null)}
+        onDismiss={() => {}}
         visible={!!formulaPicker?.visible}
       />
     </>
