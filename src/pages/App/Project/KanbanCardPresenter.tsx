@@ -66,7 +66,7 @@ export function KanbanCardPresenter({
       <CardContent className="py-2 px-3 pt-0">
         <div className="flex items-center justify-between mb-2">
           {/* Priority Icon */}
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {task.priority === "urgent" && (
               <AlertCircle className="w-4 h-4 text-red-500" />
             )}

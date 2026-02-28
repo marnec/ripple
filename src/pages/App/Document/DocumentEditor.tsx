@@ -20,12 +20,8 @@ import { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "../../../components/ui/avatar";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { getUserColor } from "../../../lib/user-colors";
@@ -220,6 +216,12 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
+
+  const getMemberItems = useMemberSuggestions({
+    members: workspaceMembers,
+    editor,
+    mentionType: "mention",
+  });
 
   // Track cell ref removals and clean up orphaned cache entries
   const prevCellRefsRef = useRef<Set<string>>(new Set());
@@ -427,37 +429,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               />
               <SuggestionMenuController
                 triggerCharacter={"@"}
-                getItems={async (query: string) => {
-                  if (!workspaceMembers) return [];
-                  return workspaceMembers
-                    .filter((member) =>
-                      member.name?.toLowerCase().includes(query.toLowerCase())
-                    )
-                    .map((member) => ({
-                      title: member.name ?? "Unknown User",
-                      onItemClick: () => {
-                        editor.insertInlineContent([
-                          {
-                            type: "mention",
-                            props: {
-                              userId: member._id,
-                            },
-                          },
-                          " ",
-                        ]);
-                      },
-                      icon: (
-                        <Avatar className="h-5 w-5">
-                          <AvatarImage src={member.image} />
-                          <AvatarFallback>
-                            {member.name?.charAt(0).toLocaleUpperCase() || "U"}
-                          </AvatarFallback>
-                        </Avatar>
-                      ),
-                      group: "Workspace members",
-                      key: member._id,
-                    }));
-                }}
+                getItems={getMemberItems}
               />
             </BlockNoteView>
         {cellRefDialog && (

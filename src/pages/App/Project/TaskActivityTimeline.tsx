@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowRight,
@@ -30,8 +31,8 @@ import { useTheme } from "next-themes";
 
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { getUserDisplayName } from "@shared/displayName";
 import { useUploadFile } from "../../../hooks/use-upload-file";
+import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 
 type TaskActivityTimelineProps = {
   taskId: Id<"tasks">;
@@ -55,26 +56,6 @@ type TimelineItem = {
   body?: string;
 };
 
-// Parse comment body - backwards compatible with plain text
-function parseCommentBody(body: string) {
-  try {
-    return JSON.parse(body);
-  } catch {
-    return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
-  }
-}
-
-// Check if editor is empty
-function isEditorEmpty(blocks: unknown[]): boolean {
-  if (blocks.length === 0) return true;
-  if (blocks.length === 1) {
-    const block = blocks[0] as { type: string; content?: unknown };
-    if (block.type === "paragraph" && (!block.content || (Array.isArray(block.content) && block.content.length === 0))) {
-      return true;
-    }
-  }
-  return false;
-}
 
 function getActivityIcon(type: string) {
   switch (type) {
@@ -164,8 +145,13 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId }: Tas
     uploadFile,
   });
 
+  const getMemberItems = useMemberSuggestions({
+    members: workspaceMembers,
+    editor,
+  });
+
   const handleSubmit = () => {
-    if (isEditorEmpty(editor.document)) return;
+    if (isBlocksEmpty(editor.document)) return;
     const body = JSON.stringify(editor.document);
     void createComment({ taskId, body }).then(() => {
       editor.replaceBlocks(editor.document, [{ id: crypto.randomUUID(), type: "paragraph", content: "" }]);
@@ -249,40 +235,12 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId }: Tas
             theme={resolvedTheme === "dark" ? "dark" : "light"}
             sideMenu={false}
             onChange={() => {
-              setIsEmpty(isEditorEmpty(editor.document));
+              setIsEmpty(isBlocksEmpty(editor.document));
             }}
           >
             <SuggestionMenuController
               triggerCharacter="@"
-              getItems={async (query) => {
-                if (!workspaceMembers) return [];
-                return workspaceMembers
-                  .filter((m) =>
-                    m.name?.toLowerCase().includes(query.toLowerCase())
-                  )
-                  .slice(0, 10)
-                  .map((m) => ({
-                    title: getUserDisplayName(m),
-                    onItemClick: () => {
-                      editor.insertInlineContent([
-                        {
-                          type: "userMention",
-                          props: { userId: m._id },
-                        },
-                        " ",
-                      ]);
-                    },
-                    icon: (
-                      <Avatar className="h-5 w-5">
-                        {m.image && <AvatarImage src={m.image} />}
-                        <AvatarFallback className="text-xs">
-                          {m.name?.slice(0, 2).toUpperCase() ?? "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                    ),
-                    group: "Workspace members",
-                  }));
-              }}
+              getItems={getMemberItems}
             />
           </BlockNoteView>
         </div>
@@ -445,8 +403,13 @@ function EditCommentEditor({
     uploadFile,
   });
 
+  const getMemberItems = useMemberSuggestions({
+    members: workspaceMembers,
+    editor: editEditor,
+  });
+
   const handleSave = () => {
-    if (isEditorEmpty(editEditor.document)) return;
+    if (isBlocksEmpty(editEditor.document)) return;
     const body = JSON.stringify(editEditor.document);
     onSave(commentId, body);
   };
@@ -461,35 +424,7 @@ function EditCommentEditor({
         >
           <SuggestionMenuController
             triggerCharacter="@"
-            getItems={async (query) => {
-              if (!workspaceMembers) return [];
-              return workspaceMembers
-                .filter((m) =>
-                  m.name?.toLowerCase().includes(query.toLowerCase())
-                )
-                .slice(0, 10)
-                .map((m) => ({
-                  title: getUserDisplayName(m),
-                  onItemClick: () => {
-                    editEditor.insertInlineContent([
-                      {
-                        type: "userMention",
-                        props: { userId: m._id },
-                      },
-                      " ",
-                    ]);
-                  },
-                  icon: (
-                    <Avatar className="h-5 w-5">
-                      {m.image && <AvatarImage src={m.image} />}
-                      <AvatarFallback className="text-xs">
-                        {m.name?.slice(0, 2).toUpperCase() ?? "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                  ),
-                  group: "Workspace members",
-                }));
-            }}
+            getItems={getMemberItems}
           />
         </BlockNoteView>
       </div>

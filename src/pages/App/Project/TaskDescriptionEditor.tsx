@@ -1,12 +1,11 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { getUserDisplayName } from "@shared/displayName";
 import { FileText, PenTool } from "lucide-react";
 import { useTheme } from "next-themes";
+import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 
 type TaskDescriptionEditorProps = {
   editor: any;
@@ -26,6 +25,12 @@ export function TaskDescriptionEditor({
   hideLabel,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
+
+  const getMemberItems = useMemberSuggestions({
+    members,
+    editor,
+    group: "Project members",
+  });
 
   if (!editor) {
     return (
@@ -122,35 +127,7 @@ export function TaskDescriptionEditor({
           />
           <SuggestionMenuController
             triggerCharacter={"@"}
-            getItems={async (query) => {
-              if (!members) return [];
-              return members
-                .filter((m) =>
-                  m.name?.toLowerCase().includes(query.toLowerCase())
-                )
-                .slice(0, 10)
-                .map((m) => ({
-                  title: getUserDisplayName(m),
-                  onItemClick: () => {
-                    editor.insertInlineContent([
-                      {
-                        type: "userMention",
-                        props: { userId: m.userId },
-                      },
-                      " ",
-                    ]);
-                  },
-                  icon: (
-                    <Avatar className="h-5 w-5">
-                      {m.image && <AvatarImage src={m.image} />}
-                      <AvatarFallback className="text-xs">
-                        {m.name?.slice(0, 2).toUpperCase() ?? "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                  ),
-                  group: "Project members",
-                }));
-            }}
+            getItems={getMemberItems}
           />
         </BlockNoteView>
       </div>
