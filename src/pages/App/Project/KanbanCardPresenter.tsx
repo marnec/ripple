@@ -38,8 +38,10 @@ export function KanbanCardPresenter({
     <Card
       onClick={onClick}
       style={{
-        viewTransitionName: `--task-${task._id}`,
-        viewTransitionClass: "task-card",
+        // DragOverlay renders a second KanbanCardPresenter with isDragging —
+        // exclude it from view transitions to avoid duplicate names.
+        viewTransitionName: isDragging ? "none" : `--task-${task._id}`,
+        viewTransitionClass: isDragging ? undefined : "task-card",
       } as React.CSSProperties}
       className={cn(
         "cursor-grab active:cursor-grabbing transition-all",

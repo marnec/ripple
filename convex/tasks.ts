@@ -244,11 +244,14 @@ export const listByProject = query({
       })
     );
 
-    // Sort by position within status groups (tasks without position sort after those with position)
+    // Sort by position — use plain < / > (character-code order) because
+    // fractional-indexing strings require ordinal comparison, not locale collation.
     enrichedTasks.sort((a, b) => {
       const posA = a.position ?? '';
       const posB = b.position ?? '';
-      return posA.localeCompare(posB) || a._creationTime - b._creationTime;
+      if (posA < posB) return -1;
+      if (posA > posB) return 1;
+      return a._creationTime - b._creationTime;
     });
 
     return enrichedTasks;

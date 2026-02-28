@@ -12,10 +12,16 @@ import { flushSync } from "react-dom";
  *   when a sort override makes them invisible.
  *   When the callback later stops returning `true` (e.g. sorting is
  *   turned off), any accumulated difference is synced immediately.
+ *
+ * @param suppressRef — When `.current` is `true`, data changes are applied
+ *   synchronously during render (no animation, no intermediate frame).
+ *   Used to bypass view transitions during DnD operations so dnd-kit
+ *   never sees a stale layout.
  */
 export function useAnimatedQuery<T>(
   liveData: T,
   shouldAbsorb?: (prev: NonNullable<T>, next: NonNullable<T>) => boolean,
+  suppressRef?: React.RefObject<boolean>,
 ): T {
   const [rendered, setRendered] = useState(liveData);
   const transitioning = useRef(false);
@@ -23,21 +29,31 @@ export function useAnimatedQuery<T>(
   const absorbRef = useRef(shouldAbsorb);
   absorbRef.current = shouldAbsorb;
 
-  // When the absorb condition stops holding (e.g. sorting turned off),
-  // sync any divergence immediately. This is the "setState during render"
-  // pattern React supports for derived state.
-  if (absorbed.current && !Object.is(liveData, rendered)) {
-    const stillAbsorbed =
-      liveData != null &&
-      rendered != null &&
-      absorbRef.current?.(rendered as NonNullable<T>, liveData as NonNullable<T>);
+  // ── Render-time fast paths ────────────────────────────────────────
+  // React supports setState during render for derived-state patterns.
+  // The component re-renders immediately with the new value *before*
+  // the browser paints, so no intermediate frame is ever visible.
 
-    if (!stillAbsorbed) {
-      absorbed.current = false;
+  if (!Object.is(liveData, rendered) && liveData != null && rendered != null) {
+    // Suppressed (DnD active) — sync instantly so dnd-kit / SortableContext
+    // always sees the correct item order. No intermediate layout change.
+    if (suppressRef?.current) {
       setRendered(liveData);
+    }
+    // Previously absorbed data becomes relevant (e.g. sorting turned off)
+    else if (absorbed.current) {
+      const stillAbsorbed = absorbRef.current?.(
+        rendered as NonNullable<T>,
+        liveData as NonNullable<T>,
+      );
+      if (!stillAbsorbed) {
+        absorbed.current = false;
+        setRendered(liveData);
+      }
     }
   }
 
+  // ── Effect: animated & absorbed paths ─────────────────────────────
   useEffect(() => {
     // Already in sync
     if (Object.is(liveData, rendered)) {
@@ -50,6 +66,9 @@ export function useAnimatedQuery<T>(
       setRendered(liveData);
       return;
     }
+
+    // Suppress handled during render — nothing to do here
+    if (suppressRef?.current) return;
 
     // Caller says this change is not visually meaningful — absorb entirely
     if (
@@ -81,20 +100,22 @@ export function useAnimatedQuery<T>(
 
 /**
  * Returns `true` when the only difference between two task arrays is the
- * `position` field — i.e. a same-column vertical reorder that has no
- * visual effect when a sort override is active.
+ * `position` field (and consequently the array order, since the server
+ * sorts by position). Matches tasks by `_id` across both arrays so that
+ * a reorder doesn't look like a structural change.
  */
 export function isPositionOnlyChange(
   prev: Array<Record<string, unknown>>,
   next: Array<Record<string, unknown>>,
 ): boolean {
   if (prev.length !== next.length) return false;
-  for (let i = 0; i < prev.length; i++) {
-    const p = prev[i];
-    const n = next[i];
-    // Different task in this slot → structural change
-    if (p._id !== n._id) return false;
-    // Check all keys (from new object) except position
+
+  const prevById = new Map<unknown, Record<string, unknown>>();
+  for (const t of prev) prevById.set(t._id, t);
+
+  for (const n of next) {
+    const p = prevById.get(n._id);
+    if (!p) return false; // task added or ID mismatch
     for (const key of Object.keys(n)) {
       if (key === "position") continue;
       if (!Object.is(p[key], n[key])) return false;

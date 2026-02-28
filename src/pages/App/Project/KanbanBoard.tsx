@@ -17,7 +17,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -55,6 +55,10 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const { toast } = useToast();
   const isSorting = sort !== null;
 
+  // Suppress view transitions during DnD — set in handleDragStart,
+  // auto-cleared by the hook after the post-drop optimistic update applies.
+  const suppressTransition = useRef(false);
+
   // Always fetch all tasks — filter client-side to avoid flash on toggle
   const liveTasks = useQuery(api.tasks.listByProject, {
     projectId,
@@ -67,6 +71,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const allTasks = useAnimatedQuery(
     liveTasks,
     isSorting ? isPositionOnlyChange : undefined,
+    suppressTransition,
   );
 
   // Apply assignee/priority filters + optional sort
@@ -116,14 +121,18 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
         grouped[task.statusId].push(task);
       }
     }
-    // Only apply position sort when no explicit sort is active
+    // Only apply position sort when no explicit sort is active.
+    // Use plain < / > comparison (character-code order) — localeCompare
+    // is case-insensitive and mis-orders fractional-indexing strings.
     if (!isSorting) {
       for (const key of Object.keys(grouped)) {
-        grouped[key].sort(
-          (a, b) =>
-            (a.position ?? "").localeCompare(b.position ?? "") ||
-            a._creationTime - b._creationTime
-        );
+        grouped[key].sort((a, b) => {
+          const pa = a.position ?? "";
+          const pb = b.position ?? "";
+          if (pa < pb) return -1;
+          if (pa > pb) return 1;
+          return a._creationTime - b._creationTime;
+        });
       }
     }
     return grouped;
@@ -145,6 +154,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   }, [allTasks, statuses]);
 
   const handleDragStart = (event: DragStartEvent) => {
+    suppressTransition.current = true;
     setActiveDragId(event.active.id as Id<"tasks">);
   };
 
@@ -152,11 +162,17 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     const { active, over } = event;
     setActiveDragId(null);
 
-    if (!over || !tasks || !statuses) return;
+    if (!over || !tasks || !statuses) {
+      suppressTransition.current = false;
+      return;
+    }
 
     const activeTaskId = active.id as Id<"tasks">;
     const activeTask = tasks.find((t) => t._id === activeTaskId);
-    if (!activeTask) return;
+    if (!activeTask) {
+      suppressTransition.current = false;
+      return;
+    }
 
     // Determine destination status
     let destinationStatusId: Id<"taskStatuses">;
@@ -173,6 +189,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     // When sorting is active, allow cross-column moves (status change) but
     // block same-column reorder since the sort overrides manual position.
     if (isSorting && activeTask.statusId === destinationStatusId) {
+      suppressTransition.current = false;
       toast({
         description: "Clear sorting to reorder tasks within a column.",
         variant: "destructive",
@@ -205,11 +222,17 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       afterTask?.position ?? null
     );
 
-    // Update position
+    // Update position — suppress ref stays true through this render cycle
+    // so the optimistic update applies without a view transition.
     void updatePosition({
       taskId: activeTaskId,
       statusId: destinationStatusId,
       position: newPosition,
+    });
+
+    // Clear suppress after the effect cycle has processed the optimistic update
+    requestAnimationFrame(() => {
+      suppressTransition.current = false;
     });
   };
 
