@@ -13,8 +13,8 @@ import {
   ItemActions,
 } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
-import { formatTaskId, formatDueDate, formatEstimate, isOverdue } from "@/lib/task-utils";
-import { AlertCircle, ArrowDown, ArrowUp, Ban, Minus } from "lucide-react";
+import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
+import { Ban } from "lucide-react";
 
 type TaskRowProps = {
   task: {
@@ -41,13 +41,6 @@ type TaskRowProps = {
   onClick: () => void;
 };
 
-const priorityIcons = {
-  urgent: <AlertCircle className="w-4 h-4 text-red-500" />,
-  high: <ArrowUp className="w-4 h-4 text-orange-500" />,
-  medium: <Minus className="w-4 h-4 text-yellow-500" />,
-  low: <ArrowDown className="w-4 h-4 text-gray-400" />,
-};
-
 export function TaskRow({ task, statuses, onStatusChange, onClick }: TaskRowProps) {
   const taskId = formatTaskId(task.projectKey, task.number);
 
@@ -62,7 +55,7 @@ export function TaskRow({ task, statuses, onStatusChange, onClick }: TaskRowProp
       className="cursor-pointer hover:bg-accent transition-colors border-input"
     >
       <ItemMedia>
-        {priorityIcons[task.priority]}
+        {getPriorityIcon(task.priority)}
         {task.hasBlockers && (
           <span title="Blocked"><Ban className="w-3 h-3 text-red-500" /></span>
         )}

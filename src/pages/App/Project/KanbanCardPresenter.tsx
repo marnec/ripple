@@ -2,8 +2,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { formatTaskId, formatDueDate, formatEstimate, isOverdue } from "@/lib/task-utils";
-import { AlertCircle, ArrowDown, ArrowUp, Ban, CalendarIcon, Minus } from "lucide-react";
+import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
+import { Ban, CalendarIcon } from "lucide-react";
 
 type KanbanCardPresenterProps = {
   task: {
@@ -67,18 +67,7 @@ export function KanbanCardPresenter({
         <div className="flex items-center justify-between mb-2">
           {/* Priority Icon */}
           <div className="shrink-0">
-            {task.priority === "urgent" && (
-              <AlertCircle className="w-4 h-4 text-red-500" />
-            )}
-            {task.priority === "high" && (
-              <ArrowUp className="w-4 h-4 text-orange-500" />
-            )}
-            {task.priority === "medium" && (
-              <Minus className="w-4 h-4 text-yellow-500" />
-            )}
-            {task.priority === "low" && (
-              <ArrowDown className="w-4 h-4 text-gray-400" />
-            )}
+            {getPriorityIcon(task.priority)}
           </div>
 
           {/* Assignee Avatar — ghost placeholder keeps row height stable */}

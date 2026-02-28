@@ -15,18 +15,21 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
+  PRIORITIES,
+  getPriorityIcon,
+  type TaskPriority,
+} from "@/lib/task-utils";
+import {
   ArrowUpDown,
-  AlertCircle,
   ArrowDown,
   ArrowUp,
   Check,
   Filter,
-  Minus,
   X,
 } from "lucide-react";
 import { useState } from "react";
 
-export type TaskPriority = "urgent" | "high" | "medium" | "low";
+export type { TaskPriority } from "@/lib/task-utils";
 export type SortField = "created" | "dueDate" | "startDate";
 export type SortDirection = "asc" | "desc";
 
@@ -56,12 +59,10 @@ type TaskToolbarProps = {
   sortBlocked?: boolean;
 };
 
-const priorities: { value: TaskPriority; label: string; icon: React.ReactNode }[] = [
-  { value: "urgent", label: "Urgent", icon: <AlertCircle className="w-3.5 h-3.5 text-red-500" /> },
-  { value: "high", label: "High", icon: <ArrowUp className="w-3.5 h-3.5 text-orange-500" /> },
-  { value: "medium", label: "Medium", icon: <Minus className="w-3.5 h-3.5 text-yellow-500" /> },
-  { value: "low", label: "Low", icon: <ArrowDown className="w-3.5 h-3.5 text-gray-400" /> },
-];
+const priorities = PRIORITIES.map((p) => ({
+  ...p,
+  icon: getPriorityIcon(p.value, "w-3.5 h-3.5"),
+}));
 
 const sortOptions: { value: SortField; label: string }[] = [
   { value: "created", label: "Created" },
