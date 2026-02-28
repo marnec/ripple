@@ -35,14 +35,18 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
     transition,
   };
 
-  // Show placeholder when dragging
+  // Show placeholder when dragging — render card invisibly to preserve exact height
   if (isDragging) {
     return (
       <div
         ref={setNodeRef}
         style={style}
-        className="h-36 border-2 border-dashed rounded-lg bg-muted/50"
-      />
+        className="relative border-2 border-dashed rounded-lg bg-muted/50"
+      >
+        <div className="invisible">
+          <KanbanCardPresenter task={task} onClick={() => {}} />
+        </div>
+      </div>
     );
   }
 
@@ -50,6 +54,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
     <div
       ref={setNodeRef}
       style={style}
+      data-task-id={task._id}
       {...attributes}
       {...listeners}
     >

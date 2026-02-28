@@ -230,10 +230,21 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       position: newPosition,
     });
 
-    // Clear suppress after the effect cycle has processed the optimistic update
+    // Play settle animation (rotate-2 → 0) on the landed card immediately.
     requestAnimationFrame(() => {
-      suppressTransition.current = false;
+      const el = document.querySelector(`[data-task-id="${activeTaskId}"]`);
+      el?.animate(
+        [{ transform: "rotate(2deg)" }, { transform: "rotate(0deg)" }],
+        { duration: 150, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+      );
     });
+
+    // Re-enable view transitions only after sortable CSS transitions (~200ms)
+    // have fully settled — prevents a view transition from firing mid-settle
+    // and causing visible jitter on sibling cards.
+    setTimeout(() => {
+      suppressTransition.current = false;
+    }, 300);
   };
 
   // Get active task for drag overlay
@@ -324,7 +335,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
         </div>
 
         {/* Drag Overlay */}
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeTask && (
             <KanbanCardPresenter
               task={activeTask}

@@ -1,7 +1,10 @@
 NEXT STEPS:
 - tasks
-    - [ ] fix sort prevention not working anymore for changes from another user
+    - [x] fix sort prevention not working anymore for changes from another user
     - [x] fix sort down somtimes not working probably due to Unexpected duplicate view-transition-name: --task-kh7cefx92642bxva03tppedxrs81tg8e
+    - [ ] improve dnd placeholder slightly taller than actual card causing a layout shift when appearing/disappearing
+    - [ ] on dnd drop animation animate also rotation to fit back in column
+    - [ ] allow starting a new drag while the drop animation is playing or speed up animation so that other cards are immediately responsive
     - [ ] PLANE.so inspired cycles
 - [ ] improve breadcrumb on desktop
 - [ ] uniform workspace thumbnail repr

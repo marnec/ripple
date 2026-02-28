@@ -44,7 +44,7 @@ export function KanbanCardPresenter({
         viewTransitionClass: isDragging ? undefined : "task-card",
       } as React.CSSProperties}
       className={cn(
-        "cursor-grab active:cursor-grabbing transition-all",
+        "cursor-grab active:cursor-grabbing",
         isDragging && "shadow-lg rotate-2"
       )}
     >
