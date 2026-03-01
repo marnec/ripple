@@ -3,7 +3,7 @@ NEXT STEPS:
 - [x] improve header on mobile
 - [x] improve breadcrumb on desktop
 - [x] uniform workspace thumbnail repr
-- [ ] add a backlink section that shows cross-references
+
 
 keyboard accessiblity
     - [ ] command palette
@@ -11,15 +11,22 @@ keyboard accessiblity
 
 - tasks
     - [ ] PLANE.so inspired cycles
-- [ ] improve favorite user journey from sidebar
+
+resource-list
+    - [ ] fix favorite user journey from sidebar (add filter non-favorites, link opens that filter)
+    - [ ] improve tag search
+    - [ ] improve resource item card
 
 - excalidraw
     - [ ] remove zoom and history controls
     - [ ] fix facepile overlap native controls in mobile view
     - [ ] uniform to standard resource page layout
 
-- [ ] add error boundaries for better UX on exceptions
-- [ ] improve spreadsheet reference highlight (border)
+- knowledge-graph
+    - [ ] add document-paragraph embeds in tasks and other docs (similar mechanism to spreadsheet range, use block id, show referenced blocks)
+    - [ ] improve spreadsheet reference highlight (border)
+    - [ ] add a backlink section that shows cross-references
+
 - [ ] internationalization (i18n and localization)
 - [ ] profile settings saved to local storage
     - [ ] move theme settings to profile settings

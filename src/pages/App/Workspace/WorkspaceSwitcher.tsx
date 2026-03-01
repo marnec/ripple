@@ -19,8 +19,22 @@ import {
 } from "@/components/ui/sidebar";
 import { useState } from "react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { cn } from "@/lib/utils";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { InviteUserDialog } from "./InviteUserDialog";
+
+function WorkspaceAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-semibold",
+        size === "md" ? "size-8 text-sm" : "size-6 text-xs",
+      )}
+    >
+      {name.slice(0, size === "md" ? 2 : 1).toUpperCase()}
+    </div>
+  );
+}
 
 export interface WorkspaceSwitcherProps {
   workspaces: Doc<"workspaces">[];
@@ -48,9 +62,7 @@ export function WorkspaceSwitcher({
             >
               {activeWorkspace ? (
                 <>
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-semibold text-sm">
-                    {activeWorkspace.name.slice(0, 2).toUpperCase()}
-                  </div>
+                  <WorkspaceAvatar name={activeWorkspace.name} />
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">
                       {activeWorkspace.name}
@@ -85,9 +97,7 @@ export function WorkspaceSwitcher({
                 onClick={() => handleWorkspaceSelect(workspace._id)}
                 className="gap-2 p-2"
               >
-                <div className="flex size-6 items-center justify-center rounded-sm border bg-muted text-xs font-medium">
-                  {workspace.name.slice(0, 1).toUpperCase()}
-                </div>
+                <WorkspaceAvatar name={workspace.name} size="sm" />
                 {workspace.name}
                 <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
               </DropdownMenuItem>
