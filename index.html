@@ -19,25 +19,7 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   </head>
   <body>
-    <div id="root">
-      <!-- Inline splash screen – visible until React mounts -->
-      <div id="splash" style="display:flex;align-items:center;justify-content:center;height:100dvh;background:#0c0a09">
-        <svg viewBox="0 0 100 100" width="64" height="64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <style>
-            .rc{fill:#f5f5f4}
-            .rr{fill:none;stroke:#f5f5f4;transform-origin:center;animation:rp 2s ease-out infinite}
-            .rr:nth-child(2){stroke-width:4;animation-delay:0s}
-            .rr:nth-child(3){stroke-width:3;animation-delay:.5s}
-            .rr:nth-child(4){stroke-width:2;animation-delay:1s}
-            @keyframes rp{0%{r:8;opacity:.9}100%{r:44;opacity:0}}
-          </style>
-          <circle class="rc" cx="50" cy="50" r="8"/>
-          <circle class="rr" cx="50" cy="50" r="8"/>
-          <circle class="rr" cx="50" cy="50" r="8"/>
-          <circle class="rr" cx="50" cy="50" r="8"/>
-        </svg>
-      </div>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
