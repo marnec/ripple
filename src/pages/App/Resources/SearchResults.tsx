@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/card";
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { useQuery } from "convex/react";
-import { FileText, Folder, MessageSquare, PenTool, Plus, Table2 } from "lucide-react";
+import { Plus } from "lucide-react";
+import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -19,13 +20,7 @@ type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channe
 
 type SearchResult = { _id: string; name: string; tags?: string[] };
 
-const RESOURCE_ICONS: Record<ResourceType, typeof FileText> = {
-  document: FileText,
-  diagram: PenTool,
-  spreadsheet: Table2,
-  project: Folder,
-  channel: MessageSquare,
-};
+const RESOURCE_ICONS = RESOURCE_TYPE_ICONS;
 
 const SEARCH_APIS = {
   document: api.documents.search,

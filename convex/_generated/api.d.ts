@@ -49,7 +49,7 @@ export declare const api: {
           | Id<"spreadsheets">
           | Id<"tasks">;
       },
-      any
+      string | null
     >;
   };
   callSessions: {

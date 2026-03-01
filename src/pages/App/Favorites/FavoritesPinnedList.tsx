@@ -1,5 +1,6 @@
 import { useQuery } from "convex/react";
-import { FileText, Folder, PenTool, Star, Table2 } from "lucide-react";
+import { Star } from "lucide-react";
+import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -13,12 +14,7 @@ import {
 } from "../../../components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const RESOURCE_ICONS = {
-  document: FileText,
-  diagram: PenTool,
-  spreadsheet: Table2,
-  project: Folder,
-} as const;
+const RESOURCE_ICONS = RESOURCE_TYPE_ICONS;
 
 const RESOURCE_ROUTES = {
   document: "documents",

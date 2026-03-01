@@ -1,15 +1,12 @@
 import { useQuery } from "convex/react";
-import { File, PenTool, Table2 } from "lucide-react";
+import { File } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useMentionedResources } from "./MentionedUsersContext";
+import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 
-const RESOURCE_ICONS: Record<string, React.FC<{ className?: string }>> = {
-  document: File,
-  diagram: PenTool,
-  spreadsheet: Table2,
-};
+const RESOURCE_ICONS = RESOURCE_TYPE_ICONS;
 
 const RESOURCE_ROUTES: Record<string, string> = {
   document: "documents",

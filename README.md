@@ -1,7 +1,7 @@
 NEXT STEPS:
 - [x] improve task view on mobile 
 - [ ] improve header on mobile
-- [ ] improve breadcrumb on desktop
+- [x] improve breadcrumb on desktop
 - [ ] uniform workspace thumbnail repr
 - [ ] add a backlink section that shows cross-references
 

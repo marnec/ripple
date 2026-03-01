@@ -6,19 +6,29 @@ import {
   BreadcrumbSeparator,
 } from "./ui/breadcrumb";
 import { useLocation, useNavigate } from "react-router-dom";
-import { APP_NAME } from "@shared/constants";
 import { useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 
-const getResourceNameRef = makeFunctionReference<"query", { resourceId: string }, string | null>("breadcrumb:getResourceName");
+const getResourceNameRef = makeFunctionReference<
+  "query",
+  { resourceId: string },
+  string | null
+>("breadcrumb:getResourceName");
 import React from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ChevronLeft } from "lucide-react";
+import { RESOURCE_CATEGORY_ICONS } from "@/lib/resource-icons";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
 interface BreadcrumbItemData {
   href: string;
   label: string;
   resourceId?: string;
+  category?: string; // the URL segment name for category items (e.g. "workspaces")
 }
 
 interface BreadcrumbLinkWithResourceProps {
@@ -26,7 +36,10 @@ interface BreadcrumbLinkWithResourceProps {
   onClick: (href: string) => void;
 }
 
-function NamedBreadcrumbItem({ item, onClick }: BreadcrumbLinkWithResourceProps) {
+function NamedBreadcrumbItem({
+  item,
+  onClick,
+}: BreadcrumbLinkWithResourceProps) {
   const resourceName = useQuery(
     getResourceNameRef,
     item.resourceId ? { resourceId: item.resourceId } : "skip"
@@ -51,6 +64,40 @@ function NamedBreadcrumbItem({ item, onClick }: BreadcrumbLinkWithResourceProps)
     <BreadcrumbLink onClick={handleClick} className="cursor-pointer">
       {displayName}
     </BreadcrumbLink>
+  );
+}
+
+function CategoryBreadcrumbItem({
+  item,
+  onClick,
+}: BreadcrumbLinkWithResourceProps) {
+  const Icon = item.category
+    ? RESOURCE_CATEGORY_ICONS[item.category]
+    : undefined;
+
+  if (!Icon) {
+    return (
+      <BreadcrumbLink
+        onClick={() => onClick(item.href)}
+        className="cursor-pointer"
+      >
+        {item.label}
+      </BreadcrumbLink>
+    );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <BreadcrumbLink
+          onClick={() => onClick(item.href)}
+          className="cursor-pointer inline-flex items-center"
+        >
+          <Icon className="h-4 w-4" />
+        </BreadcrumbLink>
+      </TooltipTrigger>
+      <TooltipContent>{item.label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -96,10 +143,8 @@ function MobileBreadcrumb({
         <ChevronLeft className="h-4 w-4" />
       </button>
       <div className="min-w-0 overflow-hidden">
-        {currentItem ? (
+        {currentItem && (
           <MobileCurrentTitle item={currentItem} />
-        ) : (
-          <span className="text-sm font-medium truncate">{APP_NAME}</span>
         )}
       </div>
     </div>
@@ -123,8 +168,8 @@ export function DynamicBreadcrumb() {
     } else {
       items.push({
         href,
-        label: segment.charAt(0).toUpperCase() + segment.slice(1),
-        resourceId: undefined,
+        label: segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " "),
+        category: segment,
       });
     }
   }
@@ -141,20 +186,32 @@ export function DynamicBreadcrumb() {
   return (
     <Breadcrumb>
       <BreadcrumbList>
-        <BreadcrumbItem key="#">
-          <BreadcrumbLink onClick={() => void navigate("/")} className="cursor-pointer">
-            {APP_NAME}
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        {items.map((item) => {
+        {items.map((item, index) => {
+          const isCategory = !item.resourceId;
+          const delay = `${index * 50}ms`;
           return (
             <React.Fragment key={item.href}>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <NamedBreadcrumbItem
-                  item={item}
-                  onClick={(href) => void navigate(href)}
+              {index > 0 && (
+                <BreadcrumbSeparator
+                  className="animate-in fade-in duration-200 fill-mode-both"
+                  style={{ animationDelay: delay }}
                 />
+              )}
+              <BreadcrumbItem
+                className="animate-in fade-in duration-200 fill-mode-both"
+                style={{ animationDelay: delay }}
+              >
+                {isCategory ? (
+                  <CategoryBreadcrumbItem
+                    item={item}
+                    onClick={(href) => void navigate(href)}
+                  />
+                ) : (
+                  <NamedBreadcrumbItem
+                    item={item}
+                    onClick={(href) => void navigate(href)}
+                  />
+                )}
               </BreadcrumbItem>
             </React.Fragment>
           );

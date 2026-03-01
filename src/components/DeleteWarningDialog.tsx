@@ -8,7 +8,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useQuery } from "convex/react";
-import { AlertTriangle, ChevronLeft, ChevronRight, FileText, ListTodo } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
@@ -34,9 +35,9 @@ type DeleteWarningDialogProps = {
 
 const PAGE_SIZE = 5;
 
-const SOURCE_TYPE_LABELS: Record<string, { label: string; icon: typeof FileText }> = {
-  document: { label: "Document", icon: FileText },
-  task: { label: "Task", icon: ListTodo },
+const SOURCE_TYPE_LABELS: Record<string, { label: string; icon: (typeof RESOURCE_TYPE_ICONS)[string] }> = {
+  document: { label: "Document", icon: RESOURCE_TYPE_ICONS.document },
+  task: { label: "Task", icon: RESOURCE_TYPE_ICONS.task },
 };
 
 function getSourceLink(ref: Reference): string {

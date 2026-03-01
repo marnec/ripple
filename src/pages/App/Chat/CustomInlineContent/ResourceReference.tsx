@@ -1,11 +1,8 @@
 import { createReactInlineContentSpec } from "@blocknote/react";
-import { File, PenTool, Table2 } from "lucide-react";
+import { File } from "lucide-react";
+import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 
-const RESOURCE_ICONS: Record<string, React.FC<{ className?: string }>> = {
-  document: File,
-  diagram: PenTool,
-  spreadsheet: Table2,
-};
+const RESOURCE_ICONS = RESOURCE_TYPE_ICONS;
 
 export const ResourceReference = createReactInlineContentSpec(
   {
