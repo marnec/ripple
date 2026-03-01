@@ -8,6 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Maximize2, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
@@ -36,8 +37,25 @@ export function TaskDetailSheet({
   workspaceId,
   projectId,
 }: TaskDetailSheetProps) {
-  const { titleInputRef, ...detail } = useTaskDetail({ taskId, workspaceId, projectId });
+  const { titleInputRef, ...detail } = useTaskDetail({
+    taskId,
+    workspaceId,
+    projectId,
+    collaborationEnabled: open,
+    suggestionDataEnabled: open,
+  });
   const navigate = useNavigate();
+
+  // Defer activity timeline mount so properties + description paint first
+  const [showActivity, setShowActivity] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setShowActivity(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setShowActivity(true));
+    return () => cancelAnimationFrame(id);
+  }, [open]);
 
   if (!taskId || !detail.task) {
     return null;
@@ -157,12 +175,13 @@ export function TaskDetailSheet({
               />
             </div>
 
-            {detail.currentUser && (
+            {detail.currentUser && showActivity && (
               <div className="space-y-2">
                 <TaskActivityTimeline
                   taskId={taskId}
                   currentUserId={detail.currentUser._id}
                   workspaceId={workspaceId}
+                  members={detail.members}
                 />
               </div>
             )}

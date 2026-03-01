@@ -33,11 +33,14 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { StaticCommentBody } from "./StaticCommentBody";
 
 type TaskActivityTimelineProps = {
   taskId: Id<"tasks">;
   currentUserId: Id<"users">;
   workspaceId: Id<"workspaces">;
+  /** Pre-fetched workspace members — avoids a duplicate query when parent already has them. */
+  members?: Array<{ _id: Id<"users">; name?: string; image?: string }>;
 };
 
 type TimelineItem = {
@@ -125,9 +128,11 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
   }
 }
 
-export function TaskActivityTimeline({ taskId, currentUserId, workspaceId }: TaskActivityTimelineProps) {
+export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp }: TaskActivityTimelineProps) {
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
-  const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  // Use pre-fetched members when available; fall back to own query for standalone usage
+  const ownMembers = useQuery(api.workspaceMembers.membersByWorkspace, membersProp ? "skip" : { workspaceId });
+  const workspaceMembers = membersProp ?? ownMembers;
   const createComment = useMutation(api.taskComments.create);
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);
@@ -357,24 +362,9 @@ function CommentItem({
   );
 }
 
-// Read-only comment body display
+// Lightweight static renderer — avoids a full BlockNote editor per comment
 function CommentBody({ body }: { body: string }) {
-  const { resolvedTheme } = useTheme();
-
-  const displayEditor = useCreateBlockNote({
-    schema: taskCommentSchema,
-    initialContent: parseCommentBody(body),
-  });
-
-  return (
-    <div className="task-comment-editor">
-      <BlockNoteView
-        editor={displayEditor}
-        editable={false}
-        theme={resolvedTheme === "dark" ? "dark" : "light"}
-      />
-    </div>
-  );
+  return <StaticCommentBody body={body} />;
 }
 
 // Edit mode for existing comment

@@ -165,6 +165,7 @@ function TaskDetailPageContent({
               taskId={taskId}
               currentUserId={detail.currentUser._id}
               workspaceId={workspaceId}
+              members={detail.members}
             />
           </div>
         )}

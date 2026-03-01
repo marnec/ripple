@@ -17,6 +17,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { StaticCommentBody } from "./StaticCommentBody";
 
 type TaskCommentsProps = {
   taskId: Id<"tasks">;
@@ -183,24 +184,9 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
   );
 }
 
-// Read-only comment body display
+// Lightweight static renderer — avoids a full BlockNote editor per comment
 function CommentBody({ body }: { body: string }) {
-  const { resolvedTheme } = useTheme();
-
-  const displayEditor = useCreateBlockNote({
-    schema: taskCommentSchema,
-    initialContent: parseCommentBody(body),
-  });
-
-  return (
-    <div className="task-comment-editor">
-      <BlockNoteView
-        editor={displayEditor}
-        editable={false}
-        theme={resolvedTheme === "dark" ? "dark" : "light"}
-      />
-    </div>
-  );
+  return <StaticCommentBody body={body} />;
 }
 
 // Edit mode for existing comment

@@ -34,17 +34,23 @@ export function useTaskDetail({
   taskId,
   workspaceId,
   projectId,
+  collaborationEnabled = true,
+  suggestionDataEnabled = true,
 }: {
   taskId: Id<"tasks"> | null;
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects">;
+  /** Defer Yjs/PartyKit connection until true (e.g. when sheet is visible). */
+  collaborationEnabled?: boolean;
+  /** Defer diagrams/documents list queries until true (only needed for # suggestion menu). */
+  suggestionDataEnabled?: boolean;
 }) {
   const task = useQuery(api.tasks.get, taskId ? { taskId } : "skip");
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const rawMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const members = rawMembers?.map((m) => ({ ...m, userId: m._id }));
-  const diagrams = useQuery(api.diagrams.list, { workspaceId });
-  const documents = useQuery(api.documents.list, { workspaceId });
+  const diagrams = useQuery(api.diagrams.list, suggestionDataEnabled ? { workspaceId } : "skip");
+  const documents = useQuery(api.documents.list, suggestionDataEnabled ? { workspaceId } : "skip");
   const currentUser = useQuery(api.users.viewer);
 
   const updateTask = useMutation(api.tasks.update);
@@ -64,7 +70,7 @@ export function useTaskDetail({
     userId: currentUser?._id ?? "anonymous",
     schema: taskDescriptionSchema,
     resourceType: "task",
-    enabled: !!taskId,
+    enabled: !!taskId && collaborationEnabled,
     uploadFile,
   });
 
