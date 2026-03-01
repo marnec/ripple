@@ -43,7 +43,7 @@ export function Layout() {
     <>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex shrink-0 sticky top-0 px-4 pt-[var(--safe-area-top)] z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
+        <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
           <div className="flex items-center">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
@@ -57,7 +57,7 @@ export function Layout() {
           </div>
         </header>
         <div
-          className={cn("relative flex overflow-y-auto scrollbar-sleek h-[calc(100svh-4rem-var(--safe-area-top))]", {
+          className={cn("relative flex overflow-y-auto scrollbar-stable h-[calc(100svh-4rem-var(--safe-area-top))]", {
             "w-svw": isMobile,
             "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
             "w-[calc(100svw-var(--sidebar-width-icon))]": !isMobile && state === "collapsed",

@@ -51,7 +51,7 @@ function ProjectDetailsContent({
   });
   const [sort, setSort] = useState<TaskSort>(null);
   const [sortBlocked, setSortBlocked] = useState(false);
-  const sortBlockedTimer = useRef<ReturnType<typeof setTimeout>>();
+  const sortBlockedTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
   const handleSortBlocked = useCallback(() => {
     setSortBlocked(true);
@@ -104,7 +104,7 @@ function ProjectDetailsContent({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0 p-3 md:p-6">
+      <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6">
       {!isLoading && project.description && (
         <p className="text-muted-foreground mb-6">{project.description}</p>
       )}
@@ -137,7 +137,7 @@ function ProjectDetailsContent({
           sortBlocked={sortBlocked}
         />
 
-        <TabsContent value="board" className="mt-0 flex-1 min-h-0">
+        <TabsContent value="board" className="mt-0 flex-1 flex flex-col min-h-0">
           <KanbanBoard projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} onSortBlocked={handleSortBlocked} />
         </TabsContent>
 

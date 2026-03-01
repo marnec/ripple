@@ -79,7 +79,7 @@ export function CellRefDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[400px]">
+      <DialogContent className="sm:max-w-100">
         <DialogHeader>
           <DialogTitle>Reference cells from {spreadsheetName}</DialogTitle>
           <DialogDescription>

@@ -82,7 +82,7 @@ export const FormulaPickerDropdown = forwardRef<
   return createPortal(
     <div
       ref={listRef}
-      className="fixed z-[60] max-h-56 w-72 overflow-y-auto rounded-md border bg-popover p-1 shadow-md animate-in fade-in-0 zoom-in-95"
+      className="fixed z-60 max-h-56 w-72 overflow-y-auto rounded-md border bg-popover p-1 shadow-md animate-in fade-in-0 zoom-in-95"
       style={{ top: adjustedY, left: position.x }}
     >
       {matches.map((formula: FormulaDefinition, i: number) => (

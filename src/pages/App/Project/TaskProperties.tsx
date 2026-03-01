@@ -70,11 +70,7 @@ export function TaskProperties({
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-muted-foreground">
-        Properties
-      </h3>
-
+    <div className="space-y-2.5">
       {/* Status */}
       <PropertyRow label="Status">
         <Select value={task.statusId} onValueChange={onStatusChange}>

@@ -257,7 +257,7 @@ export function TaskToolbar({
         >
           <SelectTrigger
             className={cn(
-              "h-7 w-[110px] text-xs [&>svg]:h-3 [&>svg]:w-3",
+              "h-7 w-27.5 text-xs [&>svg]:h-3 [&>svg]:w-3",
               sort ? "border-primary/50 text-primary" : "border-input"
             )}
           >

@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatTaskId } from "@/lib/task-utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Ban, Link2, Plus, X } from "lucide-react";
@@ -50,15 +51,14 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
 
   const [addOpen, setAddOpen] = useState(false);
 
-  if (!deps) return null;
-
-  const { blocks, blockedBy, relatesTo } = deps as {
+  const { blocks, blockedBy, relatesTo } = (deps ?? { blocks: [], blockedBy: [], relatesTo: [] }) as {
     blocks: DependencyItem[];
     blockedBy: DependencyItem[];
     relatesTo: DependencyItem[];
   };
 
-  const hasDeps = blocks.length > 0 || blockedBy.length > 0 || relatesTo.length > 0;
+  const totalCount = blocks.length + blockedBy.length + relatesTo.length;
+  const hasDeps = totalCount > 0;
 
   const handleRemove = (dependencyId: Id<"taskDependencies">) => {
     void removeDep({ dependencyId });
@@ -81,11 +81,18 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-muted-foreground">
-          Dependencies
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-muted-foreground">
+            Dependencies
+          </h3>
+          {totalCount > 0 && (
+            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-mono tabular-nums">
+              {totalCount}
+            </Badge>
+          )}
+        </div>
         <AddDependencyPopover
           open={addOpen}
           onOpenChange={setAddOpen}
@@ -100,36 +107,40 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
         />
       </div>
 
-      {!hasDeps && (
-        <p className="text-xs text-muted-foreground">No dependencies</p>
-      )}
+      <ScrollArea className="h-28">
+        <div className={cn("space-y-3 pr-3", deps !== undefined && "animate-fade-in")}>
+          {deps !== undefined && !hasDeps && (
+            <p className="text-xs text-muted-foreground py-1">No dependencies</p>
+          )}
 
-      {blockedBy.length > 0 && (
-        <DependencyGroup
-          label="Blocked by"
-          icon={<Ban className="h-3 w-3 text-red-500" />}
-          items={blockedBy}
-          onRemove={handleRemove}
-        />
-      )}
+          {blockedBy.length > 0 && (
+            <DependencyGroup
+              label="Blocked by"
+              icon={<Ban className="h-3 w-3 text-red-500" />}
+              items={blockedBy}
+              onRemove={handleRemove}
+            />
+          )}
 
-      {blocks.length > 0 && (
-        <DependencyGroup
-          label="Blocks"
-          icon={<Ban className="h-3 w-3 text-orange-500" />}
-          items={blocks}
-          onRemove={handleRemove}
-        />
-      )}
+          {blocks.length > 0 && (
+            <DependencyGroup
+              label="Blocks"
+              icon={<Ban className="h-3 w-3 text-orange-500" />}
+              items={blocks}
+              onRemove={handleRemove}
+            />
+          )}
 
-      {relatesTo.length > 0 && (
-        <DependencyGroup
-          label="Related to"
-          icon={<Link2 className="h-3 w-3 text-muted-foreground" />}
-          items={relatesTo}
-          onRemove={handleRemove}
-        />
-      )}
+          {relatesTo.length > 0 && (
+            <DependencyGroup
+              label="Related to"
+              icon={<Link2 className="h-3 w-3 text-muted-foreground" />}
+              items={relatesTo}
+              onRemove={handleRemove}
+            />
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

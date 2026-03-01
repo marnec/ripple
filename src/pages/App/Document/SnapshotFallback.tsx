@@ -28,7 +28,7 @@ export function SnapshotFallback({
   });
 
   return (
-    <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-sleek">
+    <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-stable">
       <div className="px-20 max-w-full animate-fade-in">
         <div className="sticky top-0 z-10 flex items-center justify-end gap-3 pt-5 pb-2">
           <ConnectionStatus isConnected={false} />

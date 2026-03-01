@@ -285,7 +285,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 animate-fade-in">
       {/* Create task — matches list view layout */}
       <CreateTaskInline projectId={projectId} workspaceId={workspaceId} />
 
