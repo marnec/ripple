@@ -43,7 +43,7 @@ export function Layout() {
     <>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center border-b backdrop-blur bg-background/80">
+        <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
           {isMobile ? (
             <>
               <SidebarTrigger className="-ml-1 shrink-0" />

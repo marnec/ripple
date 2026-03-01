@@ -55,3 +55,5 @@ resource-list
     - [ ] prompt for coordinates
     - [ ] mouse pick coords?
     - [ ] reintroduce formatting?
+
+- [ ] user avatars: look at dicebear
