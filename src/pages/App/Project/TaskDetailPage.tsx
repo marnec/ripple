@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
@@ -15,7 +15,6 @@ import { useTaskDetail } from "./useTaskDetail";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
 import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { getUserColor } from "@/lib/user-colors";
-import { formatTaskId } from "@/lib/task-utils";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -62,52 +61,19 @@ function TaskDetailPageContent({
   }
 
   return (
-    <div className="container mx-auto py-6 max-w-4xl">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              void navigate(
-                `/workspaces/${workspaceId}/projects/${projectId}`
-              )
-            }
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex-1 min-w-0">
-            {(() => {
-              const taskIdStr = formatTaskId(detail.task.projectKey, detail.task.number);
-              return taskIdStr ? (
-                <span className="text-xs text-muted-foreground font-mono ml-1">
-                  {taskIdStr}
-                </span>
-              ) : null;
-            })()}
-            <Input
-              ref={titleInputRef}
-              value={detail.titleValue}
-              onChange={(e) => detail.setTitleValue(e.target.value)}
-              onBlur={detail.handleTitleBlur}
-              onKeyDown={detail.handleTitleKeyDown}
-              className="text-2xl font-bold border-none focus-visible:ring-0 px-0 h-auto"
-              placeholder="Task title"
-            />
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => detail.setShowDeleteDialog(true)}
-          title="Delete task"
-        >
-          <Trash2 className="h-4 w-4 text-destructive" />
-        </Button>
-      </div>
+    <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl">
+      {/* Title */}
+      <Input
+        ref={titleInputRef}
+        value={detail.titleValue}
+        onChange={(e) => detail.setTitleValue(e.target.value)}
+        onBlur={detail.handleTitleBlur}
+        onKeyDown={detail.handleTitleKeyDown}
+        className="text-lg md:text-2xl font-bold border-none focus-visible:ring-0 px-0 h-auto mb-4 md:mb-6"
+        placeholder="Task title"
+      />
 
-      <div className="space-y-8">
+      <div className="space-y-5 md:space-y-8">
         <TaskProperties
           task={detail.task}
           statuses={detail.statuses}
@@ -154,7 +120,7 @@ function TaskDetailPageContent({
             documents={detail.documents}
             diagrams={detail.diagrams}
             members={detail.members}
-            className="min-h-75"
+            className="min-h-50 md:min-h-75"
             hideLabel
           />
         </div>
@@ -169,6 +135,18 @@ function TaskDetailPageContent({
             />
           </div>
         )}
+
+        {/* Danger zone */}
+        <div className="py-4 border-t border-destructive/20">
+          <Button
+            variant="outline"
+            className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => detail.setShowDeleteDialog(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Delete task
+          </Button>
+        </div>
       </div>
 
       <TaskDeleteDialog

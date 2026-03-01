@@ -151,7 +151,7 @@ export function Message({ message }: MessageProps) {
               <ContextMenuSubContent className="p-0">
                 <Suspense
                   fallback={
-                    <div className="flex h-[400px] w-[350px] items-center justify-center">
+                    <div className="flex h-100 w-87.5 items-center justify-center">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
                   }
