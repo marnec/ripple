@@ -153,7 +153,7 @@ export function TaskDetailSheet({
                     <h3 className="text-sm font-semibold text-muted-foreground">
                       Description
                     </h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-h-8">
                       <ConnectionStatus isConnected={detail.isConnected} />
                       {detail.isConnected && (
                         <ActiveUsers

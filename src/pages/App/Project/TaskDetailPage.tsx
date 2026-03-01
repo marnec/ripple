@@ -4,6 +4,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
@@ -41,8 +42,31 @@ function TaskDetailPageContent({
   projectId: Id<"projects">;
   taskId: Id<"tasks">;
 }) {
-  const { titleInputRef, ...detail } = useTaskDetail({ taskId, workspaceId, projectId });
+  // Defer heavy editor initialization (ProseMirror + Yjs) to unblock first paint.
+  const [editorDeferred, setEditorDeferred] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEditorDeferred(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const { titleInputRef, ...detail } = useTaskDetail({
+    taskId,
+    workspaceId,
+    projectId,
+    collaborationEnabled: editorDeferred,
+  });
   const navigate = useNavigate();
+
+  // Defer activity timeline one frame after the editor.
+  const [showActivity, setShowActivity] = useState(false);
+  useEffect(() => {
+    if (!editorDeferred) {
+      setShowActivity(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setShowActivity(true));
+    return () => cancelAnimationFrame(id);
+  }, [editorDeferred]);
 
   if (
     detail.task === undefined ||
@@ -93,40 +117,42 @@ function TaskDetailPageContent({
           workspaceId={workspaceId}
         />
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-muted-foreground">
-              Description
-            </h3>
-            <div className="flex items-center gap-2">
-              <ConnectionStatus isConnected={detail.isConnected} />
-              {detail.isConnected && (
-                <ActiveUsers
-                  remoteUsers={detail.remoteUsers}
-                  currentUser={
-                    detail.currentUser
-                      ? {
-                          name: detail.currentUser.name,
-                          color: getUserColor(detail.currentUser._id),
-                        }
-                      : undefined
-                  }
-                />
-              )}
+        {editorDeferred && (
+          <div className="space-y-2 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Description
+              </h3>
+              <div className="flex items-center gap-2 min-h-8">
+                <ConnectionStatus isConnected={detail.isConnected} />
+                {detail.isConnected && (
+                  <ActiveUsers
+                    remoteUsers={detail.remoteUsers}
+                    currentUser={
+                      detail.currentUser
+                        ? {
+                            name: detail.currentUser.name,
+                            color: getUserColor(detail.currentUser._id),
+                          }
+                        : undefined
+                    }
+                  />
+                )}
+              </div>
             </div>
+            <TaskDescriptionEditor
+              editor={detail.editor}
+              documents={detail.documents}
+              diagrams={detail.diagrams}
+              members={detail.members}
+              className="min-h-50 md:min-h-75"
+              hideLabel
+            />
           </div>
-          <TaskDescriptionEditor
-            editor={detail.editor}
-            documents={detail.documents}
-            diagrams={detail.diagrams}
-            members={detail.members}
-            className="min-h-50 md:min-h-75"
-            hideLabel
-          />
-        </div>
+        )}
 
-        {detail.currentUser && (
-          <div className="space-y-2">
+        {detail.currentUser && showActivity && (
+          <div className="space-y-2 animate-fade-in">
             <TaskActivityTimeline
               taskId={taskId}
               currentUserId={detail.currentUser._id}

@@ -1,21 +1,15 @@
 NEXT STEPS:
-- [x] improve task view on mobile 
-- [x] improve header on mobile
-- [x] improve breadcrumb on desktop
-- [x] uniform workspace thumbnail repr
-
-
-keyboard accessiblity
-    - [ ] command palette
-    - [ ] focus trap
-
 - tasks
+    - [x] fix layout shift when facepile appears
+    - [ ] add load optimization and fade-in to taskdetailspage
+    - [ ] add multiplayer mouse in kanban board
+    - [ ] mytasks??
     - [ ] PLANE.so inspired cycles
 
 resource-list
     - [ ] fix favorite user journey from sidebar (add filter non-favorites, link opens that filter)
     - [ ] improve tag search
-    - [ ] improve resource item card
+    - [ ] improve resource item card (click anywhere to navigate, more info displayed)
 
 - excalidraw
     - [ ] remove zoom and history controls
@@ -27,12 +21,18 @@ resource-list
     - [ ] improve spreadsheet reference highlight (border)
     - [ ] add a backlink section that shows cross-references
 
-- [ ] internationalization (i18n and localization)
+
+keyboard accessiblity
+    - [ ] command palette
+    - [ ] focus trap
+
 - [ ] profile settings saved to local storage
     - [ ] move theme settings to profile settings
     - [ ] user notification settings
     - [ ] language preference
     - [ ] restore last search on resource-list page from local-storage
+
+- [ ] internationalization (i18n and localization)
 
 - [ ] AI integrations
     - [ ] AI bot in chat (called on mention)
@@ -57,3 +57,4 @@ resource-list
     - [ ] reintroduce formatting?
 
 - [ ] user avatars: look at dicebear
+- [ ] optimize get collaboration token being called way too much
