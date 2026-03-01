@@ -16,7 +16,6 @@ const getResourceNameRef = makeFunctionReference<
 >("breadcrumb:getResourceName");
 import React from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ChevronLeft } from "lucide-react";
 import { RESOURCE_CATEGORY_ICONS } from "@/lib/resource-icons";
 import {
   Tooltip,
@@ -123,33 +122,6 @@ function MobileCurrentTitle({ item }: { item: BreadcrumbItemData }) {
   );
 }
 
-function MobileBreadcrumb({
-  items,
-  navigate,
-}: {
-  items: BreadcrumbItemData[];
-  navigate: (path: string) => void;
-}) {
-  const currentItem = items.length > 0 ? items[items.length - 1] : null;
-  const backHref = items.length > 1 ? items[items.length - 2].href : "/";
-
-  return (
-    <div className="flex items-center gap-1 min-w-0">
-      <button
-        onClick={() => navigate(backHref)}
-        className="shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-foreground transition-colors"
-        aria-label="Go back"
-      >
-        <ChevronLeft className="h-4 w-4" />
-      </button>
-      <div className="min-w-0 overflow-hidden">
-        {currentItem && (
-          <MobileCurrentTitle item={currentItem} />
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function DynamicBreadcrumb() {
   const navigate = useNavigate();
@@ -175,12 +147,9 @@ export function DynamicBreadcrumb() {
   }
 
   if (isMobile) {
-    return (
-      <MobileBreadcrumb
-        items={items}
-        navigate={(path) => void navigate(path)}
-      />
-    );
+    const currentItem = items.length > 0 ? items[items.length - 1] : null;
+    if (!currentItem) return null;
+    return <MobileCurrentTitle item={currentItem} />;
   }
 
   return (

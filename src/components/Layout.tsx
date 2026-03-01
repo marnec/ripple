@@ -43,18 +43,33 @@ export function Layout() {
     <>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
-          <div className="flex items-center">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-
-            <DynamicBreadcrumb />
-          </div>
-          <div className="flex items-center gap-2">
-            <FollowModeIndicator />
-            <CallIndicator />
-            <ThemeToggle />
-          </div>
+        <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center border-b backdrop-blur bg-background/80">
+          {isMobile ? (
+            <>
+              <SidebarTrigger className="-ml-1 shrink-0" />
+              <div className="flex-1 min-w-0 flex justify-center px-2">
+                <DynamicBreadcrumb />
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <FollowModeIndicator />
+                <CallIndicator />
+                <ThemeToggle />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <DynamicBreadcrumb />
+              </div>
+              <div className="flex items-center gap-2">
+                <FollowModeIndicator />
+                <CallIndicator />
+                <ThemeToggle />
+              </div>
+            </>
+          )}
         </header>
         <div
           className={cn("relative flex overflow-y-auto scrollbar-stable h-[calc(100svh-4rem-var(--safe-area-top))]", {
