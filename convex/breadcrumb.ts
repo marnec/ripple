@@ -3,7 +3,7 @@ import { query } from "./_generated/server";
 
 export const getResourceName = query({
   args: {
-    resourceId: v.union(v.id("workspaces"), v.id("channels"), v.id("projects"), v.id("documents"), v.id("diagrams"), v.id("spreadsheets"), v.id("tasks")),
+    resourceId: v.union(v.id("workspaces"), v.id("channels"), v.id("projects"), v.id("documents"), v.id("diagrams"), v.id("spreadsheets"), v.id("tasks"), v.id("cycles")),
   },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, { resourceId }) => {

@@ -318,6 +318,20 @@ export const remove = mutation({
       .collect();
     await Promise.all(taskStatuses.map((status) => ctx.db.delete(status._id)));
 
+    // 4. Delete all cycles and their cycleTasks for this project
+    const projectCycles = await ctx.db
+      .query("cycles")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+    for (const cycle of projectCycles) {
+      const cts = await ctx.db
+        .query("cycleTasks")
+        .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
+        .collect();
+      await Promise.all(cts.map((ct) => ctx.db.delete(ct._id)));
+      await ctx.db.delete(cycle._id);
+    }
+
     // Delete the project
     await ctx.db.delete(id);
 

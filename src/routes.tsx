@@ -13,7 +13,11 @@ import { SpreadsheetSettings } from "./pages/App/Spreadsheet/SpreadsheetSettings
 import { DocumentEditorContainer } from "./pages/App/Document/DocumentEditor";
 import { Documents } from "./pages/App/Document/Documents";
 import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
-import { ProjectDetails } from "./pages/App/Project/ProjectDetails";
+import { ProjectLayout } from "./pages/App/Project/ProjectLayout";
+import { ProjectOverview } from "./pages/App/Project/ProjectOverview";
+import { ProjectTasksPage } from "./pages/App/Project/ProjectTasksPage";
+import { ProjectCycles } from "./pages/App/Project/ProjectCycles";
+import { CycleDetail } from "./pages/App/Project/CycleDetail";
 import { Projects } from "./pages/App/Project/Projects";
 import { ProjectSettings } from "./pages/App/Project/ProjectSettings";
 import { MyTasks } from "./pages/App/Project/MyTasks";
@@ -84,15 +88,33 @@ export const router = createBrowserRouter(
                 },
                 {
                   path: ":projectId",
-                  element: <ProjectDetails />,
-                },
-                {
-                  path: ":projectId/tasks/:taskId",
-                  element: <TaskDetailPage />,
-                },
-                {
-                  path: ":projectId/settings",
-                  element: <ProjectSettings />,
+                  element: <ProjectLayout />,
+                  children: [
+                    {
+                      index: true,
+                      element: <ProjectOverview />,
+                    },
+                    {
+                      path: "tasks",
+                      element: <ProjectTasksPage />,
+                    },
+                    {
+                      path: "tasks/:taskId",
+                      element: <TaskDetailPage />,
+                    },
+                    {
+                      path: "cycles",
+                      element: <ProjectCycles />,
+                    },
+                    {
+                      path: "cycles/:cycleId",
+                      element: <CycleDetail />,
+                    },
+                    {
+                      path: "settings",
+                      element: <ProjectSettings />,
+                    },
+                  ],
                 },
               ],
             },

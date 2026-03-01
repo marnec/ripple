@@ -47,7 +47,8 @@ export declare const api: {
           | Id<"documents">
           | Id<"diagrams">
           | Id<"spreadsheets">
-          | Id<"tasks">;
+          | Id<"tasks">
+          | Id<"cycles">;
       },
       string | null
     >;
@@ -207,6 +208,70 @@ export declare const api: {
         sourceId: string;
         sourceType: "document" | "task";
         workspaceId: Id<"workspaces">;
+      },
+      null
+    >;
+  };
+  cycles: {
+    addTask: FunctionReference<
+      "mutation",
+      "public",
+      { cycleId: Id<"cycles">; taskId: Id<"tasks"> },
+      null
+    >;
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        description?: string;
+        dueDate?: string;
+        name: string;
+        projectId: Id<"projects">;
+        startDate?: string;
+        workspaceId: Id<"workspaces">;
+      },
+      Id<"cycles">
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { cycleId: Id<"cycles"> },
+      any | null
+    >;
+    listByProject: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      Array<any>
+    >;
+    listCycleTasks: FunctionReference<
+      "query",
+      "public",
+      { cycleId: Id<"cycles">; hideCompleted?: boolean },
+      Array<any>
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { cycleId: Id<"cycles"> },
+      null
+    >;
+    removeTask: FunctionReference<
+      "mutation",
+      "public",
+      { cycleId: Id<"cycles">; taskId: Id<"tasks"> },
+      null
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        cycleId: Id<"cycles">;
+        description?: string | null;
+        dueDate?: string | null;
+        name?: string;
+        startDate?: string | null;
+        status?: "draft" | "upcoming" | "active" | "completed";
       },
       null
     >;

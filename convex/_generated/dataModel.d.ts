@@ -303,6 +303,66 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  cycles: {
+    document: {
+      creatorId: Id<"users">;
+      description?: string;
+      dueDate?: string;
+      name: string;
+      projectId: Id<"projects">;
+      startDate?: string;
+      status: "draft" | "upcoming" | "active" | "completed";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"cycles">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "creatorId"
+      | "description"
+      | "dueDate"
+      | "name"
+      | "projectId"
+      | "startDate"
+      | "status"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_project: ["projectId", "_creationTime"];
+      by_project_status: ["projectId", "status", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  cycleTasks: {
+    document: {
+      addedBy: Id<"users">;
+      cycleId: Id<"cycles">;
+      projectId: Id<"projects">;
+      taskId: Id<"tasks">;
+      _id: Id<"cycleTasks">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "addedBy"
+      | "cycleId"
+      | "projectId"
+      | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_cycle: ["cycleId", "_creationTime"];
+      by_cycle_task: ["cycleId", "taskId", "_creationTime"];
+      by_task: ["taskId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   diagrams: {
     document: {
       name: string;

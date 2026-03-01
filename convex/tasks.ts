@@ -606,6 +606,13 @@ export const remove = mutation({
       throw new ConvexError("Not a member of this workspace");
     }
 
+    // Remove task from any cycles
+    const cycleTaskRecords = await ctx.db
+      .query("cycleTasks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .collect();
+    await Promise.all(cycleTaskRecords.map((ct) => ctx.db.delete(ct._id)));
+
     // Clean up task activity
     const taskActivities = await ctx.db
       .query("taskActivity")

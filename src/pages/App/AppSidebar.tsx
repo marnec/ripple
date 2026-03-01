@@ -5,8 +5,6 @@ import {
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
   useSidebar,
 } from "@/components/ui/sidebar";
 import usePushNotifications from "@/hooks/use-push-notifications";
@@ -14,8 +12,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
-import { CheckSquare } from "lucide-react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../convex/_generated/dataModel";
 
 const workspacesListRef = makeFunctionReference<"query">("workspaces:list");
@@ -30,7 +27,7 @@ import { NavUser } from "@/pages/App/UserMenu";
 
 export function AppSidebar() {
   const navigate = useNavigate();
-  const location = useLocation();
+  // const location = useLocation();
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
   const { workspaceId, channelId, documentId, diagramId, spreadsheetId, projectId } = useParams<QueryParams>();
@@ -89,17 +86,17 @@ export function AppSidebar() {
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/projects`);
     } else {
-      void navigate(`/workspaces/${workspaceId}/projects/${id}`);
+      void navigate(`/workspaces/${workspaceId}/projects/${id}/tasks`);
     }
   };
 
-  const handleMyTasksClick = () => {
-    if (!workspaceId) return;
-    if (isMobile) setOpenMobile(false);
-    void navigate(`/workspaces/${workspaceId}/my-tasks`);
-  };
+  // const handleMyTasksClick = () => {
+  //   if (!workspaceId) return;
+  //   if (isMobile) setOpenMobile(false);
+  //   void navigate(`/workspaces/${workspaceId}/my-tasks`);
+  // };
 
-  const isMyTasksActive = location.pathname.includes("/my-tasks");
+  // const isMyTasksActive = location.pathname.includes("/my-tasks");
 
   return (
     <Sidebar collapsible="icon">

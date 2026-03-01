@@ -1,5 +1,5 @@
 import type { FormulaPickerHandle } from "@/pages/App/Spreadsheet/FormulaPickerDropdown";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 interface FormulaPickerState {
   visible: boolean;

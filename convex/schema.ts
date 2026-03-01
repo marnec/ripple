@@ -273,6 +273,35 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_storage_id", ["storageId"]),
 
+  cycles: defineTable({
+    projectId: v.id("projects"),
+    workspaceId: v.id("workspaces"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    startDate: v.optional(v.string()), // ISO date "2026-03-01"
+    dueDate: v.optional(v.string()),   // ISO date "2026-03-31"
+    status: v.union(
+      v.literal("draft"),
+      v.literal("upcoming"),
+      v.literal("active"),
+      v.literal("completed"),
+    ),
+    creatorId: v.id("users"),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_workspace", ["workspaceId"])
+    .index("by_project_status", ["projectId", "status"]),
+
+  cycleTasks: defineTable({
+    cycleId: v.id("cycles"),
+    taskId: v.id("tasks"),
+    projectId: v.id("projects"), // denormalized for efficient filtering
+    addedBy: v.id("users"),
+  })
+    .index("by_cycle", ["cycleId"])
+    .index("by_task", ["taskId"])
+    .index("by_cycle_task", ["cycleId", "taskId"]),
+
   collaborationTokens: defineTable({
     token: v.string(),
     userId: v.id("users"),

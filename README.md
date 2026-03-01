@@ -2,9 +2,10 @@ NEXT STEPS:
 - tasks
     - [x] fix layout shift when facepile appears
     - [x] add load optimization and fade-in to taskdetailspage
-    - [ ] add multiplayer mouse in kanban board
     - [ ] mytasks??
     - [ ] PLANE.so inspired cycles
+
+- investigate rework all deletion cascade to soft-deletion
 
 resource-list
     - [ ] fix favorite user journey from sidebar (add filter non-favorites, link opens that filter)

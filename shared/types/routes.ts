@@ -8,4 +8,5 @@ export type QueryParams = {
   spreadsheetId: Id<"spreadsheets">
   projectId: Id<"projects">
   taskId: Id<"tasks">
+  cycleId: Id<"cycles">
 }
