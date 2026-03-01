@@ -116,7 +116,7 @@ export function AppSidebar() {
         {workspaceId && (
           <div className={isMobile ? "flex min-h-0 flex-1 flex-col" : "flex h-[75%] min-h-0 flex-col group-data-[collapsible=icon]:h-auto"}>
             {/* My Tasks — fixed at top */}
-            <SidebarGroup className="flex-none pb-0">
+            {/* <SidebarGroup className="flex-none pb-0">
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -129,7 +129,7 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
-            </SidebarGroup>
+            </SidebarGroup> */}
 
             {/* Channels — takes remaining vertical space, overflows internally */}
             <SidebarGroup className="min-h-0 flex-1 overflow-hidden pb-0 group-data-[collapsible=icon]:flex-none">

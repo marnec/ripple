@@ -1,7 +1,7 @@
 NEXT STEPS:
 - tasks
     - [x] fix layout shift when facepile appears
-    - [ ] add load optimization and fade-in to taskdetailspage
+    - [x] add load optimization and fade-in to taskdetailspage
     - [ ] add multiplayer mouse in kanban board
     - [ ] mytasks??
     - [ ] PLANE.so inspired cycles
