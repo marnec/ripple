@@ -53,6 +53,10 @@ export function useDocumentCollaboration<
   });
 
   const [indexedDbSynced, setIndexedDbSynced] = useState(false);
+  // True when IndexedDB loaded AND the Yjs fragment has actual cached content.
+  // This avoids showing an empty editor on first visit (no cache) — we wait
+  // for the provider to sync authoritative content instead.
+  const [cachedContentReady, setCachedContentReady] = useState(false);
 
   // Set up IndexedDB persistence for offline cache
   // CRITICAL: Decouple from provider - IndexedDB initializes independently
@@ -65,12 +69,16 @@ export function useDocumentCollaboration<
 
     persistence.on("synced", () => {
       setIndexedDbSynced(true);
+      if (yDoc.getXmlFragment("document-store").length > 0) {
+        setCachedContentReady(true);
+      }
     });
 
     // Cleanup on unmount or when documentId changes
     return () => {
       void persistence.destroy();
       setIndexedDbSynced(false);
+      setCachedContentReady(false);
     };
   }, [documentId, resourceType, yDoc, enabled]);
 
@@ -105,8 +113,12 @@ export function useDocumentCollaboration<
   const isLoading = providerLoading && !indexedDbSynced;
 
   return {
-    // Editor can render from IndexedDB data even without provider connection
-    editor: (provider || indexedDbSynced) ? editor : null,
+    // Gate editor on content readiness to prevent empty-editor flash:
+    // - isConnected: provider synced (authoritative state, even if empty)
+    // - isOffline: timeout fallback, show whatever we have
+    // - cachedContentReady && provider: IndexedDB had real content AND editor
+    //   already recreated with real provider awareness (no second flash)
+    editor: (isConnected || isOffline || (cachedContentReady && !!provider)) ? editor : null,
     isLoading,
     isConnected,
     isOffline,

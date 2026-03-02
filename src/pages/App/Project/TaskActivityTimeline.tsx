@@ -1,6 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
 import { useMutation, useQuery } from "convex/react";
@@ -176,7 +175,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
   };
 
   if (timeline === undefined || workspaceMembers === undefined) {
-    return <LoadingSpinner />;
+    return null;
   }
 
   const filteredItems = filter === "comments"
@@ -184,7 +183,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     : timeline;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in">
       {/* Header with filter */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>

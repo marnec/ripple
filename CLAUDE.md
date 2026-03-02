@@ -129,3 +129,4 @@ This project uses static code generation (`convex.json` → `staticApi: true, st
  - This app is opinionated on many topics, we don't want to please every possible user
  - Users should not be flooded with information, by default only essential information is visible
  - If the user desires more information it should be available and intuitively toggled / retrieved
+ - **No skeleton loaders** — never use skeleton/pulse placeholders. Prefer empty reserved space (matching final dimensions) with a fade-in when content arrives. Loading spinners are acceptable only for full-page or full-section blocking loads.

@@ -57,13 +57,6 @@ function TaskDetailPageContent({
   });
   const navigate = useNavigate();
 
-  // Defer activity timeline one frame after the editor.
-  const [showActivity, setShowActivity] = useState(false);
-  useEffect(() => {
-    if (!editorDeferred) return;
-    const id = requestAnimationFrame(() => setShowActivity(true));
-    return () => cancelAnimationFrame(id);
-  }, [editorDeferred]);
 
   if (
     detail.task === undefined ||
@@ -114,41 +107,39 @@ function TaskDetailPageContent({
           workspaceId={workspaceId}
         />
 
-        {editorDeferred && (
-          <div className="space-y-2 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-muted-foreground">
-                Description
-              </h3>
-              <div className="flex items-center gap-2 min-h-8">
-                <ConnectionStatus isConnected={detail.isConnected} />
-                {detail.isConnected && (
-                  <ActiveUsers
-                    remoteUsers={detail.remoteUsers}
-                    currentUser={
-                      detail.currentUser
-                        ? {
-                            name: detail.currentUser.name,
-                            color: getUserColor(detail.currentUser._id),
-                          }
-                        : undefined
-                    }
-                  />
-                )}
-              </div>
+        <div className="space-y-2 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Description
+            </h3>
+            <div className="flex items-center gap-2 min-h-8">
+              <ConnectionStatus isConnected={detail.isConnected} />
+              {detail.isConnected && (
+                <ActiveUsers
+                  remoteUsers={detail.remoteUsers}
+                  currentUser={
+                    detail.currentUser
+                      ? {
+                          name: detail.currentUser.name,
+                          color: getUserColor(detail.currentUser._id),
+                        }
+                      : undefined
+                  }
+                />
+              )}
             </div>
-            <TaskDescriptionEditor
-              editor={detail.editor}
-              documents={detail.documents}
-              diagrams={detail.diagrams}
-              members={detail.members}
-              className="min-h-50 md:min-h-75"
-              hideLabel
-            />
           </div>
-        )}
+          <TaskDescriptionEditor
+            editor={detail.editor}
+            documents={detail.documents}
+            diagrams={detail.diagrams}
+            members={detail.members}
+            className="min-h-50 md:min-h-75"
+            hideLabel
+          />
+        </div>
 
-        {detail.currentUser && showActivity && (
+        {detail.currentUser && (
           <div className="space-y-2 animate-fade-in">
             <TaskActivityTimeline
               taskId={taskId}

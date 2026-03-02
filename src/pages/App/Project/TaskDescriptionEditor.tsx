@@ -33,14 +33,7 @@ export function TaskDescriptionEditor({
   });
 
   if (!editor) {
-    return (
-      <div className={hideLabel ? undefined : "space-y-2"}>
-        {!hideLabel && <h3 className="text-sm font-semibold text-muted-foreground">Description</h3>}
-        <div className={cn("task-description-editor border rounded-md p-4 animate-pulse", className)}>
-          <div className="h-6 bg-muted rounded w-3/4" />
-        </div>
-      </div>
-    );
+    return <div className={className} />;
   }
 
   return (
@@ -52,7 +45,7 @@ export function TaskDescriptionEditor({
       )}
       <div
         className={cn(
-          "task-description-editor border rounded-md p-4",
+          "task-description-editor border rounded-md p-4 animate-fade-in",
           className
         )}
       >
