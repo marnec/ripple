@@ -73,7 +73,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   // since the sort override makes them invisible.
   const allTasks = useAnimatedQuery(
     liveTasks,
-    isPositionOnlyChange,
+    isSorting ? isPositionOnlyChange : undefined,
     dndSuppressed || sheetOpen,
   );
 
