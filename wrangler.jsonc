@@ -16,7 +16,7 @@
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["Main", "Presence"] }
+    { "tag": "v1", "new_classes": ["Main", "Presence"] }
   ],
   "routes": [
     {
