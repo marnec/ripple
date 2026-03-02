@@ -252,7 +252,7 @@ Multiple Effects triggering each other causes unnecessary re-renders and makes c
 
 ### 6. Test in Strict Mode
 
-React 18+ Strict Mode mounts components twice in development to expose missing cleanup. If your Effect breaks, you need cleanup.
+React 19+ Strict Mode mounts components twice in development to expose missing cleanup. If your Effect breaks, you need cleanup.
 
 ### 7. Consider Framework Solutions
 
@@ -296,7 +296,7 @@ This skill includes three detailed reference documents:
 
 **Symptom:** Effect runs twice on component mount in development.
 
-**Cause:** React 18 Strict Mode intentionally mounts components twice to expose bugs.
+**Cause:** React 19 Strict Mode intentionally mounts components twice to expose bugs.
 
 **Fix:** Add proper cleanup. If it's app initialization that shouldn't run twice, use a module-level guard.
 

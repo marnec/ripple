@@ -26,7 +26,7 @@ npm run deploy
 Ripple is a real-time collaborative workspace built on Convex (serverless backend) with React/Vite frontend.
 
 ### Tech Stack
-- **Frontend**: React 18, React Router v6, Tailwind CSS, shadcn/ui
+- **Frontend**: React 19, React Router v6, Tailwind CSS, shadcn/ui
 - **Backend**: Convex (database, server functions, auth)
 - **Real-time**: Convex Presence (user presence), ProseMirror Sync (collaborative docs), WebRTC (video calls)
 - **Editor**: BlockNote with custom blocks (Excalidraw diagrams)
