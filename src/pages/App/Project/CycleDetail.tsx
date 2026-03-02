@@ -6,6 +6,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -17,6 +24,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { TaskDetailSheet } from "./TaskDetailSheet";
 import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
@@ -52,6 +60,7 @@ function CycleDetailContent({
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilters>({
     hideCompleted: false,
     assigneeIds: [],
@@ -83,41 +92,35 @@ function CycleDetailContent({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Cycle header */}
-      <div className="px-4 pt-5 pb-4 md:px-8 border-b">
+      <div className="px-4 py-2.5 md:px-8 border-b">
         {isLoading ? (
-          <div className="space-y-2">
-            <div className="h-6 w-48 bg-muted animate-pulse rounded" />
-            <div className="h-4 w-32 bg-muted animate-pulse rounded" />
-          </div>
+          <div className="h-5 w-48 bg-muted animate-pulse rounded" />
         ) : (
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", styles.badge)}>
-                  {cycle!.status}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h2 className="text-sm font-semibold truncate">{cycle!.name}</h2>
+              <span className={cn("text-[11px] font-medium px-1.5 py-0.5 rounded-full shrink-0", styles.badge)}>
+                {cycle!.status}
+              </span>
+              {remaining !== null && remaining >= 0 && (
+                <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">
+                  {remaining === 0 ? "ends today" : `${remaining}d left`}
                 </span>
-                {remaining !== null && remaining >= 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {remaining === 0 ? "ends today" : `${remaining}d left`}
-                  </span>
-                )}
-              </div>
-              <h2 className="text-xl font-semibold truncate">{cycle!.name}</h2>
-              {dateRange && (
-                <p className="text-sm text-muted-foreground mt-0.5">{dateRange}</p>
               )}
-
+              {dateRange && (
+                <span className="text-xs text-muted-foreground shrink-0 hidden sm:inline">{dateRange}</span>
+              )}
               {/* Progress */}
               {cycle!.totalTasks > 0 && (
-                <div className="mt-2 flex items-center gap-2 max-w-xs">
-                  <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                  <div className="w-16 h-1 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full bg-emerald-500 transition-all"
                       style={{ width: `${cycle!.progressPercent}%` }}
                     />
                   </div>
-                  <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                    {cycle!.completedTasks}/{cycle!.totalTasks} · {cycle!.progressPercent}%
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {cycle!.completedTasks}/{cycle!.totalTasks}
                   </span>
                 </div>
               )}
@@ -127,17 +130,17 @@ function CycleDetailContent({
               variant="ghost"
               size="icon"
               onClick={() => setShowEditDialog(true)}
-              className="shrink-0"
+              className="shrink-0 h-7 w-7"
               aria-label="Edit cycle"
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
           </div>
         )}
       </div>
 
       {/* Task toolbar + Add tasks button */}
-      <div className="flex items-center gap-2 px-4 md:px-8 py-2 border-b">
+      <div className="flex items-end gap-2 px-4 md:px-8 py-2 border-b">
         <div className="flex-1">
           <TaskToolbar
             filters={filters}
@@ -155,7 +158,10 @@ function CycleDetailContent({
           className="shrink-0"
         >
           <Plus className="h-4 w-4 mr-1" />
-          Add tasks
+          {
+            isMobile ? "" : "Add tasks"
+          }
+          
         </Button>
       </div>
 
@@ -170,42 +176,66 @@ function CycleDetailContent({
         ) : (
           <div className="flex flex-col gap-1.5">
             {filteredTasks.map((task) => (
-              <div key={task._id} className="group relative flex items-center gap-1">
-                <div className="flex-1 min-w-0">
-                  <TaskRow
-                    task={task}
-                    statuses={statuses ?? undefined}
-                    onStatusChange={(statusId) => {
-                      void updateTask({
+              <SwipeToReveal
+                key={task._id}
+                enabled={isMobile}
+                open={swipeOpenId === task._id}
+                onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
+                onSwipeStart={() => setSwipeOpenId(null)}
+                action={
+                  <button
+                    onClick={() =>
+                      void removeTask({
+                        cycleId,
                         taskId: task._id as Id<"tasks">,
-                        statusId: statusId as Id<"taskStatuses">,
-                      });
-                    }}
-                    onClick={() => {
-                      if (isMobile) {
-                        void navigate(
-                          `/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`
-                        );
-                      } else {
-                        setSelectedTaskId(task._id as Id<"tasks">);
+                      })
+                    }
+                    className="flex items-center justify-center w-full bg-destructive text-destructive-foreground"
+                    aria-label="Remove from cycle"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                }
+              >
+                <div className="group flex items-center gap-1">
+                  <div className="flex-1 min-w-0">
+                    <TaskRow
+                      task={task}
+                      statuses={statuses ?? undefined}
+                      onStatusChange={(statusId) => {
+                        void updateTask({
+                          taskId: task._id as Id<"tasks">,
+                          statusId: statusId as Id<"taskStatuses">,
+                        });
+                      }}
+                      onClick={() => {
+                        if (isMobile) {
+                          void navigate(
+                            `/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`
+                          );
+                        } else {
+                          setSelectedTaskId(task._id as Id<"tasks">);
+                        }
+                      }}
+                    />
+                  </div>
+                  {/* Remove from cycle — desktop hover only */}
+                  {!isMobile && (
+                    <button
+                      onClick={() =>
+                        void removeTask({
+                          cycleId,
+                          taskId: task._id as Id<"tasks">,
+                        })
                       }
-                    }}
-                  />
+                      className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded hover:bg-accent"
+                      aria-label="Remove from cycle"
+                    >
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
-                {/* Remove from cycle */}
-                <button
-                  onClick={() =>
-                    void removeTask({
-                      cycleId,
-                      taskId: task._id as Id<"tasks">,
-                    })
-                  }
-                  className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded hover:bg-accent"
-                  aria-label="Remove from cycle"
-                >
-                  <X className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              </div>
+              </SwipeToReveal>
             ))}
           </div>
         )}
@@ -251,6 +281,81 @@ function CycleDetailContent({
 // Add Tasks Dialog
 // ────────────────────────────────────────────────────────────────────────────
 
+function AddTasksList({
+  allTasks,
+  available,
+  existingTaskIds,
+  selected,
+  onToggle,
+  search,
+  onSearchChange,
+}: {
+  allTasks: { _id: string; title: string; status?: { color: string } }[] | undefined;
+  available: { _id: string; title: string; status?: { color: string } }[];
+  existingTaskIds: Set<string>;
+  selected: Set<string>;
+  onToggle: (id: string) => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+}) {
+  return (
+    <>
+      <Input
+        placeholder="Search tasks…"
+        value={search}
+        onChange={(e) => onSearchChange(e.target.value)}
+        autoFocus
+      />
+
+      <div className="max-h-64 overflow-y-auto space-y-1 mt-2">
+        {allTasks === undefined ? (
+          <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
+        ) : available.length === 0 ? (
+          <div className="py-4 text-center text-sm text-muted-foreground">
+            {allTasks.length === existingTaskIds.size
+              ? "All tasks are already in this cycle."
+              : "No tasks match."}
+          </div>
+        ) : (
+          available.map((task) => (
+            <button
+              key={task._id}
+              onClick={() => onToggle(task._id)}
+              className={cn(
+                "w-full flex items-center gap-3 rounded px-3 py-2 text-left text-sm transition-colors",
+                selected.has(task._id)
+                  ? "bg-primary/10"
+                  : "hover:bg-accent"
+              )}
+            >
+              <span
+                className={cn(
+                  "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                  selected.has(task._id)
+                    ? "bg-primary border-primary"
+                    : "border-input"
+                )}
+              >
+                {selected.has(task._id) && (
+                  <svg className="w-3 h-3 text-primary-foreground" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span className="flex-1 min-w-0 truncate">{task.title}</span>
+              {task.status && (
+                <span
+                  className={cn("w-2 h-2 rounded-full shrink-0", task.status.color)}
+                />
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
+
 function AddTasksToCycleDialog({
   cycleId,
   projectId,
@@ -266,6 +371,7 @@ function AddTasksToCycleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const isMobile = useIsMobile();
   const allTasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
   const addTask = useMutation(api.cycles.addTask);
   const [search, setSearch] = useState("");
@@ -312,6 +418,43 @@ function AddTasksToCycleDialog({
     onOpenChange(open);
   };
 
+  const addButtonLabel = selected.size > 0
+    ? `Add ${selected.size} task${selected.size > 1 ? "s" : ""}`
+    : "Add tasks";
+
+  const listProps = {
+    allTasks,
+    available,
+    existingTaskIds,
+    selected,
+    onToggle: handleToggle,
+    search,
+    onSearchChange: setSearch,
+  };
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={handleOpenChange}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Add tasks to cycle</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4">
+            <AddTasksList {...listProps} />
+          </div>
+          <DrawerFooter>
+            <Button onClick={() => void handleAdd()} disabled={selected.size === 0 || saving}>
+              {addButtonLabel}
+            </Button>
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>
+              Cancel
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -319,58 +462,8 @@ function AddTasksToCycleDialog({
           <DialogTitle>Add tasks to cycle</DialogTitle>
         </DialogHeader>
 
-        <Input
-          placeholder="Search tasks…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="my-2"
-          autoFocus
-        />
-
-        <div className="max-h-64 overflow-y-auto space-y-1">
-          {allTasks === undefined ? (
-            <div className="py-4 text-center text-sm text-muted-foreground">Loading…</div>
-          ) : available.length === 0 ? (
-            <div className="py-4 text-center text-sm text-muted-foreground">
-              {allTasks.length === existingTaskIds.size
-                ? "All tasks are already in this cycle."
-                : "No tasks match."}
-            </div>
-          ) : (
-            available.map((task) => (
-              <button
-                key={task._id}
-                onClick={() => handleToggle(task._id)}
-                className={cn(
-                  "w-full flex items-center gap-3 rounded px-3 py-2 text-left text-sm transition-colors",
-                  selected.has(task._id)
-                    ? "bg-primary/10"
-                    : "hover:bg-accent"
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-4 h-4 rounded border flex items-center justify-center shrink-0",
-                    selected.has(task._id)
-                      ? "bg-primary border-primary"
-                      : "border-input"
-                  )}
-                >
-                  {selected.has(task._id) && (
-                    <svg className="w-3 h-3 text-primary-foreground" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </span>
-                <span className="flex-1 min-w-0 truncate">{task.title}</span>
-                {task.status && (
-                  <span
-                    className={cn("w-2 h-2 rounded-full shrink-0", task.status.color)}
-                  />
-                )}
-              </button>
-            ))
-          )}
+        <div className="my-2">
+          <AddTasksList {...listProps} />
         </div>
 
         <DialogFooter>
@@ -378,7 +471,7 @@ function AddTasksToCycleDialog({
             Cancel
           </Button>
           <Button onClick={() => void handleAdd()} disabled={selected.size === 0 || saving}>
-            Add {selected.size > 0 ? `${selected.size} task${selected.size > 1 ? "s" : ""}` : "tasks"}
+            {addButtonLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -3,6 +3,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
+import { LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
 import { useParams, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -23,10 +24,10 @@ export function ProjectLayout() {
 }
 
 const tabs = [
-  { label: "Overview", to: ".", end: true },
-  { label: "Tasks", to: "tasks", end: false },
-  { label: "Cycles", to: "cycles", end: false },
-  { label: "Settings", to: "settings", end: false },
+  { label: "Overview", icon: LayoutDashboard, to: ".", end: true },
+  { label: "Tasks", icon: ListTodo, to: "tasks", end: false },
+  { label: "Cycles", icon: RefreshCw, to: "cycles", end: false },
+  { label: "Settings", icon: Settings, to: "settings", end: false },
 ];
 
 function ProjectLayoutContent({
@@ -81,7 +82,8 @@ function ProjectLayoutContent({
                 )
               }
             >
-              {tab.label}
+              <tab.icon className="size-4 sm:hidden" />
+              <span className="hidden sm:inline">{tab.label}</span>
             </NavLink>
           ))}
         </div>

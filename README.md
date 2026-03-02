@@ -3,7 +3,7 @@ NEXT STEPS:
     - [x] fix layout shift when facepile appears
     - [x] add load optimization and fade-in to taskdetailspage
     - [ ] mytasks??
-    - [ ] PLANE.so inspired cycles
+    - [x] PLANE.so inspired cycles
 
 - investigate rework all deletion cascade to soft-deletion
 

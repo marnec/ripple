@@ -104,7 +104,7 @@ export function TaskToolbar({
   };
 
   return (
-    <div className="flex items-center gap-2 mb-4 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap">
       {/* Hide completed toggle */}
       <div className="flex items-center gap-2">
         <Checkbox

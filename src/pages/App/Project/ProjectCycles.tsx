@@ -6,6 +6,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,9 +82,9 @@ function ProjectCyclesContent({
   const isEmpty = cycles !== undefined && cycles.length === 0;
 
   return (
-    <div className="px-4 pt-6 md:px-8 md:pt-8 max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold">Cycles</h2>
+    <div className="container mx-auto px-4 pt-6 md:px-8 md:pt-8 ">
+      <div className="flex items-center justify-end mb-6">
+        
         <Button size="sm" onClick={() => setShowCreateDialog(true)}>
           <Plus className="h-4 w-4 mr-1" />
           New cycle
@@ -84,7 +92,7 @@ function ProjectCyclesContent({
       </div>
 
       {isEmpty && (
-        <EmptyCyclesState onCreate={() => setShowCreateDialog(true)} />
+        <EmptyCyclesState />
       )}
 
       {active.length > 0 && (
@@ -218,7 +226,7 @@ function CycleCard({
         {/* Progress bar (only if tasks exist) */}
         {cycle.totalTasks > 0 && (
           <div className="mt-1.5 flex items-center gap-2">
-            <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden max-w-[160px]">
+            <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden max-w-40">
               <div
                 className="h-full rounded-full bg-emerald-500 transition-all"
                 style={{ width: `${cycle.progressPercent}%` }}
@@ -253,7 +261,7 @@ function CycleCard({
   );
 }
 
-function EmptyCyclesState({ onCreate }: { onCreate: () => void }) {
+function EmptyCyclesState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <RotateCcw className="h-10 w-10 text-muted-foreground/40 mb-4" />
@@ -261,10 +269,6 @@ function EmptyCyclesState({ onCreate }: { onCreate: () => void }) {
       <p className="text-sm text-muted-foreground max-w-xs mb-6">
         Cycles are time-boxed sprints that help you organize tasks into focused work periods.
       </p>
-      <Button onClick={onCreate}>
-        <Plus className="h-4 w-4 mr-1" />
-        Create cycle
-      </Button>
     </div>
   );
 }
@@ -272,6 +276,75 @@ function EmptyCyclesState({ onCreate }: { onCreate: () => void }) {
 // ────────────────────────────────────────────────────────────────────────────
 // Create Dialog
 // ────────────────────────────────────────────────────────────────────────────
+
+function CreateCycleForm({
+  name,
+  setName,
+  description,
+  setDescription,
+  startDate,
+  setStartDate,
+  dueDate,
+  setDueDate,
+  onSave,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  description: string;
+  setDescription: (v: string) => void;
+  startDate: string | undefined;
+  setStartDate: (v: string | undefined) => void;
+  dueDate: string | undefined;
+  setDueDate: (v: string | undefined) => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="cycle-name">Name</Label>
+        <Input
+          id="cycle-name"
+          placeholder="Sprint 1"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") onSave(); }}
+          autoFocus
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="cycle-description">Description (optional)</Label>
+        <Textarea
+          id="cycle-description"
+          placeholder="What's the focus of this cycle?"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={2}
+          className="resize-none"
+        />
+      </div>
+
+      <div className="flex gap-4">
+        <div className="flex-1 space-y-1.5">
+          <Label>Start date</Label>
+          <DatePickerField
+            value={startDate}
+            onChange={(d) => setStartDate(d ?? undefined)}
+            placeholder="Start date"
+          />
+        </div>
+        <div className="flex-1 space-y-1.5">
+          <Label>Due date</Label>
+          <DatePickerField
+            value={dueDate}
+            onChange={(d) => setDueDate(d ?? undefined)}
+            placeholder="Due date"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CreateCycleDialog({
   projectId,
@@ -284,6 +357,7 @@ function CreateCycleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const isMobile = useIsMobile();
   const createCycle = useMutation(api.cycles.create);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -319,6 +393,41 @@ function CreateCycleDialog({
     }
   };
 
+  const formProps = {
+    name,
+    setName,
+    description,
+    setDescription,
+    startDate,
+    setStartDate,
+    dueDate,
+    setDueDate,
+    onSave: () => void handleSave(),
+  };
+
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={handleOpenChange}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>New cycle</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4">
+            <CreateCycleForm {...formProps} />
+          </div>
+          <DrawerFooter>
+            <Button onClick={() => void handleSave()} disabled={!name.trim() || saving}>
+              Create cycle
+            </Button>
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>
+              Cancel
+            </Button>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -326,49 +435,8 @@ function CreateCycleDialog({
           <DialogTitle>New cycle</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="cycle-name">Name</Label>
-            <Input
-              id="cycle-name"
-              placeholder="Sprint 1"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); }}
-              autoFocus
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="cycle-description">Description (optional)</Label>
-            <Textarea
-              id="cycle-description"
-              placeholder="What's the focus of this cycle?"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="resize-none"
-            />
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex-1 space-y-1.5">
-              <Label>Start date</Label>
-              <DatePickerField
-                value={startDate}
-                onChange={(d) => setStartDate(d ?? undefined)}
-                placeholder="Start date"
-              />
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <Label>Due date</Label>
-              <DatePickerField
-                value={dueDate}
-                onChange={(d) => setDueDate(d ?? undefined)}
-                placeholder="Due date"
-              />
-            </div>
-          </div>
+        <div className="py-2">
+          <CreateCycleForm {...formProps} />
         </div>
 
         <DialogFooter>
