@@ -1,14 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useQuery, useAction, useConvexAuth } from "convex/react";
+import { useQuery } from "convex/react";
 import { useTheme } from "next-themes";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { yjsToExcalidraw } from "y-excalidraw";
 import { exportToSvg } from "@excalidraw/excalidraw";
-import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { guardAuthFailure } from "@/lib/yjs-auth-guard";
 
 // Module-level SVG cache to avoid redundant exportToSvg calls across mounts
 const svgCache = new Map<
@@ -36,19 +34,24 @@ export interface UseDiagramPreviewResult {
 /**
  * Hook to get the best available diagram preview for embedding.
  *
- * Creates a single Y.Doc backed by both IndexeddbPersistence (instant cached data)
- * and YProvider (live updates). On Yjs changes, debounced exportToSvg
- * regenerates the SVG with the correct theme.
+ * Uses IndexeddbPersistence for instant cached data on mount, and Convex
+ * reactive snapshot queries for live updates (2-10s freshness). No WebSocket
+ * connection is opened — previews piggyback on the existing Convex connection.
  */
 export function useDiagramPreview(
   diagramId: Id<"diagrams">,
 ): UseDiagramPreviewResult {
   // Convex query for metadata (diagram exists? name?)
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
+
+  // Reactive snapshot URL — fires when the diagram DO saves a new snapshot
+  const snapshotUrl = useQuery(api.snapshots.getSnapshotUrl, {
+    resourceType: "diagram",
+    resourceId: diagramId,
+  });
+
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const { isAuthenticated } = useConvexAuth();
-  const getToken = useAction(api.collaboration.getCollaborationToken);
 
   const [localSvg, setLocalSvg] = useState<string | null>(() => {
     // Check cache on initial render
@@ -62,9 +65,8 @@ export function useDiagramPreview(
   const [isLocalLoading, setIsLocalLoading] = useState(true);
   const [refreshCounter, setRefreshCounter] = useState(0);
 
-  // Refs for cleanup
-  const providerRef = useRef<YProvider | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevSnapshotUrlRef = useRef<string | null>(null);
 
   // Stable Y.Doc — one per diagramId
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,7 +79,7 @@ export function useDiagramPreview(
     };
   }, [yDoc]);
 
-  // Core effect: IndexedDB + PartyKit + SVG generation
+  // Core effect: IndexedDB + Yjs observation + SVG generation
   useEffect(() => {
     let cancelled = false;
     const currentTheme = resolvedTheme ?? "light";
@@ -88,7 +90,6 @@ export function useDiagramPreview(
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       setLocalSvg(cached.svg);
       setIsLocalLoading(false);
-      // Still set up the live connection below for real-time updates
     }
 
     // Helper: generate SVG from current Yjs state
@@ -152,48 +153,12 @@ export function useDiagramPreview(
       void generateSvg();
     });
 
-    // 2. Observe Yjs changes for live updates
+    // 2. Observe Yjs changes for live updates (triggered by snapshot applies)
     const yElements = yDoc.getArray<Y.Map<any>>("elements");
     const observeHandler = () => {
       debouncedGenerate();
     };
     yElements.observeDeep(observeHandler);
-
-    // 3. Connect to PartyKit for live sync (if authenticated)
-    const connectToParty = async () => {
-      if (!isAuthenticated || cancelled) return;
-
-      try {
-        const { token } = await getToken({
-          resourceType: "diagram",
-          resourceId: diagramId,
-        });
-
-        if (cancelled) return;
-
-        const host =
-          import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
-        const roomId = `diagram-${diagramId}`;
-
-        const provider = new YProvider(host, roomId, yDoc, {
-          connect: true,
-          params: { token },
-        });
-
-        guardAuthFailure(provider, () => {
-          if (providerRef.current === provider) providerRef.current = null;
-        });
-
-        providerRef.current = provider;
-      } catch (err) {
-        // Token fetch failed (no permission, offline, etc.)
-        // Silently fall back to IndexedDB only
-        console.warn("Diagram preview: could not connect to live room:", err);
-        if (!cancelled) setIsLocalLoading(false);
-      }
-    };
-
-    void connectToParty();
 
     // Mark as not loading after a timeout if nothing has produced data
     const fallbackTimeout = setTimeout(() => {
@@ -209,14 +174,34 @@ export function useDiagramPreview(
       }
       yElements.unobserveDeep(observeHandler);
       void persistence.destroy();
-      if (providerRef.current) {
-        providerRef.current.shouldConnect = false;
-        providerRef.current.destroy();
-        providerRef.current = null;
-      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diagramId, resolvedTheme, refreshCounter, isAuthenticated]);
+  }, [diagramId, resolvedTheme, refreshCounter]);
+
+  // Fetch and apply Convex snapshot when URL changes (reactive live updates)
+  useEffect(() => {
+    if (!snapshotUrl || snapshotUrl === prevSnapshotUrlRef.current) return;
+    prevSnapshotUrlRef.current = snapshotUrl;
+
+    let cancelled = false;
+    const applySnapshot = async () => {
+      try {
+        const response = await fetch(snapshotUrl);
+        if (!response.ok) return;
+        const arrayBuffer = await response.arrayBuffer();
+        if (!cancelled) {
+          Y.applyUpdate(yDoc, new Uint8Array(arrayBuffer));
+        }
+      } catch (err) {
+        console.warn("Diagram preview: snapshot fetch failed:", err);
+      }
+    };
+    void applySnapshot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshotUrl, yDoc]);
 
   const refresh = useCallback(() => {
     // Invalidate cache for this diagram
@@ -224,6 +209,7 @@ export function useDiagramPreview(
     svgCache.delete(`${diagramId}-dark`);
     setIsLocalLoading(true);
     setLocalSvg(null);
+    prevSnapshotUrlRef.current = null; // Force re-fetch
     setRefreshCounter((c) => c + 1);
   }, [diagramId]);
 

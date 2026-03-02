@@ -49,7 +49,7 @@ keyboard accessiblity
 
 - partykit 
     - [x] migrate abandoded partykit to the new worker version
-    - [ ] partykit optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
+    - [x] partykit optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
     - [ ] optimize get collaboration token being called way too much
 
 - spreadsheet qol
