@@ -1,6 +1,6 @@
 import { useAction, useConvexAuth } from "convex/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import YPartyKitProvider from "y-partykit/provider";
+import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
 import type { ResourceType, ErrorCode } from "@shared/protocol";
@@ -30,9 +30,9 @@ export function useYjsProvider(opts: {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(enabled);
   const [isOffline, setIsOffline] = useState(false);
-  const [provider, setProvider] = useState<YPartyKitProvider | null>(null);
+  const [provider, setProvider] = useState<YProvider | null>(null);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
-  const providerRef = useRef<YPartyKitProvider | null>(null);
+  const providerRef = useRef<YProvider | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
   const recreationCountRef = useRef(0);
@@ -59,7 +59,7 @@ export function useYjsProvider(opts: {
       }
 
       try {
-        // Compute roomId outside params function (YPartyKitProvider needs it at construction)
+        // Compute roomId outside params function (YProvider needs it at construction)
         const roomId = `${resourceType}-${resourceId}`;
         const host = import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
 
@@ -97,15 +97,11 @@ export function useYjsProvider(opts: {
         let recreationTriggered = false;
 
         // Create provider with pre-fetched token (static params).
-        // IMPORTANT: Do NOT use async params function here. y-partykit's connect()
-        // resolves async params in a .then() that calls super.connect() which sets
-        // shouldConnect=true. If destroy() runs before .then() resolves, the .then()
-        // creates a zombie WebSocket that is never cleaned up (awareness listener
-        // already removed by destroy), causing ghost avatars in the facepile.
-        // Tokens are reusable for 5 minutes, so y-partykit's auto-reconnect works
-        // with the same token. For expiration beyond 5min, auth_error → triggerRecreation
-        // handles it by creating a fresh provider with a new token.
-        const newProvider = new YPartyKitProvider(host, roomId, yDoc, {
+        // Use static params (pre-fetched token) rather than async params function.
+        // Tokens are reusable for 5 minutes, so auto-reconnect works with the same
+        // token. For expiration beyond 5min, auth_error → triggerRecreation handles
+        // it by creating a fresh provider with a new token.
+        const newProvider = new YProvider(host, roomId, yDoc, {
           connect: true,
           params: { token: initialToken },
         });
@@ -150,7 +146,7 @@ export function useYjsProvider(opts: {
         };
 
         // Destroy provider permanently (permission revoked — no recreation)
-        const destroyProvider = (p: YPartyKitProvider) => {
+        const destroyProvider = (p: YProvider) => {
           recreationTriggered = true; // Prevent any other triggers
           setIsConnected(false);
           p.shouldConnect = false;
@@ -163,7 +159,7 @@ export function useYjsProvider(opts: {
         // Destroy and recreate provider with exponential backoff.
         // Guarded by recreationTriggered to prevent double-fire from
         // auth_error + status:disconnected both calling this.
-        const triggerRecreation = (p: YPartyKitProvider) => {
+        const triggerRecreation = (p: YProvider) => {
           if (recreationTriggered) return;
           recreationTriggered = true;
 
@@ -271,7 +267,7 @@ export function useYjsProvider(opts: {
         timeoutRef.current = null;
       }
       if (providerRef.current) {
-        // Stop auto-reconnect before cleanup to prevent y-partykit from
+        // Stop auto-reconnect before cleanup to prevent the provider from
         // creating new connections during the destroy sequence
         providerRef.current.shouldConnect = false;
         // Clear awareness state before destroying so other clients

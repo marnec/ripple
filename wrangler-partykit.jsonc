@@ -1,14 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ripple",
+  "name": "ripple-dev",
   "main": "partykit/worker.ts",
-  "account_id": "ad8bc0499d2dec399dbc9d6f964b3da6",
   "compatibility_date": "2026-02-07",
-  "assets": {
-    "directory": "./dist",
-    "not_found_handling": "single-page-application",
-    "binding": "ASSETS"
-  },
   "durable_objects": {
     "bindings": [
       { "name": "Main", "class_name": "Main" },
@@ -17,11 +11,5 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Main", "Presence"] }
-  ],
-  "routes": [
-    {
-      "pattern": "ripple.conduits.space",
-      "custom_domain": true
-    }
   ]
 }

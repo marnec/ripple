@@ -7,15 +7,15 @@
     "dev": "npm-run-all --parallel dev:frontend dev:backend dev:partykit",
     "dev:frontend": "vite --open",
     "dev:backend": "convex dev",
-    "dev:partykit": "while true; do partykit dev; echo '[partykit] workerd crashed, restarting in 2s...'; sleep 2; done",
+    "dev:partykit": "wrangler dev --config wrangler-partykit.jsonc --port 1999",
     "predev": "convex dev --until-success && node setup.mjs --once && convex dashboard",
     "build": "tsc -b && vite build",
     "lint": "tsc -b && eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "deploy:convex": "npx convex deploy",
     "deploy:frontend": "npm run build && wrangler deploy",
-    "deploy:partykit": "partykit deploy",
-    "deploy": "npm run build && npx convex deploy && partykit deploy && wrangler deploy"
+    "deploy:partykit": "wrangler deploy",
+    "deploy": "npm run build && npx convex deploy && wrangler deploy"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
@@ -66,7 +66,8 @@
     "lucide-react": "0.563.0",
     "next-themes": "0.4.6",
     "oslo": "1.2.1",
-    "partysocket": "^1.1.13",
+    "partyserver": "^0.3.2",
+    "partysocket": "^1.1.16",
     "react": "19.2.4",
     "react-day-picker": "^9.13.2",
     "react-dom": "19.2.4",
@@ -82,16 +83,13 @@
     "web-push": "3.6.7",
     "y-excalidraw": "^2.0.12",
     "y-indexeddb": "^9.0.12",
-    "y-partykit": "^0.0.33",
+    "y-partyserver": "^2.1.2",
     "yjs": "^13.6.29",
     "zod": "^3.25.76"
   },
   "overrides": {
     "y-excalidraw": {
       "@excalidraw/excalidraw": "$@excalidraw/excalidraw"
-    },
-    "partykit": {
-      "miniflare": "3.20250224.0"
     }
   },
   "devDependencies": {
@@ -113,7 +111,6 @@
     "globals": "^17.3.0",
     "mkcert": "3.2.0",
     "npm-run-all": "4.1.5",
-    "partykit": "^0.0.115",
     "postcss": "8.5.6",
     "prettier": "3.8.1",
     "sass": "1.97.3",

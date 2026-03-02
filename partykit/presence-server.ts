@@ -1,4 +1,5 @@
-import type * as Party from "partykit/server";
+import { Server } from "partyserver";
+import type { Connection, ConnectionContext, WSMessage } from "partyserver";
 import type {
   ErrorCode,
   ServerMessage,
@@ -22,6 +23,11 @@ interface PresenceEntry {
   resourceId?: string;
 }
 
+interface Env {
+  CONVEX_SITE_URL: string;
+  PARTYKIT_SECRET: string;
+}
+
 /**
  * Presence server for workspace-level navigation tracking.
  *
@@ -31,15 +37,13 @@ interface PresenceEntry {
  * Multi-tab support: tracks Set<connectionId> per userId. A user is only
  * removed from presence when their last tab disconnects.
  */
-export default class PresenceServer implements Party.Server {
+export default class PresenceServer extends Server {
   private presenceMap: Map<string, PresenceEntry> = new Map();
   private userConnections: Map<string, Set<string>> = new Map();
 
-  constructor(readonly room: Party.Room) {}
-
   async onConnect(
-    conn: Party.Connection,
-    ctx: Party.ConnectionContext,
+    conn: Connection,
+    ctx: ConnectionContext,
   ) {
     const url = new URL(ctx.request.url);
     const token = url.searchParams.get("token");
@@ -54,7 +58,8 @@ export default class PresenceServer implements Party.Server {
       return;
     }
 
-    const convexSiteUrl = this.room.env.CONVEX_SITE_URL as string;
+    const env = this.env as Env;
+    const convexSiteUrl = env.CONVEX_SITE_URL;
     if (!convexSiteUrl) {
       const msg: ServerMessage = {
         type: "error",
@@ -72,7 +77,7 @@ export default class PresenceServer implements Party.Server {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ roomId: `presence-${this.room.id}` }),
+        body: JSON.stringify({ roomId: `presence-${this.name}` }),
       });
 
       if (!response.ok) {
@@ -124,8 +129,9 @@ export default class PresenceServer implements Party.Server {
     }
   }
 
-  onMessage(message: string, sender: Party.Connection) {
-    const state = sender.state as ConnectionState | undefined;
+  onMessage(conn: Connection, message: WSMessage) {
+    if (typeof message !== "string") return;
+    const state = conn.state as ConnectionState | undefined;
     if (!state?.userId) return;
 
     try {
@@ -153,13 +159,13 @@ export default class PresenceServer implements Party.Server {
         resourceType: data.resourceType,
         resourceId: data.resourceId,
       };
-      this.room.broadcast(JSON.stringify(changed), [sender.id]);
+      this.broadcast(JSON.stringify(changed), [conn.id]);
     } catch {
       // Malformed message — ignore
     }
   }
 
-  onClose(conn: Party.Connection) {
+  onClose(conn: Connection, _code: number, _reason: string, _wasClean: boolean) {
     const state = conn.state as ConnectionState | undefined;
     if (!state?.userId) return;
 
@@ -176,7 +182,7 @@ export default class PresenceServer implements Party.Server {
           type: "user_left_presence",
           userId: state.userId,
         };
-        this.room.broadcast(JSON.stringify(leftMsg));
+        this.broadcast(JSON.stringify(leftMsg));
       }
     }
   }

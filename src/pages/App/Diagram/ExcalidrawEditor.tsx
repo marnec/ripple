@@ -10,7 +10,7 @@ import { useTheme } from "next-themes";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
 import type { Awareness } from "y-protocols/awareness";
-import type YPartyKitProvider from "y-partykit/provider";
+import type YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 
 
@@ -18,7 +18,7 @@ interface ExcalidrawEditorProps {
   yElements: Y.Array<Y.Map<any>>;
   yAssets: Y.Map<any>;
   awareness: Awareness | null;
-  provider: YPartyKitProvider | null;
+  provider: YProvider | null;
   onExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void;
   viewModeEnabled?: boolean;
 }

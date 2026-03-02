@@ -4,7 +4,7 @@ import { useTheme } from "next-themes";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { yjsToExcalidraw } from "y-excalidraw";
 import { exportToSvg } from "@excalidraw/excalidraw";
-import YPartyKitProvider from "y-partykit/provider";
+import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -36,7 +36,7 @@ export interface UseDiagramPreviewResult {
  * Hook to get the best available diagram preview for embedding.
  *
  * Creates a single Y.Doc backed by both IndexeddbPersistence (instant cached data)
- * and YPartyKitProvider (live updates). On Yjs changes, debounced exportToSvg
+ * and YProvider (live updates). On Yjs changes, debounced exportToSvg
  * regenerates the SVG with the correct theme.
  */
 export function useDiagramPreview(
@@ -62,7 +62,7 @@ export function useDiagramPreview(
   const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Refs for cleanup
-  const providerRef = useRef<YPartyKitProvider | null>(null);
+  const providerRef = useRef<YProvider | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Stable Y.Doc — one per diagramId
@@ -174,7 +174,7 @@ export function useDiagramPreview(
           import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
         const roomId = `diagram-${diagramId}`;
 
-        const provider = new YPartyKitProvider(host, roomId, yDoc, {
+        const provider = new YProvider(host, roomId, yDoc, {
           connect: true,
           params: { token },
         });

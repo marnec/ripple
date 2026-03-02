@@ -50,43 +50,8 @@ jobs:
         run: |
           curl -f -s -o /dev/null -w "%{http_code}" "${{ secrets.VITE_CONVEX_URL }}" || exit 1
 
-  deploy-partykit:
+  deploy-cloudflare:
     needs: deploy-convex
-    runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 10
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Deploy PartyKit
-        env:
-          GITHUB_TOKEN: ${{ secrets.PARTYKIT_GITHUB_TOKEN }}
-          GITHUB_LOGIN: ${{ secrets.PARTYKIT_GITHUB_LOGIN }}
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 5
-          max_attempts: 3
-          retry_wait_seconds: 10
-          command: npx partykit deploy --var CONVEX_SITE_URL=${{ secrets.CONVEX_SITE_URL }} --var PARTYKIT_SECRET=${{ secrets.PARTYKIT_SECRET }}
-
-      - name: Health check PartyKit
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ secrets.VITE_PARTYKIT_HOST }}")
-          echo "PartyKit responded with HTTP $STATUS"
-          if [ "$STATUS" = "000" ]; then echo "PartyKit unreachable" && exit 1; fi
-
-  deploy-frontend:
-    needs: [deploy-convex, deploy-partykit]
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
@@ -110,7 +75,15 @@ jobs:
           VITE_PARTYKIT_HOST: ${{ secrets.VITE_PARTYKIT_HOST }}
         run: npm run build
 
-      - name: Deploy to Cloudflare Workers
+      - name: Set wrangler secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "${{ secrets.CONVEX_SITE_URL }}" | npx wrangler secret put CONVEX_SITE_URL
+          echo "${{ secrets.PARTYKIT_SECRET }}" | npx wrangler secret put PARTYKIT_SECRET
+
+      - name: Deploy to Cloudflare Workers (frontend + collaboration DOs)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -126,8 +99,7 @@ jobs:
         run: |
           echo "# Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Convex backend deployed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ PartyKit collaboration server deployed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Frontend deployed to Cloudflare Workers" >> $GITHUB_STEP_SUMMARY
+          echo "Convex backend deployed" >> $GITHUB_STEP_SUMMARY
+          echo "Cloudflare Workers deployed (frontend + collaboration DOs)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Production URL: https://ripple.conduits.space" >> $GITHUB_STEP_SUMMARY

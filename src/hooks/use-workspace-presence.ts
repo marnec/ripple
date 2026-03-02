@@ -1,14 +1,8 @@
 import { useAction, useConvexAuth } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import PartySocket from "partysocket";
-
-const getCollaborationTokenRef = makeFunctionReference<
-  "action",
-  { resourceType: "doc" | "diagram" | "task" | "presence" | "spreadsheet"; resourceId: string },
-  { token: string; roomId: string }
->("collaboration:getCollaborationToken");
+import { api } from "../../convex/_generated/api";
 import type { QueryParams } from "@shared/types/routes";
 import type {
   PresenceSnapshotMessage,
@@ -48,7 +42,7 @@ export function useWorkspacePresence() {
   const params = useParams<QueryParams>();
   const workspaceId = params.workspaceId;
   const { isAuthenticated } = useConvexAuth();
-  const getToken = useAction(getCollaborationTokenRef);
+  const getToken = useAction(api.collaboration.getCollaborationToken);
 
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceEntry>>(
     new Map(),

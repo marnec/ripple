@@ -28,7 +28,7 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 ### Tech Stack
 - **Frontend**: React 19, React Router v6, Tailwind CSS, shadcn/ui
 - **Backend**: Convex (database, server functions, auth)
-- **Real-time**: Convex Presence (user presence), ProseMirror Sync (collaborative docs), WebRTC (video calls)
+- **Real-time**: partyserver + y-partyserver (Yjs sync via Cloudflare Durable Objects), WebRTC (video calls)
 - **Editor**: BlockNote with custom blocks (Excalidraw diagrams)
 
 ### Directory Structure
@@ -61,7 +61,9 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 - **Diagrams**: Access via **workspace membership** (all workspace members can access all diagrams)
 - **Tasks**: Access via **project membership** (`projectMembers`)
 - Collaboration tokens (`convex/collaboration.ts`) must match the same access model as the resource's query functions — e.g. `diagrams.get` checks workspace membership, so `checkDiagramAccess` must too
-- Real-time collaboration uses PartyKit (Yjs sync). Token flow: client calls `getCollaborationToken` action → receives one-time token → connects to PartyKit with token → PartyKit server verifies via Convex HTTP endpoint
+- Real-time collaboration uses partyserver (Cloudflare Durable Objects + Yjs sync). Token flow: client calls `getCollaborationToken` action → receives one-time token → connects to partyserver with token → server verifies via Convex HTTP endpoint
+- Server code lives in `partykit/` directory: `worker.ts` (entry point), `server.ts` (YServer for Yjs collab), `presence-server.ts` (Server for workspace presence)
+- Dev config: `wrangler-partykit.jsonc` (DOs only, port 1999). Prod config: `wrangler.jsonc` (DOs + static assets)
 
 ### Path Aliases
 - `@/*` → `./src/*`
@@ -69,14 +71,11 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 
 ## PartyKit / Yjs Snapshot Encoding
 
-- Snapshots are saved with `Y.encodeStateAsUpdateV2` and loaded with `Y.applyUpdateV2`
-- **Do not use y-partykit's `load` callback** — it internally V1-encodes the returned Y.Doc (`encodeStateAsUpdate` + `applyUpdate`), bypassing our V2 encoding. Instead, create the doc empty and apply V2 bytes directly via `Y.applyUpdateV2`
-- All three read sites must stay in sync: `partykit/server.ts` (load), `DiagramPage.tsx` (cold-start), `DocumentEditor.tsx` (cold-start)
-- To wipe snapshot data: locally `rm -rf .partykit/state`; in prod clear `yjsSnapshotId` fields + delete the linked `_storage` blobs from Convex
-
-### workerd TCMalloc crash (dev-only)
-
-The local `partykit dev` server crashes with `Unable to allocate <huge number> (new failed)` — a TCMalloc memory corruption bug in the workerd binary bundled with partykit 0.0.115. This is **dev-environment only**; production on Cloudflare's edge is not affected (each Durable Object runs in its own isolate with a current workerd version). The crash persists across workerd versions (tested 2024-07-18, 2025-01-29, 2025-02-24) and is likely platform-specific (Fedora 42, kernel 6.18). The `dev:partykit` script auto-restarts on crash. A miniflare override to 3.20250224.0 is kept in `package.json` overrides as a best-effort mitigation.
+- Uses `partyserver` + `y-partyserver` (migrated from legacy `partykit` package)
+- Snapshots use V1 encoding: `Y.encodeStateAsUpdate` / `Y.applyUpdate`
+- `y-partyserver`'s `onLoad`/`onSave` hooks handle persistence — snapshots stored in Convex blob storage
+- Both read sites must stay in sync: `partykit/server.ts` (onLoad/onSave) and `use-snapshot-fallback.ts` (client cold-start)
+- To wipe snapshot data: locally delete `.wrangler/` state; in prod clear `yjsSnapshotId` fields + delete linked `_storage` blobs from Convex
 
 ## Convex Guidelines
 

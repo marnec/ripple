@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useAction, useConvexAuth } from "convex/react";
 import { IndexeddbPersistence } from "y-indexeddb";
-import YPartyKitProvider from "y-partykit/provider";
+import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -23,7 +23,7 @@ const DEBOUNCE_MS = 500;
 interface SharedDoc {
   yDoc: Y.Doc;
   persistence: IndexeddbPersistence;
-  provider: YPartyKitProvider | null;
+  provider: YProvider | null;
   refCount: number;
   /** Set to true once IndexedDB has synced */
   indexedDbSynced: boolean;
@@ -216,7 +216,7 @@ export function useSpreadsheetCellPreview(
           import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
         const roomId = `spreadsheet-${spreadsheetId}`;
 
-        const provider = new YPartyKitProvider(host, roomId, yDoc, {
+        const provider = new YProvider(host, roomId, yDoc, {
           connect: true,
           params: { token },
         });

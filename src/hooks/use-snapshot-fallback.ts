@@ -6,13 +6,11 @@ import { Id } from "../../convex/_generated/dataModel";
 
 /**
  * Cold-start snapshot fallback: when the user is offline and no editor/IndexedDB
- * data is available, fetches a V2-encoded Yjs snapshot from storage.
+ * data is available, fetches a Yjs snapshot from storage.
  *
  * Returns `isColdStart` (whether we're in cold-start mode) and `snapshotDoc`
  * (the loaded Y.Doc, or null while loading). Callers can extract whatever they
  * need from the Y.Doc (e.g. XmlFragment for documents, Array for diagrams).
- *
- * IMPORTANT: Uses Y.applyUpdateV2 — never use y-partykit's load callback.
  */
 export function useSnapshotFallback({
   isOffline,
@@ -51,7 +49,7 @@ export function useSnapshotFallback({
         const response = await fetch(snapshotUrl);
         const arrayBuffer = await response.arrayBuffer();
         const tempDoc = new Y.Doc();
-        Y.applyUpdateV2(tempDoc, new Uint8Array(arrayBuffer));
+        Y.applyUpdate(tempDoc, new Uint8Array(arrayBuffer));
         if (!cancelled) setSnapshotDoc(tempDoc);
       } catch (error) {
         console.error("Failed to load snapshot:", error);
