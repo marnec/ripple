@@ -17,7 +17,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/components/ui/use-toast";
 import { Plus } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -58,15 +58,9 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const isSorting = sort !== null;
 
   // Suppress view transitions during DnD — set in handleDragStart,
-  // auto-cleared by the hook after the post-drop optimistic update applies.
-  const dndSuppressRef = useRef(false);
+  // auto-cleared after the post-drop optimistic update applies.
+  const [dndSuppressed, setDndSuppressed] = useState(false);
   const sheetOpen = selectedTaskId !== null;
-
-  // Also suppress when the detail sheet is open — view transition snapshots
-  // paint above top-layer overlays (the sheet backdrop), causing cards to
-  // flash at full opacity over the dimming layer.
-  const suppressTransition = useRef(false);
-  suppressTransition.current = dndSuppressRef.current || sheetOpen;
 
   // Always fetch all tasks — filter client-side to avoid flash on toggle
   const liveTasks = useQuery(api.tasks.listByProject, {
@@ -79,8 +73,8 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   // since the sort override makes them invisible.
   const allTasks = useAnimatedQuery(
     liveTasks,
-    isSorting ? isPositionOnlyChange : undefined,
-    suppressTransition,
+    isPositionOnlyChange,
+    dndSuppressed || sheetOpen,
   );
 
   // Apply assignee/priority filters + optional sort
@@ -163,7 +157,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   }, [allTasks, statuses]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    dndSuppressRef.current = true;
+    setDndSuppressed(true);
     setActiveDragId(event.active.id as Id<"tasks">);
   };
 
@@ -172,14 +166,14 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     setActiveDragId(null);
 
     if (!over || !tasks || !statuses) {
-      dndSuppressRef.current = false;
+      setDndSuppressed(false);
       return;
     }
 
     const activeTaskId = active.id as Id<"tasks">;
     const activeTask = tasks.find((t) => t._id === activeTaskId);
     if (!activeTask) {
-      dndSuppressRef.current = false;
+      setDndSuppressed(false);
       return;
     }
 
@@ -198,7 +192,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     // When sorting is active, allow cross-column moves (status change) but
     // block same-column reorder since the sort overrides manual position.
     if (isSorting && activeTask.statusId === destinationStatusId) {
-      suppressTransition.current = false;
+      setDndSuppressed(false);
       toast({
         description: "Clear sorting to reorder tasks within a column.",
         variant: "destructive",
@@ -231,17 +225,16 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       afterTask?.position ?? null
     );
 
-    // Update position — suppress ref stays true through this render cycle
+    // Update position — dndSuppressed stays true through this render cycle
     // so the optimistic update applies without a view transition.
-    // Re-enable view transitions once the server confirms the mutation
-    // AND React has processed the resulting subscription update.
-    updatePosition({
+    // Re-enable after the server confirms + React processes the update.
+    void updatePosition({
       taskId: activeTaskId,
       statusId: destinationStatusId,
       position: newPosition,
     }).finally(() => {
       requestAnimationFrame(() => {
-        dndSuppressRef.current = false;
+        setDndSuppressed(false);
       });
     });
   };

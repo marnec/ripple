@@ -67,7 +67,7 @@ function resolveClickContext(
  * Manages the spreadsheet context menu: positioning, dismiss, and row/column actions.
  */
 export function useSpreadsheetContextMenu(
-  worksheetRef: RefObject<Worksheet | null>,
+  worksheetRef: RefObject<Worksheet>,
 ) {
   const [menu, setMenu] = useState<MenuState | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);

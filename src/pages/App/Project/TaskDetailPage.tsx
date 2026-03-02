@@ -60,10 +60,7 @@ function TaskDetailPageContent({
   // Defer activity timeline one frame after the editor.
   const [showActivity, setShowActivity] = useState(false);
   useEffect(() => {
-    if (!editorDeferred) {
-      setShowActivity(false);
-      return;
-    }
+    if (!editorDeferred) return;
     const id = requestAnimationFrame(() => setShowActivity(true));
     return () => cancelAnimationFrame(id);
   }, [editorDeferred]);

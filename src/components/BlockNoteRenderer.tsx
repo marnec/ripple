@@ -78,6 +78,7 @@ export function BlockNoteRenderer({ blocks }: { blocks: Block[] }) {
 }
 
 /** Group consecutive list items and render all blocks */
+// eslint-disable-next-line react-refresh/only-export-components
 export function renderBlockGroups(blocks: Block[]): React.ReactNode[] {
   const result: React.ReactNode[] = [];
   let i = 0;

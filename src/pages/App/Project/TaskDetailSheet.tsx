@@ -43,12 +43,9 @@ export function TaskDetailSheet({
   // editor instantiation is pushed to the next frame.
   const [editorDeferred, setEditorDeferred] = useState(false);
   useEffect(() => {
-    if (!open) {
-      setEditorDeferred(false);
-      return;
-    }
+    if (!open) return;
     const id = requestAnimationFrame(() => setEditorDeferred(true));
-    return () => cancelAnimationFrame(id);
+    return () => { cancelAnimationFrame(id); setEditorDeferred(false); };
   }, [open]);
 
   const { titleInputRef, ...detail } = useTaskDetail({
@@ -63,12 +60,9 @@ export function TaskDetailSheet({
   // Defer activity timeline one frame after the editor
   const [showActivity, setShowActivity] = useState(false);
   useEffect(() => {
-    if (!editorDeferred) {
-      setShowActivity(false);
-      return;
-    }
+    if (!editorDeferred) return;
     const id = requestAnimationFrame(() => setShowActivity(true));
-    return () => cancelAnimationFrame(id);
+    return () => { cancelAnimationFrame(id); setShowActivity(false); };
   }, [editorDeferred]);
 
   const isLoaded = !!taskId && !!detail.task && detail.statuses !== undefined && detail.members !== undefined;

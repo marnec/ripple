@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 /**
@@ -13,21 +13,28 @@ import { flushSync } from "react-dom";
  *   When the callback later stops returning `true` (e.g. sorting is
  *   turned off), any accumulated difference is synced immediately.
  *
- * @param suppressRef — When `.current` is `true`, data changes are applied
- *   synchronously during render (no animation, no intermediate frame).
- *   Used to bypass view transitions during DnD operations so dnd-kit
- *   never sees a stale layout.
+ * @param suppress — When `true`, data changes are applied synchronously
+ *   during render (no animation, no intermediate frame). Used to bypass
+ *   view transitions during DnD operations so dnd-kit never sees a stale
+ *   layout, and while sheets/overlays are open to avoid z-order glitches.
  */
 export function useAnimatedQuery<T>(
   liveData: T,
   shouldAbsorb?: (prev: NonNullable<T>, next: NonNullable<T>) => boolean,
-  suppressRef?: React.RefObject<boolean>,
+  suppress?: boolean,
 ): T {
   const [rendered, setRendered] = useState(liveData);
   const transitioning = useRef(false);
   const absorbed = useRef(false);
-  const absorbRef = useRef(shouldAbsorb);
-  absorbRef.current = shouldAbsorb;
+
+  // Effect-events capture the latest prop values without requiring them
+  // in the effect dependency array (eslint-plugin-react-hooks recognises
+  // useEffectEvent and auto-excludes its return from deps).
+  const checkAbsorb = useEffectEvent(
+    (prev: NonNullable<T>, next: NonNullable<T>) =>
+      shouldAbsorb?.(prev, next) ?? false,
+  );
+  const isSuppressed = useEffectEvent(() => suppress ?? false);
 
   // ── Render-time fast paths ────────────────────────────────────────
   // React supports setState during render for derived-state patterns.
@@ -35,22 +42,24 @@ export function useAnimatedQuery<T>(
   // the browser paints, so no intermediate frame is ever visible.
 
   if (!Object.is(liveData, rendered) && liveData != null && rendered != null) {
-    // Suppressed (DnD active) — sync instantly so dnd-kit / SortableContext
-    // always sees the correct item order. No intermediate layout change.
-    if (suppressRef?.current) {
+    // Suppressed (DnD active / sheet open) — sync instantly so dnd-kit /
+    // SortableContext always sees the correct item order.
+    if (suppress) {
       setRendered(liveData);
     }
-    // Previously absorbed data becomes relevant (e.g. sorting turned off)
+    // Previously absorbed data becomes relevant (e.g. sorting turned off).
+    // `absorbed` is internal bookkeeping that cannot be state (would cause
+    // a wasted render cycle); reading/writing during render is the only way
+    // to implement synchronous derived-state reconciliation.
+    /* eslint-disable react-hooks/refs */
     else if (absorbed.current) {
-      const stillAbsorbed = absorbRef.current?.(
-        rendered as NonNullable<T>,
-        liveData as NonNullable<T>,
-      );
+      const stillAbsorbed = shouldAbsorb?.(rendered, liveData);
       if (!stillAbsorbed) {
         absorbed.current = false;
         setRendered(liveData);
       }
     }
+    /* eslint-enable react-hooks/refs */
   }
 
   // ── Effect: animated & absorbed paths ─────────────────────────────
@@ -74,13 +83,10 @@ export function useAnimatedQuery<T>(
     if (liveData == null) return;
 
     // Suppress handled during render — nothing to do here
-    if (suppressRef?.current) return;
+    if (isSuppressed()) return;
 
     // Caller says this change is not visually meaningful — absorb entirely
-    if (
-      liveData != null &&
-      absorbRef.current?.(rendered as NonNullable<T>, liveData as NonNullable<T>)
-    ) {
+    if (checkAbsorb(rendered, liveData)) {
       absorbed.current = true;
       return;
     }
@@ -94,7 +100,7 @@ export function useAnimatedQuery<T>(
     }
 
     transitioning.current = true;
-    document.startViewTransition(() => {
+    void document.startViewTransition(() => {
       flushSync(() => setRendered(liveData));
     }).finished.finally(() => {
       transitioning.current = false;

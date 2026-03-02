@@ -2,7 +2,7 @@ import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-que
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, useQuery } from "convex/react";
 import { CheckSquare } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -24,13 +24,6 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
     null
   );
   const sheetOpen = selectedTaskId !== null;
-
-  // Suppress view transitions while the detail sheet is open — transition
-  // snapshots paint above the sheet's top-layer backdrop, causing cards to
-  // flash at full opacity over the dimming layer.
-  const suppressTransition = useRef(false);
-  suppressTransition.current = sheetOpen;
-
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
@@ -39,11 +32,10 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
     hideCompleted: false,
   });
 
-  const isSorting = sort !== null;
   const allTasks = useAnimatedQuery(
     liveTasks,
-    isSorting ? isPositionOnlyChange : undefined,
-    suppressTransition,
+    isPositionOnlyChange,
+    sheetOpen,
   );
   const tasks = useFilteredTasks(allTasks, filters, sort);
 
