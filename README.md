@@ -47,10 +47,16 @@ keyboard accessiblity
     - [ ] github issues
     - [ ] add sentry
 
-- partykit 
+- partykit
     - [x] migrate abandoded partykit to the new worker version
     - [x] partykit optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
-    - [ ] optimize get collaboration token being called way too much
+    - [x] optimize get collaboration token being called way too much (HMAC-signed tokens, no DB round-trip)
+    - [ ] share presence connection across tabs (BroadcastChannel/SharedWorker)
+    - [ ] deduplicate token requests per resource across tabs
+
+- convex query optimization
+    - [ ] batch favorites.listIdsForType into single listAllForWorkspace query
+    - [ ] batch breadcrumb.getResourceName into single getResourceNames(ids[]) query
 
 - spreadsheet qol
     - [ ] improve formula picker to trigger for nested functions

@@ -252,30 +252,6 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
-  collaborationTokens: {
-    document: {
-      expiresAt: number;
-      roomId: string;
-      token: string;
-      userId: Id<"users">;
-      _id: Id<"collaborationTokens">;
-      _creationTime: number;
-    };
-    fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "expiresAt"
-      | "roomId"
-      | "token"
-      | "userId";
-    indexes: {
-      by_id: ["_id"];
-      by_creation_time: ["_creationTime"];
-      by_token: ["token", "_creationTime"];
-    };
-    searchIndexes: {};
-    vectorIndexes: {};
-  };
   contentReferences: {
     document: {
       sourceId: string;

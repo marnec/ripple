@@ -302,14 +302,6 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("by_cycle_task", ["cycleId", "taskId"]),
 
-  collaborationTokens: defineTable({
-    token: v.string(),
-    userId: v.id("users"),
-    roomId: v.string(),
-    expiresAt: v.number(), // timestamp ms
-  })
-    .index("by_token", ["token"]),
-
   pushSubscriptions: defineTable({
     userId: v.id("users"),
     device: v.string(),

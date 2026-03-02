@@ -1,4 +1,5 @@
 import { routePartykitRequest } from "partyserver";
+import { verifyToken } from "./token-utils";
 
 export { default as Main } from "./server";
 export { default as Presence } from "./presence-server";
@@ -18,7 +19,7 @@ export default {
     // rejected connections never trigger onopen → backoff-reset in y-websocket.
     const partyResponse = await routePartykitRequest(request, env, {
       async onBeforeConnect(req, lobby) {
-        // Only Main DO needs auth (Presence is unauthenticated)
+        // Only Main DO needs auth (Presence verifies in onConnect)
         if (lobby.className !== "Main") return;
 
         const url = new URL(req.url);
@@ -28,32 +29,26 @@ export default {
           return new Response("Missing token", { status: 401 });
         }
 
-        const convexSiteUrl = env.CONVEX_SITE_URL;
-        if (!convexSiteUrl) return new Response("Server misconfigured", { status: 500 });
+        const secret = env.PARTYKIT_SECRET;
+        if (!secret) return new Response("Server misconfigured", { status: 500 });
 
-        const response = await fetch(`${convexSiteUrl}/collaboration/verify`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-          },
-          body: JSON.stringify({ roomId: lobby.name }),
-        });
-
-        if (!response.ok) {
-          console.warn(`[onBeforeConnect] Auth rejected for room ${lobby.name}: ${response.status}`);
+        // Verify HMAC-signed token locally — no callback to Convex needed
+        const userData = await verifyToken(token, secret);
+        if (!userData) {
+          console.warn(`[onBeforeConnect] Auth rejected for room ${lobby.name}`);
           return new Response("Unauthorized", { status: 401 });
         }
 
-        const userData = (await response.json()) as {
-          userId: string;
-          userName: string;
-        };
+        if (userData.roomId !== lobby.name) {
+          console.warn(`[onBeforeConnect] Room mismatch: token=${userData.roomId} lobby=${lobby.name}`);
+          return new Response("Room mismatch", { status: 403 });
+        }
 
         // Forward verified user data to the DO via headers
         const headers = new Headers(req.headers);
         headers.set("X-Verified-User-Id", userData.userId);
-        headers.set("X-Verified-User-Name", userData.userName ?? "");
+        headers.set("X-Verified-User-Name", userData.userName);
+        headers.set("X-Verified-User-Image", userData.userImage ?? "");
         return new Request(req, { headers });
       },
     });

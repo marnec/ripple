@@ -1339,23 +1339,11 @@ export declare const internal: {
       { userId: Id<"users">; workspaceId: string },
       boolean
     >;
-    consumeToken: FunctionReference<
-      "mutation",
-      "internal",
-      { token: string },
-      { roomId: string; userId: Id<"users"> } | null
-    >;
     getUserInfo: FunctionReference<
       "query",
       "internal",
       { userId: Id<"users"> },
       { userId: Id<"users">; userImage?: string; userName?: string }
-    >;
-    storeToken: FunctionReference<
-      "mutation",
-      "internal",
-      { expiresAt: number; roomId: string; token: string; userId: Id<"users"> },
-      null
     >;
   };
   contentReferences: {

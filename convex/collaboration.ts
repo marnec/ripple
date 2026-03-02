@@ -1,17 +1,53 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { action, internalMutation, internalQuery } from "./_generated/server";
+import { action, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 
+// ---------------------------------------------------------------------------
+// HMAC token signing helpers
+// ---------------------------------------------------------------------------
+
+function base64urlEncode(data: Uint8Array): string {
+  let binary = "";
+  for (const byte of data) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function signToken(payload: object, secret: string): Promise<string> {
+  const payloadJson = JSON.stringify(payload);
+  const payloadB64 = base64urlEncode(new TextEncoder().encode(payloadJson));
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+
+  const signatureBytes = new Uint8Array(
+    await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payloadB64)),
+  );
+
+  return `${payloadB64}.${base64urlEncode(signatureBytes)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Public action: Generate HMAC-signed collaboration token
+// ---------------------------------------------------------------------------
+
 /**
- * Generate a one-time collaboration token for PartyKit room access.
+ * Generate an HMAC-signed collaboration token for PartyKit room access.
  *
  * Flow:
  * 1. Verify user is authenticated via Convex auth
- * 2. Check user has access to the resource (document or diagram)
- * 3. Generate random UUID token with 5-minute expiration
- * 4. Store token in collaborationTokens table
- * 5. Return token and roomId to frontend
+ * 2. Check user has access to the resource
+ * 3. Fetch user info (name/image) to embed in the token
+ * 4. Sign payload with HMAC-SHA256 using PARTYKIT_SECRET
+ * 5. Return signed token and roomId (no DB write — stateless)
+ *
+ * PartyKit verifies the token locally using the same shared secret,
+ * eliminating the need for a callback to Convex on every connection.
  */
 export const getCollaborationToken = action({
   args: {
@@ -69,22 +105,36 @@ export const getCollaborationToken = action({
       }
     }
 
-    // Generate one-time token
-    const token = crypto.randomUUID();
+    // Fetch user info to embed in the signed token
+    const userInfo = await ctx.runQuery(internal.collaboration.getUserInfo, { userId });
+
     const roomId = `${resourceType}-${resourceId}`;
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-    // Store token
-    await ctx.runMutation(internal.collaboration.storeToken, {
-      token,
-      userId,
-      roomId,
-      expiresAt,
-    });
+    // Sign token with HMAC-SHA256 — no DB storage needed
+    const secret = process.env.PARTYKIT_SECRET;
+    if (!secret) {
+      throw new ConvexError("Server configuration error: PARTYKIT_SECRET not set");
+    }
+
+    const token = await signToken(
+      {
+        sub: userId,
+        name: userInfo.userName ?? "",
+        img: userInfo.userImage ?? null,
+        room: roomId,
+        exp: expiresAt,
+      },
+      secret,
+    );
 
     return { token, roomId };
   },
 });
+
+// ---------------------------------------------------------------------------
+// Internal access-check queries (used by the action above and check-access endpoint)
+// ---------------------------------------------------------------------------
 
 /**
  * Internal query: Check if user has access to a workspace.
@@ -196,69 +246,6 @@ export const checkSpreadsheetAccess = internalQuery({
 });
 
 /**
- * Internal mutation: Store a collaboration token.
- */
-export const storeToken = internalMutation({
-  args: {
-    token: v.string(),
-    userId: v.id("users"),
-    roomId: v.string(),
-    expiresAt: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, { token, userId, roomId, expiresAt }) => {
-    await ctx.db.insert("collaborationTokens", {
-      token,
-      userId,
-      roomId,
-      expiresAt,
-    });
-    return null;
-  },
-});
-
-/**
- * Internal mutation: Verify a collaboration token.
- * Tokens are reusable within their 5-minute validity window to support
- * y-partykit's built-in auto-reconnect (which reuses the same URL/token).
- * Expired tokens are cleaned up on access.
- */
-export const consumeToken = internalMutation({
-  args: {
-    token: v.string(),
-  },
-  returns: v.union(
-    v.object({
-      userId: v.id("users"),
-      roomId: v.string(),
-    }),
-    v.null()
-  ),
-  handler: async (ctx, { token }) => {
-    const tokenDoc = await ctx.db
-      .query("collaborationTokens")
-      .withIndex("by_token", (q) => q.eq("token", token))
-      .first();
-
-    if (!tokenDoc) {
-      return null;
-    }
-
-    // Check expiration - clean up expired tokens
-    if (tokenDoc.expiresAt < Date.now()) {
-      await ctx.db.delete(tokenDoc._id);
-      return null;
-    }
-
-    // Valid token - allow reuse within validity window
-    return {
-      userId: tokenDoc.userId,
-      roomId: tokenDoc.roomId,
-    };
-  },
-});
-
-/**
  * Internal query: Get user info by ID.
  */
 export const getUserInfo = internalQuery({
@@ -287,7 +274,7 @@ export const getUserInfo = internalQuery({
  * Internal query: Check if user still has access to a resource.
  *
  * Used by PartyKit server for periodic permission re-validation.
- * Consolidates the three resource-specific checks into one function.
+ * Consolidates the resource-specific checks into one function.
  */
 export const checkAccess = internalQuery({
   args: {
@@ -298,7 +285,6 @@ export const checkAccess = internalQuery({
   returns: v.boolean(),
   handler: async (ctx, { userId, resourceType, resourceId }) => {
     if (resourceType === "doc") {
-      // Check workspace membership (documents are accessible to all workspace members)
       const document = await ctx.db.get(resourceId as any);
       if (!document) return false;
       const workspaceMember = await ctx.db
@@ -309,7 +295,6 @@ export const checkAccess = internalQuery({
         .first();
       return workspaceMember !== null;
     } else if (resourceType === "diagram") {
-      // Check workspace membership (diagrams are accessible to all workspace members)
       const diagram = await ctx.db.get(resourceId as any);
       if (!diagram) return false;
       const workspaceMember = await ctx.db

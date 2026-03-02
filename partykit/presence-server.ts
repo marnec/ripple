@@ -7,6 +7,7 @@ import type {
   PresenceChangedMessage,
   UserLeftPresenceMessage,
 } from "@shared/protocol";
+import { verifyToken } from "./token-utils";
 
 interface ConnectionState {
   userId: string;
@@ -24,7 +25,6 @@ interface PresenceEntry {
 }
 
 interface Env {
-  CONVEX_SITE_URL: string;
   PARTYKIT_SECRET: string;
 }
 
@@ -59,8 +59,8 @@ export default class PresenceServer extends Server {
     }
 
     const env = this.env as Env;
-    const convexSiteUrl = env.CONVEX_SITE_URL;
-    if (!convexSiteUrl) {
+    const secret = env.PARTYKIT_SECRET;
+    if (!secret) {
       const msg: ServerMessage = {
         type: "error",
         code: "SERVER_CONFIG_ERROR" as ErrorCode,
@@ -70,63 +70,38 @@ export default class PresenceServer extends Server {
       return;
     }
 
-    try {
-      const response = await fetch(`${convexSiteUrl}/collaboration/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ roomId: `presence-${this.name}` }),
-      });
+    // Verify HMAC-signed token locally — no callback to Convex needed
+    const userData = await verifyToken(token, secret);
 
-      if (!response.ok) {
-        const msg: ServerMessage = {
-          type: "auth_error",
-          code: "AUTH_INVALID" as ErrorCode,
-        };
-        conn.send(JSON.stringify(msg));
-        conn.close(1008, "AUTH_INVALID");
-        return;
-      }
-
-      const userData = (await response.json()) as {
-        userId: string;
-        userName?: string;
-        userImage?: string | null;
+    if (!userData || userData.roomId !== `presence-${this.name}`) {
+      const msg: ServerMessage = {
+        type: "auth_error",
+        code: "AUTH_INVALID" as ErrorCode,
       };
-
-      // Store user identity on connection
-      const state: ConnectionState = {
-        userId: userData.userId,
-        userName: userData.userName ?? "Unknown",
-        userImage: userData.userImage ?? null,
-      };
-      conn.setState(state);
-
-      // Track this connection for the user
-      const conns = this.userConnections.get(userData.userId) ?? new Set();
-      conns.add(conn.id);
-      this.userConnections.set(userData.userId, conns);
-
-      // Send current presence snapshot to the new connection
-      const snapshot: PresenceSnapshotMessage = {
-        type: "presence_snapshot",
-        users: Array.from(this.presenceMap.values()),
-      };
-      conn.send(JSON.stringify(snapshot));
-    } catch {
-      try {
-        const msg: ServerMessage = {
-          type: "error",
-          code: "SERVER_INTERNAL_ERROR" as ErrorCode,
-        };
-        conn.send(JSON.stringify(msg));
-        conn.close(1011, "SERVER_INTERNAL_ERROR");
-      } catch {
-        // Connection already closed
-      }
+      conn.send(JSON.stringify(msg));
+      conn.close(1008, "AUTH_INVALID");
+      return;
     }
+
+    // Store user identity on connection
+    const state: ConnectionState = {
+      userId: userData.userId,
+      userName: userData.userName,
+      userImage: userData.userImage,
+    };
+    conn.setState(state);
+
+    // Track this connection for the user
+    const conns = this.userConnections.get(userData.userId) ?? new Set();
+    conns.add(conn.id);
+    this.userConnections.set(userData.userId, conns);
+
+    // Send current presence snapshot to the new connection
+    const snapshot: PresenceSnapshotMessage = {
+      type: "presence_snapshot",
+      users: Array.from(this.presenceMap.values()),
+    };
+    conn.send(JSON.stringify(snapshot));
   }
 
   onMessage(conn: Connection, message: WSMessage) {
