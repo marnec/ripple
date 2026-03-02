@@ -5,6 +5,7 @@ import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
 import type { ResourceType, ErrorCode } from "@shared/protocol";
 import { ERROR_SEVERITY } from "@shared/protocol";
+import { guardAuthFailure } from "@/lib/yjs-auth-guard";
 
 // Connection timeout: 4 seconds (within the 3-5s user decision range)
 const CONNECTION_TIMEOUT = 4000;
@@ -187,6 +188,12 @@ export function useYjsProvider(opts: {
           }, delay);
         };
 
+        // Guard against auth-failure reconnect storms (close code 1008).
+        // On auth failure, recreates the provider with a fresh token + backoff.
+        guardAuthFailure(newProvider, () => {
+          if (!recreationTriggered) triggerRecreation(newProvider);
+        });
+
         newProvider.on("sync", (synced: boolean) => {
           if (!cancelled) {
             isConnectedRef.current = synced;
@@ -214,7 +221,7 @@ export function useYjsProvider(opts: {
             setIsOffline(false);
             lastConnectTimeRef.current = Date.now();
 
-            // Attach message listener when connected
+            // Attach protocol message listener for permission_revoked / auth_error
             if (newProvider.ws) {
               newProvider.ws.addEventListener("message", handleProtocolMessage);
             }

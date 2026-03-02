@@ -8,6 +8,7 @@ import YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { guardAuthFailure } from "@/lib/yjs-auth-guard";
 
 // Module-level SVG cache to avoid redundant exportToSvg calls across mounts
 const svgCache = new Map<
@@ -177,6 +178,10 @@ export function useDiagramPreview(
         const provider = new YProvider(host, roomId, yDoc, {
           connect: true,
           params: { token },
+        });
+
+        guardAuthFailure(provider, () => {
+          if (providerRef.current === provider) providerRef.current = null;
         });
 
         providerRef.current = provider;

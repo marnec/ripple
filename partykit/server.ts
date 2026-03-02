@@ -1,7 +1,7 @@
 import { YServer } from "y-partyserver";
 import type { Connection, ConnectionContext } from "partyserver";
 import * as Y from "yjs";
-import type { ErrorCode, ServerMessage } from "@shared/protocol";
+import type { ServerMessage } from "@shared/protocol";
 import { parseCellName, parseRange } from "@shared/cellRef";
 
 /**
@@ -177,96 +177,47 @@ export default class CollaborationServer extends YServer {
   // ---------------------------------------------------------------------------
 
   /**
-   * Authenticate the connection, then delegate to YServer for Yjs sync.
+   * Accept pre-authenticated connection and delegate to YServer for Yjs sync.
+   * Auth is verified in onBeforeConnect (worker.ts) BEFORE the WebSocket
+   * upgrade, so by the time we get here the user is already authenticated.
    */
   async onConnect(conn: Connection, ctx: ConnectionContext) {
     const roomId = this.name;
 
-    // Extract token from query params
-    const url = new URL(ctx.request.url);
-    const token = url.searchParams.get("token");
+    // Read user identity from headers set by onBeforeConnect in worker.ts
+    const userId = ctx.request.headers.get("X-Verified-User-Id");
+    const userName = ctx.request.headers.get("X-Verified-User-Name");
 
-    if (!token) {
-      console.error("Missing auth token for room", roomId);
-      const errorCode: ErrorCode = "AUTH_MISSING";
-      const errorMessage: ServerMessage = { type: "auth_error", code: errorCode };
-      conn.send(JSON.stringify(errorMessage));
-      conn.close(1008, errorCode);
+    if (!userId) {
+      // Should never happen — onBeforeConnect rejects unauthenticated requests
+      // before the WebSocket upgrade. If we get here, something is misconfigured.
+      console.error("Missing pre-verified user for room", roomId);
+      conn.close(1008, "AUTH_MISSING");
       return;
     }
 
-    // Verify token with Convex
-    const env = this.env as Env;
-    const convexSiteUrl = env.CONVEX_SITE_URL;
-    if (!convexSiteUrl) {
-      console.error("CONVEX_SITE_URL not configured");
-      const errorCode: ErrorCode = "SERVER_CONFIG_ERROR";
-      const errorMessage: ServerMessage = { type: "error", code: errorCode };
-      conn.send(JSON.stringify(errorMessage));
-      conn.close(1011, errorCode);
-      return;
-    }
+    console.log(`User ${userName} (${userId}) connected to room ${roomId}`);
 
+    conn.setState({ userId, userName });
+
+    // Delegate to YServer for Yjs sync setup
     try {
-      const response = await fetch(`${convexSiteUrl}/collaboration/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ roomId }),
-      });
+      await super.onConnect(conn, ctx);
+    } catch {
+      console.log(`Connection dropped during Yjs setup for room ${roomId}`);
+      return;
+    }
 
-      if (!response.ok) {
-        console.error(`Auth failed for room ${roomId}: ${response.status} ${response.statusText}`);
-        const errorCode: ErrorCode = "AUTH_INVALID";
-        const errorMessage: ServerMessage = { type: "auth_error", code: errorCode };
-        conn.send(JSON.stringify(errorMessage));
-        conn.close(1008, errorCode);
-        return;
-      }
+    // Attach cell ref observer for spreadsheet rooms
+    if (roomId.startsWith("spreadsheet-")) {
+      this.setupCellRefObserver(roomId);
+    }
 
-      const userData = (await response.json()) as {
-        userId: string;
-        userName: string;
-      };
-      console.log(`User ${userData.userName} (${userData.userId}) connected to room ${roomId}`);
-
-      // Store authenticated user identity on connection
-      conn.setState({
-        userId: userData.userId,
-        userName: userData.userName,
-      });
-
-      // Auth successful — delegate to YServer for Yjs sync setup
-      try {
-        await super.onConnect(conn, ctx);
-      } catch {
-        console.log(`Connection dropped during Yjs setup for room ${roomId}`);
-        return;
-      }
-
-      // Attach cell ref observer for spreadsheet rooms
-      if (roomId.startsWith("spreadsheet-")) {
-        this.setupCellRefObserver(roomId);
-      }
-
-      // Schedule periodic permission check alarm
-      if (!this.permissionCheckScheduled) {
-        await this.ctx.storage.put("alarmType", ALARM_TYPE_PERMISSION_CHECK);
-        await this.ctx.storage.setAlarm(Date.now() + PERMISSION_CHECK_INTERVAL);
-        this.permissionCheckScheduled = true;
-      }
-    } catch (error) {
-      try {
-        console.error("Auth verification error:", error);
-        const errorCode: ErrorCode = "SERVER_INTERNAL_ERROR";
-        const errorMessage: ServerMessage = { type: "error", code: errorCode };
-        conn.send(JSON.stringify(errorMessage));
-        conn.close(1011, errorCode);
-      } catch {
-        console.log(`Connection already closed for room ${roomId}, skipping error send`);
-      }
+    // Schedule periodic permission check alarm
+    if (!this.permissionCheckScheduled) {
+      await this.ctx.storage.put("alarmType", ALARM_TYPE_PERMISSION_CHECK);
+      await this.ctx.storage.setAlarm(Date.now() + PERMISSION_CHECK_INTERVAL);
+      this.permissionCheckScheduled = true;
     }
   }
 

@@ -19,6 +19,7 @@
 
     /* Linting */
     "strict": true,
+    "types": [],
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 

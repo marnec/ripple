@@ -11,6 +11,7 @@ import {
   parseRange,
   isSingleCell,
 } from "@shared/cellRef";
+import { guardAuthFailure } from "@/lib/yjs-auth-guard";
 
 // Debounce interval for re-extracting cell values on Yjs updates
 const DEBOUNCE_MS = 500;
@@ -24,6 +25,8 @@ interface SharedDoc {
   yDoc: Y.Doc;
   persistence: IndexeddbPersistence;
   provider: YProvider | null;
+  /** True while a connectToParty() call is in-flight (prevents zombie providers) */
+  connecting: boolean;
   refCount: number;
   /** Set to true once IndexedDB has synced */
   indexedDbSynced: boolean;
@@ -32,6 +35,23 @@ interface SharedDoc {
 }
 
 const sharedDocs = new Map<string, SharedDoc>();
+
+// Clean up orphaned providers on HMR to prevent reconnect storms.
+// Without this, each hot reload creates a fresh sharedDocs Map while the
+// old providers continue reconnecting with no way to reach them.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    for (const [, shared] of sharedDocs) {
+      if (shared.provider) {
+        shared.provider.shouldConnect = false;
+        shared.provider.destroy();
+      }
+      void shared.persistence.destroy();
+      shared.yDoc.destroy();
+    }
+    sharedDocs.clear();
+  });
+}
 
 function acquireSharedDoc(spreadsheetId: string): SharedDoc {
   const existing = sharedDocs.get(spreadsheetId);
@@ -50,6 +70,7 @@ function acquireSharedDoc(spreadsheetId: string): SharedDoc {
     yDoc,
     persistence,
     provider: null,
+    connecting: false,
     refCount: 1,
     indexedDbSynced: false,
     listeners: new Set(),
@@ -201,16 +222,23 @@ export function useSpreadsheetCellPreview(
     yData.observeDeep(debouncedExtract);
     yFormulaValues.observe(debouncedExtract);
 
-    // Connect to PartyKit if not already connected and authenticated
+    // Connect to PartyKit if not already connected and authenticated.
+    // The `connecting` flag prevents concurrent getToken() calls from
+    // creating zombie providers (multiple hooks share the same SharedDoc).
     const connectToParty = async () => {
-      if (!isAuthenticated || cancelled || shared.provider) return;
+      if (!isAuthenticated || cancelled || shared.provider || shared.connecting) return;
+      shared.connecting = true;
 
       try {
         const { token } = await getToken({
           resourceType: "spreadsheet",
           resourceId: spreadsheetId,
         });
-        if (cancelled) return;
+        if (cancelled || shared.provider) {
+          // Another hook beat us or effect was cancelled
+          shared.connecting = false;
+          return;
+        }
 
         const host =
           import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
@@ -221,6 +249,11 @@ export function useSpreadsheetCellPreview(
           params: { token },
         });
 
+        guardAuthFailure(provider, () => {
+          shared.provider = null;
+          shared.connecting = false;
+        });
+
         shared.provider = provider;
       } catch (err) {
         console.warn(
@@ -228,6 +261,8 @@ export function useSpreadsheetCellPreview(
           err,
         );
         if (!cancelled) setLocalLoading(false);
+      } finally {
+        shared.connecting = false;
       }
     };
 

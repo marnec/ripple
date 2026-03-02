@@ -48,8 +48,9 @@ keyboard accessiblity
     - [ ] add sentry
 
 - partykit 
-    - [ ] migrate abandoded partykit to the new worker version
+    - [x] migrate abandoded partykit to the new worker version
     - [ ] partykit optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
+    - [ ] optimize get collaboration token being called way too much
 
 - spreadsheet qol
     - [ ] improve formula picker to trigger for nested functions
@@ -58,4 +59,3 @@ keyboard accessiblity
     - [ ] reintroduce formatting?
 
 - [ ] user avatars: look at dicebear
-- [ ] optimize get collaboration token being called way too much
