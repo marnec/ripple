@@ -669,6 +669,22 @@ export class SpreadsheetYjsBinding {
 
     this.clearCellRefHighlights();
 
+    const borderColor = "#f59e0b";
+
+    // Accumulate shadows per cell across all refs so overlapping refs merge
+    // rather than overwrite each other.
+    const cellShadows = new Map<HTMLElement, Set<string>>();
+    const addShadow = (td: HTMLElement, shadow: string) => {
+      let set = cellShadows.get(td);
+      if (!set) { set = new Set(); cellShadows.set(td, set); }
+      set.add(shadow);
+    };
+
+    const topShadow = `inset 0 1.5px 0 0 ${borderColor}`;
+    const bottomShadow = `inset 0 -1.5px 0 0 ${borderColor}`;
+    const leftShadow = `inset 1.5px 0 0 0 ${borderColor}`;
+    const rightShadow = `inset -1.5px 0 0 0 ${borderColor}`;
+
     for (const { cellRef } of this.referencedCellRefs) {
       if (isSingleCell(cellRef)) {
         const coords = parseCellName(cellRef);
@@ -677,6 +693,10 @@ export class SpreadsheetYjsBinding {
         const td = this.getCellElement(table, coords.row, coords.col);
         if (td) {
           td.classList.add("jss-cell-ref-highlight", "jss-cell-ref-indicator");
+          addShadow(td, topShadow);
+          addShadow(td, bottomShadow);
+          addShadow(td, leftShadow);
+          addShadow(td, rightShadow);
           this.highlightedCells.push(td);
           this.indicatorCells.push(td);
         }
@@ -689,6 +709,11 @@ export class SpreadsheetYjsBinding {
             const td = this.getCellElement(table, r, c);
             if (td) {
               td.classList.add("jss-cell-ref-highlight");
+              // Outer-edge borders only (same technique as remote cursors)
+              if (r === range.startRow) addShadow(td, topShadow);
+              if (r === range.endRow) addShadow(td, bottomShadow);
+              if (c === range.startCol) addShadow(td, leftShadow);
+              if (c === range.endCol) addShadow(td, rightShadow);
               this.highlightedCells.push(td);
             }
           }
@@ -702,11 +727,17 @@ export class SpreadsheetYjsBinding {
         }
       }
     }
+
+    // Apply accumulated shadows in one pass
+    for (const [td, shadows] of cellShadows) {
+      td.style.boxShadow = [...shadows].join(", ");
+    }
   }
 
   private clearCellRefHighlights() {
     for (const cell of this.highlightedCells) {
       cell.classList.remove("jss-cell-ref-highlight");
+      cell.style.boxShadow = "";
     }
     for (const cell of this.indicatorCells) {
       cell.classList.remove("jss-cell-ref-indicator");
