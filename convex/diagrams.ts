@@ -76,7 +76,7 @@ export const search = query({
       );
     }
 
-    if (isFavorite) {
+    if (isFavorite !== undefined) {
       const favs = await ctx.db
         .query("favorites")
         .withIndex("by_workspace_user_type", (q) =>
@@ -84,7 +84,9 @@ export const search = query({
         )
         .collect();
       const favSet = new Set(favs.map((f) => f.resourceId));
-      results = results.filter((doc) => favSet.has(doc._id));
+      results = isFavorite
+        ? results.filter((doc) => favSet.has(doc._id))
+        : results.filter((doc) => !favSet.has(doc._id));
     }
 
     return results;

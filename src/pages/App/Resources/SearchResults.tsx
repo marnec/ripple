@@ -8,9 +8,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
-import { useQuery } from "convex/react";
-import { Plus } from "lucide-react";
+import type { FavoriteFilter } from "@/hooks/use-debounced-search";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
+import { useQuery } from "convex/react";
+import { formatDistanceToNow } from "date-fns";
+import { Plus } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -18,9 +20,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
 
-type SearchResult = { _id: string; name: string; tags?: string[] };
-
-const RESOURCE_ICONS = RESOURCE_TYPE_ICONS;
+type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime: number };
 
 const SEARCH_APIS = {
   document: api.documents.search,
@@ -30,12 +30,24 @@ const SEARCH_APIS = {
   channel: api.channels.search,
 } as const;
 
+function getEmptyMessage(resourceType: ResourceType, favoriteFilter?: FavoriteFilter): string {
+  switch (favoriteFilter) {
+    case "favorites":
+      return `No favorite ${resourceType}s yet. Star a ${resourceType} to see it here.`;
+    case "unfavorited":
+      return `All ${resourceType}s are already favorited!`;
+    default:
+      return "No results found.";
+  }
+}
+
 export type SearchResultsProps = {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
   searchText?: string;
   tags?: string[];
   isFavorite?: boolean;
+  favoriteFilter?: FavoriteFilter;
   onLoadingChange?: (loading: boolean) => void;
   onCreate?: () => void;
   createLabel?: string;
@@ -86,6 +98,7 @@ export function SearchResults({
   searchText,
   tags,
   isFavorite,
+  favoriteFilter,
   onLoadingChange,
   onCreate,
   createLabel,
@@ -100,15 +113,13 @@ export function SearchResults({
   // Still waiting for initial data
   if (rendered == null) return null;
 
-  const Icon = RESOURCE_ICONS[resourceType];
+  const Icon = RESOURCE_TYPE_ICONS[resourceType];
 
   if (rendered.length === 0) {
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          {isFavorite
-            ? `No favorite ${resourceType}s yet. Star a ${resourceType} to see it here.`
-            : "No results found."}
+          {getEmptyMessage(resourceType, favoriteFilter)}
         </p>
         {onCreate && (
           <Button variant="outline" onClick={onCreate}>
@@ -125,20 +136,20 @@ export function SearchResults({
       {rendered.map((resource) => (
         <Card
           key={resource._id}
-          className="flex flex-col"
+          className="group relative flex flex-col transition-colors hover:border-foreground/20"
           style={{
             viewTransitionName: `--resource-${resource._id}`,
             viewTransitionClass: "resource-card",
           } as React.CSSProperties}
         >
-          <Link to={`${resource._id}`} className="grow">
+          <Link to={`${resource._id}`} className="flex grow flex-col">
             <CardHeader className="flex flex-row items-center gap-2">
               <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
               <CardTitle className="truncate text-base">
                 {resource.name}
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="flex flex-1 flex-col justify-between pt-0">
               <div className="flex flex-wrap gap-1">
                 {resource.tags && resource.tags.length > 0 ? (
                   resource.tags.map((tag: string) => (
@@ -152,17 +163,23 @@ export function SearchResults({
                   </Badge>
                 )}
               </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Created{" "}
+                {formatDistanceToNow(resource._creationTime, {
+                  addSuffix: true,
+                })}
+              </p>
             </CardContent>
           </Link>
-          {showFavorites !== false && resourceType !== "channel" ? (
-            <CardContent className="flex items-center justify-end pt-0">
+          {showFavorites !== false && resourceType !== "channel" && (
+            <div className="absolute right-2 top-2 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:[&:has(:focus-visible)]:opacity-100">
               <FavoriteButton
                 resourceType={resourceType}
                 resourceId={resource._id}
                 workspaceId={workspaceId}
               />
-            </CardContent>
-          ) : null}
+            </div>
+          )}
         </Card>
       ))}
     </div>

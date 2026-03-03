@@ -1,10 +1,15 @@
-import { parseSearchInput, type ParsedSearch } from "@/lib/search-utils";
+import { buildSearchString, parseSearchInput, type ParsedSearch } from "@/lib/search-utils";
 import { useQuery } from "convex/react";
-import { Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { Badge } from "./ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "./ui/popover";
 
 type ResourceSearchInputProps = {
   workspaceId: Id<"workspaces">;
@@ -27,6 +32,7 @@ export function ResourceSearchInput({
 }: ResourceSearchInputProps) {
   const [internalValue, setInternalValue] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const value = controlledValue ?? internalValue;
@@ -40,14 +46,16 @@ export function ResourceSearchInput({
   // Check if user is currently typing a #tag
   const cursorAtHashTag = value.match(/#(\w*)$/);
   const hashInput = cursorAtHashTag?.[1] ?? "";
-  const existingTags = parseSearchInput(value).tags;
+  const parsed = parseSearchInput(value);
   const suggestions = cursorAtHashTag
     ? allTags.filter(
         (tag) =>
           tag.toLowerCase().includes(hashInput.toLowerCase()) &&
-          !existingTags.includes(tag),
+          !parsed.tags.includes(tag),
       )
     : [];
+
+  const availableTags = allTags.filter((tag) => !parsed.tags.includes(tag));
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -66,7 +74,19 @@ export function ResourceSearchInput({
     inputRef.current?.focus();
   };
 
-  const parsed = parseSearchInput(value);
+  const addTag = (tag: string) => {
+    const newValue = buildSearchString(parsed.searchText, [...parsed.tags, tag]);
+    setValue(newValue);
+    onSubmit?.(parseSearchInput(newValue));
+    setTagPopoverOpen(false);
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    const newTags = parsed.tags.filter((t) => t !== tagToRemove);
+    const newValue = buildSearchString(parsed.searchText, newTags);
+    setValue(newValue);
+    onSubmit?.(parseSearchInput(newValue));
+  };
 
   return (
     <div className="relative">
@@ -97,6 +117,7 @@ export function ResourceSearchInput({
             type="button"
             onClick={() => {
               setValue("");
+              onSubmit?.({ searchText: "", tags: [] });
               inputRef.current?.focus();
             }}
             className="shrink-0 text-muted-foreground hover:text-foreground"
@@ -105,13 +126,46 @@ export function ResourceSearchInput({
           </button>
         )}
       </div>
-      {parsed.tags.length > 0 && !compact && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+      {!compact && (parsed.tags.length > 0 || availableTags.length > 0) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
           {parsed.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-xs">
+            <Badge
+              key={tag}
+              variant="secondary"
+              className="cursor-pointer gap-1 text-xs hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => removeTag(tag)}
+            >
               #{tag}
+              <X className="h-3 w-3" />
             </Badge>
           ))}
+          {availableTags.length > 0 && (
+            <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-5 items-center gap-0.5 rounded-full border border-dashed border-muted-foreground/30 px-2 text-xs text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+                >
+                  <Plus className="h-3 w-3" />
+                  Tag
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-48 p-1">
+                <div className="max-h-48 overflow-auto">
+                  {availableTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => addTag(tag)}
+                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
       )}
       {showSuggestions && suggestions.length > 0 && (

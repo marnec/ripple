@@ -28,14 +28,14 @@ export const RESOURCE_ROUTES: Record<ResourceType, string> = {
  */
 export function preselectSearchTab(workspaceId: string, resourceType: ResourceType) {
   const key = `ripple:search:${workspaceId}:${resourceType}`;
-  localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: false }));
+  localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: "all" }));
 }
 
 /**
- * Pre-set the isFavorite filter so ResourceListPage opens filtered to favorites
- * when navigated to from an empty favorite slot click.
+ * Pre-set the isFavorite filter so ResourceListPage opens showing non-favorited
+ * resources when navigated to from an empty favorite slot click.
  */
 export function preselectFavoriteFilter(workspaceId: string, resourceType: ResourceType) {
   const key = `ripple:search:${workspaceId}:${resourceType}`;
-  localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: true }));
+  localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: "unfavorited" }));
 }

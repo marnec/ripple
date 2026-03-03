@@ -44,6 +44,11 @@
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
 
+  --color-favorite: hsl(var(--favorite));
+  --color-favorite-foreground: hsl(var(--favorite-foreground));
+  --color-unfavorited: hsl(var(--unfavorited));
+  --color-unfavorited-foreground: hsl(var(--unfavorited-foreground));
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -177,6 +182,11 @@
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
   --chart-5: 27 87% 67%;
+
+  --favorite: 45 93% 47%;
+  --favorite-foreground: 38 92% 40%;
+  --unfavorited: 217 91% 60%;
+  --unfavorited-foreground: 217 71% 45%;
 }
 
 .dark {
@@ -222,6 +232,11 @@
   --chart-3: 30 80% 55%;
   --chart-4: 280 65% 60%;
   --chart-5: 340 75% 55%;
+
+  --favorite: 45 93% 47%;
+  --favorite-foreground: 45 80% 70%;
+  --unfavorited: 217 91% 60%;
+  --unfavorited-foreground: 217 80% 70%;
 }
 
 * {

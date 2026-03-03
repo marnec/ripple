@@ -1,8 +1,9 @@
+import { FavoriteFilterButton } from "@/components/FavoriteFilterButton";
 import { ResourceSearchInput } from "@/components/ResourceSearchInput";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@/components/ui/button";
-import { useDebouncedSearch } from "@/hooks/use-debounced-search";
-import { Plus, Star } from "lucide-react";
+import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { SearchResults } from "./SearchResults";
@@ -63,8 +64,8 @@ export function ResourceListPage({
             </Button>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
             <ResourceSearchInput
               workspaceId={wsId}
               value={localSearchValue}
@@ -74,20 +75,7 @@ export function ResourceListPage({
             />
           </div>
           {showFavorites && (
-            <button
-              type="button"
-              onClick={handleFavoriteToggle}
-              className={`flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
-                isFavorite
-                  ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-                  : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              }`}
-            >
-              <Star
-                className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
-              />
-              Favorites
-            </button>
+            <FavoriteFilterButton value={isFavorite} onToggle={handleFavoriteToggle} />
           )}
           <div
             className="transition-opacity duration-200"
@@ -103,7 +91,8 @@ export function ResourceListPage({
           resourceType={resourceType}
           searchText={searchQuery || undefined}
           tags={tags.length > 0 ? tags : undefined}
-          isFavorite={isFavorite || undefined}
+          isFavorite={favoriteFilterToBoolean(isFavorite)}
+          favoriteFilter={isFavorite}
           onLoadingChange={handleLoadingChange}
           onCreate={onCreate}
           createLabel={createLabel}
