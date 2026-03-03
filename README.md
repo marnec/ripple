@@ -65,3 +65,5 @@ keyboard accessiblity
     - [ ] reintroduce formatting?
 
 - [ ] user avatars: look at dicebear
+
+- [ ] evaluate switch to pragmatic drag and drop for total control and integration with view-transition-apis

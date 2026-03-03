@@ -60,7 +60,12 @@ export function SwipeToReveal({
     el.style.translate = isOpen ? `${-MAX_TRANSLATE}px 0` : "0 0";
   }, [isOpen]);
 
-  // Attach native touch listeners with { passive: false } so we can preventDefault
+  // Touch listeners on the slidable row element.
+  // `touch-action: pan-y` on the outer wrapper tells the browser to handle
+  // vertical scroll natively, so horizontal touchmove events stay cancelable.
+  // touchmove is non-passive so we can preventDefault on horizontal swipes;
+  // the cancelable guard handles edge cases (fling momentum, late direction
+  // changes) to avoid Chrome's intervention warnings.
   useEffect(() => {
     const el = rowRef.current;
     if (!el || !enabled) return;
@@ -94,8 +99,10 @@ export function SwipeToReveal({
 
       if (directionLocked.current !== "horizontal") return;
 
-      // Prevent vertical scroll while swiping horizontally
-      e.preventDefault();
+      // Prevent any residual scroll during horizontal swipe.
+      // With touch-action:pan-y on the wrapper, horizontal events are
+      // normally cancelable. Guard for edge cases (fling, late lock).
+      if (e.cancelable) e.preventDefault();
 
       const base = isOpenRef.current ? -MAX_TRANSLATE : 0;
       const raw = base + dx;
@@ -158,7 +165,10 @@ export function SwipeToReveal({
   };
 
   return (
-    <div className={cn("relative overflow-hidden rounded-lg", className)}>
+    <div
+      className={cn("relative overflow-hidden rounded-lg", className)}
+      style={{ touchAction: "pan-y" }}
+    >
       {/* Action behind the row, anchored to the right */}
       <div className="absolute inset-y-0 right-0 flex items-stretch" style={{ width: MAX_TRANSLATE }}>
         {action}
@@ -169,7 +179,7 @@ export function SwipeToReveal({
         ref={rowRef}
         onClick={handleClick}
         className="relative z-10 bg-card"
-        style={{ touchAction: "pan-y", willChange: "translate" }}
+        style={{ willChange: "translate" }}
       >
         {children}
       </div>

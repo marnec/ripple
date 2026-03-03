@@ -43,6 +43,9 @@ function ProjectTasksContent({
 }) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<"list" | "board">(isMobile ? "list" : "board");
+
+  // Force list view on mobile — kanban doesn't work on small screens
+  const effectiveView = isMobile ? "list" : view;
   const [filters, setFilters] = useState<TaskFilters>({
     hideCompleted: true,
     assigneeIds: [],
@@ -75,19 +78,21 @@ function ProjectTasksContent({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6">
-      <Tabs value={view} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
+      <Tabs value={effectiveView} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
-            <TabsList>
-              <TabsTrigger value="board" className="flex items-center gap-2">
-                <Kanban className="h-4 w-4" />
-                Board
-              </TabsTrigger>
-              <TabsTrigger value="list" className="flex items-center gap-2">
-                <LayoutList className="h-4 w-4" />
-                List
-              </TabsTrigger>
-            </TabsList>
+            {!isMobile && (
+              <TabsList>
+                <TabsTrigger value="board" className="flex items-center gap-2">
+                  <Kanban className="h-4 w-4" />
+                  Board
+                </TabsTrigger>
+                <TabsTrigger value="list" className="flex items-center gap-2">
+                  <LayoutList className="h-4 w-4" />
+                  List
+                </TabsTrigger>
+              </TabsList>
+            )}
             {contentLoading && <RippleSpinner size={24} />}
           </div>
         </div>

@@ -39,9 +39,13 @@ type TaskRowProps = {
   statuses?: Array<{ _id: string; name: string; color: string }>;
   onStatusChange?: (statusId: string) => void;
   onClick: () => void;
+  /** Hide the status dropdown (e.g. on mobile where swipe handles status). */
+  hideStatusMenu?: boolean;
+  /** Remove rounded corners so the row sits flush inside a SwipeToReveal wrapper. */
+  flush?: boolean;
 };
 
-export function TaskRow({ task, statuses, onStatusChange, onClick }: TaskRowProps) {
+export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush }: TaskRowProps) {
   const taskId = formatTaskId(task.projectKey, task.number);
 
   return (
@@ -52,7 +56,7 @@ export function TaskRow({ task, statuses, onStatusChange, onClick }: TaskRowProp
         viewTransitionName: `--task-${task._id}`,
         viewTransitionClass: "task-card",
       } as React.CSSProperties}
-      className="cursor-pointer hover:bg-accent transition-colors border-input"
+      className={cn("cursor-pointer hover:bg-accent transition-colors border-input", flush && "rounded-none")}
     >
       <ItemMedia>
         {getPriorityIcon(task.priority)}
@@ -86,30 +90,40 @@ export function TaskRow({ task, statuses, onStatusChange, onClick }: TaskRowProp
           </span>
         )}
 
-        {task.status && statuses && onStatusChange ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <button className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground cursor-pointer hover:bg-muted-foreground/20 transition-colors">
-                <span
-                  className={cn("w-1.5 h-1.5 rounded-full", task.status.color)}
-                  aria-hidden="true"
-                />
-                {task.status.name}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              {statuses.map((s) => (
-                <DropdownMenuItem
-                  key={s._id}
-                  onClick={() => onStatusChange(s._id)}
-                  className="flex items-center gap-2"
-                >
-                  <span className={cn("w-2 h-2 rounded-full", s.color)} />
-                  {s.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {task.status ? (
+          hideStatusMenu ? (
+            <span className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground">
+              <span
+                className={cn("w-1.5 h-1.5 rounded-full", task.status.color)}
+                aria-hidden="true"
+              />
+              {task.status.name}
+            </span>
+          ) : statuses && onStatusChange ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <button className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground cursor-pointer hover:bg-muted-foreground/20 transition-colors">
+                  <span
+                    className={cn("w-1.5 h-1.5 rounded-full", task.status.color)}
+                    aria-hidden="true"
+                  />
+                  {task.status.name}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                {statuses.map((s) => (
+                  <DropdownMenuItem
+                    key={s._id}
+                    onClick={() => onStatusChange(s._id)}
+                    className="flex items-center gap-2"
+                  >
+                    <span className={cn("w-2 h-2 rounded-full", s.color)} />
+                    {s.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null
         ) : null}
 
         {task.assignee && (
