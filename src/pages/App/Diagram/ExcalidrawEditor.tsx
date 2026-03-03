@@ -81,6 +81,9 @@ export function ExcalidrawEditor({
         .excalidraw .ToolIcon__LaserPointer { display: none !important; }
         .excalidraw .default-sidebar-trigger { display: none !important; }
         .excalidraw .UserList__wrapper { display: none !important; }
+        .excalidraw .zoom-actions { display: none !important; }
+        .excalidraw .undo-redo-buttons { display: none !important; }
+        .excalidraw .HelpButton { display: none !important; }
       `}</style>
       
       <Excalidraw

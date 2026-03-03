@@ -20,6 +20,7 @@ import * as Y from "yjs";
 
 function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
   const viewer = useQuery(api.users.viewer);
+  const diagram = useQuery(api.diagrams.get, { id: diagramId });
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   const { resolvedTheme } = useTheme();
   const isDarkTheme = resolvedTheme === "dark";
@@ -103,64 +104,73 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     });
   };
 
-  if (!viewer) {
+  if (!viewer || diagram === undefined) {
     return <div className="h-full w-full" />;
   }
 
   // Show snapshot fallback in cold-start offline mode
   if (isColdStart && snapshotElements) {
     return (
-      <div className="relative h-full w-full">
-        <div className="absolute top-5 right-10 z-50 flex items-center gap-3">
-          <ConnectionStatus isConnected={false} />
+      <div className="flex h-full w-full flex-col">
+        <div className="flex items-center justify-between px-3 py-1.5 border-b">
+          <div className="flex h-8 items-center gap-2">
+            <span className="text-sm text-muted-foreground">Viewing saved version (offline)</span>
+          </div>
+          <div className="flex h-8 items-center gap-3">
+            <ConnectionStatus isConnected={false} />
+          </div>
         </div>
-        <div className="absolute top-5 left-10 z-50 text-sm text-muted-foreground">
-          Viewing saved version (offline)
+        <div className="flex-1 overflow-hidden">
+          <Excalidraw
+            initialData={{ elements: snapshotElements }}
+            viewModeEnabled={true}
+            theme={resolvedTheme as Theme}
+            zenModeEnabled={true}
+          />
         </div>
-        <Excalidraw
-          initialData={{ elements: snapshotElements }}
-          viewModeEnabled={true}
-          theme={resolvedTheme as Theme}
-          zenModeEnabled={true}
-        />
       </div>
     );
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden animate-fade-in">
-      {/* Header with collaboration UI */}
-      <div className="absolute top-5 right-10 z-50 flex items-center gap-3">
-        <FavoriteButton
-          resourceType="diagram"
-          resourceId={diagramId}
-          workspaceId={workspaceId}
-        />
-        <ConnectionStatus isConnected={isConnected} />
-        {isConnected && (
-          <ActiveUsers
-            remoteUsers={remotePointers.map((p) => ({
-              ...p,
-              cursor: p.pointer ? { anchor: 0, head: 0 } : null, // Map pointer to cursor for ActiveUsers compatibility
-            }))}
-            currentUser={viewer && awareness ? { name: viewer.name, color: getExcalidrawCollaboratorColor(awareness.clientID, isDarkTheme) } : undefined}
-            onUserClick={handleJumpToUser}
+    <div className="flex h-full w-full flex-col animate-fade-in">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-3 py-1.5 border-b">
+        <div className="flex h-8 items-center gap-2">
+          <FavoriteButton
+            resourceType="diagram"
+            resourceId={diagramId}
+            workspaceId={workspaceId}
+          />
+          <h1 className="hidden sm:block text-lg font-semibold truncate">{diagram?.name}</h1>
+        </div>
+        <div className="flex h-8 items-center gap-3">
+          <ConnectionStatus isConnected={isConnected} />
+          {isConnected && (
+            <ActiveUsers
+              remoteUsers={remotePointers.map((p) => ({
+                ...p,
+                cursor: p.pointer ? { anchor: 0, head: 0 } : null,
+              }))}
+              currentUser={viewer && awareness ? { name: viewer.name, color: getExcalidrawCollaboratorColor(awareness.clientID, isDarkTheme) } : undefined}
+              onUserClick={handleJumpToUser}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Canvas */}
+      <div className="flex-1 overflow-hidden">
+        {!isLoading && (
+          <ExcalidrawEditor
+            yElements={yElements}
+            yAssets={yAssets}
+            awareness={awareness}
+            provider={provider}
+            onExcalidrawAPI={setExcalidrawAPI}
           />
         )}
       </div>
-
-      {/* Editor */}
-      {!isLoading && (
-        <ExcalidrawEditor
-          yElements={yElements}
-          yAssets={yAssets}
-          awareness={awareness}
-          provider={provider}
-          onExcalidrawAPI={setExcalidrawAPI}
-        />
-      )}
-
-      {isLoading && <div className="h-full w-full" />}
     </div>
   );
 }
