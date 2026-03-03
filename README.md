@@ -7,17 +7,10 @@ NEXT STEPS:
 
 - investigate rework all deletion cascade to soft-deletion
 
-
-- excalidraw
-    - [ ] remove zoom and history controls
-    - [ ] fix facepile overlap native controls in mobile view
-    - [ ] uniform to standard resource page layout
-
 - knowledge-graph
     - [ ] add document-paragraph embeds in tasks and other docs (similar mechanism to spreadsheet range, use block id, show referenced blocks)
     - [ ] improve spreadsheet reference highlight (border)
     - [ ] add a backlink section that shows cross-references
-
 
 keyboard accessiblity
     - [ ] command palette
