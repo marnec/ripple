@@ -73,6 +73,7 @@ function ProjectLayoutContent({
               key={tab.to}
               to={tab.to}
               end={tab.end}
+              viewTransition
               className={({ isActive }) =>
                 cn(
                   "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all",

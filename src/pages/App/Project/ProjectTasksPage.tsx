@@ -76,6 +76,14 @@ function ProjectTasksContent({
   const members = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const contentLoading = tasks === undefined || statuses === undefined;
 
+  if (isMobile && contentLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <RippleSpinner size={32} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6">
       <Tabs value={effectiveView} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
@@ -93,7 +101,7 @@ function ProjectTasksContent({
                 </TabsTrigger>
               </TabsList>
             )}
-            {contentLoading && <RippleSpinner size={24} />}
+            {!isMobile && contentLoading && <RippleSpinner size={24} />}
           </div>
         </div>
 
@@ -111,7 +119,7 @@ function ProjectTasksContent({
           <KanbanBoard projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} onSortBlocked={handleSortBlocked} />
         </TabsContent>
 
-        <TabsContent value="list" className="mt-0 overflow-auto">
+        <TabsContent value="list" className="mt-0 overflow-auto animate-fade-in">
           <Tasks projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} />
         </TabsContent>
       </Tabs>
