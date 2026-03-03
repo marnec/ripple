@@ -291,7 +291,7 @@ const ResizableSpreadsheetRange = ({
 
   if (!spreadsheetId || !cellRef) {
     return (
-      <div className="p-4 border rounded-lg text-center text-muted-foreground">
+      <div className="p-3 border rounded-lg text-center text-muted-foreground">
         <p>Please select a spreadsheet range to display.</p>
       </div>
     );
@@ -299,7 +299,7 @@ const ResizableSpreadsheetRange = ({
 
   if (spreadsheet === null) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-4 border rounded-lg text-center text-muted-foreground bg-secondary h-28 gap-2">
+      <div className="w-full flex flex-col items-center justify-center p-3 border rounded-lg text-center text-muted-foreground bg-secondary h-28 gap-2">
         <CircleSlash className="h-8 w-8 text-destructive" />
         <p className="text-destructive text-sm">
           Spreadsheet not found. It may have been deleted.

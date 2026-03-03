@@ -559,4 +559,106 @@ http.route({
   }),
 });
 
+/**
+ * GET /collaboration/block-refs
+ *
+ * Get list of tracked document block references for a document.
+ * Called by PartyKit to know which blocks to monitor and push updates for.
+ */
+http.route({
+  path: "/collaboration/block-refs",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.PARTYKIT_SECRET;
+
+      if (!expectedSecret || !authHeader || authHeader.substring(7) !== expectedSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const url = new URL(request.url);
+      const documentId = url.searchParams.get("documentId");
+
+      if (!documentId) {
+        return new Response(
+          JSON.stringify({ error: "Missing documentId" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      const refs = await ctx.runQuery(
+        internal.documentBlockRefs.getReferencedBlockRefs,
+        { documentId: documentId as any },
+      );
+
+      return new Response(JSON.stringify(refs), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Block refs query error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }),
+});
+
+/**
+ * POST /collaboration/block-content
+ *
+ * Push updated block content from PartyKit when document text changes.
+ * Called by PartyKit server with debounced batches of changed blocks.
+ */
+http.route({
+  path: "/collaboration/block-content",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.PARTYKIT_SECRET;
+
+      if (!expectedSecret || !authHeader || authHeader.substring(7) !== expectedSecret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const body = (await request.json()) as {
+        documentId: string;
+        updates: Array<{ blockId: string; blockType: string; textContent: string }>;
+      };
+
+      if (!body.documentId || !Array.isArray(body.updates)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid request body" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      await ctx.runMutation(internal.documentBlockRefs.upsertBlockContent, {
+        documentId: body.documentId as any,
+        updates: body.updates,
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Block content update error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }),
+});
+
 export default http;

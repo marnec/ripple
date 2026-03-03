@@ -121,7 +121,7 @@ function collectInlineSpreadsheetRefs(nodes: InlineNode[], refs: Set<string>) {
   }
 }
 
-/** Extract all hard-embed reference keys (diagram blocks, spreadsheet refs) from the editor document tree. */
+/** Extract all hard-embed reference keys (diagram blocks, spreadsheet refs, document block embeds) from the editor document tree. */
 export function extractHardEmbeds(blocks: unknown[]): Set<string> {
   const refs = new Set<string>();
   for (const block of blocks as EditorBlock[]) {
@@ -130,6 +130,9 @@ export function extractHardEmbeds(blocks: unknown[]): Set<string> {
     }
     if (block.type === "spreadsheetRange" && block.props?.spreadsheetId) {
       refs.add(`spreadsheet|${block.props.spreadsheetId}`);
+    }
+    if (block.type === "documentBlockEmbed" && block.props?.documentId) {
+      refs.add(`document|${block.props.documentId}`);
     }
     if (Array.isArray(block.content)) {
       collectInlineSpreadsheetRefs(block.content, refs);
@@ -143,6 +146,22 @@ export function extractHardEmbeds(blocks: unknown[]): Set<string> {
     }
     if (block.children) {
       for (const key of extractHardEmbeds(block.children)) {
+        refs.add(key);
+      }
+    }
+  }
+  return refs;
+}
+
+/** Extract all documentBlockEmbed keys (documentId|blockId) from the editor document tree. */
+export function extractDocBlockRefs(blocks: unknown[]): Set<string> {
+  const refs = new Set<string>();
+  for (const block of blocks as EditorBlock[]) {
+    if (block.type === "documentBlockEmbed" && block.props?.documentId && block.props?.blockId) {
+      refs.add(`${block.props.documentId}|${block.props.blockId}`);
+    }
+    if (block.children) {
+      for (const key of extractDocBlockRefs(block.children)) {
         refs.add(key);
       }
     }

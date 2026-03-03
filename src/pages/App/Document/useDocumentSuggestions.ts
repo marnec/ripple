@@ -1,11 +1,12 @@
 import { isSingleCell } from "@shared/cellRef";
-import { PenTool, Table } from "lucide-react";
+import { FileText, PenTool, Table } from "lucide-react";
 import { useCallback, createElement } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import type { DocumentSchemaEditor } from "./schema";
 
 interface Diagram { _id: Id<"diagrams">; name: string }
 interface Spreadsheet { _id: Id<"spreadsheets">; name: string }
+interface Document { _id: Id<"documents">; name: string }
 
 interface CellRefDialogOpen {
   open: boolean;
@@ -15,22 +16,38 @@ interface CellRefDialogOpen {
 
 type CellRefDialogState = CellRefDialogOpen | null;
 
+interface BlockPickerDialogOpen {
+  open: boolean;
+  documentId: Id<"documents">;
+  documentName: string;
+}
+
+type BlockPickerDialogState = BlockPickerDialogOpen | null;
+
 /**
- * Builds the `#`-trigger suggestion items (diagrams + spreadsheets) and the
- * CellRefDialog insert handler for DocumentEditor.
+ * Builds the `#`-trigger suggestion items (diagrams + spreadsheets + documents)
+ * and the CellRefDialog/BlockPickerDialog insert handlers for DocumentEditor.
  */
 export function useDocumentSuggestions({
   diagrams,
   spreadsheets,
+  documents,
   editor,
   ensureCellRef,
+  ensureBlockRef,
   setCellRefDialog,
+  setBlockPickerDialog,
+  currentDocumentId,
 }: {
   diagrams: Diagram[] | undefined;
   spreadsheets: Spreadsheet[] | undefined;
+  documents: Document[] | undefined;
   editor: DocumentSchemaEditor | null;
   ensureCellRef: (args: { spreadsheetId: Id<"spreadsheets">; cellRef: string }) => Promise<null>;
+  ensureBlockRef: (args: { documentId: Id<"documents">; blockId: string }) => Promise<null>;
   setCellRefDialog: (state: CellRefDialogState) => void;
+  setBlockPickerDialog: (state: BlockPickerDialogState) => void;
+  currentDocumentId?: Id<"documents">;
 }) {
   // getHashItems is called on every keystroke — no need for referential stability
   const getHashItems = async (query: string) => {
@@ -42,7 +59,7 @@ export function useDocumentSuggestions({
           [
             {
               type: "diagram" as const,
-              props: { diagramId: diagram._id } as Record<string, unknown>,
+              props: { diagramId: diagram._id } as any,
             },
           ],
           editor.getTextCursorPosition().block,
@@ -66,7 +83,23 @@ export function useDocumentSuggestions({
       group: "Spreadsheets",
     }));
 
-    return [...diagramItems, ...spreadsheetItems].filter((item) =>
+    // Exclude the current document from the list (can't embed blocks from yourself)
+    const documentItems = (documents ?? [])
+      .filter((doc) => doc._id !== currentDocumentId)
+      .map((doc) => ({
+        title: doc.name,
+        onItemClick: () => {
+          setBlockPickerDialog({
+            open: true,
+            documentId: doc._id,
+            documentName: doc.name,
+          });
+        },
+        icon: createElement(FileText, { className: "h-4 w-4" }),
+        group: "Documents",
+      }));
+
+    return [...diagramItems, ...spreadsheetItems, ...documentItems].filter((item) =>
       item.title.toLowerCase().includes(query.toLowerCase()),
     );
   };
@@ -92,7 +125,7 @@ export function useDocumentSuggestions({
             [
               {
                 type: "spreadsheetRange" as const,
-                props: { spreadsheetId, cellRef } as Record<string, unknown>,
+                props: { spreadsheetId, cellRef } as any,
               },
             ],
             editor.getTextCursorPosition().block,
@@ -114,5 +147,29 @@ export function useDocumentSuggestions({
     [editor, ensureCellRef, setCellRefDialog],
   );
 
-  return { getHashItems, handleCellRefInsert };
+  const handleBlockPickerInsert = useCallback(
+    (blockId: string, blockPickerDialog: BlockPickerDialogOpen) => {
+      if (!editor) return;
+
+      const { documentId } = blockPickerDialog;
+      editor.focus();
+
+      editor.insertBlocks(
+        [
+          {
+            type: "documentBlockEmbed" as const,
+            props: { documentId, blockId } as any,
+          },
+        ],
+        editor.getTextCursorPosition().block,
+        "after",
+      );
+
+      void ensureBlockRef({ documentId, blockId });
+      setBlockPickerDialog(null);
+    },
+    [editor, ensureBlockRef, setBlockPickerDialog],
+  );
+
+  return { getHashItems, handleCellRefInsert, handleBlockPickerInsert };
 }

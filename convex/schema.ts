@@ -254,12 +254,22 @@ export default defineSchema({
   contentReferences: defineTable({
     sourceType: v.union(v.literal("document"), v.literal("task")),
     sourceId: v.string(),
-    targetType: v.union(v.literal("diagram"), v.literal("spreadsheet")),
+    targetType: v.union(v.literal("diagram"), v.literal("spreadsheet"), v.literal("document")),
     targetId: v.string(),
     workspaceId: v.id("workspaces"),
   })
     .index("by_target", ["targetId"])
     .index("by_source", ["sourceId"]),
+
+  documentBlockRefs: defineTable({
+    documentId: v.id("documents"),
+    blockId: v.string(),
+    blockType: v.string(),
+    textContent: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_document", ["documentId"])
+    .index("by_document_blockId", ["documentId", "blockId"]),
 
   medias: defineTable({
     storageId: v.id("_storage"),

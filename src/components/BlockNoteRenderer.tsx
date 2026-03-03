@@ -3,6 +3,11 @@ import { TaskMentionChip } from "@/pages/App/Chat/TaskMentionChip";
 import { ProjectReferenceChip } from "@/pages/App/Chat/ProjectReferenceChip";
 import { ResourceReferenceChip } from "@/pages/App/Chat/ResourceReferenceChip";
 import { UserMentionRenderer } from "@/pages/App/Chat/UserMentionRenderer";
+import { useDocumentBlockPreview } from "@/hooks/use-document-block-preview";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
+import { FileText } from "lucide-react";
 
 // BlockNote JSON types (simplified for rendering)
 export type Style = {
@@ -184,6 +189,9 @@ function BlockRenderer({ block }: { block: Block }) {
     case "image":
       return null;
 
+    case "documentBlockEmbed":
+      return <DocumentBlockEmbedRenderer props={block.props} />;
+
     case "table":
       return <TableRenderer content={block.content} />;
 
@@ -271,6 +279,50 @@ function InlineRenderer({ content }: { content: InlineContent }) {
     default:
       return null;
   }
+}
+
+function DocumentBlockEmbedRenderer({ props }: { props?: Record<string, unknown> }) {
+  const documentId = props?.documentId as string | undefined;
+  const blockId = props?.blockId as string | undefined;
+
+  const document = useQuery(
+    api.documents.get,
+    documentId ? { id: documentId as Id<"documents"> } : "skip",
+  );
+  const { textContent, blockType } = useDocumentBlockPreview(
+    (documentId ?? "") as Id<"documents">,
+    blockId ?? "",
+  );
+
+  if (!documentId || !blockId) return null;
+
+  if (document === null) {
+    return (
+      <div className="text-sm text-muted-foreground italic my-1">
+        Referenced document was deleted
+      </div>
+    );
+  }
+
+  if (!textContent) {
+    return (
+      <div className="text-sm text-muted-foreground italic my-1">
+        Referenced block not found
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-l-3 border-primary/30 pl-3 py-1 my-1">
+      <p className={`text-sm ${blockType === "heading" ? "font-semibold" : ""}`}>
+        {textContent}
+      </p>
+      <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
+        <FileText className="h-3 w-3" />
+        <span className="truncate max-w-40">{document?.name ?? "Document"}</span>
+      </div>
+    </div>
+  );
 }
 
 function StyledText({ text, styles }: { text: string; styles: Style }) {

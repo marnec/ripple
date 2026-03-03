@@ -36,7 +36,7 @@ export const populateFromSnapshot = internalAction({
 
     // Parse with Yjs
     const yDoc = new Y.Doc();
-    Y.applyUpdateV2(yDoc, new Uint8Array(arrayBuffer));
+    Y.applyUpdate(yDoc, new Uint8Array(arrayBuffer));
     const yData = yDoc.getArray<Y.Map<string>>("data");
     const yFormulaValues = yDoc.getMap<string>("formulaValues");
 

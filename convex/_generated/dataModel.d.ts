@@ -257,7 +257,7 @@ export type DataModel = {
       sourceId: string;
       sourceType: "document" | "task";
       targetId: string;
-      targetType: "diagram" | "spreadsheet";
+      targetType: "diagram" | "spreadsheet" | "document";
       workspaceId: Id<"workspaces">;
       _id: Id<"contentReferences">;
       _creationTime: number;
@@ -366,6 +366,33 @@ export type DataModel = {
         filterFields: "workspaceId";
       };
     };
+    vectorIndexes: {};
+  };
+  documentBlockRefs: {
+    document: {
+      blockId: string;
+      blockType: string;
+      documentId: Id<"documents">;
+      textContent: string;
+      updatedAt: number;
+      _id: Id<"documentBlockRefs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "blockId"
+      | "blockType"
+      | "documentId"
+      | "textContent"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_document: ["documentId", "_creationTime"];
+      by_document_blockId: ["documentId", "blockId", "_creationTime"];
+    };
+    searchIndexes: {};
     vectorIndexes: {};
   };
   documents: {

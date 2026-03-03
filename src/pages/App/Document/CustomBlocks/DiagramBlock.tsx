@@ -30,7 +30,7 @@ const DiagramView = ({
 
   if (diagram === null) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-4 border rounded-lg text-center text-muted-foreground bg-secondary h-40 gap-2">
+      <div className="w-full flex flex-col items-center justify-center p-3 border rounded-lg text-center text-muted-foreground bg-secondary h-40 gap-2">
         <CircleSlash className="h-10 w-10 text-destructive" />
         <p className="text-destructive">
           Diagram not found. It may have been deleted.
@@ -42,10 +42,8 @@ const DiagramView = ({
   if (svgHtml) {
     return (
       <div className="relative group animate-fade-in">
-        <div className="w-full flex justify-end">
-          <div className="text-sm text-right -mt-4 -mr-4 px-2 rounded-tr rounded-bl min-h-lh animate-fade-in">
-            {diagram?.name}
-          </div>
+        <div className="w-full text-xs text-right text-muted-foreground rounded-tr rounded-bl min-h-lh animate-fade-in">
+          {diagram?.name}
         </div>
         <div
           className="w-full cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
@@ -59,7 +57,7 @@ const DiagramView = ({
   // No SVG available — empty diagram or never generated
   return (
     <div
-      className="w-full flex flex-col items-center justify-center p-4 text-center text-muted-foreground bg-secondary h-40 gap-2 cursor-pointer hover:bg-muted/50 transition-colors animate-fade-in"
+      className="w-full flex flex-col items-center justify-center p-3 text-center text-muted-foreground bg-secondary h-40 gap-2 cursor-pointer hover:bg-muted/50 transition-colors animate-fade-in"
       onClick={handleClick}
     >
       <p>Click to view or edit this diagram.</p>
@@ -173,7 +171,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
 
   if (!diagramId) {
     return (
-      <div className="p-4 border rounded-lg text-center text-muted-foreground">
+      <div className="p-3 border rounded-lg text-center text-muted-foreground">
         <p>Please select a diagram to display.</p>
       </div>
     );
@@ -214,7 +212,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
         }
         setShowHandles(false);
       }}>
-      <div className="p-4 border rounded-lg h-full">
+      <div className="p-3 border rounded-lg h-full">
         <DiagramView
           diagramId={diagramId as Id<"diagrams">}
           onAspectRatioChange={setAspectRatio}

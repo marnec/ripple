@@ -9,13 +9,14 @@ import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
-import { useEditorTracking, extractCellRefs, extractHardEmbeds } from "../../../hooks/use-editor-tracking";
+import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs } from "../../../hooks/use-editor-tracking";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useSnapshotFallback } from "../../../hooks/use-snapshot-fallback";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { getUserColor } from "../../../lib/user-colors";
 import { ActiveUsers } from "./ActiveUsers";
+import { BlockPickerDialog } from "./BlockPickerDialog";
 import { CellRefDialog } from "./CellRefDialog";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { documentSchema as schema } from "./schema";
@@ -43,6 +44,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     api.spreadsheets.list,
     document ? { workspaceId: document.workspaceId } : "skip",
   );
+  const documents = useQuery(
+    api.documents.list,
+    document ? { workspaceId: document.workspaceId } : "skip",
+  );
   const workspaceMembers = useQuery(
     api.workspaceMembers.membersByWorkspace,
     document ? { workspaceId: document.workspaceId } : "skip",
@@ -50,12 +55,20 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const viewer = useQuery(api.users.viewer);
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const removeCellRef = useMutation(api.spreadsheetCellRefs.removeCellRef);
+  const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
+  const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
   const syncReferences = useMutation(api.contentReferences.syncReferences);
 
   const [cellRefDialog, setCellRefDialog] = useState<{
     open: boolean;
     spreadsheetId: Id<"spreadsheets">;
     spreadsheetName: string;
+  } | null>(null);
+
+  const [blockPickerDialog, setBlockPickerDialog] = useState<{
+    open: boolean;
+    documentId: Id<"documents">;
+    documentName: string;
   } | null>(null);
 
   const uploadFile = useUploadFile(document?.workspaceId);
@@ -90,14 +103,28 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   );
   useEditorTracking(editor, extractCellRefs, { onRemoved: onCellRefsRemoved });
 
-  // Sync hard-embed references (diagrams, spreadsheets) to contentReferences table
+  // Track document block ref removals
+  const onDocBlockRefsRemoved = useCallback(
+    (removed: Set<string>) => {
+      for (const key of removed) {
+        const sep = key.indexOf("|");
+        const docId = key.slice(0, sep) as Id<"documents">;
+        const blockId = key.slice(sep + 1);
+        void removeBlockRef({ documentId: docId, blockId });
+      }
+    },
+    [removeBlockRef],
+  );
+  useEditorTracking(editor, extractDocBlockRefs, { onRemoved: onDocBlockRefsRemoved });
+
+  // Sync hard-embed references (diagrams, spreadsheets, documents) to contentReferences table
   const onEmbedsChanged = useCallback(
     (current: Set<string>) => {
       if (!document) return;
       const references = [...current].map((key) => {
         const sep = key.indexOf("|");
         return {
-          targetType: key.slice(0, sep) as "diagram" | "spreadsheet",
+          targetType: key.slice(0, sep) as "diagram" | "spreadsheet" | "document",
           targetId: key.slice(sep + 1),
         };
       });
@@ -123,13 +150,17 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     resourceId: documentId,
   });
 
-  // Suggestion menu items (#-trigger) and cell ref insert handler
-  const { getHashItems, handleCellRefInsert } = useDocumentSuggestions({
+  // Suggestion menu items (#-trigger) and insert handlers
+  const { getHashItems, handleCellRefInsert, handleBlockPickerInsert } = useDocumentSuggestions({
     diagrams,
     spreadsheets,
+    documents,
     editor,
     ensureCellRef,
+    ensureBlockRef,
     setCellRefDialog,
+    setBlockPickerDialog,
+    currentDocumentId: documentId,
   });
 
   if (isColdStart && snapshotDoc) {
@@ -189,6 +220,20 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             onInsert={(cellRef) => {
               if (!cellRefDialog) return;
               handleCellRefInsert(cellRef, cellRefDialog);
+            }}
+          />
+        )}
+        {blockPickerDialog && (
+          <BlockPickerDialog
+            open={blockPickerDialog.open}
+            onOpenChange={(open) => {
+              if (!open) setBlockPickerDialog(null);
+            }}
+            documentId={blockPickerDialog.documentId}
+            documentName={blockPickerDialog.documentName}
+            onInsert={(blockId) => {
+              if (!blockPickerDialog) return;
+              handleBlockPickerInsert(blockId, blockPickerDialog);
             }}
           />
         )}

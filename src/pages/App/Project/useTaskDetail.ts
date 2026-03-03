@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
@@ -7,22 +7,41 @@ import { useDocumentCollaboration } from "../../../hooks/use-document-collaborat
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 
-/** Extract diagram references (diagram blocks + diagramEmbed inline) from task description. */
-function extractTaskDiagramEmbeds(blocks: any[]): Set<string> {
+/** Extract all hard-embed reference keys from task description (diagrams + document block embeds). */
+function extractTaskEmbedRefs(blocks: any[]): Set<string> {
   const refs = new Set<string>();
   for (const block of blocks) {
     if (block.type === "diagram" && block.props?.diagramId) {
-      refs.add(block.props.diagramId);
+      refs.add(`diagram|${block.props.diagramId}`);
+    }
+    if (block.type === "documentBlockEmbed" && block.props?.documentId) {
+      refs.add(`document|${block.props.documentId}`);
     }
     if (Array.isArray(block.content)) {
       for (const ic of block.content) {
         if (ic.type === "diagramEmbed" && ic.props?.diagramId) {
-          refs.add(ic.props.diagramId);
+          refs.add(`diagram|${ic.props.diagramId}`);
         }
       }
     }
     if (block.children) {
-      for (const key of extractTaskDiagramEmbeds(block.children)) {
+      for (const key of extractTaskEmbedRefs(block.children)) {
+        refs.add(key);
+      }
+    }
+  }
+  return refs;
+}
+
+/** Extract documentBlockEmbed keys (documentId|blockId) for block ref cache cleanup. */
+function extractTaskDocBlockRefs(blocks: any[]): Set<string> {
+  const refs = new Set<string>();
+  for (const block of blocks) {
+    if (block.type === "documentBlockEmbed" && block.props?.documentId && block.props?.blockId) {
+      refs.add(`${block.props.documentId}|${block.props.blockId}`);
+    }
+    if (block.children) {
+      for (const key of extractTaskDocBlockRefs(block.children)) {
         refs.add(key);
       }
     }
@@ -56,6 +75,7 @@ export function useTaskDetail({
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
   const syncReferences = useMutation(api.contentReferences.syncReferences);
+  const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [titleValue, setTitleValue] = useState("");
@@ -76,54 +96,85 @@ export function useTaskDetail({
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
 
-  // Sync diagram embed references to contentReferences table
-  const prevDiagramEmbedsRef = useRef<Set<string>>(new Set());
-  const diagramEmbedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Parse "type|id" keys into contentReferences format
+  const parseEmbedRefs = useCallback((keys: Set<string>) => {
+    return [...keys].map((key) => {
+      const [targetType, targetId] = key.split("|");
+      return { targetType: targetType as "diagram" | "document", targetId };
+    });
+  }, []);
+
+  // Sync embed references (diagrams + document block embeds) to contentReferences table
+  const prevEmbedsRef = useRef<Set<string>>(new Set());
+  const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!editor || !taskId) return;
-    const initial = extractTaskDiagramEmbeds(editor.document);
-    prevDiagramEmbedsRef.current = initial;
+    const initial = extractTaskEmbedRefs(editor.document);
+    prevEmbedsRef.current = initial;
 
     // Sync on mount so pre-existing embeds get tracked
     if (initial.size > 0) {
-      const references = [...initial].map((diagramId) => ({
-        targetType: "diagram" as const,
-        targetId: diagramId,
-      }));
       void syncReferences({
         sourceType: "task",
         sourceId: taskId,
-        references,
+        references: parseEmbedRefs(initial),
         workspaceId,
       });
     }
 
     const unsubscribe = editor.onChange(() => {
-      if (diagramEmbedDebounceRef.current) clearTimeout(diagramEmbedDebounceRef.current);
-      diagramEmbedDebounceRef.current = setTimeout(() => {
-        const current = extractTaskDiagramEmbeds(editor.document);
-        if (current.size !== prevDiagramEmbedsRef.current.size ||
-            [...current].some((k) => !prevDiagramEmbedsRef.current.has(k))) {
-          const references = [...current].map((diagramId) => ({
-            targetType: "diagram" as const,
-            targetId: diagramId,
-          }));
+      if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current);
+      embedDebounceRef.current = setTimeout(() => {
+        const current = extractTaskEmbedRefs(editor.document);
+        if (current.size !== prevEmbedsRef.current.size ||
+            [...current].some((k) => !prevEmbedsRef.current.has(k))) {
           void syncReferences({
             sourceType: "task",
             sourceId: taskId,
-            references,
+            references: parseEmbedRefs(current),
             workspaceId,
           });
         }
-        prevDiagramEmbedsRef.current = current;
+        prevEmbedsRef.current = current;
       }, 2000);
     });
 
     return () => {
       unsubscribe();
-      if (diagramEmbedDebounceRef.current) clearTimeout(diagramEmbedDebounceRef.current);
+      if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current);
     };
-  }, [editor, taskId, workspaceId, syncReferences]);
+  }, [editor, taskId, workspaceId, syncReferences, parseEmbedRefs]);
+
+  // Track document block ref removals for cache cleanup
+  const prevDocBlockRefsRef = useRef<Set<string>>(new Set());
+  const docBlockRefDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!editor || !taskId) return;
+    prevDocBlockRefsRef.current = extractTaskDocBlockRefs(editor.document);
+
+    const unsubscribe = editor.onChange(() => {
+      if (docBlockRefDebounceRef.current) clearTimeout(docBlockRefDebounceRef.current);
+      docBlockRefDebounceRef.current = setTimeout(() => {
+        const current = extractTaskDocBlockRefs(editor.document);
+        // Clean up removed block refs
+        for (const key of prevDocBlockRefsRef.current) {
+          if (!current.has(key)) {
+            const [documentId, blockId] = key.split("|");
+            void removeBlockRef({
+              documentId: documentId as Id<"documents">,
+              blockId,
+            });
+          }
+        }
+        prevDocBlockRefsRef.current = current;
+      }, 2000);
+    });
+
+    return () => {
+      unsubscribe();
+      if (docBlockRefDebounceRef.current) clearTimeout(docBlockRefDebounceRef.current);
+    };
+  }, [editor, taskId, removeBlockRef]);
 
   // Sync title when task loads
   useEffect(() => {

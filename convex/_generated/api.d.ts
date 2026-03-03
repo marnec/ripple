@@ -220,7 +220,7 @@ export declare const api: {
       {
         references: Array<{
           targetId: string;
-          targetType: "diagram" | "spreadsheet";
+          targetType: "diagram" | "spreadsheet" | "document";
         }>;
         sourceId: string;
         sourceType: "document" | "task";
@@ -354,6 +354,34 @@ export declare const api: {
       "public",
       { id: Id<"diagrams">; tags: Array<string> },
       null
+    >;
+  };
+  documentBlockRefs: {
+    ensureBlockRef: FunctionReference<
+      "mutation",
+      "public",
+      { blockId: string; documentId: Id<"documents"> },
+      null
+    >;
+    getBlockRef: FunctionReference<
+      "query",
+      "public",
+      { blockId: string; documentId: Id<"documents"> },
+      { blockType: string; textContent: string; updatedAt: number } | null
+    >;
+    removeBlockRef: FunctionReference<
+      "mutation",
+      "public",
+      { blockId: string; documentId: Id<"documents"> },
+      null
+    >;
+  };
+  documentBlockRefsNode: {
+    getDocumentBlocks: FunctionReference<
+      "action",
+      "public",
+      { documentId: Id<"documents"> },
+      Array<{ blockId: string; level?: number; text: string; type: string }>
     >;
   };
   documents: {
@@ -1385,6 +1413,60 @@ export declare const internal: {
       "mutation",
       "internal",
       { targetId: string },
+      null
+    >;
+  };
+  documentBlockRefs: {
+    checkMembership: FunctionReference<
+      "query",
+      "internal",
+      { userId: Id<"users">; workspaceId: Id<"workspaces"> },
+      boolean
+    >;
+    getDocumentInternal: FunctionReference<
+      "query",
+      "internal",
+      { id: Id<"documents"> },
+      {
+        _creationTime: number;
+        _id: Id<"documents">;
+        name: string;
+        tags?: Array<string>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      } | null
+    >;
+    getReferencedBlockRefs: FunctionReference<
+      "query",
+      "internal",
+      { documentId: Id<"documents"> },
+      Array<{ blockId: string }>
+    >;
+    removeAllForDocument: FunctionReference<
+      "mutation",
+      "internal",
+      { documentId: Id<"documents"> },
+      null
+    >;
+    upsertBlockContent: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        documentId: Id<"documents">;
+        updates: Array<{
+          blockId: string;
+          blockType: string;
+          textContent: string;
+        }>;
+      },
+      null
+    >;
+  };
+  documentBlockRefsNode: {
+    populateFromSnapshot: FunctionReference<
+      "action",
+      "internal",
+      { blockId: string; documentId: Id<"documents"> },
       null
     >;
   };

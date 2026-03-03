@@ -60,7 +60,7 @@ export const syncReferences = mutation({
     sourceId: v.string(),
     references: v.array(
       v.object({
-        targetType: v.union(v.literal("diagram"), v.literal("spreadsheet")),
+        targetType: v.union(v.literal("diagram"), v.literal("spreadsheet"), v.literal("document")),
         targetId: v.string(),
       }),
     ),

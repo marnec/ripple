@@ -4,8 +4,13 @@ import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { FileText, PenTool } from "lucide-react";
+import { useMutation } from "convex/react";
+import { useCallback, useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { BlockPickerDialog } from "../Document/BlockPickerDialog";
+import { api } from "../../../../convex/_generated/api";
+import { Id } from "../../../../convex/_generated/dataModel";
 
 type TaskDescriptionEditorProps = {
   editor: any;
@@ -25,12 +30,43 @@ export function TaskDescriptionEditor({
   hideLabel,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
+  const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
+
+  const [blockPickerDialog, setBlockPickerDialog] = useState<{
+    open: boolean;
+    documentId: Id<"documents">;
+    documentName: string;
+  } | null>(null);
 
   const getMemberItems = useMemberSuggestions({
     members,
     editor,
     group: "Project members",
   });
+
+  const handleBlockPickerInsert = useCallback(
+    (blockId: string) => {
+      if (!editor || !blockPickerDialog) return;
+
+      const { documentId } = blockPickerDialog;
+      editor.focus();
+
+      editor.insertBlocks(
+        [
+          {
+            type: "documentBlockEmbed",
+            props: { documentId, blockId },
+          },
+        ],
+        editor.getTextCursorPosition().block,
+        "after",
+      );
+
+      void ensureBlockRef({ documentId, blockId });
+      setBlockPickerDialog(null);
+    },
+    [editor, blockPickerDialog, ensureBlockRef],
+  );
 
   if (!editor) {
     return <div className={className} />;
@@ -74,13 +110,11 @@ export function TaskDescriptionEditor({
                     items.push({
                       title: doc.name,
                       onItemClick: () => {
-                        editor.insertInlineContent([
-                          {
-                            type: "documentLink",
-                            props: { documentId: doc._id },
-                          },
-                          " ",
-                        ]);
+                        setBlockPickerDialog({
+                          open: true,
+                          documentId: doc._id as Id<"documents">,
+                          documentName: doc.name,
+                        });
                       },
                       icon: <FileText className="h-4 w-4" />,
                       group: "Documents",
@@ -124,6 +158,17 @@ export function TaskDescriptionEditor({
           />
         </BlockNoteView>
       </div>
+      {blockPickerDialog && (
+        <BlockPickerDialog
+          open={blockPickerDialog.open}
+          onOpenChange={(open) => {
+            if (!open) setBlockPickerDialog(null);
+          }}
+          documentId={blockPickerDialog.documentId}
+          documentName={blockPickerDialog.documentName}
+          onInsert={handleBlockPickerInsert}
+        />
+      )}
     </div>
   );
 }

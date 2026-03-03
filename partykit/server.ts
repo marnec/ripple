@@ -3,6 +3,7 @@ import type { Connection, ConnectionContext } from "partyserver";
 import * as Y from "yjs";
 import type { ServerMessage } from "@shared/protocol";
 import { parseCellName, parseRange } from "@shared/cellRef";
+import { extractBlocksFromFragment } from "@shared/blockRef";
 
 /**
  * If the raw cell value is a formula (starts with "="), return the computed
@@ -26,6 +27,8 @@ const DISCONNECT_DEBOUNCE = 7_000; // 7 seconds
 const PERMISSION_CHECK_INTERVAL = 120_000; // 2 minutes
 const CELL_REF_DEBOUNCE = 2_000; // 2 seconds
 const CELL_REF_CACHE_TTL = 60_000; // 1 minute
+const BLOCK_REF_DEBOUNCE = 2_000; // 2 seconds
+const BLOCK_REF_CACHE_TTL = 60_000; // 1 minute
 const ALARM_TYPE_DISCONNECT = "disconnect";
 const ALARM_TYPE_PERMISSION_CHECK = "permission_check";
 
@@ -56,6 +59,12 @@ export default class CollaborationServer extends YServer {
   private trackedCellRefs: Array<{ cellRef: string }> | null = null;
   private trackedCellRefsLastFetch = 0;
 
+  // Document block reference observer state (doc rooms only)
+  private blockRefObserver: ((events: Y.YEvent<any>[], tx: Y.Transaction) => void) | null = null;
+  private blockRefPushTimeout: ReturnType<typeof setTimeout> | null = null;
+  private trackedBlockRefs: Array<{ blockId: string }> | null = null;
+  private trackedBlockRefsLastFetch = 0;
+
   // ---------------------------------------------------------------------------
   // YServer lifecycle hooks
   // ---------------------------------------------------------------------------
@@ -70,10 +79,12 @@ export default class CollaborationServer extends YServer {
     // and wires up the debounced onSave() callback.
     await super.onStart();
 
-    // Attach cell ref observer for spreadsheet rooms
+    // Attach observers for specific room types
     const roomId = this.name;
     if (roomId.startsWith("spreadsheet-")) {
       this.setupCellRefObserver(roomId);
+    } else if (roomId.startsWith("doc-")) {
+      this.setupBlockRefObserver(roomId);
     }
   }
 
@@ -208,9 +219,11 @@ export default class CollaborationServer extends YServer {
       return;
     }
 
-    // Attach cell ref observer for spreadsheet rooms
+    // Attach observers for specific room types
     if (roomId.startsWith("spreadsheet-")) {
       this.setupCellRefObserver(roomId);
+    } else if (roomId.startsWith("doc-")) {
+      this.setupBlockRefObserver(roomId);
     }
 
     // Schedule periodic permission check alarm
@@ -260,10 +273,12 @@ export default class CollaborationServer extends YServer {
       }
 
       if (connectionCount === 0) {
-        // Still no connections — save final snapshot and clean up
+        // Still no connections — flush pending ref updates, save final snapshot, clean up
         console.log(`Debounce expired for room ${roomId}, saving final snapshot`);
+        await this.flushPendingRefUpdates(roomId);
         await this.onSave();
         this.cleanupCellRefObserver();
+        this.cleanupBlockRefObserver();
       } else {
         console.log(`User reconnected to room ${roomId} during debounce, cancelling save`);
         await this.checkPermissions(roomId);
@@ -310,7 +325,7 @@ export default class CollaborationServer extends YServer {
         });
 
         if (response.ok) {
-          const data = await response.json() as { hasAccess: boolean };
+          const data: { hasAccess: boolean } = await response.json();
           if (!data.hasAccess) {
             console.log(`Permission revoked for user ${state.userId} in room ${roomId}`);
             const msg: ServerMessage = {
@@ -377,7 +392,8 @@ export default class CollaborationServer extends YServer {
           { headers: { Authorization: `Bearer ${secret}` } },
         );
         if (response.ok) {
-          this.trackedCellRefs = (await response.json()) as Array<{ cellRef: string }>;
+          const refs: Array<{ cellRef: string }> = await response.json();
+          this.trackedCellRefs = refs;
           this.trackedCellRefsLastFetch = Date.now();
         }
       } catch (e) {
@@ -444,6 +460,121 @@ export default class CollaborationServer extends YServer {
       const raw = rowMap?.get(String(cell.col)) ?? "";
       return [[resolveDisplayValue(raw, cell.row, cell.col, yFormulaValues)]];
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Document block reference observer (doc rooms only)
+  // ---------------------------------------------------------------------------
+
+  private setupBlockRefObserver(roomId: string): void {
+    if (this.blockRefObserver) return; // Already attached
+
+    const fragment = this.document.getXmlFragment("document-store");
+
+    this.blockRefObserver = () => {
+      if (this.blockRefPushTimeout) clearTimeout(this.blockRefPushTimeout);
+      this.blockRefPushTimeout = setTimeout(() => {
+        void this.pushBlockRefUpdates(roomId);
+      }, BLOCK_REF_DEBOUNCE);
+    };
+
+    fragment.observeDeep(this.blockRefObserver);
+    console.log(`Block ref observer attached for room ${roomId}`);
+  }
+
+  private async pushBlockRefUpdates(roomId: string): Promise<void> {
+    const env = this.env as Env;
+    const convexSiteUrl = env.CONVEX_SITE_URL;
+    const secret = env.PARTYKIT_SECRET;
+    if (!convexSiteUrl || !secret) return;
+
+    const documentId = roomId.replace("doc-", "");
+
+    // Fetch tracked block refs (with TTL caching)
+    if (
+      !this.trackedBlockRefs ||
+      Date.now() - this.trackedBlockRefsLastFetch > BLOCK_REF_CACHE_TTL
+    ) {
+      try {
+        const response = await fetch(
+          `${convexSiteUrl}/collaboration/block-refs?documentId=${encodeURIComponent(documentId)}`,
+          { headers: { Authorization: `Bearer ${secret}` } },
+        );
+        if (response.ok) {
+          const refs: Array<{ blockId: string }> = await response.json();
+          this.trackedBlockRefs = refs;
+          this.trackedBlockRefsLastFetch = Date.now();
+        }
+      } catch (e) {
+        console.error("Failed to fetch tracked block refs:", e);
+        return;
+      }
+    }
+
+    if (!this.trackedBlockRefs || this.trackedBlockRefs.length === 0) return;
+
+    // Extract current block content from Yjs XML fragment
+    const fragment = this.document.getXmlFragment("document-store");
+    const allBlocks = extractBlocksFromFragment(fragment);
+    const blockMap = new Map(allBlocks.map((b) => [b.blockId, b]));
+
+    const updates: Array<{ blockId: string; blockType: string; textContent: string }> = [];
+
+    for (const { blockId } of this.trackedBlockRefs) {
+      const block = blockMap.get(blockId);
+      if (block) {
+        updates.push({
+          blockId,
+          blockType: block.type,
+          textContent: block.text,
+        });
+      }
+    }
+
+    if (updates.length === 0) return;
+
+    try {
+      await fetch(`${convexSiteUrl}/collaboration/block-content`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${secret}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ documentId, updates }),
+      });
+    } catch (e) {
+      console.error("Failed to push block ref updates:", e);
+    }
+  }
+
+  /**
+   * Flush any pending debounced ref updates before cleanup.
+   * Ensures edits made just before disconnect are pushed to Convex.
+   */
+  private async flushPendingRefUpdates(roomId: string): Promise<void> {
+    if (this.cellRefPushTimeout) {
+      clearTimeout(this.cellRefPushTimeout);
+      this.cellRefPushTimeout = null;
+      await this.pushCellRefUpdates(roomId);
+    }
+    if (this.blockRefPushTimeout) {
+      clearTimeout(this.blockRefPushTimeout);
+      this.blockRefPushTimeout = null;
+      await this.pushBlockRefUpdates(roomId);
+    }
+  }
+
+  private cleanupBlockRefObserver(): void {
+    if (this.blockRefObserver) {
+      this.document.getXmlFragment("document-store").unobserveDeep(this.blockRefObserver);
+      this.blockRefObserver = null;
+    }
+    if (this.blockRefPushTimeout) {
+      clearTimeout(this.blockRefPushTimeout);
+      this.blockRefPushTimeout = null;
+    }
+    this.trackedBlockRefs = null;
+    this.trackedBlockRefsLastFetch = 0;
   }
 
   private cleanupCellRefObserver(): void {
