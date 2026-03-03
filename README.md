@@ -7,10 +7,6 @@ NEXT STEPS:
 
 - investigate rework all deletion cascade to soft-deletion
 
-resource-list
-    - [ ] fix favorite user journey from sidebar (add filter non-favorites, link opens that filter)
-    - [ ] improve tag search
-    - [ ] improve resource item card (click anywhere to navigate, more info displayed)
 
 - excalidraw
     - [ ] remove zoom and history controls
@@ -48,15 +44,8 @@ keyboard accessiblity
     - [ ] add sentry
 
 - partykit
-    - [x] migrate abandoded partykit to the new worker version
-    - [x] partykit optimization for docs with embeds: vehicule all updates in room channel also for embedded resources, so that a document needs to listen to just a single room
-    - [x] optimize get collaboration token being called way too much (HMAC-signed tokens, no DB round-trip)
     - [ ] share presence connection across tabs (BroadcastChannel/SharedWorker)
     - [ ] deduplicate token requests per resource across tabs
-
-- convex query optimization
-    - [x] batch favorites.listIdsForType into single listAllForWorkspace query
-    - [x] batch breadcrumb.getResourceName into single getResourceNames(ids[]) query
 
 - spreadsheet qol
     - [ ] improve formula picker to trigger for nested functions
