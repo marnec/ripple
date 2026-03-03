@@ -31,10 +31,10 @@ export function DocumentSelectorList({
   const isListActive = location.pathname.endsWith("/documents");
 
   const documents = useQuery(api.documents.list, { workspaceId });
-  const favoriteIds = useQuery(api.favorites.listIdsForType, { workspaceId, resourceType: "document" });
+  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
   const deleteDocument = useMutation(api.documents.remove);
 
-  const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
+  const favoriteSet = useMemo(() => new Set(allFavoriteIds?.document ?? []), [allFavoriteIds]);
   const favoriteDocs = useMemo(
     () => documents?.filter((d) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [documents, favoriteSet],

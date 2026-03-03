@@ -32,9 +32,9 @@ export function ProjectSelectorList({
   const projects = useQuery(api.projects.list, {
     workspaceId,
   });
-  const favoriteIds = useQuery(api.favorites.listIdsForType, { workspaceId, resourceType: "project" });
+  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
 
-  const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
+  const favoriteSet = useMemo(() => new Set(allFavoriteIds?.project ?? []), [allFavoriteIds]);
   const favoriteProjects = useMemo(
     () => projects?.filter((p) => favoriteSet.has(p._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [projects, favoriteSet],

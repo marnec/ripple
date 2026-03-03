@@ -55,8 +55,8 @@ keyboard accessiblity
     - [ ] deduplicate token requests per resource across tabs
 
 - convex query optimization
-    - [ ] batch favorites.listIdsForType into single listAllForWorkspace query
-    - [ ] batch breadcrumb.getResourceName into single getResourceNames(ids[]) query
+    - [x] batch favorites.listIdsForType into single listAllForWorkspace query
+    - [x] batch breadcrumb.getResourceName into single getResourceNames(ids[]) query
 
 - spreadsheet qol
     - [ ] improve formula picker to trigger for nested functions

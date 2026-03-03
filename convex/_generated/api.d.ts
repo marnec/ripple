@@ -52,6 +52,23 @@ export declare const api: {
       },
       string | null
     >;
+    getResourceNames: FunctionReference<
+      "query",
+      "public",
+      {
+        resourceIds: Array<
+          | Id<"workspaces">
+          | Id<"channels">
+          | Id<"projects">
+          | Id<"documents">
+          | Id<"diagrams">
+          | Id<"spreadsheets">
+          | Id<"tasks">
+          | Id<"cycles">
+        >;
+      },
+      Record<string, string | null>
+    >;
   };
   callSessions: {
     endSession: FunctionReference<
@@ -408,6 +425,17 @@ export declare const api: {
       "public",
       { resourceId: string },
       boolean
+    >;
+    listAllIdsForWorkspace: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      {
+        diagram: Array<string>;
+        document: Array<string>;
+        project: Array<string>;
+        spreadsheet: Array<string>;
+      }
     >;
     listByType: FunctionReference<
       "query",

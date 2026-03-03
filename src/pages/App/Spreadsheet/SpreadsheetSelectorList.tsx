@@ -33,9 +33,9 @@ export function SpreadsheetSelectorList({
   const deletingIdRef = useRef<string | null>(null);
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
-  const favoriteIds = useQuery(api.favorites.listIdsForType, { workspaceId, resourceType: "spreadsheet" });
+  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
 
-  const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
+  const favoriteSet = useMemo(() => new Set(allFavoriteIds?.spreadsheet ?? []), [allFavoriteIds]);
   const favoriteSheets = useMemo(
     () => spreadsheets?.filter((s) => favoriteSet.has(s._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [spreadsheets, favoriteSet],

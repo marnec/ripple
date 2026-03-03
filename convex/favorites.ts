@@ -177,6 +177,40 @@ export const listIdsForType = query({
   },
 });
 
+export const listAllIdsForWorkspace = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  returns: v.object({
+    document: v.array(v.string()),
+    diagram: v.array(v.string()),
+    spreadsheet: v.array(v.string()),
+    project: v.array(v.string()),
+  }),
+  handler: async (ctx, { workspaceId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { document: [], diagram: [], spreadsheet: [], project: [] };
+
+    const favorites = await ctx.db
+      .query("favorites")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .collect();
+
+    const result: Record<ResourceType, string[]> = {
+      document: [],
+      diagram: [],
+      spreadsheet: [],
+      project: [],
+    };
+    for (const fav of favorites) {
+      result[fav.resourceType].push(fav.resourceId);
+    }
+    return result;
+  },
+});
+
 export const isFavorited = query({
   args: { resourceId: v.string() },
   returns: v.boolean(),

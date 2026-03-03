@@ -33,9 +33,9 @@ export function DiagramSelectorList({
   const deletingIdRef = useRef<string | null>(null);
 
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
-  const favoriteIds = useQuery(api.favorites.listIdsForType, { workspaceId, resourceType: "diagram" });
+  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
 
-  const favoriteSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds]);
+  const favoriteSet = useMemo(() => new Set(allFavoriteIds?.diagram ?? []), [allFavoriteIds]);
   const favoriteDiagrams = useMemo(
     () => diagrams?.filter((d: { _id: string }) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [diagrams, favoriteSet],
