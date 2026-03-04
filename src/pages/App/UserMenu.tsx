@@ -11,17 +11,18 @@ import {
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   BadgeCheck,
-  Bell,
   ChevronsUpDown,
   CreditCard,
   LogOut,
   Mail,
   RefreshCw,
+  Settings,
   Sparkles,
 } from "lucide-react";
 import { useContext, useState } from "react";
 import { usePwaUpdate } from "@/hooks/use-pwa-update";
 import { PendingInvitesDialog } from "./Workspace/PendingInvites";
+import { UserSettingsDialog } from "./UserSettingsDialog";
 import { usePendingInvites } from "@/hooks/use-pending-invites";
 import { Badge } from "../../components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
@@ -38,6 +39,7 @@ export function NavUser() {
   const user = useContext(UserContext);
   const { signOut } = useAuthActions();
   const [showInvites, setShowInvites] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const pendingInvites = usePendingInvites();
   const { needRefresh, updateAndReload } = usePwaUpdate();
 
@@ -107,9 +109,9 @@ export function NavUser() {
                 <CreditCard />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell />
-                Notifications
+              <DropdownMenuItem onClick={() => setShowSettings(true)}>
+                <Settings />
+                Settings
               </DropdownMenuItem>
               {needRefresh && (
                 <DropdownMenuItem onClick={updateAndReload}>
@@ -139,6 +141,7 @@ export function NavUser() {
         </DropdownMenu>
       </SidebarMenuItem>
       <PendingInvitesDialog open={showInvites} onOpenChange={setShowInvites} />
+      <UserSettingsDialog open={showSettings} onOpenChange={setShowSettings} />
     </SidebarMenu>
   );
 }

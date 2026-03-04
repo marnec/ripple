@@ -10,7 +10,6 @@ import { cn } from "../lib/utils";
 import { DynamicBreadcrumb } from "./Breadcrumb";
 import { FollowModeIndicator } from "./FollowModeIndicator";
 import { Separator } from "./ui/separator";
-import { ThemeToggle } from "./ThemeToggle";
 import { AppSidebar } from "@/pages/App/AppSidebar";
 
 function CallIndicator() {
@@ -54,7 +53,6 @@ export function Layout() {
               <div className="flex shrink-0 items-center gap-2">
                 <FollowModeIndicator />
                 <CallIndicator />
-                <ThemeToggle />
               </div>
             </>
           ) : (
@@ -67,7 +65,6 @@ export function Layout() {
               <div className="flex items-center gap-2">
                 <FollowModeIndicator />
                 <CallIndicator />
-                <ThemeToggle />
               </div>
             </>
           )}

@@ -8,6 +8,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import usePushNotifications from "@/hooks/use-push-notifications";
+import { useUserSettings } from "@/hooks/use-user-settings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
@@ -34,6 +35,7 @@ export function AppSidebar() {
   const { workspaceId, channelId, documentId, diagramId, spreadsheetId, projectId } = useParams<QueryParams>();
 
   const { subscribeUser } = usePushNotifications();
+  const [settings] = useUserSettings();
 
   const workspaces = useQuery(workspacesListRef);
   const activeWorkspace = useQuery(workspacesGetRef, workspaceId ? { id: workspaceId } : "skip");
@@ -45,7 +47,7 @@ export function AppSidebar() {
     } else {
       void navigate(`/workspaces/${workspaceId}/channels/${id}`);
       setOpenMobile(false);
-      void subscribeUser();
+      if (settings.notificationsEnabled) void subscribeUser();
     }
   };
 
