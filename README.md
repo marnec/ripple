@@ -2,16 +2,27 @@ NEXT STEPS:
 - tasks
     - [ ] mytasks??
 
-- investigate rework all deletion cascade to soft-deletion
+- investigate rework all deletion cascade to soft-deletion with scheduled garbage collection
+
+- [ ] diagram and spreadsheet embeds in blocknote editor should not be resizeable in mobile, thy should take full width and not influence block-stored desktop width
+
+- [ ] fix spreadsheet embed resize (remove resizeable cols, only leave block resize)
+
+- [ ] in mobile docs blocks should take full width and should not be dragged (hide drag, plus icon)
+
+- [ ] when deleting embed show alert dialog / drawer (this edit cannot be undone) or alternatively add toast that allows to manually undo the action for a period of time
+
+- [ ] there is still a problem sometimes with the in-call follow action not working
 
 - knowledge-graph
-    - [ ] add document-paragraph embeds in tasks and other docs (similar mechanism to spreadsheet range, use block id, show referenced blocks)
-    - [ ] improve spreadsheet reference highlight (border)
+    - [x] add document-paragraph embeds in tasks and other docs (similar mechanism to spreadsheet range, use block id, show referenced blocks)
+    - [x] improve spreadsheet reference highlight (border)
     - [ ] add a backlink section that shows cross-references
 
 keyboard accessiblity
     - [ ] command palette
-    - [ ] focus trap
+    - [ ] focus traps
+    - [ ] chat image focus escape with "esc" key too
 
 - [ ] profile settings saved to local storage
     - [ ] move theme settings to profile settings
@@ -43,6 +54,9 @@ keyboard accessiblity
     - [ ] mouse pick coords?
     - [ ] reintroduce formatting?
 
-- [ ] user avatars: look at dicebear
+- avatars:
+    - [ ] user custom avatars: look at dicebear
+    - [ ] facepile not using user avatar (investigate convex cost)
+    - [ ] fix workspace avatar being squashed on closed sidebar
 
 - [ ] evaluate switch to pragmatic drag and drop for total control and integration with view-transition-apis
