@@ -10,7 +10,7 @@ NEXT STEPS:
 
 - [x] in mobile docs blocks should take full width and should not be dragged (hide drag, plus icon)
 
-- [ ] when deleting embed show alert dialog / drawer (this edit cannot be undone) or alternatively add toast that allows to manually undo the action for a period of time
+- [x] when deleting embed show alert dialog / drawer (this edit cannot be undone) or alternatively add toast that allows to manually undo the action for a period of time
 
 - [ ] there is still a problem sometimes with the in-call follow action not working
 

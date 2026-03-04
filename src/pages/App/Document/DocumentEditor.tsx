@@ -9,6 +9,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
 import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs } from "../../../hooks/use-editor-tracking";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
@@ -141,6 +142,9 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     onChanged: onEmbedsChanged,
     syncOnMount: true,
   });
+
+  // Protect embed blocks from accidental deletion with animation + undo toast
+  useEmbedDeleteProtection(editor);
 
   // Cold-start snapshot fallback: offline + no editor from IndexedDB
   const { isColdStart, snapshotDoc } = useSnapshotFallback({
