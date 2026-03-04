@@ -371,7 +371,7 @@ const ResizableSpreadsheetRange = ({
               {Array.from({ length: colCount }, (_, ci) => (
                 <div
                   key={ci}
-                  className="border-b border-r border-border last:border-r-0 px-2.5 py-1.5 text-sm font-mono truncate"
+                  className={`px-2.5 py-1.5 text-sm font-mono truncate border-border${ci < colCount - 1 ? " border-r" : ""}${ri < rowCount - 1 ? " border-b" : ""}`}
                 >
                   {values[ri]?.[ci] || "\u00A0"}
                 </div>
