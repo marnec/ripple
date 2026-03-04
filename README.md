@@ -6,7 +6,7 @@ NEXT STEPS:
 
 - [x] diagram and spreadsheet embeds in blocknote editor should not be resizeable in mobile, thy should take full width and not influence block-stored desktop width
 
-- [ ] fix spreadsheet embed resize (remove resizeable cols, only leave block resize)
+- [x] fix spreadsheet embed resize (remove resizeable cols, only leave block resize)
 
 - [ ] in mobile docs blocks should take full width and should not be dragged (hide drag, plus icon)
 

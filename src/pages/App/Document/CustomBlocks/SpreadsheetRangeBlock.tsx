@@ -12,7 +12,7 @@ import {
 import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview";
 import { parseRange, toCellName } from "@shared/cellRef";
 import { useQuery } from "convex/react";
-import { CircleSlash, Eye, EyeOff } from "lucide-react";
+import { CircleSlash, Copy, Eye, EyeOff, Table } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";
@@ -133,6 +133,33 @@ const ResizableSpreadsheetRange = ({
     });
   }, [editor, block, showHeaders]);
 
+  // --- Clone as editable table ---
+  const cloneAsTable = useCallback(() => {
+    const rows = Array.from({ length: rowCount }, (_, ri) =>
+      ({
+        cells: Array.from({ length: colCount }, (_, ci) => [{
+          type: "text" as const,
+          text: values[ri]?.[ci] || "",
+          styles: {},
+        }]),
+      }),
+    );
+    editor.insertBlocks(
+      [{ type: "table" as const, content: { type: "tableContent" as const, columnWidths: Array.from({ length: colCount }, () => undefined), rows } } as any],
+      block,
+      "after",
+    );
+  }, [editor, block, values, rowCount, colCount]);
+
+  // --- Clone as linked range ---
+  const cloneAsLinkedRange = useCallback(() => {
+    editor.insertBlocks(
+      [{ type: "spreadsheetRange" as const, props: { spreadsheetId, cellRef, width: block.props.width, showHeaders } } as any],
+      block,
+      "after",
+    );
+  }, [editor, block, spreadsheetId, cellRef, showHeaders]);
+
   // --- Navigation ---
   const handleNavigate = () => {
     if (spreadsheet && workspaceId) {
@@ -213,26 +240,56 @@ const ResizableSpreadsheetRange = ({
         {/* Header toggle */}
         {editable && hovered && (
           <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="flex p-0.5 items-center justify-center cursor-pointer rounded hover:bg-muted transition-colors text-muted-foreground"
-                  onClick={toggleHeaders}
-                >
-                  {showHeaders ? (
-                    <Eye size={12} />
-                  ) : (
-                    <EyeOff size={12} />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <span className="text-xs">
-                  {showHeaders ? "Hide" : "Show"} row/column headers
-                </span>
-              </TooltipContent>
-            </Tooltip>
+            <div className="flex items-center gap-4">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex p-0.5 items-center justify-center cursor-pointer rounded hover:bg-muted transition-colors text-muted-foreground"
+                    onClick={toggleHeaders}
+                  >
+                    {showHeaders ? (
+                      <Eye size={12} />
+                    ) : (
+                      <EyeOff size={12} />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <span className="text-xs">
+                    {showHeaders ? "Hide" : "Show"} row/column headers
+                  </span>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex p-0.5 items-center justify-center cursor-pointer rounded hover:bg-muted transition-colors text-muted-foreground"
+                    onClick={cloneAsTable}
+                  >
+                    <Table size={12} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <span className="text-xs">Clone as editable table</span>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex p-0.5 items-center justify-center cursor-pointer rounded hover:bg-muted transition-colors text-muted-foreground"
+                    onClick={cloneAsLinkedRange}
+                  >
+                    <Copy size={12} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <span className="text-xs">Clone as linked range</span>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </TooltipProvider>
         )}
         <div className="flex-1" />
