@@ -16,9 +16,11 @@ import {
   CreditCard,
   LogOut,
   Mail,
+  RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { useContext, useState } from "react";
+import { usePwaUpdate } from "@/hooks/use-pwa-update";
 import { PendingInvitesDialog } from "./Workspace/PendingInvites";
 import { usePendingInvites } from "@/hooks/use-pending-invites";
 import { Badge } from "../../components/ui/badge";
@@ -37,6 +39,7 @@ export function NavUser() {
   const { signOut } = useAuthActions();
   const [showInvites, setShowInvites] = useState(false);
   const pendingInvites = usePendingInvites();
+  const { needRefresh, updateAndReload } = usePwaUpdate();
 
   return (
     <SidebarMenu>
@@ -47,13 +50,18 @@ export function NavUser() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage
-                  src={user?.image || undefined}
-                  alt={user?.name || ""}
-                />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-8 w-8 rounded-lg">
+                  <AvatarImage
+                    src={user?.image || undefined}
+                    alt={user?.name || ""}
+                  />
+                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                </Avatar>
+                {(needRefresh || pendingInvites.length > 0) && (
+                  <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-blue-600 ring-2 ring-sidebar" />
+                )}
+              </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-semibold">{user?.name}</span>
                 <span className="truncate text-xs">{user?.email}</span>
@@ -103,6 +111,15 @@ export function NavUser() {
                 <Bell />
                 Notifications
               </DropdownMenuItem>
+              {needRefresh && (
+                <DropdownMenuItem onClick={updateAndReload}>
+                  <RefreshCw />
+                  Update available
+                  <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full bg-blue-600 px-1.5 text-[10px]">
+                    1
+                  </Badge>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => setShowInvites(true)}>
                 <Mail />
                 Invitations
