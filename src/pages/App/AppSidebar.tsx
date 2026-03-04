@@ -113,7 +113,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent className={isMobile ? "" : "h-full overflow-hidden!"}>
         {workspaceId && (
-          <div className={isMobile ? "flex min-h-0 flex-1 flex-col" : "flex h-[75%] min-h-0 flex-col group-data-[collapsible=icon]:h-auto"}>
+          <div className="flex min-h-0 flex-1 flex-col group-data-[collapsible=icon]:h-auto">
             {/* My Tasks — fixed at top */}
             {/* <SidebarGroup className="flex-none pb-0">
               <SidebarMenu>
