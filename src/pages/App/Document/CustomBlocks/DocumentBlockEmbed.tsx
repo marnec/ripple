@@ -37,7 +37,7 @@ function DocumentBlockView({
   // Document deleted
   if (document === null) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-4 border rounded-lg text-center text-muted-foreground bg-secondary h-20 gap-2">
+      <div data-embed-deleted className="w-full flex flex-col items-center justify-center p-4 border rounded-lg text-center text-muted-foreground bg-secondary h-20 gap-2">
         <CircleSlash className="h-6 w-6 text-destructive" />
         <p className="text-destructive text-sm">Document not found. It may have been deleted.</p>
       </div>
@@ -52,7 +52,7 @@ function DocumentBlockView({
   // Block content not found (block may have been deleted from source)
   if (!textContent) {
     return (
-      <div className="w-full flex items-center gap-2 p-3 border border-dashed rounded-lg text-muted-foreground text-sm">
+      <div data-embed-deleted className="w-full flex items-center gap-2 p-3 border border-dashed rounded-lg text-muted-foreground text-sm">
         <CircleSlash className="h-4 w-4 shrink-0" />
         <span>Referenced block no longer exists in &ldquo;{document.name}&rdquo;</span>
       </div>

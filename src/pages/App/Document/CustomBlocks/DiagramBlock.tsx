@@ -30,7 +30,7 @@ const DiagramView = ({
 
   if (diagram === null) {
     return (
-      <div className="w-full flex flex-col items-center justify-center p-3 border rounded-lg text-center text-muted-foreground bg-secondary h-40 gap-2">
+      <div data-embed-deleted className="w-full flex flex-col items-center justify-center p-3 border rounded-lg text-center text-muted-foreground bg-secondary h-40 gap-2">
         <CircleSlash className="h-10 w-10 text-destructive" />
         <p className="text-destructive">
           Diagram not found. It may have been deleted.

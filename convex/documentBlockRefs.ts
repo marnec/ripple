@@ -112,6 +112,37 @@ export const ensureBlockRef = mutation({
 });
 
 /**
+ * List all block IDs in a document that are referenced by documentBlockEmbeds elsewhere.
+ * Used by the editor to visualize and protect referenced blocks.
+ */
+export const listReferencedBlockIds = query({
+  args: { documentId: v.id("documents") },
+  returns: v.array(v.string()),
+  handler: async (ctx, { documentId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const doc = await ctx.db.get(documentId);
+    if (!doc) return [];
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", doc.workspaceId).eq("userId", userId),
+      )
+      .first();
+    if (!membership) return [];
+
+    const refs = await ctx.db
+      .query("documentBlockRefs")
+      .withIndex("by_document", (q) => q.eq("documentId", documentId))
+      .collect();
+
+    return refs.map((ref) => ref.blockId);
+  },
+});
+
+/**
  * Remove a block ref cache entry. Called when embed is removed from editor.
  */
 export const removeBlockRef = mutation({

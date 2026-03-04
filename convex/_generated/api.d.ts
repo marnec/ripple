@@ -369,6 +369,12 @@ export declare const api: {
       { blockId: string; documentId: Id<"documents"> },
       { blockType: string; textContent: string; updatedAt: number } | null
     >;
+    listReferencedBlockIds: FunctionReference<
+      "query",
+      "public",
+      { documentId: Id<"documents"> },
+      Array<string>
+    >;
     removeBlockRef: FunctionReference<
       "mutation",
       "public",

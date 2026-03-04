@@ -1,9 +1,11 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
-import { useCallback, useState } from "react";
+import { Link2, Link2Off } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -11,6 +13,8 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
 import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs } from "../../../hooks/use-editor-tracking";
+import { useReferencedBlockDeleteProtection } from "../../../hooks/use-referenced-block-delete-protection";
+import { useReferencedBlocks } from "../../../hooks/use-referenced-blocks";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useSnapshotFallback } from "../../../hooks/use-snapshot-fallback";
@@ -146,6 +150,37 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   // Protect embed blocks from accidental deletion with animation + undo toast
   useEmbedDeleteProtection(editor);
 
+  // Track which blocks in this document are referenced by embeds elsewhere
+  const { referencedBlockIds, hasReferencedBlocks } = useReferencedBlocks(documentId);
+  const [showReferencedBlocks, setShowReferencedBlocks] = useState(false);
+
+  // Protect referenced blocks from accidental deletion
+  const onReferencedBlocksDeleted = useCallback(
+    (blockIds: string[]) => {
+      for (const blockId of blockIds) {
+        void removeBlockRef({ documentId, blockId });
+      }
+    },
+    [removeBlockRef, documentId],
+  );
+  useReferencedBlockDeleteProtection(editor, referencedBlockIds, onReferencedBlocksDeleted);
+
+  // Build dynamic CSS rules targeting referenced blocks by their stable data-id
+  // (ProseMirror preserves data-id but wipes custom attributes on re-render)
+  const referencedBlockStyles = useMemo(() => {
+    if (!showReferencedBlocks || referencedBlockIds.size === 0) return null;
+    const rules = [...referencedBlockIds]
+      .map((id) => `.bn-block-outer[data-id="${id}"] > .bn-block`)
+      .join(",\n");
+    return `${rules} {
+  border-left: 2px solid hsl(45 90% 50% / 0.5);
+  background-color: hsl(45 90% 50% / 0.06);
+  padding-left: 6px;
+  border-radius: 0 4px 4px 0;
+  transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
+}`;
+  }, [showReferencedBlocks, referencedBlockIds]);
+
   // Cold-start snapshot fallback: offline + no editor from IndexedDB
   const { isColdStart, snapshotDoc } = useSnapshotFallback({
     isOffline,
@@ -193,6 +228,26 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
         </div>
         <div className="flex h-8 items-center gap-3">
+          {hasReferencedBlocks && (
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={`flex p-1 items-center justify-center cursor-pointer rounded hover:bg-muted transition-colors ${showReferencedBlocks ? "text-primary" : "text-muted-foreground"}`}
+                    onClick={() => setShowReferencedBlocks((v) => !v)}
+                  >
+                    {showReferencedBlocks ? <Link2 size={14} /> : <Link2Off size={14} />}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <span className="text-xs">
+                    {showReferencedBlocks ? "Hide" : "Show"} referenced blocks
+                  </span>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           <ConnectionStatus isConnected={isConnected} />
           {isConnected && (
             <ActiveUsers
@@ -211,6 +266,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       </div>
       <div className="flex-1 overflow-y-scroll scrollbar-stable">
       <div className="px-2 sm:px-20 max-w-full">
+        {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
         <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
           <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
           <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />

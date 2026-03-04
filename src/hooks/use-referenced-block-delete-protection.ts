@@ -4,7 +4,7 @@ import { toast } from "@/components/ui/use-toast";
 import { useEffect, useRef } from "react";
 import React from "react";
 
-/** Minimal editor shape required by useEmbedDeleteProtection. */
+/** Minimal editor shape needed by this hook. */
 type AnyEditor = {
   isEditable: boolean;
   document: unknown[];
@@ -24,22 +24,23 @@ type AnyEditor = {
   getTextCursorPosition: () => { block: { id: string } };
 };
 
-const EMBED_TYPES = new Set(["diagram", "spreadsheetRange", "documentBlockEmbed"]);
-
-const EMBED_LABELS: Record<string, string> = {
-  diagram: "Diagram embed",
-  spreadsheetRange: "Spreadsheet range",
-  documentBlockEmbed: "Document embed",
-};
-
 const TOAST_DURATION = 5000;
 
 /**
- * Intercepts deletion of embed blocks (diagram, spreadsheetRange, documentBlockEmbed).
+ * Intercepts deletion of blocks that are referenced by documentBlockEmbeds in other documents.
  * Shows a destructive toast with undo action and a countdown progress bar.
+ * After the undo window expires, calls `onBlocksDeleted` so the caller can clean up documentBlockRefs.
  */
-export function useEmbedDeleteProtection(editor: AnyEditor | null): void {
+export function useReferencedBlockDeleteProtection(
+  editor: AnyEditor | null,
+  referencedBlockIds: Set<string>,
+  onBlocksDeleted?: (blockIds: string[]) => void,
+): void {
   const programmaticRef = useRef<Set<string>>(new Set());
+  const referencedRef = useRef(referencedBlockIds);
+  referencedRef.current = referencedBlockIds;
+  const onBlocksDeletedRef = useRef(onBlocksDeleted);
+  onBlocksDeletedRef.current = onBlocksDeleted;
 
   useEffect(() => {
     if (!editor || !editor.isEditable) return;
@@ -47,37 +48,27 @@ export function useEmbedDeleteProtection(editor: AnyEditor | null): void {
     const unsub = editor.onBeforeChange(({ getChanges }) => {
       const changes = getChanges();
 
-      const embedDeletions = changes.filter((c) => {
-        if (
-          c.type !== "delete" ||
-          !EMBED_TYPES.has(c.block.type) ||
-          c.source.type !== "local" ||
-          programmaticRef.current.has(c.block.id)
-        )
-          return false;
+      const refDeletions = changes.filter(
+        (c) =>
+          c.type === "delete" &&
+          c.source.type === "local" &&
+          referencedRef.current.has(c.block.id) &&
+          !programmaticRef.current.has(c.block.id),
+      );
 
-        // Skip protection for embeds showing a "deleted resource" placeholder
-        const blockEl = editor.domElement?.querySelector(
-          `[data-id="${c.block.id}"]`,
-        );
-        if (blockEl?.querySelector("[data-embed-deleted]")) return false;
+      if (refDeletions.length === 0) return; // allow change through
 
-        return true;
-      });
-
-      if (embedDeletions.length === 0) return; // allow change through
-
-      for (const del of embedDeletions) {
+      for (const del of refDeletions) {
         const blockId = del.block.id;
 
-        // Capture block data for undo before removal
+        // Capture block data for undo
         const blockData = {
           type: del.block.type,
           props: { ...del.block.props },
           children: del.block.children,
         };
 
-        // Programmatically remove after preventing the original deletion
+        // Programmatically remove (bypasses this hook on re-entry)
         programmaticRef.current.add(blockId);
         try {
           editor.removeBlocks([blockId]);
@@ -87,21 +78,22 @@ export function useEmbedDeleteProtection(editor: AnyEditor | null): void {
 
         const cursorBlock = editor.getTextCursorPosition().block;
 
-        const label =
-          embedDeletions.length === 1
-            ? `${EMBED_LABELS[del.block.type] ?? "Embed"} removed`
-            : `${embedDeletions.length} embeds removed`;
+        // Schedule cleanup after undo window expires
+        const cleanupTimer = setTimeout(() => {
+          onBlocksDeletedRef.current?.([blockId]);
+        }, TOAST_DURATION + 200);
 
         toast({
           variant: "destructive",
-          title: label,
-          duration: TOAST_DURATION,
+          title: "Referenced block removed",
           description: React.createElement(CountdownBar, { duration: TOAST_DURATION }),
+          duration: TOAST_DURATION,
           action: React.createElement(
             ToastAction,
             {
               altText: "Undo",
               onClick: () => {
+                clearTimeout(cleanupTimer);
                 editor.insertBlocks([blockData], cursorBlock, "before");
               },
             },
@@ -116,4 +108,3 @@ export function useEmbedDeleteProtection(editor: AnyEditor | null): void {
     return unsub;
   }, [editor]);
 }
-
