@@ -15,16 +15,20 @@ import { RenameSpreadsheetDialog } from "./RenameSpreadsheetDialog";
 import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
 import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
+import type { AllFavoriteIds } from "../Document/DocumentSelectorList";
+
 export type SpreadsheetSelectorProps = {
   workspaceId: Id<"workspaces">;
   spreadsheetId: Id<"spreadsheets"> | undefined;
   onSpreadsheetSelect: (id: string | null) => void;
+  allFavoriteIds: AllFavoriteIds | undefined;
 };
 
 export function SpreadsheetSelectorList({
   workspaceId,
   spreadsheetId,
   onSpreadsheetSelect,
+  allFavoriteIds,
 }: SpreadsheetSelectorProps) {
   const [selectedSpreadsheetForRename, setSelectedSpreadsheetForRename] = useState<Id<"spreadsheets"> | null>(null);
   const navigate = useNavigate();
@@ -33,7 +37,6 @@ export function SpreadsheetSelectorList({
   const deletingIdRef = useRef<string | null>(null);
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
-  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.spreadsheet ?? []), [allFavoriteIds]);
   const favoriteSheets = useMemo(

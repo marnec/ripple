@@ -113,30 +113,27 @@ export function DynamicBreadcrumb() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
-  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const { items, resourceIds } = useMemo(() => {
+    const pathSegments = location.pathname.split("/").filter(Boolean);
+    const built: BreadcrumbItemData[] = [];
+    for (let i = 0; i < pathSegments.length; i++) {
+      const segment = pathSegments[i];
+      const href = `/${pathSegments.slice(0, i + 1).join("/")}`;
+      const isResource = i % 2 !== 0;
 
-  const items: BreadcrumbItemData[] = [];
-  for (let i = 0; i < pathSegments.length; i++) {
-    const segment = pathSegments[i];
-    const href = `/${pathSegments.slice(0, i + 1).join("/")}`;
-    const isResource = i % 2 !== 0;
-
-    if (isResource) {
-      items.push({ href, label: segment, resourceId: segment });
-    } else {
-      items.push({
-        href,
-        label: segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " "),
-        category: segment,
-      });
+      if (isResource) {
+        built.push({ href, label: segment, resourceId: segment });
+      } else {
+        built.push({
+          href,
+          label: segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " "),
+          category: segment,
+        });
+      }
     }
-  }
-
-  const resourceIds = useMemo(
-    () => items.filter((item) => item.resourceId).map((item) => item.resourceId!),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [location.pathname],
-  );
+    const ids = built.filter((item) => item.resourceId).map((item) => item.resourceId!);
+    return { items: built, resourceIds: ids };
+  }, [location.pathname]);
 
   const nameMap = useQuery(
     api.breadcrumb.getResourceNames,

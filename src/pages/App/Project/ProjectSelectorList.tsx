@@ -13,16 +13,20 @@ import { ProjectSelectorItem } from "./ProjectSelectorItem";
 import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
 import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
+import type { AllFavoriteIds } from "../Document/DocumentSelectorList";
+
 export interface ProjectSelectorListProps {
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
+  allFavoriteIds: AllFavoriteIds | undefined;
 }
 
 export function ProjectSelectorList({
   workspaceId,
   projectId,
   onProjectSelect,
+  allFavoriteIds,
 }: ProjectSelectorListProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,7 +36,6 @@ export function ProjectSelectorList({
   const projects = useQuery(api.projects.list, {
     workspaceId,
   });
-  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.project ?? []), [allFavoriteIds]);
   const favoriteProjects = useMemo(

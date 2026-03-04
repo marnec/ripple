@@ -15,16 +15,20 @@ import { RenameDiagramDialog } from "./RenameDiagramDialog";
 import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
 import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
+import type { AllFavoriteIds } from "../Document/DocumentSelectorList";
+
 export type DiagramSelectorProps = {
   workspaceId: Id<"workspaces">;
   diagramId: Id<"diagrams"> | undefined;
   onDiagramSelect: (id: string | null) => void;
+  allFavoriteIds: AllFavoriteIds | undefined;
 };
 
 export function DiagramSelectorList({
   workspaceId,
   diagramId,
   onDiagramSelect,
+  allFavoriteIds,
 }: DiagramSelectorProps) {
   const [selectedDiagramForRename, setSelectedDiagramForRename] = useState<Id<"diagrams"> | null>(null);
   const navigate = useNavigate();
@@ -33,7 +37,6 @@ export function DiagramSelectorList({
   const deletingIdRef = useRef<string | null>(null);
 
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
-  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.diagram ?? []), [allFavoriteIds]);
   const favoriteDiagrams = useMemo(

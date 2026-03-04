@@ -14,16 +14,25 @@ import { RenameDocumentDialog } from "./RenameDocumentDialog";
 import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
 import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
 
+export type AllFavoriteIds = {
+  document: string[];
+  diagram: string[];
+  spreadsheet: string[];
+  project: string[];
+};
+
 export type DocumentSelectorProps = {
   workspaceId: Id<"workspaces">;
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
+  allFavoriteIds: AllFavoriteIds | undefined;
 };
 
 export function DocumentSelectorList({
   workspaceId,
   documentId,
   onDocumentSelect,
+  allFavoriteIds,
 }: DocumentSelectorProps) {
   const [selectedDocForRename, setSelectedDocForRename] = useState<Id<"documents"> | null>(null);
   const navigate = useNavigate();
@@ -31,7 +40,6 @@ export function DocumentSelectorList({
   const isListActive = location.pathname.endsWith("/documents");
 
   const documents = useQuery(api.documents.list, { workspaceId });
-  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, { workspaceId });
   const deleteDocument = useMutation(api.documents.remove);
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.document ?? []), [allFavoriteIds]);

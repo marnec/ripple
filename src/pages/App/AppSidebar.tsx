@@ -13,6 +13,7 @@ import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { useNavigate, useParams } from "react-router-dom";
+import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 
 const workspacesListRef = makeFunctionReference<"query">("workspaces:list");
@@ -36,6 +37,7 @@ export function AppSidebar() {
 
   const workspaces = useQuery(workspacesListRef);
   const activeWorkspace = useQuery(workspacesGetRef, workspaceId ? { id: workspaceId } : "skip");
+  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, workspaceId ? { workspaceId } : "skip");
 
   const handleChannelSelect = (id: string | null) => {
     if (!id) {
@@ -146,21 +148,25 @@ export function AppSidebar() {
                   workspaceId={workspaceId}
                   projectId={projectId}
                   onProjectSelect={handleProjectSelect}
+                  allFavoriteIds={allFavoriteIds}
                 />
                 <DocumentSelectorList
                   workspaceId={workspaceId}
                   documentId={documentId}
                   onDocumentSelect={handleDocumentSelect}
+                  allFavoriteIds={allFavoriteIds}
                 />
                 <DiagramSelectorList
                   workspaceId={workspaceId}
                   diagramId={diagramId}
                   onDiagramSelect={handleDiagramSelect}
+                  allFavoriteIds={allFavoriteIds}
                 />
                 <SpreadsheetSelectorList
                   workspaceId={workspaceId}
                   spreadsheetId={spreadsheetId}
                   onSpreadsheetSelect={handleSpreadsheetSelect}
+                  allFavoriteIds={allFavoriteIds}
                 />
               </SidebarMenu>
             </SidebarGroup>

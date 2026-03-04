@@ -28,6 +28,7 @@ export function useYjsProvider(opts: {
   const { resourceType, resourceId, enabled = true } = opts;
   const { isAuthenticated } = useConvexAuth();
   const getToken = useAction(api.collaboration.getCollaborationToken);
+  const getTokenRef = useRef(getToken);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(enabled);
   const [isOffline, setIsOffline] = useState(false);
@@ -68,7 +69,7 @@ export function useYjsProvider(opts: {
         // creating a WebSocket connection that will just be rejected by the server.
         let initialToken: string;
         try {
-          const result = await getToken({ resourceType, resourceId });
+          const result = await getTokenRef.current({ resourceType, resourceId });
           initialToken = result.token;
         } catch (err) {
           console.error("Failed to get collaboration token:", err);
@@ -290,7 +291,7 @@ export function useYjsProvider(opts: {
       }
       setProvider(null);
     };
-  }, [resourceType, resourceId, enabled, yDoc, getToken, reconnectTrigger, isAuthenticated]);
+  }, [resourceType, resourceId, enabled, yDoc, reconnectTrigger, isAuthenticated]);
 
   // Listen for browser offline/online events (independent of WebSocket close events)
   // This catches DevTools offline mode and airplane mode changes that don't close WebSockets
@@ -336,6 +337,11 @@ export function useYjsProvider(opts: {
       window.removeEventListener("online", handleOnline);
     };
   }, [enabled]);
+
+  // Keep getToken ref in sync (must be in effect, not render, per React Compiler)
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  });
 
   // Cleanup yDoc on unmount or resourceId change
   useEffect(() => {
