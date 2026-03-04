@@ -226,8 +226,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             workspaceId={document.workspaceId}
           />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
-        </div>
-        <div className="flex h-8 items-center gap-3">
           {hasReferencedBlocks && (
             <TooltipProvider delayDuration={200}>
               <Tooltip>
@@ -248,6 +246,8 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               </Tooltip>
             </TooltipProvider>
           )}
+        </div>
+        <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} />
           {isConnected && (
             <ActiveUsers
@@ -255,9 +255,9 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               currentUser={
                 viewer
                   ? {
-                      name: viewer.name,
-                      color: getUserColor(viewer._id),
-                    }
+                    name: viewer.name,
+                    color: getUserColor(viewer._id),
+                  }
                   : undefined
               }
             />
@@ -265,40 +265,40 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         </div>
       </div>
       <div className="flex-1 overflow-y-scroll scrollbar-stable">
-      <div className="px-2 sm:px-20 max-w-full">
-        {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
-        <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
-          <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
-          <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
-        </BlockNoteView>
-        {cellRefDialog && (
-          <CellRefDialog
-            open={cellRefDialog.open}
-            onOpenChange={(open) => {
-              if (!open) setCellRefDialog(null);
-            }}
-            spreadsheetName={cellRefDialog.spreadsheetName}
-            onInsert={(cellRef) => {
-              if (!cellRefDialog) return;
-              handleCellRefInsert(cellRef, cellRefDialog);
-            }}
-          />
-        )}
-        {blockPickerDialog && (
-          <BlockPickerDialog
-            open={blockPickerDialog.open}
-            onOpenChange={(open) => {
-              if (!open) setBlockPickerDialog(null);
-            }}
-            documentId={blockPickerDialog.documentId}
-            documentName={blockPickerDialog.documentName}
-            onInsert={(blockId) => {
-              if (!blockPickerDialog) return;
-              handleBlockPickerInsert(blockId, blockPickerDialog);
-            }}
-          />
-        )}
-      </div>
+        <div className="px-2 sm:px-20 max-w-full">
+          {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
+          <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
+            <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
+            <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
+          </BlockNoteView>
+          {cellRefDialog && (
+            <CellRefDialog
+              open={cellRefDialog.open}
+              onOpenChange={(open) => {
+                if (!open) setCellRefDialog(null);
+              }}
+              spreadsheetName={cellRefDialog.spreadsheetName}
+              onInsert={(cellRef) => {
+                if (!cellRefDialog) return;
+                handleCellRefInsert(cellRef, cellRefDialog);
+              }}
+            />
+          )}
+          {blockPickerDialog && (
+            <BlockPickerDialog
+              open={blockPickerDialog.open}
+              onOpenChange={(open) => {
+                if (!open) setBlockPickerDialog(null);
+              }}
+              documentId={blockPickerDialog.documentId}
+              documentName={blockPickerDialog.documentName}
+              onInsert={(blockId) => {
+                if (!blockPickerDialog) return;
+                handleBlockPickerInsert(blockId, blockPickerDialog);
+              }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
