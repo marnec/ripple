@@ -13,7 +13,7 @@ import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview"
 import { parseRange, toCellName } from "@shared/cellRef";
 import { useQuery } from "convex/react";
 import { CircleSlash, Eye, EyeOff } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
@@ -27,7 +27,6 @@ const spreadsheetRangePropSchema = {
   spreadsheetId: { default: "" as unknown as string },
   cellRef: { default: "" },
   width: { default: 512 },
-  columnWidths: { default: "" },
   showHeaders: { default: true as unknown as boolean },
 } as const;
 
@@ -40,18 +39,6 @@ type SpreadsheetRangeProps = ReactCustomBlockRenderProps<
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function parseColumnWidths(raw: string): number[] | null {
-  if (!raw) return null;
-  try {
-    const arr = JSON.parse(raw);
-    if (Array.isArray(arr) && arr.every((n: unknown) => typeof n === "number"))
-      return arr;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
 
 /** Generate column letter for a 0-indexed column number. */
 function colLetter(col: number): string {
@@ -67,7 +54,6 @@ const ResizableSpreadsheetRange = ({
   editor,
 }: SpreadsheetRangeProps) => {
   const { spreadsheetId, cellRef, showHeaders } = block.props;
-
   const spreadsheet = useQuery(
     api.spreadsheets.get,
     spreadsheetId ? { id: spreadsheetId as Id<"spreadsheets"> } : "skip",
@@ -81,22 +67,10 @@ const ResizableSpreadsheetRange = ({
   const navigate = useNavigate();
   const { workspaceId } = useParams<{ workspaceId: string }>();
 
-  // --- Block-level resize (mirrors DiagramBlock) ---
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const resizeParamsRef = useRef<{
-    handleUsed: "l" | "r";
-    initialWidth: number;
-    initialClientX: number;
-  } | undefined>(undefined);
+  const isResizingRef = useRef(false);
 
   const [hovered, setHovered] = useState(false);
-
-  // --- Column resize ---
-  const colResizeRef = useRef<{
-    colIndex: number;
-    initialWidths: number[];
-    initialClientX: number;
-  } | undefined>(undefined);
 
   // Derive column count from data or range
   const range = useMemo(() => parseRange(cellRef), [cellRef]);
@@ -105,46 +79,25 @@ const ResizableSpreadsheetRange = ({
 
   const values: string[][] = localValues ?? [];
 
-  // Current column widths: from props or equal distribution
-  const columnWidths = useMemo(() => {
-    const parsed = parseColumnWidths(block.props.columnWidths);
-    if (parsed && parsed.length === colCount) return parsed;
-    if (colCount === 0) return [];
-    const headerOffset = showHeaders ? 40 : 0;
-    const available = block.props.width - headerOffset;
-    const w = Math.max(40, available / colCount);
-    return Array.from({ length: colCount }, () => w);
-  }, [block.props.columnWidths, block.props.width, colCount, showHeaders]);
-
-  // Keep a mutable ref of column widths for drag operations
-  const columnWidthsRef = useRef(columnWidths);
-  useEffect(() => {
-    columnWidthsRef.current = columnWidths;
-  }, [columnWidths]);
-
-  // --- Block-level resize handler ---
-  useEffect(() => {
+  const blockResizeDown = (
+    e: React.MouseEvent,
+    handle: "l" | "r",
+  ) => {
+    e.preventDefault();
     const wrapper = wrapperRef.current;
     if (!wrapper) return;
 
-    const onMouseMove = (e: MouseEvent) => {
-      const rp = resizeParamsRef.current;
-      if (!rp) return;
+    const initialWidth = wrapper.clientWidth;
+    const initialClientX = e.clientX;
+    const alignment = block.props.textAlignment;
 
-      const xDiff = e.clientX - rp.initialClientX;
-      let newWidth: number;
-
-      if (block.props.textAlignment === "center") {
-        newWidth =
-          rp.handleUsed === "r"
-            ? rp.initialWidth + xDiff * 2
-            : rp.initialWidth - xDiff * 2;
-      } else {
-        newWidth =
-          rp.handleUsed === "r"
-            ? rp.initialWidth + xDiff
-            : rp.initialWidth - xDiff;
-      }
+    const onMouseMove = (ev: MouseEvent) => {
+      const xDiff = ev.clientX - initialClientX;
+      const multiplier = alignment === "center" ? 2 : 1;
+      const newWidth =
+        handle === "r"
+          ? initialWidth + xDiff * multiplier
+          : initialWidth - xDiff * multiplier;
 
       const minWidth = 64;
       const editorWidth = (
@@ -158,117 +111,19 @@ const ResizableSpreadsheetRange = ({
     };
 
     const onMouseUp = () => {
-      const rp = resizeParamsRef.current;
-      if (!rp) return;
-      resizeParamsRef.current = undefined;
-
-      const newWidth = wrapper.clientWidth;
-      const oldWidth = rp.initialWidth;
-
-      // Defer to next frame to avoid ProseMirror .rows race condition
-      requestAnimationFrame(() => {
-        if (oldWidth > 0 && columnWidthsRef.current.length > 0) {
-          const scale = newWidth / oldWidth;
-          const scaled = columnWidthsRef.current.map((w) =>
-            Math.max(40, Math.round(w * scale)),
-          );
-          editor.updateBlock(block, {
-            props: {
-              width: newWidth,
-              columnWidths: JSON.stringify(scaled),
-            },
-          });
-        } else {
-          editor.updateBlock(block, { props: { width: newWidth } });
-        }
-      });
-    };
-
-    // Capture phase so events arrive before wrapper's stopPropagation
-    window.addEventListener("mousemove", onMouseMove, true);
-    window.addEventListener("mouseup", onMouseUp, true);
-    return () => {
       window.removeEventListener("mousemove", onMouseMove, true);
       window.removeEventListener("mouseup", onMouseUp, true);
-    };
-  }, [editor, block]);
+      isResizingRef.current = false;
 
-  const blockResizeDown = (
-    e: React.MouseEvent,
-    handle: "l" | "r",
-  ) => {
-    e.preventDefault();
-    if (!wrapperRef.current) return;
-    resizeParamsRef.current = {
-      handleUsed: handle,
-      initialWidth: wrapperRef.current.clientWidth,
-      initialClientX: e.clientX,
-    };
-  };
-
-  // --- Column resize handler ---
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      const cr = colResizeRef.current;
-      if (!cr) return;
-
-      const diff = e.clientX - cr.initialClientX;
-      const newWidths = [...cr.initialWidths];
-      newWidths[cr.colIndex] = Math.max(40, cr.initialWidths[cr.colIndex] + diff);
-
-      // Apply directly to colgroup for smooth dragging
-      const wrapper = wrapperRef.current;
-      if (!wrapper) return;
-      const cols = wrapper.querySelectorAll<HTMLElement>("col[data-col-idx]");
-      cols.forEach((col) => {
-        const idx = Number(col.dataset.colIdx);
-        if (!isNaN(idx) && newWidths[idx] !== undefined) {
-          col.style.width = `${newWidths[idx]}px`;
-        }
+      editor.updateBlock(block, {
+        props: { width: wrapper.clientWidth },
       });
     };
 
-    const onMouseUp = () => {
-      const cr = colResizeRef.current;
-      if (!cr) return;
-      colResizeRef.current = undefined;
-
-      // Read final widths from DOM
-      const wrapper = wrapperRef.current;
-      if (!wrapper) return;
-      const cols = wrapper.querySelectorAll<HTMLElement>("col[data-col-idx]");
-      const finalWidths = [...cr.initialWidths];
-      cols.forEach((col) => {
-        const idx = Number(col.dataset.colIdx);
-        if (!isNaN(idx)) {
-          finalWidths[idx] = Math.max(40, parseFloat(col.style.width) || 40);
-        }
-      });
-
-      requestAnimationFrame(() => {
-        editor.updateBlock(block, {
-          props: { columnWidths: JSON.stringify(finalWidths) },
-        });
-      });
-    };
-
-    // Capture phase so events arrive before wrapper's stopPropagation
+    isResizingRef.current = true;
+    // Capture phase: fires before table container's onMouseMove stopPropagation
     window.addEventListener("mousemove", onMouseMove, true);
     window.addEventListener("mouseup", onMouseUp, true);
-    return () => {
-      window.removeEventListener("mousemove", onMouseMove, true);
-      window.removeEventListener("mouseup", onMouseUp, true);
-    };
-  }, [editor, block]);
-
-  const colResizeDown = (e: React.MouseEvent, colIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    colResizeRef.current = {
-      colIndex,
-      initialWidths: [...columnWidthsRef.current],
-      initialClientX: e.clientX,
-    };
   };
 
   // --- Toggle headers ---
@@ -339,16 +194,14 @@ const ResizableSpreadsheetRange = ({
     <div
       ref={wrapperRef}
       className="relative group/range"
-      style={{ width: block.props.width }}
-      contentEditable={false}
-      onMouseMove={(e) => e.stopPropagation()}
+      style={{ width: block.props.width, maxWidth: "100%" }}
       onMouseEnter={() => editable && setHovered(true)}
       onMouseLeave={(e) => {
         if (
           (e.relatedTarget as HTMLElement)?.classList?.contains(
             "bn-resize-handle",
           ) ||
-          resizeParamsRef.current
+          isResizingRef.current
         ) {
           return;
         }
@@ -391,17 +244,21 @@ const ResizableSpreadsheetRange = ({
         </span>
       </div>
 
-      {/* Table */}
+      {/* Table — stop mousemove from reaching BlockNote's table column-resize plugin */}
       <div
-        className="border border-border rounded-lg overflow-hidden"
+        className="border border-border rounded-lg overflow-x-auto"
+        onMouseMove={(e) => e.stopPropagation()}
       >
-        <table className="border-collapse w-full table-fixed">
+        <table
+          className="border-collapse w-full table-fixed select-none"
+          draggable={false}
+        >
           <colgroup>
             {showHeaders && (
               <col style={{ width: 40 }} />
             )}
-            {columnWidths.map((w, i) => (
-              <col key={i} data-col-idx={i} style={{ width: w }} />
+            {Array.from({ length: colCount }, (_, i) => (
+              <col key={i} />
             ))}
           </colgroup>
 
@@ -415,13 +272,6 @@ const ResizableSpreadsheetRange = ({
                     className="relative bg-muted/50 border-b border-border px-1 py-0.5 text-[10px] text-muted-foreground font-medium text-center select-none"
                   >
                     {colLetter(range.startCol + ci)}
-                    {/* Column resize handle */}
-                    {editable && ci < colCount - 1 && (
-                      <div
-                        className="absolute top-0 -right-[2px] w-[4px] h-full cursor-col-resize z-10 hover:bg-primary/30"
-                        onMouseDown={(e) => colResizeDown(e, ci)}
-                      />
-                    )}
                   </th>
                 ))}
               </tr>

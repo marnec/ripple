@@ -2,7 +2,7 @@ import { useDiagramPreview } from "@/hooks/use-diagram-preview";
 import { defaultProps } from "@blocknote/core";
 import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
 import { CircleSlash } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../../convex/_generated/dataModel";
 
@@ -80,93 +80,59 @@ type DiagramBlockProps = ReactCustomBlockRenderProps<"diagram", typeof diagramPr
 
 const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   const { diagramId } = block.props;
-
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const resizeParamsRef = useRef<{
-    handleUsed: "l" | "r";
-    initialWidth: number;
-    initialClientX: number;
-  } | undefined>(undefined);
+  const isResizingRef = useRef(false);
 
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
-  // state to show/hide handles
   const [showHandles, setShowHandles] = useState(false);
-
-  useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper) return;
-
-    const windowMouseMoveHandler = (event: MouseEvent) => {
-      if (!resizeParamsRef.current) {
-        return;
-      }
-
-      let newWidth: number;
-      const resizeParams = resizeParamsRef.current;
-      const xDiff = event.clientX - resizeParams.initialClientX;
-
-      if (block.props.textAlignment === "center") {
-        if (resizeParams.handleUsed === "r") {
-          newWidth = resizeParams.initialWidth + xDiff * 2;
-        } else {
-          newWidth = resizeParams.initialWidth - xDiff * 2;
-        }
-      } else {
-        if (resizeParams.handleUsed === "r") {
-          newWidth = resizeParams.initialWidth + xDiff;
-        } else {
-          newWidth = resizeParams.initialWidth - xDiff;
-        }
-      }
-
-      const minWidth = 64;
-      const editorWidth = (editor.domElement?.firstElementChild as HTMLElement)
-        ?.clientWidth;
-
-      const finalWidth = Math.min(
-        Math.max(newWidth, minWidth),
-        editorWidth || Number.MAX_VALUE,
-      );
-      wrapper.style.width = `${finalWidth}px`;
-      if (aspectRatio) {
-        wrapper.style.height = `${finalWidth * aspectRatio}px`;
-      }
-    };
-
-    const windowMouseUpHandler = () => {
-      if (!resizeParamsRef.current) {
-        return;
-      }
-
-      resizeParamsRef.current = undefined;
-
-      editor.updateBlock(block, {
-        props: {
-          width: wrapper.clientWidth,
-        },
-      });
-    };
-
-    window.addEventListener("mousemove", windowMouseMoveHandler);
-    window.addEventListener("mouseup", windowMouseUpHandler);
-
-    return () => {
-      window.removeEventListener("mousemove", windowMouseMoveHandler);
-      window.removeEventListener("mouseup", windowMouseUpHandler);
-    };
-  }, [editor, block, aspectRatio]);
 
   const resizeHandleMouseDownHandler = (
     event: React.MouseEvent,
     handle: "l" | "r",
   ) => {
     event.preventDefault();
-    if (!wrapperRef.current) return;
-    resizeParamsRef.current = {
-      handleUsed: handle,
-      initialWidth: wrapperRef.current.clientWidth,
-      initialClientX: event.clientX,
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const initialWidth = wrapper.clientWidth;
+    const initialClientX = event.clientX;
+    const alignment = block.props.textAlignment;
+    const currentAspectRatio = aspectRatio;
+
+    const onMouseMove = (e: MouseEvent) => {
+      const xDiff = e.clientX - initialClientX;
+      const multiplier = alignment === "center" ? 2 : 1;
+      const newWidth =
+        handle === "r"
+          ? initialWidth + xDiff * multiplier
+          : initialWidth - xDiff * multiplier;
+
+      const minWidth = 64;
+      const editorWidth = (editor.domElement?.firstElementChild as HTMLElement)
+        ?.clientWidth;
+      const finalWidth = Math.min(
+        Math.max(newWidth, minWidth),
+        editorWidth || Number.MAX_VALUE,
+      );
+      wrapper.style.width = `${finalWidth}px`;
+      if (currentAspectRatio) {
+        wrapper.style.height = `${finalWidth * currentAspectRatio}px`;
+      }
     };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      isResizingRef.current = false;
+
+      editor.updateBlock(block, {
+        props: { width: wrapper.clientWidth },
+      });
+    };
+
+    isResizingRef.current = true;
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   };
 
   if (!diagramId) {
@@ -195,6 +161,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
       className="relative"
       style={{
         width: block.props.width,
+        maxWidth: "100%",
         height:
           aspectRatio && block.props.width
             ? `${block.props.width * aspectRatio}px`
@@ -206,7 +173,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
           (event.relatedTarget as HTMLElement)?.classList.contains(
             "bn-resize-handle",
           ) ||
-          resizeParamsRef.current
+          isResizingRef.current
         ) {
           return;
         }

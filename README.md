@@ -4,7 +4,7 @@ NEXT STEPS:
 
 - investigate rework all deletion cascade to soft-deletion with scheduled garbage collection
 
-- [ ] diagram and spreadsheet embeds in blocknote editor should not be resizeable in mobile, thy should take full width and not influence block-stored desktop width
+- [x] diagram and spreadsheet embeds in blocknote editor should not be resizeable in mobile, thy should take full width and not influence block-stored desktop width
 
 - [ ] fix spreadsheet embed resize (remove resizeable cols, only leave block resize)
 
@@ -13,6 +13,8 @@ NEXT STEPS:
 - [ ] when deleting embed show alert dialog / drawer (this edit cannot be undone) or alternatively add toast that allows to manually undo the action for a period of time
 
 - [ ] there is still a problem sometimes with the in-call follow action not working
+
+- [ ] link previews in chat
 
 - knowledge-graph
     - [x] add document-paragraph embeds in tasks and other docs (similar mechanism to spreadsheet range, use block id, show referenced blocks)
