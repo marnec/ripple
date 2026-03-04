@@ -447,6 +447,13 @@ body {
   --bn-colors-editor-background: transparent !important;
 }
 
+/* Hide drag handle + plus icon on mobile for cleaner touch experience */
+@media (max-width: 640px) {
+  .bn-side-menu {
+    display: none !important;
+  }
+}
+
 /* Subtle card hover */
 .card-hover {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;

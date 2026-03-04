@@ -206,7 +206,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         </div>
       </div>
       <div className="flex-1 overflow-y-scroll scrollbar-stable">
-      <div className="px-20 max-w-full">
+      <div className="px-2 sm:px-20 max-w-full">
         <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
           <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
           <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
