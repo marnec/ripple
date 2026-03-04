@@ -13,7 +13,7 @@ import { useQuery } from "convex/react";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
-import { Circle, Eye, EyeOff, WifiOff } from "lucide-react";
+import { Circle, Link2, Link2Off, WifiOff } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
@@ -154,7 +154,7 @@ function SpreadsheetEditor({
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   const viewer = useQuery(api.users.viewer);
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
-  const [showRefHighlights, setShowRefHighlights] = useState(true);
+  const [showRefHighlights, setShowRefHighlights] = useState(false);
 
   // Stabilize ref identity to prevent unnecessary JSpreadsheetGrid re-renders
   const referencedCellRefs = useMemo(
@@ -213,7 +213,7 @@ function SpreadsheetEditor({
               className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-2"
               title={showRefHighlights ? "Hide reference highlights" : "Show reference highlights"}
             >
-              {showRefHighlights ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+              {showRefHighlights ? <Link2 className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
               References
             </button>
           )}

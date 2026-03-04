@@ -1,5 +1,4 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { QueryParams } from "@shared/types/routes";
@@ -227,24 +226,15 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
           {hasReferencedBlocks && (
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className={`flex p-1 items-center justify-center cursor-pointer rounded hover:bg-muted transition-colors ${showReferencedBlocks ? "text-primary" : "text-muted-foreground"}`}
-                    onClick={() => setShowReferencedBlocks((v) => !v)}
-                  >
-                    {showReferencedBlocks ? <Link2 size={14} /> : <Link2Off size={14} />}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <span className="text-xs">
-                    {showReferencedBlocks ? "Hide" : "Show"} referenced blocks
-                  </span>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <button
+              type="button"
+              onClick={() => setShowReferencedBlocks((v) => !v)}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-2"
+              title={showReferencedBlocks ? "Hide referenced blocks" : "Show referenced blocks"}
+            >
+              {showReferencedBlocks ? <Link2 className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
+              References
+            </button>
           )}
         </div>
         <div className="flex h-8 items-center gap-3">
