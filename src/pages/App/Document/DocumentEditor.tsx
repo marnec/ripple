@@ -178,34 +178,35 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   }
 
   return (
-    <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-stable">
-      <div className="px-20 max-w-full animate-fade-in">
-        <div className="sticky top-0 z-10 flex items-center justify-between pt-5 pb-2 bg-background/80 backdrop-blur-sm">
-          <div className="flex h-8 items-center gap-2">
-            <FavoriteButton
-              resourceType="document"
-              resourceId={documentId}
-              workspaceId={document.workspaceId}
-            />
-            <h1 className="text-lg font-semibold truncate">{document.name}</h1>
-          </div>
-          <div className="flex h-8 items-center gap-3">
-            <ConnectionStatus isConnected={isConnected} />
-            {isConnected && (
-              <ActiveUsers
-                remoteUsers={remoteUsers}
-                currentUser={
-                  viewer
-                    ? {
-                        name: viewer.name,
-                        color: getUserColor(viewer._id),
-                      }
-                    : undefined
-                }
-              />
-            )}
-          </div>
+    <div className="h-full flex-1 min-w-0 flex flex-col animate-fade-in">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b">
+        <div className="flex h-8 items-center gap-2">
+          <FavoriteButton
+            resourceType="document"
+            resourceId={documentId}
+            workspaceId={document.workspaceId}
+          />
+          <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
         </div>
+        <div className="flex h-8 items-center gap-3">
+          <ConnectionStatus isConnected={isConnected} />
+          {isConnected && (
+            <ActiveUsers
+              remoteUsers={remoteUsers}
+              currentUser={
+                viewer
+                  ? {
+                      name: viewer.name,
+                      color: getUserColor(viewer._id),
+                    }
+                  : undefined
+              }
+            />
+          )}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-scroll scrollbar-stable">
+      <div className="px-20 max-w-full">
         <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
           <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
           <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
@@ -237,6 +238,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             }}
           />
         )}
+      </div>
       </div>
     </div>
   );

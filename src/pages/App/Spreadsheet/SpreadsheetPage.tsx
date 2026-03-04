@@ -205,7 +205,7 @@ function SpreadsheetEditor({
             resourceId={spreadsheetId}
             workspaceId={spreadsheet.workspaceId}
           />
-          <h1 className="text-lg font-semibold truncate">{spreadsheet.name}</h1>
+          <h1 className="hidden sm:block text-lg font-semibold truncate">{spreadsheet.name}</h1>
           {hasRefs && (
             <button
               type="button"

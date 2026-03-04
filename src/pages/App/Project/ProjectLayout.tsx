@@ -59,7 +59,7 @@ function ProjectLayoutContent({
             <div className="h-5 w-40 bg-muted animate-pulse rounded" />
           ) : (
             <>
-              <h1 className="text-sm font-semibold truncate">{project.name}</h1>
+              <h1 className="text-lg font-semibold truncate">{project.name}</h1>
               {project.color && (
                 <span className={`w-2 h-2 rounded-full ${project.color} shrink-0`} />
               )}
