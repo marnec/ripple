@@ -18,11 +18,11 @@ keyboard accessiblity
     - [ ] focus traps
     - [ ] chat image focus escape with "esc" key too
 
-- [ ] profile settings saved to local storage
-    - [ ] move theme settings to profile settings
-    - [ ] user notification settings
-    - [ ] language preference
-    - [ ] restore last search on resource-list page from local-storage
+- [x] profile settings saved to local storage
+    - [x] move theme settings to profile settings
+    - [x] user notification settings
+    - [x] language preference
+    - [x] restore last search on resource-list page from local-storage
 
 - [ ] internationalization (i18n and localization)
 
