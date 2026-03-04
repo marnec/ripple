@@ -66,7 +66,7 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
   const showIndicator = pullDistance > 10;
 
   return (
-    <div ref={containerRef} className="relative h-full overflow-y-auto scrollbar-stable">
+    <div ref={containerRef} className="relative h-full w-full overflow-y-auto scrollbar-stable">
       {showIndicator && (
         <div
           className="pointer-events-none absolute inset-x-0 top-0 z-50 flex justify-center"
