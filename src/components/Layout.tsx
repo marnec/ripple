@@ -3,6 +3,7 @@ import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 import { Phone } from "lucide-react";
 import { useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { PullToRefresh } from "./PullToRefresh";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
 import { cn } from "../lib/utils";
@@ -72,7 +73,7 @@ export function Layout() {
           )}
         </header>
         <div
-          className={cn("relative flex overflow-y-auto scrollbar-stable h-[calc(100svh-4rem-var(--safe-area-top))]", {
+          className={cn("relative flex h-[calc(100svh-4rem-var(--safe-area-top))]", {
             "w-svw": isMobile,
             "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
             "w-[calc(100svw-var(--sidebar-width-icon))]": !isMobile && state === "collapsed",
@@ -83,7 +84,9 @@ export function Layout() {
               className={`pointer-events-none absolute inset-0 z-30 ring-2 ring-inset ${followColor.ring}`}
             />
           )}
-          <Outlet />
+          <PullToRefresh>
+            <Outlet />
+          </PullToRefresh>
         </div>
       </SidebarInset>
     </>
