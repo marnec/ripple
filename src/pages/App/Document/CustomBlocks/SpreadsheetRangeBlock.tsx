@@ -13,7 +13,7 @@ import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview"
 import { parseRange, toCellName } from "@shared/cellRef";
 import { useQuery } from "convex/react";
 import { CircleSlash, Copy, Eye, EyeOff, Table } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
@@ -135,21 +135,53 @@ const ResizableSpreadsheetRange = ({
 
   // --- Clone as editable table ---
   const cloneAsTable = useCallback(() => {
-    const rows = Array.from({ length: rowCount }, (_, ri) =>
-      ({
-        cells: Array.from({ length: colCount }, (_, ci) => [{
-          type: "text" as const,
-          text: values[ri]?.[ci] || "",
-          styles: {},
-        }]),
-      }),
-    );
-    editor.insertBlocks(
-      [{ type: "table" as const, content: { type: "tableContent" as const, columnWidths: Array.from({ length: colCount }, () => undefined), rows } } as any],
-      block,
-      "after",
-    );
-  }, [editor, block, values, rowCount, colCount]);
+    const textCell = (text: string) => [
+      { type: "text" as const, text, styles: {} },
+    ];
+    const tableRows: { cells: { type: "text"; text: string; styles: object }[][] }[] = [];
+
+    if (showHeaders && range) {
+      // Header row: empty corner cell + column letters
+      const headerCells = [
+        ...(showHeaders ? [textCell("")] : []),
+        ...Array.from({ length: colCount }, (_, ci) =>
+          textCell(colLetter(range.startCol + ci)),
+        ),
+      ];
+      tableRows.push({ cells: headerCells });
+    }
+
+    for (let ri = 0; ri < rowCount; ri++) {
+      const dataCells = [
+        ...(showHeaders && range ? [textCell(String(range.startRow + ri + 1))] : []),
+        ...Array.from({ length: colCount }, (_, ci) =>
+          textCell(values[ri]?.[ci] || ""),
+        ),
+      ];
+      tableRows.push({ cells: dataCells });
+    }
+
+    const totalCols = colCount + (showHeaders && range ? 1 : 0);
+
+    // Defer to macrotask to avoid synchronous update loop inside BlockNote's table plugin
+    setTimeout(() => {
+      editor.insertBlocks(
+        [
+          {
+            type: "table" as const,
+            content: {
+              type: "tableContent" as const,
+              columnWidths: Array.from({ length: totalCols }, () => undefined),
+              ...(showHeaders && range ? { headerRows: 1, headerCols: 1 } : {}),
+              rows: tableRows,
+            },
+          } as any,
+        ],
+        block,
+        "after",
+      );
+    }, 0);
+  }, [editor, block, values, rowCount, colCount, showHeaders, range]);
 
   // --- Clone as linked range ---
   const cloneAsLinkedRange = useCallback(() => {
@@ -301,60 +333,52 @@ const ResizableSpreadsheetRange = ({
         </span>
       </div>
 
-      {/* Table — stop mousemove from reaching BlockNote's table column-resize plugin */}
+      {/* Grid table — uses divs instead of <table> to avoid BlockNote's TableHandles plugin
+           which registers a window-level mouseup handler that calls domCellAround() looking for TD/TH */}
       <div
-        className="border border-border rounded-lg overflow-x-auto"
-        onMouseMove={(e) => e.stopPropagation()}
+        className="border border-border rounded-lg overflow-x-auto select-none"
+        draggable={false}
       >
-        <table
-          className="border-collapse w-full table-fixed select-none"
-          draggable={false}
+        <div
+          className="grid w-full"
+          style={{
+            gridTemplateColumns: showHeaders
+              ? `40px repeat(${colCount}, minmax(0, 1fr))`
+              : `repeat(${colCount}, minmax(0, 1fr))`,
+          }}
         >
-          <colgroup>
-            {showHeaders && (
-              <col style={{ width: 40 }} />
-            )}
-            {Array.from({ length: colCount }, (_, i) => (
-              <col key={i} />
-            ))}
-          </colgroup>
-
           {showHeaders && range && (
-            <thead>
-              <tr>
-                <th className="bg-muted/50 border-b border-r border-border px-1 py-0.5 text-[10px] text-muted-foreground font-normal w-10" />
-                {Array.from({ length: colCount }, (_, ci) => (
-                  <th
-                    key={ci}
-                    className="relative bg-muted/50 border-b border-border px-1 py-0.5 text-[10px] text-muted-foreground font-medium text-center select-none"
-                  >
-                    {colLetter(range.startCol + ci)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+            <>
+              <div className="bg-muted/50 border-b border-r border-border px-1 py-0.5 text-[10px] text-muted-foreground font-normal w-10" />
+              {Array.from({ length: colCount }, (_, ci) => (
+                <div
+                  key={ci}
+                  className="bg-muted/50 border-b border-border px-1 py-0.5 text-[10px] text-muted-foreground font-medium text-center"
+                >
+                  {colLetter(range.startCol + ci)}
+                </div>
+              ))}
+            </>
           )}
 
-          <tbody>
-            {Array.from({ length: rowCount }, (_, ri) => (
-              <tr key={ri}>
-                {showHeaders && range && (
-                  <td className="bg-muted/50 border-r border-border px-1 py-0.5 text-[10px] text-muted-foreground font-normal text-center select-none w-10">
-                    {range.startRow + ri + 1}
-                  </td>
-                )}
-                {Array.from({ length: colCount }, (_, ci) => (
-                  <td
-                    key={ci}
-                    className="border-b border-r border-border last:border-r-0 px-2.5 py-1.5 text-sm font-mono truncate"
-                  >
-                    {values[ri]?.[ci] || "\u00A0"}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          {Array.from({ length: rowCount }, (_, ri) => (
+            <React.Fragment key={ri}>
+              {showHeaders && range && (
+                <div className="bg-muted/50 border-r border-border px-1 py-0.5 text-[10px] text-muted-foreground font-normal text-center w-10">
+                  {range.startRow + ri + 1}
+                </div>
+              )}
+              {Array.from({ length: colCount }, (_, ci) => (
+                <div
+                  key={ci}
+                  className="border-b border-r border-border last:border-r-0 px-2.5 py-1.5 text-sm font-mono truncate"
+                >
+                  {values[ri]?.[ci] || "\u00A0"}
+                </div>
+              ))}
+            </React.Fragment>
+          ))}
+        </div>
       </div>
 
       {/* Click overlay for navigation (non-editable mode) */}

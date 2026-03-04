@@ -8,7 +8,7 @@ NEXT STEPS:
 
 - [x] fix spreadsheet embed resize (remove resizeable cols, only leave block resize)
 
-- [ ] in mobile docs blocks should take full width and should not be dragged (hide drag, plus icon)
+- [x] in mobile docs blocks should take full width and should not be dragged (hide drag, plus icon)
 
 - [ ] when deleting embed show alert dialog / drawer (this edit cannot be undone) or alternatively add toast that allows to manually undo the action for a period of time
 

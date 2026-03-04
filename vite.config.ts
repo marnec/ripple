@@ -54,6 +54,9 @@ export default defineConfig({
       },
     }),
   ],
+  css: { devSourcemap: true },
+  build: { sourcemap: true },
+  optimizeDeps: { esbuildOptions: { sourcemap: true } },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
