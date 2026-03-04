@@ -8,6 +8,7 @@ export default tseslint.config(
     ignores: [
       "dist/**",
       "convex/_generated/**",
+      ".wrangler/**",
       "postcss.config.js",
       "tailwind.config.js",
       "vite.config.ts",

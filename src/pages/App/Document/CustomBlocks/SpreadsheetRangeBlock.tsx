@@ -77,7 +77,7 @@ const ResizableSpreadsheetRange = ({
   const colCount = range ? range.endCol - range.startCol + 1 : 0;
   const rowCount = range ? range.endRow - range.startRow + 1 : 0;
 
-  const values: string[][] = localValues ?? [];
+  const values: string[][] = useMemo(() => localValues ?? [], [localValues]);
 
   const blockResizeDown = (
     e: React.MouseEvent,

@@ -46,11 +46,13 @@ export function SwipeToReveal({
 
   // Keep latest values in refs so native listeners always see current state
   const isOpenRef = useRef(isOpen);
-  isOpenRef.current = isOpen;
   const onSwipeStartRef = useRef(onSwipeStart);
-  onSwipeStartRef.current = onSwipeStart;
   const setOpenRef = useRef(setOpen);
-  setOpenRef.current = setOpen;
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+    onSwipeStartRef.current = onSwipeStart;
+    setOpenRef.current = setOpen;
+  });
 
   // Sync controlled open → translate position
   useEffect(() => {

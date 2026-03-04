@@ -2,19 +2,10 @@ import { useDocumentBlockPreview } from "@/hooks/use-document-block-preview";
 import { defaultProps } from "@blocknote/core";
 import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
 import { useQuery } from "convex/react";
-import { CircleSlash, FileText, Heading, List, ListOrdered, CheckSquare, Quote, Type } from "lucide-react";
+import { CircleSlash } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
-
-const blockTypeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  paragraph: Type,
-  heading: Heading,
-  bulletListItem: List,
-  numberedListItem: ListOrdered,
-  checkListItem: CheckSquare,
-  quote: Quote,
-};
 
 function DocumentBlockView({
   documentId,
@@ -58,8 +49,6 @@ function DocumentBlockView({
       </div>
     );
   }
-
-  const Icon = blockTypeIcons[blockType ?? "paragraph"] ?? Type;
 
   return (
     <div className="animate-fade-in">
