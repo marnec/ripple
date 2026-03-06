@@ -124,6 +124,27 @@ This project uses static code generation (`convex.json` → `staticApi: true, st
 - Use `Doc<"tableName">` for document types
 - Functions returning nothing should have `returns: v.null()`
 
+## Testing
+
+Tests are vital to this application. When making changes to business logic, update or add corresponding tests.
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+```
+
+### Test Structure
+- **Backend tests** (`tests/convex/`): Use `convex-test` to test Convex mutations/queries with real schema validation. Helpers in `tests/convex/helpers.ts` provide `createTestContext`, `setupAuthenticatedUser`, and `setupWorkspaceWithAdmin`.
+- **Frontend unit tests** (`src/**/*.test.ts`): Pure utility function tests using `vitest` + `jsdom`.
+
+### When to Write Tests
+- Any new Convex mutation/query with non-trivial logic (auth checks, cascading deletes, status sync, etc.)
+- Utility functions with business logic (formatters, parsers, computed values)
+- Bug fixes should include a regression test when feasible
+
 ### UX principles
  - This app is opinionated on many topics, we don't want to please every possible user
  - Users should not be flooded with information, by default only essential information is visible
