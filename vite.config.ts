@@ -63,10 +63,12 @@ export default defineConfig({
       "@shared": path.resolve(__dirname, "./shared"),
     },
   },
-  server: {
-    https: {
-      key: fs.readFileSync("./ssl/localhost-key.pem"),
-      cert: fs.readFileSync("./ssl/localhost.pem"),
-    },
-  },
+  server: fs.existsSync("./ssl/localhost-key.pem")
+    ? {
+        https: {
+          key: fs.readFileSync("./ssl/localhost-key.pem"),
+          cert: fs.readFileSync("./ssl/localhost.pem"),
+        },
+      }
+    : {},
 });

@@ -15,7 +15,11 @@
     "deploy:convex": "npx convex deploy",
     "deploy:frontend": "npm run build && wrangler deploy",
     "deploy:partykit": "wrangler deploy",
-    "deploy": "npm run build && npx convex deploy && wrangler deploy"
+    "deploy": "npm run build && npx convex deploy && wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:backend": "vitest run --project backend",
+    "test:frontend": "vitest run --project frontend"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
@@ -95,6 +99,9 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.2.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/color-hash": "^2.0.0",
     "@types/node": "^20.14.9",
     "@types/react": "19.2.14",
@@ -105,11 +112,13 @@
     "@typescript-eslint/parser": "8.56.1",
     "@vitejs/plugin-react": "5.1.3",
     "autoprefixer": "10.4.24",
+    "convex-test": "^0.0.41",
     "dotenv": "17.2.4",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "7.0.1",
     "eslint-plugin-react-refresh": "0.5.2",
     "globals": "^17.3.0",
+    "jsdom": "^28.1.0",
     "mkcert": "3.2.0",
     "npm-run-all": "4.1.5",
     "postcss": "8.5.6",
@@ -120,6 +129,7 @@
     "typescript-eslint": "8.56.1",
     "vite": "7.3.1",
     "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.0.18",
     "wrangler": "^4.63.0"
   }
 }

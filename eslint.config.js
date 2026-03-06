@@ -12,6 +12,7 @@ export default tseslint.config(
       "postcss.config.js",
       "tailwind.config.js",
       "vite.config.ts",
+      "vitest.workspace.ts",
       "src/components/ui/**",
     ],
   },
@@ -89,6 +90,13 @@ export default tseslint.config(
     },
     rules: {
       "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    files: ["**/*.test.ts", "**/*.test.tsx", "src/test/**"],
+    rules: {
+      "@typescript-eslint/no-non-null-assertion": "off",
+      "@typescript-eslint/no-floating-promises": "off",
     },
   },
 );

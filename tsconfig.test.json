@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "composite": true,
+    "types": ["vitest/importMeta"]
+  },
+  "include": [
+    "src",
+    "shared",
+    "tests/**/*.ts",
+    "convex/schema.ts",
+    "convex/_generated/**/*.ts",
+    "convex/signaling.ts",
+    "convex/utils/blocknote.ts"
+  ]
+}
