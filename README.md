@@ -8,6 +8,8 @@ NEXT STEPS:
 
 - [ ] link previews in chat
 
+- [x] add tests
+
 - knowledge-graph
     - [x] add document-paragraph embeds in tasks and other docs (similar mechanism to spreadsheet range, use block id, show referenced blocks)
     - [x] improve spreadsheet reference highlight (border)
