@@ -147,7 +147,6 @@ export declare const api: {
         _id: Id<"channels">;
         isPublic: boolean;
         name: string;
-        roleCount: { admin: number; member: number };
         workspaceId: Id<"workspaces">;
       } | null
     >;
@@ -160,7 +159,6 @@ export declare const api: {
         _id: Id<"channels">;
         isPublic: boolean;
         name: string;
-        roleCount: { admin: number; member: number };
         workspaceId: Id<"workspaces">;
       }>
     >;
@@ -173,7 +171,6 @@ export declare const api: {
         _id: Id<"channels">;
         isPublic: boolean;
         name: string;
-        roleCount: { admin: number; member: number };
         workspaceId: Id<"workspaces">;
       }>
     >;
@@ -1735,7 +1732,6 @@ export declare const internal: {
         _id: Id<"channels">;
         isPublic: boolean;
         name: string;
-        roleCount: { admin: number; member: number };
         workspaceId: Id<"workspaces">;
       } | null
     >;
@@ -1899,6 +1895,30 @@ export declare const internal: {
       any
     >;
     run: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    runAll: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    stripChannelRoleCount: FunctionReference<
       "mutation",
       "internal",
       {

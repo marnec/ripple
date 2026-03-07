@@ -224,7 +224,7 @@ export type DataModel = {
     document: {
       isPublic: boolean;
       name: string;
-      roleCount: { admin: number; member: number };
+      roleCount?: { admin: number; member: number };
       workspaceId: Id<"workspaces">;
       _id: Id<"channels">;
       _creationTime: number;

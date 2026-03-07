@@ -46,6 +46,11 @@ jobs:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: npx convex deploy
 
+      - name: Run migrations
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: npx convex run migrations:runAll
+
       - name: Health check Convex
         run: |
           curl -f -s -o /dev/null -w "%{http_code}" "${{ secrets.VITE_CONVEX_URL }}" || exit 1

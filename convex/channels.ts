@@ -29,10 +29,6 @@ export const create = mutation({
       name,
       workspaceId,
       isPublic,
-      roleCount: {
-        [ChannelRole.MEMBER]: 0,
-        [ChannelRole.ADMIN]: 1,
-      },
     });
 
     if (!isPublic) {
@@ -52,10 +48,6 @@ export const list = query({
     name: v.string(),
     workspaceId: v.id("workspaces"),
     isPublic: v.boolean(),
-    roleCount: v.object({
-      admin: v.number(),
-      member: v.number(),
-    }),
   })),
   handler: async (ctx, { workspaceId }) => {
     const userId = await getAuthUserId(ctx);
@@ -85,10 +77,6 @@ export const get = query({
       name: v.string(),
       workspaceId: v.id("workspaces"),
       isPublic: v.boolean(),
-      roleCount: v.object({
-        admin: v.number(),
-        member: v.number(),
-      }),
     }),
     v.null()
   ),
@@ -252,10 +240,6 @@ const channelValidator = v.object({
   name: v.string(),
   workspaceId: v.id("workspaces"),
   isPublic: v.boolean(),
-  roleCount: v.object({
-    admin: v.number(),
-    member: v.number(),
-  }),
 });
 
 export const getInternal = internalQuery({

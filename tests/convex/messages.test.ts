@@ -27,7 +27,6 @@ async function setupChannel(
       name,
       workspaceId,
       isPublic: true,
-      roleCount: { admin: 1, member: 0 },
     });
     await ctx.db.insert("channelMembers", {
       channelId,

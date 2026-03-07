@@ -2,7 +2,7 @@ import { authTables } from "@convex-dev/auth/server";
 import { InviteStatus } from "@shared/enums/inviteStatus";
 import { ChannelRole, WorkspaceRole } from "@shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
-import { v, VFloat64 } from "convex/values";
+import { v } from "convex/values";
 
 export const channelRoleSchema = v.union(
   ...Object.values(ChannelRole).map((role) => v.literal(role)),
@@ -67,13 +67,11 @@ export default defineSchema({
     name: v.string(),
     workspaceId: v.id("workspaces"),
     isPublic: v.boolean(),
-    roleCount: v.object({
-      [ChannelRole.ADMIN]: v.number(),
-      [ChannelRole.MEMBER]: v.number(),
-    } satisfies Record<
-      (typeof ChannelRole)[keyof typeof ChannelRole],
-      VFloat64<number, "required">
-    >),
+    // Deprecated: kept optional for migration compatibility. Remove after running stripChannelRoleCount migration.
+    roleCount: v.optional(v.object({
+      admin: v.number(),
+      member: v.number(),
+    })),
   })
   .index("by_workspace", ["workspaceId"])
   .index("by_isPublicInWorkspace", ["isPublic", "workspaceId"])

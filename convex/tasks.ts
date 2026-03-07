@@ -159,7 +159,8 @@ export const create = mutation({
       position = generateKeyBetween(lastTask?.position ?? null, null);
     }
 
-    // Atomically assign sequential task number
+    // Assign sequential task number — serialization point under OCC.
+    // Concurrent creates on the same project will retry automatically.
     const counter = project.taskCounter ?? 0;
     const nextNumber = counter + 1;
     await ctx.db.patch(args.projectId, { taskCounter: nextNumber });

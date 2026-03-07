@@ -81,12 +81,6 @@ export const addToChannel = mutation({
       throw new ConvexError(`Channel ${channelId} does not exist`);
     }
 
-    const { member } = channel.roleCount;
-
-    await ctx.db.patch(channelId, {
-      roleCount: { ...channel.roleCount, [ChannelRole.MEMBER]: member + 1 },
-    });
-
     return ctx.db.insert("channelMembers", {
       userId,
       channelId,
@@ -109,37 +103,20 @@ export const removeFromChannel = mutation({
       throw new ConvexError(`User id=${userId} is not part of channel id=${channelId}`);
     }
 
-    const channel = await ctx.db.get(channelId);
-    const user = await ctx.db.get(userId);
+    if (channelMember.role === ChannelRole.ADMIN) {
+      const channelAdmins = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_role", (q) =>
+          q.eq("channelId", channelId).eq("role", "admin"),
+        )
+        .collect();
 
-    if (!channel) {
-      throw new ConvexError(`Channel not found with id=${channelId}`);
+      if (channelAdmins.length <= 1) {
+        throw new ConvexError(
+          `Cannot remove last ${ChannelRole.ADMIN} in the channel, set another user as admin first`,
+        );
+      }
     }
-
-    if (!user) {
-      throw new ConvexError(`User not found with id=${userId}`);
-    }
-
-    const numberRoleInChannel = channel.roleCount[`${channelMember.role}`];
-
-    if (numberRoleInChannel === 0) {
-      throw new ConvexError(
-        `Something went wrong: There are 0 ${channelMember.role}s before removal`,
-      );
-    }
-
-    if (channelMember.role === ChannelRole.ADMIN && numberRoleInChannel === 1) {
-      throw new ConvexError(
-        `Cannot remove last ${ChannelRole.ADMIN} in the channel, set another user as admin first`,
-      );
-    }
-
-    await ctx.db.patch(channelId, {
-      roleCount: {
-        ...channel.roleCount,
-        [channelMember.role]: channel.roleCount[`${channelMember.role}`] - 1,
-      },
-    });
 
     await ctx.db.delete(channelMember._id);
     return null;

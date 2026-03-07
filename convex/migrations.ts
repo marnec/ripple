@@ -1,5 +1,5 @@
 import { Migrations } from "@convex-dev/migrations";
-import { components } from "./_generated/api.js";
+import { components, internal } from "./_generated/api.js";
 import { DataModel, Id } from "./_generated/dataModel.js";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
@@ -83,6 +83,17 @@ export const migrateTaskStatusesToProject = migrations.define({
 
 export const run = migrations.runner();
 
+// Runs all migrations in order. Chain with deploy:
+// npx convex deploy --cmd 'npm run build' && npx convex run migrations:runAll --prod
+export const runAll = migrations.runner([
+  internal.migrations.migrateTaskStatusesToProject,
+  internal.migrations.stripDeprecatedFields,
+  internal.migrations.stripDocumentFields,
+  internal.migrations.stripDiagramFields,
+  internal.migrations.stripChannelRoleCount,
+  internal.migrations.stripSpreadsheetFields,
+]);
+
 /**
  * Strip deprecated fields from existing documents after removing
  * per-resource membership tables.
@@ -135,6 +146,20 @@ export const stripDiagramFields = migrations.define({
         name: doc.name,
         tags: doc.tags,
         yjsSnapshotId: doc.yjsSnapshotId,
+      });
+    }
+  },
+});
+
+export const stripChannelRoleCount = migrations.define({
+  table: "channels",
+  migrateOne: async (ctx, channel) => {
+    const legacy = channel as Record<string, unknown>;
+    if (legacy.roleCount !== undefined) {
+      await ctx.db.replace(channel._id, {
+        name: channel.name,
+        workspaceId: channel.workspaceId,
+        isPublic: channel.isPublic,
       });
     }
   },
