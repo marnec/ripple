@@ -1,4 +1,4 @@
-import { expect, describe, it } from "vitest";
+import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { api } from "../../convex/_generated/api";
 import {
   createTestContext,
@@ -6,6 +6,11 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import { Id } from "../../convex/_generated/dataModel";
+
+// Use fake timers so audit log component's scheduled aggregate updates
+// don't fire uncontrollably and corrupt convex-test state.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 /** Create a project with seeded statuses (mirrors projects.create logic). */
 async function setupProjectWithStatuses(
@@ -318,9 +323,7 @@ describe("tasks.remove", () => {
     expect(task).toBeNull();
   });
 
-  // TODO: audit log component schedules aggregate updates that corrupt convex-test state.
-  // Fix in the audit-log fork by wrapping ctx.scheduler.runAfter in try-catch.
-  it.skip("cleans up cycle associations on delete", async () => {
+  it("cleans up cycle associations on delete", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
     const { projectId } = await setupProjectWithStatuses(t, {
