@@ -66,6 +66,40 @@ export const addToChannel = mutation({
   args: { userId: v.id("users"), channelId: v.id("channels") },
   returns: v.id("channelMembers"),
   handler: async (ctx, { userId, channelId }) => {
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId) throw new ConvexError("Unauthenticated");
+
+    const channel = await ctx.db.get(channelId);
+    if (!channel) throw new ConvexError(`Channel ${channelId} does not exist`);
+
+    // Caller must be channel admin (private) or workspace admin (public)
+    if (!channel.isPublic) {
+      const callerMembership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", callerId))
+        .first();
+      if (callerMembership?.role !== ChannelRole.ADMIN) {
+        throw new ConvexError("Not authorized to add members to this channel");
+      }
+    } else {
+      const workspaceMembership = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", callerId))
+        .first();
+      if (!workspaceMembership) {
+        throw new ConvexError("Not authorized to add members to this channel");
+      }
+    }
+
+    // Target user must be in the workspace
+    const targetWorkspaceMembership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", userId))
+      .first();
+    if (!targetWorkspaceMembership) {
+      throw new ConvexError("User is not a member of this workspace");
+    }
+
     const channelMemberExists = await ctx.db
       .query("channelMembers")
       .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
@@ -73,12 +107,6 @@ export const addToChannel = mutation({
 
     if (channelMemberExists) {
       throw new ConvexError(`User id=${userId} is already a member of channel id=${channelId}`);
-    }
-
-    const channel = await ctx.db.get(channelId);
-
-    if (!channel) {
-      throw new ConvexError(`Channel ${channelId} does not exist`);
     }
 
     return ctx.db.insert("channelMembers", {
@@ -94,6 +122,34 @@ export const removeFromChannel = mutation({
   args: { userId: v.id("users"), channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { userId, channelId }) => {
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId) throw new ConvexError("Unauthenticated");
+
+    const channel = await ctx.db.get(channelId);
+    if (!channel) throw new ConvexError("Channel not found");
+
+    // Allow self-removal, otherwise require channel admin (private) or workspace admin (public)
+    const isSelfRemoval = callerId === userId;
+    if (!isSelfRemoval) {
+      if (!channel.isPublic) {
+        const callerMembership = await ctx.db
+          .query("channelMembers")
+          .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", callerId))
+          .first();
+        if (callerMembership?.role !== ChannelRole.ADMIN) {
+          throw new ConvexError("Not authorized to remove members from this channel");
+        }
+      } else {
+        const workspaceMembership = await ctx.db
+          .query("workspaceMembers")
+          .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", callerId))
+          .first();
+        if (workspaceMembership?.role !== "admin") {
+          throw new ConvexError("Not authorized to remove members from this channel");
+        }
+      }
+    }
+
     const channelMember = await ctx.db
       .query("channelMembers")
       .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
@@ -127,10 +183,34 @@ export const changeMemberRole = mutation({
   args: { channelMemberId: v.id("channelMembers"), role: channelRoleSchema },
   returns: v.null(),
   handler: async (ctx, { channelMemberId, role }) => {
-    const channelMember = await ctx.db.get(channelMemberId);
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId) throw new ConvexError("Unauthenticated");
 
+    const channelMember = await ctx.db.get(channelMemberId);
     if (!channelMember) {
       throw new ConvexError(`No channel member found with id=${channelMemberId}`);
+    }
+
+    const channel = await ctx.db.get(channelMember.channelId);
+    if (!channel) throw new ConvexError("Channel not found");
+
+    // Caller must be channel admin (private) or workspace admin (public)
+    if (!channel.isPublic) {
+      const callerMembership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) => q.eq("channelId", channel._id).eq("userId", callerId))
+        .first();
+      if (callerMembership?.role !== ChannelRole.ADMIN) {
+        throw new ConvexError("Not authorized to change member roles");
+      }
+    } else {
+      const workspaceMembership = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", callerId))
+        .first();
+      if (workspaceMembership?.role !== "admin") {
+        throw new ConvexError("Not authorized to change member roles");
+      }
     }
 
     if (channelMember.role === role) return null;

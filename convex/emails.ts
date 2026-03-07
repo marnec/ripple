@@ -12,6 +12,7 @@ export const sendWorkspaceInvite = internalAction({
     inviterName: v.string(),
     recipientEmail: v.string(),
   },
+  returns: v.null(),
   handler: async (_, { inviteId, workspaceName, inviterName, recipientEmail }) => {
     const url = `${process.env.SITE_URL}/invite/${inviteId}`;
 
@@ -57,21 +58,17 @@ export const sendWorkspaceInvite = internalAction({
 
     const resend = new Resend(resendKey);
 
-    return resend.emails.send({
+    const sent = await resend.emails.send({
       from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
       to: recipientEmail,
       subject: `Invitation to join ${workspaceName} on ${APP_NAME}`,
       html: emailContent,
-    })
-      .then((sent) => {
-        if (sent.error) {
-          throw new ConvexError(`Failed to send email: ${sent.error.message}`);
-        }
-        return sent;
-      })
-      .catch((error) => {
-        console.error("Failed to send email:", error);
-        throw error;
-      });
+    });
+
+    if (sent.error) {
+      throw new ConvexError(`Failed to send email: ${sent.error.message}`);
+    }
+
+    return null;
   },
-}); 
+});

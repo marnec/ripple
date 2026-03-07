@@ -923,19 +923,27 @@ export declare const api: {
         expirationTime: number | null;
         keys: { auth: string; p256dh: string };
       },
-      any
+      null
     >;
     unregisterSubscription: FunctionReference<
       "mutation",
       "public",
       { endpoint: string },
-      any
+      null
     >;
     usersSubscriptions: FunctionReference<
       "query",
       "public",
       { usersIds: Array<Id<"users">> },
-      any
+      Array<{
+        _creationTime: number;
+        _id: Id<"pushSubscriptions">;
+        device: string;
+        endpoint: string;
+        expirationTime: number | null;
+        keys: { auth: string; p256dh: string };
+        userId: Id<"users">;
+      }>
     >;
   };
   snapshots: {
@@ -1875,7 +1883,7 @@ export declare const internal: {
         recipientEmail: string;
         workspaceName: string;
       },
-      any
+      null
     >;
   };
   migrations: {
