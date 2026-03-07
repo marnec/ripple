@@ -556,18 +556,16 @@ export const getMessageContext = query({
     const messagesBefore = await ctx.db
       .query("messages")
       .withIndex("undeleted_by_channel", (q) =>
-        q.eq("channelId", targetMessage.channelId).eq("deleted", false)
+        q.eq("channelId", targetMessage.channelId).eq("deleted", false).lt("_creationTime", targetMessage._creationTime)
       )
-      .filter((q) => q.lt(q.field("_creationTime"), targetMessage._creationTime))
       .order("desc")
       .take(contextSize);
 
     const messagesAfter = await ctx.db
       .query("messages")
       .withIndex("undeleted_by_channel", (q) =>
-        q.eq("channelId", targetMessage.channelId).eq("deleted", false)
+        q.eq("channelId", targetMessage.channelId).eq("deleted", false).gt("_creationTime", targetMessage._creationTime)
       )
-      .filter((q) => q.gt(q.field("_creationTime"), targetMessage._creationTime))
       .order("asc")
       .take(contextSize);
 

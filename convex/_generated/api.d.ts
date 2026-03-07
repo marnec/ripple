@@ -917,7 +917,6 @@ export declare const api: {
     >;
   };
   pushSubscription: {
-    listNonSelfSubscriptions: FunctionReference<"query", "public", {}, any>;
     registerSubscription: FunctionReference<
       "mutation",
       "public",

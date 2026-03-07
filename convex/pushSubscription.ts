@@ -44,21 +44,6 @@ export const unregisterSubscription = mutation({
   },
 });
 
-export const listNonSelfSubscriptions = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    ctx.db.query("workspaces");
-
-    return ctx.db
-      .query("pushSubscriptions")
-      .filter((q) => q.neq(q.field("userId"), userId))
-      .collect();
-  },
-});
-
 export const usersSubscriptions = query({
   args: { usersIds: v.array(v.id("users")) },
   handler: async (ctx, { usersIds }) => {

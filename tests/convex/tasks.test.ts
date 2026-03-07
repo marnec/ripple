@@ -401,7 +401,7 @@ describe("tasks.get", () => {
     expect(result).toBeDefined();
     expect(result!.title).toBe("Enriched");
     expect(result!.status).toBeDefined();
-    expect(result!.status.name).toBe("Todo");
+    expect(result!.status!.name).toBe("Todo");
     expect(result!.projectKey).toBe("TST");
   });
 
