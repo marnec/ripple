@@ -6,7 +6,7 @@ export function ChatContainer() {
   const { channelId } = useParams<QueryParams>();
 
   return (
-    <div className="flex w-full flex-col justify-between">
+    <div className="flex h-full w-full flex-col">
       {channelId && (
         <>
           <Chat channelId={channelId} />

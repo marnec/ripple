@@ -124,7 +124,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           {/* Main Chat View */}
       {/* Inline Search — hidden in compact variant */}
       {variant === "full" && (
-      <div className="flex items-center gap-2 p-2 border-b">
+      <div className="flex shrink-0 items-center gap-2 p-2 border-b">
         <div className="relative flex-1">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input

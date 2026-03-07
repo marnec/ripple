@@ -27,9 +27,9 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
   const { messages, targetMessageId: _targetMessageId, targetIndex } = contextData;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+      <div className="flex shrink-0 items-center justify-between p-4 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -50,15 +50,15 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4 max-w-4xl mx-auto">
+      <ScrollArea className="min-h-0 flex-1 overflow-hidden">
+        <div className="space-y-4 p-4">
           {messages.map((message, index) => (
             <div key={message.isomorphicId}>
               {/* Highlight the target message */}
-              <div 
+              <div
                 className={
-                  index === targetIndex 
-                    ? "ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg" 
+                  index === targetIndex
+                    ? "ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg"
                     : ""
                 }
               >
