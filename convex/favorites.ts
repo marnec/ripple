@@ -165,7 +165,9 @@ export const listByType = query({
 
     return {
       ...result,
-      page: enrichedPage.filter(Boolean),
+      page: enrichedPage.filter(
+        (item): item is NonNullable<typeof item> => item !== null,
+      ),
     };
   },
 });
