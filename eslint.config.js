@@ -14,6 +14,7 @@ export default tseslint.config(
       "vite.config.ts",
       "vitest.workspace.ts",
       "src/components/ui/**",
+      "audit-log/**",
     ],
   },
   {
