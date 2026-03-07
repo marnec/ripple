@@ -49,7 +49,7 @@ export const search = query({
     tags: v.optional(v.array(v.string())),
     isFavorite: v.optional(v.boolean()),
   },
-  returns: v.any(),
+  returns: v.array(spreadsheetValidator),
   handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
@@ -213,9 +213,21 @@ export const rename = mutation({
   },
 });
 
+const referenceValidator = v.object({
+  _id: v.id("contentReferences"),
+  sourceType: v.string(),
+  sourceId: v.string(),
+  sourceName: v.string(),
+  workspaceId: v.string(),
+  projectId: v.optional(v.string()),
+});
+
 export const remove = mutation({
   args: { id: v.id("spreadsheets"), force: v.optional(v.boolean()) },
-  returns: v.any(),
+  returns: v.union(
+    v.object({ status: v.literal("deleted") }),
+    v.object({ status: v.literal("has_references"), references: v.array(referenceValidator) }),
+  ),
   handler: async (ctx, { id, force }) => {
     const userId = await getAuthUserId(ctx);
 

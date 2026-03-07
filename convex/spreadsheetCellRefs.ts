@@ -13,7 +13,10 @@ export const getCellRef = query({
     spreadsheetId: v.id("spreadsheets"),
     cellRef: v.string(),
   },
-  returns: v.any(),
+  returns: v.union(
+    v.object({ values: v.array(v.array(v.string())), updatedAt: v.number() }),
+    v.null(),
+  ),
   handler: async (ctx, { spreadsheetId, cellRef }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
@@ -201,7 +204,7 @@ export const removeCellRef = mutation({
  */
 export const getReferencedCellRefs = internalQuery({
   args: { spreadsheetId: v.id("spreadsheets") },
-  returns: v.any(),
+  returns: v.array(v.object({ cellRef: v.string() })),
   handler: async (ctx, { spreadsheetId }) => {
     const refs = await ctx.db
       .query("spreadsheetCellRefs")
@@ -217,7 +220,17 @@ export const getReferencedCellRefs = internalQuery({
  */
 export const getSpreadsheetInternal = internalQuery({
   args: { id: v.id("spreadsheets") },
-  returns: v.any(),
+  returns: v.union(
+    v.object({
+      _id: v.id("spreadsheets"),
+      _creationTime: v.number(),
+      workspaceId: v.id("workspaces"),
+      name: v.string(),
+      tags: v.optional(v.array(v.string())),
+      yjsSnapshotId: v.optional(v.id("_storage")),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, { id }) => {
     return await ctx.db.get(id);
   },

@@ -16,9 +16,33 @@ type AuditEntry = {
 };
 
 // Returns a merged timeline of audit log activity events and comments, sorted chronologically.
+const timelineItemValidator = v.union(
+  v.object({
+    kind: v.literal("activity"),
+    _id: v.string(),
+    _creationTime: v.number(),
+    userId: v.string(),
+    userName: v.string(),
+    userImage: v.optional(v.string()),
+    type: v.string(),
+    oldValue: v.optional(v.string()),
+    newValue: v.optional(v.string()),
+  }),
+  v.object({
+    kind: v.literal("comment"),
+    _id: v.id("taskComments"),
+    _creationTime: v.number(),
+    userId: v.id("users"),
+    userName: v.string(),
+    userImage: v.optional(v.string()),
+    commentId: v.id("taskComments"),
+    body: v.string(),
+  }),
+);
+
 export const timeline = query({
   args: { taskId: v.id("tasks") },
-  returns: v.any(),
+  returns: v.array(timelineItemValidator),
   handler: async (ctx, { taskId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");

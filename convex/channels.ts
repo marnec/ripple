@@ -213,7 +213,7 @@ export const search = query({
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
   },
-  returns: v.any(),
+  returns: v.array(v.object({ _id: v.id("channels"), name: v.string() })),
   handler: async (ctx, { workspaceId, searchText }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");

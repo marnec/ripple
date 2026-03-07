@@ -2,9 +2,21 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+const taskStatusValidator = v.object({
+  _id: v.id("taskStatuses"),
+  _creationTime: v.number(),
+  projectId: v.id("projects"),
+  name: v.string(),
+  color: v.string(),
+  order: v.number(),
+  isDefault: v.boolean(),
+  isCompleted: v.boolean(),
+  setsStartDate: v.optional(v.boolean()),
+});
+
 export const listByProject = query({
   args: { projectId: v.id("projects") },
-  returns: v.array(v.any()),
+  returns: v.array(taskStatusValidator),
   handler: async (ctx, { projectId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");

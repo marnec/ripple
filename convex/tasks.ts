@@ -7,6 +7,76 @@ import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@shared/displayName";
 import { logTaskActivity } from "./auditLog";
 
+const priorityValidator = v.union(
+  v.literal("urgent"),
+  v.literal("high"),
+  v.literal("medium"),
+  v.literal("low"),
+);
+
+const taskStatusValidator = v.object({
+  _id: v.id("taskStatuses"),
+  _creationTime: v.number(),
+  projectId: v.id("projects"),
+  name: v.string(),
+  color: v.string(),
+  order: v.number(),
+  isDefault: v.boolean(),
+  isCompleted: v.boolean(),
+  setsStartDate: v.optional(v.boolean()),
+});
+
+const userValidator = v.object({
+  _id: v.id("users"),
+  _creationTime: v.number(),
+  name: v.optional(v.string()),
+  email: v.optional(v.string()),
+  emailVerificationTime: v.optional(v.number()),
+  image: v.optional(v.string()),
+  isAnonymous: v.optional(v.boolean()),
+});
+
+const baseTaskFields = {
+  _id: v.id("tasks"),
+  _creationTime: v.number(),
+  projectId: v.id("projects"),
+  workspaceId: v.id("workspaces"),
+  title: v.string(),
+  statusId: v.id("taskStatuses"),
+  assigneeId: v.optional(v.id("users")),
+  priority: priorityValidator,
+  labels: v.optional(v.array(v.string())),
+  completed: v.boolean(),
+  creatorId: v.id("users"),
+  position: v.optional(v.string()),
+  yjsSnapshotId: v.optional(v.id("_storage")),
+  number: v.optional(v.number()),
+  dueDate: v.optional(v.string()),
+  startDate: v.optional(v.string()),
+  estimate: v.optional(v.number()),
+};
+
+const enrichedTaskValidator = v.object({
+  ...baseTaskFields,
+  status: v.union(taskStatusValidator, v.null()),
+  assignee: v.union(userValidator, v.null()),
+  projectKey: v.optional(v.string()),
+  hasBlockers: v.boolean(),
+});
+
+const projectValidator = v.object({
+  _id: v.id("projects"),
+  _creationTime: v.number(),
+  name: v.string(),
+  description: v.optional(v.string()),
+  color: v.string(),
+  workspaceId: v.id("workspaces"),
+  creatorId: v.id("users"),
+  key: v.optional(v.string()),
+  taskCounter: v.optional(v.number()),
+  tags: v.optional(v.array(v.string())),
+});
+
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
@@ -140,7 +210,7 @@ export const create = mutation({
 
 export const get = query({
   args: { taskId: v.id("tasks") },
-  returns: v.union(v.any(), v.null()),
+  returns: v.union(enrichedTaskValidator, v.null()),
   handler: async (ctx, { taskId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
@@ -185,7 +255,7 @@ export const listByProject = query({
     projectId: v.id("projects"),
     hideCompleted: v.optional(v.boolean()),
   },
-  returns: v.array(v.any()),
+  returns: v.array(enrichedTaskValidator),
   handler: async (ctx, { projectId, hideCompleted }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
@@ -263,7 +333,15 @@ export const listByWorkspace = query({
     workspaceId: v.id("workspaces"),
     hideCompleted: v.optional(v.boolean()),
   },
-  returns: v.array(v.any()),
+  returns: v.array(v.object({
+    ...baseTaskFields,
+    status: v.union(v.object({
+      name: v.string(),
+      color: v.string(),
+      isCompleted: v.boolean(),
+    }), v.null()),
+    projectKey: v.optional(v.string()),
+  })),
   handler: async (ctx, { workspaceId, hideCompleted }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
@@ -321,7 +399,13 @@ export const listByAssignee = query({
     workspaceId: v.id("workspaces"),
     hideCompleted: v.optional(v.boolean()),
   },
-  returns: v.array(v.any()),
+  returns: v.array(v.object({
+    ...baseTaskFields,
+    status: v.union(taskStatusValidator, v.null()),
+    assignee: v.union(userValidator, v.null()),
+    project: v.union(projectValidator, v.null()),
+    projectKey: v.optional(v.string()),
+  })),
   handler: async (ctx, { workspaceId, hideCompleted }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");

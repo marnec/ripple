@@ -10,9 +10,17 @@ import { internal } from "./_generated/api";
 
 const CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
+const callSessionValidator = v.object({
+  _id: v.id("callSessions"),
+  _creationTime: v.number(),
+  channelId: v.id("channels"),
+  cloudflareMeetingId: v.string(),
+  active: v.boolean(),
+});
+
 export const getActiveSession = internalQuery({
   args: { channelId: v.id("channels") },
-  returns: v.any(),
+  returns: v.union(callSessionValidator, v.null()),
   handler: async (ctx, { channelId }) => {
     return await ctx.db
       .query("callSessions")

@@ -3,9 +3,26 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logTaskActivity } from "./auditLog";
 
+const enrichedDepTaskValidator = v.object({
+  _id: v.id("tasks"),
+  title: v.string(),
+  number: v.optional(v.number()),
+  projectKey: v.optional(v.string()),
+  completed: v.boolean(),
+});
+
+const depItemValidator = v.object({
+  dependencyId: v.id("taskDependencies"),
+  task: enrichedDepTaskValidator,
+});
+
 export const listByTask = query({
   args: { taskId: v.id("tasks") },
-  returns: v.any(),
+  returns: v.object({
+    blocks: v.array(depItemValidator),
+    blockedBy: v.array(depItemValidator),
+    relatesTo: v.array(depItemValidator),
+  }),
   handler: async (ctx, { taskId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return { blocks: [], blockedBy: [], relatesTo: [] };

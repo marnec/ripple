@@ -9,6 +9,43 @@ import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, e
 import { getUserDisplayName } from "@shared/displayName";
 import { DatabaseReader } from "./_generated/server";
 
+const mentionedUsersValidator = v.record(v.string(), v.object({
+  name: v.union(v.string(), v.null()),
+  email: v.optional(v.union(v.string(), v.null())),
+  image: v.optional(v.string()),
+}));
+const mentionedTasksValidator = v.record(v.string(), v.object({
+  title: v.string(),
+  projectId: v.string(),
+  statusColor: v.optional(v.string()),
+}));
+const mentionedProjectsValidator = v.record(v.string(), v.object({
+  name: v.string(),
+  color: v.string(),
+}));
+const mentionedResourcesValidator = v.record(v.string(), v.object({
+  name: v.string(),
+  type: v.union(v.literal("document"), v.literal("diagram"), v.literal("spreadsheet")),
+}));
+
+const enrichedMessageValidator = v.object({
+  _id: v.id("messages"),
+  _creationTime: v.number(),
+  userId: v.id("users"),
+  isomorphicId: v.string(),
+  body: v.string(),
+  plainText: v.string(),
+  channelId: v.id("channels"),
+  deleted: v.boolean(),
+  replyToId: v.optional(v.id("messages")),
+  author: v.string(),
+  replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
+  mentionedUsers: mentionedUsersValidator,
+  mentionedTasks: mentionedTasksValidator,
+  mentionedProjects: mentionedProjectsValidator,
+  mentionedResources: mentionedResourcesValidator,
+});
+
 /**
  * Enrich messages with mentionedUsers record, batch-resolving all @mentions
  * found in message bodies so the client can render them instantly.
@@ -269,23 +306,7 @@ async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
 export const list = query({
   args: { channelId: v.id("channels"), paginationOpts: paginationOptsValidator },
   returns: v.object({
-    page: v.array(v.object({
-      _id: v.id("messages"),
-      _creationTime: v.number(),
-      userId: v.id("users"),
-      isomorphicId: v.string(),
-      body: v.string(),
-      plainText: v.string(),
-      channelId: v.id("channels"),
-      deleted: v.boolean(),
-      replyToId: v.optional(v.id("messages")),
-      author: v.string(),
-      replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
-      mentionedUsers: v.any(),
-      mentionedTasks: v.any(),
-      mentionedProjects: v.any(),
-      mentionedResources: v.any(),
-    })),
+    page: v.array(enrichedMessageValidator),
     isDone: v.boolean(),
     continueCursor: v.string(),
     splitCursor: v.optional(v.union(v.string(), v.null())),
@@ -450,23 +471,7 @@ export const search = query({
     searchTerm: v.string(),
     limit: v.optional(v.number())
   },
-  returns: v.array(v.object({
-    _id: v.id("messages"),
-    _creationTime: v.number(),
-    userId: v.id("users"),
-    isomorphicId: v.string(),
-    body: v.string(),
-    plainText: v.string(),
-    channelId: v.id("channels"),
-    deleted: v.boolean(),
-    replyToId: v.optional(v.id("messages")),
-    author: v.string(),
-    replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
-    mentionedUsers: v.any(),
-    mentionedTasks: v.any(),
-    mentionedProjects: v.any(),
-    mentionedResources: v.any(),
-  })),
+  returns: v.array(enrichedMessageValidator),
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError(`Unauthenticated`);
@@ -522,23 +527,7 @@ export const getMessageContext = query({
     contextSize: v.optional(v.number())
   },
   returns: v.object({
-    messages: v.array(v.object({
-      _id: v.id("messages"),
-      _creationTime: v.number(),
-      userId: v.id("users"),
-      isomorphicId: v.string(),
-      body: v.string(),
-      plainText: v.string(),
-      channelId: v.id("channels"),
-      deleted: v.boolean(),
-      replyToId: v.optional(v.id("messages")),
-      author: v.string(),
-      replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
-      mentionedUsers: v.any(),
-      mentionedTasks: v.any(),
-      mentionedProjects: v.any(),
-      mentionedResources: v.any(),
-    })),
+    messages: v.array(enrichedMessageValidator),
     targetMessageId: v.id("messages"),
     targetIndex: v.number(),
   }),

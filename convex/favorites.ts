@@ -66,9 +66,17 @@ export const toggle = mutation({
   },
 });
 
+const enrichedFavoriteValidator = v.object({
+  _id: v.id("favorites"),
+  resourceType: resourceTypeValidator,
+  resourceId: v.string(),
+  name: v.string(),
+  favoritedAt: v.number(),
+});
+
 export const listPinned = query({
   args: { workspaceId: v.id("workspaces") },
-  returns: v.any(),
+  returns: v.array(enrichedFavoriteValidator),
   handler: async (ctx, { workspaceId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
@@ -113,7 +121,13 @@ export const listByType = query({
     resourceType: resourceTypeValidator,
     paginationOpts: paginationOptsValidator,
   },
-  returns: v.any(),
+  returns: v.object({
+    page: v.array(enrichedFavoriteValidator),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+    splitCursor: v.optional(v.union(v.string(), v.null())),
+    pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
+  }),
   handler: async (ctx, { workspaceId, resourceType, paginationOpts }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");

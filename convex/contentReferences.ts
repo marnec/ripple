@@ -153,7 +153,14 @@ export const removeAllForTarget = internalMutation({
  */
 export const getReferencesTo = query({
   args: { targetId: v.string() },
-  returns: v.any(),
+  returns: v.array(v.object({
+    _id: v.id("contentReferences"),
+    sourceType: v.string(),
+    sourceId: v.string(),
+    sourceName: v.string(),
+    workspaceId: v.string(),
+    projectId: v.optional(v.string()),
+  })),
   handler: async (ctx, { targetId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];

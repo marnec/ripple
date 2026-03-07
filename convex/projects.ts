@@ -112,7 +112,7 @@ export const search = query({
     tags: v.optional(v.array(v.string())),
     isFavorite: v.optional(v.boolean()),
   },
-  returns: v.any(),
+  returns: v.array(projectValidator),
   handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
