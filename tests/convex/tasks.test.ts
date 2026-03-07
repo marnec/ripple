@@ -5,7 +5,7 @@ import {
   setupAuthenticatedUser,
   setupWorkspaceWithAdmin,
 } from "./helpers";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 
 // Use fake timers so audit log component's scheduled aggregate updates
 // don't fire uncontrollably and corrupt convex-test state.
@@ -31,14 +31,6 @@ async function setupProjectWithStatuses(
       creatorId: userId,
       key: "TST",
       taskCounter: 0,
-    });
-
-    // Add project membership
-    await ctx.db.insert("projectMembers", {
-      userId,
-      projectId,
-      workspaceId,
-      role: "admin",
     });
 
     // Seed statuses matching projects.create
