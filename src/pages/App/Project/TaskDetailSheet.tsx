@@ -65,14 +65,15 @@ export function TaskDetailSheet({
     return () => { cancelAnimationFrame(id); setShowActivity(false); };
   }, [editorDeferred]);
 
-  const isLoaded = !!taskId && !!detail.task && detail.statuses !== undefined && detail.members !== undefined;
+  const { task } = detail;
+  const isLoaded = !!taskId && !!task && detail.statuses !== undefined && detail.members !== undefined;
 
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-full md:w-176 overflow-y-scroll scrollbar-stable">
           <SheetTitle className="sr-only">Task Details</SheetTitle>
-          {!isLoaded ? (
+          {!isLoaded || !task ? (
             <div className="flex items-center justify-center py-12">
               <LoadingSpinner />
             </div>
@@ -93,7 +94,7 @@ export function TaskDetailSheet({
               </Button>
               <SheetHeader>
                 {(() => {
-                  const taskIdStr = formatTaskId(detail.task.projectKey, detail.task.number);
+                  const taskIdStr = formatTaskId(task.projectKey, task.number);
                   return taskIdStr ? (
                     <span className="text-xs text-muted-foreground font-mono ml-1">
                       {taskIdStr}
@@ -124,7 +125,7 @@ export function TaskDetailSheet({
 
               <div className="mt-4 space-y-5">
                 <TaskProperties
-                  task={detail.task}
+                  task={task}
                   statuses={detail.statuses!}
                   members={detail.members!}
                   onStatusChange={detail.handleStatusChange}

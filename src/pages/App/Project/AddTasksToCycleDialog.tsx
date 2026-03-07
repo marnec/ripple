@@ -34,8 +34,8 @@ function AddTasksList({
   search,
   onSearchChange,
 }: {
-  allTasks: { _id: string; title: string; status?: { color: string } }[] | undefined;
-  available: { _id: string; title: string; status?: { color: string } }[];
+  allTasks: { _id: string; title: string; status?: { color: string } | null }[] | undefined;
+  available: { _id: string; title: string; status?: { color: string } | null }[];
   existingTaskIds: Set<string>;
   selected: Set<string>;
   onToggle: (id: string) => void;
