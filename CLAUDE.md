@@ -59,7 +59,7 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 ### Permissions & Collaboration
 - **Channels/Documents**: Access via per-resource membership tables (`channelMembers`, `documentMembers`)
 - **Diagrams**: Access via **workspace membership** (all workspace members can access all diagrams)
-- **Tasks**: Access via **project membership** (`projectMembers`)
+- **Tasks/Projects**: Access via **workspace membership** (all workspace members can access all projects and tasks)
 - Collaboration tokens (`convex/collaboration.ts`) must match the same access model as the resource's query functions — e.g. `diagrams.get` checks workspace membership, so `checkDiagramAccess` must too
 - Real-time collaboration uses partyserver (Cloudflare Durable Objects + Yjs sync). Token flow: client calls `getCollaborationToken` action → receives one-time token → connects to partyserver with token → server verifies via Convex HTTP endpoint
 - Server code lives in `partykit/` directory: `worker.ts` (entry point), `server.ts` (YServer for Yjs collab), `presence-server.ts` (Server for workspace presence)
