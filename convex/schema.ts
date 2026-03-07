@@ -143,7 +143,8 @@ export default defineSchema({
     setsStartDate: v.optional(v.boolean()), // when true, auto-sets startDate on tasks entering this status
   })
     .index("by_project", ["projectId"])
-    .index("by_project_order", ["projectId", "order"]),
+    .index("by_project_order", ["projectId", "order"])
+    .index("by_project_isDefault", ["projectId", "isDefault"]),
 
   tasks: defineTable({
     projectId: v.id("projects"),

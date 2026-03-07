@@ -187,7 +187,7 @@ export declare const api: {
       "query",
       "public",
       { searchText?: string; workspaceId: Id<"workspaces"> },
-      any
+      Array<{ _id: Id<"channels">; name: string }>
     >;
     update: FunctionReference<
       "mutation",
@@ -212,7 +212,14 @@ export declare const api: {
       "query",
       "public",
       { targetId: string },
-      any
+      Array<{
+        _id: Id<"contentReferences">;
+        projectId?: string;
+        sourceId: string;
+        sourceName: string;
+        sourceType: string;
+        workspaceId: string;
+      }>
     >;
     syncReferences: FunctionReference<
       "mutation",
@@ -253,19 +260,87 @@ export declare const api: {
       "query",
       "public",
       { cycleId: Id<"cycles"> },
-      any | null
+      {
+        _creationTime: number;
+        _id: Id<"cycles">;
+        completedTasks: number;
+        creatorId: Id<"users">;
+        description?: string;
+        dueDate?: string;
+        name: string;
+        progressPercent: number;
+        projectId: Id<"projects">;
+        startDate?: string;
+        status: "draft" | "upcoming" | "active" | "completed";
+        totalTasks: number;
+        workspaceId: Id<"workspaces">;
+      } | null
     >;
     listByProject: FunctionReference<
       "query",
       "public",
       { projectId: Id<"projects"> },
-      Array<any>
+      Array<{
+        _creationTime: number;
+        _id: Id<"cycles">;
+        completedTasks: number;
+        creatorId: Id<"users">;
+        description?: string;
+        dueDate?: string;
+        name: string;
+        progressPercent: number;
+        projectId: Id<"projects">;
+        startDate?: string;
+        status: "draft" | "upcoming" | "active" | "completed";
+        totalTasks: number;
+        workspaceId: Id<"workspaces">;
+      }>
     >;
     listCycleTasks: FunctionReference<
       "query",
       "public",
       { cycleId: Id<"cycles">; hideCompleted?: boolean },
-      Array<any>
+      Array<{
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assignee: {
+          _creationTime: number;
+          _id: Id<"users">;
+          email?: string;
+          emailVerificationTime?: number;
+          image?: string;
+          isAnonymous?: boolean;
+          name?: string;
+        } | null;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        hasBlockers: boolean;
+        labels?: Array<string>;
+        number?: number;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        projectId: Id<"projects">;
+        projectKey?: string;
+        startDate?: string;
+        status: {
+          _creationTime: number;
+          _id: Id<"taskStatuses">;
+          color: string;
+          isCompleted: boolean;
+          isDefault: boolean;
+          name: string;
+          order: number;
+          projectId: Id<"projects">;
+          setsStartDate?: boolean;
+        } | null;
+        statusId: Id<"taskStatuses">;
+        title: string;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
     >;
     remove: FunctionReference<
       "mutation",
@@ -330,7 +405,18 @@ export declare const api: {
       "mutation",
       "public",
       { force?: boolean; id: Id<"diagrams"> },
-      any
+      | { status: "deleted" }
+      | {
+          references: Array<{
+            _id: Id<"contentReferences">;
+            projectId?: string;
+            sourceId: string;
+            sourceName: string;
+            sourceType: string;
+            workspaceId: string;
+          }>;
+          status: "has_references";
+        }
     >;
     rename: FunctionReference<
       "mutation",
@@ -347,7 +433,14 @@ export declare const api: {
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      any
+      Array<{
+        _creationTime: number;
+        _id: Id<"diagrams">;
+        name: string;
+        tags?: Array<string>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
     >;
     updateTags: FunctionReference<
       "mutation",
@@ -444,7 +537,14 @@ export declare const api: {
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      any
+      Array<{
+        _creationTime: number;
+        _id: Id<"documents">;
+        name: string;
+        tags?: Array<string>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
     >;
     updateTags: FunctionReference<
       "mutation",
@@ -486,7 +586,19 @@ export declare const api: {
         resourceType: "document" | "diagram" | "spreadsheet" | "project";
         workspaceId: Id<"workspaces">;
       },
-      any
+      {
+        continueCursor: string;
+        isDone: boolean;
+        page: Array<{
+          _id: Id<"favorites">;
+          favoritedAt: number;
+          name: string;
+          resourceId: string;
+          resourceType: "document" | "diagram" | "spreadsheet" | "project";
+        }>;
+        pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+        splitCursor?: string | null;
+      }
     >;
     listIdsForType: FunctionReference<
       "query",
@@ -501,7 +613,13 @@ export declare const api: {
       "query",
       "public",
       { workspaceId: Id<"workspaces"> },
-      any
+      Array<{
+        _id: Id<"favorites">;
+        favoritedAt: number;
+        name: string;
+        resourceId: string;
+        resourceType: "document" | "diagram" | "spreadsheet" | "project";
+      }>
     >;
     toggle: FunctionReference<
       "mutation",
@@ -570,10 +688,19 @@ export declare const api: {
           channelId: Id<"channels">;
           deleted: boolean;
           isomorphicId: string;
-          mentionedProjects: any;
-          mentionedResources: any;
-          mentionedTasks: any;
-          mentionedUsers: any;
+          mentionedProjects: Record<string, { color: string; name: string }>;
+          mentionedResources: Record<
+            string,
+            { name: string; type: "document" | "diagram" | "spreadsheet" }
+          >;
+          mentionedTasks: Record<
+            string,
+            { projectId: string; statusColor?: string; title: string }
+          >;
+          mentionedUsers: Record<
+            string,
+            { email?: string | null; image?: string; name: string | null }
+          >;
           plainText: string;
           replyTo: null | {
             author: string;
@@ -612,10 +739,19 @@ export declare const api: {
           channelId: Id<"channels">;
           deleted: boolean;
           isomorphicId: string;
-          mentionedProjects: any;
-          mentionedResources: any;
-          mentionedTasks: any;
-          mentionedUsers: any;
+          mentionedProjects: Record<string, { color: string; name: string }>;
+          mentionedResources: Record<
+            string,
+            { name: string; type: "document" | "diagram" | "spreadsheet" }
+          >;
+          mentionedTasks: Record<
+            string,
+            { projectId: string; statusColor?: string; title: string }
+          >;
+          mentionedUsers: Record<
+            string,
+            { email?: string | null; image?: string; name: string | null }
+          >;
           plainText: string;
           replyTo: null | {
             author: string;
@@ -647,10 +783,19 @@ export declare const api: {
         channelId: Id<"channels">;
         deleted: boolean;
         isomorphicId: string;
-        mentionedProjects: any;
-        mentionedResources: any;
-        mentionedTasks: any;
-        mentionedUsers: any;
+        mentionedProjects: Record<string, { color: string; name: string }>;
+        mentionedResources: Record<
+          string,
+          { name: string; type: "document" | "diagram" | "spreadsheet" }
+        >;
+        mentionedTasks: Record<
+          string,
+          { projectId: string; statusColor?: string; title: string }
+        >;
+        mentionedUsers: Record<
+          string,
+          { email?: string | null; image?: string; name: string | null }
+        >;
         plainText: string;
         replyTo: null | { author: string; deleted: boolean; plainText: string };
         replyToId?: Id<"messages">;
@@ -732,7 +877,18 @@ export declare const api: {
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      any
+      Array<{
+        _creationTime: number;
+        _id: Id<"projects">;
+        color: string;
+        creatorId: Id<"users">;
+        description?: string;
+        key?: string;
+        name: string;
+        tags?: Array<string>;
+        taskCounter?: number;
+        workspaceId: Id<"workspaces">;
+      }>
     >;
     update: FunctionReference<
       "mutation",
@@ -808,7 +964,7 @@ export declare const api: {
       "query",
       "public",
       { cellRef: string; spreadsheetId: Id<"spreadsheets"> },
-      any
+      { updatedAt: number; values: Array<Array<string>> } | null
     >;
     listBySpreadsheet: FunctionReference<
       "query",
@@ -860,7 +1016,18 @@ export declare const api: {
       "mutation",
       "public",
       { force?: boolean; id: Id<"spreadsheets"> },
-      any
+      | { status: "deleted" }
+      | {
+          references: Array<{
+            _id: Id<"contentReferences">;
+            projectId?: string;
+            sourceId: string;
+            sourceName: string;
+            sourceType: string;
+            workspaceId: string;
+          }>;
+          status: "has_references";
+        }
     >;
     rename: FunctionReference<
       "mutation",
@@ -877,7 +1044,14 @@ export declare const api: {
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      any
+      Array<{
+        _creationTime: number;
+        _id: Id<"spreadsheets">;
+        name: string;
+        tags?: Array<string>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
     >;
     updateTags: FunctionReference<
       "mutation",
@@ -899,7 +1073,29 @@ export declare const api: {
       "query",
       "public",
       { taskId: Id<"tasks"> },
-      any
+      Array<
+        | {
+            _creationTime: number;
+            _id: string;
+            kind: "activity";
+            newValue?: string;
+            oldValue?: string;
+            type: string;
+            userId: string;
+            userImage?: string;
+            userName: string;
+          }
+        | {
+            _creationTime: number;
+            _id: Id<"taskComments">;
+            body: string;
+            commentId: Id<"taskComments">;
+            kind: "comment";
+            userId: Id<"users">;
+            userImage?: string;
+            userName: string;
+          }
+      >
     >;
   };
   taskComments: {
@@ -952,7 +1148,38 @@ export declare const api: {
       "query",
       "public",
       { taskId: Id<"tasks"> },
-      any
+      {
+        blockedBy: Array<{
+          dependencyId: Id<"taskDependencies">;
+          task: {
+            _id: Id<"tasks">;
+            completed: boolean;
+            number?: number;
+            projectKey?: string;
+            title: string;
+          };
+        }>;
+        blocks: Array<{
+          dependencyId: Id<"taskDependencies">;
+          task: {
+            _id: Id<"tasks">;
+            completed: boolean;
+            number?: number;
+            projectKey?: string;
+            title: string;
+          };
+        }>;
+        relatesTo: Array<{
+          dependencyId: Id<"taskDependencies">;
+          task: {
+            _id: Id<"tasks">;
+            completed: boolean;
+            number?: number;
+            projectKey?: string;
+            title: string;
+          };
+        }>;
+      }
     >;
     remove: FunctionReference<
       "mutation",
@@ -984,25 +1211,176 @@ export declare const api: {
       "query",
       "public",
       { taskId: Id<"tasks"> },
-      any | null
+      {
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assignee: {
+          _creationTime: number;
+          _id: Id<"users">;
+          email?: string;
+          emailVerificationTime?: number;
+          image?: string;
+          isAnonymous?: boolean;
+          name?: string;
+        } | null;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        hasBlockers: boolean;
+        labels?: Array<string>;
+        number?: number;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        projectId: Id<"projects">;
+        projectKey?: string;
+        startDate?: string;
+        status: {
+          _creationTime: number;
+          _id: Id<"taskStatuses">;
+          color: string;
+          isCompleted: boolean;
+          isDefault: boolean;
+          name: string;
+          order: number;
+          projectId: Id<"projects">;
+          setsStartDate?: boolean;
+        } | null;
+        statusId: Id<"taskStatuses">;
+        title: string;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      } | null
     >;
     listByAssignee: FunctionReference<
       "query",
       "public",
       { hideCompleted?: boolean; workspaceId: Id<"workspaces"> },
-      Array<any>
+      Array<{
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assignee: {
+          _creationTime: number;
+          _id: Id<"users">;
+          email?: string;
+          emailVerificationTime?: number;
+          image?: string;
+          isAnonymous?: boolean;
+          name?: string;
+        } | null;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        labels?: Array<string>;
+        number?: number;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        project: {
+          _creationTime: number;
+          _id: Id<"projects">;
+          color: string;
+          creatorId: Id<"users">;
+          description?: string;
+          key?: string;
+          name: string;
+          tags?: Array<string>;
+          taskCounter?: number;
+          workspaceId: Id<"workspaces">;
+        } | null;
+        projectId: Id<"projects">;
+        projectKey?: string;
+        startDate?: string;
+        status: {
+          _creationTime: number;
+          _id: Id<"taskStatuses">;
+          color: string;
+          isCompleted: boolean;
+          isDefault: boolean;
+          name: string;
+          order: number;
+          projectId: Id<"projects">;
+          setsStartDate?: boolean;
+        } | null;
+        statusId: Id<"taskStatuses">;
+        title: string;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
     >;
     listByProject: FunctionReference<
       "query",
       "public",
       { hideCompleted?: boolean; projectId: Id<"projects"> },
-      Array<any>
+      Array<{
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assignee: {
+          _creationTime: number;
+          _id: Id<"users">;
+          email?: string;
+          emailVerificationTime?: number;
+          image?: string;
+          isAnonymous?: boolean;
+          name?: string;
+        } | null;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        hasBlockers: boolean;
+        labels?: Array<string>;
+        number?: number;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        projectId: Id<"projects">;
+        projectKey?: string;
+        startDate?: string;
+        status: {
+          _creationTime: number;
+          _id: Id<"taskStatuses">;
+          color: string;
+          isCompleted: boolean;
+          isDefault: boolean;
+          name: string;
+          order: number;
+          projectId: Id<"projects">;
+          setsStartDate?: boolean;
+        } | null;
+        statusId: Id<"taskStatuses">;
+        title: string;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
     >;
     listByWorkspace: FunctionReference<
       "query",
       "public",
       { hideCompleted?: boolean; workspaceId: Id<"workspaces"> },
-      Array<any>
+      Array<{
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        labels?: Array<string>;
+        number?: number;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        projectId: Id<"projects">;
+        projectKey?: string;
+        startDate?: string;
+        status: { color: string; isCompleted: boolean; name: string } | null;
+        statusId: Id<"taskStatuses">;
+        title: string;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
     >;
     remove: FunctionReference<
       "mutation",
@@ -1051,7 +1429,17 @@ export declare const api: {
       "query",
       "public",
       { projectId: Id<"projects"> },
-      Array<any>
+      Array<{
+        _creationTime: number;
+        _id: Id<"taskStatuses">;
+        color: string;
+        isCompleted: boolean;
+        isDefault: boolean;
+        name: string;
+        order: number;
+        projectId: Id<"projects">;
+        setsStartDate?: boolean;
+      }>
     >;
     remove: FunctionReference<
       "mutation",
@@ -1329,7 +1717,13 @@ export declare const internal: {
       "query",
       "internal",
       { channelId: Id<"channels"> },
-      any
+      {
+        _creationTime: number;
+        _id: Id<"callSessions">;
+        active: boolean;
+        channelId: Id<"channels">;
+        cloudflareMeetingId: string;
+      } | null
     >;
   };
   channels: {
@@ -1592,13 +1986,20 @@ export declare const internal: {
       "query",
       "internal",
       { spreadsheetId: Id<"spreadsheets"> },
-      any
+      Array<{ cellRef: string }>
     >;
     getSpreadsheetInternal: FunctionReference<
       "query",
       "internal",
       { id: Id<"spreadsheets"> },
-      any
+      {
+        _creationTime: number;
+        _id: Id<"spreadsheets">;
+        name: string;
+        tags?: Array<string>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      } | null
     >;
     upsertCellValues: FunctionReference<
       "mutation",

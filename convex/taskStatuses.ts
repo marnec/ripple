@@ -214,8 +214,9 @@ export const remove = mutation({
     // Find the default status for this project
     const defaultStatus = await ctx.db
       .query("taskStatuses")
-      .withIndex("by_project", (q) => q.eq("projectId", status.projectId))
-      .filter((q) => q.eq(q.field("isDefault"), true))
+      .withIndex("by_project_isDefault", (q) =>
+        q.eq("projectId", status.projectId).eq("isDefault", true)
+      )
       .first();
 
     if (!defaultStatus) {

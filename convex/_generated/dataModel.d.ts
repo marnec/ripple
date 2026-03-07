@@ -805,6 +805,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_project: ["projectId", "_creationTime"];
+      by_project_isDefault: ["projectId", "isDefault", "_creationTime"];
       by_project_order: ["projectId", "order", "_creationTime"];
     };
     searchIndexes: {};

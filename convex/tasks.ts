@@ -124,8 +124,9 @@ export const create = mutation({
     if (!statusId) {
       const defaultStatus = await ctx.db
         .query("taskStatuses")
-        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-        .filter((q) => q.eq(q.field("isDefault"), true))
+        .withIndex("by_project_isDefault", (q) =>
+          q.eq("projectId", args.projectId).eq("isDefault", true)
+        )
         .first();
 
       if (!defaultStatus) {
