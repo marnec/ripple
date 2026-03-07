@@ -1,11 +1,14 @@
 import { convexTest } from "convex-test";
 import schema from "../../convex/schema";
 import { WorkspaceRole } from "@shared/enums/roles";
+import auditLogComponent from "convex-audit-log/test";
 
 const modules = import.meta.glob("../../convex/**/*.ts");
 
 export function createTestContext() {
-  return convexTest(schema, modules);
+  const t = convexTest(schema, modules);
+  auditLogComponent.register(t as any);
+  return t;
 }
 
 /**

@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
-import { insertActivity } from "./taskActivity";
+import { logTaskActivity } from "./auditLog";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -149,7 +149,7 @@ export const update = mutation({
     await ctx.db.patch(id, { body: body.trim() });
 
     // Log comment edit activity
-    await insertActivity(ctx, { taskId: comment.taskId, userId, type: "comment_edit" });
+    await logTaskActivity(ctx, { taskId: comment.taskId, userId, type: "comment_edit" });
 
     // Schedule mention notifications for newly added mentions after database write
     const oldMentions = new Set(comment.body ? extractMentionedUserIds(comment.body) : []);
@@ -194,7 +194,7 @@ export const remove = mutation({
     await ctx.db.patch(id, { deleted: true });
 
     // Log comment delete activity
-    await insertActivity(ctx, { taskId: comment.taskId, userId, type: "comment_delete" });
+    await logTaskActivity(ctx, { taskId: comment.taskId, userId, type: "comment_delete" });
 
     return null;
   },

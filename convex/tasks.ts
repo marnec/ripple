@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@shared/displayName";
-import { insertActivity } from "./taskActivity";
+import { logTaskActivity } from "./auditLog";
 
 export const create = mutation({
   args: {
@@ -112,7 +112,7 @@ export const create = mutation({
     });
 
     // Log task creation activity
-    await insertActivity(ctx, { taskId, userId, type: "created" });
+    await logTaskActivity(ctx, { taskId, userId, type: "created" });
 
     // Schedule notifications after database write
     const user = await ctx.db.get(userId);
@@ -445,24 +445,24 @@ export const update = mutation({
 
     // Log activity for each changed field
     if (title !== undefined && title !== task.title) {
-      await insertActivity(ctx, { taskId, userId, type: "title_change", oldValue: task.title, newValue: title });
+      await logTaskActivity(ctx, { taskId, userId, type: "title_change", oldValue: task.title, newValue: title });
     }
     if (statusId !== undefined && statusId !== task.statusId) {
       const oldStatus = await ctx.db.get(task.statusId);
       const newStatus = await ctx.db.get(statusId);
-      await insertActivity(ctx, {
+      await logTaskActivity(ctx, {
         taskId, userId, type: "status_change",
         oldValue: oldStatus?.name ?? "Unknown",
         newValue: newStatus?.name ?? "Unknown",
       });
     }
     if (priority !== undefined && priority !== task.priority) {
-      await insertActivity(ctx, { taskId, userId, type: "priority_change", oldValue: task.priority, newValue: priority });
+      await logTaskActivity(ctx, { taskId, userId, type: "priority_change", oldValue: task.priority, newValue: priority });
     }
     if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
       const oldUser = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
       const newUser = assigneeId ? await ctx.db.get(assigneeId) : null;
-      await insertActivity(ctx, {
+      await logTaskActivity(ctx, {
         taskId, userId, type: "assignee_change",
         oldValue: oldUser ? getUserDisplayName(oldUser) : undefined,
         newValue: newUser ? getUserDisplayName(newUser) : undefined,
@@ -473,14 +473,14 @@ export const update = mutation({
       const added = labels.filter((l) => !oldLabels.includes(l));
       const removed = oldLabels.filter((l) => !labels.includes(l));
       for (const label of added) {
-        await insertActivity(ctx, { taskId, userId, type: "label_add", newValue: label });
+        await logTaskActivity(ctx, { taskId, userId, type: "label_add", newValue: label });
       }
       for (const label of removed) {
-        await insertActivity(ctx, { taskId, userId, type: "label_remove", oldValue: label });
+        await logTaskActivity(ctx, { taskId, userId, type: "label_remove", oldValue: label });
       }
     }
     if (dueDate !== undefined && dueDate !== task.dueDate) {
-      await insertActivity(ctx, {
+      await logTaskActivity(ctx, {
         taskId, userId, type: "due_date_change",
         oldValue: task.dueDate ?? undefined,
         newValue: dueDate ?? undefined,
@@ -488,14 +488,14 @@ export const update = mutation({
     }
     if ((startDate !== undefined && startDate !== task.startDate) ||
         (patch.startDate !== undefined && !task.startDate)) {
-      await insertActivity(ctx, {
+      await logTaskActivity(ctx, {
         taskId, userId, type: "start_date_change",
         oldValue: task.startDate ?? undefined,
         newValue: (startDate ?? patch.startDate) ?? undefined,
       });
     }
     if (estimate !== undefined && estimate !== task.estimate) {
-      await insertActivity(ctx, {
+      await logTaskActivity(ctx, {
         taskId, userId, type: "estimate_change",
         oldValue: task.estimate !== undefined ? String(task.estimate) : undefined,
         newValue: estimate !== null ? String(estimate) : undefined,
@@ -566,14 +566,14 @@ export const updatePosition = mutation({
     // Log status change if status actually changed (kanban drag)
     if (statusId !== task.statusId) {
       const oldStatus = await ctx.db.get(task.statusId);
-      await insertActivity(ctx, {
+      await logTaskActivity(ctx, {
         taskId, userId, type: "status_change",
         oldValue: oldStatus?.name ?? "Unknown",
         newValue: newStatus.name,
       });
       // Log auto-set start date
       if (patchData.startDate && !task.startDate) {
-        await insertActivity(ctx, {
+        await logTaskActivity(ctx, {
           taskId, userId, type: "start_date_change",
           newValue: patchData.startDate,
         });
@@ -612,13 +612,6 @@ export const remove = mutation({
       .withIndex("by_task", (q) => q.eq("taskId", taskId))
       .collect();
     await Promise.all(cycleTaskRecords.map((ct) => ctx.db.delete(ct._id)));
-
-    // Clean up task activity
-    const taskActivities = await ctx.db
-      .query("taskActivity")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect();
-    await Promise.all(taskActivities.map((a) => ctx.db.delete(a._id)));
 
     // Clean up task comments
     const taskComments = await ctx.db

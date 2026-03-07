@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
@@ -54,6 +55,9 @@ export default defineConfig({
       },
     }),
   ],
+  test: {
+    setupFiles: ["./tests/setup.ts"],
+  },
   css: { devSourcemap: true },
   build: { sourcemap: true },
   optimizeDeps: { esbuildOptions: { sourcemap: true } },

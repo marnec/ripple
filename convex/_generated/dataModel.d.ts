@@ -670,46 +670,6 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
-  taskActivity: {
-    document: {
-      newValue?: string;
-      oldValue?: string;
-      taskId: Id<"tasks">;
-      type:
-        | "created"
-        | "status_change"
-        | "priority_change"
-        | "assignee_change"
-        | "label_add"
-        | "label_remove"
-        | "title_change"
-        | "due_date_change"
-        | "start_date_change"
-        | "estimate_change"
-        | "dependency_add"
-        | "dependency_remove"
-        | "comment_edit"
-        | "comment_delete";
-      userId: Id<"users">;
-      _id: Id<"taskActivity">;
-      _creationTime: number;
-    };
-    fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "newValue"
-      | "oldValue"
-      | "taskId"
-      | "type"
-      | "userId";
-    indexes: {
-      by_id: ["_id"];
-      by_creation_time: ["_creationTime"];
-      by_task: ["taskId", "_creationTime"];
-    };
-    searchIndexes: {};
-    vectorIndexes: {};
-  };
   taskComments: {
     document: {
       body: string;

@@ -1,47 +1,21 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
 import { getAll } from "convex-helpers/server/relationships";
 import { getUserDisplayName } from "@shared/displayName";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
+import { auditLog } from "./auditLog";
 
-// Helper to insert activity from within any mutation handler.
-// Import and call directly — Convex mutations can't call other mutations.
-export async function insertActivity(
-  ctx: MutationCtx,
-  args: {
-    taskId: Id<"tasks">;
-    userId: Id<"users">;
-    type:
-      | "created"
-      | "status_change"
-      | "priority_change"
-      | "assignee_change"
-      | "label_add"
-      | "label_remove"
-      | "title_change"
-      | "due_date_change"
-      | "start_date_change"
-      | "estimate_change"
-      | "dependency_add"
-      | "dependency_remove"
-      | "comment_edit"
-      | "comment_delete";
-    oldValue?: string;
-    newValue?: string;
-  },
-) {
-  await ctx.db.insert("taskActivity", {
-    taskId: args.taskId,
-    userId: args.userId,
-    type: args.type,
-    oldValue: args.oldValue,
-    newValue: args.newValue,
-  });
-}
+type AuditEntry = {
+  _id: string;
+  _creationTime: number;
+  action: string;
+  actorId?: string;
+  timestamp: number;
+  metadata?: unknown;
+};
 
-// Returns a merged timeline of activity events and comments, sorted chronologically.
+// Returns a merged timeline of audit log activity events and comments, sorted chronologically.
 export const timeline = query({
   args: { taskId: v.id("tasks") },
   returns: v.any(),
@@ -61,12 +35,12 @@ export const timeline = query({
       .first();
     if (!membership) throw new ConvexError("Not a member of this workspace");
 
-    // Fetch activity entries
-    const activities = await ctx.db
-      .query("taskActivity")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .order("asc")
-      .collect();
+    // Fetch activity entries from audit log component
+    const auditEntries: AuditEntry[] = await auditLog.queryByResource(ctx, {
+      resourceType: "tasks",
+      resourceId: taskId,
+      limit: 200,
+    });
 
     // Fetch undeleted comments
     const comments = await ctx.db
@@ -78,35 +52,40 @@ export const timeline = query({
       .collect();
 
     // Collect all user IDs for batch enrichment
+    const auditActorIds = auditEntries
+      .map((e) => e.actorId)
+      .filter((id): id is string => !!id);
     const allUserIds = [
       ...new Set([
-        ...activities.map((a) => a.userId),
-        ...comments.map((c) => c.userId),
+        ...auditActorIds,
+        ...comments.map((c) => String(c.userId)),
       ]),
-    ];
+    ] as Id<"users">[];
     const users = await getAll(ctx.db, allUserIds);
     const userMap = new Map(
-      users.map((u, i) => [allUserIds[i], u]),
+      users.map((u, i) => [allUserIds[i] as string, u]),
     );
 
     // Build unified timeline items
-    const activityItems = activities.map((a) => {
-      const user = userMap.get(a.userId);
+    const activityItems = auditEntries.map((entry) => {
+      const user = entry.actorId ? userMap.get(entry.actorId) : undefined;
+      const meta = (entry.metadata ?? {}) as { oldValue?: string; newValue?: string };
+      const type = entry.action.startsWith("task.") ? entry.action.slice(5) : entry.action;
       return {
         kind: "activity" as const,
-        _id: a._id,
-        _creationTime: a._creationTime,
-        userId: a.userId,
+        _id: entry._id,
+        _creationTime: entry.timestamp,
+        userId: entry.actorId ?? "",
         userName: getUserDisplayName(user),
         userImage: user?.image,
-        type: a.type,
-        oldValue: a.oldValue,
-        newValue: a.newValue,
+        type,
+        oldValue: meta.oldValue,
+        newValue: meta.newValue,
       };
     });
 
     const commentItems = comments.map((c) => {
-      const user = userMap.get(c.userId);
+      const user = userMap.get(String(c.userId));
       return {
         kind: "comment" as const,
         _id: c._id,

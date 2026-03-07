@@ -1,7 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { insertActivity } from "./taskActivity";
+import { logTaskActivity } from "./auditLog";
 
 export const listByTask = query({
   args: { taskId: v.id("tasks") },
@@ -137,7 +137,7 @@ export const create = mutation({
 
     // Log activity
     const targetTask = await ctx.db.get(args.dependsOnTaskId);
-    await insertActivity(ctx, {
+    await logTaskActivity(ctx, {
       taskId: args.taskId,
       userId,
       type: "dependency_add",
@@ -172,7 +172,7 @@ export const remove = mutation({
 
     // Log activity before deleting
     const targetTask = await ctx.db.get(dep.dependsOnTaskId);
-    await insertActivity(ctx, {
+    await logTaskActivity(ctx, {
       taskId: dep.taskId,
       userId,
       type: "dependency_remove",
