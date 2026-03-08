@@ -224,20 +224,11 @@ export type DataModel = {
     document: {
       isPublic: boolean;
       name: string;
-      roleCount?: { admin: number; member: number };
       workspaceId: Id<"workspaces">;
       _id: Id<"channels">;
       _creationTime: number;
     };
-    fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "isPublic"
-      | "name"
-      | "roleCount"
-      | "roleCount.admin"
-      | "roleCount.member"
-      | "workspaceId";
+    fieldPaths: "_creationTime" | "_id" | "isPublic" | "name" | "workspaceId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];

@@ -67,11 +67,6 @@ export default defineSchema({
     name: v.string(),
     workspaceId: v.id("workspaces"),
     isPublic: v.boolean(),
-    // Deprecated: kept optional for migration compatibility. Remove after running stripChannelRoleCount migration.
-    roleCount: v.optional(v.object({
-      admin: v.number(),
-      member: v.number(),
-    })),
   })
   .index("by_workspace", ["workspaceId"])
   .index("by_isPublicInWorkspace", ["isPublic", "workspaceId"])
