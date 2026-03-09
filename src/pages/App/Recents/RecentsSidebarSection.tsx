@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sidebar";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
+import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { useQuery } from "convex/react";
 import { ChevronRight, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -24,7 +25,8 @@ interface RecentsSidebarSectionProps {
 export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: RecentsSidebarSectionProps) {
   const navigate = useNavigate();
   const { setOpenMobile } = useSidebar();
-  const recents = useQuery(api.recentActivity.listRecent, { workspaceId, limit: 5 });
+  const liveRecents = useQuery(api.recentActivity.listRecent, { workspaceId, limit: 5 });
+  const recents = useAnimatedQuery(liveRecents);
 
   if (!recents || recents.length === 0) return null;
 
@@ -45,9 +47,14 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
             {recents.map((item) => {
               const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
 
+              const vtProps = {
+                className: "channel-vt",
+                style: { viewTransitionName: `recent-${item._id}` } as React.CSSProperties,
+              };
+
               if (item.deleted) {
                 return (
-                  <SidebarMenuSubItem key={item._id}>
+                  <SidebarMenuSubItem key={item._id} {...vtProps}>
                     <SidebarMenuSubButton asChild>
                       <div className="cursor-default opacity-40">
                         {Icon && <Icon className="size-3.5 shrink-0" />}
@@ -59,7 +66,7 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
               }
 
               return (
-                <SidebarMenuSubItem key={item._id}>
+                <SidebarMenuSubItem key={item._id} {...vtProps}>
                   <SidebarMenuSubButton asChild>
                     <div
                       onClick={() => {
