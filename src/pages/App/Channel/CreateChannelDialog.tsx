@@ -63,14 +63,9 @@ export function CreateChannelDialog({
   const createNewChannel = async (values: z.infer<typeof formSchema>) => {
     try {
       const newChannelId = await createChannel({ ...values, workspaceId });
-      toast({
-        title: "Channel created",
-        description: `Successfully created channel "#${values.name}"`,
-      });
       form.reset();
-      void navigate(`/workspaces/${workspaceId}/channels/${newChannelId}${values.isPublic ? '' : '/settings'}`)
-
       onOpenChange(false);
+      void navigate(`/workspaces/${workspaceId}/channels/${newChannelId}${values.isPublic ? '' : '/settings'}`)
     } catch {
       toast({
         title: "Error creating channel",

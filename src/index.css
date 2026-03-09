@@ -385,7 +385,10 @@ body {
 ::view-transition-old(sidebar-sep-2),
 ::view-transition-old(sidebar-docs),
 ::view-transition-old(sidebar-sep-3),
-::view-transition-old(sidebar-recents),
+::view-transition-old(sidebar-recents) {
+  display: none;
+}
+
 ::view-transition-new(sidebar-channels),
 ::view-transition-new(sidebar-sep-1),
 ::view-transition-new(sidebar-projects),
@@ -394,7 +397,6 @@ body {
 ::view-transition-new(sidebar-sep-3),
 ::view-transition-new(sidebar-recents) {
   animation: none;
-  mix-blend-mode: normal;
 }
 
 /* ─── View Transitions — channel sidebar items ────────────────────── */
@@ -413,17 +415,16 @@ body {
 }
 
 ::view-transition-old(.channel-item) {
-  animation: none;
-  mix-blend-mode: normal;
+  display: none;
 }
 
 ::view-transition-new(.channel-item) {
   animation: none;
-  mix-blend-mode: normal;
 }
 
 /* Channel exiting (ghost acknowledged → removed from list) */
 ::view-transition-old(.channel-item):only-child {
+  display: block;
   animation: vt-channel-exit 200ms ease forwards;
 }
 

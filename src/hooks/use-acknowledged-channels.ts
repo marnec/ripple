@@ -125,11 +125,14 @@ export function useAcknowledgedChannels(
     }
   }, [channels, workspaceId, rawSnapshot, liveList]);
 
-  // Auto-acknowledge when channels change after a user-initiated action
+  // Auto-acknowledge when channels change after a user-initiated action.
+  // No view transition here — the acting user expects instant feedback,
+  // and startViewTransition inside an effect races with dialog exit
+  // animations and route changes, causing snapshot artifacts.
   useEffect(() => {
     if (autoAckRef.current && channels && channels !== prevChannelsRef.current) {
       autoAckRef.current = false;
-      startViewTransition(() => writeKnownList(workspaceId, liveList));
+      writeKnownList(workspaceId, liveList);
     }
     prevChannelsRef.current = channels;
   }, [channels, workspaceId, liveList]);
