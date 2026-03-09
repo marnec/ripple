@@ -1,14 +1,17 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useMutation, useQuery } from "convex/react";
-import { useMemo } from "react";
-import { Folder } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronRight, Folder, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
 } from "../../../components/ui/sidebar";
+import { CreateProjectDialog } from "./CreateProjectDialog";
 import { ProjectSelectorItem } from "./ProjectSelectorItem";
 import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
 import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
@@ -20,6 +23,8 @@ export interface ProjectSelectorListProps {
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
   allFavoriteIds: AllFavoriteIds | undefined;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
 export function ProjectSelectorList({
@@ -27,7 +32,10 @@ export function ProjectSelectorList({
   projectId,
   onProjectSelect,
   allFavoriteIds,
+  isOpen,
+  onToggle,
 }: ProjectSelectorListProps) {
+  const [showCreateProject, setShowCreateProject] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/projects");
@@ -58,24 +66,42 @@ export function ProjectSelectorList({
   };
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton tooltip="Projects" onClick={handleHeaderClick} isActive={isListActive}>
-        <Folder className="size-4" />
-        <span className="font-medium">Projects</span>
-      </SidebarMenuButton>
-      <SidebarMenuSub className="gap-0">
-        {favoriteProjects?.map((project) => (
-          <ProjectSelectorItem
-            key={project._id}
-            project={project}
-            projectId={projectId}
-            onProjectSelect={onProjectSelect}
-            onManageProject={navigateToProjectSettings}
-            onDeleteProject={(id) => void handleProjectDelete(id)}
-          />
-        ))}
-        <EmptyFavoriteSlots filled={favoriteProjects?.length ?? 0} workspaceId={workspaceId} resourceType="project" />
-      </SidebarMenuSub>
-    </SidebarMenuItem>
+    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
+      <SidebarMenuItem>
+        <SidebarMenuButton tooltip="Projects" onClick={handleHeaderClick} isActive={isListActive}>
+          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <span role="button" className="shrink-0">
+              <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+            </span>
+          </CollapsibleTrigger>
+          <Folder className="size-4" />
+          <span className="font-medium">Projects</span>
+        </SidebarMenuButton>
+        <SidebarMenuAction showOnHover onClick={() => setShowCreateProject(true)}>
+          <Plus />
+          <span className="sr-only">New Project</span>
+        </SidebarMenuAction>
+        <CollapsibleContent>
+          <SidebarMenuSub className="gap-0">
+            {favoriteProjects?.map((project) => (
+              <ProjectSelectorItem
+                key={project._id}
+                project={project}
+                projectId={projectId}
+                onProjectSelect={onProjectSelect}
+                onManageProject={navigateToProjectSettings}
+                onDeleteProject={(id) => void handleProjectDelete(id)}
+              />
+            ))}
+            <EmptyFavoriteSlots filled={favoriteProjects?.length ?? 0} workspaceId={workspaceId} resourceType="project" />
+          </SidebarMenuSub>
+        </CollapsibleContent>
+        <CreateProjectDialog
+          workspaceId={workspaceId}
+          open={showCreateProject}
+          onOpenChange={setShowCreateProject}
+        />
+      </SidebarMenuItem>
+    </Collapsible>
   );
 }

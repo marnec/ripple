@@ -9,6 +9,7 @@ import { useTheme } from "next-themes";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
 import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs } from "../../../hooks/use-editor-tracking";
@@ -40,6 +41,7 @@ export function DocumentEditorContainer() {
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { resolvedTheme } = useTheme();
   const document = useQuery(api.documents.get, { id: documentId });
+  useRecordVisit(document?.workspaceId, "document", documentId, document?.name);
   const diagrams = useQuery(
     api.diagrams.list,
     document ? { workspaceId: document.workspaceId } : "skip",

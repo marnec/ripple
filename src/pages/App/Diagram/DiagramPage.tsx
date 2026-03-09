@@ -11,6 +11,7 @@ import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
 import { ActiveUsers } from "../Document/ActiveUsers";
 import { ConnectionStatus } from "../Document/ConnectionStatus";
+import { useRecordVisit } from "@/hooks/use-record-visit";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import { getCameraFromAppState } from "@/lib/canvas-coordinates";
 import { Excalidraw } from "@excalidraw/excalidraw";
@@ -21,6 +22,7 @@ import * as Y from "yjs";
 function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
   const viewer = useQuery(api.users.viewer);
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
+  useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
   const { resolvedTheme } = useTheme();
   const isDarkTheme = resolvedTheme === "dark";

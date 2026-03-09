@@ -4,9 +4,9 @@ import { MessageList } from "@/pages/App/Chat/MessageList";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
-import { useMutation, usePaginatedQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { SearchIcon } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -19,11 +19,23 @@ import { MessageComposer } from "./MessageComposer";
 import { MessageContext } from "./MessageContext";
 import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
+import { useRecordVisit } from "@/hooks/use-record-visit";
 
 export type ChatVariant = "full" | "compact";
 
 export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels">; variant?: ChatVariant }) {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const channel = useQuery(api.channels.get, { id: channelId });
+  const markRead = useMutation(api.channelReads.markRead);
+
+  // Mark channel as read on mount / channel switch
+  useEffect(() => {
+    void markRead({ channelId });
+  }, [channelId, markRead]);
+
+  // Record visit for recents
+  useRecordVisit(workspaceId as Id<"workspaces"> | undefined, "channel", channelId, channel?.name);
+
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
   const [replyingTo, setReplyingTo] = useState<ReplyingToMessage>(null);
   const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');

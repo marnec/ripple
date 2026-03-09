@@ -1,8 +1,10 @@
 import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
+import { QueryParams } from "@shared/types/routes";
 import { Phone } from "lucide-react";
-import { useEffect } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Outlet, useLocation, useParams } from "react-router-dom";
+import { CommandPalette } from "./CommandPalette";
 import { PullToRefresh } from "./PullToRefresh";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
@@ -32,12 +34,25 @@ function CallIndicator() {
 
 export function Layout() {
   const { pathname } = useLocation();
+  const { workspaceId } = useParams<QueryParams>();
   const { isMobile, state, setOpenMobile } = useSidebar();
   const { isFollowing, followColor } = useFollowMode();
+  const [commandOpen, setCommandOpen] = useState(false);
 
   useEffect(() => {
     if (pathname === "/") setOpenMobile(true);
   }, [pathname, setOpenMobile]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCommandOpen((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <>
@@ -86,6 +101,13 @@ export function Layout() {
           </PullToRefresh>
         </div>
       </SidebarInset>
+      {workspaceId && (
+        <CommandPalette
+          workspaceId={workspaceId}
+          open={commandOpen}
+          onOpenChange={setCommandOpen}
+        />
+      )}
     </>
   );
 }

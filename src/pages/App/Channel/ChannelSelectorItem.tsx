@@ -1,6 +1,8 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { useQuery } from "convex/react";
 import { Cog, Hash, Info, Lock, MoreHorizontal, Trash2 } from "lucide-react";
+import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -21,6 +23,8 @@ export interface ChannelSelectorItemProps {
   onManageChannel: (id: Id<"channels">) => void;
   onChannelDetails: (id: Id<"channels">) => void;
   onDeleteChannel: (id: Id<"channels">) => void;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 export function ChannelSelectorItem({
@@ -30,11 +34,14 @@ export function ChannelSelectorItem({
   onManageChannel,
   onChannelDetails,
   onDeleteChannel,
+  className,
+  style,
 }: ChannelSelectorItemProps) {
   const isMobile = useIsMobile();
+  const unreadCount = useQuery(api.channelReads.getUnreadCount, { channelId: channel._id });
 
   return (
-    <SidebarMenuSubItem className="group/subitem relative">
+    <SidebarMenuSubItem className={cn("group/subitem relative", className)} style={style}>
       <SidebarMenuSubButton
         asChild
         isActive={channel._id === channelId}
@@ -44,7 +51,12 @@ export function ChannelSelectorItem({
             <Hash size={14} />
             <Lock className={cn("size-2.5", "-ml-0.5", channel.isPublic ? "invisible" : "")} />
           </div>
-          <span className="truncate">{channel.name}</span>
+          <span className={cn("truncate", unreadCount && unreadCount > 0 && "font-semibold")}>{channel.name}</span>
+          {unreadCount != null && unreadCount > 0 && (
+            <span className="ml-auto shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-medium text-primary-foreground">
+              {unreadCount}
+            </span>
+          )}
         </div>
       </SidebarMenuSubButton>
       <DropdownMenu>

@@ -2,29 +2,36 @@ NEXT STEPS:
 - tasks
     - [ ] mytasks??
 
-- investigate rework all deletion cascade to soft-deletion with scheduled garbage collection
+- investigate rework all deletion cascade to soft-deletion with scheduled garbage collection (also investigate n+1 problem and analyze submitted component for cascading delete)
 
 - [ ] there is still a problem sometimes with the in-call follow action not working
 
+- [x] evaluate use of audit-log for sidebar recent
+- [ ] extend audit-log usage
+- [ ] investigate why task activity uses metadata instead of after before
+
 - [ ] link previews in chat
 
-- [x] add tests
+- [ ] fix recent files links referencing deleted entities
+- [ ] fix acknowledged deletion
+- [ ] add view transition for acknowledgements
+
+- [ ] restyle workspace home page, remove skeletons, add fade-in, add missing cards, evaluate if resource lists make sense or other informations are better
+
+- [ ] add navigation around to access settings of various things
+
+- [ ] bring back text on breadcrumb
 
 - knowledge-graph
-    - [x] add document-paragraph embeds in tasks and other docs (similar mechanism to spreadsheet range, use block id, show referenced blocks)
-    - [x] improve spreadsheet reference highlight (border)
-    - [ ] add a backlink section that shows cross-references (this might be harder than it seems)
+    - [ ] add task description embedding in tasks ()
+    - [ ] add table embedding in tasks
+    - [ ] explore pdf reading, annotation and embedding
+    - [ ] add a obsidian style backlinks to resources (this might be harder than it seems)
 
 keyboard accessiblity
     - [ ] command palette
     - [ ] focus traps
     - [ ] chat image focus escape with "esc" key too
-
-- [x] profile settings saved to local storage
-    - [x] move theme settings to profile settings
-    - [x] user notification settings
-    - [x] language preference
-    - [x] restore last search on resource-list page from local-storage
 
 - [ ] internationalization (i18n and localization)
 

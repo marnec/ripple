@@ -5,15 +5,20 @@ import {
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
   useSidebar,
 } from "@/components/ui/sidebar";
 import usePushNotifications from "@/hooks/use-push-notifications";
 import { useUserSettings } from "@/hooks/use-user-settings";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
-import { useNavigate, useParams } from "react-router-dom";
+import { CheckSquare } from "lucide-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 
@@ -26,16 +31,18 @@ import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { ProjectSelectorList } from "./Project/ProjectSelectorList";
 import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
+import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
 
 export function AppSidebar() {
   const navigate = useNavigate();
-  // const location = useLocation();
+  const location = useLocation();
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
   const { workspaceId, channelId, documentId, diagramId, spreadsheetId, projectId } = useParams<QueryParams>();
 
   const { subscribeUser } = usePushNotifications();
   const [settings] = useUserSettings();
+  const { isOpen, toggle } = useSidebarSections();
 
   const workspaces = useQuery(workspacesListRef);
   const activeWorkspace = useQuery(workspacesGetRef, workspaceId ? { id: workspaceId } : "skip");
@@ -94,13 +101,13 @@ export function AppSidebar() {
     }
   };
 
-  // const handleMyTasksClick = () => {
-  //   if (!workspaceId) return;
-  //   if (isMobile) setOpenMobile(false);
-  //   void navigate(`/workspaces/${workspaceId}/my-tasks`);
-  // };
+  const handleMyTasksClick = () => {
+    if (!workspaceId) return;
+    if (isMobile) setOpenMobile(false);
+    void navigate(`/workspaces/${workspaceId}/my-tasks`);
+  };
 
-  // const isMyTasksActive = location.pathname.includes("/my-tasks");
+  const isMyTasksActive = location.pathname.includes("/my-tasks");
 
   return (
     <Sidebar collapsible="icon">
@@ -113,66 +120,94 @@ export function AppSidebar() {
           />
         )}
       </SidebarHeader>
-      <SidebarContent className={isMobile ? "" : "h-full overflow-hidden!"}>
+      <SidebarContent>
         {workspaceId && (
-          <div className="flex min-h-0 flex-1 flex-col group-data-[collapsible=icon]:h-auto">
-            {/* My Tasks — fixed at top */}
-            {/* <SidebarGroup className="flex-none pb-0">
+          <>
+            {/* Channels */}
+            <SidebarGroup className="pb-0">
+              <SidebarMenu>
+                <ChannelSelectorList
+                  channelId={channelId}
+                  workspaceId={workspaceId}
+                  onChannelSelect={handleChannelSelect}
+                  isOpen={isOpen("channels")}
+                  onToggle={() => toggle("channels")}
+                />
+              </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarSeparator />
+
+            {/* My Tasks + Projects */}
+            <SidebarGroup className="py-0">
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={handleMyTasksClick}
                     isActive={isMyTasksActive}
                     tooltip="My Tasks"
+                    className="pl-7"
                   >
                     <CheckSquare />
                     <span>My Tasks</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroup> */}
-
-            {/* Channels — takes remaining vertical space, overflows internally */}
-            <SidebarGroup className="min-h-0 flex-1 overflow-hidden pb-0 group-data-[collapsible=icon]:flex-none">
-              <SidebarMenu className="h-full">
-                <ChannelSelectorList
-                  channelId={channelId}
-                  workspaceId={workspaceId}
-                  onChannelSelect={handleChannelSelect}
-                />
-              </SidebarMenu>
-            </SidebarGroup>
-
-            {/* Favorites-based groups — fixed height for header + n slots each */}
-            <SidebarGroup className="flex-none">
-              <SidebarMenu>
                 <ProjectSelectorList
                   workspaceId={workspaceId}
                   projectId={projectId}
                   onProjectSelect={handleProjectSelect}
                   allFavoriteIds={allFavoriteIds}
+                  isOpen={isOpen("projects")}
+                  onToggle={() => toggle("projects")}
                 />
+              </SidebarMenu>
+            </SidebarGroup>
+
+            <SidebarSeparator />
+
+            {/* Documents, Diagrams, Spreadsheets */}
+            <SidebarGroup className="py-0">
+              <SidebarMenu>
                 <DocumentSelectorList
                   workspaceId={workspaceId}
                   documentId={documentId}
                   onDocumentSelect={handleDocumentSelect}
                   allFavoriteIds={allFavoriteIds}
+                  isOpen={isOpen("documents")}
+                  onToggle={() => toggle("documents")}
                 />
                 <DiagramSelectorList
                   workspaceId={workspaceId}
                   diagramId={diagramId}
                   onDiagramSelect={handleDiagramSelect}
                   allFavoriteIds={allFavoriteIds}
+                  isOpen={isOpen("diagrams")}
+                  onToggle={() => toggle("diagrams")}
                 />
                 <SpreadsheetSelectorList
                   workspaceId={workspaceId}
                   spreadsheetId={spreadsheetId}
                   onSpreadsheetSelect={handleSpreadsheetSelect}
                   allFavoriteIds={allFavoriteIds}
+                  isOpen={isOpen("spreadsheets")}
+                  onToggle={() => toggle("spreadsheets")}
                 />
               </SidebarMenu>
             </SidebarGroup>
-          </div>
+
+            <SidebarSeparator />
+
+            {/* Recents */}
+            <SidebarGroup className="py-0">
+              <SidebarMenu>
+                <RecentsSidebarSection
+                  workspaceId={workspaceId}
+                  isOpen={isOpen("recents")}
+                  onToggle={() => toggle("recents")}
+                />
+              </SidebarMenu>
+            </SidebarGroup>
+          </>
         )}
       </SidebarContent>
       <SidebarFooter>

@@ -1,11 +1,13 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useMemo, useRef, useState } from "react";
-import { Table2 } from "lucide-react";
+import { ChevronRight, Plus, Table2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -22,6 +24,8 @@ export type SpreadsheetSelectorProps = {
   spreadsheetId: Id<"spreadsheets"> | undefined;
   onSpreadsheetSelect: (id: string | null) => void;
   allFavoriteIds: AllFavoriteIds | undefined;
+  isOpen: boolean;
+  onToggle: () => void;
 };
 
 export function SpreadsheetSelectorList({
@@ -29,6 +33,8 @@ export function SpreadsheetSelectorList({
   spreadsheetId,
   onSpreadsheetSelect,
   allFavoriteIds,
+  isOpen,
+  onToggle,
 }: SpreadsheetSelectorProps) {
   const [selectedSpreadsheetForRename, setSelectedSpreadsheetForRename] = useState<Id<"spreadsheets"> | null>(null);
   const navigate = useNavigate();
@@ -37,6 +43,7 @@ export function SpreadsheetSelectorList({
   const deletingIdRef = useRef<string | null>(null);
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
+  const createSpreadsheet = useMutation(api.spreadsheets.create);
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.spreadsheet ?? []), [allFavoriteIds]);
   const favoriteSheets = useMemo(
@@ -62,39 +69,57 @@ export function SpreadsheetSelectorList({
     void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}/settings`);
   };
 
+  const handleCreate = async () => {
+    const id = await createSpreadsheet({ workspaceId });
+    onSpreadsheetSelect(id);
+  };
+
   const handleHeaderClick = () => {
     preselectSearchTab(workspaceId, "spreadsheet");
     onSpreadsheetSelect(null);
   };
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton tooltip="Spreadsheets" onClick={handleHeaderClick} isActive={isListActive}>
-        <Table2 className="size-4" />
-        <span className="font-medium">Spreadsheets</span>
-      </SidebarMenuButton>
-      <SidebarMenuSub className="gap-0">
-        {favoriteSheets?.map((spreadsheet) => (
-          <SpreadsheetSelectorItem
-            key={spreadsheet._id}
-            spreadsheet={spreadsheet}
-            spreadsheetId={spreadsheetId}
-            onSpreadsheetSelect={onSpreadsheetSelect}
-            onRenameSpreadsheet={setSelectedSpreadsheetForRename}
-            onManageSpreadsheet={navigateToSpreadsheetSettings}
-            onDeleteSpreadsheet={(id) => handleSpreadsheetDelete(id)}
+    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
+      <SidebarMenuItem>
+        <SidebarMenuButton tooltip="Spreadsheets" onClick={handleHeaderClick} isActive={isListActive}>
+          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <span role="button" className="shrink-0">
+              <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+            </span>
+          </CollapsibleTrigger>
+          <Table2 className="size-4" />
+          <span className="font-medium">Spreadsheets</span>
+        </SidebarMenuButton>
+        <SidebarMenuAction showOnHover onClick={() => void handleCreate()}>
+          <Plus />
+          <span className="sr-only">New Spreadsheet</span>
+        </SidebarMenuAction>
+        <CollapsibleContent>
+          <SidebarMenuSub className="gap-0">
+            {favoriteSheets?.map((spreadsheet) => (
+              <SpreadsheetSelectorItem
+                key={spreadsheet._id}
+                spreadsheet={spreadsheet}
+                spreadsheetId={spreadsheetId}
+                onSpreadsheetSelect={onSpreadsheetSelect}
+                onRenameSpreadsheet={setSelectedSpreadsheetForRename}
+                onManageSpreadsheet={navigateToSpreadsheetSettings}
+                onDeleteSpreadsheet={(id) => handleSpreadsheetDelete(id)}
+              />
+            ))}
+            <EmptyFavoriteSlots filled={favoriteSheets?.length ?? 0} workspaceId={workspaceId} resourceType="spreadsheet" />
+          </SidebarMenuSub>
+        </CollapsibleContent>
+        {deleteDialog}
+        {!!selectedSpreadsheetForRename && (
+          <RenameSpreadsheetDialog
+            spreadsheetId={selectedSpreadsheetForRename}
+            open={!!selectedSpreadsheetForRename}
+            onOpenChange={(open: boolean) => !open && setSelectedSpreadsheetForRename(null)}
           />
-        ))}
-        <EmptyFavoriteSlots filled={favoriteSheets?.length ?? 0} workspaceId={workspaceId} resourceType="spreadsheet" />
-      </SidebarMenuSub>
-      {deleteDialog}
-      {!!selectedSpreadsheetForRename && (
-        <RenameSpreadsheetDialog
-          spreadsheetId={selectedSpreadsheetForRename}
-          open={!!selectedSpreadsheetForRename}
-          onOpenChange={(open: boolean) => !open && setSelectedSpreadsheetForRename(null)}
-        />
-      )}
-    </SidebarMenuItem>
+        )}
+      </SidebarMenuItem>
+    </Collapsible>
   );
 }

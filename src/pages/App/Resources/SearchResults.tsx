@@ -20,7 +20,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
 
-type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime: number };
+type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number };
 
 const SEARCH_APIS = {
   document: api.documents.search,
@@ -163,12 +163,14 @@ export function SearchResults({
                   </Badge>
                 )}
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Created{" "}
-                {formatDistanceToNow(resource._creationTime, {
-                  addSuffix: true,
-                })}
-              </p>
+              {resource._creationTime != null && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Created{" "}
+                  {formatDistanceToNow(resource._creationTime, {
+                    addSuffix: true,
+                  })}
+                </p>
+              )}
             </CardContent>
           </Link>
           {showFavorites !== false && resourceType !== "channel" && (

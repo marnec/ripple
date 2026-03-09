@@ -1,10 +1,12 @@
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useMutation, useQuery } from "convex/react";
 import { useMemo, useState } from "react";
-import { File } from "lucide-react";
+import { ChevronRight, File, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -26,6 +28,8 @@ export type DocumentSelectorProps = {
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
   allFavoriteIds: AllFavoriteIds | undefined;
+  isOpen: boolean;
+  onToggle: () => void;
 };
 
 export function DocumentSelectorList({
@@ -33,6 +37,8 @@ export function DocumentSelectorList({
   documentId,
   onDocumentSelect,
   allFavoriteIds,
+  isOpen,
+  onToggle,
 }: DocumentSelectorProps) {
   const [selectedDocForRename, setSelectedDocForRename] = useState<Id<"documents"> | null>(null);
   const navigate = useNavigate();
@@ -40,6 +46,7 @@ export function DocumentSelectorList({
   const isListActive = location.pathname.endsWith("/documents");
 
   const documents = useQuery(api.documents.list, { workspaceId });
+  const createDocument = useMutation(api.documents.create);
   const deleteDocument = useMutation(api.documents.remove);
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.document ?? []), [allFavoriteIds]);
@@ -60,38 +67,56 @@ export function DocumentSelectorList({
     void navigate(`/workspaces/${workspaceId}/documents/${id}/settings`);
   };
 
+  const handleCreate = async () => {
+    const id = await createDocument({ workspaceId });
+    onDocumentSelect(id);
+  };
+
   const handleHeaderClick = () => {
     preselectSearchTab(workspaceId, "document");
     onDocumentSelect(null);
   };
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton tooltip="Documents" onClick={handleHeaderClick} isActive={isListActive}>
-        <File className="size-4" />
-        <span className="font-medium">Documents</span>
-      </SidebarMenuButton>
-      <SidebarMenuSub className="gap-0">
-        {favoriteDocs?.map((document) => (
-          <DocumentSelectorItem
-            key={document._id}
-            document={document}
-            documentId={documentId}
-            onDocumentSelect={onDocumentSelect}
-            onRenameDocument={setSelectedDocForRename}
-            onManageDocument={navigateToDocumentSettings}
-            onDeleteDocument={(id) => void handleDocumentDelete(id)}
+    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
+      <SidebarMenuItem>
+        <SidebarMenuButton tooltip="Documents" onClick={handleHeaderClick} isActive={isListActive}>
+          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <span role="button" className="shrink-0">
+              <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+            </span>
+          </CollapsibleTrigger>
+          <File className="size-4" />
+          <span className="font-medium">Documents</span>
+        </SidebarMenuButton>
+        <SidebarMenuAction showOnHover onClick={() => void handleCreate()}>
+          <Plus />
+          <span className="sr-only">New Document</span>
+        </SidebarMenuAction>
+        <CollapsibleContent>
+          <SidebarMenuSub className="gap-0">
+            {favoriteDocs?.map((document) => (
+              <DocumentSelectorItem
+                key={document._id}
+                document={document}
+                documentId={documentId}
+                onDocumentSelect={onDocumentSelect}
+                onRenameDocument={setSelectedDocForRename}
+                onManageDocument={navigateToDocumentSettings}
+                onDeleteDocument={(id) => void handleDocumentDelete(id)}
+              />
+            ))}
+            <EmptyFavoriteSlots filled={favoriteDocs?.length ?? 0} workspaceId={workspaceId} resourceType="document" />
+          </SidebarMenuSub>
+        </CollapsibleContent>
+        {!!selectedDocForRename && (
+          <RenameDocumentDialog
+            documentId={selectedDocForRename}
+            open={!!selectedDocForRename}
+            onOpenChange={(e) => !e && setSelectedDocForRename(null)}
           />
-        ))}
-        <EmptyFavoriteSlots filled={favoriteDocs?.length ?? 0} workspaceId={workspaceId} resourceType="document" />
-      </SidebarMenuSub>
-      {!!selectedDocForRename && (
-        <RenameDocumentDialog
-          documentId={selectedDocForRename}
-          open={!!selectedDocForRename}
-          onOpenChange={(e) => !e && setSelectedDocForRename(null)}
-        />
-      )}
-    </SidebarMenuItem>
+        )}
+      </SidebarMenuItem>
+    </Collapsible>
   );
 }

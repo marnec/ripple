@@ -131,6 +131,20 @@ export declare const api: {
       null
     >;
   };
+  channelReads: {
+    getUnreadCount: FunctionReference<
+      "query",
+      "public",
+      { channelId: Id<"channels"> },
+      number
+    >;
+    markRead: FunctionReference<
+      "mutation",
+      "public",
+      { channelId: Id<"channels"> },
+      null
+    >;
+  };
   channels: {
     create: FunctionReference<
       "mutation",
@@ -944,6 +958,43 @@ export declare const api: {
         keys: { auth: string; p256dh: string };
         userId: Id<"users">;
       }>
+    >;
+  };
+  recentActivity: {
+    listRecent: FunctionReference<
+      "query",
+      "public",
+      { limit?: number; workspaceId: Id<"workspaces"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"recentActivity">;
+        deleted: boolean;
+        resourceId: string;
+        resourceName: string;
+        resourceType:
+          | "channel"
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "project";
+        visitedAt: number;
+      }>
+    >;
+    recordVisit: FunctionReference<
+      "mutation",
+      "public",
+      {
+        resourceId: string;
+        resourceName: string;
+        resourceType:
+          | "channel"
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "project";
+        workspaceId: Id<"workspaces">;
+      },
+      null
     >;
   };
   snapshots: {

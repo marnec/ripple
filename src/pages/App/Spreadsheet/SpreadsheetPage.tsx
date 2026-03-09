@@ -5,6 +5,7 @@ import { useFormulaPicker } from "@/hooks/use-formula-picker";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
+import { useRecordVisit } from "@/hooks/use-record-visit";
 import { getUserColor } from "@/lib/user-colors";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -152,6 +153,7 @@ function SpreadsheetEditor({
   spreadsheetId: Id<"spreadsheets">;
 }) {
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
+  useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
   const viewer = useQuery(api.users.viewer);
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
   const [showRefHighlights, setShowRefHighlights] = useState(false);

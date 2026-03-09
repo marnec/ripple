@@ -195,6 +195,7 @@ export type DataModel = {
   channelMembers: {
     document: {
       channelId: Id<"channels">;
+      lastReadAt?: number;
       role: "admin" | "member";
       userId: Id<"users">;
       workspaceId: Id<"workspaces">;
@@ -205,6 +206,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "channelId"
+      | "lastReadAt"
       | "role"
       | "userId"
       | "workspaceId";
@@ -603,6 +605,40 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_endpoint: ["endpoint", "_creationTime"];
       by_user: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  recentActivity: {
+    document: {
+      resourceId: string;
+      resourceName: string;
+      resourceType:
+        | "channel"
+        | "document"
+        | "diagram"
+        | "spreadsheet"
+        | "project";
+      userId: Id<"users">;
+      visitedAt: number;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"recentActivity">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "resourceId"
+      | "resourceName"
+      | "resourceType"
+      | "userId"
+      | "visitedAt"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_user_resource: ["userId", "resourceId", "_creationTime"];
+      by_user_workspace: ["userId", "workspaceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

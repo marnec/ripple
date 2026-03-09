@@ -356,13 +356,65 @@ body {
   }
 }
 
+/* ─── View Transitions — channel sidebar items ────────────────────── */
+
+.channel-vt {
+  view-transition-class: channel-item;
+}
+
+::view-transition-group(.channel-item) {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-image-pair(.channel-item) {
+  isolation: auto;
+}
+
+::view-transition-old(.channel-item) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(.channel-item) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* Channel exiting (ghost acknowledged → removed from list) */
+::view-transition-old(.channel-item):only-child {
+  animation: vt-channel-exit 200ms ease forwards;
+}
+
+/* Channel entering (new channel acknowledged → appears in list) */
+::view-transition-new(.channel-item):only-child {
+  animation: vt-channel-enter 200ms ease;
+}
+
+@keyframes vt-channel-exit {
+  to {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes vt-channel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(.task-card),
   ::view-transition-old(.task-card),
   ::view-transition-new(.task-card),
   ::view-transition-group(.resource-card),
   ::view-transition-old(.resource-card),
-  ::view-transition-new(.resource-card) {
+  ::view-transition-new(.resource-card),
+  ::view-transition-group(.channel-item),
+  ::view-transition-old(.channel-item),
+  ::view-transition-new(.channel-item) {
     animation-duration: 0.01ms !important;
   }
 }

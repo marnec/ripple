@@ -78,6 +78,7 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     userId: v.id("users"),
     role: channelRoleSchema,
+    lastReadAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_channel", ["channelId"])
@@ -294,4 +295,21 @@ export default defineSchema({
   })
     .index("by_endpoint", ["endpoint"])
     .index("by_user", ["userId"]),
+
+  recentActivity: defineTable({
+    userId: v.id("users"),
+    workspaceId: v.id("workspaces"),
+    resourceType: v.union(
+      v.literal("channel"),
+      v.literal("document"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+      v.literal("project"),
+    ),
+    resourceId: v.string(),
+    resourceName: v.string(),
+    visitedAt: v.number(),
+  })
+    .index("by_user_workspace", ["userId", "workspaceId"])
+    .index("by_user_resource", ["userId", "resourceId"]),
 });

@@ -7,6 +7,7 @@ import { LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
 import { useParams, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { useRecordVisit } from "@/hooks/use-record-visit";
 
 export function ProjectLayout() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -38,6 +39,7 @@ function ProjectLayoutContent({
   projectId: Id<"projects">;
 }) {
   const project = useQuery(api.projects.get, { id: projectId });
+  useRecordVisit(workspaceId, "project", projectId, project?.name);
 
   if (project === null) {
     return <SomethingWentWrong />;
