@@ -124,7 +124,7 @@ export function AppSidebar() {
         {workspaceId && (
           <>
             {/* Channels */}
-            <SidebarGroup className="pb-0">
+            <SidebarGroup className="pb-0" style={{ viewTransitionName: "sidebar-channels" }}>
               <SidebarMenu>
                 <ChannelSelectorList
                   channelId={channelId}
@@ -136,10 +136,10 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroup>
 
-            <SidebarSeparator />
+            <SidebarSeparator style={{ viewTransitionName: "sidebar-sep-1" }} />
 
             {/* My Tasks + Projects */}
-            <SidebarGroup className="py-0">
+            <SidebarGroup className="py-0" style={{ viewTransitionName: "sidebar-projects" }}>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -163,10 +163,10 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroup>
 
-            <SidebarSeparator />
+            <SidebarSeparator style={{ viewTransitionName: "sidebar-sep-2" }} />
 
             {/* Documents, Diagrams, Spreadsheets */}
-            <SidebarGroup className="py-0">
+            <SidebarGroup className="py-0" style={{ viewTransitionName: "sidebar-docs" }}>
               <SidebarMenu>
                 <DocumentSelectorList
                   workspaceId={workspaceId}
@@ -195,10 +195,10 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroup>
 
-            <SidebarSeparator />
+            <SidebarSeparator style={{ viewTransitionName: "sidebar-sep-3" }} />
 
             {/* Recents */}
-            <SidebarGroup className="py-0">
+            <SidebarGroup className="py-0" style={{ viewTransitionName: "sidebar-recents" }}>
               <SidebarMenu>
                 <RecentsSidebarSection
                   workspaceId={workspaceId}
