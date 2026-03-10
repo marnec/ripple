@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { ChannelRole } from "@shared/enums";
 import { getUserDisplayName } from "@shared/displayName";
 import type { ChannelMember } from "@shared/types/channel";
@@ -35,7 +35,6 @@ export function ChannelMembersSection({
   channelMembers,
   availableMembers,
 }: ChannelMembersSectionProps) {
-  const { toast } = useToast();
   const addToChannel = useMutation(api.channelMembers.addToChannel);
   const removeFromChannel = useMutation(api.channelMembers.removeFromChannel);
   const changeMemberRole = useMutation(api.channelMembers.changeMemberRole);
@@ -43,7 +42,7 @@ export function ChannelMembersSection({
   const handleAdd = (userId: Id<"users">) => {
     addToChannel({ channelId, userId }).catch((error) => {
       if (error instanceof ConvexError) {
-        toast({ title: "Error", description: String(error.data), variant: "destructive" });
+        toast.error("Error", { description: String(error.data) });
       }
     });
   };
@@ -51,7 +50,7 @@ export function ChannelMembersSection({
   const handleRemove = (userId: Id<"users">) => {
     removeFromChannel({ channelId, userId }).catch((error) => {
       if (error instanceof ConvexError) {
-        toast({ title: "Error", description: String(error.data), variant: "destructive" });
+        toast.error("Error", { description: String(error.data) });
       }
     });
   };
@@ -62,7 +61,7 @@ export function ChannelMembersSection({
   ) => {
     changeMemberRole({ channelMemberId, role }).catch((error) => {
       if (error instanceof ConvexError) {
-        toast({ title: "Error", description: String(error.data), variant: "destructive" });
+        toast.error("Error", { description: String(error.data) });
       }
     });
   };

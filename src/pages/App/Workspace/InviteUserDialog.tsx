@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
-import { useToast } from "../../../components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { FormEvent, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
@@ -25,24 +25,19 @@ export function InviteUserDialog({
 }) {
   const [email, setEmail] = useState("");
   const createInvite = useMutation(api.workspaceInvites.create);
-  const { toast } = useToast();
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await createInvite({ email, workspaceId });
-      toast({
-        title: "Invitation sent",
+      toast.success("Invitation sent", {
         description: `Successfully invited ${email} to the workspace`,
       });
       setEmail("");
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: "Error sending invitation",
+      toast.error("Error sending invitation", {
         description:
           error instanceof Error ? error.message : "Please try again later",
-        variant: "destructive",
       });
     }
   };

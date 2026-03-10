@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -13,7 +13,6 @@ interface ChannelDangerZoneProps {
 
 export function ChannelDangerZone({ channelId, workspaceId }: ChannelDangerZoneProps) {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const deleteChannel = useMutation(api.channels.remove);
 
   const handleDelete = async () => {
@@ -26,13 +25,11 @@ export function ChannelDangerZone({ channelId, workspaceId }: ChannelDangerZoneP
     }
     try {
       await deleteChannel({ id: channelId });
-      toast({ title: "Channel deleted" });
+      toast.success("Channel deleted");
       void navigate(`/workspaces/${workspaceId}`);
     } catch (error) {
-      toast({
-        title: "Error deleting channel",
+      toast.error("Error deleting channel", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };

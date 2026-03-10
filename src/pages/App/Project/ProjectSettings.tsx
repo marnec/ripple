@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
@@ -48,8 +48,6 @@ function ProjectSettingsContent({
   projectId: Id<"projects">;
 }) {
   const navigate = useNavigate();
-  const { toast } = useToast();
-
   // Queries
   const project = useQuery(api.projects.get, { id: projectId });
   const currentUser = useQuery(api.users.viewer);
@@ -90,15 +88,13 @@ function ProjectSettingsContent({
         ...(selectedColor !== null && { color: selectedColor }),
         ...(projectKey !== null && { key: projectKey }),
       });
-      toast({ title: "Project updated" });
+      toast.success("Project updated");
       setProjectName(null);
       setSelectedColor(null);
       setProjectKey(null);
     } catch (error) {
-      toast({
-        title: "Error updating project",
+      toast.error("Error updating project", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };
@@ -109,13 +105,11 @@ function ProjectSettingsContent({
     }
     try {
       await deleteProject({ id: projectId });
-      toast({ title: "Project deleted" });
+      toast.success("Project deleted");
       void navigate(`/workspaces/${workspaceId}/projects`);
     } catch (error) {
-      toast({
-        title: "Error deleting project",
+      toast.error("Error deleting project", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };

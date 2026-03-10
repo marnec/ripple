@@ -1,6 +1,6 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
-import { toast } from "../../components/ui/use-toast";
+import { toast } from "sonner";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 
@@ -18,10 +18,7 @@ export function EmailVerification({ email }: { email: string }) {
     try {
       await signIn("password", formData);
     } catch (error) {
-      toast({
-        title: `Could not verify email ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive",
-      });
+      toast.error(`Could not verify email ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 

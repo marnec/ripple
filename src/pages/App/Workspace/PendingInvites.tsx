@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { Check, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -25,13 +25,10 @@ export function PendingInvitesDialog({
   const acceptInvite = useMutation(api.workspaceInvites.accept);
   const declineInvite = useMutation(api.workspaceInvites.decline);
   const navigate = useNavigate();
-  const { toast } = useToast();
-
   const handleAccept = async (inviteId: Id<"workspaceInvites">, workspaceName: string) => {
     try {
       await acceptInvite({ inviteId });
-      toast({
-        title: "Invitation accepted",
+      toast.success("Invitation accepted", {
         description: `You joined ${workspaceName}`,
       });
       onOpenChange(false);
@@ -39,10 +36,10 @@ export function PendingInvitesDialog({
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       if (message.toLowerCase().includes("already a member")) {
-        toast({ title: "Already a member", description: `You're already in ${workspaceName}` });
+        toast("Already a member", { description: `You're already in ${workspaceName}` });
         onOpenChange(false);
       } else {
-        toast({ title: "Error", description: message, variant: "destructive" });
+        toast.error("Error", { description: message });
       }
     }
   };
@@ -50,12 +47,10 @@ export function PendingInvitesDialog({
   const handleDecline = async (inviteId: Id<"workspaceInvites">) => {
     try {
       await declineInvite({ inviteId });
-      toast({ title: "Invitation declined" });
+      toast("Invitation declined");
     } catch (err) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: err instanceof Error ? err.message : "Something went wrong",
-        variant: "destructive",
       });
     }
   };

@@ -2,7 +2,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useState } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { toast } from "../../components/ui/use-toast";
+import { toast } from "sonner";
 
 export function PasswordReset({ handleCancel }: { handleCancel: () => void }) {
   const { signIn } = useAuthActions();
@@ -19,10 +19,8 @@ export function PasswordReset({ handleCancel }: { handleCancel: () => void }) {
       setEmail(email);
       setStep("verification");
     } catch {
-      toast({
-        variant: "destructive",
-        title: "Could not retrieve password",
-        description: 'Check your email is correct'
+      toast.error("Could not retrieve password", {
+        description: "Check your email is correct",
       });
     }
   };
@@ -37,9 +35,7 @@ export function PasswordReset({ handleCancel }: { handleCancel: () => void }) {
       await signIn("password", { email, code, newPassword, flow: "reset-verification" });
       handleCancel(); // Call the cancel handler after successful reset
     } catch {
-      toast({
-        variant: "destructive",
-        title: "Something went wrong",
+      toast.error("Something went wrong", {
         description: "Check the code is correct",
       });
     }

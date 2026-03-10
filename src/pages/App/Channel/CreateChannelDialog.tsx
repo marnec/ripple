@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
-import { useToast } from "../../../components/ui/use-toast";
+import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -46,7 +46,6 @@ export function CreateChannelDialog({
 }) {
   const createChannel = useMutation(api.channels.create);
   const navigate = useNavigate()
-  const { toast } = useToast();
   const channelNameInput = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -69,10 +68,8 @@ export function CreateChannelDialog({
       onOpenChange(false);
       void navigate(`/workspaces/${workspaceId}/channels/${newChannelId}${values.isPublic ? '' : '/settings'}`)
     } catch {
-      toast({
-        title: "Error creating channel",
+      toast.error("Error creating channel", {
         description: "Please try again later",
-        variant: "destructive",
       });
     }
   };

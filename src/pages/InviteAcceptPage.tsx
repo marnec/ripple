@@ -1,4 +1,4 @@
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { SignInForm } from "@/pages/Authentication/SignInForm";
 import { Authenticated, Unauthenticated, useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
@@ -8,7 +8,6 @@ import { Id } from "../../convex/_generated/dataModel";
 
 function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const acceptInvite = useMutation(api.workspaceInvites.accept);
   const hasRun = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,8 +20,7 @@ function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
       try {
         await acceptInvite({ inviteId: inviteId as Id<"workspaceInvites"> });
         localStorage.removeItem("inviteId");
-        toast({
-          title: "Invitation accepted",
+        toast.success("Invitation accepted", {
           description: "You have successfully joined the workspace",
         });
         void navigate("/");
@@ -31,8 +29,7 @@ function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
           err instanceof Error ? err.message : "Something went wrong";
         if (message.toLowerCase().includes("already a member")) {
           localStorage.removeItem("inviteId");
-          toast({
-            title: "Already a member",
+          toast("Already a member", {
             description: "You are already a member of this workspace",
           });
           void navigate("/");
@@ -41,7 +38,7 @@ function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
         }
       }
     })();
-  }, [acceptInvite, inviteId, navigate, toast]);
+  }, [acceptInvite, inviteId, navigate]);
 
   if (error) {
     return (

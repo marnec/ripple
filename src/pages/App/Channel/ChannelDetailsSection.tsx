@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { Globe, Lock } from "lucide-react";
 import { useState } from "react";
@@ -21,7 +21,6 @@ export function ChannelDetailsSection({
   isPublic,
   isAdmin,
 }: ChannelDetailsSectionProps) {
-  const { toast } = useToast();
   const updateChannel = useMutation(api.channels.update);
   const [localName, setLocalName] = useState<string | null>(null);
 
@@ -34,13 +33,11 @@ export function ChannelDetailsSection({
         id: channelId,
         ...(localName !== null && { name: localName }),
       });
-      toast({ title: "Channel updated" });
+      toast.success("Channel updated");
       setLocalName(null);
     } catch (error) {
-      toast({
-        title: "Error updating channel",
+      toast.error("Error updating channel", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };

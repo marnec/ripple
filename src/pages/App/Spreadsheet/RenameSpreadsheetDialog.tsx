@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
-import { useToast } from "../../../components/ui/use-toast";
+import { toast } from "sonner";
 
 export function RenameSpreadsheetDialog({
   spreadsheetId,
@@ -28,23 +28,18 @@ export function RenameSpreadsheetDialog({
   const renameSpreadsheet = useMutation(api.spreadsheets.rename);
   useQuery(api.spreadsheets.get, { id: spreadsheetId });
 
-  const { toast } = useToast();
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await renameSpreadsheet({ name, id: spreadsheetId });
-      toast({
-        title: "Spreadsheet renamed",
+      toast.success("Spreadsheet renamed", {
         description: `Successfully renamed spreadsheet to "${name}"`,
       });
       setName("");
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: "Error renaming spreadsheet",
+      toast.error("Error renaming spreadsheet", {
         description: (error as Error).message,
-        variant: "destructive",
       });
     }
   };

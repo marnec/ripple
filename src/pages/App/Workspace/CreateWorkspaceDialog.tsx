@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { FormEvent, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
@@ -24,24 +24,19 @@ export function CreateWorkspaceDialog({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const createWorkspace = useMutation(api.workspaces.create);
-  const { toast } = useToast();
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await createWorkspace({ name, description });
-      toast({
-        title: "Workspace created",
+      toast.success("Workspace created", {
         description: `Successfully created workspace "${name}"`,
       });
       setName("");
       setDescription("");
       onOpenChange(false);
     } catch {
-      toast({
-        title: "Error creating workspace",
+      toast.error("Error creating workspace", {
         description: "Please try again later",
-        variant: "destructive",
       });
     }
   };

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -26,8 +26,6 @@ function SpreadsheetSettingsContent({
   spreadsheetId,
 }: SpreadsheetSettingsContentProps) {
   const navigate = useNavigate();
-  const { toast } = useToast();
-
   // Queries
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   const currentUser = useQuery(api.users.viewer);
@@ -66,13 +64,11 @@ function SpreadsheetSettingsContent({
   const handleSaveDetails = async () => {
     try {
       await renameSpreadsheet({ id: spreadsheetId, name: displayName });
-      toast({ title: "Spreadsheet updated" });
+      toast.success("Spreadsheet updated");
       setSpreadsheetName(null);
     } catch (error) {
-      toast({
-        title: "Error updating spreadsheet",
+      toast.error("Error updating spreadsheet", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };

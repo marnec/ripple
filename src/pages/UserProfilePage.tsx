@@ -1,5 +1,5 @@
 import { UserContext } from "@/pages/App/UserContext";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,7 +9,6 @@ import { api } from "../../convex/_generated/api";
 export function UserProfilePage() {
   const user = useContext(UserContext);
   const updateUser = useMutation(api.users.update);
-  const { toast } = useToast();
   const navigate = useNavigate();
   
   const [name, setName] = useState("");
@@ -29,15 +28,12 @@ export function UserProfilePage() {
 
     try {
       await updateUser({ userId: user._id, name });
-      toast({
-        title: "Profile updated",
+      toast.success("Profile updated", {
         description: "Your profile information has been updated successfully.",
       });
     } catch (error) {
-      toast({
-        title: "Error updating profile",
+      toast.error("Error updating profile", {
         description: error instanceof Error ? error.message : "Please try again later.",
-        variant: "destructive",
       });
     }
   };

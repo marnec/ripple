@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
@@ -26,8 +26,6 @@ function DocumentSettingsContent({
   documentId,
 }: DocumentSettingsContentProps) {
   const navigate = useNavigate();
-  const { toast } = useToast();
-
   // Queries
   const document = useQuery(api.documents.get, { id: documentId });
   const currentUser = useQuery(api.users.viewer);
@@ -63,13 +61,11 @@ function DocumentSettingsContent({
   const handleSaveDetails = async () => {
     try {
       await renameDocument({ id: documentId, name: displayName });
-      toast({ title: "Document updated" });
+      toast.success("Document updated");
       setDocumentName(null);
     } catch (error) {
-      toast({
-        title: "Error updating document",
+      toast.error("Error updating document", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };
@@ -77,13 +73,11 @@ function DocumentSettingsContent({
   const handleDeleteDocument = async () => {
     try {
       await deleteDocument({ id: documentId });
-      toast({ title: "Document deleted" });
+      toast.success("Document deleted");
       void navigate(`/workspaces/${workspaceId}/documents`);
     } catch (error) {
-      toast({
-        title: "Error deleting document",
+      toast.error("Error deleting document", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };

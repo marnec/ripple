@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -26,8 +26,6 @@ function DiagramSettingsContent({
   diagramId,
 }: DiagramSettingsContentProps) {
   const navigate = useNavigate();
-  const { toast } = useToast();
-
   // Queries
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
   const currentUser = useQuery(api.users.viewer);
@@ -66,13 +64,11 @@ function DiagramSettingsContent({
   const handleSaveDetails = async () => {
     try {
       await renameDiagram({ id: diagramId, name: displayName });
-      toast({ title: "Diagram updated" });
+      toast.success("Diagram updated");
       setDiagramName(null);
     } catch (error) {
-      toast({
-        title: "Error updating diagram",
+      toast.error("Error updating diagram", {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
   };

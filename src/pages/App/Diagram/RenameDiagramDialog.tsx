@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
-import { useToast } from "../../../components/ui/use-toast";
+import { toast } from "sonner";
 
 export function RenameDiagramDialog({
   diagramId,
@@ -29,23 +29,18 @@ export function RenameDiagramDialog({
   const renameDiagram = useMutation(api.diagrams.rename);
   useQuery(api.diagrams.get, { id: diagramId });
 
-  const { toast } = useToast();
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await renameDiagram({ name, id: diagramId });
-      toast({
-        title: "Diagram renamed",
+      toast.success("Diagram renamed", {
         description: `Successfully renamed diagram to "${name}"`,
       });
       setName("");
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: "Error renaming diagram",
+      toast.error("Error renaming diagram", {
         description: (error as Error).message,
-        variant: "destructive",
       });
     }
   };

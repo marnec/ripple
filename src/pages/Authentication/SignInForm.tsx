@@ -1,8 +1,7 @@
 import { SignInMethodDivider } from "@/pages/Authentication/SignInMethodDivider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Toaster } from "@/components/ui/toaster";
-import { toast, useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import { useState } from "react";
@@ -87,8 +86,6 @@ function SignInWithGitHub() {
 
 function SignInWithMagicLink({ handleLinkSent }: { handleLinkSent: () => void }) {
   const { signIn } = useAuthActions();
-  const { toast } = useToast();
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget as HTMLFormElement);
@@ -96,10 +93,7 @@ function SignInWithMagicLink({ handleLinkSent }: { handleLinkSent: () => void })
       await signIn("resend", formData);
       handleLinkSent();
     } catch (error) {
-      toast({
-        title: `Could not send sign-in link ${error instanceof Error ? error.message : String(error)}`,
-        variant: "destructive",
-      });
+      toast.error(`Could not send sign-in link ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -108,7 +102,6 @@ function SignInWithMagicLink({ handleLinkSent }: { handleLinkSent: () => void })
       <label htmlFor="email">Email</label>
       <Input name="email" id="email" className="mb-4" autoComplete="email" required />
       <Button type="submit">Send sign-in link</Button>
-      <Toaster />
     </form>
   );
 }
@@ -130,9 +123,7 @@ function SignInWithPassword({
         setStep({ email: formData.get("email") as string });
       }
     } catch {
-      toast({
-        variant: "destructive",
-        title: "Authentication failed",
+      toast.error("Authentication failed", {
         description: "Wrong email or password",
       });
     }

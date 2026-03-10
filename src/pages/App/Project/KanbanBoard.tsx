@@ -15,7 +15,7 @@ import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMutation, useQuery } from "convex/react";
 import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
@@ -54,7 +54,6 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [showAddColumn, setShowAddColumn] = useState(false);
-  const { toast } = useToast();
   const isSorting = sort !== null;
 
   // Suppress view transitions during DnD — set in handleDragStart,
@@ -193,9 +192,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     // block same-column reorder since the sort overrides manual position.
     if (isSorting && activeTask.statusId === destinationStatusId) {
       setDndSuppressed(false);
-      toast({
-        description: "Clear sorting to reorder tasks within a column.",
-        variant: "destructive",
+      toast.error("Clear sorting to reorder tasks within a column.", {
         duration: 2500,
       });
       onSortBlocked?.();

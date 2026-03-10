@@ -1,8 +1,5 @@
-import { CountdownBar } from "@/components/CountdownBar";
-import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useEffect, useRef } from "react";
-import React from "react";
 
 /** Minimal editor shape required by useEmbedDeleteProtection. */
 type AnyEditor = {
@@ -92,21 +89,14 @@ export function useEmbedDeleteProtection(editor: AnyEditor | null): void {
             ? `${EMBED_LABELS[del.block.type] ?? "Embed"} removed`
             : `${embedDeletions.length} embeds removed`;
 
-        toast({
-          variant: "destructive",
-          title: label,
+        toast.error(label, {
           duration: TOAST_DURATION,
-          description: React.createElement(CountdownBar, { duration: TOAST_DURATION }),
-          action: React.createElement(
-            ToastAction,
-            {
-              altText: "Undo",
-              onClick: () => {
-                editor.insertBlocks([blockData], cursorBlock, "before");
-              },
+          action: {
+            label: "Undo",
+            onClick: () => {
+              editor.insertBlocks([blockData], cursorBlock, "before");
             },
-            "Undo",
-          ) as unknown as ToastActionElement,
+          },
         });
       }
 

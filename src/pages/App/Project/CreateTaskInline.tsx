@@ -1,5 +1,5 @@
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { Plus } from "lucide-react";
 import { FormEvent, useRef, useState } from "react";
@@ -16,8 +16,6 @@ export function CreateTaskInline({ projectId, workspaceId }: CreateTaskInlinePro
   const [isCreating, setIsCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const createTask = useMutation(api.tasks.create);
-  const { toast } = useToast();
-
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
 
@@ -37,10 +35,8 @@ export function CreateTaskInline({ projectId, workspaceId }: CreateTaskInlinePro
         inputRef.current?.focus();
       })
       .catch((error) => {
-        toast({
-          title: "Failed to create task",
+        toast.error("Failed to create task", {
           description: error instanceof Error ? error.message : "Unknown error",
-          variant: "destructive",
         });
       })
       .finally(() => {

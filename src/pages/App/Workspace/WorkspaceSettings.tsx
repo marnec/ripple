@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "convex/react";
 import { useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { api } from "../../../../convex/_generated/api";
-import { useToast } from "../../../components/ui/use-toast";
+import { toast } from "sonner";
 import { useState } from "react";
 import { Input } from "../../../components/ui/input";
 import { Button } from "../../../components/ui/button";
@@ -13,7 +13,6 @@ export function WorkspaceSettings() {
     const id = workspaceId as Id<"workspaces">
     const workspace = useQuery(api.workspaces.get, { id});
     const updateWorkspace = useMutation(api.workspaces.update);
-    const { toast } = useToast();
     const [nameOverride, setNameOverride] = useState<string | null>(null);
     const [descriptionOverride, setDescriptionOverride] = useState<string | null>(null);
 
@@ -24,16 +23,12 @@ export function WorkspaceSettings() {
         e.preventDefault();
         try {
             await updateWorkspace({ id, name, description });
-            toast({
-                title: "Workspace updated",
+            toast.success("Workspace updated", {
                 description: "Workspace settings have been updated successfully.",
-                variant: 'default'
             });
         } catch (error) {
-            toast({
-                title: "Error updating workspace",
+            toast.error("Error updating workspace", {
                 description: error instanceof Error ? error.message : "Please try again later.",
-                variant: "destructive",
             });
         }
     };

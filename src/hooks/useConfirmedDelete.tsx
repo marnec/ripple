@@ -1,5 +1,5 @@
 import { DeleteWarningDialog } from "@/components/DeleteWarningDialog";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { useCallback, useState } from "react";
 import { api } from "../../convex/_generated/api";
@@ -42,7 +42,6 @@ export function useConfirmedDelete(
 ) {
   const config = RESOURCE_CONFIGS[resourceType];
   const deleteMutation = useMutation(config.mutation);
-  const { toast } = useToast();
   const [pending, setPending] = useState<PendingDelete | null>(null);
 
   const requestDelete = useCallback(
@@ -53,35 +52,31 @@ export function useConfirmedDelete(
         if (result?.status === "has_references") {
           setPending({ id, name, references: result.references });
         } else {
-          toast({ title: `${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted` });
+          toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
           options?.onDeleted?.();
         }
       } catch (error) {
-        toast({
-          title: `Error deleting ${resourceType}`,
+        toast.error(`Error deleting ${resourceType}`, {
           description: error instanceof Error ? error.message : "Please try again",
-          variant: "destructive",
         });
       }
     },
-    [deleteMutation, toast, resourceType, options],
+    [deleteMutation, resourceType, options],
   );
 
   const confirmDelete = useCallback(async () => {
     if (!pending) return;
     try {
       await deleteMutation({ id: pending.id as any, force: true });
-      toast({ title: `${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted` });
+      toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
       setPending(null);
       options?.onDeleted?.();
     } catch (error) {
-      toast({
-        title: `Error deleting ${resourceType}`,
+      toast.error(`Error deleting ${resourceType}`, {
         description: error instanceof Error ? error.message : "Please try again",
-        variant: "destructive",
       });
     }
-  }, [pending, deleteMutation, toast, resourceType, options]);
+  }, [pending, deleteMutation, resourceType, options]);
 
   const dialog = pending ? (
     <DeleteWarningDialog

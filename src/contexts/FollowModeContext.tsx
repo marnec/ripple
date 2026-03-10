@@ -1,4 +1,4 @@
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   createContext,
   useCallback,
@@ -67,7 +67,6 @@ export function FollowModeProvider({
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
   const { presenceMap } = usePresence();
   const { status: callStatus } = useActiveCall();
 
@@ -110,8 +109,7 @@ export function FollowModeProvider({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        toast({
-          title: "Stopped following",
+        toast("Stopped following", {
           description: `No longer following ${followingUserNameRef.current}`,
         });
         clearFollowState();
@@ -119,7 +117,7 @@ export function FollowModeProvider({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [followingUserId, toast, clearFollowState]);
+  }, [followingUserId, clearFollowState]);
 
   // --- Auto-unfollow when leaving call ---
   const prevCallStatusRef = useRef(callStatus);
@@ -134,14 +132,13 @@ export function FollowModeProvider({
     ) {
       requestAnimationFrame(() => {
         if (!followingUserIdRef.current) return;
-        toast({
-          title: "Stopped following",
+        toast("Stopped following", {
           description: `You left the call`,
         });
         clearFollowState();
       });
     }
-  }, [callStatus, toast, clearFollowState]);
+  }, [callStatus, clearFollowState]);
 
   // Handle presence changes: navigate or stop following
   // undefined = initial/reset state (prevents false "went offline" toast on follow start)
@@ -164,8 +161,7 @@ export function FollowModeProvider({
       prevPresenceRef.current = presence;
       requestAnimationFrame(() => {
         if (!followingUserIdRef.current) return;
-        toast({
-          title: "Lost connection",
+        toast("Lost connection", {
           description: `${followingUserNameRef.current} went offline`,
         });
         clearFollowState();
@@ -199,8 +195,7 @@ export function FollowModeProvider({
       ) {
         requestAnimationFrame(() => {
           if (!followingUserIdRef.current) return;
-          toast({
-            title: "Stopped following",
+          toast("Stopped following", {
             description: `You navigated away from ${followingUserNameRef.current}`,
           });
           clearFollowState();
@@ -224,7 +219,6 @@ export function FollowModeProvider({
     followingUserId,
     navigate,
     location.pathname,
-    toast,
     clearFollowState,
   ]);
 
@@ -235,12 +229,11 @@ export function FollowModeProvider({
       pendingNavTargetRef.current = null;
       confirmedPathRef.current = null;
       prevPresenceRef.current = undefined;
-      toast({
-        title: "Following",
+      toast("Following", {
         description: `Now following ${userName}`,
       });
     },
-    [toast],
+    [],
   );
 
   const stopFollowing = useCallback(() => {

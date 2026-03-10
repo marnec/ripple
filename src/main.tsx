@@ -4,7 +4,7 @@ import { ThemeProvider } from "next-themes";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
-import { Toaster } from "./components/ui/toaster.tsx";
+import { Toaster } from "sonner";
 import { PwaUpdateProvider } from "./hooks/use-pwa-update";
 import "./index.css";
 import { router } from "./routes.tsx";

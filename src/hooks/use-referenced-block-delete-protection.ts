@@ -1,8 +1,5 @@
-import { CountdownBar } from "@/components/CountdownBar";
-import { ToastAction, type ToastActionElement } from "@/components/ui/toast";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useEffect, useRef } from "react";
-import React from "react";
 
 /** Minimal editor shape needed by this hook. */
 type AnyEditor = {
@@ -83,22 +80,15 @@ export function useReferencedBlockDeleteProtection(
           onBlocksDeletedRef.current?.([blockId]);
         }, TOAST_DURATION + 200);
 
-        toast({
-          variant: "destructive",
-          title: "Referenced block removed",
-          description: React.createElement(CountdownBar, { duration: TOAST_DURATION }),
+        toast.error("Referenced block removed", {
           duration: TOAST_DURATION,
-          action: React.createElement(
-            ToastAction,
-            {
-              altText: "Undo",
-              onClick: () => {
-                clearTimeout(cleanupTimer);
-                editor.insertBlocks([blockData], cursorBlock, "before");
-              },
+          action: {
+            label: "Undo",
+            onClick: () => {
+              clearTimeout(cleanupTimer);
+              editor.insertBlocks([blockData], cursorBlock, "before");
             },
-            "Undo",
-          ) as unknown as ToastActionElement,
+          },
         });
       }
 

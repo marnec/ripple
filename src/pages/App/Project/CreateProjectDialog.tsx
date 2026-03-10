@@ -16,7 +16,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
 import { useEffect, useRef } from "react";
@@ -57,7 +57,6 @@ export function CreateProjectDialog({
 }) {
   const createProject = useMutation(api.projects.create);
   const navigate = useNavigate();
-  const { toast } = useToast();
   const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -81,8 +80,7 @@ export function CreateProjectDialog({
         ...values,
         workspaceId,
       });
-      toast({
-        title: "Project created",
+      toast.success("Project created", {
         description: `Successfully created project "${values.name}"`,
       });
       form.reset();
@@ -90,11 +88,9 @@ export function CreateProjectDialog({
       // Navigate to new project (per CONTEXT.md: "User lands inside the new project after creation")
       void navigate(`/workspaces/${workspaceId}/projects/${projectId}`);
     } catch (error) {
-      toast({
-        title: "Error creating project",
+      toast.error("Error creating project", {
         description:
           error instanceof Error ? error.message : "Please try again later",
-        variant: "destructive",
       });
     }
   };

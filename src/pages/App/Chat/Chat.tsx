@@ -13,7 +13,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Separator } from "../../../components/ui/separator";
-import { toast } from "../../../components/ui/use-toast";
+import { toast } from "sonner";
 import "./message-composer.css";
 import { MessageComposer } from "./MessageComposer";
 import { MessageContext } from "./MessageContext";
@@ -73,8 +73,8 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
         channelId,
         isomorphicId,
         ...(replyingTo?.id ? { replyToId: replyingTo.id } : {}),
-      }).catch((error) => {
-        toast({ variant: "destructive", title: "could not send message", content: error });
+      }).catch(() => {
+        toast.error("Could not send message");
       });
 
       // Clear reply mode after sending

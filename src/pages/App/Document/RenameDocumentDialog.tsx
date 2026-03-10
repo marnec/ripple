@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "../../../components/ui/dialog";
 import { Input } from "../../../components/ui/input";
-import { useToast } from "../../../components/ui/use-toast";
+import { toast } from "sonner";
 
 export function RenameDocumentDialog({
   documentId,
@@ -29,23 +29,18 @@ export function RenameDocumentDialog({
 
   const document = useQuery(api.documents.get, { id: documentId });
 
-  const { toast } = useToast();
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await renameDocument({ name, id: documentId });
-      toast({
-        title: "Document renamed",
+      toast.success("Document renamed", {
         description: `Successfully renamed document to "${name}"`,
       });
       setName("");
       onOpenChange(false);
     } catch (error) {
-      toast({
-        title: "Error renaming document",
+      toast.error("Error renaming document", {
         description: (error as Error).message,
-        variant: "destructive",
       });
     }
   };
