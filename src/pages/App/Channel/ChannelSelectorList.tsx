@@ -1,10 +1,11 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
+import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 
@@ -46,6 +47,32 @@ export function ChannelSelectorList({
   onToggle,
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  // Suppress view transitions while the dialog is animating closed.
+  // Radix keeps the portal in the DOM during exit animation (~200ms).
+  // We track it via a data-attribute on the content element.
+  const [dialogInDom, setDialogInDom] = useState(false);
+  useEffect(() => {
+    if (showCreateChannel) {
+      setDialogInDom(true);
+      return;
+    }
+    if (!dialogInDom) return;
+    // Dialog closing — watch for the dialog content to be removed
+    const el = document.querySelector("[data-create-channel-dialog]");
+    if (!el) {
+      setDialogInDom(false);
+      return;
+    }
+    const obs = new MutationObserver(() => {
+      if (!document.querySelector("[data-create-channel-dialog]")) {
+        setDialogInDom(false);
+        obs.disconnect();
+      }
+    });
+    obs.observe(el.parentElement ?? document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [showCreateChannel, dialogInDom]);
+
   const navigate = useNavigate();
   const deleteChannel = useMutation(channelsRemoveRef);
 
@@ -57,8 +84,9 @@ export function ChannelSelectorList({
     () => channels?.map((c) => ({ id: c._id, name: c.name })),
     [channels],
   );
-  const { displayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
+  const { displayList: rawDisplayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
     useAcknowledgedChannels(workspaceId, channelEntries);
+  const displayList = useAnimatedQuery(rawDisplayList, undefined, dialogInDom);
 
   // Build a map from id → Doc for live channels
   const channelMap = useMemo(() => {

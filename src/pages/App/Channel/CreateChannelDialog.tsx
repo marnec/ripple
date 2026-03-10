@@ -77,7 +77,7 @@ export function CreateChannelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent data-create-channel-dialog>
         <DialogHeader>
           <DialogTitle>Create New Channel</DialogTitle>
           <DialogDescription>
