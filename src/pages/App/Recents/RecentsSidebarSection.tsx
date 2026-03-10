@@ -24,9 +24,10 @@ interface RecentsSidebarSectionProps {
 
 export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: RecentsSidebarSectionProps) {
   const navigate = useNavigate();
-  const { setOpenMobile } = useSidebar();
+  const { isMobile, state, setOpen } = useSidebar();
   const liveRecents = useQuery(api.recentActivity.listRecent, { workspaceId, limit: 5 });
-  const recents = useAnimatedQuery(liveRecents);
+  const mobileExpanded = isMobile && state === "expanded";
+  const recents = useAnimatedQuery(liveRecents, undefined, mobileExpanded);
 
   if (!recents || recents.length === 0) return null;
 
@@ -45,7 +46,7 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
               const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
 
               const vtProps = {
-                className: "channel-vt",
+                className: "sidebar-item-vt",
                 style: { viewTransitionName: `recent-${item._id}` } as React.CSSProperties,
               };
 
@@ -64,7 +65,7 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
                 <SidebarMenuSubItem key={item._id} {...vtProps}>
                   <SidebarMenuSubButton render={<div
                       onClick={() => {
-                        setOpenMobile(false);
+                        if (isMobile) setOpen(false);
                         void navigate(getResourceUrl(workspaceId, item.resourceType, item.resourceId));
                       }}
                       className="cursor-pointer"

@@ -35,13 +35,13 @@ function CallIndicator() {
 export function Layout() {
   const { pathname } = useLocation();
   const { workspaceId } = useParams<QueryParams>();
-  const { isMobile, state, setOpenMobile } = useSidebar();
+  const { isMobile, state, setOpen } = useSidebar();
   const { isFollowing, followColor } = useFollowMode();
   const [commandOpen, setCommandOpen] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/") setOpenMobile(true);
-  }, [pathname, setOpenMobile]);
+    if (pathname === "/" && isMobile) setOpen(true);
+  }, [pathname, isMobile, setOpen]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -86,9 +86,8 @@ export function Layout() {
         </header>
         <div
           className={cn("relative flex h-[calc(100svh-4rem-var(--safe-area-top))]", {
-            "w-svw": isMobile,
+            "w-[calc(100svw-var(--sidebar-width-icon))]": isMobile || state === "collapsed",
             "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
-            "w-[calc(100svw-var(--sidebar-width-icon))]": !isMobile && state === "collapsed",
           })}
         >
           {isFollowing && followColor && (

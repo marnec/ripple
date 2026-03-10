@@ -27,6 +27,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from "../../../components/ui/sidebar";
 import { ChannelSelectorItem } from "./ChannelSelectorItem";
 import { CreateChannelDialog } from "./CreateChannelDialog";
@@ -54,6 +55,11 @@ export function ChannelSelectorList({
   const handleDialogOpenChangeComplete = useCallback((open: boolean) => {
     setDialogInDom(open);
   }, []);
+  // Also suppress while the mobile sidebar is expanded — view transition
+  // snapshots capture items at absolute positions which conflicts with the
+  // sidebar's expand animation.
+  const { isMobile, state } = useSidebar();
+  const suppress = dialogInDom || (isMobile && state === "expanded");
 
   const navigate = useNavigate();
   const deleteChannel = useMutation(channelsRemoveRef);
@@ -68,7 +74,7 @@ export function ChannelSelectorList({
   );
   const { displayList: rawDisplayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
     useAcknowledgedChannels(workspaceId, channelEntries);
-  const displayList = useAnimatedQuery(rawDisplayList, undefined, dialogInDom);
+  const displayList = useAnimatedQuery(rawDisplayList, undefined, suppress);
 
   // Build a map from id → Doc for live channels
   const channelMap = useMemo(() => {
@@ -143,7 +149,7 @@ export function ChannelSelectorList({
                 return (
                   <SidebarMenuSubItem
                     key={item.id}
-                    className={cn("channel-vt")}
+                    className={cn("sidebar-item-vt")}
                     style={vtStyle}
                   >
                     <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
@@ -172,7 +178,7 @@ export function ChannelSelectorList({
                   onManageChannel={navigateToChannelSettings}
                   onChannelDetails={navigateToChannelDetails}
                   onDeleteChannel={(id) => void handleChannelDelete(id)}
-                  className="channel-vt"
+                  className="sidebar-item-vt"
                   style={vtStyle}
                 />
               );

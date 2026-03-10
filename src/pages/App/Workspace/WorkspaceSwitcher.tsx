@@ -65,7 +65,7 @@ export function WorkspaceSwitcher({
               {activeWorkspace ? (
                 <>
                   <WorkspaceAvatar name={activeWorkspace.name} />
-                  <div className="grid flex-1 text-left text-sm leading-tight">
+                  <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-semibold">
                       {activeWorkspace.name}
                     </span>
@@ -81,7 +81,7 @@ export function WorkspaceSwitcher({
                   <div>Select a workspace</div>
                 </div>
               )}
-              <ChevronsUpDown className="ml-auto" />
+              <ChevronsUpDown className="ml-auto group-data-[collapsible=icon]:hidden" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"

@@ -36,7 +36,7 @@ import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setOpenMobile } = useSidebar();
+  const { setOpen } = useSidebar();
   const isMobile = useIsMobile();
   const { workspaceId, channelId, documentId, diagramId, spreadsheetId, projectId } = useParams<QueryParams>();
 
@@ -53,13 +53,13 @@ export function AppSidebar() {
       void navigate(`/workspaces/${workspaceId}/channels`);
     } else {
       void navigate(`/workspaces/${workspaceId}/channels/${id}`);
-      setOpenMobile(false);
+      if (isMobile) setOpen(false);
       if (settings.notificationsEnabled) void subscribeUser();
     }
   };
 
   const handleDocumentSelect = (id: string | null) => {
-    setOpenMobile(false);
+    if (isMobile) setOpen(false);
 
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/documents`);
@@ -69,7 +69,7 @@ export function AppSidebar() {
   };
 
   const handleDiagramSelect = (id: string | null) => {
-    setOpenMobile(false);
+    if (isMobile) setOpen(false);
 
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/diagrams`);
@@ -79,7 +79,7 @@ export function AppSidebar() {
   };
 
   const handleSpreadsheetSelect = (id: string | null) => {
-    setOpenMobile(false);
+    if (isMobile) setOpen(false);
 
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/spreadsheets`);
@@ -93,7 +93,7 @@ export function AppSidebar() {
   };
 
   const handleProjectSelect = (id: string | null) => {
-    setOpenMobile(false);
+    if (isMobile) setOpen(false);
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/projects`);
     } else {
@@ -103,7 +103,7 @@ export function AppSidebar() {
 
   const handleMyTasksClick = () => {
     if (!workspaceId) return;
-    if (isMobile) setOpenMobile(false);
+    if (isMobile) if (isMobile) setOpen(false);
     void navigate(`/workspaces/${workspaceId}/my-tasks`);
   };
 

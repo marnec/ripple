@@ -306,6 +306,21 @@ body {
   letter-spacing: -0.025em;
 }
 
+/* ─── View Transitions — exclude overlays from snapshots ─────────── */
+
+/* Prevent dialog/sheet portals from being captured in the root
+   view-transition group. Without this, an open overlay (or one still
+   exit-animating) would appear in the old/new root snapshot and
+   cross-fade, causing visual flashes. `none` is the default value but
+   stating it explicitly opts these elements out even when the browser
+   would otherwise inherit a name from an ancestor. */
+[data-slot="dialog-overlay"],
+[data-slot="dialog-content"],
+[data-slot="sheet-overlay"],
+[data-slot="sheet-content"] {
+  view-transition-name: none;
+}
+
 /* ─── View Transitions — card animations ─────────────────────────── */
 
 /* Shared: smooth position/size interpolation for all card types */
@@ -366,9 +381,9 @@ body {
 
 
 
-/* ─── View Transitions — channel sidebar items ────────────────────── */
+/* ─── View Transitions — sidebar items ───────────────────────────── */
 
-.channel-vt {
+.sidebar-item-vt {
   view-transition-class: channel-item;
 }
 
@@ -453,6 +468,13 @@ body {
 #message-composer:focus-within {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
+}
+
+/* Collapsed sidebar: hide collapsible triggers so the section icon
+   (not the chevron) is the first visible child in the overflow-hidden
+   menu button. */
+[data-collapsible="icon"] [data-slot="collapsible-trigger"] {
+  display: none;
 }
 
 /* Sidebar item hover enhancement */

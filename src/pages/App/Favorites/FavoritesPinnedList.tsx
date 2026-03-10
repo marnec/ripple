@@ -12,7 +12,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "../../../components/ui/sidebar";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 const RESOURCE_ICONS = RESOURCE_TYPE_ICONS;
 
@@ -29,14 +28,13 @@ type FavoritesPinnedListProps = {
 
 export function FavoritesPinnedList({ workspaceId }: FavoritesPinnedListProps) {
   const navigate = useNavigate();
-  const { setOpenMobile } = useSidebar();
-  const isMobile = useIsMobile();
+  const { isMobile, setOpen } = useSidebar();
   const favorites = useQuery(api.favorites.listPinned, { workspaceId });
 
   if (!favorites || favorites.length === 0) return null;
 
   const handleClick = (fav: { resourceType: keyof typeof RESOURCE_ROUTES; resourceId: string }) => {
-    if (isMobile) setOpenMobile(false);
+    if (isMobile) setOpen(false);
     const route = RESOURCE_ROUTES[fav.resourceType];
     void navigate(`/workspaces/${workspaceId}/${route}/${fav.resourceId}`);
   };
