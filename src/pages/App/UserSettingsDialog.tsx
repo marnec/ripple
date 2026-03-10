@@ -96,7 +96,7 @@ export function UserSettingsDialog({
             <Label className="text-sm font-medium">Language</Label>
             <Select
               value={settings.language}
-              onValueChange={(value) => updateSettings({ language: value })}
+              onValueChange={(value) => { if (value !== null) updateSettings({ language: value }); }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />

@@ -141,14 +141,14 @@ export function ResourceSearchInput({
           ))}
           {availableTags.length > 0 && (
             <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
-              <PopoverTrigger asChild>
-                <button
+              <PopoverTrigger
+                render={<button
                   type="button"
                   className="inline-flex h-5 items-center gap-0.5 rounded-full border border-dashed border-muted-foreground/30 px-2 text-xs text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
-                >
+                />}
+              >
                   <Plus className="h-3 w-3" />
                   Tag
-                </button>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-48 p-1">
                 <div className="max-h-48 overflow-auto">

@@ -143,9 +143,7 @@ export function SearchDialog({ channelId, onJumpToMessage, children, initialSear
   if (isMobile) {
     return (
       <Drawer open={isOpen} onOpenChange={onOpenChange}>
-        <DrawerTrigger asChild>
-          {children}
-        </DrawerTrigger>
+        <DrawerTrigger asChild>{children}</DrawerTrigger>
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle className="flex items-center gap-2">
@@ -168,9 +166,7 @@ export function SearchDialog({ channelId, onJumpToMessage, children, initialSear
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+      <DialogTrigger render={children as React.ReactElement} />
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

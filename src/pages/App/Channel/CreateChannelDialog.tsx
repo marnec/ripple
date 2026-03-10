@@ -37,10 +37,12 @@ export function CreateChannelDialog({
   workspaceId,
   open,
   onOpenChange,
+  onOpenChangeComplete,
 }: {
   workspaceId: Id<"workspaces">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenChangeComplete?: (open: boolean) => void;
 }) {
   const createChannel = useMutation(api.channels.create);
   const navigate = useNavigate()
@@ -76,8 +78,8 @@ export function CreateChannelDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-create-channel-dialog>
+    <Dialog open={open} onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Create New Channel</DialogTitle>
           <DialogDescription>

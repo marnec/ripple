@@ -78,13 +78,10 @@ export function DocumentSelectorList({
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
-      <SidebarMenuItem>
+    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
         <SidebarMenuButton tooltip="Documents" onClick={handleHeaderClick} isActive={isListActive}>
-          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <span role="button" className="shrink-0">
+          <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
               <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-            </span>
           </CollapsibleTrigger>
           <File className="size-4" />
           <span className="font-medium">Documents</span>
@@ -116,7 +113,6 @@ export function DocumentSelectorList({
             onOpenChange={(e) => !e && setSelectedDocForRename(null)}
           />
         )}
-      </SidebarMenuItem>
     </Collapsible>
   );
 }

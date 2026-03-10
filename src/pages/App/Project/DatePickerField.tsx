@@ -25,15 +25,16 @@ export function DatePickerField({
   return (
     <div className="flex items-center gap-2">
       <Popover>
-        <PopoverTrigger asChild>
-          <Button
+        <PopoverTrigger
+          render={<Button
             variant="outline"
             className={cn(
               "w-full justify-start text-left font-normal",
               !value && "text-muted-foreground",
               overdue && "text-red-500 border-red-500/50",
             )}
-          >
+          />}
+        >
             <CalendarIcon className="mr-2 h-4 w-4" />
             {value
               ? parseISODate(value).toLocaleDateString("en-US", {
@@ -42,7 +43,6 @@ export function DatePickerField({
                   year: "numeric",
                 })
               : placeholder}
-          </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar

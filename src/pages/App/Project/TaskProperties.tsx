@@ -73,7 +73,7 @@ export function TaskProperties({
     <div className="space-y-1.5 md:space-y-2.5">
       {/* Status */}
       <PropertyRow label="Status">
-        <Select value={task.statusId} onValueChange={onStatusChange}>
+        <Select value={task.statusId} onValueChange={(v) => { if (v !== null) onStatusChange(v); }}>
           <SelectTrigger>
             <SelectValue>
               {task.status && (
@@ -99,7 +99,7 @@ export function TaskProperties({
 
       {/* Priority */}
       <PropertyRow label="Priority">
-        <Select value={task.priority} onValueChange={onPriorityChange}>
+        <Select value={task.priority} onValueChange={(v) => { if (v !== null) onPriorityChange(v as "urgent" | "high" | "medium" | "low"); }}>
           <SelectTrigger>
             <SelectValue>
               <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ export function TaskProperties({
       <PropertyRow label="Assignee">
         <Select
           value={task.assigneeId || "unassigned"}
-          onValueChange={onAssigneeChange}
+          onValueChange={(v) => { if (v !== null) onAssigneeChange(v); }}
         >
           <SelectTrigger>
             <SelectValue>
@@ -198,9 +198,9 @@ export function TaskProperties({
       <PropertyRow label="Estimate">
         <Select
           value={task.estimate != null ? String(task.estimate) : "none"}
-          onValueChange={(val) =>
-            onEstimateChange(val === "none" ? null : Number(val))
-          }
+          onValueChange={(val) => {
+            if (val !== null) onEstimateChange(val === "none" ? null : Number(val));
+          }}
         >
           <SelectTrigger>
             <SelectValue>

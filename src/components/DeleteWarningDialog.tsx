@@ -84,8 +84,7 @@ export function DeleteWarningDialog({
           <DialogTitle>
             Delete {resourceType}?
           </DialogTitle>
-          <DialogDescription asChild>
-            <div>
+          <DialogDescription render={<div />}>
               {isLoading && (
                 <span className="text-muted-foreground">Checking for references...</span>
               )}
@@ -153,7 +152,6 @@ export function DeleteWarningDialog({
                   Are you sure you want to delete &ldquo;{resourceName}&rdquo;? This action cannot be undone.
                 </span>
               )}
-            </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

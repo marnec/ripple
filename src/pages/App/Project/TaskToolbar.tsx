@@ -126,15 +126,16 @@ export function TaskToolbar({
 
       {/* Assignee filter */}
       <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
-        <PopoverTrigger asChild>
-          <button
+        <PopoverTrigger
+          render={<button
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md border px-2.5 h-7 text-xs font-medium transition-colors cursor-pointer",
               filters.assigneeIds.length > 0
                 ? "border-primary/50 bg-primary/10 text-primary"
                 : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             )}
-          >
+          />}
+        >
             <Filter className="w-3 h-3" />
             Assignee
             {filters.assigneeIds.length > 0 && (
@@ -142,7 +143,6 @@ export function TaskToolbar({
                 {filters.assigneeIds.length}
               </span>
             )}
-          </button>
         </PopoverTrigger>
         <PopoverContent className="w-52 p-2" align="start">
           <div className="flex flex-col gap-0.5">
@@ -177,15 +177,16 @@ export function TaskToolbar({
 
       {/* Priority filter */}
       <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
-        <PopoverTrigger asChild>
-          <button
+        <PopoverTrigger
+          render={<button
             className={cn(
               "inline-flex items-center gap-1.5 rounded-md border px-2.5 h-7 text-xs font-medium transition-colors cursor-pointer",
               filters.priorities.length > 0
                 ? "border-primary/50 bg-primary/10 text-primary"
                 : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             )}
-          >
+          />}
+        >
             <Filter className="w-3 h-3" />
             Priority
             {filters.priorities.length > 0 && (
@@ -193,7 +194,6 @@ export function TaskToolbar({
                 {filters.priorities.length}
               </span>
             )}
-          </button>
         </PopoverTrigger>
         <PopoverContent className="w-44 p-2" align="start">
           <div className="flex flex-col gap-0.5">

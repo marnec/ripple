@@ -40,8 +40,8 @@ export function MessageReactionPill({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <button
+      <TooltipTrigger
+        render={<button
           onClick={handleClick}
           className={cn(
             "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm transition-colors hover:bg-accent",
@@ -49,10 +49,10 @@ export function MessageReactionPill({
             currentUserReacted &&
               "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950"
           )}
-        >
+        />}
+      >
           <span>{emojiNative}</span>
           <span className="text-xs text-muted-foreground">{count}</span>
-        </button>
       </TooltipTrigger>
       <TooltipContent>
         <div className="text-xs">{tooltipContent}</div>

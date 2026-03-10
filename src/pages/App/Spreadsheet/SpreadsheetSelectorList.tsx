@@ -80,13 +80,10 @@ export function SpreadsheetSelectorList({
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
-      <SidebarMenuItem>
+    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
         <SidebarMenuButton tooltip="Spreadsheets" onClick={handleHeaderClick} isActive={isListActive}>
-          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <span role="button" className="shrink-0">
+          <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
               <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-            </span>
           </CollapsibleTrigger>
           <Table2 className="size-4" />
           <span className="font-medium">Spreadsheets</span>
@@ -119,7 +116,6 @@ export function SpreadsheetSelectorList({
             onOpenChange={(open: boolean) => !open && setSelectedSpreadsheetForRename(null)}
           />
         )}
-      </SidebarMenuItem>
     </Collapsible>
   );
 }

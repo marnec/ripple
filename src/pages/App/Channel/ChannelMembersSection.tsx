@@ -117,7 +117,7 @@ function AddMemberSelect({
 
   return (
     <div className="flex gap-2 mb-4">
-      <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+      <Select value={selectedUserId} onValueChange={(v) => { if (v !== null) setSelectedUserId(v); }}>
         <SelectTrigger className="flex-1">
           <SelectValue placeholder="Select a member to add" />
         </SelectTrigger>
@@ -182,9 +182,9 @@ function MemberRow({
         {isAdmin && isPrivate && (
           <Select
             value={member.role}
-            onValueChange={(role: Values<typeof ChannelRole>) =>
-              onRoleChange(member._id, role)
-            }
+            onValueChange={(role) => {
+              if (role !== null) onRoleChange(member._id, role as Values<typeof ChannelRole>);
+            }}
           >
             <SelectTrigger className="w-27.5">
               <SelectValue />

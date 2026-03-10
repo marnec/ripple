@@ -101,14 +101,15 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
             </span>
           ) : statuses && onStatusChange ? (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                <button className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground cursor-pointer hover:bg-muted-foreground/20 transition-colors">
+              <DropdownMenuTrigger
+                onClick={(e) => e.stopPropagation()}
+                render={<button className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground cursor-pointer hover:bg-muted-foreground/20 transition-colors" />}
+              >
                   <span
                     className={cn("w-1.5 h-1.5 rounded-full", task.status.color)}
                     aria-hidden="true"
                   />
                   {task.status.name}
-                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 {statuses.map((s) => (

@@ -31,13 +31,10 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
   if (!recents || recents.length === 0) return null;
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
-      <SidebarMenuItem>
+    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
         <SidebarMenuButton tooltip="Recents">
-          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <span role="button" className="shrink-0">
+          <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
               <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-            </span>
           </CollapsibleTrigger>
           <Clock className="size-4" />
           <span className="font-medium">Recents</span>
@@ -55,11 +52,9 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
               if (item.deleted) {
                 return (
                   <SidebarMenuSubItem key={item._id} {...vtProps}>
-                    <SidebarMenuSubButton asChild>
-                      <div className="cursor-default opacity-40">
+                    <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
                         {Icon && <Icon className="size-3.5 shrink-0" />}
                         <span className="truncate line-through">{item.resourceName}</span>
-                      </div>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                 );
@@ -67,24 +62,21 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
 
               return (
                 <SidebarMenuSubItem key={item._id} {...vtProps}>
-                  <SidebarMenuSubButton asChild>
-                    <div
+                  <SidebarMenuSubButton render={<div
                       onClick={() => {
                         setOpenMobile(false);
                         void navigate(getResourceUrl(workspaceId, item.resourceType, item.resourceId));
                       }}
                       className="cursor-pointer"
-                    >
+                    />}>
                       {Icon && <Icon className="size-3.5" />}
                       <span className="truncate">{item.resourceName}</span>
-                    </div>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
               );
             })}
           </SidebarMenuSub>
         </CollapsibleContent>
-      </SidebarMenuItem>
     </Collapsible>
   );
 }

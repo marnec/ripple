@@ -5,6 +5,7 @@ import { ChevronsUpDown, Plus, UserPlus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -55,11 +56,12 @@ export function WorkspaceSwitcher({
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
+          <DropdownMenuTrigger
+            render={<SidebarMenuButton
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
+            />}
+          >
               {activeWorkspace ? (
                 <>
                   <WorkspaceAvatar name={activeWorkspace.name} />
@@ -80,7 +82,6 @@ export function WorkspaceSwitcher({
                 </div>
               )}
               <ChevronsUpDown className="ml-auto" />
-            </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
@@ -88,20 +89,22 @@ export function WorkspaceSwitcher({
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Workspaces
-            </DropdownMenuLabel>
-            {workspaces.map((workspace, index) => (
-              <DropdownMenuItem
-                key={workspace._id}
-                onClick={() => handleWorkspaceSelect(workspace._id)}
-                className="gap-2 p-2"
-              >
-                <WorkspaceAvatar name={workspace.name} size="sm" />
-                {workspace.name}
-                <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Workspaces
+              </DropdownMenuLabel>
+              {workspaces.map((workspace, index) => (
+                <DropdownMenuItem
+                  key={workspace._id}
+                  onClick={() => handleWorkspaceSelect(workspace._id)}
+                  className="gap-2 p-2"
+                >
+                  <WorkspaceAvatar name={workspace.name} size="sm" />
+                  {workspace.name}
+                  <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
 
             <DropdownMenuItem

@@ -219,11 +219,9 @@ function AddDependencyPopover({
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 px-2">
+      <PopoverTrigger render={<Button variant="ghost" size="sm" className="h-7 px-2" />}>
           <Plus className="h-3 w-3 mr-1" />
           Add
-        </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0" align="end">
         <div className="p-3 border-b">

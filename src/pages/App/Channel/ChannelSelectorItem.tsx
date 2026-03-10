@@ -43,10 +43,9 @@ export function ChannelSelectorItem({
   return (
     <SidebarMenuSubItem className={cn("group/subitem relative", className)} style={style}>
       <SidebarMenuSubButton
-        asChild
+        render={<div onClick={() => onChannelSelect(channel._id)} className="cursor-pointer pr-6" />}
         isActive={channel._id === channelId}
       >
-        <div onClick={() => onChannelSelect(channel._id)} className="cursor-pointer pr-6">
           <div className="flex items-end shrink-0">
             <Hash size={14} />
             <Lock className={cn("size-2.5", "-ml-0.5", channel.isPublic ? "invisible" : "")} />
@@ -57,13 +56,10 @@ export function ChannelSelectorItem({
               {unreadCount}
             </span>
           )}
-        </div>
       </SidebarMenuSubButton>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover/subitem:opacity-100 data-[state=open]:opacity-100">
+        <DropdownMenuTrigger render={<button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground group-hover/subitem:opacity-100 data-[state=open]:opacity-100" />}>
             <MoreHorizontal className="size-3.5" />
-          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           className="w-48 rounded-lg"

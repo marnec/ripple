@@ -17,8 +17,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ALIGN_OPTIONS } from "@radix-ui/react-popper";
 import { useDebounceCallback } from "usehooks-ts";
+
+type Align = "start" | "center" | "end";
 
 export type ComboBoxItemType = {
   value: string;
@@ -40,13 +41,13 @@ type ComboboxProps = {
   disabled?: boolean;
   selected?: string[];
   popoverSameWidthAsTrigger?: boolean;
-  align?: (typeof ALIGN_OPTIONS)[number];
+  align?: Align;
   popoverContentClassName?: string;
   total?: number;
 };
 
 const popOverStyles = {
-  width: "var(--radix-popover-trigger-width)",
+  width: "var(--anchor-width)",
 };
 
 export function Combobox({
@@ -83,19 +84,21 @@ export function Combobox({
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={true}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn("justify-between", className)}
-          disabled={disabled}
-        >
-          <span className="truncate flex items-center">
-            {label || selectItemMsg}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn("justify-between", className)}
+            disabled={disabled}
+          />
+        }
+      >
+        <span className="truncate flex items-center">
+          {label || selectItemMsg}
+        </span>
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent
         style={popoverSameWidthAsTrigger ? popOverStyles : {}}

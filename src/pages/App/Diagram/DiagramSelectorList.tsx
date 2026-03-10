@@ -80,13 +80,10 @@ export function DiagramSelectorList({
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
-      <SidebarMenuItem>
+    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
         <SidebarMenuButton tooltip="Diagrams" onClick={handleHeaderClick} isActive={isListActive}>
-          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <span role="button" className="shrink-0">
+          <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
               <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-            </span>
           </CollapsibleTrigger>
           <PenTool className="size-4" />
           <span className="font-medium">Diagrams</span>
@@ -119,7 +116,6 @@ export function DiagramSelectorList({
             onOpenChange={(open: boolean) => !open && setSelectedDiagramForRename(null)}
           />
         )}
-      </SidebarMenuItem>
     </Collapsible>
   );
 }

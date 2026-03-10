@@ -78,13 +78,13 @@ function CategoryBreadcrumbItem({
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <BreadcrumbLink
+      <TooltipTrigger
+        render={<BreadcrumbLink
           onClick={() => onClick(item.href)}
           className="cursor-pointer inline-flex items-center"
-        >
+        />}
+      >
           <Icon className="h-4 w-4" />
-        </BreadcrumbLink>
       </TooltipTrigger>
       <TooltipContent>{item.label}</TooltipContent>
     </Tooltip>

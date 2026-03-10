@@ -364,48 +364,7 @@ body {
   }
 }
 
-/* ─── View Transitions — sidebar section position animation ─────── */
 
-::view-transition-group(sidebar-channels),
-::view-transition-group(sidebar-sep-1),
-::view-transition-group(sidebar-projects),
-::view-transition-group(sidebar-sep-2),
-::view-transition-group(sidebar-docs),
-::view-transition-group(sidebar-sep-3),
-::view-transition-group(sidebar-recents) {
-  animation-duration: 200ms;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-::view-transition-image-pair(sidebar-channels),
-::view-transition-image-pair(sidebar-sep-1),
-::view-transition-image-pair(sidebar-projects),
-::view-transition-image-pair(sidebar-sep-2),
-::view-transition-image-pair(sidebar-docs),
-::view-transition-image-pair(sidebar-sep-3),
-::view-transition-image-pair(sidebar-recents) {
-  isolation: auto;
-}
-
-::view-transition-old(sidebar-channels),
-::view-transition-old(sidebar-sep-1),
-::view-transition-old(sidebar-projects),
-::view-transition-old(sidebar-sep-2),
-::view-transition-old(sidebar-docs),
-::view-transition-old(sidebar-sep-3),
-::view-transition-old(sidebar-recents) {
-  display: none;
-}
-
-::view-transition-new(sidebar-channels),
-::view-transition-new(sidebar-sep-1),
-::view-transition-new(sidebar-projects),
-::view-transition-new(sidebar-sep-2),
-::view-transition-new(sidebar-docs),
-::view-transition-new(sidebar-sep-3),
-::view-transition-new(sidebar-recents) {
-  animation: none;
-}
 
 /* ─── View Transitions — channel sidebar items ────────────────────── */
 

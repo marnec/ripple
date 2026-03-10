@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   return (
-    <ToggleGroup type="single" size="sm" onValueChange={setTheme} value={theme}>
+    <ToggleGroup size="sm" onValueChange={(values) => { const last = values[values.length - 1]; if (last) setTheme(last); }} value={theme ? [theme] : []}>
       <ToggleGroupItem value="light" aria-label="Light">
         <SunIcon />
       </ToggleGroupItem>

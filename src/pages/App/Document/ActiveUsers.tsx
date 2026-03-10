@@ -40,15 +40,13 @@ export function ActiveUsers({ remoteUsers, currentUser, max = 5, className, onUs
         {currentUser && (
           <div className="relative group" style={{ zIndex: max + 1 }}>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Avatar className="h-8 w-8 border-2 border-background">
+              <TooltipTrigger render={<Avatar className="h-8 w-8 border-2 border-background" />}>
                   <AvatarFallback
                     className="text-xs font-medium"
                     style={{ backgroundColor: currentUser.color, color: "#fff" }}
                   >
                     {currentUser.name ? getInitials(currentUser.name) : "ME"}
                   </AvatarFallback>
-                </Avatar>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="font-medium">{currentUser.name || "You"}</div>
@@ -66,11 +64,12 @@ export function ActiveUsers({ remoteUsers, currentUser, max = 5, className, onUs
             style={{ zIndex: max - index }}
           >
             <Tooltip>
-              <TooltipTrigger asChild>
-                <div
+              <TooltipTrigger
+                render={<div
                   className={onUserClick ? "cursor-pointer" : undefined}
                   onClick={() => onUserClick?.(user)}
-                >
+                />}
+              >
                   <Avatar
                     className={cn(
                       "h-8 w-8 border-2 transition-transform group-hover:scale-110",
@@ -88,7 +87,6 @@ export function ActiveUsers({ remoteUsers, currentUser, max = 5, className, onUs
                       {getInitials(user.name)}
                     </AvatarFallback>
                   </Avatar>
-                </div>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="font-medium">{user.name}</div>
@@ -102,12 +100,10 @@ export function ActiveUsers({ remoteUsers, currentUser, max = 5, className, onUs
         {remainingCount > 0 && (
           <div className="relative group" style={{ zIndex: 0 }}>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Avatar className="h-8 w-8 border-2 border-background">
+              <TooltipTrigger render={<Avatar className="h-8 w-8 border-2 border-background" />}>
                   <AvatarFallback className="text-xs font-medium bg-muted text-muted-foreground">
                     +{remainingCount}
                   </AvatarFallback>
-                </Avatar>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="font-medium">

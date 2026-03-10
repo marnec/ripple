@@ -139,14 +139,14 @@ export function KanbanColumn({
           </Badge>
           {/* Column Actions */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
+            <DropdownMenuTrigger
+              render={<Button
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
-              >
+              />}
+            >
                 <MoreHorizontal className="h-4 w-4" />
-              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={startRename}>

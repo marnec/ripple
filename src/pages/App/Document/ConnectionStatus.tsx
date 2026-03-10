@@ -14,8 +14,7 @@ export function ConnectionStatus({ isConnected }: ConnectionStatusProps) {
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <div className="flex items-center">
+        <TooltipTrigger render={<div className="flex items-center" />}>
             {isConnected ? (
               // Connected state: green dot
               <div className="w-2 h-2 rounded-full bg-green-500" />
@@ -23,7 +22,6 @@ export function ConnectionStatus({ isConnected }: ConnectionStatusProps) {
               // Not connected state: cloud-off icon
               <CloudOff className="h-4 w-4 text-muted-foreground" />
             )}
-          </div>
         </TooltipTrigger>
         <TooltipContent>
           <p className="text-xs">

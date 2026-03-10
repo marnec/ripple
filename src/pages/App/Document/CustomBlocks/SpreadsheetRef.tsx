@@ -166,16 +166,16 @@ function CellValueChip({
   onClick: (e: React.MouseEvent) => void;
 }) {
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delay={300}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span
+        <TooltipTrigger
+          render={<span
             className="inline-flex items-center px-1.5 py-0.5 rounded bg-muted text-sm font-mono cursor-pointer hover:bg-muted/80 transition-colors align-middle animate-fade-in"
             contentEditable={false}
             onClick={onClick}
-          >
+          />}
+        >
             {value || "\u00A0"}
-          </span>
         </TooltipTrigger>
         <TooltipContent side="top">
           <span className="text-xs">{tooltip}</span>

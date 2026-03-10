@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 
@@ -48,30 +48,12 @@ export function ChannelSelectorList({
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   // Suppress view transitions while the dialog is animating closed.
-  // Radix keeps the portal in the DOM during exit animation (~200ms).
-  // We track it via a data-attribute on the content element.
+  // Base UI's onOpenChangeComplete fires after exit animations finish,
+  // so we know the portal is fully unmounted before allowing transitions.
   const [dialogInDom, setDialogInDom] = useState(false);
-  useEffect(() => {
-    if (showCreateChannel) {
-      setDialogInDom(true);
-      return;
-    }
-    if (!dialogInDom) return;
-    // Dialog closing — watch for the dialog content to be removed
-    const el = document.querySelector("[data-create-channel-dialog]");
-    if (!el) {
-      setDialogInDom(false);
-      return;
-    }
-    const obs = new MutationObserver(() => {
-      if (!document.querySelector("[data-create-channel-dialog]")) {
-        setDialogInDom(false);
-        obs.disconnect();
-      }
-    });
-    obs.observe(el.parentElement ?? document.body, { childList: true, subtree: true });
-    return () => obs.disconnect();
-  }, [showCreateChannel, dialogInDom]);
+  const handleDialogOpenChangeComplete = useCallback((open: boolean) => {
+    setDialogInDom(open);
+  }, []);
 
   const navigate = useNavigate();
   const deleteChannel = useMutation(channelsRemoveRef);
@@ -118,17 +100,15 @@ export function ChannelSelectorList({
 
   const handleCreateChannel = () => {
     autoAcknowledgeNext();
+    setDialogInDom(true);
     setShowCreateChannel(true);
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} asChild>
-      <SidebarMenuItem>
+    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
         <SidebarMenuButton tooltip="Channels" onClick={handleHeaderClick}>
-          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <span role="button" className="shrink-0">
+          <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
               <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-            </span>
           </CollapsibleTrigger>
           <MessageSquare className="size-4" />
           <span className="font-medium">Channels</span>
@@ -166,11 +146,9 @@ export function ChannelSelectorList({
                     className={cn("channel-vt")}
                     style={vtStyle}
                   >
-                    <SidebarMenuSubButton asChild>
-                      <div className="cursor-default opacity-40">
+                    <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
                         <Hash size={14} className="shrink-0" />
                         <span className="truncate line-through">{item.name || "unknown"}</span>
-                      </div>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                 );
@@ -205,8 +183,8 @@ export function ChannelSelectorList({
           workspaceId={workspaceId}
           open={showCreateChannel}
           onOpenChange={setShowCreateChannel}
+          onOpenChangeComplete={handleDialogOpenChangeComplete}
         />
-      </SidebarMenuItem>
     </Collapsible>
   );
 }
