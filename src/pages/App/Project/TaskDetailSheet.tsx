@@ -71,7 +71,7 @@ export function TaskDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full md:w-176 overflow-y-scroll scrollbar-stable">
+        <SheetContent className="w-full scrollbar-stable" style={{ maxWidth: "44rem" }}>
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           {!isLoaded || !task ? (
             <div className="flex items-center justify-center py-12">
@@ -79,32 +79,34 @@ export function TaskDetailSheet({
             </div>
           ) : (
             <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-12 top-4 rounded-sm opacity-70 hover:opacity-100 h-auto w-auto p-0"
-                onClick={() =>
-                  void navigate(
-                    `/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`
-                  )
-                }
-                title="Expand to full page"
-              >
-                <Maximize2 className="h-4 w-4" />
-              </Button>
-              <SheetHeader>
-                {(() => {
-                  const taskIdStr = formatTaskId(task.projectKey, task.number);
-                  return taskIdStr ? (
-                    <span className="text-xs text-muted-foreground font-mono ml-1">
-                      {taskIdStr}
-                    </span>
-                  ) : null;
-                })()}
-                <div className="flex items-center gap-1">
+              <SheetHeader className="pr-20 gap-3">
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const taskIdStr = formatTaskId(task.projectKey, task.number);
+                    return taskIdStr ? (
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {taskIdStr}
+                      </span>
+                    ) : null;
+                  })()}
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="icon-sm"
+                    className="absolute top-3 right-12"
+                    onClick={() =>
+                      void navigate(
+                        `/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`
+                      )
+                    }
+                    title="Expand to full page"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex items-center gap-1 h-7">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     className="shrink-0"
                     onClick={() => detail.setShowDeleteDialog(true)}
                     title="Delete task"
@@ -117,13 +119,13 @@ export function TaskDetailSheet({
                     onChange={(e) => detail.setTitleValue(e.target.value)}
                     onBlur={detail.handleTitleBlur}
                     onKeyDown={detail.handleTitleKeyDown}
-                    className="text-lg font-semibold border-none focus-visible:ring-0 px-0 h-auto"
+                    className="text-lg font-semibold leading-none border-none focus-visible:ring-0 px-2 h-full"
                     placeholder="Task title"
                   />
                 </div>
               </SheetHeader>
 
-              <div className="mt-4 space-y-5">
+              <div className="space-y-5 px-4 pb-4 overflow-y-auto min-h-0">
                 <TaskProperties
                   task={task}
                   statuses={detail.statuses!}

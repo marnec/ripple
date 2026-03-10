@@ -1,11 +1,9 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
-import { useAnimatedQuery } from "@/hooks/use-animated-query";
-import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 
@@ -27,7 +25,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  useSidebar,
 } from "../../../components/ui/sidebar";
 import { ChannelSelectorItem } from "./ChannelSelectorItem";
 import { CreateChannelDialog } from "./CreateChannelDialog";
@@ -48,18 +45,6 @@ export function ChannelSelectorList({
   onToggle,
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
-  // Suppress view transitions while the dialog is animating closed.
-  // Base UI's onOpenChangeComplete fires after exit animations finish,
-  // so we know the portal is fully unmounted before allowing transitions.
-  const [dialogInDom, setDialogInDom] = useState(false);
-  const handleDialogOpenChangeComplete = useCallback((open: boolean) => {
-    setDialogInDom(open);
-  }, []);
-  // Also suppress while the mobile sidebar is expanded — view transition
-  // snapshots capture items at absolute positions which conflicts with the
-  // sidebar's expand animation.
-  const { isMobile, state } = useSidebar();
-  const suppress = dialogInDom || (isMobile && state === "expanded");
 
   const navigate = useNavigate();
   const deleteChannel = useMutation(channelsRemoveRef);
@@ -72,9 +57,8 @@ export function ChannelSelectorList({
     () => channels?.map((c) => ({ id: c._id, name: c.name })),
     [channels],
   );
-  const { displayList: rawDisplayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
+  const { displayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
     useAcknowledgedChannels(workspaceId, channelEntries);
-  const displayList = useAnimatedQuery(rawDisplayList, undefined, suppress);
 
   // Build a map from id → Doc for live channels
   const channelMap = useMemo(() => {
@@ -106,7 +90,6 @@ export function ChannelSelectorList({
 
   const handleCreateChannel = () => {
     autoAcknowledgeNext();
-    setDialogInDom(true);
     setShowCreateChannel(true);
   };
 
@@ -143,14 +126,10 @@ export function ChannelSelectorList({
               <p className="px-2 py-1 text-xs text-muted-foreground">No channels yet</p>
             )}
             {displayList.map((item) => {
-              const vtStyle = { viewTransitionName: `channel-${item.id}` } as React.CSSProperties;
-
               if (item.removed) {
                 return (
                   <SidebarMenuSubItem
                     key={item.id}
-                    className={cn("sidebar-item-vt")}
-                    style={vtStyle}
                   >
                     <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
                         <Hash size={14} className="shrink-0" />
@@ -178,8 +157,6 @@ export function ChannelSelectorList({
                   onManageChannel={navigateToChannelSettings}
                   onChannelDetails={navigateToChannelDetails}
                   onDeleteChannel={(id) => void handleChannelDelete(id)}
-                  className="sidebar-item-vt"
-                  style={vtStyle}
                 />
               );
             })}
@@ -189,7 +166,6 @@ export function ChannelSelectorList({
           workspaceId={workspaceId}
           open={showCreateChannel}
           onOpenChange={setShowCreateChannel}
-          onOpenChangeComplete={handleDialogOpenChangeComplete}
         />
     </Collapsible>
   );

@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/sidebar";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
-import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { useQuery } from "convex/react";
 import { ChevronRight, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -24,10 +23,8 @@ interface RecentsSidebarSectionProps {
 
 export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: RecentsSidebarSectionProps) {
   const navigate = useNavigate();
-  const { isMobile, state, setOpen } = useSidebar();
-  const liveRecents = useQuery(api.recentActivity.listRecent, { workspaceId, limit: 5 });
-  const mobileExpanded = isMobile && state === "expanded";
-  const recents = useAnimatedQuery(liveRecents, undefined, mobileExpanded);
+  const { isMobile, setOpen } = useSidebar();
+  const recents = useQuery(api.recentActivity.listRecent, { workspaceId, limit: 5 });
 
   if (!recents || recents.length === 0) return null;
 
@@ -41,18 +38,13 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
           <span className="font-medium">Recents</span>
         </SidebarMenuButton>
         <CollapsibleContent>
-          <SidebarMenuSub className="gap-0">
+          <SidebarMenuSub className="gap-0.5">
             {recents.map((item) => {
               const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
 
-              const vtProps = {
-                className: "sidebar-item-vt",
-                style: { viewTransitionName: `recent-${item._id}` } as React.CSSProperties,
-              };
-
               if (item.deleted) {
                 return (
-                  <SidebarMenuSubItem key={item._id} {...vtProps}>
+                  <SidebarMenuSubItem key={item._id}>
                     <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
                         {Icon && <Icon className="size-3.5 shrink-0" />}
                         <span className="truncate line-through">{item.resourceName}</span>
@@ -62,7 +54,7 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
               }
 
               return (
-                <SidebarMenuSubItem key={item._id} {...vtProps}>
+                <SidebarMenuSubItem key={item._id}>
                   <SidebarMenuSubButton render={<div
                       onClick={() => {
                         if (isMobile) setOpen(false);

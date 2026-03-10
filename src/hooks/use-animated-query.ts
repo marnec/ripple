@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import type React from "react";
 import { flushSync } from "react-dom";
 
 /**
@@ -17,11 +18,18 @@ import { flushSync } from "react-dom";
  *   during render (no animation, no intermediate frame). Used to bypass
  *   view transitions during DnD operations so dnd-kit never sees a stale
  *   layout, and while sheets/overlays are open to avoid z-order glitches.
+ *
+ * @param vtScopeRef — Optional ref to a container element. When provided,
+ *   before starting a view transition any `.sidebar-item-vt` elements
+ *   OUTSIDE this container have their `view-transition-name` temporarily
+ *   set to `none` so they don't participate in the transition (which would
+ *   reset their CSS `:hover` state and cause hover-only UI to flash).
  */
 export function useAnimatedQuery<T>(
   liveData: T,
   shouldAbsorb?: (prev: NonNullable<T>, next: NonNullable<T>) => boolean,
   suppress?: boolean,
+  vtScopeRef?: React.RefObject<HTMLElement | null>,
 ): T {
   const [rendered, setRendered] = useState(liveData);
   const transitioning = useRef(false);
@@ -35,6 +43,7 @@ export function useAnimatedQuery<T>(
       shouldAbsorb?.(prev, next) ?? false,
   );
   const isSuppressed = useEffectEvent(() => suppress ?? false);
+  const getVtScope = useEffectEvent(() => vtScopeRef?.current ?? null);
 
   // ── Render-time fast paths ────────────────────────────────────────
   // React supports setState during render for derived-state patterns.
@@ -99,11 +108,30 @@ export function useAnimatedQuery<T>(
       return;
     }
 
+    // Neutralize sidebar items outside our scope so they don't participate
+    // in the transition (the snapshot/replace cycle resets CSS :hover).
+    const frozen: Array<{ el: HTMLElement; name: string }> = [];
+    const scope = getVtScope();
+    if (scope) {
+      document.querySelectorAll<HTMLElement>('.sidebar-item-vt').forEach(el => {
+        if (!scope.contains(el)) {
+          const name = el.style.viewTransitionName;
+          if (name && name !== 'none') {
+            frozen.push({ el, name });
+            el.style.viewTransitionName = 'none';
+          }
+        }
+      });
+    }
+
     transitioning.current = true;
     void document.startViewTransition(() => {
       flushSync(() => setRendered(liveData));
     }).finished.finally(() => {
       transitioning.current = false;
+      for (const { el, name } of frozen) {
+        el.style.viewTransitionName = name;
+      }
     });
   }, [liveData, rendered]);
 

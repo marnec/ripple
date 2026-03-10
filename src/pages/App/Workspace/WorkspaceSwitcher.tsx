@@ -59,7 +59,7 @@ export function WorkspaceSwitcher({
           <DropdownMenuTrigger
             render={<SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
             />}
           >
               {activeWorkspace ? (

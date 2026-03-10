@@ -23,13 +23,13 @@ export function DatePickerField({
   overdue,
 }: DatePickerFieldProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 min-w-0">
       <Popover>
         <PopoverTrigger
           render={<Button
             variant="outline"
             className={cn(
-              "w-full justify-start text-left font-normal",
+              "min-w-0 flex-1 justify-start text-left font-normal",
               !value && "text-muted-foreground",
               overdue && "text-red-500 border-red-500/50",
             )}

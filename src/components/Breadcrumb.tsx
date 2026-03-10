@@ -8,97 +8,58 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import React, { useMemo } from "react";
+import React, { memo, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { RESOURCE_CATEGORY_ICONS } from "@/lib/resource-icons";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "./ui/tooltip";
 
 interface BreadcrumbItemData {
   href: string;
   label: string;
   resourceId?: string;
-  category?: string; // the URL segment name for category items (e.g. "workspaces")
+  category?: string;
 }
 
-interface BreadcrumbLinkWithResourceProps {
-  item: BreadcrumbItemData;
-  onClick: (href: string) => void;
-  nameMap: Record<string, string | null> | undefined;
-}
-
-function NamedBreadcrumbItem({
+/**
+ * Each resource breadcrumb subscribes to its own name query,
+ * so parent items (e.g. workspace) don't re-render when a sibling name changes.
+ */
+const ResourceBreadcrumbLink = memo(function ResourceBreadcrumbLink({
   item,
   onClick,
-  nameMap,
-}: BreadcrumbLinkWithResourceProps) {
-  const handleClick = () => {
-    onClick(item.href);
-  };
+}: {
+  item: BreadcrumbItemData;
+  onClick: (href: string) => void;
+}) {
+  const name = useQuery(
+    api.breadcrumb.getResourceName,
+    item.resourceId ? { resourceId: item.resourceId as any } : "skip",
+  );
 
-  let displayName;
+  let displayName: string;
   if (item.resourceId) {
-    if (nameMap === undefined) {
-      displayName = "...";
-    } else {
-      displayName = nameMap[item.resourceId] ?? item.label;
-    }
+    displayName = name === undefined ? "..." : (name ?? item.label);
   } else {
     displayName = item.label;
   }
 
   return (
-    <BreadcrumbLink onClick={handleClick} className="cursor-pointer">
+    <BreadcrumbLink
+      onClick={() => onClick(item.href)}
+      className="cursor-pointer"
+    >
       {displayName}
     </BreadcrumbLink>
   );
-}
+});
 
-function CategoryBreadcrumbItem({
-  item,
-  onClick,
-}: Omit<BreadcrumbLinkWithResourceProps, "nameMap">) {
-  const Icon = item.category
-    ? RESOURCE_CATEGORY_ICONS[item.category]
-    : undefined;
-
-  if (!Icon) {
-    return (
-      <BreadcrumbLink
-        onClick={() => onClick(item.href)}
-        className="cursor-pointer"
-      >
-        {item.label}
-      </BreadcrumbLink>
-    );
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={<BreadcrumbLink
-          onClick={() => onClick(item.href)}
-          className="cursor-pointer inline-flex items-center"
-        />}
-      >
-          <Icon className="h-4 w-4" />
-      </TooltipTrigger>
-      <TooltipContent>{item.label}</TooltipContent>
-    </Tooltip>
+function MobileCurrentTitle({ item }: { item: BreadcrumbItemData }) {
+  const name = useQuery(
+    api.breadcrumb.getResourceName,
+    item.resourceId ? { resourceId: item.resourceId as any } : "skip",
   );
-}
 
-function MobileCurrentTitle({ item, nameMap }: { item: BreadcrumbItemData; nameMap: Record<string, string | null> | undefined }) {
-  let displayName;
+  let displayName: string;
   if (item.resourceId) {
-    if (nameMap === undefined) {
-      displayName = "...";
-    } else {
-      displayName = nameMap[item.resourceId] ?? item.label;
-    }
+    displayName = name === undefined ? "..." : (name ?? item.label);
   } else {
     displayName = item.label;
   }
@@ -108,12 +69,11 @@ function MobileCurrentTitle({ item, nameMap }: { item: BreadcrumbItemData; nameM
   );
 }
 
-
 export function DynamicBreadcrumb() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
-  const { items, resourceIds } = useMemo(() => {
+  const items = useMemo(() => {
     const pathSegments = location.pathname.split("/").filter(Boolean);
     const built: BreadcrumbItemData[] = [];
     for (let i = 0; i < pathSegments.length; i++) {
@@ -131,26 +91,19 @@ export function DynamicBreadcrumb() {
         });
       }
     }
-    const ids = built.filter((item) => item.resourceId).map((item) => item.resourceId!);
-    return { items: built, resourceIds: ids };
+    return built;
   }, [location.pathname]);
-
-  const nameMap = useQuery(
-    api.breadcrumb.getResourceNames,
-    resourceIds.length > 0 ? { resourceIds: resourceIds as any } : "skip",
-  );
 
   if (isMobile) {
     const currentItem = items.length > 0 ? items[items.length - 1] : null;
     if (!currentItem) return null;
-    return <MobileCurrentTitle item={currentItem} nameMap={nameMap} />;
+    return <MobileCurrentTitle item={currentItem} />;
   }
 
   return (
     <Breadcrumb>
       <BreadcrumbList>
         {items.map((item, index) => {
-          const isCategory = !item.resourceId;
           const delay = `${index * 50}ms`;
           return (
             <React.Fragment key={item.href}>
@@ -164,18 +117,10 @@ export function DynamicBreadcrumb() {
                 className="animate-in fade-in duration-200 fill-mode-both"
                 style={{ animationDelay: delay }}
               >
-                {isCategory ? (
-                  <CategoryBreadcrumbItem
-                    item={item}
-                    onClick={(href) => void navigate(href)}
-                  />
-                ) : (
-                  <NamedBreadcrumbItem
-                    item={item}
-                    onClick={(href) => void navigate(href)}
-                    nameMap={nameMap}
-                  />
-                )}
+                <ResourceBreadcrumbLink
+                  item={item}
+                  onClick={(href) => void navigate(href)}
+                />
               </BreadcrumbItem>
             </React.Fragment>
           );

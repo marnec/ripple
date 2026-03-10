@@ -93,7 +93,7 @@ export function DiagramSelectorList({
           <span className="sr-only">New Diagram</span>
         </SidebarMenuAction>
         <CollapsibleContent>
-          <SidebarMenuSub className="gap-0">
+          <SidebarMenuSub className="gap-0.5">
             {favoriteDiagrams?.map((diagram: any) => (
               <DiagramSelectorItem
                 key={diagram._id}

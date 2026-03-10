@@ -344,18 +344,17 @@ body {
 }
 ::view-transition-old(.task-card),
 ::view-transition-old(.resource-card) {
-  animation: none;
-  mix-blend-mode: normal;
+  display: none;
 }
 ::view-transition-new(.task-card),
 ::view-transition-new(.resource-card) {
   animation: none;
-  mix-blend-mode: normal;
 }
 
 /* Cards removed from view: shrink out */
 ::view-transition-old(.task-card):only-child,
 ::view-transition-old(.resource-card):only-child {
+  display: block;
   animation: vt-shrink 200ms ease forwards;
 }
 
@@ -500,9 +499,11 @@ body {
   opacity: 0.5;
 }
 
-/* Stable scrollbar — reserves full gutter to prevent layout shift, thumb appears on hover */
+/* Stable scrollbar — fixed-width gutter, subtle persistent thumb */
 .scrollbar-stable {
-  scrollbar-color: transparent transparent;
+  overflow-y: scroll;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--foreground) / 0.08) transparent;
 }
 
 .scrollbar-stable:hover {
@@ -518,9 +519,8 @@ body {
 }
 
 .scrollbar-stable::-webkit-scrollbar-thumb {
-  background: transparent;
+  background: hsl(var(--foreground) / 0.08);
   border-radius: 4px;
-  transition: background 0.2s ease;
 }
 
 .scrollbar-stable:hover::-webkit-scrollbar-thumb {

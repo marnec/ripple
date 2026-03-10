@@ -79,7 +79,7 @@ export function ProjectSelectorList({
           <span className="sr-only">New Project</span>
         </SidebarMenuAction>
         <CollapsibleContent>
-          <SidebarMenuSub className="gap-0">
+          <SidebarMenuSub className="gap-0.5">
             {favoriteProjects?.map((project) => (
               <ProjectSelectorItem
                 key={project._id}

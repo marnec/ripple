@@ -75,7 +75,8 @@ function TaskDetailPageContent({
   }
 
   return (
-    <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl">
+    <div className="flex-1 overflow-y-auto min-h-0">
+    <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl pb-6">
       {/* Title */}
       <Input
         ref={titleInputRef}
@@ -174,6 +175,7 @@ function TaskDetailPageContent({
           })
         }
       />
+    </div>
     </div>
   );
 }

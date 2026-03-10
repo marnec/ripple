@@ -93,7 +93,7 @@ export function SpreadsheetSelectorList({
           <span className="sr-only">New Spreadsheet</span>
         </SidebarMenuAction>
         <CollapsibleContent>
-          <SidebarMenuSub className="gap-0">
+          <SidebarMenuSub className="gap-0.5">
             {favoriteSheets?.map((spreadsheet) => (
               <SpreadsheetSelectorItem
                 key={spreadsheet._id}

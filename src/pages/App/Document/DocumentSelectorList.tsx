@@ -91,7 +91,7 @@ export function DocumentSelectorList({
           <span className="sr-only">New Document</span>
         </SidebarMenuAction>
         <CollapsibleContent>
-          <SidebarMenuSub className="gap-0">
+          <SidebarMenuSub className="gap-0.5">
             {favoriteDocs?.map((document) => (
               <DocumentSelectorItem
                 key={document._id}
