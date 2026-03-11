@@ -8,10 +8,8 @@ import { CommandPalette } from "./CommandPalette";
 import { PullToRefresh } from "./PullToRefresh";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
-import { cn } from "../lib/utils";
 import { DynamicBreadcrumb } from "./Breadcrumb";
 import { FollowModeIndicator } from "./FollowModeIndicator";
-import { Separator } from "./ui/separator";
 import { AppSidebar } from "@/pages/App/AppSidebar";
 
 function CallIndicator() {
@@ -35,7 +33,7 @@ function CallIndicator() {
 export function Layout() {
   const { pathname } = useLocation();
   const { workspaceId } = useParams<QueryParams>();
-  const { isMobile, state, setOpen } = useSidebar();
+  const { isMobile, setOpen } = useSidebar();
   const { isFollowing, followColor } = useFollowMode();
   const [commandOpen, setCommandOpen] = useState(false);
 
@@ -84,10 +82,7 @@ export function Layout() {
           )}
         </header>
         <div
-          className={cn("relative flex h-[calc(100svh-4rem-var(--safe-area-top))]", {
-            "w-svw": isMobile || state === "collapsed",
-            "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
-          })}
+          className="relative flex h-[calc(100svh-4rem-var(--safe-area-top))] w-full"
         >
           {isFollowing && followColor && (
             <div
