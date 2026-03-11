@@ -156,7 +156,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const [showReferencedBlocks, setShowReferencedBlocks] = useState(false);
   // stylesActive keeps the <style> tag in the DOM during the exit transition
   const [stylesActive, setStylesActive] = useState(false);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleToggleReferences = useCallback(() => {
     if (showReferencedBlocks) {
