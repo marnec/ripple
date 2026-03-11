@@ -4,7 +4,7 @@ import { BlockNoteView } from "@blocknote/shadcn";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
 import { Link2, Link2Off } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -154,6 +154,23 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   // Track which blocks in this document are referenced by embeds elsewhere
   const { referencedBlockIds, hasReferencedBlocks } = useReferencedBlocks(documentId);
   const [showReferencedBlocks, setShowReferencedBlocks] = useState(false);
+  // stylesActive keeps the <style> tag in the DOM during the exit transition
+  const [stylesActive, setStylesActive] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleToggleReferences = useCallback(() => {
+    if (showReferencedBlocks) {
+      setShowReferencedBlocks(false);
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = setTimeout(() => setStylesActive(false), 220);
+    } else {
+      clearTimeout(hideTimerRef.current);
+      setStylesActive(true);
+      setShowReferencedBlocks(true);
+    }
+  }, [showReferencedBlocks]);
+
+  useEffect(() => () => clearTimeout(hideTimerRef.current), []);
 
   // Protect referenced blocks from accidental deletion
   const onReferencedBlocksDeleted = useCallback(
@@ -168,19 +185,29 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   // Build dynamic CSS rules targeting referenced blocks by their stable data-id
   // (ProseMirror preserves data-id but wipes custom attributes on re-render)
+  // stylesActive keeps the <style> in the DOM during exit so the transition can play out.
   const referencedBlockStyles = useMemo(() => {
-    if (!showReferencedBlocks || referencedBlockIds.size === 0) return null;
+    if (!stylesActive || referencedBlockIds.size === 0) return null;
     const rules = [...referencedBlockIds]
       .map((id) => `.bn-block-outer[data-id="${id}"] > .bn-block`)
       .join(",\n");
-    return `${rules} {
+    if (showReferencedBlocks) {
+      return `${rules} {
   border-left: 2px solid hsl(45 90% 50% / 0.5);
   background-color: hsl(45 90% 50% / 0.06);
   padding-left: 6px;
   border-radius: 0 4px 4px 0;
   transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
 }`;
-  }, [showReferencedBlocks, referencedBlockIds]);
+    }
+    // Exit state: zeroed-out values so the transition animates to nothing
+    return `${rules} {
+  border-left: 2px solid transparent;
+  background-color: transparent;
+  padding-left: 0;
+  transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
+}`;
+  }, [showReferencedBlocks, stylesActive, referencedBlockIds]);
 
   // Cold-start snapshot fallback: offline + no editor from IndexedDB
   const { isColdStart, snapshotDoc } = useSnapshotFallback({
@@ -230,7 +257,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           {hasReferencedBlocks && (
             <button
               type="button"
-              onClick={() => setShowReferencedBlocks((v) => !v)}
+              onClick={handleToggleReferences}
               className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-2"
               title={showReferencedBlocks ? "Hide referenced blocks" : "Show referenced blocks"}
             >
