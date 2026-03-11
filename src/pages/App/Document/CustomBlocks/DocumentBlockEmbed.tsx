@@ -35,9 +35,16 @@ function DocumentBlockView({
     );
   }
 
-  // Loading
+  // Loading — mirror the loaded DOM structure invisibly to reserve exact dimensions
   if (document === undefined || isLoading) {
-    return <div className="h-20 w-full" />;
+    return (
+      <div aria-hidden="true" className="invisible">
+        <div className="text-xs text-muted-foreground w-full text-right">&nbsp;</div>
+        <div className="w-full border-l-3 border-primary/30 pl-3 py-2">
+          <p className="text-sm leading-relaxed">&nbsp;</p>
+        </div>
+      </div>
+    );
   }
 
   // Block content not found (block may have been deleted from source)

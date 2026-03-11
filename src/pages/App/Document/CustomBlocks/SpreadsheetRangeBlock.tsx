@@ -159,10 +159,20 @@ const ResizableSpreadsheetRange = ({
 
   if (isLoading) {
     return (
-      <div
-        className="animate-pulse bg-muted/40 rounded-lg border border-border"
-        style={{ width: block.props.width, height: 100 }}
-      />
+      <div aria-hidden="true" className="invisible" style={{ width: block.props.width, maxWidth: "100%" }}>
+        <div className="flex items-center justify-between mb-0.5">
+          <div className="flex-1" />
+          <span className="text-xs">&nbsp;</span>
+        </div>
+        <SpreadsheetGrid
+          values={[]}
+          colCount={colCount}
+          rowCount={rowCount}
+          startCol={range?.startCol ?? 0}
+          startRow={range?.startRow ?? 0}
+          showHeaders={showHeaders}
+        />
+      </div>
     );
   }
 
@@ -172,7 +182,7 @@ const ResizableSpreadsheetRange = ({
   return (
     <div
       ref={wrapperRef}
-      className="relative group/range"
+      className="relative group/range animate-fade-in"
       style={{ width: block.props.width, maxWidth: "100%" }}
       onMouseEnter={() => editable && setHovered(true)}
       onMouseLeave={(e) => {
