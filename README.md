@@ -1,29 +1,21 @@
 NEXT STEPS:
-- tasks
-    - [ ] mytasks??
-
 - investigate rework all deletion cascade to soft-deletion with scheduled garbage collection (also investigate n+1 problem and analyze submitted component for cascading delete)
 
 - [ ] there is still a problem sometimes with the in-call follow action not working
 
-- [x] evaluate use of audit-log for sidebar recent
 - [ ] extend audit-log usage
 - [ ] investigate why task activity uses metadata instead of after before
 
 - [ ] link previews in chat
 
-- [ ] fix recent files links referencing deleted entities
 - [ ] fix acknowledged deletion
-- [ ] add view transition for acknowledgements
 
 - [ ] restyle workspace home page, remove skeletons, add fade-in, add missing cards, evaluate if resource lists make sense or other informations are better
 
-- [ ] add navigation around to access settings of various things
-
-- [ ] bring back text on breadcrumb
+- [ ] add navigation to access settings of various things
 
 - knowledge-graph
-    - [ ] add task description embedding in tasks ()
+    - [ ] add task description embedding in tasks (auto add relates-to relationship)
     - [ ] add table embedding in tasks
     - [ ] explore pdf reading, annotation and embedding
     - [ ] add a obsidian style backlinks to resources (this might be harder than it seems)
