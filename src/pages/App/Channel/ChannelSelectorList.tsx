@@ -25,6 +25,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from "../../../components/ui/sidebar";
 import { ChannelSelectorItem } from "./ChannelSelectorItem";
 import { CreateChannelDialog } from "./CreateChannelDialog";
@@ -45,6 +46,8 @@ export function ChannelSelectorList({
   onToggle,
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const { state: sidebarState, openMobile, isMobile } = useSidebar();
+  const isChannelListVisible = isOpen && (isMobile ? openMobile : sidebarState === "expanded");
 
   const navigate = useNavigate();
   const deleteChannel = useMutation(channelsRemoveRef);
@@ -58,7 +61,7 @@ export function ChannelSelectorList({
     [channels],
   );
   const { displayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
-    useAcknowledgedChannels(workspaceId, channelEntries);
+    useAcknowledgedChannels(workspaceId, channelEntries, isChannelListVisible);
 
   // Build a map from id → Doc for live channels
   const channelMap = useMemo(() => {

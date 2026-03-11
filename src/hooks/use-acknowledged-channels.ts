@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 const STORAGE_PREFIX = "channels:known:";
 
@@ -64,10 +64,12 @@ export interface ChannelEntry {
 export function useAcknowledgedChannels(
   workspaceId: string,
   channels: ChannelEntry[] | undefined,
+  isVisible: boolean,
 ) {
   const initializedRef = useRef<string | null>(null);
   const autoAckRef = useRef(false);
   const prevChannelsRef = useRef<ChannelEntry[] | undefined>(undefined);
+  const prevVisibleRef = useRef(false);
 
   // Subscribe to localStorage changes (cross-tab sync)
   const subscribe = useCallback(
@@ -116,16 +118,34 @@ export function useAcknowledgedChannels(
     [channels],
   );
 
-  // Auto-initialize: first time seeing this workspace, mark all current channels as known
-  useEffect(() => {
-    if (channels && initializedRef.current !== workspaceId && !rawSnapshot) {
+  // Auto-acknowledge on any not-visible → visible transition (page load, reload,
+  // section expand, mobile sidebar open). Also handles first-load (no localStorage).
+  // The point of acknowledgment is UI stability while the user is looking at the
+  // list — if they weren't looking, there's no reference to diff against.
+  // useLayoutEffect so the localStorage write (+ useSyncExternalStore re-render)
+  // happens before the browser paints — no pill flash on transitions.
+  useLayoutEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = isVisible;
+
+    if (!isVisible || !channels) return;
+
+    // First load ever (no localStorage): seed the known list
+    if (initializedRef.current !== workspaceId && !rawSnapshot) {
       initializedRef.current = workspaceId;
       writeKnownList(workspaceId, liveList);
+      return;
     }
-  }, [channels, workspaceId, rawSnapshot, liveList]);
+
+    // Transition from not-visible → visible: auto-acknowledge
+    if (!wasVisible) {
+      writeKnownList(workspaceId, liveList);
+    }
+  }, [isVisible, channels, workspaceId, rawSnapshot, liveList]);
 
   // Auto-acknowledge when channels change after a user-initiated action.
-  useEffect(() => {
+  // useLayoutEffect so the write happens before paint — no pill flash.
+  useLayoutEffect(() => {
     if (autoAckRef.current && channels && channels !== prevChannelsRef.current) {
       autoAckRef.current = false;
       writeKnownList(workspaceId, liveList);
@@ -142,6 +162,14 @@ export function useAcknowledgedChannels(
   const { displayList, newCount } = useMemo(() => {
     if (!channels)
       return { displayList: [] as { id: string; name: string; removed: boolean }[], newCount: 0 };
+
+    // Not visible: skip pill computation entirely
+    if (!isVisible) {
+      return {
+        displayList: channels.map((c) => ({ id: c.id, name: c.name, removed: false })),
+        newCount: 0,
+      };
+    }
 
     // First load (no localStorage yet): show all as-is
     if (knownList.length === 0 && !rawSnapshot) {
@@ -170,7 +198,7 @@ export function useAcknowledgedChannels(
     }
 
     return { displayList: display, newCount: fresh };
-  }, [channels, knownList, knownIdSet, rawSnapshot]);
+  }, [channels, knownList, knownIdSet, rawSnapshot, isVisible]);
 
   const removedCount = useMemo(
     () => displayList.filter((d) => d.removed).length,
