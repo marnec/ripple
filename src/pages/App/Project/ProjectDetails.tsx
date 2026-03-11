@@ -45,7 +45,7 @@ function ProjectDetailsContent({
   const isMobile = useIsMobile();
   const [view, setView] = useState<"list" | "board">(isMobile ? "list" : "board");
   const [filters, setFilters] = useState<TaskFilters>({
-    hideCompleted: true,
+    completionFilter: "uncompleted" as const,
     assigneeIds: [],
     priorities: [],
   });

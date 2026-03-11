@@ -1,6 +1,4 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -33,8 +31,10 @@ export type { TaskPriority } from "@/lib/task-utils";
 export type SortField = "created" | "dueDate" | "startDate";
 export type SortDirection = "asc" | "desc";
 
+export type CompletionFilter = "all" | "completed" | "uncompleted";
+
 export type TaskFilters = {
-  hideCompleted: boolean;
+  completionFilter: CompletionFilter;
   assigneeIds: string[];
   priorities: TaskPriority[];
 };
@@ -78,10 +78,12 @@ export function TaskToolbar({
   members,
   sortBlocked,
 }: TaskToolbarProps) {
+  const [completionOpen, setCompletionOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
 
   const activeFilterCount =
+    (filters.completionFilter !== "uncompleted" ? 1 : 0) +
     (filters.assigneeIds.length > 0 ? 1 : 0) +
     (filters.priorities.length > 0 ? 1 : 0);
 
@@ -100,29 +102,47 @@ export function TaskToolbar({
   };
 
   const clearFilters = () => {
-    onFiltersChange({ ...filters, assigneeIds: [], priorities: [] });
+    onFiltersChange({ ...filters, completionFilter: "uncompleted", assigneeIds: [], priorities: [] });
   };
+
+  const completionLabels: Record<string, string> = { all: "All", completed: "Completed", uncompleted: "Uncompleted" };
+  const completionActive = filters.completionFilter !== "uncompleted";
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Hide completed toggle */}
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="hide-completed"
-          checked={filters.hideCompleted}
-          onCheckedChange={(checked) =>
-            onFiltersChange({ ...filters, hideCompleted: checked === true })
-          }
-        />
-        <Label
-          htmlFor="hide-completed"
-          className="text-sm font-normal cursor-pointer"
+      {/* Completion filter */}
+      <Popover open={completionOpen} onOpenChange={setCompletionOpen}>
+        <PopoverTrigger
+          render={<button
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 h-7 text-xs font-medium transition-colors cursor-pointer",
+              completionActive
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            )}
+          />}
         >
-          Hide completed
-        </Label>
-      </div>
-
-      <div className="w-px h-4 bg-border" />
+          <Filter className="w-3 h-3" />
+          {completionLabels[filters.completionFilter]}
+        </PopoverTrigger>
+        <PopoverContent className="w-40 p-2" align="start">
+          <div className="flex flex-col gap-0.5">
+            {(["uncompleted", "all", "completed"] as const).map((opt) => (
+              <button
+                key={opt}
+                onClick={() => { onFiltersChange({ ...filters, completionFilter: opt }); setCompletionOpen(false); }}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors",
+                  filters.completionFilter === opt ? "bg-accent" : "hover:bg-accent/50"
+                )}
+              >
+                <span className="flex-1 text-left">{completionLabels[opt]}</span>
+                {filters.completionFilter === opt && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
 
       {/* Assignee filter */}
       <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
@@ -228,8 +248,6 @@ export function TaskToolbar({
           Clear
         </button>
       )}
-
-      <div className="w-px h-4 bg-border" />
 
       {/* Sort */}
       <div

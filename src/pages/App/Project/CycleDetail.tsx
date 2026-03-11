@@ -46,7 +46,7 @@ function CycleDetailContent({
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilters>({
-    hideCompleted: false,
+    completionFilter: "uncompleted" as const,
     assigneeIds: [],
     priorities: [],
   });

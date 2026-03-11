@@ -47,7 +47,7 @@ function ProjectTasksContent({
   // Force list view on mobile — kanban doesn't work on small screens
   const effectiveView = isMobile ? "list" : view;
   const [filters, setFilters] = useState<TaskFilters>({
-    hideCompleted: true,
+    completionFilter: "uncompleted" as const,
     assigneeIds: [],
     priorities: [],
   });

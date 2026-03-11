@@ -23,9 +23,11 @@ export function useFilteredTasks<T extends FilterableTask>(
 
     let result = tasks;
 
-    // Filter completed
-    if (filters.hideCompleted) {
+    // Filter by completion
+    if (filters.completionFilter === "uncompleted") {
       result = result.filter((t) => !t.completed);
+    } else if (filters.completionFilter === "completed") {
+      result = result.filter((t) => t.completed);
     }
 
     // Filter by assignee
@@ -73,5 +75,5 @@ export function useFilteredTasks<T extends FilterableTask>(
     }
 
     return result;
-  }, [tasks, filters.hideCompleted, filters.assigneeIds, filters.priorities, sort]);
+  }, [tasks, filters.completionFilter, filters.assigneeIds, filters.priorities, sort]);
 }
