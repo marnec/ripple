@@ -111,6 +111,9 @@ export class SpreadsheetYjsBinding {
   /** Currently highlighted indicator cells (top-right cells with corner triangle) */
   private indicatorCells: HTMLElement[] = [];
 
+  /** Timer for delayed removal of exit-animation classes */
+  private highlightExitTimer: ReturnType<typeof setTimeout> | null = null;
+
   /** Stored cell refs from the server */
   private referencedCellRefs: { cellRef: string }[] = [];
 
@@ -659,8 +662,13 @@ export class SpreadsheetYjsBinding {
 
   /** Update the set of cell refs referenced by documents. Triggers re-render of highlights. */
   setReferencedCells(refs: { cellRef: string }[]) {
+    const wasHighlighted = this.referencedCellRefs.length > 0;
     this.referencedCellRefs = refs;
-    this.renderCellRefHighlights();
+    if (refs.length === 0 && wasHighlighted) {
+      this.clearCellRefHighlights(true);
+    } else {
+      this.renderCellRefHighlights();
+    }
   }
 
   private renderCellRefHighlights() {
@@ -734,9 +742,39 @@ export class SpreadsheetYjsBinding {
     }
   }
 
-  private clearCellRefHighlights() {
+  private clearCellRefHighlights(animated = false) {
+    if (this.highlightExitTimer !== null) {
+      clearTimeout(this.highlightExitTimer);
+      this.highlightExitTimer = null;
+      // Clean up any lingering exit classes from a previous animation
+      for (const cell of this.highlightedCells) {
+        cell.classList.remove("jss-cell-ref-exiting");
+      }
+    }
+
+    if (animated && this.highlightedCells.length > 0) {
+      const exitingCells = [...this.highlightedCells];
+      for (const cell of exitingCells) {
+        cell.classList.remove("jss-cell-ref-highlight");
+        cell.classList.add("jss-cell-ref-exiting");
+        cell.style.boxShadow = "";
+      }
+      for (const cell of this.indicatorCells) {
+        cell.classList.remove("jss-cell-ref-indicator");
+      }
+      this.highlightedCells = [];
+      this.indicatorCells = [];
+      this.highlightExitTimer = setTimeout(() => {
+        for (const cell of exitingCells) {
+          cell.classList.remove("jss-cell-ref-exiting");
+        }
+        this.highlightExitTimer = null;
+      }, 220);
+      return;
+    }
+
     for (const cell of this.highlightedCells) {
-      cell.classList.remove("jss-cell-ref-highlight");
+      cell.classList.remove("jss-cell-ref-highlight", "jss-cell-ref-exiting");
       cell.style.boxShadow = "";
     }
     for (const cell of this.indicatorCells) {
@@ -770,6 +808,11 @@ export class SpreadsheetYjsBinding {
       }
       .jss-cell-ref-highlight {
         background-color: rgba(251, 191, 36, 0.12) !important;
+        transition: background-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .jss-cell-ref-exiting {
+        background-color: transparent !important;
+        transition: background-color 0.2s ease, box-shadow 0.2s ease;
       }
       .jss-cell-ref-indicator {
         position: relative !important;
@@ -1061,6 +1104,7 @@ export class SpreadsheetYjsBinding {
 
     // Cancel pending timers and rAF callbacks
     if (this.formulaRefreshTimer !== null) clearTimeout(this.formulaRefreshTimer);
+    if (this.highlightExitTimer !== null) clearTimeout(this.highlightExitTimer);
     if (this.selectionRafId !== null) cancelAnimationFrame(this.selectionRafId);
     if (this.cursorRafId !== null) cancelAnimationFrame(this.cursorRafId);
 
