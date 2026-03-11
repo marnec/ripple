@@ -17,6 +17,7 @@ export function Projects() {
       resourceType="project"
       title="Projects"
       workspaceId={workspaceId}
+      subPath="tasks"
       onCreate={() => setShowCreate(true)}
       createLabel="New project"
       createDialog={

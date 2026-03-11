@@ -24,9 +24,7 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
     const handleClick = (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      void navigate(`/workspaces/${workspaceId}/projects/${cached.projectId}`, {
-        state: { highlightTaskId: taskId },
-      });
+      void navigate(`/workspaces/${workspaceId}/projects/${cached.projectId}/tasks/${taskId}`);
     };
 
     return (
@@ -56,9 +54,7 @@ export function TaskMentionChip({ taskId }: TaskMentionChipProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    void navigate(`/workspaces/${workspaceId}/projects/${task.projectId}`, {
-      state: { highlightTaskId: taskId },
-    });
+    void navigate(`/workspaces/${workspaceId}/projects/${task.projectId}/tasks/${taskId}`);
   };
 
   const taskIdStr = formatTaskId(task.projectKey, task.number);

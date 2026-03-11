@@ -18,6 +18,7 @@ type ResourceListPageProps = {
   createLabel?: string;
   createDialog?: React.ReactNode;
   showFavorites?: boolean;
+  subPath?: string;
 };
 
 export function ResourceListPage({
@@ -28,6 +29,7 @@ export function ResourceListPage({
   createLabel,
   createDialog,
   showFavorites = true,
+  subPath,
 }: ResourceListPageProps) {
   const wsId = workspaceId as Id<"workspaces">;
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +99,7 @@ export function ResourceListPage({
           favoriteFilter={isFavorite}
           onLoadingChange={handleLoadingChange}
           showFavorites={showFavorites}
+          subPath={subPath}
         />
       </div>
       {createDialog}

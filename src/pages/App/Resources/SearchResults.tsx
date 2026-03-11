@@ -48,6 +48,7 @@ export type SearchResultsProps = {
   favoriteFilter?: FavoriteFilter;
   onLoadingChange?: (loading: boolean) => void;
   showFavorites?: boolean;
+  subPath?: string;
 };
 
 function useResourceSearch(
@@ -97,6 +98,7 @@ export function SearchResults({
   favoriteFilter,
   onLoadingChange,
   showFavorites,
+  subPath,
 }: SearchResultsProps) {
   const results = useResourceSearch(resourceType, workspaceId, searchText, tags, isFavorite);
   const rendered = useAnimatedQuery(results);
@@ -130,7 +132,7 @@ export function SearchResults({
             viewTransitionClass: "resource-card",
           } as React.CSSProperties}
         >
-          <Link to={`${resource._id}`} className="flex grow flex-col">
+          <Link to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`} className="flex grow flex-col">
             <CardHeader className="flex flex-row items-center gap-2">
               <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
               <CardTitle className="truncate text-base">
