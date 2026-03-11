@@ -138,6 +138,7 @@ function CycleDetailContent({
                   <div className="flex-1 min-w-0">
                     <TaskRow
                       task={task}
+                      flush={isMobile}
                       statuses={statuses ?? undefined}
                       onStatusChange={(statusId) => {
                         void updateTask({
