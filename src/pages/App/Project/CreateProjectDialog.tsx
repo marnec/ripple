@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import * as z from "zod";
@@ -37,14 +37,15 @@ const PROJECT_COLORS = [
   { name: "Teal", class: "bg-teal-500" },
 ];
 
+function deriveKeyFromName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4).toUpperCase();
+}
+
 const formSchema = z.object({
   name: z.string().min(1, { message: "Project name is required" }),
+  key: z.string().min(2, { message: "Key must be at least 2 characters" }).max(5),
   color: z.string().min(1, { message: "Color is required" }),
 });
-
-function deriveProjectKey(name: string): string {
-  return name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3).toUpperCase() || "PRJ";
-}
 
 export function CreateProjectDialog({
   workspaceId,
@@ -58,34 +59,47 @@ export function CreateProjectDialog({
   const createProject = useMutation(api.projects.create);
   const navigate = useNavigate();
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const [keyManuallyEdited, setKeyManuallyEdited] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      key: "",
       color: "bg-blue-500",
     },
   });
 
+  const watchedName = form.watch("name");
+
+  useEffect(() => {
+    if (!keyManuallyEdited) {
+      form.setValue("key", deriveKeyFromName(watchedName));
+    }
+  }, [watchedName, keyManuallyEdited, form]);
+
   useEffect(() => {
     if (open) {
-      // Focus name input when dialog opens
       setTimeout(() => nameInputRef.current?.focus(), 0);
+    } else {
+      // Reset key-edited state when dialog closes
+      setKeyManuallyEdited(false);
     }
   }, [open]);
 
   const handleCreate = async (values: z.infer<typeof formSchema>) => {
     try {
       const projectId = await createProject({
-        ...values,
+        name: values.name,
+        color: values.color,
         workspaceId,
+        key: values.key || undefined,
       });
       toast.success("Project created", {
         description: `Successfully created project "${values.name}"`,
       });
       form.reset();
       onOpenChange(false);
-      // Navigate to new project (per CONTEXT.md: "User lands inside the new project after creation")
       void navigate(`/workspaces/${workspaceId}/projects/${projectId}`);
     } catch (error) {
       toast.error("Error creating project", {
@@ -125,11 +139,35 @@ export function CreateProjectDialog({
                       placeholder="Enter project name"
                     />
                   </FormControl>
-                  {field.value && (
-                    <p className="text-xs text-muted-foreground">
-                      Task IDs will use prefix <span className="font-mono font-medium">{deriveProjectKey(field.value)}</span> (e.g., {deriveProjectKey(field.value)}-1). You can change this later in project settings.
-                    </p>
-                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="key"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Project Key</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="e.g., ENG"
+                      maxLength={5}
+                      className="font-mono uppercase w-32"
+                      onChange={(e) => {
+                        const value = e.target.value
+                          .replace(/[^a-zA-Z0-9]/g, "")
+                          .toUpperCase()
+                          .slice(0, 5);
+                        field.onChange(value);
+                        setKeyManuallyEdited(true);
+                      }}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Used as task ID prefix (e.g., {field.value || "ENG"}-1). Cannot be changed once tasks exist.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

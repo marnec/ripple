@@ -252,6 +252,34 @@ export const get = query({
   },
 });
 
+export const hasAnyTasks = query({
+  args: { projectId: v.id("projects") },
+  returns: v.boolean(),
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return false;
+
+    const project = await ctx.db.get(projectId);
+    if (!project) return false;
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
+      )
+      .first();
+
+    if (!membership) return false;
+
+    const task = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .first();
+
+    return task !== null;
+  },
+});
+
 export const listByProject = query({
   args: {
     projectId: v.id("projects"),

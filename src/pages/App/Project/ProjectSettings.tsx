@@ -51,6 +51,7 @@ function ProjectSettingsContent({
   // Queries
   const project = useQuery(api.projects.get, { id: projectId });
   const currentUser = useQuery(api.users.viewer);
+  const projectHasTasks = useQuery(api.tasks.hasAnyTasks, { projectId });
 
   // Mutations
   const updateProject = useMutation(api.projects.update);
@@ -141,12 +142,14 @@ function ProjectSettingsContent({
               value={displayKey}
               onChange={(e) => setProjectKey(e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 5))}
               placeholder="e.g., ENG"
-              disabled={!isCreator}
+              disabled={!isCreator || !!projectHasTasks}
               maxLength={5}
               className="font-mono uppercase"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              2-5 character identifier used in task IDs (e.g., {displayKey || "ENG"}-1)
+              {projectHasTasks
+                ? "The project key cannot be changed once tasks have been created."
+                : `2-5 character identifier used in task IDs (e.g., ${displayKey || "ENG"}-1). Cannot be changed once tasks exist.`}
             </p>
           </div>
           <div>

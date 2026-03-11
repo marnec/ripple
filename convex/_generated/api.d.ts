@@ -836,7 +836,12 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { color: string; name: string; workspaceId: Id<"workspaces"> },
+      {
+        color: string;
+        key?: string;
+        name: string;
+        workspaceId: Id<"workspaces">;
+      },
       Id<"projects">
     >;
     get: FunctionReference<
@@ -1307,6 +1312,12 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       } | null
+    >;
+    hasAnyTasks: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      boolean
     >;
     listByAssignee: FunctionReference<
       "query",

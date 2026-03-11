@@ -21,9 +21,10 @@ export const create = mutation({
     name: v.string(),
     color: v.string(),
     workspaceId: v.id("workspaces"),
+    key: v.optional(v.string()),
   },
   returns: v.id("projects"),
-  handler: async (ctx, { name, color, workspaceId }) => {
+  handler: async (ctx, { name, color, workspaceId, key: providedKey }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -40,11 +41,11 @@ export const create = mutation({
       throw new ConvexError("Only workspace admins can create projects");
     }
 
-    // Auto-generate a unique project key from the name
-    const baseKey = name
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .slice(0, 3)
-      .toUpperCase() || "PRJ";
+    // Use provided key or auto-generate from name
+    const baseKey = (providedKey
+      ? providedKey.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 5)
+      : name.replace(/[^a-zA-Z0-9]/g, "").slice(0, 4).toUpperCase()
+    ) || "PRJ";
 
     let key = baseKey;
     let suffix = 1;
