@@ -57,6 +57,7 @@ type TaskToolbarProps = {
   onSortChange: (sort: TaskSort) => void;
   members: Member[];
   sortBlocked?: boolean;
+  hideAssigneeFilter?: boolean;
 };
 
 const priorities = PRIORITIES.map((p) => ({
@@ -77,6 +78,7 @@ export function TaskToolbar({
   onSortChange,
   members,
   sortBlocked,
+  hideAssigneeFilter,
 }: TaskToolbarProps) {
   const [completionOpen, setCompletionOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
@@ -145,7 +147,7 @@ export function TaskToolbar({
       </Popover>
 
       {/* Assignee filter */}
-      <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
+      {!hideAssigneeFilter && <Popover open={assigneeOpen} onOpenChange={setAssigneeOpen}>
         <PopoverTrigger
           render={<button
             className={cn(
@@ -193,7 +195,7 @@ export function TaskToolbar({
             )}
           </div>
         </PopoverContent>
-      </Popover>
+      </Popover>}
 
       {/* Priority filter */}
       <Popover open={priorityOpen} onOpenChange={setPriorityOpen}>
