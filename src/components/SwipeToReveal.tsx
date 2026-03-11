@@ -5,6 +5,7 @@ import {
   useMotionTemplate,
   useMotionValue,
   useReducedMotion,
+  useTransform,
   type ValueAnimationTransition,
 } from "framer-motion";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
@@ -53,6 +54,7 @@ export function SwipeToReveal({
   const x = useMotionValue(0);
   // Exposed as CSS var so the action panel can size itself with it
   const xPx = useMotionTemplate`${x}px`;
+  const fadeOpacity = useTransform(x, [0, -24], [0, 1]);
 
   const snapTransition: ValueAnimationTransition = reduceMotion
     ? { type: "tween", duration: 0 }
@@ -75,6 +77,12 @@ export function SwipeToReveal({
       className={cn("relative overflow-hidden rounded-lg", className)}
       style={style}
     >
+      {/* Fade gradient on the left edge, fixed in place while content slides away */}
+      <motion.div
+        style={{ opacity: fadeOpacity }}
+        className="absolute inset-y-0 left-0 w-16 bg-linear-to-l from-transparent to-card pointer-events-none z-20"
+      />
+
       <motion.div
         drag="x"
         dragConstraints={{ right: 0 }}
