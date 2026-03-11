@@ -38,4 +38,5 @@ export function preselectSearchTab(workspaceId: string, resourceType: ResourceTy
 export function preselectFavoriteFilter(workspaceId: string, resourceType: ResourceType) {
   const key = `ripple:search:${workspaceId}:${resourceType}`;
   localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: "unfavorited" }));
+  window.dispatchEvent(new CustomEvent("ripple:search-preselect", { detail: { workspaceId, resourceType } }));
 }

@@ -56,6 +56,7 @@ export function useDebouncedSearch(
     () => buildSearchString(stored.q, stored.tags),
   );
   const [isSearchDebouncing, setIsSearchDebouncing] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const persistState = useCallback(
@@ -108,6 +109,23 @@ export function useDebouncedSearch(
   }, [isFavorite, persistState, searchQuery, tags]);
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const { workspaceId: eid, resourceType: ert } = (e as CustomEvent).detail as { workspaceId: string; resourceType: string };
+      if (eid !== workspaceId || ert !== resourceType) return;
+      if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+      const fresh = readSearchState(workspaceId, resourceType);
+      setSearchQuery(fresh.q);
+      setTags(fresh.tags);
+      setLocalSearchValue(buildSearchString(fresh.q, fresh.tags));
+      setIsSearchDebouncing(false);
+      if (showFavorites) setIsFavorite(fresh.isFavorite);
+      setResetKey((k) => k + 1);
+    };
+    window.addEventListener("ripple:search-preselect", handler);
+    return () => window.removeEventListener("ripple:search-preselect", handler);
+  }, [workspaceId, resourceType, showFavorites]);
+
+  useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -119,6 +137,7 @@ export function useDebouncedSearch(
     tags,
     isFavorite,
     isSearchDebouncing,
+    resetKey,
     handleSearchChange,
     handleSearchSubmit,
     handleFavoriteToggle,
