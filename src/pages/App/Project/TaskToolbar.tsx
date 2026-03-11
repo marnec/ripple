@@ -234,7 +234,7 @@ export function TaskToolbar({
       {/* Sort */}
       <div
         className={cn(
-          "relative inline-flex items-center gap-1.5 rounded-md px-1.5 h-7 transition-colors",
+          "relative inline-flex items-center gap-1.5 rounded-md px-1.5 transition-colors h-7",
           sort && "bg-primary/10"
         )}
       >
@@ -257,8 +257,8 @@ export function TaskToolbar({
         >
           <SelectTrigger
             className={cn(
-              "h-7 w-27.5 text-xs [&>svg]:h-3 [&>svg]:w-3",
-              sort ? "border-primary/50 text-primary" : "border-input"
+              "h-7! w-27.5 text-xs [&>svg]:h-3 [&>svg]:w-3",
+              sort ? "border-none text-primary bg-transparent" : "border-input"
             )}
           >
             <SelectValue placeholder="Sort by..." />
@@ -280,10 +280,7 @@ export function TaskToolbar({
                   direction: sort.direction === "asc" ? "desc" : "asc",
                 })
               }
-              className={cn(
-                "inline-flex items-center justify-center rounded-md border h-7 w-7 text-xs transition-colors cursor-pointer",
-                "border-primary/50 text-primary hover:bg-primary/20"
-              )}
+              className="inline-flex items-center justify-center rounded-md h-7 w-7 text-xs transition-colors cursor-pointer text-primary hover:bg-primary/20"
               title={sort.direction === "asc" ? "Ascending" : "Descending"}
             >
               {sort.direction === "asc" ? (
@@ -296,10 +293,10 @@ export function TaskToolbar({
               onClick={() => onSortChange(null)}
               className={cn(
                 "inline-flex items-center gap-1 text-xs transition-colors cursor-pointer",
-                "text-primary hover:text-primary/80"
+                "text-primary hover:bg-primary/20 rounded-md h-7 w-7",
               )}
             >
-              <X className="w-3 h-3" />
+              <X className="w-3 h-3 mx-auto" />
             </button>
           </>
         )}
