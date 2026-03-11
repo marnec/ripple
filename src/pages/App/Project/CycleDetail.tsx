@@ -4,7 +4,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
 import { Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -63,6 +63,19 @@ function CycleDetailContent({
   const removeTask = useMutation(api.cycles.removeTask);
 
   const filteredTasks = useFilteredTasks(cycleTasks, filters, sort);
+  const closeAllSwipes = useCallback(() => setSwipeOpenId(null), []);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Close swipe when tapping anywhere outside the task list
+  useEffect(() => {
+    if (!swipeOpenId) return;
+    const onTap = (e: Event) => {
+      if (listRef.current?.contains(e.target as Node)) return;
+      setSwipeOpenId(null);
+    };
+    document.addEventListener("click", onTap, { passive: true });
+    return () => document.removeEventListener("click", onTap);
+  }, [swipeOpenId]);
 
   if (cycle === null) {
     return <SomethingWentWrong />;
@@ -111,14 +124,14 @@ function CycleDetailContent({
               : "No tasks match the current filters."}
           </div>
         ) : (
-          <div className="flex flex-col gap-1.5">
+          <div ref={listRef} className="flex flex-col gap-1.5">
             {filteredTasks.map((task) => (
               <SwipeToReveal
                 key={task._id}
                 enabled={isMobile}
                 open={swipeOpenId === task._id}
                 onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
-                onSwipeStart={() => setSwipeOpenId(null)}
+                onSwipeStart={closeAllSwipes}
                 action={
                   <button
                     onClick={() =>

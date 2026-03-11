@@ -57,6 +57,7 @@
     "dompurify": "3.3.2",
     "emoji-picker-react": "4.18.0",
     "fractional-indexing": "3.2.0",
+    "framer-motion": "^12.35.2",
     "jspreadsheet-ce": "5.0.4",
     "jsuites": "6.3.0",
     "lucide-react": "^0.577.0",
