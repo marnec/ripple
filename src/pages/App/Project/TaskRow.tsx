@@ -50,12 +50,11 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
 
   return (
     <Item
-      size="sm"
       onClick={onClick}
-      style={{
+      style={!flush ? {
         viewTransitionName: `--task-${task._id}`,
         viewTransitionClass: "task-card",
-      } as React.CSSProperties}
+      } as React.CSSProperties : undefined}
       className={cn("cursor-pointer hover:bg-accent transition-colors border-input", flush && "rounded-none")}
     >
       <ItemMedia>

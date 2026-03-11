@@ -181,7 +181,6 @@ export function SwipeToReveal({
         ref={rowRef}
         onClick={handleClick}
         className="relative z-10 bg-card"
-        style={{ willChange: "translate" }}
       >
         {children}
       </div>

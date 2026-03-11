@@ -34,6 +34,9 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
     hideCompleted: false,
   });
 
+  // Track which row has its swipe action revealed (only one at a time)
+  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
+
   const allTasks = useAnimatedQuery(
     liveTasks,
     isPositionOnlyChange,
@@ -43,9 +46,6 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
 
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
-
-  // Track which row has its swipe action revealed (only one at a time)
-  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const closeAllSwipes = useCallback(() => setSwipeOpenId(null), []);
   const listRef = useRef<HTMLDivElement>(null);
 
