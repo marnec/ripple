@@ -1,5 +1,9 @@
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getUserColor } from "@/lib/user-colors";
+import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
+import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { Trash2 } from "lucide-react";
@@ -12,10 +16,6 @@ import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
 import { useTaskDetail } from "./useTaskDetail";
-import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
-import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
-import { getUserColor } from "@/lib/user-colors";
-import { RippleSpinner } from "@/components/RippleSpinner";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -76,106 +76,103 @@ function TaskDetailPageContent({
 
   return (
     <div className="flex-1 overflow-y-auto min-h-0">
-    <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl pb-6">
-      {/* Title */}
-      <Input
-        ref={titleInputRef}
-        value={detail.titleValue}
-        onChange={(e) => detail.setTitleValue(e.target.value)}
-        onBlur={detail.handleTitleBlur}
-        onKeyDown={detail.handleTitleKeyDown}
-        className="text-lg md:text-2xl font-bold focus-visible:ring-0 h-auto mb-4 md:mb-6"
-        placeholder="Task title"
-      />
-
-      <div className="space-y-5 md:space-y-8">
-        <TaskProperties
-          task={detail.task}
-          statuses={detail.statuses}
-          members={detail.members}
-          onStatusChange={detail.handleStatusChange}
-          onPriorityChange={detail.handlePriorityChange}
-          onAssigneeChange={detail.handleAssigneeChange}
-          onAddLabel={detail.handleAddLabel}
-          onRemoveLabel={detail.handleRemoveLabel}
-          onDueDateChange={detail.handleDueDateChange}
-          onStartDateChange={detail.handleStartDateChange}
-          onEstimateChange={detail.handleEstimateChange}
-        />
-
-        <TaskDependencies
-          taskId={taskId}
-          workspaceId={workspaceId}
-        />
-
-        <div className="space-y-2 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-muted-foreground">
-              Description
-            </h3>
-            <div className="flex items-center gap-2 min-h-8">
-              <ConnectionStatus isConnected={detail.isConnected} />
-              {detail.isConnected && (
-                <ActiveUsers
-                  remoteUsers={detail.remoteUsers}
-                  currentUser={
-                    detail.currentUser
-                      ? {
-                          name: detail.currentUser.name,
-                          color: getUserColor(detail.currentUser._id),
-                        }
-                      : undefined
-                  }
-                />
-              )}
-            </div>
-          </div>
-          <TaskDescriptionEditor
-            editor={detail.editor}
-            documents={detail.documents}
-            diagrams={detail.diagrams}
-            members={detail.members}
-            className="min-h-50 md:min-h-75"
-            hideLabel
+      <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl pb-6">
+        <div className="flex gap-1 items-end mb-4 md:mb-6">
+          <Button
+            variant="ghost"
+            className="md:h-10 md:w-10 h-7 w-7"
+            onClick={() => detail.setShowDeleteDialog(true)}
+            title="Delete task"
+          >
+            <Trash2 className="text-destructive" />
+          </Button>
+          <Input
+            ref={titleInputRef}
+            value={detail.titleValue}
+            onChange={(e) => detail.setTitleValue(e.target.value)}
+            onBlur={detail.handleTitleBlur}
+            onKeyDown={detail.handleTitleKeyDown}
+            className="text-lg md:text-2xl font-bold focus-visible:ring-0 md:h-10 h-7"
+            placeholder="Task title"
           />
         </div>
 
-        {detail.currentUser && (
+        <div className="space-y-5 md:space-y-8">
+          <TaskProperties
+            task={detail.task}
+            statuses={detail.statuses}
+            members={detail.members}
+            onStatusChange={detail.handleStatusChange}
+            onPriorityChange={detail.handlePriorityChange}
+            onAssigneeChange={detail.handleAssigneeChange}
+            onAddLabel={detail.handleAddLabel}
+            onRemoveLabel={detail.handleRemoveLabel}
+            onDueDateChange={detail.handleDueDateChange}
+            onStartDateChange={detail.handleStartDateChange}
+            onEstimateChange={detail.handleEstimateChange}
+          />
+
+          <TaskDependencies
+            taskId={taskId}
+            workspaceId={workspaceId}
+          />
+
           <div className="space-y-2 animate-fade-in">
-            <TaskActivityTimeline
-              taskId={taskId}
-              currentUserId={detail.currentUser._id}
-              workspaceId={workspaceId}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Description
+              </h3>
+              <div className="flex items-center gap-2 min-h-8">
+                <ConnectionStatus isConnected={detail.isConnected} />
+                {detail.isConnected && (
+                  <ActiveUsers
+                    remoteUsers={detail.remoteUsers}
+                    currentUser={
+                      detail.currentUser
+                        ? {
+                          name: detail.currentUser.name,
+                          color: getUserColor(detail.currentUser._id),
+                        }
+                        : undefined
+                    }
+                  />
+                )}
+              </div>
+            </div>
+            <TaskDescriptionEditor
+              editor={detail.editor}
+              documents={detail.documents}
+              diagrams={detail.diagrams}
               members={detail.members}
+              className="min-h-50 md:min-h-75"
+              hideLabel
             />
           </div>
-        )}
 
-        {/* Danger zone */}
-        <div className="py-4 border-t border-destructive/20">
-          <Button
-            variant="outline"
-            className="w-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => detail.setShowDeleteDialog(true)}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete task
-          </Button>
+          {detail.currentUser && (
+            <div className="space-y-2 animate-fade-in">
+              <TaskActivityTimeline
+                taskId={taskId}
+                currentUserId={detail.currentUser._id}
+                workspaceId={workspaceId}
+                members={detail.members}
+              />
+            </div>
+          )}
         </div>
-      </div>
 
-      <TaskDeleteDialog
-        open={detail.showDeleteDialog}
-        onOpenChange={detail.setShowDeleteDialog}
-        onConfirm={() =>
-          detail.handleDelete(() => {
-            void navigate(
-              `/workspaces/${workspaceId}/projects/${projectId}`
-            );
-          })
-        }
-      />
-    </div>
+        <TaskDeleteDialog
+          open={detail.showDeleteDialog}
+          onOpenChange={detail.setShowDeleteDialog}
+          onConfirm={() =>
+            detail.handleDelete(() => {
+              void navigate(
+                `/workspaces/${workspaceId}/projects/${projectId}`
+              );
+            })
+          }
+        />
+      </div>
     </div>
   );
 }
