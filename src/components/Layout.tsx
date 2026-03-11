@@ -55,7 +55,7 @@ export function Layout() {
   return (
     <>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
           {isMobile ? (
             <>
