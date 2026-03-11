@@ -94,7 +94,7 @@ export function ResourceSearchInput({
         className={
           compact
             ? "flex items-center gap-1"
-            : "flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+            : "flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
         }
       >
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
