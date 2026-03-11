@@ -1,6 +1,5 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -12,7 +11,6 @@ import type { FavoriteFilter } from "@/hooks/use-debounced-search";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useQuery } from "convex/react";
 import { formatDistanceToNow } from "date-fns";
-import { Plus } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -49,8 +47,6 @@ export type SearchResultsProps = {
   isFavorite?: boolean;
   favoriteFilter?: FavoriteFilter;
   onLoadingChange?: (loading: boolean) => void;
-  onCreate?: () => void;
-  createLabel?: string;
   showFavorites?: boolean;
 };
 
@@ -100,8 +96,6 @@ export function SearchResults({
   isFavorite,
   favoriteFilter,
   onLoadingChange,
-  onCreate,
-  createLabel,
   showFavorites,
 }: SearchResultsProps) {
   const results = useResourceSearch(resourceType, workspaceId, searchText, tags, isFavorite);
@@ -121,12 +115,6 @@ export function SearchResults({
         <p className="text-sm text-muted-foreground">
           {getEmptyMessage(resourceType, favoriteFilter)}
         </p>
-        {onCreate && (
-          <Button variant="outline" onClick={onCreate}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            {createLabel ?? `Create a ${resourceType}`}
-          </Button>
-        )}
       </div>
     );
   }

@@ -96,8 +96,6 @@ export function ResourceListPage({
           isFavorite={favoriteFilterToBoolean(isFavorite)}
           favoriteFilter={isFavorite}
           onLoadingChange={handleLoadingChange}
-          onCreate={onCreate}
-          createLabel={createLabel}
           showFavorites={showFavorites}
         />
       </div>
