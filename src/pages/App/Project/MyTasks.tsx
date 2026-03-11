@@ -160,8 +160,14 @@ export function MyTasks() {
           {groupedTasks.map((group) => {
             const isOpen = !closedGroups.has(group.projectId);
             return (
-              <Collapsible
+              <div
                 key={group.projectId}
+                style={{
+                  viewTransitionName: `--project-group-${group.projectId}`,
+                  viewTransitionClass: "task-card",
+                } as React.CSSProperties}
+              >
+              <Collapsible
                 open={isOpen}
                 onOpenChange={() => toggleGroup(group.projectId)}
               >
@@ -191,23 +197,31 @@ export function MyTasks() {
                   <CollapsibleContent>
                     <div>
                       {group.tasks.map((task) => (
-                        <TaskRow
+                        <div
                           key={task._id}
-                          task={task}
-                          flush
-                          onClick={() => {
-                            if (isMobile) {
-                              void navigate(`/workspaces/${workspaceId}/projects/${group.projectId}/tasks/${task._id}`);
-                            } else {
-                              setSelectedTaskId(task._id);
-                            }
-                          }}
-                        />
+                          style={{
+                            viewTransitionName: `--task-${task._id}`,
+                            viewTransitionClass: "task-card",
+                          } as React.CSSProperties}
+                        >
+                          <TaskRow
+                            task={task}
+                            flush
+                            onClick={() => {
+                              if (isMobile) {
+                                void navigate(`/workspaces/${workspaceId}/projects/${group.projectId}/tasks/${task._id}`);
+                              } else {
+                                setSelectedTaskId(task._id);
+                              }
+                            }}
+                          />
+                        </div>
                       ))}
                     </div>
                   </CollapsibleContent>
                 </div>
               </Collapsible>
+              </div>
             );
           })}
         </div>
