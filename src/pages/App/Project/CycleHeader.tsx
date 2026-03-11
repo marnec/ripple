@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { CYCLE_STATUS_STYLES, formatDateRange, daysRemaining } from "./cycleUtils";
 
 interface CycleHeaderProps {
@@ -14,9 +14,10 @@ interface CycleHeaderProps {
     dueDate?: string;
   };
   onEdit: () => void;
+  onAddTasks: () => void;
 }
 
-export function CycleHeader({ cycle, onEdit }: CycleHeaderProps) {
+export function CycleHeader({ cycle, onEdit, onAddTasks }: CycleHeaderProps) {
   const cycleStatus = cycle.status as "draft" | "upcoming" | "active" | "completed";
   const styles = CYCLE_STATUS_STYLES[cycleStatus] ?? CYCLE_STATUS_STYLES.draft;
   const dateRange = formatDateRange(cycle.startDate, cycle.dueDate);
@@ -53,14 +54,13 @@ export function CycleHeader({ cycle, onEdit }: CycleHeaderProps) {
           )}
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onEdit}
-          className="shrink-0 h-7 w-7"
-          aria-label="Edit cycle"
-        >
+        <Button variant="outline" size="sm" onClick={onAddTasks} className="shrink-0">
+          <Plus className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Add tasks</span>
+        </Button>
+        <Button variant="outline" size="sm" onClick={onEdit} className="shrink-0">
           <Pencil className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Edit</span>
         </Button>
       </div>
     </div>

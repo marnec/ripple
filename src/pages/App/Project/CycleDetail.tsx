@@ -1,9 +1,8 @@
-import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -90,29 +89,19 @@ function CycleDetailContent({
       <CycleHeader
         cycle={cycle as { name: string; status: string; totalTasks: number; completedTasks: number; progressPercent: number; startDate?: string; dueDate?: string }}
         onEdit={() => setShowEditDialog(true)}
+        onAddTasks={() => setShowAddDialog(true)}
       />
 
-      {/* Task toolbar + Add tasks button */}
-      <div className="flex items-end gap-2 px-4 md:px-8 py-2 border-b">
-        <div className="flex-1">
-          <TaskToolbar
-            filters={filters}
-            onFiltersChange={setFilters}
-            sort={sort}
-            onSortChange={setSort}
-            members={members ?? []}
-            sortBlocked={false}
-          />
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShowAddDialog(true)}
-          className="shrink-0"
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          {isMobile ? "" : "Add tasks"}
-        </Button>
+      {/* Task toolbar */}
+      <div className="px-4 md:px-8 py-2 border-b">
+        <TaskToolbar
+          filters={filters}
+          onFiltersChange={setFilters}
+          sort={sort}
+          onSortChange={setSort}
+          members={members ?? []}
+          sortBlocked={false}
+        />
       </div>
 
       {/* Task list */}
