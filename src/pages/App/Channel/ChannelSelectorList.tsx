@@ -92,7 +92,6 @@ export function ChannelSelectorList({
   };
 
   const handleCreateChannel = () => {
-    autoAcknowledgeNext();
     setShowCreateChannel(true);
   };
 
@@ -169,6 +168,7 @@ export function ChannelSelectorList({
           workspaceId={workspaceId}
           open={showCreateChannel}
           onOpenChange={setShowCreateChannel}
+          onChannelCreated={autoAcknowledgeNext}
         />
     </Collapsible>
   );

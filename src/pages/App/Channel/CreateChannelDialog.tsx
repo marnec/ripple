@@ -38,11 +38,13 @@ export function CreateChannelDialog({
   open,
   onOpenChange,
   onOpenChangeComplete,
+  onChannelCreated,
 }: {
   workspaceId: Id<"workspaces">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenChangeComplete?: (open: boolean) => void;
+  onChannelCreated?: () => void;
 }) {
   const createChannel = useMutation(api.channels.create);
   const navigate = useNavigate()
@@ -64,6 +66,7 @@ export function CreateChannelDialog({
   const createNewChannel = async (values: z.infer<typeof formSchema>) => {
     try {
       const newChannelId = await createChannel({ ...values, workspaceId });
+      onChannelCreated?.();
       form.reset();
       onOpenChange(false);
       void navigate(`/workspaces/${workspaceId}/channels/${newChannelId}${values.isPublic ? '' : '/settings'}`)
