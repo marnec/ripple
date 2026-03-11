@@ -193,9 +193,9 @@ function Sidebar({
           data-slot="sidebar-gap"
           className={cn(
             "relative bg-transparent transition-[width] duration-200 ease-linear",
-            // On mobile, gap is always icon width (sidebar overlays when expanded)
+            // On mobile, gap is 0 for offcanvas (sidebar overlays), icon width for icon mode
             isMobile
-              ? "w-(--sidebar-width-icon)"
+              ? collapsible === "offcanvas" ? "w-0" : "w-(--sidebar-width-icon)"
               : cn(
                   "w-(--sidebar-width)",
                   "group-data-[collapsible=offcanvas]:w-0",

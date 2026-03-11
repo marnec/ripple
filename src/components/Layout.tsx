@@ -85,7 +85,7 @@ export function Layout() {
         </header>
         <div
           className={cn("relative flex h-[calc(100svh-4rem-var(--safe-area-top))]", {
-            "w-[calc(100svw-var(--sidebar-width-icon))]": isMobile || state === "collapsed",
+            "w-svw": isMobile || state === "collapsed",
             "w-[calc(100svw-var(--sidebar-width))]": !isMobile && state === "expanded",
           })}
         >

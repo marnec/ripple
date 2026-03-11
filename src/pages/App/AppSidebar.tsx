@@ -110,7 +110,7 @@ export function AppSidebar() {
   const isMyTasksActive = location.pathname.includes("/my-tasks");
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="offcanvas">
       <SidebarHeader>
         {workspaces && (
           <WorkspaceSwitcher
