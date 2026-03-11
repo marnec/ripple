@@ -1,3 +1,4 @@
+import type React from "react";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { cn } from "@/lib/utils";
@@ -116,6 +117,10 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
                 open={swipeOpenId === task._id}
                 onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
                 onSwipeStart={closeAllSwipes}
+                style={isMobile ? {
+                  viewTransitionName: `--task-${task._id}`,
+                  viewTransitionClass: "task-card",
+                } as React.CSSProperties : undefined}
                 action={
                   nextStatus ? (
                     <button

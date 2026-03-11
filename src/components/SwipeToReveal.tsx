@@ -16,6 +16,7 @@ type SwipeToRevealProps = {
   /** Called when open state changes. */
   onOpenChange?: (open: boolean) => void;
   className?: string;
+  style?: React.CSSProperties;
   children: ReactNode;
 };
 
@@ -26,6 +27,7 @@ export function SwipeToReveal({
   open: controlledOpen,
   onOpenChange,
   className,
+  style,
   children,
 }: SwipeToRevealProps) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -169,7 +171,7 @@ export function SwipeToReveal({
   return (
     <div
       className={cn("relative overflow-hidden rounded-lg", className)}
-      style={{ touchAction: "pan-y" }}
+      style={{ touchAction: "pan-y", ...style }}
     >
       {/* Action behind the row, anchored to the right */}
       <div className="absolute inset-y-0 right-0 flex items-stretch" style={{ width: MAX_TRANSLATE }}>
