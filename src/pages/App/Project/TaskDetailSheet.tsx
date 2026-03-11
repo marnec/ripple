@@ -1,26 +1,26 @@
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { formatTaskId } from "@/lib/task-utils";
+import { getUserColor } from "@/lib/user-colors";
+import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
+import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { Maximize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
-import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskDependencies } from "./TaskDependencies";
+import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
 import { useTaskDetail } from "./useTaskDetail";
-import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
-import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
-import { getUserColor } from "@/lib/user-colors";
-import { formatTaskId } from "@/lib/task-utils";
 
 type TaskDetailSheetProps = {
   taskId: Id<"tasks"> | null;
@@ -75,7 +75,7 @@ export function TaskDetailSheet({
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           {!isLoaded || !task ? (
             <div className="flex items-center justify-center py-12">
-              <LoadingSpinner />
+              <RippleSpinner />
             </div>
           ) : (
             <>
@@ -119,13 +119,13 @@ export function TaskDetailSheet({
                     onChange={(e) => detail.setTitleValue(e.target.value)}
                     onBlur={detail.handleTitleBlur}
                     onKeyDown={detail.handleTitleKeyDown}
-                    className="text-lg font-semibold leading-none border-none focus-visible:ring-0 px-2 h-full"
+                    className="text-lg font-semibold leading-none focus-visible:ring-0 px-2 h-full"
                     placeholder="Task title"
                   />
                 </div>
               </SheetHeader>
 
-              <div className="space-y-5 px-4 pb-4 overflow-y-auto min-h-0">
+              <div className="space-y-5 px-4 pb-4">
                 <TaskProperties
                   task={task}
                   statuses={detail.statuses!}

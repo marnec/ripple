@@ -4,6 +4,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
 import { Ban, CalendarIcon } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type KanbanCardPresenterProps = {
   task: {
@@ -44,7 +49,7 @@ export function KanbanCardPresenter({
         viewTransitionClass: isDragging ? undefined : "task-card",
       } as React.CSSProperties}
       className={cn(
-        "cursor-grab active:cursor-grabbing py-0 gap-0 border shadow ring-0 bg-black/50!",
+        "cursor-grab active:cursor-grabbing py-0 gap-0 border shadow ring-0 dark:bg-stone-950 bg-stone-100",
         isDragging && "shadow-lg rotate-2"
       )}
     >
@@ -85,16 +90,38 @@ export function KanbanCardPresenter({
           )}
         </div>
 
-        {/* Labels — always reserve single row height */}
-        <div className="flex flex-wrap gap-1 overflow-hidden max-h-5">
+        {/* Labels — fixed height, single row with fade + tooltip */}
+        <div className="min-h-5.5">
           {task.labels && task.labels.length > 0 ? (
-            task.labels.map((label, index) => (
-              <Badge key={index} variant="secondary" className="text-xs py-0">
-                {label}
-              </Badge>
-            ))
+            <Tooltip>
+              <TooltipTrigger className="flex items-center gap-1 overflow-hidden w-full mask-[linear-gradient(to_right,black_calc(100%-20px),transparent)]">
+                {task.labels.map((label, index) => (
+                  <Badge
+                    key={index}
+                    variant="secondary"
+                    className="text-xs py-0 shrink-0"
+                  >
+                    {label}
+                  </Badge>
+                ))}
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-64">
+                <div className="flex flex-wrap gap-1">
+                  {task.labels.map((label, index) => (
+                    <span
+                      key={index}
+                      className="text-xs rounded bg-background/20 px-1.5 py-0.5"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
           ) : (
-            <span className="text-xs invisible py-0" aria-hidden>&#8203;</span>
+            <span className="invisible text-xs leading-5.5" aria-hidden>
+              &#8203;
+            </span>
           )}
         </div>
 

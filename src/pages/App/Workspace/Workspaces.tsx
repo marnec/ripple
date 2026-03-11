@@ -1,16 +1,15 @@
-import React from "react";
 import { useQuery } from "convex/react";
 
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { RippleSpinner } from "@/components/RippleSpinner";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "react-router-dom";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { api } from "../../../../convex/_generated/api";
 
 export const Workspaces = () => {
   const workspaces = useQuery(api.workspaces.list);
 
   if (workspaces === undefined) {
-    return <LoadingSpinner />;
+    return <RippleSpinner />;
   }
 
   return (

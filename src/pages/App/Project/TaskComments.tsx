@@ -1,22 +1,21 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
+import { SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/shadcn";
 import { useMutation, useQuery } from "convex/react";
 import { Pencil, Trash2 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { BlockNoteView } from "@blocknote/shadcn";
-import { useCreateBlockNote } from "@blocknote/react";
-import { SuggestionMenuController } from "@blocknote/react";
 import { taskCommentSchema } from "./taskCommentSchema";
-import { useTheme } from "next-themes";
 
+import { RippleSpinner } from "@/components/RippleSpinner";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { useUploadFile } from "../../../hooks/use-upload-file";
 import { StaticCommentBody } from "./StaticCommentBody";
 
 type TaskCommentsProps = {
@@ -77,7 +76,7 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
 
   // Loading state
   if (comments === undefined || workspaceMembers === undefined) {
-    return <LoadingSpinner />;
+    return <RippleSpinner />;
   }
 
   return (

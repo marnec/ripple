@@ -1,12 +1,12 @@
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Label } from "@/components/ui/label";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { CheckSquare, ChevronDown, ChevronRight } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -87,7 +87,7 @@ export function MyTasks() {
   if (tasks === undefined) {
     return (
       <div className="flex items-center justify-center py-12">
-        <LoadingSpinner />
+        <RippleSpinner />
       </div>
     );
   }

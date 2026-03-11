@@ -1,8 +1,8 @@
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { Separator } from "@/components/ui/separator";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import { QueryParams } from "@shared/types/routes";
 import { ChannelRole } from "@shared/enums";
+import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -31,7 +31,7 @@ function ChannelSettingsContent({
   ) {
     return (
       <div className="flex items-center justify-center h-full">
-        <LoadingSpinner />
+        <RippleSpinner />
       </div>
     );
   }

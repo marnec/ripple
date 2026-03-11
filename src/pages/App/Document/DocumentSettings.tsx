@@ -1,11 +1,10 @@
 import { DeleteWarningDialog } from "@/components/DeleteWarningDialog";
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
@@ -13,6 +12,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 
@@ -42,7 +42,7 @@ function DocumentSettingsContent({
   if (document === undefined || currentUser === undefined) {
     return (
       <div className="flex items-center justify-center h-full">
-        <LoadingSpinner />
+        <RippleSpinner />
       </div>
     );
   }

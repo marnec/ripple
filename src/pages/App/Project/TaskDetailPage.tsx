@@ -84,7 +84,7 @@ function TaskDetailPageContent({
         onChange={(e) => detail.setTitleValue(e.target.value)}
         onBlur={detail.handleTitleBlur}
         onKeyDown={detail.handleTitleKeyDown}
-        className="text-lg md:text-2xl font-bold border-none focus-visible:ring-0 px-0 h-auto mb-4 md:mb-6"
+        className="text-lg md:text-2xl font-bold focus-visible:ring-0 h-auto mb-4 md:mb-6"
         placeholder="Task title"
       />
 
