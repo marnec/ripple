@@ -55,7 +55,7 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
         viewTransitionName: `--task-${task._id}`,
         viewTransitionClass: "task-card",
       } as React.CSSProperties : undefined}
-      className={cn("cursor-pointer border-transparent! hover:bg-accent transition-colors", flush && "rounded-none")}
+      className={cn("cursor-pointer border-transparent! md:border-input! hover:bg-accent transition-colors", flush && "rounded-none")}
     >
       <ItemMedia>
         {getPriorityIcon(task.priority)}
