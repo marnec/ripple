@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { useQuery } from "convex/react";
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
@@ -78,13 +78,13 @@ export function DeleteWarningDialog({
     : [];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>
             Delete {resourceType}?
-          </DialogTitle>
-          <DialogDescription render={<div />}>
+          </ResponsiveDialogTitle>
+          <ResponsiveDialogDescription render={<div />}>
               {isLoading && (
                 <span className="text-muted-foreground">Checking for references...</span>
               )}
@@ -152,9 +152,9 @@ export function DeleteWarningDialog({
                   Are you sure you want to delete &ldquo;{resourceName}&rdquo;? This action cannot be undone.
                 </span>
               )}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -165,8 +165,8 @@ export function DeleteWarningDialog({
           >
             Delete
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

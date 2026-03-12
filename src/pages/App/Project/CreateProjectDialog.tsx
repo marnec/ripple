@@ -1,12 +1,13 @@
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogBody,
+} from "@/components/ui/responsive-dialog";
 import {
   Form,
   FormControl,
@@ -110,22 +111,22 @@ export function CreateProjectDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New Project</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Create New Project</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Create a new project to organize tasks
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
         <Form {...form}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void form.handleSubmit(handleCreate)(e);
             }}
-            className="space-y-4"
           >
+            <ResponsiveDialogBody className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -199,12 +200,13 @@ export function CreateProjectDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            </ResponsiveDialogBody>
+            <ResponsiveDialogFooter>
               <Button type="submit">Create Project</Button>
-            </DialogFooter>
+            </ResponsiveDialogFooter>
           </form>
         </Form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

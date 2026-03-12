@@ -1,13 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogBody,
+} from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -68,17 +69,17 @@ export function AddColumnDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add Column</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Add Column</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Create a new status column for your project.
-          </DialogDescription>
-        </DialogHeader>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
+          <ResponsiveDialogBody className="space-y-4 py-4">
             {/* Name Input */}
             <div className="space-y-2">
               <Label htmlFor="column-name">Name</Label>
@@ -149,9 +150,9 @@ export function AddColumnDialog({
                 Sets start date for tasks
               </Label>
             </div>
-          </div>
+          </ResponsiveDialogBody>
 
-          <DialogFooter>
+          <ResponsiveDialogFooter>
             <Button
               type="button"
               variant="outline"
@@ -160,9 +161,9 @@ export function AddColumnDialog({
               Cancel
             </Button>
             <Button type="submit">Create Column</Button>
-          </DialogFooter>
+          </ResponsiveDialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

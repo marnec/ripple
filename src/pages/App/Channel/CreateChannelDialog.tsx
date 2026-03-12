@@ -16,13 +16,14 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "../../../components/ui/responsive-dialog";
 import { Input } from "../../../components/ui/input";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
@@ -37,13 +38,11 @@ export function CreateChannelDialog({
   workspaceId,
   open,
   onOpenChange,
-  onOpenChangeComplete,
   onChannelCreated,
 }: {
   workspaceId: Id<"workspaces">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenChangeComplete?: (open: boolean) => void;
   onChannelCreated?: () => void;
 }) {
   const createChannel = useMutation(api.channels.create);
@@ -78,23 +77,24 @@ export function CreateChannelDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} onOpenChangeComplete={onOpenChangeComplete}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New Channel</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Create New Channel</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Create a new channel in this workspace
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void form.handleSubmit(createNewChannel)(e);
-            }}
-            className="space-y-4"
-          >
-            <FormField
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogBody>
+          <Form {...form}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void form.handleSubmit(createNewChannel)(e);
+              }}
+              className="space-y-4"
+            >
+              <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
@@ -131,12 +131,13 @@ export function CreateChannelDialog({
                 </FormItem>
               )}
             />
-            <DialogFooter>
-              <Button type="submit">Create Channel</Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+              <ResponsiveDialogFooter>
+                <Button type="submit">Create Channel</Button>
+              </ResponsiveDialogFooter>
+            </form>
+          </Form>
+        </ResponsiveDialogBody>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
-} 
+}

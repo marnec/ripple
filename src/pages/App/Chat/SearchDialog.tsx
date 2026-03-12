@@ -3,24 +3,17 @@ import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../../../components/ui/dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "../../../components/ui/drawer";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogTrigger,
+} from "../../../components/ui/responsive-dialog";
 import { Input } from "../../../components/ui/input";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { SearchIcon, MessageSquareIcon } from "lucide-react";
 import { SafeHtml } from "@/components/ui/safe-html";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SearchDialogProps {
   channelId: Id<"channels">;
@@ -121,9 +114,31 @@ function SearchContent({
   );
 }
 
+function SearchDialogBody({
+  searchTerm,
+  setSearchTerm,
+  searchResults,
+  onJumpToMessage,
+}: {
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  searchResults: Array<{ _id: Id<"messages">; _creationTime: number; author: string; plainText: string }> | undefined;
+  onJumpToMessage: (messageId: Id<"messages">) => void;
+}) {
+  return (
+    <ResponsiveDialogBody>
+      <SearchContent
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        searchResults={searchResults}
+        onJumpToMessage={onJumpToMessage}
+      />
+    </ResponsiveDialogBody>
+  );
+}
+
 export function SearchDialog({ channelId, onJumpToMessage, children, initialSearchTerm = "", isOpen, onOpenChange }: SearchDialogProps) {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
-  const isMobile = useIsMobile();
 
   const searchResults = useQuery(
     api.messages.search,
@@ -140,47 +155,23 @@ export function SearchDialog({ channelId, onJumpToMessage, children, initialSear
     setSearchTerm(initialSearchTerm);
   }, [initialSearchTerm]);
 
-  if (isMobile) {
-    return (
-      <Drawer open={isOpen} onOpenChange={onOpenChange}>
-        <DrawerTrigger asChild>{children}</DrawerTrigger>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle className="flex items-center gap-2">
-              <SearchIcon className="h-4 w-4" />
-              Search Messages
-            </DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4 pb-4">
-            <SearchContent
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              searchResults={searchResults}
-              onJumpToMessage={handleJumpToMessage}
-            />
-          </div>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogTrigger render={children as React.ReactElement} />
-      <DialogContent className="max-w-2xl max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <ResponsiveDialog open={isOpen} onOpenChange={onOpenChange}>
+      <ResponsiveDialogTrigger render={children as React.ReactElement} />
+      <ResponsiveDialogContent className="max-w-2xl max-h-[80vh]">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle className="flex items-center gap-2">
             <SearchIcon className="h-4 w-4" />
             Search Messages
-          </DialogTitle>
-        </DialogHeader>
-        <SearchContent
+          </ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
+        <SearchDialogBody
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           searchResults={searchResults}
           onJumpToMessage={handleJumpToMessage}
         />
-      </DialogContent>
-    </Dialog>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
-} 
+}

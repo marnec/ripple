@@ -1,19 +1,13 @@
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
-import { useIsMobile } from "@/hooks/use-mobile";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  useResponsiveDialog,
+} from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -124,6 +118,52 @@ function DeleteButton({
   );
 }
 
+function EditCycleFooter({
+  name,
+  saving,
+  confirmDelete,
+  onSave,
+  onClose,
+  onDelete,
+}: {
+  name: string;
+  saving: boolean;
+  confirmDelete: boolean;
+  onSave: () => void;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const isMobile = useResponsiveDialog();
+
+  if (isMobile) {
+    return (
+      <ResponsiveDialogFooter>
+        <Button onClick={onSave} disabled={!name.trim() || saving}>
+          Save
+        </Button>
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <DeleteButton confirmDelete={confirmDelete} onDelete={onDelete} />
+      </ResponsiveDialogFooter>
+    );
+  }
+
+  return (
+    <ResponsiveDialogFooter className="flex-row justify-between">
+      <DeleteButton confirmDelete={confirmDelete} onDelete={onDelete} />
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button onClick={onSave} disabled={!name.trim() || saving}>
+          Save
+        </Button>
+      </div>
+    </ResponsiveDialogFooter>
+  );
+}
+
 export function EditCycleDialog({
   cycle,
   open,
@@ -133,7 +173,6 @@ export function EditCycleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const isMobile = useIsMobile();
   const updateCycle = useMutation(api.cycles.update);
   const removeCycle = useMutation(api.cycles.remove);
   const [name, setName] = useState(cycle.name);
@@ -181,53 +220,26 @@ export function EditCycleDialog({
     onSave: () => void handleSave(),
   };
 
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Edit cycle</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4">
-            <EditCycleForm {...formProps} />
-          </div>
-          <DrawerFooter>
-            <Button onClick={() => void handleSave()} disabled={!name.trim() || saving}>
-              Save
-            </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <DeleteButton confirmDelete={confirmDelete} onDelete={() => void handleDelete()} />
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit cycle</DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-md">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Edit cycle</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
 
-        <div className="py-2">
+        <ResponsiveDialogBody className="py-2">
           <EditCycleForm {...formProps} />
-        </div>
+        </ResponsiveDialogBody>
 
-        <DialogFooter className="flex-row justify-between">
-          <DeleteButton confirmDelete={confirmDelete} onDelete={() => void handleDelete()} />
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => void handleSave()} disabled={!name.trim() || saving}>
-              Save
-            </Button>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <EditCycleFooter
+          name={name}
+          saving={saving}
+          confirmDelete={confirmDelete}
+          onSave={() => void handleSave()}
+          onClose={() => onOpenChange(false)}
+          onDelete={() => void handleDelete()}
+        />
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }

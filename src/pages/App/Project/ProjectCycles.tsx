@@ -1,19 +1,12 @@
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
-import { useIsMobile } from "@/hooks/use-mobile";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -357,7 +350,6 @@ function CreateCycleDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const isMobile = useIsMobile();
   const createCycle = useMutation(api.cycles.create);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -405,50 +397,27 @@ function CreateCycleDialog({
     onSave: () => void handleSave(),
   };
 
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={handleOpenChange}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>New cycle</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4">
-            <CreateCycleForm {...formProps} />
-          </div>
-          <DrawerFooter>
-            <Button onClick={() => void handleSave()} disabled={!name.trim() || saving}>
-              Create cycle
-            </Button>
-            <Button variant="outline" onClick={() => handleOpenChange(false)}>
-              Cancel
-            </Button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>New cycle</DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-md">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>New cycle</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
 
-        <div className="py-2">
+        <ResponsiveDialogBody className="py-2">
           <CreateCycleForm {...formProps} />
-        </div>
+        </ResponsiveDialogBody>
 
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={() => void handleSave()} disabled={!name.trim() || saving}>
             Create cycle
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
 

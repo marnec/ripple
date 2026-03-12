@@ -1,20 +1,13 @@
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
@@ -119,7 +112,6 @@ export function AddTasksToCycleDialog({
   open,
   onOpenChange,
 }: AddTasksToCycleDialogProps) {
-  const isMobile = useIsMobile();
   const allTasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
   const addTask = useMutation(api.cycles.addTask);
   const [search, setSearch] = useState("");
@@ -180,49 +172,26 @@ export function AddTasksToCycleDialog({
     onSearchChange: setSearch,
   };
 
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={handleOpenChange}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Add tasks to cycle</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4">
-            <AddTasksList {...listProps} />
-          </div>
-          <DrawerFooter>
-            <Button onClick={() => void handleAdd()} disabled={selected.size === 0 || saving}>
-              {addButtonLabel}
-            </Button>
-            <Button variant="outline" onClick={() => handleOpenChange(false)}>
-              Cancel
-            </Button>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add tasks to cycle</DialogTitle>
-        </DialogHeader>
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+      <ResponsiveDialogContent className="sm:max-w-md">
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Add tasks to cycle</ResponsiveDialogTitle>
+        </ResponsiveDialogHeader>
 
-        <div className="my-2">
+        <ResponsiveDialogBody className="my-2">
           <AddTasksList {...listProps} />
-        </div>
+        </ResponsiveDialogBody>
 
-        <DialogFooter>
+        <ResponsiveDialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={() => void handleAdd()} disabled={selected.size === 0 || saving}>
             {addButtonLabel}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ResponsiveDialogFooter>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
