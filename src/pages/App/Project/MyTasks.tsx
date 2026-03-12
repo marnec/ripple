@@ -287,7 +287,7 @@ export function MyTasks() {
                   onOpenChange={() => toggleGroup(group.projectId)}
                 >
                   <div className="border rounded-lg overflow-hidden">
-                    <CollapsibleTrigger className="w-full">
+                    <CollapsibleTrigger nativeButton className="w-full">
                       <div className="flex items-center gap-2.5 px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors">
                         {isOpen ? (
                           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
