@@ -9,6 +9,7 @@ import {
 import {
   Drawer,
   DrawerContent,
+  DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -79,6 +80,7 @@ function ResponsiveDropdownMenuContent({
   if (isMobile) {
     return (
       <DrawerContent>
+        <DrawerTitle className="sr-only">Menu</DrawerTitle>
         <div className="flex flex-col p-3 pb-6">{children}</div>
       </DrawerContent>
     );
@@ -93,9 +95,11 @@ function ResponsiveDropdownMenuContent({
 function ResponsiveDropdownMenuItem({
   className,
   children,
-  onClick,
+  onSelect,
   ...props
-}: React.ComponentProps<typeof DropdownMenuItem>) {
+}: Omit<React.ComponentProps<typeof DropdownMenuItem>, "onClick"> & {
+  onSelect?: () => void;
+}) {
   const { isMobile, close } = React.useContext(ResponsiveDropdownMenuContext);
   if (isMobile) {
     return (
@@ -106,18 +110,17 @@ function ResponsiveDropdownMenuItem({
           "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
           className,
         )}
-        onClick={(e) => {
+        onClick={() => {
           close();
-          onClick?.(e as unknown as React.MouseEvent);
+          onSelect?.();
         }}
-        {...(props as React.ComponentProps<"button">)}
       >
         {children}
       </button>
     );
   }
   return (
-    <DropdownMenuItem className={className} onClick={onClick} {...props}>
+    <DropdownMenuItem className={className} onClick={onSelect} {...props}>
       {children}
     </DropdownMenuItem>
   );
