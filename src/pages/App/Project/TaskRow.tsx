@@ -98,15 +98,7 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
         )}
 
         {task.status ? (
-          hideStatusMenu ? (
-            <span className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground">
-              <span
-                className={cn("w-1.5 h-1.5 rounded-full", task.status.color)}
-                aria-hidden="true"
-              />
-              {task.status.name}
-            </span>
-          ) : statuses && onStatusChange ? (
+          !hideStatusMenu && statuses && onStatusChange ? (
             <DropdownMenu>
               <DropdownMenuTrigger
                 onClick={(e) => e.stopPropagation()}
@@ -131,7 +123,15 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : null
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-md border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-secondary text-secondary-foreground">
+              <span
+                className={cn("w-1.5 h-1.5 rounded-full", task.status.color)}
+                aria-hidden="true"
+              />
+              {task.status.name}
+            </span>
+          )
         ) : null}
 
         {!hideAssignee && task.assignee && (

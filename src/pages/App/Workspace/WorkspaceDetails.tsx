@@ -34,7 +34,7 @@ export function WorkspaceDetails() {
   const overview = useQuery(api.workspaces.overview, { workspaceId: id });
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 animate-fade-in">
       <div className="space-y-4">
         <div className="hidden md:flex items-start justify-between">
           <div>
