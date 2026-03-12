@@ -8,6 +8,7 @@ import { CommandPalette } from "./CommandPalette";
 import { PullToRefresh } from "./PullToRefresh";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
+import { HeaderSlotContext, useHeaderSlotRef } from "../contexts/HeaderSlotContext";
 import { DynamicBreadcrumb } from "./Breadcrumb";
 import { FollowModeIndicator } from "./FollowModeIndicator";
 import { AppSidebar } from "@/pages/App/AppSidebar";
@@ -36,6 +37,7 @@ export function Layout() {
   const { isMobile, setOpen } = useSidebar();
   const { isFollowing, followColor } = useFollowMode();
   const [commandOpen, setCommandOpen] = useState(false);
+  const headerSlotRef = useHeaderSlotRef();
 
   useEffect(() => {
     if (pathname === "/" && isMobile) setOpen(true);
@@ -64,6 +66,7 @@ export function Layout() {
                 <DynamicBreadcrumb />
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <div ref={headerSlotRef} className="flex items-center gap-2" />
                 <FollowModeIndicator />
                 <CallIndicator />
               </div>
@@ -75,6 +78,7 @@ export function Layout() {
                 <DynamicBreadcrumb />
               </div>
               <div className="flex items-center gap-2">
+                <div ref={headerSlotRef} className="flex items-center gap-2" />
                 <FollowModeIndicator />
                 <CallIndicator />
               </div>
@@ -90,7 +94,9 @@ export function Layout() {
             />
           )}
           <PullToRefresh>
-            <Outlet />
+            <HeaderSlotContext value={headerSlotRef}>
+              <Outlet />
+            </HeaderSlotContext>
           </PullToRefresh>
         </div>
       </SidebarInset>

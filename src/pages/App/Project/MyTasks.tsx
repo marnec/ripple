@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "convex/react";
 import { CheckSquare, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TaskDetailSheet } from "./TaskDetailSheet";
@@ -234,10 +235,10 @@ export function MyTasks() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-5xl">
-      {/* Page Header */}
-      <div className="mb-5">
+      {/* Page Header — hidden on mobile to save space */}
+      <div className="mb-5 hidden md:block">
         <div className="flex items-center gap-2.5 mb-1">
-          <h1 className="text-xl font-semibold tracking-tight">My Tasks</h1>
+          <h1 className="text-2xl font-semibold">My Tasks</h1>
           <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 tabular-nums">
             {totalTaskCount}
           </span>
@@ -321,6 +322,14 @@ export function MyTasks() {
             );
           })}
         </div>
+      )}
+
+      {isMobile && (
+        <HeaderSlot>
+          <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 tabular-nums">
+            {totalTaskCount}
+          </span>
+        </HeaderSlot>
       )}
 
       {selectedTaskId && workspaceId && (() => {
