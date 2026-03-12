@@ -2,6 +2,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
 import { useMutation, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -124,40 +125,57 @@ export function ChannelSelectorList({
             {displayList.length === 0 && newCount === 0 && (
               <p className="px-2 py-1 text-xs text-muted-foreground">No channels yet</p>
             )}
-            {displayList.map((item) => {
-              if (item.removed) {
+            <AnimatePresence initial={false}>
+              {displayList.map((item) => {
+                if (item.removed) {
+                  return (
+                    <motion.div
+                      key={item.id}
+                      layout
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    >
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
+                            <Hash size={14} className="shrink-0" />
+                            <span className="truncate line-through">{item.name || "unknown"}</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </motion.div>
+                  );
+                }
+
+                const channel = channelMap.get(item.id);
+                if (!channel) return null;
+
                 return (
-                  <SidebarMenuSubItem
-                    key={item.id}
+                  <motion.div
+                    key={channel._id}
+                    layout
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
                   >
-                    <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
-                        <Hash size={14} className="shrink-0" />
-                        <span className="truncate line-through">{item.name || "unknown"}</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
+                    <ChannelSelectorItem
+                      channel={channel}
+                      channelId={channelId}
+                      onChannelSelect={(id) => {
+                        if (id) {
+                          const ch = channelMap.get(id);
+                          acknowledgeOne(id, ch?.name ?? "");
+                        }
+                        onChannelSelect(id);
+                      }}
+                      onManageChannel={navigateToChannelSettings}
+                      onDeleteChannel={(id) => void handleChannelDelete(id)}
+                    />
+                  </motion.div>
                 );
-              }
-
-              const channel = channelMap.get(item.id);
-              if (!channel) return null;
-
-              return (
-                <ChannelSelectorItem
-                  key={channel._id}
-                  channel={channel}
-                  channelId={channelId}
-                  onChannelSelect={(id) => {
-                    if (id) {
-                      const ch = channelMap.get(id);
-                      acknowledgeOne(id, ch?.name ?? "");
-                    }
-                    onChannelSelect(id);
-                  }}
-                  onManageChannel={navigateToChannelSettings}
-                  onDeleteChannel={(id) => void handleChannelDelete(id)}
-                />
-              );
-            })}
+              })}
+            </AnimatePresence>
           </SidebarMenuSub>
         </CollapsibleContent>
         <CreateChannelDialog

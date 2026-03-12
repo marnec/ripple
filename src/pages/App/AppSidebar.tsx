@@ -17,6 +17,7 @@ import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
+import { LayoutGroup, motion } from "framer-motion";
 import { CheckSquare } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
@@ -122,92 +123,106 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {workspaceId && (
-          <>
+          <LayoutGroup>
             {/* Channels */}
-            <SidebarGroup className="pb-0">
-              <SidebarMenu>
-                <ChannelSelectorList
-                  channelId={channelId}
-                  workspaceId={workspaceId}
-                  onChannelSelect={handleChannelSelect}
-                  isOpen={isOpen("channels")}
-                  onToggle={() => toggle("channels")}
-                />
-              </SidebarMenu>
-            </SidebarGroup>
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarGroup className="pb-0">
+                <SidebarMenu>
+                  <ChannelSelectorList
+                    channelId={channelId}
+                    workspaceId={workspaceId}
+                    onChannelSelect={handleChannelSelect}
+                    isOpen={isOpen("channels")}
+                    onToggle={() => toggle("channels")}
+                  />
+                </SidebarMenu>
+              </SidebarGroup>
+            </motion.div>
 
-            <SidebarSeparator />
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarSeparator />
+            </motion.div>
 
             {/* My Tasks + Projects */}
-            <SidebarGroup className="py-0">
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={handleMyTasksClick}
-                    isActive={isMyTasksActive}
-                    tooltip="My Tasks"
-                    className="pl-7"
-                  >
-                    <CheckSquare />
-                    <span>My Tasks</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <ProjectSelectorList
-                  workspaceId={workspaceId}
-                  projectId={projectId}
-                  onProjectSelect={handleProjectSelect}
-                  allFavoriteIds={allFavoriteIds}
-                  isOpen={isOpen("projects")}
-                  onToggle={() => toggle("projects")}
-                />
-              </SidebarMenu>
-            </SidebarGroup>
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarGroup className="py-0">
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={handleMyTasksClick}
+                      isActive={isMyTasksActive}
+                      tooltip="My Tasks"
+                      className="pl-7"
+                    >
+                      <CheckSquare />
+                      <span>My Tasks</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <ProjectSelectorList
+                    workspaceId={workspaceId}
+                    projectId={projectId}
+                    onProjectSelect={handleProjectSelect}
+                    allFavoriteIds={allFavoriteIds}
+                    isOpen={isOpen("projects")}
+                    onToggle={() => toggle("projects")}
+                  />
+                </SidebarMenu>
+              </SidebarGroup>
+            </motion.div>
 
-            <SidebarSeparator />
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarSeparator />
+            </motion.div>
 
             {/* Documents, Diagrams, Spreadsheets */}
-            <SidebarGroup className="py-0">
-              <SidebarMenu>
-                <DocumentSelectorList
-                  workspaceId={workspaceId}
-                  documentId={documentId}
-                  onDocumentSelect={handleDocumentSelect}
-                  allFavoriteIds={allFavoriteIds}
-                  isOpen={isOpen("documents")}
-                  onToggle={() => toggle("documents")}
-                />
-                <DiagramSelectorList
-                  workspaceId={workspaceId}
-                  diagramId={diagramId}
-                  onDiagramSelect={handleDiagramSelect}
-                  allFavoriteIds={allFavoriteIds}
-                  isOpen={isOpen("diagrams")}
-                  onToggle={() => toggle("diagrams")}
-                />
-                <SpreadsheetSelectorList
-                  workspaceId={workspaceId}
-                  spreadsheetId={spreadsheetId}
-                  onSpreadsheetSelect={handleSpreadsheetSelect}
-                  allFavoriteIds={allFavoriteIds}
-                  isOpen={isOpen("spreadsheets")}
-                  onToggle={() => toggle("spreadsheets")}
-                />
-              </SidebarMenu>
-            </SidebarGroup>
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarGroup className="py-0">
+                <SidebarMenu>
+                  <DocumentSelectorList
+                    workspaceId={workspaceId}
+                    documentId={documentId}
+                    onDocumentSelect={handleDocumentSelect}
+                    allFavoriteIds={allFavoriteIds}
+                    isOpen={isOpen("documents")}
+                    onToggle={() => toggle("documents")}
+                  />
+                  <DiagramSelectorList
+                    workspaceId={workspaceId}
+                    diagramId={diagramId}
+                    onDiagramSelect={handleDiagramSelect}
+                    allFavoriteIds={allFavoriteIds}
+                    isOpen={isOpen("diagrams")}
+                    onToggle={() => toggle("diagrams")}
+                  />
+                  <SpreadsheetSelectorList
+                    workspaceId={workspaceId}
+                    spreadsheetId={spreadsheetId}
+                    onSpreadsheetSelect={handleSpreadsheetSelect}
+                    allFavoriteIds={allFavoriteIds}
+                    isOpen={isOpen("spreadsheets")}
+                    onToggle={() => toggle("spreadsheets")}
+                  />
+                </SidebarMenu>
+              </SidebarGroup>
+            </motion.div>
 
-            <SidebarSeparator />
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarSeparator />
+            </motion.div>
 
             {/* Recents */}
-            <SidebarGroup className="py-0">
-              <SidebarMenu>
-                <RecentsSidebarSection
-                  workspaceId={workspaceId}
-                  isOpen={isOpen("recents")}
-                  onToggle={() => toggle("recents")}
-                />
-              </SidebarMenu>
-            </SidebarGroup>
-          </>
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarGroup className="py-0">
+                <SidebarMenu>
+                  <RecentsSidebarSection
+                    workspaceId={workspaceId}
+                    isOpen={isOpen("recents")}
+                    onToggle={() => toggle("recents")}
+                  />
+                </SidebarMenu>
+              </SidebarGroup>
+            </motion.div>
+          </LayoutGroup>
         )}
       </SidebarContent>
       <SidebarFooter>
