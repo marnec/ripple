@@ -1686,6 +1686,19 @@ export declare const api: {
         ownerId: Id<"users">;
       }>
     >;
+    overview: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      {
+        channels: number;
+        diagrams: number;
+        documents: number;
+        members: number;
+        projects: number;
+        spreadsheets: number;
+      }
+    >;
     update: FunctionReference<
       "mutation",
       "public",

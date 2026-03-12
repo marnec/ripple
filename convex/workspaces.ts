@@ -73,6 +73,59 @@ export const get = query({
   },
 });
 
+/** Lightweight counts for the workspace overview page. */
+export const overview = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.object({
+    members: v.number(),
+    channels: v.number(),
+    projects: v.number(),
+    documents: v.number(),
+    diagrams: v.number(),
+    spreadsheets: v.number(),
+  }),
+  handler: async (ctx, { workspaceId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const [members, channels, projects, documents, diagrams, spreadsheets] =
+      await Promise.all([
+        ctx.db
+          .query("workspaceMembers")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect()
+          .then((r) => r.length),
+        ctx.db
+          .query("channels")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect()
+          .then((r) => r.length),
+        ctx.db
+          .query("projects")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect()
+          .then((r) => r.length),
+        ctx.db
+          .query("documents")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect()
+          .then((r) => r.length),
+        ctx.db
+          .query("diagrams")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect()
+          .then((r) => r.length),
+        ctx.db
+          .query("spreadsheets")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect()
+          .then((r) => r.length),
+      ]);
+
+    return { members, channels, projects, documents, diagrams, spreadsheets };
+  },
+});
+
 export const update = mutation({
   args: {
     id: v.id("workspaces"),
