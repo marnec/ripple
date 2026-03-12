@@ -58,7 +58,7 @@ function ProjectLayoutContent({
             workspaceId={workspaceId}
           />
           {!isLoading && (
-            <div className="flex items-center gap-2 min-w-0 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 min-w-0 animate-fade-in">
               <h1 className="text-lg font-semibold truncate">{project.name}</h1>
               {project.color && (
                 <span className={`w-2 h-2 rounded-full ${project.color} shrink-0`} />

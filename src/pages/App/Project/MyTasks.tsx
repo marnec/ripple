@@ -236,7 +236,7 @@ export function MyTasks() {
   const totalTaskCount = filteredTasks?.length ?? 0;
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 animate-fade-in">
       {/* Page Header — hidden on mobile to save space */}
       <div className="mb-5 hidden md:block">
         <div className="flex items-center gap-2.5 mb-1">
