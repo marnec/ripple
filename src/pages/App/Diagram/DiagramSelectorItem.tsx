@@ -1,16 +1,15 @@
-import { useIsMobile } from "@/hooks/use-mobile";
 import { FilePen, MoreHorizontal, Settings, StarOff } from "lucide-react";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "../../../components/ui/dropdown-menu";
 import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
 } from "../../../components/ui/sidebar";
+import {
+  ResponsiveDropdownMenu,
+  ResponsiveDropdownMenuContent,
+  ResponsiveDropdownMenuItem,
+  ResponsiveDropdownMenuSeparator,
+  ResponsiveDropdownMenuTrigger,
+} from "../../../components/ui/responsive-dropdown-menu";
 
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 
@@ -31,8 +30,6 @@ export function DiagramSelectorItem({
   onManageDiagram,
   onUnstarDiagram
 }: DiagramSelectorItemProps) {
-  const isMobile = useIsMobile();
-
   return (
     <SidebarMenuSubItem className="group/subitem relative">
       <SidebarMenuSubButton
@@ -41,30 +38,26 @@ export function DiagramSelectorItem({
       >
           <span className="truncate">{diagram.name}</span>
       </SidebarMenuSubButton>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 md:opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground md:group-hover/subitem:opacity-100 data-popup-open:opacity-100" />}>
+      <ResponsiveDropdownMenu>
+        <ResponsiveDropdownMenuTrigger render={<button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 md:opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground md:group-hover/subitem:opacity-100 data-popup-open:opacity-100" />}>
             <MoreHorizontal className="size-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="w-48 rounded-lg"
-          side={isMobile ? "bottom" : "right"}
-          align={isMobile ? "end" : "start"}
-        >
-          <DropdownMenuItem onClick={() => onRenameDiagram(diagram._id)}>
+        </ResponsiveDropdownMenuTrigger>
+        <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
+          <ResponsiveDropdownMenuItem onClick={() => onRenameDiagram(diagram._id)}>
             <FilePen className="text-muted-foreground" />
             <span>Rename</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onManageDiagram(diagram._id)}>
+          </ResponsiveDropdownMenuItem>
+          <ResponsiveDropdownMenuItem onClick={() => onManageDiagram(diagram._id)}>
             <Settings className="text-muted-foreground" />
             <span>Settings</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onUnstarDiagram(diagram._id)}>
+          </ResponsiveDropdownMenuItem>
+          <ResponsiveDropdownMenuSeparator />
+          <ResponsiveDropdownMenuItem onClick={() => onUnstarDiagram(diagram._id)}>
             <StarOff className="text-muted-foreground" />
             <span>Unstar</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </ResponsiveDropdownMenuItem>
+        </ResponsiveDropdownMenuContent>
+      </ResponsiveDropdownMenu>
     </SidebarMenuSubItem>
   );
 }

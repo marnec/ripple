@@ -1,16 +1,15 @@
-import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { Cog, Hash, Lock, MoreHorizontal, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "../../../components/ui/dropdown-menu";
+  ResponsiveDropdownMenu,
+  ResponsiveDropdownMenuContent,
+  ResponsiveDropdownMenuItem,
+  ResponsiveDropdownMenuSeparator,
+  ResponsiveDropdownMenuTrigger,
+} from "../../../components/ui/responsive-dropdown-menu";
 import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
@@ -35,7 +34,6 @@ export function ChannelSelectorItem({
   className,
   style,
 }: ChannelSelectorItemProps) {
-  const isMobile = useIsMobile();
   const unreadCount = useQuery(api.channelReads.getUnreadCount, { channelId: channel._id });
 
   return (
@@ -55,26 +53,22 @@ export function ChannelSelectorItem({
             </span>
           )}
       </SidebarMenuSubButton>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 md:opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground md:group-hover/subitem:opacity-100 data-popup-open:opacity-100" />}>
+      <ResponsiveDropdownMenu>
+        <ResponsiveDropdownMenuTrigger render={<button className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-sidebar-foreground/60 md:opacity-0 hover:bg-sidebar-accent hover:text-sidebar-foreground md:group-hover/subitem:opacity-100 data-popup-open:opacity-100" />}>
             <MoreHorizontal className="size-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="w-48 rounded-lg"
-          side={isMobile ? "bottom" : "right"}
-          align={isMobile ? "end" : "start"}
-        >
-          <DropdownMenuItem onClick={() => onManageChannel(channel._id)}>
+        </ResponsiveDropdownMenuTrigger>
+        <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
+          <ResponsiveDropdownMenuItem onClick={() => onManageChannel(channel._id)}>
             <Cog className="text-muted-foreground" />
             <span>Manage channel</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onDeleteChannel(channel._id)}>
+          </ResponsiveDropdownMenuItem>
+          <ResponsiveDropdownMenuSeparator />
+          <ResponsiveDropdownMenuItem onClick={() => onDeleteChannel(channel._id)}>
             <Trash2 className="text-muted-foreground" />
             <span>Delete channel</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </ResponsiveDropdownMenuItem>
+        </ResponsiveDropdownMenuContent>
+      </ResponsiveDropdownMenu>
     </SidebarMenuSubItem>
   );
 }
