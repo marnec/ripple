@@ -1,6 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type React from "react";
 import { flushSync } from "react-dom";
+import { isMobileSidebarOpen } from "./use-view-transition";
 
 /**
  * Buffers a Convex `useQuery` result and applies changes inside a
@@ -102,8 +103,8 @@ export function useAnimatedQuery<T>(
 
     absorbed.current = false;
 
-    // If mid-transition or API unsupported, apply directly
-    if (transitioning.current || !document.startViewTransition) {
+    // If mid-transition, API unsupported, or mobile sidebar open, apply directly
+    if (transitioning.current || !document.startViewTransition || isMobileSidebarOpen()) {
       setRendered(liveData);
       return;
     }
