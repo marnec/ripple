@@ -74,8 +74,8 @@ function SpreadsheetSettingsContent({
   };
 
   return (
-    <div className="container mx-auto py-6 max-w-2xl">
-      <h1 className="text-2xl font-bold mb-6">Spreadsheet Settings</h1>
+    <div className="container mx-auto px-4 py-6 max-w-2xl">
+      <h1 className="hidden md:block text-2xl font-bold mb-6">Spreadsheet Settings</h1>
 
       {/* Details Section */}
       <section className="mb-8">
