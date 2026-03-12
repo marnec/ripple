@@ -43,9 +43,11 @@ type TaskRowProps = {
   hideStatusMenu?: boolean;
   /** Remove rounded corners so the row sits flush inside a SwipeToReveal wrapper. */
   flush?: boolean;
+  /** Hide the assignee avatar (e.g. on My Tasks where it's always the current user). */
+  hideAssignee?: boolean;
 };
 
-export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush }: TaskRowProps) {
+export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee }: TaskRowProps) {
   const taskId = formatTaskId(task.projectKey, task.number);
 
   return (
@@ -64,14 +66,20 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
         )}
       </ItemMedia>
 
-      <ItemContent>
+      <ItemContent className="md:flex-1 md:min-w-0 basis-full md:basis-auto order-last md:order-0 pl-6.5 md:pl-0">
         <ItemTitle className={cn(task.completed && "line-through text-muted-foreground")}>
           {taskId && (
-            <span className="text-xs text-muted-foreground font-mono">{taskId}</span>
+            <span className="text-xs text-muted-foreground font-mono shrink-0 hidden md:inline">{taskId}</span>
           )}
           <span className="truncate">{task.title}</span>
         </ItemTitle>
       </ItemContent>
+
+      {/* Top-row metadata on mobile: task ID + spacer to push actions right */}
+      {taskId && (
+        <span className="text-xs text-muted-foreground font-mono shrink-0 md:hidden">{taskId}</span>
+      )}
+      <span className="flex-1 md:hidden" />
 
       <ItemActions>
         {task.dueDate && (
@@ -84,7 +92,7 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
         )}
 
         {task.estimate != null && (
-          <span className="text-xs text-muted-foreground shrink-0">
+          <span className="text-xs text-muted-foreground shrink-0 hidden md:inline">
             {formatEstimate(task.estimate)}
           </span>
         )}
@@ -126,7 +134,7 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
           ) : null
         ) : null}
 
-        {task.assignee && (
+        {!hideAssignee && task.assignee && (
           <Avatar className="h-6 w-6">
             {task.assignee.image && (
               <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />

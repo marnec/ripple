@@ -123,6 +123,7 @@ function ProjectGroupTasks({
                 task={task}
                 statuses={isMobile ? undefined : (statuses ?? undefined)}
                 hideStatusMenu={isMobile}
+                hideAssignee
                 flush
                 onStatusChange={(statusId) => {
                   void updateTask({
