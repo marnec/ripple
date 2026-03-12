@@ -38,7 +38,7 @@ export function SpreadsheetSelectorList({
 }: SpreadsheetSelectorProps) {
   const [selectedSpreadsheetForRename, setSelectedSpreadsheetForRename] = useState<Id<"spreadsheets"> | null>(null);
   const navigate = useNavigate();
-  const { setOpenMobile } = useSidebar();
+  const { isMobile, setOpen: setSidebarOpen } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/spreadsheets");
 
@@ -57,7 +57,7 @@ export function SpreadsheetSelectorList({
   };
 
   const navigateToSpreadsheetSettings = (id: Id<"spreadsheets">) => {
-    setOpenMobile(false);
+    if (isMobile) setSidebarOpen(false);
     void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}/settings`);
   };
 

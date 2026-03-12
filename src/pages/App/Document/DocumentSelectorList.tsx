@@ -43,7 +43,7 @@ export function DocumentSelectorList({
 }: DocumentSelectorProps) {
   const [selectedDocForRename, setSelectedDocForRename] = useState<Id<"documents"> | null>(null);
   const navigate = useNavigate();
-  const { setOpenMobile } = useSidebar();
+  const { isMobile, setOpen: setSidebarOpen } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/documents");
 
@@ -62,7 +62,7 @@ export function DocumentSelectorList({
   };
 
   const navigateToDocumentSettings = (id: Id<"documents">) => {
-    setOpenMobile(false);
+    if (isMobile) setSidebarOpen(false);
     void navigate(`/workspaces/${workspaceId}/documents/${id}/settings`);
   };
 

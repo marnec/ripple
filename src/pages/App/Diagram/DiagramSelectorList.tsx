@@ -38,7 +38,7 @@ export function DiagramSelectorList({
 }: DiagramSelectorProps) {
   const [selectedDiagramForRename, setSelectedDiagramForRename] = useState<Id<"diagrams"> | null>(null);
   const navigate = useNavigate();
-  const { setOpenMobile } = useSidebar();
+  const { isMobile, setOpen: setSidebarOpen } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/diagrams");
 
@@ -57,7 +57,7 @@ export function DiagramSelectorList({
   };
 
   const navigateToDiagramSettings = (id: Id<"diagrams">) => {
-    setOpenMobile(false);
+    if (isMobile) setSidebarOpen(false);
     void navigate(`/workspaces/${workspaceId}/diagrams/${id}/settings`);
   };
 

@@ -1,27 +1,12 @@
-import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  ResponsiveDialog,
-  ResponsiveDialogContent,
-  ResponsiveDialogDescription,
-  ResponsiveDialogFooter,
-  ResponsiveDialogHeader,
-  ResponsiveDialogTitle,
-} from "@/components/ui/responsive-dialog";
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
-
-const channelsRemoveRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"channels"> },
-  null
->("channels:remove");
 
 const channelsListByUserMembershipRef = makeFunctionReference<
   "query",
@@ -56,12 +41,10 @@ export function ChannelSelectorList({
   onToggle,
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
-  const [pendingDeleteChannel, setPendingDeleteChannel] = useState<{ id: Id<"channels">; name: string } | null>(null);
-  const { state: sidebarState, openMobile, setOpenMobile, isMobile } = useSidebar();
-  const isChannelListVisible = isOpen && (isMobile ? openMobile : sidebarState === "expanded");
+  const { state: sidebarState, open: sidebarOpen, isMobile, setOpen } = useSidebar();
+  const isChannelListVisible = isOpen && (isMobile ? sidebarOpen : sidebarState === "expanded");
 
   const navigate = useNavigate();
-  const deleteChannel = useMutation(channelsRemoveRef);
 
   const channels = useQuery(channelsListByUserMembershipRef, {
     workspaceId: workspaceId,
@@ -81,22 +64,14 @@ export function ChannelSelectorList({
     return m;
   }, [channels]);
 
-  const handleChannelDeleteRequest = (id: Id<"channels">) => {
-    const channel = channelMap.get(id);
-    setPendingDeleteChannel({ id, name: channel?.name ?? "this channel" });
-  };
-
-  const handleChannelDeleteConfirm = async () => {
-    if (!pendingDeleteChannel) return;
-    autoAcknowledgeNext();
-    onChannelSelect(null);
-    await deleteChannel({ id: pendingDeleteChannel.id });
-    setPendingDeleteChannel(null);
-  };
-
   const navigateToChannelSettings = (id: Id<"channels">) => {
-    setOpenMobile(false);
+    if (isMobile) setOpen(false);
     void navigate(`/workspaces/${workspaceId}/channels/${id}/settings`);
+  };
+
+  const navigateToVideoCall = (id: Id<"channels">) => {
+    if (isMobile) setOpen(false);
+    void navigate(`/workspaces/${workspaceId}/channels/${id}/videocall`);
   };
 
 
@@ -188,7 +163,7 @@ export function ChannelSelectorList({
                         onChannelSelect(id);
                       }}
                       onManageChannel={navigateToChannelSettings}
-                      onDeleteChannel={handleChannelDeleteRequest}
+                      onStartCall={navigateToVideoCall}
                     />
                   </motion.div>
                 );
@@ -202,27 +177,6 @@ export function ChannelSelectorList({
           onOpenChange={setShowCreateChannel}
           onChannelCreated={autoAcknowledgeNext}
         />
-        <ResponsiveDialog
-          open={!!pendingDeleteChannel}
-          onOpenChange={(open) => { if (!open) setPendingDeleteChannel(null); }}
-        >
-          <ResponsiveDialogContent>
-            <ResponsiveDialogHeader>
-              <ResponsiveDialogTitle>Delete channel?</ResponsiveDialogTitle>
-              <ResponsiveDialogDescription>
-                Are you sure you want to delete &ldquo;{pendingDeleteChannel?.name}&rdquo;? All messages will be permanently lost. This action cannot be undone.
-              </ResponsiveDialogDescription>
-            </ResponsiveDialogHeader>
-            <ResponsiveDialogFooter>
-              <Button variant="outline" onClick={() => setPendingDeleteChannel(null)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={() => void handleChannelDeleteConfirm()}>
-                Delete
-              </Button>
-            </ResponsiveDialogFooter>
-          </ResponsiveDialogContent>
-        </ResponsiveDialog>
     </Collapsible>
   );
 }

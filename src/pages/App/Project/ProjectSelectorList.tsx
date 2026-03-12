@@ -38,7 +38,7 @@ export function ProjectSelectorList({
 }: ProjectSelectorListProps) {
   const [showCreateProject, setShowCreateProject] = useState(false);
   const navigate = useNavigate();
-  const { setOpenMobile } = useSidebar();
+  const { isMobile, setOpen: setSidebarOpen } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/projects");
   const toggleFavorite = useMutation(api.favorites.toggle);
@@ -58,7 +58,7 @@ export function ProjectSelectorList({
   };
 
   const navigateToProjectSettings = (id: Id<"projects">) => {
-    setOpenMobile(false);
+    if (isMobile) setSidebarOpen(false);
     void navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
   };
 

@@ -1,13 +1,12 @@
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
-import { Cog, Hash, Lock, MoreHorizontal, Trash2 } from "lucide-react";
+import { Cog, Hash, Lock, MoreHorizontal, Video } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuContent,
   ResponsiveDropdownMenuItem,
-  ResponsiveDropdownMenuSeparator,
   ResponsiveDropdownMenuTrigger,
 } from "../../../components/ui/responsive-dropdown-menu";
 import {
@@ -20,7 +19,7 @@ export interface ChannelSelectorItemProps {
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
   onManageChannel: (id: Id<"channels">) => void;
-  onDeleteChannel: (id: Id<"channels">) => void;
+  onStartCall: (id: Id<"channels">) => void;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -30,7 +29,7 @@ export function ChannelSelectorItem({
   channel,
   onChannelSelect,
   onManageChannel,
-  onDeleteChannel,
+  onStartCall,
   className,
   style,
 }: ChannelSelectorItemProps) {
@@ -58,14 +57,13 @@ export function ChannelSelectorItem({
             <MoreHorizontal className="size-3.5" />
         </ResponsiveDropdownMenuTrigger>
         <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
+          <ResponsiveDropdownMenuItem onSelect={() => onStartCall(channel._id)}>
+            <Video className="text-muted-foreground" />
+            <span>Join call</span>
+          </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuItem onSelect={() => onManageChannel(channel._id)}>
             <Cog className="text-muted-foreground" />
             <span>Manage channel</span>
-          </ResponsiveDropdownMenuItem>
-          <ResponsiveDropdownMenuSeparator />
-          <ResponsiveDropdownMenuItem onSelect={() => onDeleteChannel(channel._id)}>
-            <Trash2 className="text-muted-foreground" />
-            <span>Delete channel</span>
           </ResponsiveDropdownMenuItem>
         </ResponsiveDropdownMenuContent>
       </ResponsiveDropdownMenu>
