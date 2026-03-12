@@ -1,11 +1,13 @@
+import type React from "react";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { startViewTransition } from "@/hooks/use-view-transition";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { useQuery } from "convex/react";
-import { CheckSquare, ChevronDown, ChevronRight } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { CheckSquare, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -14,40 +16,129 @@ import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 
+type MyTask = {
+  _id: string;
+  _creationTime: number;
+  title: string;
+  priority: "urgent" | "high" | "medium" | "low";
+  completed: boolean;
+  projectId: Id<"projects">;
+  assigneeId?: string;
+  dueDate?: string;
+  startDate?: string;
+  position?: string;
+  number?: number;
+  projectKey?: string;
+  estimate?: number;
+  hasBlockers?: boolean;
+  statusId: string;
+  status: { name: string; color: string } | null;
+  assignee: { name?: string; image?: string } | null;
+  project: { name: string; color: string } | null;
+};
+
 type ProjectGroup = {
   projectId: Id<"projects">;
   projectName: string;
   projectColor: string;
-  tasks: Array<{
-    _id: string;
-    _creationTime: number;
-    title: string;
-    priority: "urgent" | "high" | "medium" | "low";
-    completed: boolean;
-    projectId: Id<"projects">;
-    assigneeId?: string;
-    dueDate?: string;
-    startDate?: string;
-    position?: string;
-    number?: number;
-    projectKey?: string;
-    estimate?: number;
-    hasBlockers?: boolean;
-    statusId: string;
-    status: {
-      name: string;
-      color: string;
-    } | null;
-    assignee: {
-      name?: string;
-      image?: string;
-    } | null;
-    project: {
-      name: string;
-      color: string;
-    } | null;
-  }>;
+  tasks: MyTask[];
 };
+
+// Per-project task list with swipe-to-advance-status, mirroring Tasks.tsx
+function ProjectGroupTasks({
+  group,
+  isMobile,
+  swipeOpenId,
+  setSwipeOpenId,
+  onTaskClick,
+}: {
+  group: ProjectGroup;
+  isMobile: boolean;
+  swipeOpenId: string | null;
+  setSwipeOpenId: (id: string | null) => void;
+  onTaskClick: (taskId: string, projectId: Id<"projects">) => void;
+}) {
+  const statuses = useQuery(api.taskStatuses.listByProject, { projectId: group.projectId });
+  const updateTask = useMutation(api.tasks.update);
+
+  const advanceStatus = useCallback(
+    (taskId: string, currentStatusId: string) => {
+      if (!statuses || statuses.length === 0) return;
+      const idx = statuses.findIndex((s) => s._id === currentStatusId);
+      const nextStatus = statuses[(idx + 1) % statuses.length];
+      void updateTask({ taskId: taskId as Id<"tasks">, statusId: nextStatus._id as Id<"taskStatuses"> });
+      setSwipeOpenId(null);
+    },
+    [statuses, updateTask, setSwipeOpenId]
+  );
+
+  const getNextStatus = useCallback(
+    (currentStatusId: string) => {
+      if (!statuses || statuses.length === 0) return null;
+      const idx = statuses.findIndex((s) => s._id === currentStatusId);
+      return statuses[(idx + 1) % statuses.length];
+    },
+    [statuses]
+  );
+
+  return (
+    <div className="divide-y divide-border">
+      {group.tasks.map((task) => {
+        const nextStatus = getNextStatus(task.statusId);
+        return (
+          <div
+            key={task._id}
+            style={{
+              viewTransitionName: `--task-${task._id}`,
+              viewTransitionClass: "task-card",
+            } as React.CSSProperties}
+          >
+            <SwipeToReveal
+              enabled={isMobile}
+              className="rounded-none"
+              open={swipeOpenId === task._id}
+              onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
+              onSwipeStart={() => setSwipeOpenId(null)}
+              action={
+                nextStatus ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      advanceStatus(task._id, task.statusId);
+                    }}
+                    className={cn(
+                      "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
+                      nextStatus.color
+                    )}
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    <span className="text-[10px] font-medium leading-tight text-center truncate w-full">
+                      {nextStatus.name}
+                    </span>
+                  </button>
+                ) : null
+              }
+            >
+              <TaskRow
+                task={task}
+                statuses={isMobile ? undefined : (statuses ?? undefined)}
+                hideStatusMenu={isMobile}
+                flush
+                onStatusChange={(statusId) => {
+                  void updateTask({
+                    taskId: task._id as Id<"tasks">,
+                    statusId: statusId as Id<"taskStatuses">,
+                  });
+                }}
+                onClick={() => onTaskClick(task._id, group.projectId)}
+              />
+            </SwipeToReveal>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function MyTasks() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
@@ -59,6 +150,8 @@ export function MyTasks() {
   const [sort, setSort] = useState<TaskSort>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
+  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
@@ -66,6 +159,17 @@ export function MyTasks() {
     api.tasks.listByAssignee,
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces">, hideCompleted: false } : "skip"
   );
+
+  // Close swipe when tapping anywhere outside the task list
+  useEffect(() => {
+    if (!swipeOpenId) return;
+    const onTap = (e: Event) => {
+      if (listRef.current?.contains(e.target as Node)) return;
+      setSwipeOpenId(null);
+    };
+    document.addEventListener("click", onTap, { passive: true });
+    return () => document.removeEventListener("click", onTap);
+  }, [swipeOpenId]);
 
   const setFiltersAnimated = useCallback(
     (next: TaskFilters) => startViewTransition(() => setFilters(next)),
@@ -78,7 +182,6 @@ export function MyTasks() {
 
   const filteredTasks = useFilteredTasks(tasks, filters, sort);
 
-  // Group filtered tasks by project
   const groupedTasks = useMemo(() => {
     if (!filteredTasks) return [];
     const groups = new Map<string, ProjectGroup>();
@@ -101,14 +204,22 @@ export function MyTasks() {
   const toggleGroup = (projectId: string) => {
     setClosedGroups((prev) => {
       const next = new Set(prev);
-      if (next.has(projectId)) {
-        next.delete(projectId);
-      } else {
-        next.add(projectId);
-      }
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
       return next;
     });
   };
+
+  const handleTaskClick = useCallback(
+    (taskId: string, projectId: Id<"projects">) => {
+      if (isMobile) {
+        void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);
+      } else {
+        setSelectedTaskId(taskId);
+      }
+    },
+    [isMobile, navigate, workspaceId]
+  );
 
   if (tasks === undefined) {
     return (
@@ -156,7 +267,7 @@ export function MyTasks() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3" ref={listRef}>
           {groupedTasks.map((group) => {
             const isOpen = !closedGroups.has(group.projectId);
             return (
@@ -167,60 +278,44 @@ export function MyTasks() {
                   viewTransitionClass: "task-card",
                 } as React.CSSProperties}
               >
-              <Collapsible
-                open={isOpen}
-                onOpenChange={() => toggleGroup(group.projectId)}
-              >
-                <div className="border rounded-lg overflow-hidden">
-                  {/* Project Group Header */}
-                  <CollapsibleTrigger className="w-full">
-                    <div className="flex items-center gap-2.5 px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors">
-                      {isOpen ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      )}
-                      <span
-                        className={cn("w-2 h-2 rounded-full shrink-0", group.projectColor)}
-                        aria-hidden="true"
-                      />
-                      <span className="text-sm font-medium text-left flex-1 truncate">
-                        {group.projectName}
-                      </span>
-                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-                        {group.tasks.length}
-                      </span>
-                    </div>
-                  </CollapsibleTrigger>
+                <Collapsible
+                  open={isOpen}
+                  onOpenChange={() => toggleGroup(group.projectId)}
+                >
+                  <div className="border rounded-lg overflow-hidden">
+                    <CollapsibleTrigger className="w-full">
+                      <div className="flex items-center gap-2.5 px-3 py-2.5 bg-muted/40 hover:bg-muted/70 transition-colors">
+                        {isOpen ? (
+                          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        )}
+                        <span
+                          className={cn("w-2 h-2 rounded-full shrink-0", group.projectColor)}
+                          aria-hidden="true"
+                        />
+                        <span className="text-sm font-medium text-left flex-1 truncate">
+                          {group.projectName}
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                          {group.tasks.length}
+                        </span>
+                      </div>
+                    </CollapsibleTrigger>
 
-                  {/* Tasks in Group */}
-                  <CollapsibleContent>
-                    <div>
-                      {group.tasks.map((task) => (
-                        <div
-                          key={task._id}
-                          style={{
-                            viewTransitionName: `--task-${task._id}`,
-                            viewTransitionClass: "task-card",
-                          } as React.CSSProperties}
-                        >
-                          <TaskRow
-                            task={task}
-                            flush
-                            onClick={() => {
-                              if (isMobile) {
-                                void navigate(`/workspaces/${workspaceId}/projects/${group.projectId}/tasks/${task._id}`);
-                              } else {
-                                setSelectedTaskId(task._id);
-                              }
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </div>
-              </Collapsible>
+                    <CollapsibleContent>
+                      <div>
+                        <ProjectGroupTasks
+                          group={group}
+                          isMobile={isMobile}
+                          swipeOpenId={swipeOpenId}
+                          setSwipeOpenId={setSwipeOpenId}
+                          onTaskClick={handleTaskClick}
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
               </div>
             );
           })}
