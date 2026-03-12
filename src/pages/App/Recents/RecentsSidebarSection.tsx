@@ -10,6 +10,7 @@ import {
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
 import { useQuery } from "convex/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -39,35 +40,55 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
         </SidebarMenuButton>
         <CollapsibleContent>
           <SidebarMenuSub className="gap-0.5">
-            {recents.map((item) => {
-              const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
+            <AnimatePresence initial={false}>
+              {recents.map((item) => {
+                const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
 
-              if (item.deleted) {
+                if (item.deleted) {
+                  return (
+                    <motion.div
+                      key={item.resourceId}
+                      layout
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                    >
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
+                            {Icon && <Icon className="size-3.5 shrink-0" />}
+                            <span className="truncate line-through">{item.resourceName}</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </motion.div>
+                  );
+                }
+
                 return (
-                  <SidebarMenuSubItem key={item._id}>
-                    <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
-                        {Icon && <Icon className="size-3.5 shrink-0" />}
-                        <span className="truncate line-through">{item.resourceName}</span>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
+                  <motion.div
+                    key={item.resourceId}
+                    layout
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                  >
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton render={<div
+                          onClick={() => {
+                            if (isMobile) setOpen(false);
+                            void navigate(getResourceUrl(workspaceId, item.resourceType, item.resourceId));
+                          }}
+                          className="cursor-pointer"
+                        />}>
+                          {Icon && <Icon className="size-3.5" />}
+                          <span className="truncate">{item.resourceName}</span>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </motion.div>
                 );
-              }
-
-              return (
-                <SidebarMenuSubItem key={item._id}>
-                  <SidebarMenuSubButton render={<div
-                      onClick={() => {
-                        if (isMobile) setOpen(false);
-                        void navigate(getResourceUrl(workspaceId, item.resourceType, item.resourceId));
-                      }}
-                      className="cursor-pointer"
-                    />}>
-                      {Icon && <Icon className="size-3.5" />}
-                      <span className="truncate">{item.resourceName}</span>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              );
-            })}
+              })}
+            </AnimatePresence>
           </SidebarMenuSub>
         </CollapsibleContent>
     </Collapsible>
