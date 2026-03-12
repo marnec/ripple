@@ -151,6 +151,7 @@ export function MyTasks() {
   });
   const [sort, setSort] = useState<TaskSort>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<Id<"projects"> | null>(null);
   const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -218,6 +219,7 @@ export function MyTasks() {
         void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);
       } else {
         setSelectedTaskId(taskId);
+        setSelectedProjectId(projectId);
       }
     },
     [isMobile, navigate, workspaceId]
@@ -332,19 +334,18 @@ export function MyTasks() {
         </HeaderSlot>
       )}
 
-      {selectedTaskId && workspaceId && (() => {
-        const selectedTask = tasks?.find((t) => t._id === selectedTaskId);
-        if (!selectedTask) return null;
-        return (
-          <TaskDetailSheet
-            taskId={selectedTaskId as Id<"tasks">}
-            open={true}
-            onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
-            workspaceId={workspaceId as Id<"workspaces">}
-            projectId={selectedTask.projectId}
-          />
-        );
-      })()}
+      {/* Always mounted so the Sheet slide-in animation plays.
+          projectId fallback: use any valid project ID so queries don't
+          receive "" while the sheet is closed (open={false}). */}
+      {workspaceId && (
+        <TaskDetailSheet
+          taskId={selectedTaskId as Id<"tasks"> | null}
+          open={!!selectedTaskId}
+          onOpenChange={(open) => { if (!open) { setSelectedTaskId(null); } }}
+          workspaceId={workspaceId as Id<"workspaces">}
+          projectId={selectedProjectId ?? tasks?.[0]?.projectId ?? ("" as Id<"projects">)}
+        />
+      )}
     </div>
   );
 }
