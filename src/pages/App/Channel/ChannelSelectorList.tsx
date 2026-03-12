@@ -80,9 +80,6 @@ export function ChannelSelectorList({
     void navigate(`/workspaces/${workspaceId}/channels/${id}/settings`);
   };
 
-  const navigateToChannelDetails = (id: Id<"channels">) => {
-    void navigate(`/workspaces/${workspaceId}/channels/${id}/details`);
-  };
 
   const hasPendingChanges = newCount > 0 || removedCount > 0;
 
@@ -157,7 +154,6 @@ export function ChannelSelectorList({
                     onChannelSelect(id);
                   }}
                   onManageChannel={navigateToChannelSettings}
-                  onChannelDetails={navigateToChannelDetails}
                   onDeleteChannel={(id) => void handleChannelDelete(id)}
                 />
               );

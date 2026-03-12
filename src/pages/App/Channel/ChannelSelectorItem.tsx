@@ -1,7 +1,7 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
-import { Cog, Hash, Info, Lock, MoreHorizontal, Trash2 } from "lucide-react";
+import { Cog, Hash, Lock, MoreHorizontal, Trash2 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
@@ -21,7 +21,6 @@ export interface ChannelSelectorItemProps {
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
   onManageChannel: (id: Id<"channels">) => void;
-  onChannelDetails: (id: Id<"channels">) => void;
   onDeleteChannel: (id: Id<"channels">) => void;
   className?: string;
   style?: React.CSSProperties;
@@ -32,7 +31,6 @@ export function ChannelSelectorItem({
   channel,
   onChannelSelect,
   onManageChannel,
-  onChannelDetails,
   onDeleteChannel,
   className,
   style,
@@ -66,10 +64,6 @@ export function ChannelSelectorItem({
           side={isMobile ? "bottom" : "right"}
           align={isMobile ? "end" : "start"}
         >
-          <DropdownMenuItem onClick={() => onChannelDetails(channel._id)}>
-            <Info className="text-muted-foreground" />
-            <span>Details</span>
-          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onManageChannel(channel._id)}>
             <Cog className="text-muted-foreground" />
             <span>Manage channel</span>
