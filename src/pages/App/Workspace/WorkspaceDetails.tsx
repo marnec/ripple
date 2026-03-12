@@ -45,11 +45,9 @@ export function WorkspaceDetails() {
               {workspace?.description || "No description available."}
             </p>
           </div>
-          <Button asChild size="sm" variant="outline">
-            <Link to="settings" className="inline-flex items-center gap-1.5">
-              <Settings className="h-4 w-4" />
-              Settings
-            </Link>
+          <Button size="sm" variant="outline" render={<Link to="settings" />} className="inline-flex items-center gap-1.5">
+            <Settings className="h-4 w-4" />
+            Settings
           </Button>
         </div>
 
