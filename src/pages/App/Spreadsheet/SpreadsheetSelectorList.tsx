@@ -1,7 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useMutation, useQuery } from "convex/react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight, Plus, Table2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -11,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
+  useSidebar,
 } from "../../../components/ui/sidebar";
 import { SpreadsheetSelectorItem } from "./SpreadsheetSelectorItem";
 import { RenameSpreadsheetDialog } from "./RenameSpreadsheetDialog";
@@ -38,34 +38,26 @@ export function SpreadsheetSelectorList({
 }: SpreadsheetSelectorProps) {
   const [selectedSpreadsheetForRename, setSelectedSpreadsheetForRename] = useState<Id<"spreadsheets"> | null>(null);
   const navigate = useNavigate();
+  const { setOpenMobile } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/spreadsheets");
-  const deletingIdRef = useRef<string | null>(null);
 
   const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
   const createSpreadsheet = useMutation(api.spreadsheets.create);
+  const toggleFavorite = useMutation(api.favorites.toggle);
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.spreadsheet ?? []), [allFavoriteIds]);
   const favoriteSheets = useMemo(
     () => spreadsheets?.filter((s) => favoriteSet.has(s._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [spreadsheets, favoriteSet],
   );
-  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("spreadsheet", {
-    onDeleted: () => {
-      if (deletingIdRef.current && window.location.pathname.includes(deletingIdRef.current)) {
-        onSpreadsheetSelect(null);
-      }
-      deletingIdRef.current = null;
-    },
-  });
 
-  const handleSpreadsheetDelete = (id: Id<"spreadsheets">) => {
-    deletingIdRef.current = id;
-    const spreadsheet = spreadsheets?.find((s) => s._id === id);
-    void requestDelete(id, spreadsheet?.name ?? "Untitled");
+  const handleUnstar = (id: Id<"spreadsheets">) => {
+    void toggleFavorite({ workspaceId, resourceType: "spreadsheet", resourceId: id });
   };
 
   const navigateToSpreadsheetSettings = (id: Id<"spreadsheets">) => {
+    setOpenMobile(false);
     void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}/settings`);
   };
 
@@ -102,13 +94,12 @@ export function SpreadsheetSelectorList({
                 onSpreadsheetSelect={onSpreadsheetSelect}
                 onRenameSpreadsheet={setSelectedSpreadsheetForRename}
                 onManageSpreadsheet={navigateToSpreadsheetSettings}
-                onDeleteSpreadsheet={(id) => handleSpreadsheetDelete(id)}
+                onUnstarSpreadsheet={handleUnstar}
               />
             ))}
             <EmptyFavoriteSlots filled={favoriteSheets?.length ?? 0} workspaceId={workspaceId} resourceType="spreadsheet" />
           </SidebarMenuSub>
         </CollapsibleContent>
-        {deleteDialog}
         {!!selectedSpreadsheetForRename && (
           <RenameSpreadsheetDialog
             spreadsheetId={selectedSpreadsheetForRename}

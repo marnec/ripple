@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
+  useSidebar,
 } from "../../../components/ui/sidebar";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { ProjectSelectorItem } from "./ProjectSelectorItem";
@@ -37,9 +38,10 @@ export function ProjectSelectorList({
 }: ProjectSelectorListProps) {
   const [showCreateProject, setShowCreateProject] = useState(false);
   const navigate = useNavigate();
+  const { setOpenMobile } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/projects");
-  const deleteProject = useMutation(api.projects.remove);
+  const toggleFavorite = useMutation(api.favorites.toggle);
 
   const projects = useQuery(api.projects.list, {
     workspaceId,
@@ -51,12 +53,12 @@ export function ProjectSelectorList({
     [projects, favoriteSet],
   );
 
-  const handleProjectDelete = async (id: Id<"projects">) => {
-    onProjectSelect(null);
-    await deleteProject({ id });
+  const handleUnstar = (id: Id<"projects">) => {
+    void toggleFavorite({ workspaceId, resourceType: "project", resourceId: id });
   };
 
   const navigateToProjectSettings = (id: Id<"projects">) => {
+    setOpenMobile(false);
     void navigate(`/workspaces/${workspaceId}/projects/${id}/settings`);
   };
 
@@ -87,7 +89,7 @@ export function ProjectSelectorList({
                 projectId={projectId}
                 onProjectSelect={onProjectSelect}
                 onManageProject={navigateToProjectSettings}
-                onDeleteProject={(id) => void handleProjectDelete(id)}
+                onUnstarProject={handleUnstar}
               />
             ))}
             <EmptyFavoriteSlots filled={favoriteProjects?.length ?? 0} workspaceId={workspaceId} resourceType="project" />

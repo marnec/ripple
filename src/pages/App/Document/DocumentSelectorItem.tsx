@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
+import { FilePen, MoreHorizontal, Settings, StarOff } from "lucide-react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -19,7 +19,7 @@ export interface DocumentSelectorItemProps {
   onDocumentSelect: (id: string | null) => void;
   onRenameDocument: (id: Id<"documents">) => void;
   onManageDocument: (id: Id<"documents">) => void;
-  onDeleteDocument: (id: Id<"documents">) => void;
+  onUnstarDocument: (id: Id<"documents">) => void;
 }
 
 export function DocumentSelectorItem({
@@ -28,7 +28,7 @@ export function DocumentSelectorItem({
   onDocumentSelect,
   onRenameDocument,
   onManageDocument,
-  onDeleteDocument,
+  onUnstarDocument,
 }: DocumentSelectorItemProps) {
   const isMobile = useIsMobile();
 
@@ -58,9 +58,9 @@ export function DocumentSelectorItem({
             <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onDeleteDocument(document._id)}>
-            <Trash2 className="text-muted-foreground" />
-            <span>Delete</span>
+          <DropdownMenuItem onClick={() => onUnstarDocument(document._id)}>
+            <StarOff className="text-muted-foreground" />
+            <span>Unstar</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

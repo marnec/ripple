@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { FilePen, MoreHorizontal, Settings, Trash2 } from "lucide-react";
+import { FilePen, MoreHorizontal, Settings, StarOff } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -20,7 +20,7 @@ export interface SpreadsheetSelectorItemProps {
   onSpreadsheetSelect: (id: string) => void;
   onRenameSpreadsheet: (id: Id<"spreadsheets">) => void;
   onManageSpreadsheet: (id: Id<"spreadsheets">) => void;
-  onDeleteSpreadsheet: (id: Id<"spreadsheets">) => void;
+  onUnstarSpreadsheet: (id: Id<"spreadsheets">) => void;
 }
 
 export function SpreadsheetSelectorItem({
@@ -29,7 +29,7 @@ export function SpreadsheetSelectorItem({
   onSpreadsheetSelect,
   onRenameSpreadsheet,
   onManageSpreadsheet,
-  onDeleteSpreadsheet
+  onUnstarSpreadsheet
 }: SpreadsheetSelectorItemProps) {
   const isMobile = useIsMobile();
 
@@ -59,9 +59,9 @@ export function SpreadsheetSelectorItem({
             <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onDeleteSpreadsheet(spreadsheet._id)}>
-            <Trash2 className="text-muted-foreground" />
-            <span>Delete</span>
+          <DropdownMenuItem onClick={() => onUnstarSpreadsheet(spreadsheet._id)}>
+            <StarOff className="text-muted-foreground" />
+            <span>Unstar</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
+  useSidebar,
 } from "../../../components/ui/sidebar";
 import { DocumentSelectorItem } from "./DocumentSelectorItem";
 import { RenameDocumentDialog } from "./RenameDocumentDialog";
@@ -42,12 +43,13 @@ export function DocumentSelectorList({
 }: DocumentSelectorProps) {
   const [selectedDocForRename, setSelectedDocForRename] = useState<Id<"documents"> | null>(null);
   const navigate = useNavigate();
+  const { setOpenMobile } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/documents");
 
   const documents = useQuery(api.documents.list, { workspaceId });
   const createDocument = useMutation(api.documents.create);
-  const deleteDocument = useMutation(api.documents.remove);
+  const toggleFavorite = useMutation(api.favorites.toggle);
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.document ?? []), [allFavoriteIds]);
   const favoriteDocs = useMemo(
@@ -55,15 +57,12 @@ export function DocumentSelectorList({
     [documents, favoriteSet],
   );
 
-  const handleDocumentDelete = async (id: Id<"documents">) => {
-    const shouldNavigate = window.location.pathname.includes(id);
-    await deleteDocument({ id });
-    if (shouldNavigate) {
-      onDocumentSelect(null);
-    }
+  const handleUnstar = (id: Id<"documents">) => {
+    void toggleFavorite({ workspaceId, resourceType: "document", resourceId: id });
   };
 
   const navigateToDocumentSettings = (id: Id<"documents">) => {
+    setOpenMobile(false);
     void navigate(`/workspaces/${workspaceId}/documents/${id}/settings`);
   };
 
@@ -100,7 +99,7 @@ export function DocumentSelectorList({
                 onDocumentSelect={onDocumentSelect}
                 onRenameDocument={setSelectedDocForRename}
                 onManageDocument={navigateToDocumentSettings}
-                onDeleteDocument={(id) => void handleDocumentDelete(id)}
+                onUnstarDocument={handleUnstar}
               />
             ))}
             <EmptyFavoriteSlots filled={favoriteDocs?.length ?? 0} workspaceId={workspaceId} resourceType="document" />

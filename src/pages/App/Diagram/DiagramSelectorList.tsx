@@ -1,7 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { useMutation, useQuery } from "convex/react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight, PenTool, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -11,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
+  useSidebar,
 } from "../../../components/ui/sidebar";
 import { DiagramSelectorItem } from "./DiagramSelectorItem";
 import { RenameDiagramDialog } from "./RenameDiagramDialog";
@@ -38,34 +38,26 @@ export function DiagramSelectorList({
 }: DiagramSelectorProps) {
   const [selectedDiagramForRename, setSelectedDiagramForRename] = useState<Id<"diagrams"> | null>(null);
   const navigate = useNavigate();
+  const { setOpenMobile } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/diagrams");
-  const deletingIdRef = useRef<string | null>(null);
 
   const diagrams = useQuery(api.diagrams.list, { workspaceId });
   const createDiagram = useMutation(api.diagrams.create);
+  const toggleFavorite = useMutation(api.favorites.toggle);
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.diagram ?? []), [allFavoriteIds]);
   const favoriteDiagrams = useMemo(
     () => diagrams?.filter((d: { _id: string }) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES),
     [diagrams, favoriteSet],
   );
-  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", {
-    onDeleted: () => {
-      if (deletingIdRef.current && window.location.pathname.includes(deletingIdRef.current)) {
-        onDiagramSelect(null);
-      }
-      deletingIdRef.current = null;
-    },
-  });
 
-  const handleDiagramDelete = (id: Id<"diagrams">) => {
-    deletingIdRef.current = id;
-    const diagram = diagrams?.find((d) => d._id === id);
-    void requestDelete(id, diagram?.name ?? "Untitled");
+  const handleUnstar = (id: Id<"diagrams">) => {
+    void toggleFavorite({ workspaceId, resourceType: "diagram", resourceId: id });
   };
 
   const navigateToDiagramSettings = (id: Id<"diagrams">) => {
+    setOpenMobile(false);
     void navigate(`/workspaces/${workspaceId}/diagrams/${id}/settings`);
   };
 
@@ -102,13 +94,12 @@ export function DiagramSelectorList({
                 onDiagramSelect={onDiagramSelect}
                 onRenameDiagram={setSelectedDiagramForRename}
                 onManageDiagram={navigateToDiagramSettings}
-                onDeleteDiagram={(id) => handleDiagramDelete(id)}
+                onUnstarDiagram={handleUnstar}
               />
             ))}
             <EmptyFavoriteSlots filled={favoriteDiagrams?.length ?? 0} workspaceId={workspaceId} resourceType="diagram" />
           </SidebarMenuSub>
         </CollapsibleContent>
-        {deleteDialog}
         {!!selectedDiagramForRename && (
           <RenameDiagramDialog
             diagramId={selectedDiagramForRename}

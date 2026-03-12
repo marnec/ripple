@@ -1,5 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Cog, Folder, MoreHorizontal, Trash2 } from "lucide-react";
+import { Cog, Folder, MoreHorizontal, StarOff } from "lucide-react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   DropdownMenu,
@@ -18,7 +18,7 @@ export interface ProjectSelectorItemProps {
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
   onManageProject: (id: Id<"projects">) => void;
-  onDeleteProject: (id: Id<"projects">) => void;
+  onUnstarProject: (id: Id<"projects">) => void;
 }
 
 export function ProjectSelectorItem({
@@ -26,7 +26,7 @@ export function ProjectSelectorItem({
   projectId,
   onProjectSelect,
   onManageProject,
-  onDeleteProject,
+  onUnstarProject,
 }: ProjectSelectorItemProps) {
   const isMobile = useIsMobile();
 
@@ -57,9 +57,9 @@ export function ProjectSelectorItem({
             <span>Settings</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onDeleteProject(project._id)}>
-            <Trash2 className="text-muted-foreground" />
-            <span>Delete project</span>
+          <DropdownMenuItem onClick={() => onUnstarProject(project._id)}>
+            <StarOff className="text-muted-foreground" />
+            <span>Unstar</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
