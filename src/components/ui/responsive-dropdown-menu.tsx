@@ -2,8 +2,11 @@ import * as React from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -20,7 +23,13 @@ const ResponsiveDropdownMenuContext = React.createContext<{
   close: () => void;
 }>({ isMobile: false, close: () => {} });
 
-function ResponsiveDropdownMenu({ children }: { children: React.ReactNode }) {
+function ResponsiveDropdownMenu({
+  children,
+  direction,
+}: {
+  children: React.ReactNode;
+  direction?: "top" | "bottom";
+}) {
   const isMobile = useIsMobile();
   const [open, setOpen] = React.useState(false);
 
@@ -29,7 +38,7 @@ function ResponsiveDropdownMenu({ children }: { children: React.ReactNode }) {
   return (
     <ResponsiveDropdownMenuContext.Provider value={{ isMobile, close }}>
       {isMobile ? (
-        <Drawer open={open} onOpenChange={setOpen}>
+        <Drawer open={open} onOpenChange={setOpen} direction={direction}>
           {children}
         </Drawer>
       ) : (
@@ -96,6 +105,7 @@ function ResponsiveDropdownMenuItem({
   className,
   children,
   onSelect,
+  disabled,
   ...props
 }: Omit<React.ComponentProps<typeof DropdownMenuItem>, "onClick"> & {
   onSelect?: () => void;
@@ -105,9 +115,11 @@ function ResponsiveDropdownMenuItem({
     return (
       <button
         type="button"
+        disabled={disabled}
         className={cn(
           "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm outline-none active:bg-accent",
           "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+          disabled && "pointer-events-none opacity-50",
           className,
         )}
         onClick={() => {
@@ -120,7 +132,7 @@ function ResponsiveDropdownMenuItem({
     );
   }
   return (
-    <DropdownMenuItem className={className} onClick={onSelect} {...props}>
+    <DropdownMenuItem className={className} onClick={onSelect} disabled={disabled} {...props}>
       {children}
     </DropdownMenuItem>
   );
@@ -137,10 +149,55 @@ function ResponsiveDropdownMenuSeparator({
   return <DropdownMenuSeparator className={className} {...props} />;
 }
 
+function ResponsiveDropdownMenuGroup({
+  children,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuGroup>) {
+  const { isMobile } = React.useContext(ResponsiveDropdownMenuContext);
+  if (isMobile) {
+    return <div>{children}</div>;
+  }
+  return <DropdownMenuGroup {...props}>{children}</DropdownMenuGroup>;
+}
+
+function ResponsiveDropdownMenuLabel({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuLabel>) {
+  const { isMobile } = React.useContext(ResponsiveDropdownMenuContext);
+  if (isMobile) {
+    return (
+      <div className={cn("px-3 py-2 text-xs text-muted-foreground", className)}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <DropdownMenuLabel className={className} {...props}>
+      {children}
+    </DropdownMenuLabel>
+  );
+}
+
+function ResponsiveDropdownMenuShortcut({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuShortcut>) {
+  const { isMobile } = React.useContext(ResponsiveDropdownMenuContext);
+  if (isMobile) {
+    return null;
+  }
+  return <DropdownMenuShortcut className={className} {...props} />;
+}
+
 export {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuTrigger,
   ResponsiveDropdownMenuContent,
   ResponsiveDropdownMenuItem,
   ResponsiveDropdownMenuSeparator,
+  ResponsiveDropdownMenuGroup,
+  ResponsiveDropdownMenuLabel,
+  ResponsiveDropdownMenuShortcut,
 };

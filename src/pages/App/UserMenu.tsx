@@ -1,13 +1,13 @@
 import { UserContext } from "@/pages/App/UserContext";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  ResponsiveDropdownMenu as DropdownMenu,
+  ResponsiveDropdownMenuContent as DropdownMenuContent,
+  ResponsiveDropdownMenuGroup as DropdownMenuGroup,
+  ResponsiveDropdownMenuItem as DropdownMenuItem,
+  ResponsiveDropdownMenuLabel as DropdownMenuLabel,
+  ResponsiveDropdownMenuSeparator as DropdownMenuSeparator,
+  ResponsiveDropdownMenuTrigger as DropdownMenuTrigger,
+} from "@/components/ui/responsive-dropdown-menu";
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   BadgeCheck,
@@ -30,12 +30,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "../../components/ui/sidebar";
 
 
 export function NavUser() {
-  const { isMobile } = useSidebar();
   const user = useContext(UserContext);
   const { signOut } = useAuthActions();
   const [showInvites, setShowInvites] = useState(false);
@@ -73,7 +71,7 @@ export function NavUser() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "right"}
+            side="right"
             align="end"
             sideOffset={4}
           >
@@ -111,12 +109,12 @@ export function NavUser() {
                 <CreditCard />
                 Billing
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowSettings(true)}>
+              <DropdownMenuItem onSelect={() => setShowSettings(true)}>
                 <Settings />
                 Settings
               </DropdownMenuItem>
               {needRefresh && (
-                <DropdownMenuItem onClick={updateAndReload}>
+                <DropdownMenuItem onSelect={updateAndReload}>
                   <RefreshCw />
                   Update available
                   <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full bg-blue-600 px-1.5 text-[10px]">
@@ -124,7 +122,7 @@ export function NavUser() {
                   </Badge>
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem onClick={() => setShowInvites(true)}>
+              <DropdownMenuItem onSelect={() => setShowInvites(true)}>
                 <Mail />
                 Invitations
                 {pendingInvites.length > 0 && (
@@ -135,7 +133,7 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void signOut()}>
+            <DropdownMenuItem onSelect={() => void signOut()}>
               <LogOut />
               Log out
             </DropdownMenuItem>

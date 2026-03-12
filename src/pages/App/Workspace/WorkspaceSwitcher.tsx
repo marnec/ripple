@@ -3,20 +3,19 @@
 import { ChevronsUpDown, Plus, UserPlus } from "lucide-react";
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  ResponsiveDropdownMenu as DropdownMenu,
+  ResponsiveDropdownMenuContent as DropdownMenuContent,
+  ResponsiveDropdownMenuGroup as DropdownMenuGroup,
+  ResponsiveDropdownMenuItem as DropdownMenuItem,
+  ResponsiveDropdownMenuLabel as DropdownMenuLabel,
+  ResponsiveDropdownMenuSeparator as DropdownMenuSeparator,
+  ResponsiveDropdownMenuShortcut as DropdownMenuShortcut,
+  ResponsiveDropdownMenuTrigger as DropdownMenuTrigger,
+} from "@/components/ui/responsive-dropdown-menu";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { useState } from "react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -48,14 +47,13 @@ export function WorkspaceSwitcher({
   activeWorkspace,
   handleWorkspaceSelect,
 }: WorkspaceSwitcherProps) {
-  const { isMobile } = useSidebar();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu direction="top">
           <DropdownMenuTrigger
             render={<SidebarMenuButton
               size="lg"
@@ -86,7 +84,7 @@ export function WorkspaceSwitcher({
           <DropdownMenuContent
             className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
             align="start"
-            side={isMobile ? "bottom" : "right"}
+            side="right"
             sideOffset={4}
           >
             <DropdownMenuGroup>
@@ -96,7 +94,7 @@ export function WorkspaceSwitcher({
               {workspaces.map((workspace, index) => (
                 <DropdownMenuItem
                   key={workspace._id}
-                  onClick={() => handleWorkspaceSelect(workspace._id)}
+                  onSelect={() => handleWorkspaceSelect(workspace._id)}
                   className="gap-2 p-2"
                 >
                   <WorkspaceAvatar name={workspace.name} size="sm" />
@@ -109,7 +107,7 @@ export function WorkspaceSwitcher({
 
             <DropdownMenuItem
               className="gap-2 p-2"
-              onClick={() => setShowInviteDialog(true)}
+              onSelect={() => setShowInviteDialog(true)}
               disabled={!activeWorkspace}
             >
               <div className="flex size-6 items-center justify-center rounded-md border bg-background">
@@ -122,7 +120,7 @@ export function WorkspaceSwitcher({
 
             <DropdownMenuItem
               className="gap-2 p-2"
-              onClick={() => setShowCreateDialog(true)}
+              onSelect={() => setShowCreateDialog(true)}
             >
               <div className="flex size-6 items-center justify-center rounded-md border bg-background">
                 <Plus className="size-4" />
