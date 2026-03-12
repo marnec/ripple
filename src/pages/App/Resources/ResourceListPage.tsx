@@ -2,7 +2,9 @@ import { FavoriteFilterButton } from "@/components/FavoriteFilterButton";
 import { ResourceSearchInput } from "@/components/ResourceSearchInput";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@/components/ui/button";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -32,6 +34,7 @@ export function ResourceListPage({
   subPath,
 }: ResourceListPageProps) {
   const wsId = workspaceId as Id<"workspaces">;
+  const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(true);
 
   const {
@@ -53,7 +56,7 @@ export function ResourceListPage({
   return (
     <div className="container mx-auto p-4">
       <div className="space-y-4">
-        <div className="flex items-start justify-between">
+        <div className="hidden md:flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold">{title}</h1>
             <p className="text-sm text-muted-foreground">
@@ -103,6 +106,13 @@ export function ResourceListPage({
         />
       </div>
       {createDialog}
+      {isMobile && onCreate && (
+        <HeaderSlot>
+          <Button onClick={onCreate} size="sm" variant="ghost" className="h-7 w-7 p-0">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </HeaderSlot>
+      )}
     </div>
   );
 }

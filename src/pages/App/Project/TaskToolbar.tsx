@@ -17,6 +17,7 @@ import {
   getPriorityIcon,
   type TaskPriority,
 } from "@/lib/task-utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   ArrowUpDown,
   ArrowDown,
@@ -80,6 +81,7 @@ export function TaskToolbar({
   sortBlocked,
   hideAssigneeFilter,
 }: TaskToolbarProps) {
+  const isMobile = useIsMobile();
   const [completionOpen, setCompletionOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
@@ -111,7 +113,10 @@ export function TaskToolbar({
   const completionActive = filters.completionFilter !== "uncompleted";
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className={cn("flex items-center gap-2", isMobile ? "flex-col items-stretch" : "flex-wrap")}>
+      {/* Filters row */}
+      <div className="flex items-center gap-2 flex-wrap">
+      <Filter className={cn("w-3.5 h-3.5 shrink-0", activeFilterCount > 0 ? "text-primary" : "text-muted-foreground")} />
       {/* Completion filter */}
       <Popover open={completionOpen} onOpenChange={setCompletionOpen}>
         <PopoverTrigger
@@ -124,7 +129,6 @@ export function TaskToolbar({
             )}
           />}
         >
-          <Filter className="w-3 h-3" />
           {completionLabels[filters.completionFilter]}
         </PopoverTrigger>
         <PopoverContent className="w-40 p-2" align="start">
@@ -158,7 +162,6 @@ export function TaskToolbar({
             )}
           />}
         >
-            <Filter className="w-3 h-3" />
             Assignee
             {filters.assigneeIds.length > 0 && (
               <span className="rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">
@@ -209,7 +212,6 @@ export function TaskToolbar({
             )}
           />}
         >
-            <Filter className="w-3 h-3" />
             Priority
             {filters.priorities.length > 0 && (
               <span className="rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">
@@ -250,11 +252,12 @@ export function TaskToolbar({
           Clear
         </button>
       )}
+      </div>
 
       {/* Sort */}
       <div
         className={cn(
-          "relative inline-flex items-center gap-1.5 rounded-md px-1.5 transition-colors h-7",
+          "relative inline-flex items-center gap-1.5 rounded-md pr-1.5 transition-colors h-7",
           sort && "bg-primary/10"
         )}
       >
@@ -264,7 +267,7 @@ export function TaskToolbar({
             <span className="relative inline-flex size-2.5 rounded-full bg-destructive" />
           </span>
         )}
-        <ArrowUpDown className={cn("w-3 h-3", sort ? "text-primary" : "text-muted-foreground")} />
+        <ArrowUpDown className={cn("w-3.5 h-3.5 shrink-0", sort ? "text-primary" : "text-muted-foreground")} />
         <Select
           value={sort?.field ?? ""}
           onValueChange={(value) => {
