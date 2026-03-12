@@ -1,12 +1,14 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
-import { Link2, Link2Off } from "lucide-react";
+import { Link2, Link2Off, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useRecordVisit } from "@/hooks/use-record-visit";
@@ -40,6 +42,7 @@ export function DocumentEditorContainer() {
 
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { resolvedTheme } = useTheme();
+  const isMobile = useIsMobile();
   const document = useQuery(api.documents.get, { id: documentId });
   useRecordVisit(document?.workspaceId, "document", documentId, document?.name);
   const diagrams = useQuery(
@@ -281,8 +284,28 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }
             />
           )}
+          {!isMobile && (
+            <Link
+              to="settings"
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title="Document settings"
+            >
+              <Settings className="size-4" />
+            </Link>
+          )}
         </div>
       </div>
+      {isMobile && (
+        <HeaderSlot>
+          <Link
+            to="settings"
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            title="Document settings"
+          >
+            <Settings className="size-4" />
+          </Link>
+        </HeaderSlot>
+      )}
       <div className="flex-1 overflow-y-scroll scrollbar-stable">
         <div className="px-2 sm:px-20 max-w-full">
           {referencedBlockStyles && <style>{referencedBlockStyles}</style>}

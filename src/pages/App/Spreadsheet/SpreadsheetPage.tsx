@@ -1,7 +1,9 @@
 
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useFormulaPicker } from "@/hooks/use-formula-picker";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
@@ -14,9 +16,9 @@ import { useQuery } from "convex/react";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
-import { Circle, Link2, Link2Off, WifiOff } from "lucide-react";
+import { Circle, Link2, Link2Off, Settings, WifiOff } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
@@ -152,6 +154,7 @@ function SpreadsheetEditor({
 }: {
   spreadsheetId: Id<"spreadsheets">;
 }) {
+  const isMobile = useIsMobile();
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
   const viewer = useQuery(api.users.viewer);
@@ -232,8 +235,28 @@ function SpreadsheetEditor({
               }
             />
           )}
+          {!isMobile && (
+            <Link
+              to="settings"
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title="Spreadsheet settings"
+            >
+              <Settings className="size-4" />
+            </Link>
+          )}
         </div>
       </div>
+      {isMobile && (
+        <HeaderSlot>
+          <Link
+            to="settings"
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            title="Spreadsheet settings"
+          >
+            <Settings className="size-4" />
+          </Link>
+        </HeaderSlot>
+      )}
       <div className="flex-1 overflow-hidden">
         <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} referencedCellRefs={referencedCellRefs} />
       </div>

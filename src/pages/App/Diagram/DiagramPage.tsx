@@ -1,5 +1,7 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
-import { useParams } from "react-router-dom";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Link, useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
 import { useQuery } from "convex/react";
@@ -7,6 +9,7 @@ import { api } from "../../../../convex/_generated/api";
 import { useEffect, useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { useTheme } from "next-themes";
+import { Settings } from "lucide-react";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
 import { ActiveUsers } from "../Document/ActiveUsers";
@@ -20,6 +23,7 @@ import { yjsToExcalidraw } from "y-excalidraw";
 import * as Y from "yjs";
 
 function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
+  const isMobile = useIsMobile();
   const viewer = useQuery(api.users.viewer);
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
   useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
@@ -158,8 +162,28 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               onUserClick={handleJumpToUser}
             />
           )}
+          {!isMobile && (
+            <Link
+              to="settings"
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title="Diagram settings"
+            >
+              <Settings className="size-4" />
+            </Link>
+          )}
         </div>
       </div>
+      {isMobile && (
+        <HeaderSlot>
+          <Link
+            to="settings"
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            title="Diagram settings"
+          >
+            <Settings className="size-4" />
+          </Link>
+        </HeaderSlot>
+      )}
 
       {/* Canvas */}
       <div className="flex-1 overflow-hidden">

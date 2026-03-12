@@ -1,13 +1,15 @@
 "use client";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Message } from "@/pages/App/Chat/Message";
 import { MessageList } from "@/pages/App/Chat/MessageList";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
-import { SearchIcon } from "lucide-react";
+import { SearchIcon, Settings } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
@@ -25,6 +27,7 @@ export type ChatVariant = "full" | "compact";
 
 export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels">; variant?: ChatVariant }) {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const isMobile = useIsMobile();
   const channel = useQuery(api.channels.get, { id: channelId });
   const markRead = useMutation(api.channelReads.markRead);
 
@@ -136,34 +139,57 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           {/* Main Chat View */}
       {/* Inline Search — hidden in compact variant */}
       {variant === "full" && (
-      <div className="flex shrink-0 items-center gap-2 p-2 border-b">
-        <div className="relative flex-1">
-          <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search messages..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyPress={handleSearchKeyPress}
-            className="pl-10 pr-12"
-          />
-        </div>
-        <SearchDialog
-          channelId={channelId}
-          onJumpToMessage={handleJumpToMessage}
-          initialSearchTerm={searchDialogTerm}
-          isOpen={isSearchDialogOpen}
-          onOpenChange={setIsSearchDialogOpen}
-        >
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSearchSubmit}
-            disabled={!searchInput.trim()}
+      <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 border-b">
+        <div className="relative mx-auto w-full max-w-md flex items-center gap-2">
+          <div className="relative flex-1">
+            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search messages..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyPress={handleSearchKeyPress}
+              className="pl-10"
+            />
+          </div>
+          <SearchDialog
+            channelId={channelId}
+            onJumpToMessage={handleJumpToMessage}
+            initialSearchTerm={searchDialogTerm}
+            isOpen={isSearchDialogOpen}
+            onOpenChange={setIsSearchDialogOpen}
           >
-            <SearchIcon className="h-4 w-4" />
-          </Button>
-        </SearchDialog>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSearchSubmit}
+              disabled={!searchInput.trim()}
+              className="shrink-0"
+            >
+              <SearchIcon className="h-4 w-4" />
+            </Button>
+          </SearchDialog>
+        </div>
+        {!isMobile && (
+          <Link
+            to="settings"
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+            title="Channel settings"
+          >
+            <Settings className="size-4" />
+          </Link>
+        )}
       </div>
+      )}
+      {isMobile && variant === "full" && (
+        <HeaderSlot>
+          <Link
+            to="settings"
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            title="Channel settings"
+          >
+            <Settings className="size-4" />
+          </Link>
+        </HeaderSlot>
       )}
 
       <div className="min-h-0 flex-1">
