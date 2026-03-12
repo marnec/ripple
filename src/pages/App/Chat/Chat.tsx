@@ -135,94 +135,94 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           onBackToChat={handleBackToChat}
         />
       ) : (
-        <div className="flex h-full min-h-0 flex-col">
+        <div className="flex h-full min-h-0 flex-col animate-fade-in">
           {/* Main Chat View */}
-      {/* Inline Search — hidden in compact variant */}
-      {variant === "full" && (
-      <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 border-b">
-        <div className="relative mx-auto w-full max-w-md flex items-center gap-2">
-          <div className="relative flex-1">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search messages..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyPress={handleSearchKeyPress}
-              className="pl-10"
-            />
-          </div>
-          <SearchDialog
-            channelId={channelId}
-            onJumpToMessage={handleJumpToMessage}
-            initialSearchTerm={searchDialogTerm}
-            isOpen={isSearchDialogOpen}
-            onOpenChange={setIsSearchDialogOpen}
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSearchSubmit}
-              disabled={!searchInput.trim()}
-              className="shrink-0"
-            >
-              <SearchIcon className="h-4 w-4" />
-            </Button>
-          </SearchDialog>
-        </div>
-        {!isMobile && (
-          <Link
-            to="settings"
-            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-            title="Channel settings"
-          >
-            <Settings className="size-4" />
-          </Link>
-        )}
-      </div>
-      )}
-      {isMobile && variant === "full" && (
-        <HeaderSlot>
-          <Link
-            to="settings"
-            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title="Channel settings"
-          >
-            <Settings className="size-4" />
-          </Link>
-        </HeaderSlot>
-      )}
-
-      <div className="min-h-0 flex-1">
-      <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
-        {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
-
-        {(messages || []).map((message, index) => (
-          <Fragment key={message.isomorphicId}>
-            {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
-              <>
-                <Separator orientation="horizontal" className="-mt-7" />
-                <div className="self-center text-muted px-2 z-10 bg-card">
-                  {new Date(message._creationTime).toDateString()}
+          {/* Inline Search — hidden in compact variant */}
+          {variant === "full" && (
+            <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 border-b">
+              <div className="relative mx-auto w-full max-w-md flex items-center gap-2">
+                <div className="relative flex-1">
+                  <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search messages..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyPress={handleSearchKeyPress}
+                    className="pl-10"
+                  />
                 </div>
-              </>
-            )}
-            <Message
-              message={message}
-            />
-          </Fragment>
-        ))}
-        {variant === "full" && messages && (
-          <Button
-            variant="outline"
-            className="self-center sm:w-fit w-full"
-            disabled={status === "Exhausted" || isLoading || !messages?.length}
-            onClick={() => loadMore(25)}
-          >
-            Load more...
-          </Button>
-        )}
-      </MessageList>
-      </div>
+                <SearchDialog
+                  channelId={channelId}
+                  onJumpToMessage={handleJumpToMessage}
+                  initialSearchTerm={searchDialogTerm}
+                  isOpen={isSearchDialogOpen}
+                  onOpenChange={setIsSearchDialogOpen}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSearchSubmit}
+                    disabled={!searchInput.trim()}
+                    className="shrink-0"
+                  >
+                    <SearchIcon className="h-4 w-4" />
+                  </Button>
+                </SearchDialog>
+              </div>
+              {!isMobile && (
+                <Link
+                  to="settings"
+                  className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+                  title="Channel settings"
+                >
+                  <Settings className="size-4" />
+                </Link>
+              )}
+            </div>
+          )}
+          {isMobile && variant === "full" && (
+            <HeaderSlot>
+              <Link
+                to="settings"
+                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                title="Channel settings"
+              >
+                <Settings className="size-4" />
+              </Link>
+            </HeaderSlot>
+          )}
+
+          <div className="min-h-0 flex-1">
+            <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
+              {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
+
+              {(messages || []).map((message, index) => (
+                <Fragment key={message.isomorphicId}>
+                  {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
+                    <>
+                      <Separator orientation="horizontal" className="-mt-7" />
+                      <div className="self-center text-muted px-2 z-10 bg-card">
+                        {new Date(message._creationTime).toDateString()}
+                      </div>
+                    </>
+                  )}
+                  <Message
+                    message={message}
+                  />
+                </Fragment>
+              ))}
+              {variant === "full" && messages && (
+                <Button
+                  variant="outline"
+                  className="self-center sm:w-fit w-full"
+                  disabled={status === "Exhausted" || isLoading || !messages?.length}
+                  onClick={() => loadMore(25)}
+                >
+                  Load more...
+                </Button>
+              )}
+            </MessageList>
+          </div>
 
           <MessageComposer
             handleSubmit={(content, plainText) => void handleSubmit(content, plainText)}

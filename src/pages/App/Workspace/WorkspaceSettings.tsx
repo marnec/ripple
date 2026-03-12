@@ -50,7 +50,7 @@ export function WorkspaceSettings() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl">
+    <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
       <h1 className="hidden md:block text-2xl font-bold mb-6">Workspace Settings</h1>
 
       <section className="mb-8">

@@ -83,7 +83,7 @@ function DocumentSettingsContent({
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl">
+    <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
       <h1 className="hidden md:block text-2xl font-bold mb-6">Document Settings</h1>
 
       {/* Details Section */}
