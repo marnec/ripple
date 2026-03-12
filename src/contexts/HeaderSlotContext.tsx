@@ -1,21 +1,29 @@
-import { createContext, useContext, useRef, type RefObject } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useCallback, useContext, useState } from "react";
 import { createPortal } from "react-dom";
 
-const HeaderSlotContext = createContext<RefObject<HTMLDivElement | null> | null>(null);
+const HeaderSlotContext = createContext<HTMLDivElement | null>(null);
 
-/** Provide the header slot ref — used by Layout to create the portal target. */
+/**
+ * Provide a callback ref for the header slot target element.
+ * Used by Layout to create the portal target.
+ */
 export function useHeaderSlotRef() {
-  return useRef<HTMLDivElement | null>(null);
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const callbackRef = useCallback((el: HTMLDivElement | null) => {
+    setNode(el);
+  }, []);
+  return [callbackRef, node] as const;
 }
 
 export { HeaderSlotContext };
 
 /**
  * Render children into the header slot (next to breadcrumb indicators).
- * No-ops if the slot ref isn't mounted.
+ * No-ops if the slot isn't mounted.
  */
 export function HeaderSlot({ children }: { children: React.ReactNode }) {
-  const ref = useContext(HeaderSlotContext);
-  if (!ref?.current) return null;
-  return createPortal(children, ref.current);
+  const node = useContext(HeaderSlotContext);
+  if (!node) return null;
+  return createPortal(children, node);
 }

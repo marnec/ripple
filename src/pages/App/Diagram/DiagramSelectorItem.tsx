@@ -43,16 +43,16 @@ export function DiagramSelectorItem({
             <MoreHorizontal className="size-3.5" />
         </ResponsiveDropdownMenuTrigger>
         <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
-          <ResponsiveDropdownMenuItem onClick={() => onRenameDiagram(diagram._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onRenameDiagram(diagram._id)}>
             <FilePen className="text-muted-foreground" />
             <span>Rename</span>
           </ResponsiveDropdownMenuItem>
-          <ResponsiveDropdownMenuItem onClick={() => onManageDiagram(diagram._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onManageDiagram(diagram._id)}>
             <Settings className="text-muted-foreground" />
             <span>Settings</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuSeparator />
-          <ResponsiveDropdownMenuItem onClick={() => onUnstarDiagram(diagram._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onUnstarDiagram(diagram._id)}>
             <StarOff className="text-muted-foreground" />
             <span>Unstar</span>
           </ResponsiveDropdownMenuItem>

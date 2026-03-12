@@ -42,16 +42,16 @@ export function DocumentSelectorItem({
             <MoreHorizontal className="size-3.5" />
         </ResponsiveDropdownMenuTrigger>
         <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
-          <ResponsiveDropdownMenuItem onClick={() => onRenameDocument(document._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onRenameDocument(document._id)}>
             <FilePen className="text-muted-foreground" />
             <span>Rename</span>
           </ResponsiveDropdownMenuItem>
-          <ResponsiveDropdownMenuItem onClick={() => onManageDocument(document._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onManageDocument(document._id)}>
             <Settings className="text-muted-foreground" />
             <span>Settings</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuSeparator />
-          <ResponsiveDropdownMenuItem onClick={() => onUnstarDocument(document._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onUnstarDocument(document._id)}>
             <StarOff className="text-muted-foreground" />
             <span>Unstar</span>
           </ResponsiveDropdownMenuItem>

@@ -37,7 +37,7 @@ export function Layout() {
   const { isMobile, setOpen } = useSidebar();
   const { isFollowing, followColor } = useFollowMode();
   const [commandOpen, setCommandOpen] = useState(false);
-  const headerSlotRef = useHeaderSlotRef();
+  const [headerSlotCallbackRef, headerSlotNode] = useHeaderSlotRef();
 
   useEffect(() => {
     if (pathname === "/" && isMobile) setOpen(true);
@@ -66,7 +66,7 @@ export function Layout() {
                 <DynamicBreadcrumb />
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <div ref={headerSlotRef} className="flex items-center gap-2" />
+                <div ref={headerSlotCallbackRef} className="flex items-center gap-2" />
                 <FollowModeIndicator />
                 <CallIndicator />
               </div>
@@ -78,7 +78,7 @@ export function Layout() {
                 <DynamicBreadcrumb />
               </div>
               <div className="flex items-center gap-2">
-                <div ref={headerSlotRef} className="flex items-center gap-2" />
+                <div ref={headerSlotCallbackRef} className="flex items-center gap-2" />
                 <FollowModeIndicator />
                 <CallIndicator />
               </div>
@@ -94,7 +94,7 @@ export function Layout() {
             />
           )}
           <PullToRefresh>
-            <HeaderSlotContext value={headerSlotRef}>
+            <HeaderSlotContext value={headerSlotNode}>
               <Outlet />
             </HeaderSlotContext>
           </PullToRefresh>

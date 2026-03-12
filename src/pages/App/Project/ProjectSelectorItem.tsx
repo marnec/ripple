@@ -41,16 +41,16 @@ export function ProjectSelectorItem({
             <MoreHorizontal className="size-3.5" />
         </ResponsiveDropdownMenuTrigger>
         <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
-          <ResponsiveDropdownMenuItem onClick={() => onProjectSelect(project._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onProjectSelect(project._id)}>
             <Folder className="text-muted-foreground" />
             <span>View project</span>
           </ResponsiveDropdownMenuItem>
-          <ResponsiveDropdownMenuItem onClick={() => onManageProject(project._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onManageProject(project._id)}>
             <Cog className="text-muted-foreground" />
             <span>Settings</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuSeparator />
-          <ResponsiveDropdownMenuItem onClick={() => onUnstarProject(project._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onUnstarProject(project._id)}>
             <StarOff className="text-muted-foreground" />
             <span>Unstar</span>
           </ResponsiveDropdownMenuItem>

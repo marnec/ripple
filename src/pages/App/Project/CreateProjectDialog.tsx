@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import * as z from "zod";
 import { api } from "../../../../convex/_generated/api";
@@ -71,7 +71,7 @@ export function CreateProjectDialog({
     },
   });
 
-  const watchedName = form.watch("name");
+  const watchedName = useWatch({ control: form.control, name: "name" });
 
   useEffect(() => {
     if (!keyManuallyEdited) {
@@ -79,12 +79,16 @@ export function CreateProjectDialog({
     }
   }, [watchedName, keyManuallyEdited, form]);
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setKeyManuallyEdited(false);
+    }
+    onOpenChange(nextOpen);
+  };
+
   useEffect(() => {
     if (open) {
       setTimeout(() => nameInputRef.current?.focus(), 0);
-    } else {
-      // Reset key-edited state when dialog closes
-      setKeyManuallyEdited(false);
     }
   }, [open]);
 
@@ -111,7 +115,7 @@ export function CreateProjectDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Create New Project</ResponsiveDialogTitle>

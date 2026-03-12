@@ -58,12 +58,12 @@ export function ChannelSelectorItem({
             <MoreHorizontal className="size-3.5" />
         </ResponsiveDropdownMenuTrigger>
         <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
-          <ResponsiveDropdownMenuItem onClick={() => onManageChannel(channel._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onManageChannel(channel._id)}>
             <Cog className="text-muted-foreground" />
             <span>Manage channel</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuSeparator />
-          <ResponsiveDropdownMenuItem onClick={() => onDeleteChannel(channel._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onDeleteChannel(channel._id)}>
             <Trash2 className="text-muted-foreground" />
             <span>Delete channel</span>
           </ResponsiveDropdownMenuItem>

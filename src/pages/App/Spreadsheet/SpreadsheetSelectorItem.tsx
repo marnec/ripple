@@ -43,16 +43,16 @@ export function SpreadsheetSelectorItem({
             <MoreHorizontal className="size-3.5" />
         </ResponsiveDropdownMenuTrigger>
         <ResponsiveDropdownMenuContent className="w-48 rounded-lg">
-          <ResponsiveDropdownMenuItem onClick={() => onRenameSpreadsheet(spreadsheet._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onRenameSpreadsheet(spreadsheet._id)}>
             <FilePen className="text-muted-foreground" />
             <span>Rename</span>
           </ResponsiveDropdownMenuItem>
-          <ResponsiveDropdownMenuItem onClick={() => onManageSpreadsheet(spreadsheet._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onManageSpreadsheet(spreadsheet._id)}>
             <Settings className="text-muted-foreground" />
             <span>Settings</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuSeparator />
-          <ResponsiveDropdownMenuItem onClick={() => onUnstarSpreadsheet(spreadsheet._id)}>
+          <ResponsiveDropdownMenuItem onSelect={() => onUnstarSpreadsheet(spreadsheet._id)}>
             <StarOff className="text-muted-foreground" />
             <span>Unstar</span>
           </ResponsiveDropdownMenuItem>
