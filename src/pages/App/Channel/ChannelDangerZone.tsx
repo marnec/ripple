@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { removeFromKnownChannels } from "@/hooks/use-acknowledged-channels";
 
 interface ChannelDangerZoneProps {
   channelId: Id<"channels">;
@@ -25,6 +26,7 @@ export function ChannelDangerZone({ channelId, workspaceId }: ChannelDangerZoneP
     }
     try {
       await deleteChannel({ id: channelId });
+      removeFromKnownChannels(workspaceId, channelId);
       toast.success("Channel deleted");
       void navigate(`/workspaces/${workspaceId}`);
     } catch (error) {

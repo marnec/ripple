@@ -61,6 +61,16 @@ export interface ChannelEntry {
  * Call `autoAcknowledgeNext()` before a user-initiated action (create/delete)
  * so the resulting query update is immediately reflected without badges.
  */
+/**
+ * Remove a channel from the known list so it won't appear as a ghost item.
+ * Call this from the acting user's deletion flow before navigating away.
+ */
+export function removeFromKnownChannels(workspaceId: string, channelId: string) {
+  const current = readKnownList(workspaceId);
+  const updated = current.filter(([id]) => id !== channelId);
+  writeKnownList(workspaceId, updated);
+}
+
 export function useAcknowledgedChannels(
   workspaceId: string,
   channels: ChannelEntry[] | undefined,
