@@ -1,5 +1,6 @@
 import { FilePen, MoreHorizontal, Settings, StarOff } from "lucide-react";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 import {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuContent,
@@ -13,6 +14,7 @@ import {
 } from "../../../components/ui/sidebar";
 
 export interface DocumentSelectorItemProps {
+  idx: number;
   document: Doc<"documents">;
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
@@ -22,6 +24,7 @@ export interface DocumentSelectorItemProps {
 }
 
 export function DocumentSelectorItem({
+  idx,
   document,
   documentId,
   onDocumentSelect,
@@ -30,7 +33,8 @@ export function DocumentSelectorItem({
   onUnstarDocument,
 }: DocumentSelectorItemProps) {
   return (
-    <SidebarMenuSubItem className="group/subitem relative">
+    <SidebarMenuSubItem className="group/subitem relative animate-fade-in"
+      style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}>
       <SidebarMenuSubButton
         render={<div onClick={() => onDocumentSelect(document._id)} className="cursor-pointer pr-6" />}
         isActive={document._id === documentId}

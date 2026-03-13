@@ -186,6 +186,12 @@ export function AppSidebar() {
                     isOpen={isOpen("documents")}
                     onToggle={() => toggle("documents")}
                   />
+                </SidebarMenu>
+              </SidebarGroup>
+            </motion.div>
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarGroup className="py-0">
+                <SidebarMenu>
                   <DiagramSelectorList
                     workspaceId={workspaceId}
                     diagramId={diagramId}
@@ -194,6 +200,12 @@ export function AppSidebar() {
                     isOpen={isOpen("diagrams")}
                     onToggle={() => toggle("diagrams")}
                   />
+                </SidebarMenu>
+              </SidebarGroup>
+            </motion.div>
+            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarGroup className="py-0">
+                <SidebarMenu>
                   <SpreadsheetSelectorList
                     workspaceId={workspaceId}
                     spreadsheetId={spreadsheetId}

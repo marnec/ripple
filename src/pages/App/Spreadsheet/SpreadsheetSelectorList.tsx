@@ -86,9 +86,10 @@ export function SpreadsheetSelectorList({
         </SidebarMenuAction>
         <CollapsibleContent>
           <SidebarMenuSub className="gap-0.5">
-            {favoriteSheets?.map((spreadsheet) => (
+            {favoriteSheets?.map((spreadsheet, idx) => (
               <SpreadsheetSelectorItem
                 key={spreadsheet._id}
+                idx={idx}
                 spreadsheet={spreadsheet}
                 spreadsheetId={spreadsheetId}
                 onSpreadsheetSelect={onSpreadsheetSelect}

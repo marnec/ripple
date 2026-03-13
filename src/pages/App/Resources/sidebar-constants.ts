@@ -4,6 +4,8 @@
  */
 export const MAX_SIDEBAR_FAVORITES = 3;
 
+export const SIDEBAR_ELEMENT_FADEIN_DELAY = 75;
+
 /**
  * Height of a single sidebar sub-item row (matches SidebarMenuSubButton h-7 = 1.75rem).
  * Used to reserve vertical space for empty favorite slots.

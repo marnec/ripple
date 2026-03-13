@@ -69,37 +69,38 @@ export function ProjectSelectorList({
 
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
-        <SidebarMenuButton tooltip="Projects" onClick={handleHeaderClick} isActive={isListActive}>
-          <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-              <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-          </CollapsibleTrigger>
-          <Folder className="size-4" />
-          <span className="font-medium">Projects</span>
-        </SidebarMenuButton>
-        <SidebarMenuAction showOnHover onClick={() => setShowCreateProject(true)}>
-          <Plus />
-          <span className="sr-only">New Project</span>
-        </SidebarMenuAction>
-        <CollapsibleContent>
-          <SidebarMenuSub className="gap-0.5">
-            {favoriteProjects?.map((project) => (
-              <ProjectSelectorItem
-                key={project._id}
-                project={project}
-                projectId={projectId}
-                onProjectSelect={onProjectSelect}
-                onManageProject={navigateToProjectSettings}
-                onUnstarProject={handleUnstar}
-              />
-            ))}
-            <EmptyFavoriteSlots filled={favoriteProjects?.length ?? 0} workspaceId={workspaceId} resourceType="project" />
-          </SidebarMenuSub>
-        </CollapsibleContent>
-        <CreateProjectDialog
-          workspaceId={workspaceId}
-          open={showCreateProject}
-          onOpenChange={setShowCreateProject}
-        />
+      <SidebarMenuButton tooltip="Projects" onClick={handleHeaderClick} isActive={isListActive}>
+        <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+          <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+        </CollapsibleTrigger>
+        <Folder className="size-4" />
+        <span className="font-medium">Projects</span>
+      </SidebarMenuButton>
+      <SidebarMenuAction showOnHover onClick={() => setShowCreateProject(true)}>
+        <Plus />
+        <span className="sr-only">New Project</span>
+      </SidebarMenuAction>
+      <CollapsibleContent>
+        <SidebarMenuSub className="gap-0.5">
+          {favoriteProjects?.map((project, idx) => (
+            <ProjectSelectorItem
+              idx={idx}
+              key={project._id}
+              project={project}
+              projectId={projectId}
+              onProjectSelect={onProjectSelect}
+              onManageProject={navigateToProjectSettings}
+              onUnstarProject={handleUnstar}
+            />
+          ))}
+          <EmptyFavoriteSlots filled={favoriteProjects?.length ?? 0} workspaceId={workspaceId} resourceType="project" />
+        </SidebarMenuSub>
+      </CollapsibleContent>
+      <CreateProjectDialog
+        workspaceId={workspaceId}
+        open={showCreateProject}
+        onOpenChange={setShowCreateProject}
+      />
     </Collapsible>
   );
 }

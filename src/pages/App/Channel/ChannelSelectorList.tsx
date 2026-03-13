@@ -24,6 +24,7 @@ import {
 } from "../../../components/ui/sidebar";
 import { ChannelSelectorItem } from "./ChannelSelectorItem";
 import { CreateChannelDialog } from "./CreateChannelDialog";
+import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
@@ -119,7 +120,7 @@ export function ChannelSelectorList({
               <p className="px-2 py-1 text-xs text-muted-foreground">No channels yet</p>
             )}
             <AnimatePresence initial={false}>
-              {displayList.map((item) => {
+              {displayList.map((item, idx) => {
                 if (item.removed) {
                   return (
                     <motion.div
@@ -153,6 +154,8 @@ export function ChannelSelectorList({
                     transition={{ duration: 0.2, ease: "easeOut" }}
                   >
                     <ChannelSelectorItem
+                      className="animate-fade-in"
+                      style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}
                       channel={channel}
                       channelId={channelId}
                       onChannelSelect={(id) => {

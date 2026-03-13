@@ -1,7 +1,7 @@
 import { Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { SidebarMenuSubItem, useSidebar } from "@/components/ui/sidebar";
-import { MAX_SIDEBAR_FAVORITES, RESOURCE_ROUTES, preselectFavoriteFilter } from "./sidebar-constants";
+import { MAX_SIDEBAR_FAVORITES, RESOURCE_ROUTES, SIDEBAR_ELEMENT_FADEIN_DELAY, preselectFavoriteFilter } from "./sidebar-constants";
 import type { ResourceType } from "./sidebar-constants";
 
 /**
@@ -32,13 +32,14 @@ export function EmptyFavoriteSlots({
   return (
     <>
       {Array.from({ length: empty }, (_, i) => (
-        <SidebarMenuSubItem key={`empty-${i}`}>
+        <SidebarMenuSubItem className="animate-fade-in" key={`empty-${i}`} style={{ animationDelay: `${(filled + i) * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: 'backwards' }}>
           <div
             role="button"
             tabIndex={0}
             onClick={handleClick}
             onKeyDown={(e) => e.key === "Enter" && handleClick()}
             className="flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sidebar-foreground/25 hover:bg-sidebar-accent hover:text-sidebar-foreground/40"
+
           >
             <Star className="size-3 shrink-0" />
             <span className="truncate text-xs italic">select a favorite</span>

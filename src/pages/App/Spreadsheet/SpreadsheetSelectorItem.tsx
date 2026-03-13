@@ -12,8 +12,10 @@ import {
 } from "../../../components/ui/responsive-dropdown-menu";
 
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface SpreadsheetSelectorItemProps {
+  idx: number;
   spreadsheet: Doc<"spreadsheets">;
   spreadsheetId: Id<"spreadsheets"> | undefined;
   onSpreadsheetSelect: (id: string) => void;
@@ -23,6 +25,7 @@ export interface SpreadsheetSelectorItemProps {
 }
 
 export function SpreadsheetSelectorItem({
+  idx,
   spreadsheet,
   spreadsheetId,
   onSpreadsheetSelect,
@@ -31,7 +34,8 @@ export function SpreadsheetSelectorItem({
   onUnstarSpreadsheet
 }: SpreadsheetSelectorItemProps) {
   return (
-    <SidebarMenuSubItem className="group/subitem relative">
+    <SidebarMenuSubItem className="group/subitem relative animate-fade-in"
+      style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}>
       <SidebarMenuSubButton
         render={<div onClick={() => onSpreadsheetSelect(spreadsheet._id)} className="cursor-pointer pr-6" />}
         isActive={spreadsheet._id === spreadsheetId}

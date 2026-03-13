@@ -91,9 +91,10 @@ export function DocumentSelectorList({
         </SidebarMenuAction>
         <CollapsibleContent>
           <SidebarMenuSub className="gap-0.5">
-            {favoriteDocs?.map((document) => (
+            {favoriteDocs?.map((document, idx) => (
               <DocumentSelectorItem
                 key={document._id}
+                idx={idx}
                 document={document}
                 documentId={documentId}
                 onDocumentSelect={onDocumentSelect}

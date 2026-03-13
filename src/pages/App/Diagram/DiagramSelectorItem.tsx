@@ -12,8 +12,10 @@ import {
 } from "../../../components/ui/responsive-dropdown-menu";
 
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface DiagramSelectorItemProps {
+  idx: number;
   diagram: Doc<"diagrams">;
   diagramId: Id<"diagrams"> | undefined;
   onDiagramSelect: (id: string) => void;
@@ -23,6 +25,7 @@ export interface DiagramSelectorItemProps {
 }
 
 export function DiagramSelectorItem({
+  idx,
   diagram,
   diagramId,
   onDiagramSelect,
@@ -31,7 +34,8 @@ export function DiagramSelectorItem({
   onUnstarDiagram
 }: DiagramSelectorItemProps) {
   return (
-    <SidebarMenuSubItem className="group/subitem relative">
+    <SidebarMenuSubItem className="group/subitem relative animate-fade-in"
+      style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}>
       <SidebarMenuSubButton
         render={<div onClick={() => onDiagramSelect(diagram._id)} className="cursor-pointer pr-6" />}
         isActive={diagram._id === diagramId}
