@@ -4,7 +4,7 @@
  */
 export const MAX_SIDEBAR_FAVORITES = 3;
 
-export const SIDEBAR_ELEMENT_FADEIN_DELAY = 75;
+export const SIDEBAR_ELEMENT_FADEIN_DELAY = 25;
 
 /**
  * Height of a single sidebar sub-item row (matches SidebarMenuSubButton h-7 = 1.75rem).
