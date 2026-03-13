@@ -1,47 +1,68 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-function getIsStandalone() {
-  return window.matchMedia("(display-mode: standalone)").matches;
+// Capture the event at module level so it's not lost if it fires before React mounts
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
+const listeners = new Set<() => void>();
+
+function notifyListeners() {
+  for (const listener of listeners) listener();
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e as BeforeInstallPromptEvent;
+  notifyListeners();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredPrompt = null;
+  notifyListeners();
+});
+
+function subscribe(callback: () => void) {
+  listeners.add(callback);
+  return () => listeners.delete(callback);
+}
+
+function getSnapshot() {
+  return deferredPrompt;
 }
 
 export function useInstallPrompt() {
-  const [installPrompt, setInstallPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(getIsStandalone);
+  const prompt = useSyncExternalStore(subscribe, getSnapshot);
+  const [isInstalled, setIsInstalled] = useState(() =>
+    window.matchMedia("(display-mode: standalone)").matches,
+  );
 
   useEffect(() => {
-    if (isInstalled) return;
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e as BeforeInstallPromptEvent);
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, [isInstalled]);
+    const mql = window.matchMedia("(display-mode: standalone)");
+    const handler = (e: MediaQueryListEvent) => setIsInstalled(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
 
   const promptInstall = async () => {
-    if (!installPrompt) return false;
+    if (!prompt) return false;
 
-    await installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
+    await prompt.prompt();
+    const { outcome } = await prompt.userChoice;
 
     if (outcome === "accepted") {
+      deferredPrompt = null;
       setIsInstalled(true);
-      setInstallPrompt(null);
+      notifyListeners();
     }
 
     return outcome === "accepted";
   };
 
   return {
-    canInstall: !!installPrompt && !isInstalled,
+    canInstall: !!prompt && !isInstalled,
     isInstalled,
     promptInstall,
   };

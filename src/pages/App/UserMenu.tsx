@@ -15,12 +15,14 @@ import {
   CreditCard,
   LogOut,
   Mail,
+  Download,
   RefreshCw,
   Settings,
   Sparkles,
 } from "lucide-react";
 import { useContext, useState } from "react";
 import { usePwaUpdate } from "@/hooks/use-pwa-update";
+import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import { PendingInvitesDialog } from "./Workspace/PendingInvites";
 import { UserSettingsDialog } from "./UserSettingsDialog";
 import { usePendingInvites } from "@/hooks/use-pending-invites";
@@ -40,6 +42,7 @@ export function NavUser() {
   const [showSettings, setShowSettings] = useState(false);
   const pendingInvites = usePendingInvites();
   const { needRefresh, updateAndReload } = usePwaUpdate();
+  const { canInstall, promptInstall } = useInstallPrompt();
 
   return (
     <SidebarMenu>
@@ -59,7 +62,7 @@ export function NavUser() {
                   />
                   <AvatarFallback className="rounded-lg">CN</AvatarFallback>
                 </Avatar>
-                {(needRefresh || pendingInvites.length > 0) && (
+                {(needRefresh || canInstall || pendingInvites.length > 0) && (
                   <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-blue-600 ring-2 ring-sidebar" />
                 )}
               </div>
@@ -113,6 +116,12 @@ export function NavUser() {
                 <Settings />
                 Settings
               </DropdownMenuItem>
+              {canInstall && (
+                <DropdownMenuItem onSelect={() => void promptInstall()}>
+                  <Download />
+                  Install app
+                </DropdownMenuItem>
+              )}
               {needRefresh && (
                 <DropdownMenuItem onSelect={updateAndReload}>
                   <RefreshCw />
