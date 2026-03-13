@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import { RouteErrorFallback } from "./components/RouteErrorFallback";
 import App from "./pages/App/App";
 import { ChannelVideoCall } from "./pages/App/Channel/ChannelCall";
 import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
@@ -34,6 +35,7 @@ export const router = createBrowserRouter(
     {
       path: "/",
       element: <App />,
+      errorElement: <RouteErrorFallback />,
       children: [
         {
           index: true,
@@ -45,6 +47,7 @@ export const router = createBrowserRouter(
         },
         {
           path: "workspaces/:workspaceId",
+          errorElement: <RouteErrorFallback />,
           children: [
             {
               index: true,
