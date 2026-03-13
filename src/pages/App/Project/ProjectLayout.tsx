@@ -1,4 +1,5 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,7 @@ function ProjectLayoutContent({
   useRecordVisit(workspaceId, "project", projectId, project?.name);
 
   if (project === null) {
-    return <SomethingWentWrong />;
+    return <ResourceDeleted resourceType="project" />;
   }
 
   const isLoading = project === undefined;

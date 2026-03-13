@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { getUserColor } from "@/lib/user-colors";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
 import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { Trash2 } from "lucide-react";
@@ -71,7 +72,7 @@ function TaskDetailPageContent({
   }
 
   if (detail.task === null) {
-    return <SomethingWentWrong />;
+    return <ResourceDeleted resourceType="task" />;
   }
 
   return (

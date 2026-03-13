@@ -3,7 +3,7 @@ import { FileX2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 type ResourceDeletedProps = {
-  resourceType: "channel" | "document" | "diagram" | "spreadsheet" | "project";
+  resourceType: "channel" | "document" | "diagram" | "spreadsheet" | "project" | "task" | "cycle" | "workspace";
 };
 
 export function ResourceDeleted({ resourceType }: ResourceDeletedProps) {

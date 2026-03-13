@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import SomethingWentWrong from "@/pages/SomethingWentWrong";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -28,7 +28,7 @@ export function WorkspaceSettings() {
   }
 
   if (workspace === null) {
-    return <SomethingWentWrong />;
+    return <ResourceDeleted resourceType="workspace" />;
   }
 
   const name = nameOverride ?? workspace.name;

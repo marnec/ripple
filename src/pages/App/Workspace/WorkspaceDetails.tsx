@@ -14,6 +14,7 @@ import {
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { QueryParams } from "@shared/types/routes";
 
 const overviewCards = [
@@ -32,6 +33,10 @@ export function WorkspaceDetails() {
 
   const workspace = useQuery(api.workspaces.get, { id });
   const overview = useQuery(api.workspaces.overview, { workspaceId: id });
+
+  if (workspace === null) {
+    return <ResourceDeleted resourceType="workspace" />;
+  }
 
   return (
     <div className="container mx-auto p-4 animate-fade-in">

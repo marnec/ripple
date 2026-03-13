@@ -3,6 +3,8 @@ import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
+import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
 import { Link2, Link2Off, Settings } from "lucide-react";
@@ -34,7 +36,7 @@ export function DocumentEditorContainer() {
   const { documentId } = useParams<QueryParams>();
 
   if (!documentId) {
-    return <p className="p-20">No document selected</p>;
+    return <SomethingWentWrong />;
   }
 
   return <DocumentEditor documentId={documentId} key={documentId} />;
@@ -241,6 +243,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         resolvedTheme={resolvedTheme}
       />
     );
+  }
+
+  if (document === null) {
+    return <ResourceDeleted resourceType="document" />;
   }
 
   if (isLoading || !editor || !document) {

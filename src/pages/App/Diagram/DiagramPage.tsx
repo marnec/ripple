@@ -1,6 +1,7 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { Link, useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
@@ -112,6 +113,10 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
 
   if (!viewer || diagram === undefined) {
     return <div className="h-full w-full" />;
+  }
+
+  if (diagram === null) {
+    return <ResourceDeleted resourceType="diagram" />;
   }
 
   // Show snapshot fallback in cold-start offline mode

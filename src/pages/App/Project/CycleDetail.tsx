@@ -1,4 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
@@ -77,11 +78,11 @@ function CycleDetailContent({
   }, [swipeOpenId]);
 
   if (cycle === null) {
-    return <SomethingWentWrong />;
+    return <ResourceDeleted resourceType="cycle" />;
   }
 
   if (cycle === undefined) {
-    return <div className="flex-1 flex flex-col min-h-0"><div className="px-4 py-2.5 md:px-8 border-b"><div className="h-5 w-48 bg-muted animate-pulse rounded" /></div></div>;
+    return <div className="flex-1 flex flex-col min-h-0"><div className="px-4 py-2.5 md:px-8 border-b"><div className="h-5 w-48" /></div></div>;
   }
 
   return (

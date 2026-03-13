@@ -1,3 +1,4 @@
+import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -9,7 +10,7 @@ export function ChannelDetails() {
   const [showCreate, setShowCreate] = useState(false);
 
   if (!workspaceId) {
-    return <div>Workspace not found</div>;
+    return <SomethingWentWrong />;
   }
 
   return (

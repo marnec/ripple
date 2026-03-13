@@ -1,5 +1,6 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Separator } from "@/components/ui/separator";
+import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { ChannelRole } from "@shared/enums";
 import { QueryParams } from "@shared/types/routes";
@@ -36,7 +37,11 @@ function ChannelSettingsContent({
     );
   }
 
-  if (channel === null || currentUser === null) {
+  if (channel === null) {
+    return <ResourceDeleted resourceType="channel" />;
+  }
+
+  if (currentUser === null) {
     return <SomethingWentWrong />;
   }
 
