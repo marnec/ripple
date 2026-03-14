@@ -1,5 +1,5 @@
 import type { BlockNoteEditor } from "@blocknote/core";
-import { useEditorSelectionChange } from "@blocknote/react";
+import { useEditorChange, useEditorSelectionChange } from "@blocknote/react";
 import {
   CodeIcon,
   FontBoldIcon,
@@ -9,7 +9,7 @@ import {
   UnderlineIcon,
 } from "@radix-ui/react-icons";
 import { ImageIcon, Phone } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
 
@@ -55,7 +55,7 @@ export function FormattingToolbar({
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEditorSelectionChange(() => {
+  const syncStyles = useCallback(() => {
     const styles = editor.getActiveStyles();
     setActiveStyles({
       bold: !!styles.bold,
@@ -64,7 +64,10 @@ export function FormattingToolbar({
       strike: !!styles.strike,
       code: !!styles.code,
     });
-  }, editor);
+  }, [editor]);
+
+  useEditorSelectionChange(syncStyles, editor);
+  useEditorChange(syncStyles, editor);
 
   const handleAttachImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -93,6 +96,7 @@ export function FormattingToolbar({
             title={title}
             onClick={() => {
               editor.toggleStyles({ [key]: true });
+              setActiveStyles((prev) => ({ ...prev, [key]: !prev[key] }));
               editor.focus();
             }}
           >
