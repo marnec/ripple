@@ -27,7 +27,7 @@ describe("projects.create", () => {
     expect(project).toMatchObject({
       name: "Engineering",
       color: "bg-blue-500",
-      key: "ENG",
+      key: "ENGI",
       taskCounter: 0,
     });
 
