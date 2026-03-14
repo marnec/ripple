@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { DEFAULT_DIAGRAM_NAME } from "@shared/constants";
 import { getEnrichedReferencesTo } from "./contentReferences";
+import { logActivity } from "./auditLog";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -179,6 +180,11 @@ export const create = mutation({
       name: diagramName,
     });
 
+    await logActivity(ctx, {
+      userId, resourceType: "diagrams", resourceId: diagramId,
+      action: "created", newValue: diagramName,
+    });
+
     return diagramId;
   },
 });
@@ -207,6 +213,11 @@ export const rename = mutation({
       throw new ConvexError(
         `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
       );
+
+    await logActivity(ctx, {
+      userId, resourceType: "diagrams", resourceId: id,
+      action: "renamed", oldValue: diagram.name, newValue: name,
+    });
 
     await ctx.db.patch(id, { name });
     return null;
@@ -257,6 +268,11 @@ export const remove = mutation({
         return { status: "has_references" as const, references };
       }
     }
+
+    await logActivity(ctx, {
+      userId, resourceType: "diagrams", resourceId: id,
+      action: "deleted", oldValue: diagram.name,
+    });
 
     // Clean up Yjs snapshot from storage
     if (diagram.yjsSnapshotId) {

@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums";
+import { logActivity } from "./auditLog";
 
 const projectValidator = v.object({
   _id: v.id("projects"),
@@ -100,6 +101,11 @@ export const create = mutation({
       isDefault: false,
       isCompleted: true,
       setsStartDate: false,
+    });
+
+    await logActivity(ctx, {
+      userId, resourceType: "projects", resourceId: projectId,
+      action: "created", newValue: name,
     });
 
     return projectId;
@@ -254,6 +260,12 @@ export const update = mutation({
     }
 
     if (Object.keys(patch).length > 0) {
+      if (name !== undefined && name !== project.name) {
+        await logActivity(ctx, {
+          userId, resourceType: "projects", resourceId: id,
+          action: "renamed", oldValue: project.name, newValue: name,
+        });
+      }
       await ctx.db.patch(id, patch);
     }
 
@@ -275,6 +287,11 @@ export const remove = mutation({
     if (project.creatorId !== userId) {
       throw new ConvexError("Only project creator can delete the project");
     }
+
+    await logActivity(ctx, {
+      userId, resourceType: "projects", resourceId: id,
+      action: "deleted", oldValue: project.name,
+    });
 
     // Cascade delete: tasks, taskComments, and taskStatuses
     // 1. Delete all taskComments for tasks in this project

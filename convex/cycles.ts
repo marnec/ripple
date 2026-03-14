@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { logActivity } from "./auditLog";
 
 const cycleStatusValidator = v.union(
   v.literal("draft"),
@@ -114,7 +115,7 @@ export const create = mutation({
 
     const status = computeStatus(args.startDate, args.dueDate);
 
-    return await ctx.db.insert("cycles", {
+    const cycleId = await ctx.db.insert("cycles", {
       projectId: args.projectId,
       workspaceId: args.workspaceId,
       name: args.name,
@@ -124,6 +125,13 @@ export const create = mutation({
       status,
       creatorId: userId,
     });
+
+    await logActivity(ctx, {
+      userId, resourceType: "cycles", resourceId: cycleId,
+      action: "created", newValue: args.name,
+    });
+
+    return cycleId;
   },
 });
 
@@ -215,6 +223,11 @@ export const remove = mutation({
       .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
       .collect();
     await Promise.all(cycleTasks.map((ct) => ctx.db.delete(ct._id)));
+
+    await logActivity(ctx, {
+      userId, resourceType: "cycles", resourceId: cycleId,
+      action: "deleted", oldValue: cycle.name,
+    });
 
     await ctx.db.delete(cycleId);
     return null;

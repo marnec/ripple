@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
+import { logActivity } from "./auditLog";
 
 export const create = mutation({
   args: {
@@ -24,6 +25,11 @@ export const create = mutation({
       workspaceId,
       userId,
       role: WorkspaceRole.ADMIN,
+    });
+
+    await logActivity(ctx, {
+      userId, resourceType: "workspaces", resourceId: workspaceId,
+      action: "created", newValue: name,
     });
 
     return workspaceId;
@@ -148,6 +154,13 @@ export const update = mutation({
 
     if (membership?.role !== WorkspaceRole.ADMIN) {
       throw new ConvexError("Not authorized to update this workspace");
+    }
+
+    if (name !== workspace.name) {
+      await logActivity(ctx, {
+        userId, resourceType: "workspaces", resourceId: id,
+        action: "renamed", oldValue: workspace.name, newValue: name,
+      });
     }
 
     await ctx.db.patch(id, {

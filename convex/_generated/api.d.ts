@@ -1962,6 +1962,17 @@ export declare const internal: {
     >;
   };
   migrations: {
+    migrateAuditActionPrefix: FunctionReference<
+      "mutation",
+      "internal",
+      { cursor?: string },
+      {
+        cursor: string | null;
+        isDone: boolean;
+        migrated: number;
+        scanned: number;
+      }
+    >;
     migrateTaskStatusesToProject: FunctionReference<
       "mutation",
       "internal",
@@ -2308,6 +2319,22 @@ export declare const components: {
           userAgent?: string;
         },
         string
+      >;
+      migrateActionPrefix: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          batchSize?: number;
+          cursor?: string;
+          newPrefix: string;
+          oldPrefix: string;
+        },
+        {
+          cursor: string | null;
+          isDone: boolean;
+          migrated: number;
+          scanned: number;
+        }
       >;
       queryByAction: FunctionReference<
         "query",

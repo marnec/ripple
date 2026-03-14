@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { DEFAULT_DOC_NAME } from "@shared/constants";
+import { logActivity } from "./auditLog";
 
 export const create = mutation({
   args: {
@@ -20,6 +21,11 @@ export const create = mutation({
     const documentId = await ctx.db.insert("documents", {
       workspaceId,
       name: documentName,
+    });
+
+    await logActivity(ctx, {
+      userId, resourceType: "documents", resourceId: documentId,
+      action: "created", newValue: documentName,
     });
 
     return documentId;
@@ -60,6 +66,11 @@ export const rename = mutation({
       .collect();
 
     if (match.length) throw new ConvexError("Document name already exists");
+
+    await logActivity(ctx, {
+      userId, resourceType: "documents", resourceId: id,
+      action: "renamed", oldValue: document.name, newValue: name,
+    });
 
     await ctx.db.patch(id, { name });
     return null;
@@ -219,6 +230,11 @@ export const remove = mutation({
     if (document.yjsSnapshotId) {
       await ctx.storage.delete(document.yjsSnapshotId);
     }
+
+    await logActivity(ctx, {
+      userId, resourceType: "documents", resourceId: id,
+      action: "deleted", oldValue: document.name,
+    });
 
     // Clean up outgoing content references from this document
     const outgoingRefs = await ctx.db

@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { DEFAULT_SPREADSHEET_NAME } from "@shared/constants";
 import { getEnrichedReferencesTo } from "./contentReferences";
+import { logActivity } from "./auditLog";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -179,6 +180,11 @@ export const create = mutation({
       name: spreadsheetName,
     });
 
+    await logActivity(ctx, {
+      userId, resourceType: "spreadsheets", resourceId: spreadsheetId,
+      action: "created", newValue: spreadsheetName,
+    });
+
     return spreadsheetId;
   },
 });
@@ -207,6 +213,11 @@ export const rename = mutation({
       throw new ConvexError(
         `User="${userId}" is not a member of workspace="${spreadsheet.workspaceId}"`,
       );
+
+    await logActivity(ctx, {
+      userId, resourceType: "spreadsheets", resourceId: id,
+      action: "renamed", oldValue: spreadsheet.name, newValue: name,
+    });
 
     await ctx.db.patch(id, { name });
     return null;
@@ -257,6 +268,11 @@ export const remove = mutation({
         return { status: "has_references" as const, references };
       }
     }
+
+    await logActivity(ctx, {
+      userId, resourceType: "spreadsheets", resourceId: id,
+      action: "deleted", oldValue: spreadsheet.name,
+    });
 
     // Clean up cached cell references
     const cellRefs = await ctx.db

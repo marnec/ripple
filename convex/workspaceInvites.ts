@@ -4,6 +4,7 @@ import { WorkspaceRole } from "@shared/enums/roles";
 import { InviteStatus } from "@shared/enums/inviteStatus";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
+import { logActivity } from "./auditLog";
 
 export const create = mutation({
   args: {
@@ -61,6 +62,11 @@ export const create = mutation({
       email,
       invitedBy: userId,
       status: InviteStatus.PENDING,
+    });
+
+    await logActivity(ctx, {
+      userId, resourceType: "workspaceInvites", resourceId: inviteId,
+      action: "invited", newValue: email,
     });
 
     // Send invite email
@@ -164,6 +170,11 @@ export const accept = mutation({
     // Update invite status
     await ctx.db.patch(inviteId, {
       status: InviteStatus.ACCEPTED,
+    });
+
+    await logActivity(ctx, {
+      userId, resourceType: "workspaceInvites", resourceId: inviteId,
+      action: "accepted",
     });
   },
 });

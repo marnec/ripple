@@ -3,16 +3,15 @@ NEXT STEPS:
 
 - [ ] there is still a problem sometimes with the in-call follow action not working
 
-- [ ] extend audit-log usage
-- [ ] investigate why task activity uses metadata instead of after before
+- [x] extend audit-log usage
 
 - [ ] link previews in chat
 
-- [ ] fix acknowledged deletion
+- [x] fix acknowledged deletion
 
-- [ ] restyle workspace home page, remove skeletons, add fade-in, add missing cards, evaluate if resource lists make sense or other informations are better
+- [x] restyle workspace home page, remove skeletons, add fade-in, add missing cards, evaluate if resource lists make sense or other informations are better
 
-- [ ] add navigation to access settings of various things
+- [x] add navigation to access settings of various things
 
 - knowledge-graph
     - [ ] add task description embedding in tasks (auto add relates-to relationship)

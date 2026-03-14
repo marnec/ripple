@@ -5,6 +5,7 @@ import { mutation, query } from "./_generated/server";
 import { ChannelMember } from "@shared/types/channel";
 import { getUserDisplayName } from "@shared/displayName";
 import { channelRoleSchema } from "./schema";
+import { logActivity } from "./auditLog";
 
 const channelMemberValidator = v.object({
   _id: v.id("channelMembers"),
@@ -109,12 +110,19 @@ export const addToChannel = mutation({
       throw new ConvexError(`User id=${userId} is already a member of channel id=${channelId}`);
     }
 
-    return ctx.db.insert("channelMembers", {
+    const memberId = await ctx.db.insert("channelMembers", {
       userId,
       channelId,
       workspaceId: channel.workspaceId,
       role: ChannelRole.MEMBER,
     });
+
+    await logActivity(ctx, {
+      userId: callerId, resourceType: "channelMembers", resourceId: channelId,
+      action: "member_added", newValue: userId,
+    });
+
+    return memberId;
   },
 });
 
@@ -174,6 +182,11 @@ export const removeFromChannel = mutation({
       }
     }
 
+    await logActivity(ctx, {
+      userId: callerId, resourceType: "channelMembers", resourceId: channelId,
+      action: "member_removed", oldValue: userId,
+    });
+
     await ctx.db.delete(channelMember._id);
     return null;
   },
@@ -229,6 +242,11 @@ export const changeMemberRole = mutation({
         );
       }
     }
+
+    await logActivity(ctx, {
+      userId: callerId, resourceType: "channelMembers", resourceId: channelMember.channelId,
+      action: "role_changed", oldValue: channelMember.role, newValue: role,
+    });
 
     await ctx.db.patch(channelMemberId, { role });
     return null;

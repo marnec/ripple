@@ -5,6 +5,7 @@ import { ChannelRole } from "@shared/enums";
 import { stream } from "convex-helpers/server/stream";
 import { getAll } from "convex-helpers/server/relationships";
 import schema from "./schema";
+import { logActivity } from "./auditLog";
 
 export const create = mutation({
   args: {
@@ -35,6 +36,10 @@ export const create = mutation({
       await ctx.db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN, workspaceId });
     }
 
+    await logActivity(ctx, {
+      userId, resourceType: "channels", resourceId: channelId,
+      action: "created", newValue: name,
+    });
 
     return channelId;
   },
@@ -138,6 +143,12 @@ export const update = mutation({
     if (name !== undefined) updates.name = name;
 
     if (Object.keys(updates).length > 0) {
+      if (name !== undefined && name !== channel.name) {
+        await logActivity(ctx, {
+          userId, resourceType: "channels", resourceId: id,
+          action: "renamed", oldValue: channel.name, newValue: name,
+        });
+      }
       await ctx.db.patch(id, updates);
     }
 
@@ -176,6 +187,11 @@ export const remove = mutation({
         throw new ConvexError("Not authorized to delete this channel");
       }
     }
+
+    await logActivity(ctx, {
+      userId, resourceType: "channels", resourceId: id,
+      action: "deleted", oldValue: channel.name,
+    });
 
     const channelMessages = await ctx.db
       .query("messages")

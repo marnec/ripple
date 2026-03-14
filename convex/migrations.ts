@@ -1,6 +1,9 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api.js";
 import { DataModel, Id } from "./_generated/dataModel.js";
+import { internalMutation } from "./_generated/server.js";
+import { v } from "convex/values";
+import { auditLog } from "./auditLog.js";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 
@@ -162,6 +165,31 @@ export const stripChannelRoleCount = migrations.define({
         isPublic: channel.isPublic,
       });
     }
+  },
+});
+
+/**
+ * Rename audit log action prefix from "task." to "tasks." for consistency
+ * with the new generic logActivity convention (resourceType.action).
+ *
+ * Run: npx convex run migrations:migrateAuditActionPrefix
+ * Call repeatedly until isDone is true.
+ */
+export const migrateAuditActionPrefix = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  returns: v.object({
+    migrated: v.number(),
+    scanned: v.number(),
+    cursor: v.union(v.string(), v.null()),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    return await auditLog.migrateActionPrefix(ctx, {
+      oldPrefix: "task.",
+      newPrefix: "tasks.",
+      cursor: args.cursor,
+      batchSize: 200,
+    });
   },
 });
 

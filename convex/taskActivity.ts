@@ -94,7 +94,7 @@ export const timeline = query({
     const activityItems = auditEntries.map((entry) => {
       const user = entry.actorId ? userMap.get(entry.actorId) : undefined;
       const meta = (entry.metadata ?? {}) as { oldValue?: string; newValue?: string };
-      const type = entry.action.startsWith("task.") ? entry.action.slice(5) : entry.action;
+      const type = entry.action.startsWith("tasks.") ? entry.action.slice(6) : entry.action;
       return {
         kind: "activity" as const,
         _id: entry._id,
