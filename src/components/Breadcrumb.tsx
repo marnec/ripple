@@ -8,7 +8,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import React, { memo, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface BreadcrumbItemData {
@@ -18,61 +18,11 @@ interface BreadcrumbItemData {
   category?: string;
 }
 
-/**
- * Each resource breadcrumb subscribes to its own name query,
- * so parent items (e.g. workspace) don't re-render when a sibling name changes.
- */
-const ResourceBreadcrumbLink = memo(function ResourceBreadcrumbLink({
-  item,
-  onClick,
-}: {
-  item: BreadcrumbItemData;
-  onClick: (href: string) => void;
-}) {
-  const name = useQuery(
-    api.breadcrumb.getResourceName,
-    item.resourceId ? { resourceId: item.resourceId as any } : "skip",
-  );
-
-  let displayName: string;
-  if (item.resourceId) {
-    displayName = name === undefined ? "..." : (name ?? item.label);
-  } else {
-    displayName = item.label;
-  }
-
-  return (
-    <BreadcrumbLink
-      onClick={() => onClick(item.href)}
-      className="cursor-pointer"
-    >
-      {displayName}
-    </BreadcrumbLink>
-  );
-});
-
-function MobileCurrentTitle({ item }: { item: BreadcrumbItemData }) {
-  const name = useQuery(
-    api.breadcrumb.getResourceName,
-    item.resourceId ? { resourceId: item.resourceId as any } : "skip",
-  );
-
-  let displayName: string;
-  if (item.resourceId) {
-    displayName = name === undefined ? "..." : (name ?? item.label);
-  } else {
-    displayName = item.label;
-  }
-
-  return (
-    <span className="text-sm font-medium truncate">{displayName}</span>
-  );
-}
-
 export function DynamicBreadcrumb() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
+
   const items = useMemo(() => {
     const pathSegments = location.pathname.split("/").filter(Boolean);
     const built: BreadcrumbItemData[] = [];
@@ -94,10 +44,23 @@ export function DynamicBreadcrumb() {
     return built;
   }, [location.pathname]);
 
+  // Collect all resource IDs and batch-fetch their names in a single query
+  const resourceIds = useMemo(
+    () => items.filter((item) => item.resourceId).map((item) => item.resourceId!),
+    [items],
+  );
+  const namesMap = useQuery(
+    api.breadcrumb.getResourceNames,
+    resourceIds.length > 0 ? { resourceIds: resourceIds as any } : "skip",
+  );
+
   if (isMobile) {
     const currentItem = items.length > 0 ? items[items.length - 1] : null;
     if (!currentItem) return null;
-    return <MobileCurrentTitle item={currentItem} />;
+    const displayName = currentItem.resourceId
+      ? (namesMap === undefined ? "..." : (namesMap?.[currentItem.resourceId] ?? currentItem.label))
+      : currentItem.label;
+    return <span className="text-sm font-medium truncate">{displayName}</span>;
   }
 
   return (
@@ -105,6 +68,13 @@ export function DynamicBreadcrumb() {
       <BreadcrumbList>
         {items.map((item, index) => {
           const delay = `${index * 50}ms`;
+          let displayName: string;
+          if (item.resourceId) {
+            displayName = namesMap === undefined ? "..." : (namesMap?.[item.resourceId] ?? item.label);
+          } else {
+            displayName = item.label;
+          }
+
           return (
             <React.Fragment key={item.href}>
               {index > 0 && (
@@ -117,10 +87,12 @@ export function DynamicBreadcrumb() {
                 className="animate-in fade-in duration-200 fill-mode-both"
                 style={{ animationDelay: delay }}
               >
-                <ResourceBreadcrumbLink
-                  item={item}
-                  onClick={(href) => void navigate(href)}
-                />
+                <BreadcrumbLink
+                  onClick={() => void navigate(item.href)}
+                  className="cursor-pointer"
+                >
+                  {displayName}
+                </BreadcrumbLink>
               </BreadcrumbItem>
             </React.Fragment>
           );

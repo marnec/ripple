@@ -311,5 +311,6 @@ export default defineSchema({
     visitedAt: v.number(),
   })
     .index("by_user_workspace", ["userId", "workspaceId"])
+    .index("by_user_workspace_visited", ["userId", "workspaceId", "visitedAt"])
     .index("by_user_resource", ["userId", "resourceId"]),
 });

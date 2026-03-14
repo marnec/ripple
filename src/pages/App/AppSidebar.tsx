@@ -20,7 +20,6 @@ import { makeFunctionReference } from "convex/server";
 import { LayoutGroup, motion } from "framer-motion";
 import { CheckSquare } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 
 const workspacesListRef = makeFunctionReference<"query">("workspaces:list");
@@ -34,7 +33,9 @@ import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
 
-export function AppSidebar() {
+import { AllFavoriteIds } from "./Document/DocumentSelectorList";
+
+export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds | null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { setOpen } = useSidebar();
@@ -47,8 +48,6 @@ export function AppSidebar() {
 
   const workspaces = useQuery(workspacesListRef);
   const activeWorkspace = useQuery(workspacesGetRef, workspaceId ? { id: workspaceId } : "skip");
-  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, workspaceId ? { workspaceId } : "skip");
-
   const handleChannelSelect = (id: string | null) => {
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/channels`);
@@ -162,7 +161,7 @@ export function AppSidebar() {
                     workspaceId={workspaceId}
                     projectId={projectId}
                     onProjectSelect={handleProjectSelect}
-                    allFavoriteIds={allFavoriteIds}
+                    allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("projects")}
                     onToggle={() => toggle("projects")}
                   />
@@ -182,7 +181,7 @@ export function AppSidebar() {
                     workspaceId={workspaceId}
                     documentId={documentId}
                     onDocumentSelect={handleDocumentSelect}
-                    allFavoriteIds={allFavoriteIds}
+                    allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("documents")}
                     onToggle={() => toggle("documents")}
                   />
@@ -196,7 +195,7 @@ export function AppSidebar() {
                     workspaceId={workspaceId}
                     diagramId={diagramId}
                     onDiagramSelect={handleDiagramSelect}
-                    allFavoriteIds={allFavoriteIds}
+                    allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("diagrams")}
                     onToggle={() => toggle("diagrams")}
                   />
@@ -210,7 +209,7 @@ export function AppSidebar() {
                     workspaceId={workspaceId}
                     spreadsheetId={spreadsheetId}
                     onSpreadsheetSelect={handleSpreadsheetSelect}
-                    allFavoriteIds={allFavoriteIds}
+                    allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("spreadsheets")}
                     onToggle={() => toggle("spreadsheets")}
                   />

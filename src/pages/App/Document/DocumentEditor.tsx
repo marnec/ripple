@@ -13,6 +13,7 @@ import { useTheme } from "next-themes";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { useViewer } from "../UserContext";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
@@ -63,7 +64,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     api.workspaceMembers.membersByWorkspace,
     document ? { workspaceId: document.workspaceId } : "skip",
   );
-  const viewer = useQuery(api.users.viewer);
+  const viewer = useViewer();
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const removeCellRef = useMutation(api.spreadsheetCellRefs.removeCellRef);
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);

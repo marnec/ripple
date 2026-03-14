@@ -73,14 +73,11 @@ export const listRecent = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    const entries = await ctx.db
+    const top = await ctx.db
       .query("recentActivity")
-      .withIndex("by_user_workspace", (q) => q.eq("userId", userId).eq("workspaceId", workspaceId))
-      .collect();
-
-    // Sort by visitedAt descending and take top N
-    entries.sort((a, b) => b.visitedAt - a.visitedAt);
-    const top = entries.slice(0, limit);
+      .withIndex("by_user_workspace_visited", (q) => q.eq("userId", userId).eq("workspaceId", workspaceId))
+      .order("desc")
+      .take(limit);
 
     // Check existence of each resource (resourceId is stored as string but is a valid Convex ID)
     const results = await Promise.all(

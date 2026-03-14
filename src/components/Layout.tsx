@@ -4,9 +4,12 @@ import { QueryParams } from "@shared/types/routes";
 import { Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { CommandPalette } from "./CommandPalette";
 import { PullToRefresh } from "./PullToRefresh";
 import { useActiveCall } from "../contexts/ActiveCallContext";
+import { FavoritesContext } from "../contexts/FavoritesContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
 import { HeaderSlotContext, useHeaderSlotRef } from "../contexts/HeaderSlotContext";
 import { DynamicBreadcrumb } from "./Breadcrumb";
@@ -38,6 +41,7 @@ export function Layout() {
   const { isFollowing, followColor } = useFollowMode();
   const [commandOpen, setCommandOpen] = useState(false);
   const [headerSlotCallbackRef, headerSlotNode] = useHeaderSlotRef();
+  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, workspaceId ? { workspaceId } : "skip");
 
   useEffect(() => {
     if (pathname === "/" && isMobile) setOpen(true);
@@ -55,8 +59,8 @@ export function Layout() {
   }, []);
 
   return (
-    <>
-      <AppSidebar />
+    <FavoritesContext.Provider value={allFavoriteIds ?? undefined}>
+      <AppSidebar allFavoriteIds={allFavoriteIds} />
       <SidebarInset className="min-w-0">
         <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
           {isMobile ? (
@@ -107,6 +111,6 @@ export function Layout() {
           onOpenChange={setCommandOpen}
         />
       )}
-    </>
+    </FavoritesContext.Provider>
   );
 }

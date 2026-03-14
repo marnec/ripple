@@ -639,6 +639,12 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_user_resource: ["userId", "resourceId", "_creationTime"];
       by_user_workspace: ["userId", "workspaceId", "_creationTime"];
+      by_user_workspace_visited: [
+        "userId",
+        "workspaceId",
+        "visitedAt",
+        "_creationTime",
+      ];
     };
     searchIndexes: {};
     vectorIndexes: {};

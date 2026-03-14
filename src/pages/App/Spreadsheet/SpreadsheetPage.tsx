@@ -13,6 +13,7 @@ import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
+import { useViewer } from "../UserContext";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
@@ -157,7 +158,7 @@ function SpreadsheetEditor({
   const isMobile = useIsMobile();
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
-  const viewer = useQuery(api.users.viewer);
+  const viewer = useViewer();
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
   const [showRefHighlights, setShowRefHighlights] = useState(false);
 

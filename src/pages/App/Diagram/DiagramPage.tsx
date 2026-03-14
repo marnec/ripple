@@ -7,6 +7,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import { useViewer } from "../UserContext";
 import { useEffect, useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { useTheme } from "next-themes";
@@ -25,7 +26,7 @@ import * as Y from "yjs";
 
 function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
   const isMobile = useIsMobile();
-  const viewer = useQuery(api.users.viewer);
+  const viewer = useViewer();
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
   useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
