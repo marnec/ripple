@@ -26,23 +26,33 @@ const ResponsiveDropdownMenuContext = React.createContext<{
 function ResponsiveDropdownMenu({
   children,
   direction,
+  onOpenChange: onOpenChangeProp,
 }: {
   children: React.ReactNode;
   direction?: "top" | "bottom";
+  onOpenChange?: (open: boolean) => void;
 }) {
   const isMobile = useIsMobile();
   const [open, setOpen] = React.useState(false);
 
-  const close = React.useCallback(() => setOpen(false), []);
+  const handleOpenChange = React.useCallback(
+    (value: boolean) => {
+      setOpen(value);
+      onOpenChangeProp?.(value);
+    },
+    [onOpenChangeProp],
+  );
+
+  const close = React.useCallback(() => handleOpenChange(false), [handleOpenChange]);
 
   return (
     <ResponsiveDropdownMenuContext.Provider value={{ isMobile, close }}>
       {isMobile ? (
-        <Drawer open={open} onOpenChange={setOpen} direction={direction}>
+        <Drawer open={open} onOpenChange={handleOpenChange} direction={direction}>
           {children}
         </Drawer>
       ) : (
-        <DropdownMenu>{children}</DropdownMenu>
+        <DropdownMenu open={open} onOpenChange={handleOpenChange}>{children}</DropdownMenu>
       )}
     </ResponsiveDropdownMenuContext.Provider>
   );

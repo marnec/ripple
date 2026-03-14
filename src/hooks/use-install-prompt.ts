@@ -33,10 +33,20 @@ function getSnapshot() {
   return deferredPrompt;
 }
 
+// iOS Safari doesn't support beforeinstallprompt — detect it so we can show manual instructions
+const isIOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+const isIOSSafari =
+  isIOS && !("beforeinstallprompt" in window);
+
 export function useInstallPrompt() {
   const prompt = useSyncExternalStore(subscribe, getSnapshot);
-  const [isInstalled, setIsInstalled] = useState(() =>
-    window.matchMedia("(display-mode: standalone)").matches,
+  const [isInstalled, setIsInstalled] = useState(
+    () =>
+      window.matchMedia("(display-mode: standalone)").matches ||
+      ("standalone" in navigator && (navigator as Navigator & { standalone: boolean }).standalone),
   );
 
   useEffect(() => {
@@ -62,8 +72,9 @@ export function useInstallPrompt() {
   };
 
   return {
-    canInstall: !!prompt && !isInstalled,
+    canInstall: (!!prompt || isIOSSafari) && !isInstalled,
     isInstalled,
+    isIOSSafari,
     promptInstall,
   };
 }

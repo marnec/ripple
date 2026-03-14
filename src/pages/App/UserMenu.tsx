@@ -20,7 +20,7 @@ import {
   Settings,
   Sparkles,
 } from "lucide-react";
-import { useContext, useState } from "react";
+import { useContext, useState, type ReactNode } from "react";
 import { usePwaUpdate } from "@/hooks/use-pwa-update";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import { PendingInvitesDialog } from "./Workspace/PendingInvites";
@@ -33,6 +33,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "../../components/ui/sidebar";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+  ResponsiveDialogDescription,
+} from "@/components/ui/responsive-dialog";
 
 
 export function NavUser() {
@@ -42,7 +49,15 @@ export function NavUser() {
   const [showSettings, setShowSettings] = useState(false);
   const pendingInvites = usePendingInvites();
   const { needRefresh, updateAndReload } = usePwaUpdate();
-  const { canInstall, promptInstall } = useInstallPrompt();
+  const { canInstall, isIOSSafari, promptInstall } = useInstallPrompt();
+  const [showIOSInstall, setShowIOSInstall] = useState(false);
+  const [installDotDismissed, setInstallDotDismissed] = useState(
+    () => localStorage.getItem("ripple:install-dot-seen") === "1",
+  );
+  const dismissInstallDot = () => {
+    localStorage.setItem("ripple:install-dot-seen", "1");
+    setInstallDotDismissed(true);
+  };
 
   return (
     <SidebarMenu>
@@ -62,7 +77,7 @@ export function NavUser() {
                   />
                   <AvatarFallback className="rounded-lg">CN</AvatarFallback>
                 </Avatar>
-                {(needRefresh || canInstall || pendingInvites.length > 0) && (
+                {(needRefresh || (canInstall && !installDotDismissed) || pendingInvites.length > 0) && (
                   <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-blue-600 ring-2 ring-sidebar" />
                 )}
               </div>
@@ -117,7 +132,7 @@ export function NavUser() {
                 Settings
               </DropdownMenuItem>
               {canInstall && (
-                <DropdownMenuItem onSelect={() => void promptInstall()}>
+                <DropdownMenuItem onSelect={() => { dismissInstallDot(); isIOSSafari ? setShowIOSInstall(true) : void promptInstall(); }}>
                   <Download />
                   Install app
                 </DropdownMenuItem>
@@ -151,6 +166,56 @@ export function NavUser() {
       </SidebarMenuItem>
       <PendingInvitesDialog open={showInvites} onOpenChange={setShowInvites} />
       <UserSettingsDialog open={showSettings} onOpenChange={setShowSettings} />
+      <IOSInstallDialog open={showIOSInstall} onOpenChange={setShowIOSInstall} />
     </SidebarMenu>
+  );
+}
+
+function IOSShareIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12M7 8l5-5 5 5" />
+      <path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" />
+    </svg>
+  );
+}
+
+function IOSInstallStep({ step, icon, children }: { step: number; icon: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
+        {step}
+      </div>
+      <div className="flex items-center gap-2 pt-0.5 text-sm">
+        {icon}
+        <span>{children}</span>
+      </div>
+    </div>
+  );
+}
+
+function IOSInstallDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Install Ripple</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
+            Add Ripple to your home screen for the best experience.
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <div className="flex flex-col gap-4 px-4 pb-6 pt-2">
+          <IOSInstallStep step={1} icon={<IOSShareIcon className="size-5 text-blue-500" />}>
+            Tap the <span className="font-medium">Share</span> button in Safari's toolbar
+          </IOSInstallStep>
+          <IOSInstallStep step={2} icon={<span className="text-base">+</span>}>
+            Scroll down and tap <span className="font-medium">Add to Home Screen</span>
+          </IOSInstallStep>
+          <IOSInstallStep step={3} icon={null}>
+            Tap <span className="font-medium">Add</span> to confirm
+          </IOSInstallStep>
+        </div>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
