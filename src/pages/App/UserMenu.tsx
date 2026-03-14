@@ -132,7 +132,7 @@ export function NavUser() {
                 Settings
               </DropdownMenuItem>
               {canInstall ? (
-                <DropdownMenuItem onSelect={() => { dismissInstallDot(); isIOSSafari ? setShowIOSInstall(true) : void promptInstall(); }}>
+                <DropdownMenuItem onSelect={() => { dismissInstallDot(); if (isIOSSafari) { setShowIOSInstall(true); } else { void promptInstall(); } }}>
                   <Download />
                   Install app
                 </DropdownMenuItem>
