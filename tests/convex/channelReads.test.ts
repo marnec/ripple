@@ -92,10 +92,18 @@ describe("channelReads", () => {
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
 
-      // Mark as read first
-      await asUser.mutation(api.channelReads.markRead, { channelId });
+      // Set lastReadAt to a known past time to avoid same-millisecond race
+      await t.run(async (ctx) => {
+        const membership = await ctx.db
+          .query("channelMembers")
+          .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
+          .first();
+        if (membership) {
+          await ctx.db.patch(membership._id, { lastReadAt: Date.now() - 10000 });
+        }
+      });
 
-      // Insert messages after marking read
+      // Insert messages after lastReadAt
       await insertMessage(t, { channelId, userId });
       await insertMessage(t, { channelId, userId });
 
