@@ -9,13 +9,9 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Clean old caches from previous versions
 cleanupOutdatedCaches();
 
-// Activate new service worker immediately (skip waiting for old tabs to close)
-self.addEventListener("install", () => {
-  void self.skipWaiting();
-});
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
-});
+// Let the main thread control when the new SW activates (registerType: "prompt").
+// Do NOT call skipWaiting/clients.claim here — that would bypass the update prompt
+// and cause surprise reloads.
 
 // Push notification handler
 self.addEventListener("push", (event) => {
