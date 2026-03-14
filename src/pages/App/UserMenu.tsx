@@ -48,7 +48,7 @@ export function NavUser() {
   const [showInvites, setShowInvites] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const pendingInvites = usePendingInvites();
-  const { needRefresh, updateAndReload } = usePwaUpdate();
+  const { needRefresh, updateAndReload, checkForUpdate } = usePwaUpdate();
   const { canInstall, isIOSSafari, promptInstall } = useInstallPrompt();
   const [showIOSInstall, setShowIOSInstall] = useState(false);
   const [installDotDismissed, setInstallDotDismissed] = useState(
@@ -131,19 +131,23 @@ export function NavUser() {
                 <Settings />
                 Settings
               </DropdownMenuItem>
-              {canInstall && (
+              {canInstall ? (
                 <DropdownMenuItem onSelect={() => { dismissInstallDot(); isIOSSafari ? setShowIOSInstall(true) : void promptInstall(); }}>
                   <Download />
                   Install app
                 </DropdownMenuItem>
-              )}
-              {needRefresh && (
+              ) : needRefresh ? (
                 <DropdownMenuItem onSelect={updateAndReload}>
                   <RefreshCw />
                   Update available
                   <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full bg-blue-600 px-1.5 text-[10px]">
                     1
                   </Badge>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onSelect={() => void checkForUpdate()}>
+                  <RefreshCw />
+                  Check for updates
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onSelect={() => setShowInvites(true)}>
