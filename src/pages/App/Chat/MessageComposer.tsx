@@ -12,7 +12,7 @@ import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { File, FolderKanban, PenTool, Table2, X } from "lucide-react";
+import { File, FolderKanban, PenTool, SendHorizonal, Table2, X } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -22,6 +22,7 @@ import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
 import { FormattingToolbar } from "./FormattingToolbar";
+import { Kbd } from "../../../components/ui/kbd";
 
 interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
@@ -42,11 +43,14 @@ const schema = BlockNoteSchema.create({
   },
 });
 
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const modKey = isMac ? "Cmd" : "Ctrl";
+
 const dictionary = {
   ...en,
   placeholders: {
     ...en.placeholders,
-    default: "Ctrl+Enter to send",
+    default: "Type a message... # refs, @ mentions",
   },
 };
 
@@ -276,7 +280,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           slashMenu={false}
           formattingToolbar={false}
           onKeyDownCapture={(event) => {
-            if (event.key === "Enter" && event.ctrlKey) {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
               event.preventDefault();
               sendMessage();
             }
@@ -285,9 +289,16 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
           <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
         </BlockNoteView>
-        <Button disabled={!canSend} onClick={sendMessage} className="shrink-0 transition-transform active:scale-95">
-          Send
-        </Button>
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <Button disabled={!canSend} onClick={sendMessage} size="icon" className="sm:w-18 sm:gap-1.5 sm:px-3 transition-transform active:scale-95">
+            <SendHorizonal className="h-4 w-4" />
+            <span className="hidden sm:inline text-sm">Send</span>
+          </Button>
+          <div className="hidden sm:flex items-center gap-0.5">
+            <Kbd>{modKey}</Kbd>
+            <Kbd>Enter</Kbd>
+          </div>
+        </div>
       </div>
     </div>
   );

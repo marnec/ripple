@@ -85,7 +85,7 @@ export function FormattingToolbar({
   };
 
   return (
-    <div className="flex justify-between items-start">
+    <div className="flex justify-between items-center">
       <div className="flex flex-row gap-2">
         {STYLE_TOGGLES.map(({ key, icon: Icon, title }) => (
           <Toggle
@@ -136,8 +136,9 @@ export function FormattingToolbar({
         />
       </div>
       {showCallButton && onStartCall && (
-        <Button variant="ghost" size="icon" onClick={onStartCall} title="Start a call">
+        <Button variant="ghost" size="icon" onClick={onStartCall} title="Start a call" className="sm:w-18 sm:gap-1.5 sm:px-3">
           <Phone className="h-4 w-4" />
+          <span className="hidden sm:inline text-sm">Call</span>
         </Button>
       )}
     </div>
