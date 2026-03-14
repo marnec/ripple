@@ -8,7 +8,7 @@ import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { SearchIcon, Settings } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -39,6 +39,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   // Record visit for recents
   useRecordVisit(workspaceId as Id<"workspaces"> | undefined, "channel", channelId, channel?.name);
 
+  const userSentMessageRef = useRef(false);
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });
   const [replyingTo, setReplyingTo] = useState<ReplyingToMessage>(null);
   const [viewMode, setViewMode] = useState<'chat' | 'context'>('chat');
@@ -69,6 +70,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
       });
     } else {
       const isomorphicId = crypto.randomUUID();
+      userSentMessageRef.current = true;
 
       await sendMessage({
         body,
@@ -193,7 +195,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           )}
 
           <div className="min-h-0 flex-1">
-            <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading}>
+            <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef}>
               {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
               {(messages || []).map((message, index) => (
