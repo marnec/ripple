@@ -1,4 +1,5 @@
 import { renderBlockGroups, type Block } from "@/components/BlockNoteRenderer";
+import { useState } from "react";
 
 export type { Block };
 
@@ -21,6 +22,7 @@ export function MessageRenderer({ blocks, onImageClick }: MessageRendererProps) 
   });
 
   const imageUrl = (imageBlock?.props as { url?: string })?.url;
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   return (
     <>
@@ -30,11 +32,15 @@ export function MessageRenderer({ blocks, onImageClick }: MessageRendererProps) 
           className="block cursor-pointer"
           onClick={() => onImageClick?.(imageUrl)}
         >
+          {!imageLoaded && (
+            <div className="w-48 h-48 max-w-xs sm:max-w-sm rounded-sm bg-muted" />
+          )}
           <img
             src={imageUrl}
             alt=""
-            className="max-w-xs sm:max-w-sm max-h-80 rounded-sm hover:brightness-90 transition-[filter]"
+            className={`max-w-xs sm:max-w-sm max-h-80 rounded-sm hover:brightness-90 transition-[filter] ${imageLoaded ? "animate-in fade-in duration-300" : "hidden"}`}
             loading="lazy"
+            onLoad={() => setImageLoaded(true)}
           />
         </button>
       )}

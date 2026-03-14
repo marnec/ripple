@@ -99,6 +99,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   );
 
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
 
   const editor = useCreateBlockNote(editorConfig);
@@ -231,6 +232,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         editor={editor}
         uploadFile={uploadFile}
         onAttachImage={setAttachedImage}
+        onUploadStart={() => setIsUploadingImage(true)}
+        onUploadEnd={() => setIsUploadingImage(false)}
         showCallButton={showCallButton}
         onStartCall={() => void navigate("videocall")}
       />
@@ -244,16 +247,22 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           onCancel={() => setReplyingTo(null)}
         />
       )}
-      {attachedImage && (
+      {(attachedImage || isUploadingImage) && (
         <div className="relative w-fit">
-          <img src={attachedImage} alt="" className="max-h-32 rounded-md object-contain" />
-          <button
-            type="button"
-            onClick={() => setAttachedImage(null)}
-            className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
-          >
-            <X className="h-3 w-3" />
-          </button>
+          {attachedImage ? (
+            <img src={attachedImage} alt="" className="max-h-32 rounded-md object-contain animate-in fade-in duration-300" />
+          ) : (
+            <div className="h-32 w-48 rounded-md bg-muted" />
+          )}
+          {attachedImage && (
+            <button
+              type="button"
+              onClick={() => setAttachedImage(null)}
+              className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </div>
       )}
       <div className="flex gap-2">

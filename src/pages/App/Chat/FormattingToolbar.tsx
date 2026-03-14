@@ -31,6 +31,8 @@ type FormattingToolbarProps = {
   editor: BlockNoteEditor<any, any, any>;
   uploadFile?: (file: File) => Promise<string>;
   onAttachImage: (url: string) => void;
+  onUploadStart?: () => void;
+  onUploadEnd?: () => void;
   showCallButton?: boolean;
   onStartCall?: () => void;
 };
@@ -39,6 +41,8 @@ export function FormattingToolbar({
   editor,
   uploadFile,
   onAttachImage,
+  onUploadStart,
+  onUploadEnd,
   showCallButton,
   onStartCall,
 }: FormattingToolbarProps) {
@@ -65,11 +69,14 @@ export function FormattingToolbar({
   const handleAttachImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadFile) return;
+    onUploadStart?.();
     try {
       const url = await uploadFile(file);
       onAttachImage(url);
     } catch (err) {
       console.error("Image upload failed:", err);
+    } finally {
+      onUploadEnd?.();
     }
     e.target.value = "";
   };
