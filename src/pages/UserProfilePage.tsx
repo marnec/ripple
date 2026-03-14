@@ -4,13 +4,14 @@ import { useMutation } from "convex/react";
 import { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function UserProfilePage() {
   const user = useContext(UserContext);
   const updateUser = useMutation(api.users.update);
   const navigate = useNavigate();
-  
+
   const [name, setName] = useState("");
 
   const userName = user?.name || "";
@@ -22,8 +23,8 @@ export function UserProfilePage() {
     e.preventDefault();
 
     if (!user?._id) {
-        void navigate("/");
-        return;
+      void navigate("/");
+      return;
     }
 
     try {
@@ -39,24 +40,36 @@ export function UserProfilePage() {
   };
 
   return (
-    <div className="container mx-auto flex flex-col items-center justify-center min-h-screen p-4">
-      <h1 className="text-3xl font-semibold mb-6">User Profile</h1>
-      <form onSubmit={(e) => void handleSubmit(e)} className="w-full max-w-md bg-card shadow-md rounded-lg p-6 space-y-4">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-muted-foreground">Name</label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 block w-full border border-input rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-ring"
-            required
-          />
+    <div className="flex min-h-svh items-center justify-center px-4 py-8">
+      <div className="w-full max-w-100">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage your account information
+          </p>
         </div>
-        <button type="submit" className="w-full px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition duration-200">
-          Update Profile
-        </button>
-      </form>
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          className="flex flex-col gap-5 rounded-lg border bg-card p-6"
+        >
+          <div className="space-y-2">
+            <label htmlFor="name" className="text-sm font-medium">
+              Name
+            </label>
+            <Input
+              id="name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-11"
+              required
+            />
+          </div>
+          <Button type="submit" className="h-11">
+            Update profile
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

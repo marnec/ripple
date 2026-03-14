@@ -23,17 +23,32 @@ export function EmailVerification({ email }: { email: string }) {
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)}>
-      <label htmlFor="code">Verification Code</label>
-      <Input
-        name="code"
-        id="code"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        className="mb-4"
-        required
-      />
-      <Button type="submit">Verify Email</Button>
+    <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-5">
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight">Verify your email</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          We sent a verification code to{" "}
+          <span className="font-medium text-foreground">{email}</span>
+        </p>
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="verification-code" className="text-sm font-medium">
+          Verification code
+        </label>
+        <Input
+          name="code"
+          id="verification-code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="Enter code"
+          className="h-11"
+          autoComplete="one-time-code"
+          required
+        />
+      </div>
+      <Button type="submit" className="h-11">
+        Verify email
+      </Button>
     </form>
   );
 }

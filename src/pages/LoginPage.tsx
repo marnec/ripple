@@ -1,4 +1,5 @@
 import { SignInForm } from "@/pages/Authentication/SignInForm";
+import { AuthLayout } from "@/pages/Authentication/AuthLayout";
 import { Authenticated } from "convex/react";
 import { Navigate } from "react-router-dom";
 
@@ -8,9 +9,9 @@ export const LoginPage = () => {
       <Authenticated>
         <Navigate to="/" replace />
       </Authenticated>
-      <div className="flex flex-row h-svh items-center justify-center">
+      <AuthLayout>
         <SignInForm />
-      </div>
+      </AuthLayout>
     </>
   );
 };
