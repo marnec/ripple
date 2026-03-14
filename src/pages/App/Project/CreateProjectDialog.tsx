@@ -115,7 +115,7 @@ export function CreateProjectDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange} direction="top">
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Create New Project</ResponsiveDialogTitle>

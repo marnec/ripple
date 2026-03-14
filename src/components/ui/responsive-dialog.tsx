@@ -32,19 +32,22 @@ type ResponsiveDialogProps = {
   children: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Direction the mobile drawer opens from. Defaults to "bottom". Use "top" for dialogs with inputs to avoid keyboard interference. */
+  direction?: "bottom" | "top";
 };
 
 function ResponsiveDialog({
   children,
   open,
   onOpenChange,
+  direction = "bottom",
 }: ResponsiveDialogProps) {
   const isMobile = useIsMobile();
 
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
       {isMobile ? (
-        <Drawer open={open} onOpenChange={onOpenChange}>{children}</Drawer>
+        <Drawer open={open} onOpenChange={onOpenChange} direction={direction}>{children}</Drawer>
       ) : (
         <Dialog open={open} onOpenChange={onOpenChange}>{children}</Dialog>
       )}

@@ -46,7 +46,7 @@ export function RenameSpreadsheetDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent className="sm:max-w-md">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Rename Spreadsheet</ResponsiveDialogTitle>

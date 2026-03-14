@@ -156,7 +156,7 @@ export function SearchDialog({ channelId, onJumpToMessage, children, initialSear
   }, [initialSearchTerm]);
 
   return (
-    <ResponsiveDialog open={isOpen} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={isOpen} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogTrigger render={children as React.ReactElement} />
       <ResponsiveDialogContent className="max-w-2xl max-h-[80vh]">
         <ResponsiveDialogHeader>

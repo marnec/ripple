@@ -163,7 +163,7 @@ export function BlockPickerDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange} direction="top">
       <ResponsiveDialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="flex items-center gap-2">

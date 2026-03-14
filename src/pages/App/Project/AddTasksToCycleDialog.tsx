@@ -173,7 +173,7 @@ export function AddTasksToCycleDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={handleOpenChange} direction="top">
       <ResponsiveDialogContent className="sm:max-w-md">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Add tasks to cycle</ResponsiveDialogTitle>

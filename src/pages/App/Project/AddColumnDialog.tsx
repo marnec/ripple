@@ -69,7 +69,7 @@ export function AddColumnDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Add Column</ResponsiveDialogTitle>

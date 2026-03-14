@@ -43,7 +43,7 @@ export function CreateWorkspaceDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Create New Workspace</ResponsiveDialogTitle>

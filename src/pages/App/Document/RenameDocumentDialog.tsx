@@ -47,7 +47,7 @@ export function RenameDocumentDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Rename document </ResponsiveDialogTitle>

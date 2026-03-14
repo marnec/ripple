@@ -77,7 +77,7 @@ export function CreateChannelDialog({
   };
 
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange}>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>Create New Channel</ResponsiveDialogTitle>

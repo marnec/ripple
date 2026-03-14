@@ -1,12 +1,13 @@
 import { Button } from "../../../components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "../../../components/ui/dialog";
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "../../../components/ui/responsive-dialog";
 import { Input } from "../../../components/ui/input";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
@@ -43,35 +44,37 @@ export function InviteUserDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite User</DialogTitle>
-          <DialogDescription>
+    <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
+      <ResponsiveDialogContent>
+        <ResponsiveDialogHeader>
+          <ResponsiveDialogTitle>Invite User</ResponsiveDialogTitle>
+          <ResponsiveDialogDescription>
             Invite a user to join this workspace
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email Address
-            </label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter email address"
-              required
-            />
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={!email}>
-              Send Invitation
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </ResponsiveDialogDescription>
+        </ResponsiveDialogHeader>
+        <ResponsiveDialogBody>
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">
+                Email Address
+              </label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter email address"
+                required
+              />
+            </div>
+            <ResponsiveDialogFooter>
+              <Button type="submit" disabled={!email}>
+                Send Invitation
+              </Button>
+            </ResponsiveDialogFooter>
+          </form>
+        </ResponsiveDialogBody>
+      </ResponsiveDialogContent>
+    </ResponsiveDialog>
   );
 }
