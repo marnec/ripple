@@ -82,14 +82,14 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     documentName: string;
   } | null>(null);
 
-  const uploadFile = useUploadFile(document?.workspaceId);
+  const fileUpload = useUploadFile(document?.workspaceId);
 
   const { editor, isLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
     documentId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "anonymous",
     schema,
-    uploadFile,
+    uploadFile: fileUpload?.uploadFile,
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);

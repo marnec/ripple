@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
 import { CornerUpLeft, Loader2, Pencil, Plus, Trash2, X as XIcon } from "lucide-react";
-import React, { Suspense, useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import {
   ContextMenu,
@@ -15,7 +15,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu";
-import { Dialog, DialogOverlay, DialogPortal } from "../../../components/ui/dialog";
+import { Dialog, DialogClose, DialogOverlay, DialogPortal } from "../../../components/ui/dialog";
 import { useChatContext } from "./ChatContext";
 import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
@@ -88,6 +88,10 @@ export function Message({ message }: MessageProps) {
   const messageHasImages = useMemo(() => hasImageBlocks(blocks), [blocks]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
+  const handleImageClick = useCallback((_thumbnailUrl: string, fullUrl: string) => {
+    setLightboxUrl(fullUrl);
+  }, []);
+
   return (
     <>
       <ContextMenu>
@@ -122,7 +126,7 @@ export function Message({ message }: MessageProps) {
                     <MessageQuotePreview message={message.replyTo ?? null} compact />
                   </div>
                 )}
-                <MessageRenderer blocks={blocks} onImageClick={setLightboxUrl} />
+                <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
               </div>
             </MentionedResourcesContext.Provider>
             </MentionedProjectsContext.Provider>
@@ -191,26 +195,51 @@ export function Message({ message }: MessageProps) {
         </ContextMenuContent>
       </ContextMenu>
 
-      <Dialog open={!!lightboxUrl} onOpenChange={() => setLightboxUrl(null)}>
-        <DialogPortal>
-          <DialogOverlay className="cursor-zoom-out" onClick={() => setLightboxUrl(null)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-            <img
-              src={lightboxUrl!}
-              alt=""
-              className="max-w-[90vw] max-h-[90vh] object-contain pointer-events-auto"
-            />
-          </div>
-          <button
-            type="button"
-            autoFocus
-            onClick={() => setLightboxUrl(null)}
-            className="fixed right-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white ring-1 ring-white/20 hover:bg-black/80 hover:ring-white/40 transition-all focus:outline-none focus:ring-2 focus:ring-white/50"
-          >
-            <XIcon className="h-5 w-5" />
-          </button>
-        </DialogPortal>
-      </Dialog>
+      {lightboxUrl && (
+        <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      )}
     </>
+  );
+}
+
+function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogPortal>
+        <DialogOverlay className="cursor-zoom-out" onClick={onClose} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <img
+            src={url}
+            alt=""
+            className="max-w-[90vw] max-h-[90vh] object-contain pointer-events-auto"
+          />
+        </div>
+        <DialogClose
+          ref={closeRef}
+          render={
+            <button
+              type="button"
+              className="fixed right-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white ring-1 ring-white/20 hover:bg-black/80 hover:ring-white/40 transition-all focus:outline-none focus:ring-2 focus:ring-white/50"
+            />
+          }
+        >
+          <XIcon className="h-5 w-5" />
+        </DialogClose>
+      </DialogPortal>
+    </Dialog>
   );
 }

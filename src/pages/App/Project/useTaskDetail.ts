@@ -81,7 +81,7 @@ export function useTaskDetail({
   const [titleValue, setTitleValue] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadFile = useUploadFile(workspaceId);
+  const fileUpload = useUploadFile(workspaceId);
 
   // Collaborative editor - Yjs handles sync automatically
   const { editor, isLoading: editorLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
@@ -91,7 +91,7 @@ export function useTaskDetail({
     schema: taskDescriptionSchema,
     resourceType: "task",
     enabled: !!taskId && collaborationEnabled,
-    uploadFile,
+    uploadFile: fileUpload?.uploadFile,
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);

@@ -12,6 +12,8 @@ import { ImageIcon, Phone } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
+import { generateThumbnail } from "@/lib/image-thumbnail";
+import type { ImageUploadResult } from "../../../hooks/use-upload-file";
 
 type StyleKey = "bold" | "italic" | "underline" | "strike" | "code";
 
@@ -29,20 +31,20 @@ const STYLE_TOGGLES: {
 
 type FormattingToolbarProps = {
   editor: BlockNoteEditor<any, any, any>;
-  uploadFile?: (file: File) => Promise<string>;
-  onAttachImage: (url: string) => void;
-  onUploadStart?: () => void;
-  onUploadEnd?: () => void;
+  uploadImageWithThumbnail?: (original: File, thumbnail: File, isOriginal: boolean) => Promise<ImageUploadResult>;
+  onImagePreview: (blobUrl: string) => void;
+  onImageReady: (urls: ImageUploadResult) => void;
+  onImageUploadFailed: () => void;
   showCallButton?: boolean;
   onStartCall?: () => void;
 };
 
 export function FormattingToolbar({
   editor,
-  uploadFile,
-  onAttachImage,
-  onUploadStart,
-  onUploadEnd,
+  uploadImageWithThumbnail,
+  onImagePreview,
+  onImageReady,
+  onImageUploadFailed,
   showCallButton,
   onStartCall,
 }: FormattingToolbarProps) {
@@ -71,15 +73,15 @@ export function FormattingToolbar({
 
   const handleAttachImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !uploadFile) return;
-    onUploadStart?.();
+    if (!file || !uploadImageWithThumbnail) return;
     try {
-      const url = await uploadFile(file);
-      onAttachImage(url);
+      const { thumbnail, previewUrl, isOriginal } = await generateThumbnail(file);
+      onImagePreview(previewUrl);
+      const urls = await uploadImageWithThumbnail(file, thumbnail, isOriginal);
+      onImageReady(urls);
     } catch (err) {
       console.error("Image upload failed:", err);
-    } finally {
-      onUploadEnd?.();
+      onImageUploadFailed();
     }
     e.target.value = "";
   };
@@ -122,7 +124,7 @@ export function FormattingToolbar({
           variant="outline"
           size="sm"
           title="Attach image"
-          disabled={!uploadFile}
+          disabled={!uploadImageWithThumbnail}
           onClick={() => fileInputRef.current?.click()}
         >
           <ImageIcon className="h-4 w-4" />

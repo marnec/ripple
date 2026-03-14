@@ -1,11 +1,15 @@
 import { renderBlockGroups, type Block } from "@/components/BlockNoteRenderer";
-import { useState } from "react";
 
 export type { Block };
 
+interface ImageProps {
+  url?: string;
+  fullUrl?: string;
+}
+
 interface MessageRendererProps {
   blocks: Block[];
-  onImageClick?: (url: string) => void;
+  onImageClick?: (thumbnailUrl: string, fullUrl: string) => void;
 }
 
 /**
@@ -21,31 +25,28 @@ export function MessageRenderer({ blocks, onImageClick }: MessageRendererProps) 
     return false;
   });
 
-  const imageUrl = (imageBlock?.props as { url?: string })?.url;
-  const [imageLoaded, setImageLoaded] = useState(false);
+  const imageProps = imageBlock?.props as ImageProps | undefined;
+  const thumbnailUrl = imageProps?.url;
+  const fullUrl = imageProps?.fullUrl || thumbnailUrl;
 
   return (
     <>
-      {imageUrl && (
+      {thumbnailUrl && (
         <button
           type="button"
           className="block cursor-pointer"
-          onClick={() => onImageClick?.(imageUrl)}
+          onClick={() => onImageClick?.(thumbnailUrl, fullUrl!)}
         >
-          {!imageLoaded && (
-            <div className="w-48 h-48 max-w-xs sm:max-w-sm rounded-sm bg-muted" />
-          )}
           <img
-            src={imageUrl}
+            src={thumbnailUrl}
             alt=""
-            className={`max-w-xs sm:max-w-sm max-h-80 rounded-sm hover:brightness-90 transition-[filter] ${imageLoaded ? "animate-in fade-in duration-300" : "hidden"}`}
+            className="max-w-xs sm:max-w-sm max-h-80 rounded-sm hover:brightness-90 transition-[filter]"
             loading="lazy"
-            onLoad={() => setImageLoaded(true)}
           />
         </button>
       )}
       {hasText && (
-        <div className={imageUrl ? "px-3 pb-2 pt-1.5" : undefined}>
+        <div className={thumbnailUrl ? "px-3 pb-2 pt-1.5" : undefined}>
           {renderBlockGroups(rest)}
         </div>
       )}

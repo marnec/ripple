@@ -136,7 +136,8 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);
 
-  const uploadFile = useUploadFile(workspaceId);
+  const fileUpload = useUploadFile(workspaceId);
+  const uploadFile = fileUpload?.uploadFile;
 
   const [filter, setFilter] = useState<"all" | "comments">("comments");
   const [editingCommentId, setEditingCommentId] = useState<Id<"taskComments"> | null>(null);

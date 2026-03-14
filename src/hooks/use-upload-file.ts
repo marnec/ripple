@@ -3,9 +3,16 @@ import { useCallback, useEffect, useRef } from "react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
+export interface ImageUploadResult {
+  /** Thumbnail URL (or original if already small) */
+  url: string;
+  /** Full-resolution URL */
+  fullUrl: string;
+}
+
 /**
- * Returns an `uploadFile` function compatible with BlockNote's `uploadFile` editor option.
- * Uploads files to Convex storage and records metadata in the `medias` table.
+ * Returns an `uploadFile` function compatible with BlockNote's `uploadFile` editor option,
+ * plus an `uploadImageWithThumbnail` for chat image uploads.
  */
 export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
   const generateUploadUrl = useMutation(api.medias.generateUploadUrl);
@@ -17,15 +24,13 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
     workspaceIdRef.current = workspaceId;
   }, [workspaceId]);
 
-  const uploadFile = useCallback(
+  const uploadSingleFile = useCallback(
     async (file: File): Promise<string> => {
       const wsId = workspaceIdRef.current;
       if (!wsId) throw new Error("Workspace not available for upload");
 
-      // 1. Get a short-lived upload URL from Convex
       const uploadUrl = await generateUploadUrl();
 
-      // 2. POST the file to the upload URL
       const result = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": file.type },
@@ -40,7 +45,6 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
         storageId: Id<"_storage">;
       };
 
-      // 3. Save metadata and get the serving URL
       const url = await saveMedia({
         storageId,
         workspaceId: wsId,
@@ -52,8 +56,27 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
 
       return url;
     },
-    [generateUploadUrl, saveMedia]
+    [generateUploadUrl, saveMedia],
   );
 
-  return workspaceId ? uploadFile : undefined;
+  const uploadImageWithThumbnail = useCallback(
+    async (original: File, thumbnail: File, isOriginal: boolean): Promise<ImageUploadResult> => {
+      if (isOriginal) {
+        const url = await uploadSingleFile(original);
+        return { url, fullUrl: url };
+      }
+
+      const [thumbnailUrl, fullUrl] = await Promise.all([
+        uploadSingleFile(thumbnail),
+        uploadSingleFile(original),
+      ]);
+
+      return { url: thumbnailUrl, fullUrl };
+    },
+    [uploadSingleFile],
+  );
+
+  return workspaceId
+    ? { uploadFile: uploadSingleFile, uploadImageWithThumbnail }
+    : undefined;
 }

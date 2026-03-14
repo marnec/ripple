@@ -31,7 +31,8 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);
 
-  const uploadFile = useUploadFile(workspaceId);
+  const fileUpload = useUploadFile(workspaceId);
+  const uploadFile = fileUpload?.uploadFile;
 
   const [editingCommentId, setEditingCommentId] = useState<Id<"taskComments"> | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);

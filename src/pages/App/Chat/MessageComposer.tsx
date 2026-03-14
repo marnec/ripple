@@ -3,7 +3,7 @@ import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote, useEditorChange, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../components/ui/button";
 import { useChatContext } from "./ChatContext";
@@ -13,12 +13,13 @@ import { ProjectReference } from "../Project/CustomInlineContent/ProjectReferenc
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 import { File, FolderKanban, PenTool, SendHorizonal, Table2, X } from "lucide-react";
+import { RippleSpinner } from "../../../components/RippleSpinner";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@shared/displayName";
-import { useUploadFile } from "../../../hooks/use-upload-file";
+import { useUploadFile, type ImageUploadResult } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
 import { FormattingToolbar } from "./FormattingToolbar";
@@ -72,7 +73,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const currentUser = useQuery(api.users.viewer);
 
-  const uploadFile = useUploadFile(workspaceId);
+  const fileUpload = useUploadFile(workspaceId);
 
   const { userNames, projectNames } = useMemo(() => {
     const u = new Map<string, string>();
@@ -102,7 +103,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     [],
   );
 
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  // Image state: local blob preview + uploaded URLs (thumbnail + full)
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<ImageUploadResult | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
 
@@ -112,13 +115,18 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   useEffect(() => {
     if (!editor?._tiptapEditor?.isInitialized) return;
     editor._tiptapEditor.commands.clearContent();
-    setAttachedImage(null);
+    setImagePreview(null);
+    setImageUrls(null);
+    setIsUploadingImage(false);
 
     if (editingMessage.id && editingMessage.body) {
       const blocks: any[] = JSON.parse(editingMessage.body);
       const imageBlock = blocks.find((b: any) => b.type === "image");
       if (imageBlock?.props?.url) {
-        setAttachedImage(imageBlock.props.url);
+        const url = imageBlock.props.url as string;
+        const fullUrl = (imageBlock.props.fullUrl as string) || url;
+        setImagePreview(url);
+        setImageUrls({ url, fullUrl });
       }
       const textBlocks = blocks.filter((b: any) => b.type !== "image");
       if (textBlocks.length > 0) {
@@ -128,7 +136,29 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);
 
-  const canSend = !isEmpty || !!attachedImage;
+  const hasImage = !!imagePreview;
+  const canSend = (!isEmpty || !!imageUrls) && !isUploadingImage;
+
+  const clearImage = useCallback(() => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImagePreview(null);
+    setImageUrls(null);
+    setIsUploadingImage(false);
+  }, [imagePreview]);
+
+  const handleImagePreview = useCallback((blobUrl: string) => {
+    setImagePreview(blobUrl);
+    setIsUploadingImage(true);
+  }, []);
+
+  const handleImageReady = useCallback((urls: ImageUploadResult) => {
+    setImageUrls(urls);
+    setIsUploadingImage(false);
+  }, []);
+
+  const handleImageUploadFailed = useCallback(() => {
+    clearImage();
+  }, [clearImage]);
 
   const getMemberItems = useMemberSuggestions({
     members: workspaceMembers,
@@ -215,15 +245,15 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const sendMessage = () => {
     if (!canSend || !editor) return;
     const blocks: any[] = [...editor.document];
-    if (attachedImage) {
-      blocks.unshift({ type: "image", props: { url: attachedImage } });
+    if (imageUrls) {
+      blocks.unshift({ type: "image", props: { url: imageUrls.url, fullUrl: imageUrls.fullUrl } });
     }
     const body = JSON.stringify(blocks);
     const plainText = blocksToPlainText(editor.document, userNames, projectNames);
 
     handleSubmit(body, plainText);
     editorClear(editor);
-    setAttachedImage(null);
+    clearImage();
   };
 
   useEditorChange(() => {
@@ -234,10 +264,10 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     <div className="flex shrink-0 sm:flex-col flex-col-reverse p-2 pb-[calc(0.5rem+var(--safe-area-bottom))] max-w-full border-t gap-2">
       <FormattingToolbar
         editor={editor}
-        uploadFile={uploadFile}
-        onAttachImage={setAttachedImage}
-        onUploadStart={() => setIsUploadingImage(true)}
-        onUploadEnd={() => setIsUploadingImage(false)}
+        uploadImageWithThumbnail={fileUpload?.uploadImageWithThumbnail}
+        onImagePreview={handleImagePreview}
+        onImageReady={handleImageReady}
+        onImageUploadFailed={handleImageUploadFailed}
         showCallButton={showCallButton}
         onStartCall={() => void navigate("videocall")}
       />
@@ -251,22 +281,21 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           onCancel={() => setReplyingTo(null)}
         />
       )}
-      {(attachedImage || isUploadingImage) && (
+      {hasImage && (
         <div className="relative w-fit">
-          {attachedImage ? (
-            <img src={attachedImage} alt="" className="max-h-32 rounded-md object-contain animate-in fade-in duration-300" />
-          ) : (
-            <div className="h-32 w-48 rounded-md bg-muted" />
+          <img src={imagePreview} alt="" className="max-h-32 rounded-md object-contain" />
+          {isUploadingImage && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/60">
+              <RippleSpinner size={32} />
+            </div>
           )}
-          {attachedImage && (
-            <button
-              type="button"
-              onClick={() => setAttachedImage(null)}
-              className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={clearImage}
+            className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
       )}
       <div className="flex gap-2">
