@@ -9,11 +9,10 @@ import {
 } from "@/components/ui/sidebar";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
-import { useQuery } from "convex/react";
+import { useLocalRecents } from "@/hooks/use-local-recents";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 
 interface RecentsSidebarSectionProps {
@@ -25,9 +24,9 @@ interface RecentsSidebarSectionProps {
 export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: RecentsSidebarSectionProps) {
   const navigate = useNavigate();
   const { isMobile, setOpen } = useSidebar();
-  const recents = useQuery(api.recentActivity.listRecent, { workspaceId, limit: 5 });
+  const recents = useLocalRecents(workspaceId, 5);
 
-  if (!recents || recents.length === 0) return null;
+  if (recents.length === 0) return null;
 
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
@@ -43,26 +42,6 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
             <AnimatePresence initial={false}>
               {recents.map((item) => {
                 const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
-
-                if (item.deleted) {
-                  return (
-                    <motion.div
-                      key={item.resourceId}
-                      layout
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.2, ease: "easeOut" }}
-                    >
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton render={<div className="cursor-default opacity-40" />}>
-                            {Icon && <Icon className="size-3.5 shrink-0" />}
-                            <span className="truncate line-through">{item.resourceName}</span>
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    </motion.div>
-                  );
-                }
 
                 return (
                   <motion.div

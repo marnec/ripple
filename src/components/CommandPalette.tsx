@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { useLocalRecents } from "@/hooks/use-local-recents";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
 import {
@@ -34,11 +35,8 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
 
   const hasSearch = search.trim().length > 0;
 
-  // Recent items (shown when search is empty)
-  const recents = useQuery(
-    api.recentActivity.listRecent,
-    !hasSearch ? { workspaceId, limit: 8 } : "skip",
-  );
+  // Recent items from localStorage (shown when search is empty)
+  const recents = useLocalRecents(hasSearch ? undefined : workspaceId, 8);
 
   // Search queries (fired when search is non-empty)
   const channels = useQuery(
@@ -90,13 +88,13 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
         <CommandEmpty>No results found.</CommandEmpty>
 
         {/* Recent items when search is empty */}
-        {!hasSearch && recents && recents.length > 0 && (
+        {!hasSearch && recents.length > 0 && (
           <CommandGroup heading="Recent">
             {recents.map((item) => {
               const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
               return (
                 <CommandItem
-                  key={item._id}
+                  key={item.resourceId}
                   value={`${item.resourceName} ${item.resourceType}`}
                   onSelect={() => handleSelect(item.resourceType, item.resourceId)}
                 >
