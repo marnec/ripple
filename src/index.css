@@ -536,6 +536,25 @@ body {
   --bn-colors-editor-background: transparent !important;
 }
 
+/* BlockNote suggestion menu — keyboard navigation highlight.
+   The aria-selected:bg-accent Tailwind class from @blocknote/shadcn isn't
+   generated (Tailwind v4 auto-detection doesn't scan node_modules classes),
+   so we apply the selected style directly. */
+.bn-suggestion-menu [role="option"][aria-selected="true"] {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.bn-suggestion-menu [role="option"] {
+  padding: 4px 8px;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.bn-suggestion-menu [role="option"] [data-position="left"] {
+  padding: 0;
+}
+
 /* Hide drag handle + plus icon on mobile for cleaner touch experience */
 @media (max-width: 640px) {
   .bn-side-menu {
