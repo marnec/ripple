@@ -157,8 +157,10 @@ export const create = mutation({
     await logTaskActivity(ctx, {
       taskId: args.taskId,
       userId,
+      workspaceId: task.workspaceId,
       type: "dependency_add",
       newValue: `${args.type}:${targetTask?.title ?? "Unknown"}`,
+      taskTitle: task.title,
     });
 
     return depId;
@@ -192,8 +194,10 @@ export const remove = mutation({
     await logTaskActivity(ctx, {
       taskId: dep.taskId,
       userId,
+      workspaceId: task.workspaceId,
       type: "dependency_remove",
       oldValue: `${dep.type}:${targetTask?.title ?? "Unknown"}`,
+      taskTitle: task.title,
     });
 
     await ctx.db.delete(dependencyId);

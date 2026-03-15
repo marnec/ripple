@@ -182,7 +182,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "diagrams", resourceId: diagramId,
-      action: "created", newValue: diagramName,
+      action: "created", newValue: diagramName, resourceName: diagramName, scope: workspaceId,
     });
 
     return diagramId;
@@ -216,7 +216,7 @@ export const rename = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "diagrams", resourceId: id,
-      action: "renamed", oldValue: diagram.name, newValue: name,
+      action: "renamed", oldValue: diagram.name, newValue: name, resourceName: name, scope: diagram.workspaceId,
     });
 
     await ctx.db.patch(id, { name });
@@ -271,7 +271,7 @@ export const remove = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "diagrams", resourceId: id,
-      action: "deleted", oldValue: diagram.name,
+      action: "deleted", oldValue: diagram.name, resourceName: diagram.name, scope: diagram.workspaceId,
     });
 
     // Clean up Yjs snapshot from storage

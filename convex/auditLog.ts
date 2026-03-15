@@ -24,8 +24,10 @@ export async function logActivity(
     resourceType: ResourceType;
     resourceId: string;
     action: string;
+    resourceName?: string;
     oldValue?: string;
     newValue?: string;
+    scope?: string;
   },
 ) {
   await auditLog.log(ctx, {
@@ -34,7 +36,12 @@ export async function logActivity(
     resourceType: args.resourceType,
     resourceId: args.resourceId,
     severity: "info",
-    metadata: { oldValue: args.oldValue, newValue: args.newValue },
+    metadata: {
+      resourceName: args.resourceName,
+      oldValue: args.oldValue,
+      newValue: args.newValue,
+    },
+    scope: args.scope,
   });
 }
 
@@ -43,6 +50,8 @@ export async function logTaskActivity(
   args: {
     taskId: Id<"tasks">;
     userId: Id<"users">;
+    workspaceId: Id<"workspaces">;
+    taskTitle: string;
     type: string;
     oldValue?: string;
     newValue?: string;
@@ -53,7 +62,9 @@ export async function logTaskActivity(
     resourceType: "tasks",
     resourceId: args.taskId.toString(),
     action: args.type,
+    resourceName: args.taskTitle,
     oldValue: args.oldValue,
     newValue: args.newValue,
+    scope: args.workspaceId,
   });
 }

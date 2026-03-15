@@ -149,7 +149,8 @@ export const update = mutation({
     await ctx.db.patch(id, { body: body.trim() });
 
     // Log comment edit activity
-    await logTaskActivity(ctx, { taskId: comment.taskId, userId, type: "comment_edit" });
+    const taskDoc = await ctx.db.get(comment.taskId);
+    await logTaskActivity(ctx, { taskId: comment.taskId, userId, workspaceId: taskDoc!.workspaceId, type: "comment_edit", taskTitle: taskDoc!.title });
 
     // Schedule mention notifications for newly added mentions after database write
     const oldMentions = new Set(comment.body ? extractMentionedUserIds(comment.body) : []);
@@ -194,7 +195,8 @@ export const remove = mutation({
     await ctx.db.patch(id, { deleted: true });
 
     // Log comment delete activity
-    await logTaskActivity(ctx, { taskId: comment.taskId, userId, type: "comment_delete" });
+    const taskForScope = await ctx.db.get(comment.taskId);
+    await logTaskActivity(ctx, { taskId: comment.taskId, userId, workspaceId: taskForScope!.workspaceId, type: "comment_delete", taskTitle: taskForScope!.title });
 
     return null;
   },

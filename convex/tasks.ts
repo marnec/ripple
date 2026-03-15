@@ -184,7 +184,7 @@ export const create = mutation({
     });
 
     // Log task creation activity
-    await logTaskActivity(ctx, { taskId, userId, type: "created" });
+    await logTaskActivity(ctx, { taskId, userId, workspaceId: project.workspaceId, type: "created", taskTitle: args.title });
 
     // Schedule notifications after database write
     const user = await ctx.db.get(userId);
@@ -559,27 +559,29 @@ export const update = mutation({
 
     // Log activity for each changed field
     if (title !== undefined && title !== task.title) {
-      await logTaskActivity(ctx, { taskId, userId, type: "title_change", oldValue: task.title, newValue: title });
+      await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "title_change", oldValue: task.title, newValue: title, taskTitle: task.title });
     }
     if (statusId !== undefined && statusId !== task.statusId) {
       const oldStatus = await ctx.db.get(task.statusId);
       const newStatus = await ctx.db.get(statusId);
       await logTaskActivity(ctx, {
-        taskId, userId, type: "status_change",
+        taskId, userId, workspaceId: task.workspaceId, type: "status_change",
         oldValue: oldStatus?.name ?? "Unknown",
         newValue: newStatus?.name ?? "Unknown",
+        taskTitle: task.title,
       });
     }
     if (priority !== undefined && priority !== task.priority) {
-      await logTaskActivity(ctx, { taskId, userId, type: "priority_change", oldValue: task.priority, newValue: priority });
+      await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "priority_change", oldValue: task.priority, newValue: priority, taskTitle: task.title });
     }
     if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
       const oldUser = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
       const newUser = assigneeId ? await ctx.db.get(assigneeId) : null;
       await logTaskActivity(ctx, {
-        taskId, userId, type: "assignee_change",
+        taskId, userId, workspaceId: task.workspaceId, type: "assignee_change",
         oldValue: oldUser ? getUserDisplayName(oldUser) : undefined,
         newValue: newUser ? getUserDisplayName(newUser) : undefined,
+        taskTitle: task.title,
       });
     }
     if (labels !== undefined) {
@@ -587,32 +589,35 @@ export const update = mutation({
       const added = labels.filter((l) => !oldLabels.includes(l));
       const removed = oldLabels.filter((l) => !labels.includes(l));
       for (const label of added) {
-        await logTaskActivity(ctx, { taskId, userId, type: "label_add", newValue: label });
+        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "label_add", newValue: label, taskTitle: task.title });
       }
       for (const label of removed) {
-        await logTaskActivity(ctx, { taskId, userId, type: "label_remove", oldValue: label });
+        await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "label_remove", oldValue: label, taskTitle: task.title });
       }
     }
     if (dueDate !== undefined && dueDate !== task.dueDate) {
       await logTaskActivity(ctx, {
-        taskId, userId, type: "due_date_change",
+        taskId, userId, workspaceId: task.workspaceId, type: "due_date_change",
         oldValue: task.dueDate ?? undefined,
         newValue: dueDate ?? undefined,
+        taskTitle: task.title,
       });
     }
     if ((startDate !== undefined && startDate !== task.startDate) ||
         (patch.startDate !== undefined && !task.startDate)) {
       await logTaskActivity(ctx, {
-        taskId, userId, type: "start_date_change",
+        taskId, userId, workspaceId: task.workspaceId, type: "start_date_change",
         oldValue: task.startDate ?? undefined,
         newValue: (startDate ?? patch.startDate) ?? undefined,
+        taskTitle: task.title,
       });
     }
     if (estimate !== undefined && estimate !== task.estimate) {
       await logTaskActivity(ctx, {
-        taskId, userId, type: "estimate_change",
+        taskId, userId, workspaceId: task.workspaceId, type: "estimate_change",
         oldValue: task.estimate !== undefined ? String(task.estimate) : undefined,
         newValue: estimate !== null ? String(estimate) : undefined,
+        taskTitle: task.title,
       });
     }
 
@@ -681,15 +686,17 @@ export const updatePosition = mutation({
     if (statusId !== task.statusId) {
       const oldStatus = await ctx.db.get(task.statusId);
       await logTaskActivity(ctx, {
-        taskId, userId, type: "status_change",
+        taskId, userId, workspaceId: task.workspaceId, type: "status_change",
         oldValue: oldStatus?.name ?? "Unknown",
         newValue: newStatus.name,
+        taskTitle: task.title,
       });
       // Log auto-set start date
       if (patchData.startDate && !task.startDate) {
         await logTaskActivity(ctx, {
-          taskId, userId, type: "start_date_change",
+          taskId, userId, workspaceId: task.workspaceId, type: "start_date_change",
           newValue: patchData.startDate,
+          taskTitle: task.title,
         });
       }
     }

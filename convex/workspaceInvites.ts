@@ -66,7 +66,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "workspaceInvites", resourceId: inviteId,
-      action: "invited", newValue: email,
+      action: "invited", newValue: email, resourceName: email, scope: workspaceId,
     });
 
     // Send invite email
@@ -174,7 +174,7 @@ export const accept = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "workspaceInvites", resourceId: inviteId,
-      action: "accepted",
+      action: "accepted", scope: invite.workspaceId,
     });
   },
 });

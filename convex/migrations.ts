@@ -1,6 +1,6 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api.js";
-import { DataModel, Id } from "./_generated/dataModel.js";
+import type { DataModel, Id } from "./_generated/dataModel.js";
 import { internalMutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { auditLog } from "./auditLog.js";
@@ -190,6 +190,89 @@ export const migrateAuditActionPrefix = internalMutation({
       cursor: args.cursor,
       batchSize: 200,
     });
+  },
+});
+
+/**
+ * Backfill `scope` (workspaceId) on existing audit log entries.
+ *
+ * Scans entries without scope, looks up the resource to resolve its workspaceId,
+ * and patches them in batches. Skipped entries (deleted resources) are counted.
+ *
+ * Run: npx convex run migrations:backfillAuditScope
+ * Call repeatedly until isDone is true.
+ */
+export const backfillAuditScope = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  returns: v.object({
+    patched: v.number(),
+    skipped: v.number(),
+    cursor: v.union(v.string(), v.null()),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const scan: {
+      items: { _id: string; resourceType?: string; resourceId?: string }[];
+      cursor: string | null;
+      isDone: boolean;
+    } = await auditLog.scanWithoutScope(ctx, {
+      cursor: args.cursor,
+      batchSize: 50,
+    });
+
+    // Tables that have a direct workspaceId field
+    const tablesWithWorkspaceId = [
+      "tasks", "documents", "diagrams", "spreadsheets",
+      "channels", "projects", "cycles", "workspaceInvites",
+    ] as const;
+    type TableWithWsId = (typeof tablesWithWorkspaceId)[number];
+
+    // Resolve workspaceId for each entry
+    const patches: { id: string; scope: string }[] = [];
+    let skipped = 0;
+
+    for (const item of scan.items) {
+      let workspaceId: string | undefined;
+
+      if (!item.resourceType || !item.resourceId) {
+        skipped++;
+        continue;
+      }
+
+      if (item.resourceType === "workspaces") {
+        // The resource IS the workspace
+        workspaceId = item.resourceId;
+      } else {
+        // For channelMembers, resourceId is the channelId
+        const table = (item.resourceType === "channelMembers" ? "channels" : item.resourceType) as TableWithWsId;
+        if (tablesWithWorkspaceId.includes(table)) {
+          const id = ctx.db.normalizeId(table, item.resourceId);
+          if (id) {
+            const doc = await ctx.db.get(id);
+            if (doc) {
+              workspaceId = doc.workspaceId as string;
+            }
+          }
+        }
+      }
+
+      if (workspaceId) {
+        patches.push({ id: item._id, scope: workspaceId });
+      } else {
+        skipped++;
+      }
+    }
+
+    const patched = patches.length > 0
+      ? await auditLog.batchSetScope(ctx, patches)
+      : 0;
+
+    return {
+      patched,
+      skipped,
+      cursor: scan.cursor,
+      isDone: scan.isDone,
+    };
   },
 });
 

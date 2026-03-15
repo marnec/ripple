@@ -25,7 +25,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "documents", resourceId: documentId,
-      action: "created", newValue: documentName,
+      action: "created", newValue: documentName, resourceName: documentName, scope: workspaceId,
     });
 
     return documentId;
@@ -69,7 +69,7 @@ export const rename = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "documents", resourceId: id,
-      action: "renamed", oldValue: document.name, newValue: name,
+      action: "renamed", oldValue: document.name, newValue: name, resourceName: name, scope: document.workspaceId,
     });
 
     await ctx.db.patch(id, { name });
@@ -233,7 +233,7 @@ export const remove = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "documents", resourceId: id,
-      action: "deleted", oldValue: document.name,
+      action: "deleted", oldValue: document.name, resourceName: document.name, scope: document.workspaceId,
     });
 
     // Clean up outgoing content references from this document

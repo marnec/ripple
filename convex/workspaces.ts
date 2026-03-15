@@ -29,7 +29,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "workspaces", resourceId: workspaceId,
-      action: "created", newValue: name,
+      action: "created", newValue: name, resourceName: name, scope: workspaceId,
     });
 
     return workspaceId;
@@ -159,7 +159,7 @@ export const update = mutation({
     if (name !== workspace.name) {
       await logActivity(ctx, {
         userId, resourceType: "workspaces", resourceId: id,
-        action: "renamed", oldValue: workspace.name, newValue: name,
+        action: "renamed", oldValue: workspace.name, newValue: name, resourceName: name, scope: id,
       });
     }
 

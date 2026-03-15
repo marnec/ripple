@@ -182,7 +182,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "spreadsheets", resourceId: spreadsheetId,
-      action: "created", newValue: spreadsheetName,
+      action: "created", newValue: spreadsheetName, resourceName: spreadsheetName, scope: workspaceId,
     });
 
     return spreadsheetId;
@@ -216,7 +216,7 @@ export const rename = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "spreadsheets", resourceId: id,
-      action: "renamed", oldValue: spreadsheet.name, newValue: name,
+      action: "renamed", oldValue: spreadsheet.name, newValue: name, resourceName: name, scope: spreadsheet.workspaceId,
     });
 
     await ctx.db.patch(id, { name });
@@ -271,7 +271,7 @@ export const remove = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "spreadsheets", resourceId: id,
-      action: "deleted", oldValue: spreadsheet.name,
+      action: "deleted", oldValue: spreadsheet.name, resourceName: spreadsheet.name, scope: spreadsheet.workspaceId,
     });
 
     // Clean up cached cell references

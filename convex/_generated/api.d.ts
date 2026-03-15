@@ -1706,6 +1706,24 @@ export declare const api: {
       null
     >;
   };
+  workspaceTimeline: {
+    list: FunctionReference<
+      "query",
+      "public",
+      { limit?: number; workspaceId: Id<"workspaces"> },
+      Array<{
+        _id: string;
+        action: string;
+        actorImage?: string;
+        actorName: string;
+        newValue?: string;
+        oldValue?: string;
+        resourceName?: string;
+        resourceType?: string;
+        timestamp: number;
+      }>
+    >;
+  };
 };
 
 /**
@@ -1962,6 +1980,17 @@ export declare const internal: {
     >;
   };
   migrations: {
+    backfillAuditScope: FunctionReference<
+      "mutation",
+      "internal",
+      { cursor?: string },
+      {
+        cursor: string | null;
+        isDone: boolean;
+        patched: number;
+        skipped: number;
+      }
+    >;
     migrateAuditActionPrefix: FunctionReference<
       "mutation",
       "internal",
@@ -2159,6 +2188,12 @@ export declare const internal: {
 export declare const components: {
   auditLog: {
     lib: {
+      batchSetScope: FunctionReference<
+        "mutation",
+        "internal",
+        { patches: Array<{ id: string; scope: string }> },
+        number
+      >;
       cleanup: FunctionReference<
         "mutation",
         "internal",
@@ -2224,6 +2259,7 @@ export declare const components: {
           resourceId?: string;
           resourceType?: string;
           retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;
@@ -2273,6 +2309,7 @@ export declare const components: {
           resourceId?: string;
           resourceType?: string;
           retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;
@@ -2292,6 +2329,7 @@ export declare const components: {
             resourceId?: string;
             resourceType?: string;
             retentionCategory?: string;
+            scope?: string;
             sessionId?: string;
             severity: "info" | "warning" | "error" | "critical";
             tags?: Array<string>;
@@ -2313,6 +2351,7 @@ export declare const components: {
           resourceId: string;
           resourceType: string;
           retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity?: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;
@@ -2353,6 +2392,7 @@ export declare const components: {
           resourceId?: string;
           resourceType?: string;
           retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;
@@ -2382,6 +2422,7 @@ export declare const components: {
           resourceId?: string;
           resourceType?: string;
           retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;
@@ -2411,6 +2452,37 @@ export declare const components: {
           resourceId?: string;
           resourceType?: string;
           retentionCategory?: string;
+          scope?: string;
+          sessionId?: string;
+          severity: "info" | "warning" | "error" | "critical";
+          tags?: Array<string>;
+          timestamp: number;
+          userAgent?: string;
+        }>
+      >;
+      queryByScope: FunctionReference<
+        "query",
+        "internal",
+        {
+          fromTimestamp?: number;
+          limit?: number;
+          resourceTypes?: Array<string>;
+          scope: string;
+        },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          action: string;
+          actorId?: string;
+          after?: any;
+          before?: any;
+          diff?: string;
+          ipAddress?: string;
+          metadata?: any;
+          resourceId?: string;
+          resourceType?: string;
+          retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;
@@ -2439,6 +2511,7 @@ export declare const components: {
           resourceId?: string;
           resourceType?: string;
           retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;
@@ -2452,6 +2525,20 @@ export declare const components: {
         { batchSize?: number; cursor?: string },
         { cursor: string | null; isDone: boolean; processed: number }
       >;
+      scanWithoutScope: FunctionReference<
+        "query",
+        "internal",
+        { batchSize?: number; cursor?: string },
+        {
+          cursor: string | null;
+          isDone: boolean;
+          items: Array<{
+            _id: string;
+            resourceId?: string;
+            resourceType?: string;
+          }>;
+        }
+      >;
       search: FunctionReference<
         "query",
         "internal",
@@ -2461,6 +2548,7 @@ export declare const components: {
             actorIds?: Array<string>;
             fromTimestamp?: number;
             resourceTypes?: Array<string>;
+            scope?: string;
             severity?: Array<"info" | "warning" | "error" | "critical">;
             tags?: Array<string>;
             toTimestamp?: number;
@@ -2483,6 +2571,7 @@ export declare const components: {
             resourceId?: string;
             resourceType?: string;
             retentionCategory?: string;
+            scope?: string;
             sessionId?: string;
             severity: "info" | "warning" | "error" | "critical";
             tags?: Array<string>;
@@ -2524,6 +2613,7 @@ export declare const components: {
           resourceId?: string;
           resourceType?: string;
           retentionCategory?: string;
+          scope?: string;
           sessionId?: string;
           severity: "info" | "warning" | "error" | "critical";
           tags?: Array<string>;

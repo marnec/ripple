@@ -16,6 +16,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { QueryParams } from "@shared/types/routes";
+import { WorkspaceTimeline } from "./WorkspaceTimeline";
 
 const overviewCards = [
   { key: "members", label: "Members", icon: Users, to: "settings" },
@@ -75,6 +76,11 @@ export function WorkspaceDetails() {
               </Link>
             );
           })}
+        </div>
+
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground mb-3">Recent activity</h2>
+          <WorkspaceTimeline workspaceId={id} />
         </div>
       </div>
 

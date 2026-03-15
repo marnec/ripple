@@ -38,7 +38,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "channels", resourceId: channelId,
-      action: "created", newValue: name,
+      action: "created", newValue: name, resourceName: name, scope: workspaceId,
     });
 
     return channelId;
@@ -146,7 +146,7 @@ export const update = mutation({
       if (name !== undefined && name !== channel.name) {
         await logActivity(ctx, {
           userId, resourceType: "channels", resourceId: id,
-          action: "renamed", oldValue: channel.name, newValue: name,
+          action: "renamed", oldValue: channel.name, newValue: name, resourceName: name, scope: channel.workspaceId,
         });
       }
       await ctx.db.patch(id, updates);
@@ -190,7 +190,7 @@ export const remove = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "channels", resourceId: id,
-      action: "deleted", oldValue: channel.name,
+      action: "deleted", oldValue: channel.name, resourceName: channel.name, scope: channel.workspaceId,
     });
 
     const channelMessages = await ctx.db

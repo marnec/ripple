@@ -128,7 +128,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: cycleId,
-      action: "created", newValue: args.name,
+      action: "created", newValue: args.name, resourceName: args.name, scope: args.workspaceId,
     });
 
     return cycleId;
@@ -226,7 +226,7 @@ export const remove = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: cycleId,
-      action: "deleted", oldValue: cycle.name,
+      action: "deleted", oldValue: cycle.name, resourceName: cycle.name, scope: cycle.workspaceId,
     });
 
     await ctx.db.delete(cycleId);

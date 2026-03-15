@@ -105,7 +105,7 @@ export const create = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "projects", resourceId: projectId,
-      action: "created", newValue: name,
+      action: "created", newValue: name, resourceName: name, scope: workspaceId,
     });
 
     return projectId;
@@ -263,7 +263,7 @@ export const update = mutation({
       if (name !== undefined && name !== project.name) {
         await logActivity(ctx, {
           userId, resourceType: "projects", resourceId: id,
-          action: "renamed", oldValue: project.name, newValue: name,
+          action: "renamed", oldValue: project.name, newValue: name, resourceName: name, scope: project.workspaceId,
         });
       }
       await ctx.db.patch(id, patch);
@@ -290,7 +290,7 @@ export const remove = mutation({
 
     await logActivity(ctx, {
       userId, resourceType: "projects", resourceId: id,
-      action: "deleted", oldValue: project.name,
+      action: "deleted", oldValue: project.name, resourceName: project.name, scope: project.workspaceId,
     });
 
     // Cascade delete: tasks, taskComments, and taskStatuses

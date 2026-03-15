@@ -119,7 +119,7 @@ export const addToChannel = mutation({
 
     await logActivity(ctx, {
       userId: callerId, resourceType: "channelMembers", resourceId: channelId,
-      action: "member_added", newValue: userId,
+      action: "member_added", newValue: userId, resourceName: channel.name, scope: channel.workspaceId,
     });
 
     return memberId;
@@ -184,7 +184,7 @@ export const removeFromChannel = mutation({
 
     await logActivity(ctx, {
       userId: callerId, resourceType: "channelMembers", resourceId: channelId,
-      action: "member_removed", oldValue: userId,
+      action: "member_removed", oldValue: userId, resourceName: channel.name, scope: channel.workspaceId,
     });
 
     await ctx.db.delete(channelMember._id);
@@ -245,7 +245,7 @@ export const changeMemberRole = mutation({
 
     await logActivity(ctx, {
       userId: callerId, resourceType: "channelMembers", resourceId: channelMember.channelId,
-      action: "role_changed", oldValue: channelMember.role, newValue: role,
+      action: "role_changed", oldValue: channelMember.role, newValue: role, resourceName: channel.name, scope: channel.workspaceId,
     });
 
     await ctx.db.patch(channelMemberId, { role });
