@@ -16,14 +16,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { LayoutGroup, motion } from "framer-motion";
 import { CheckSquare } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Id } from "../../../convex/_generated/dataModel";
-
-const workspacesListRef = makeFunctionReference<"query">("workspaces:list");
-const workspacesGetRef = makeFunctionReference<"query", { id: Id<"workspaces"> }>("workspaces:get");
+import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
 import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
@@ -46,8 +42,8 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
   const [settings] = useUserSettings();
   const { isOpen, toggle } = useSidebarSections();
 
-  const workspaces = useQuery(workspacesListRef);
-  const activeWorkspace = useQuery(workspacesGetRef, workspaceId ? { id: workspaceId } : "skip");
+  const workspaces = useQuery(api.workspaces.list);
+  const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
   const handleChannelSelect = (id: string | null) => {
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/channels`);

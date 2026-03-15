@@ -16,7 +16,7 @@ import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface SpreadsheetSelectorItemProps {
   idx: number;
-  spreadsheet: Doc<"spreadsheets">;
+  spreadsheet: Pick<Doc<"spreadsheets">, "_id" | "name">;
   spreadsheetId: Id<"spreadsheets"> | undefined;
   onSpreadsheetSelect: (id: string) => void;
   onRenameSpreadsheet: (id: Id<"spreadsheets">) => void;

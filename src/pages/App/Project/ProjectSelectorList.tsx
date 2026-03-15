@@ -1,5 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useMutation, useQuery } from "convex/react";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -43,9 +44,7 @@ export function ProjectSelectorList({
   const isListActive = location.pathname.endsWith("/projects");
   const toggleFavorite = useMutation(api.favorites.toggle);
 
-  const projects = useQuery(api.projects.list, {
-    workspaceId,
-  });
+  const projects = useWorkspaceSidebar()?.projects;
 
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.project ?? []), [allFavoriteIds]);
   const favoriteProjects = useMemo(

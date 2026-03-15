@@ -1,7 +1,5 @@
 import { cn } from "@/lib/utils";
-import { useQuery } from "convex/react";
 import { Cog, Hash, Lock, MoreHorizontal, Video } from "lucide-react";
-import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   ResponsiveDropdownMenu,
@@ -17,6 +15,7 @@ import {
 export interface ChannelSelectorItemProps {
   channel: Doc<"channels">;
   channelId: Id<"channels"> | undefined;
+  unreadCount: number;
   onChannelSelect: (id: string | null) => void;
   onManageChannel: (id: Id<"channels">) => void;
   onStartCall: (id: Id<"channels">) => void;
@@ -27,13 +26,13 @@ export interface ChannelSelectorItemProps {
 export function ChannelSelectorItem({
   channelId,
   channel,
+  unreadCount,
   onChannelSelect,
   onManageChannel,
   onStartCall,
   className,
   style,
 }: ChannelSelectorItemProps) {
-  const unreadCount = useQuery(api.channelReads.getUnreadCount, { channelId: channel._id });
 
   return (
     <SidebarMenuSubItem className={cn("group/subitem relative", className)} style={style}>
@@ -45,8 +44,8 @@ export function ChannelSelectorItem({
             <Hash size={14} />
             <Lock className={cn("size-2.5", "-ml-0.5", channel.isPublic ? "invisible" : "")} />
           </div>
-          <span className={cn("truncate", unreadCount && unreadCount > 0 && "font-semibold")}>{channel.name}</span>
-          {unreadCount != null && unreadCount > 0 && (
+          <span className={cn("truncate", unreadCount > 0 && "font-semibold")}>{channel.name}</span>
+          {unreadCount > 0 && (
             <span className="ml-auto shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-medium text-primary-foreground">
               {unreadCount}
             </span>

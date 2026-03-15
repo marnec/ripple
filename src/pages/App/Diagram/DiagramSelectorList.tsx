@@ -1,5 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useMutation, useQuery } from "convex/react";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 import { ChevronRight, PenTool, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -42,7 +43,7 @@ export function DiagramSelectorList({
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/diagrams");
 
-  const diagrams = useQuery(api.diagrams.list, { workspaceId });
+  const diagrams = useWorkspaceSidebar()?.diagrams;
   const createDiagram = useMutation(api.diagrams.create);
   const toggleFavorite = useMutation(api.favorites.toggle);
 

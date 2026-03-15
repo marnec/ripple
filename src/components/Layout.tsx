@@ -12,6 +12,7 @@ import { useActiveCall } from "../contexts/ActiveCallContext";
 import { FavoritesContext } from "../contexts/FavoritesContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
 import { HeaderSlotContext, useHeaderSlotRef } from "../contexts/HeaderSlotContext";
+import { WorkspaceSidebarProvider } from "../contexts/WorkspaceSidebarContext";
 import { DynamicBreadcrumb } from "./Breadcrumb";
 import { FollowModeIndicator } from "./FollowModeIndicator";
 import { AppSidebar } from "@/pages/App/AppSidebar";
@@ -58,7 +59,7 @@ export function Layout() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  return (
+  const inner = (
     <FavoritesContext.Provider value={allFavoriteIds ?? undefined}>
       <AppSidebar allFavoriteIds={allFavoriteIds} />
       <SidebarInset className="min-w-0">
@@ -113,4 +114,14 @@ export function Layout() {
       )}
     </FavoritesContext.Provider>
   );
+
+  if (workspaceId) {
+    return (
+      <WorkspaceSidebarProvider workspaceId={workspaceId}>
+        {inner}
+      </WorkspaceSidebarProvider>
+    );
+  }
+
+  return inner;
 }

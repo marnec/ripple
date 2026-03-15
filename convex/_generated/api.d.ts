@@ -132,11 +132,11 @@ export declare const api: {
     >;
   };
   channelReads: {
-    getUnreadCount: FunctionReference<
+    getUnreadCounts: FunctionReference<
       "query",
       "public",
-      { channelId: Id<"channels"> },
-      number
+      { channelIds: Array<Id<"channels">> },
+      Array<{ channelId: Id<"channels">; count: number }>
     >;
     markRead: FunctionReference<
       "mutation",
@@ -1704,6 +1704,48 @@ export declare const api: {
       "public",
       { description?: string; id: Id<"workspaces">; name: string },
       null
+    >;
+  };
+  workspaceSidebarData: {
+    get: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      {
+        counts: {
+          channels: number;
+          diagrams: number;
+          documents: number;
+          members: number;
+          projects: number;
+          spreadsheets: number;
+        };
+        diagrams: Array<{
+          _creationTime: number;
+          _id: Id<"diagrams">;
+          name: string;
+          tags?: Array<string>;
+        }>;
+        documents: Array<{
+          _creationTime: number;
+          _id: Id<"documents">;
+          name: string;
+          tags?: Array<string>;
+        }>;
+        projects: Array<{
+          _creationTime: number;
+          _id: Id<"projects">;
+          color: string;
+          key?: string;
+          name: string;
+        }>;
+        spreadsheets: Array<{
+          _creationTime: number;
+          _id: Id<"spreadsheets">;
+          name: string;
+          tags?: Array<string>;
+        }>;
+      }
     >;
   };
   workspaceTimeline: {

@@ -74,17 +74,16 @@ describe("channelReads", () => {
     });
   });
 
-  describe("getUnreadCount", () => {
+  describe("getUnreadCounts", () => {
     it("returns 0 when lastReadAt is undefined (new member)", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
 
-      // Insert a message but don't mark read
       await insertMessage(t, { channelId, userId });
 
-      const count = await asUser.query(api.channelReads.getUnreadCount, { channelId });
-      expect(count).toBe(0);
+      const counts = await asUser.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] });
+      expect(counts).toEqual([{ channelId, count: 0 }]);
     });
 
     it("returns correct count for messages after lastReadAt", async () => {
@@ -92,7 +91,6 @@ describe("channelReads", () => {
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
 
-      // Set lastReadAt to a known past time to avoid same-millisecond race
       await t.run(async (ctx) => {
         const membership = await ctx.db
           .query("channelMembers")
@@ -103,12 +101,11 @@ describe("channelReads", () => {
         }
       });
 
-      // Insert messages after lastReadAt
       await insertMessage(t, { channelId, userId });
       await insertMessage(t, { channelId, userId });
 
-      const count = await asUser.query(api.channelReads.getUnreadCount, { channelId });
-      expect(count).toBe(2);
+      const counts = await asUser.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] });
+      expect(counts).toEqual([{ channelId, count: 2 }]);
     });
 
     it("returns 0 when no messages after lastReadAt", async () => {
@@ -118,7 +115,6 @@ describe("channelReads", () => {
 
       await insertMessage(t, { channelId, userId });
 
-      // Set lastReadAt to far future to ensure all messages are before it
       await t.run(async (ctx) => {
         const membership = await ctx.db
           .query("channelMembers")
@@ -129,8 +125,40 @@ describe("channelReads", () => {
         }
       });
 
-      const count = await asUser.query(api.channelReads.getUnreadCount, { channelId });
-      expect(count).toBe(0);
+      const counts = await asUser.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] });
+      expect(counts).toEqual([{ channelId, count: 0 }]);
+    });
+
+    it("returns results for multiple channels", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId1 = await setupChannelWithMembership(t, { workspaceId, userId });
+      const channelId2 = await setupChannelWithMembership(t, { workspaceId, userId });
+
+      // Set lastReadAt on both channels
+      await t.run(async (ctx) => {
+        for (const channelId of [channelId1, channelId2]) {
+          const membership = await ctx.db
+            .query("channelMembers")
+            .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
+            .first();
+          if (membership) {
+            await ctx.db.patch(membership._id, { lastReadAt: Date.now() - 10000 });
+          }
+        }
+      });
+
+      // 2 messages in channel1, 1 in channel2
+      await insertMessage(t, { channelId: channelId1, userId });
+      await insertMessage(t, { channelId: channelId1, userId });
+      await insertMessage(t, { channelId: channelId2, userId });
+
+      const counts = await asUser.query(api.channelReads.getUnreadCounts, {
+        channelIds: [channelId1, channelId2],
+      });
+      expect(counts).toHaveLength(2);
+      expect(counts.find((c) => c.channelId === channelId1)?.count).toBe(2);
+      expect(counts.find((c) => c.channelId === channelId2)?.count).toBe(1);
     });
 
     it("rejects unauthenticated calls", async () => {
@@ -139,7 +167,7 @@ describe("channelReads", () => {
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
 
       await expect(
-        t.query(api.channelReads.getUnreadCount, { channelId }),
+        t.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] }),
       ).rejects.toThrow("Not authenticated");
     });
   });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import {
   ArrowRight,
@@ -181,7 +181,26 @@ const PAGE_SIZE = 5;
 const MAX_FETCH = 50;
 
 export function WorkspaceTimeline({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
-  const allEntries = useQuery(api.workspaceTimeline.list, { workspaceId, limit: MAX_FETCH }) as TimelineEntry[] | undefined;
+  const [isVisible, setIsVisible] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) setIsVisible(true);
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const allEntries = useQuery(
+    api.workspaceTimeline.list,
+    isVisible ? { workspaceId, limit: MAX_FETCH } : "skip",
+  ) as TimelineEntry[] | undefined;
   const [visible, setVisible] = useState(PAGE_SIZE);
 
   if (allEntries === undefined) return null;
@@ -198,7 +217,7 @@ export function WorkspaceTimeline({ workspaceId }: { workspaceId: Id<"workspaces
   const hasMore = visible < allEntries.length;
 
   return (
-    <div className="relative">
+    <div ref={sentinelRef} className="relative">
       {entries.length > 1 && (
         <div className="absolute left-2.5 top-3 bottom-3 w-px bg-border" />
       )}

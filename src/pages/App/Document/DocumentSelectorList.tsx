@@ -1,5 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useMutation, useQuery } from "convex/react";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 import { ChevronRight, File, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -47,7 +48,7 @@ export function DocumentSelectorList({
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/documents");
 
-  const documents = useQuery(api.documents.list, { workspaceId });
+  const documents = useWorkspaceSidebar()?.documents;
   const createDocument = useMutation(api.documents.create);
   const toggleFavorite = useMutation(api.favorites.toggle);
 

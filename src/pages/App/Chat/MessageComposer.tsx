@@ -14,6 +14,7 @@ import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 import { File, FolderKanban, PenTool, SendHorizonal, Table2, X } from "lucide-react";
 import { RippleSpinner } from "../../../components/RippleSpinner";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -65,11 +66,12 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const navigate = useNavigate();
   const { editingMessage, replyingTo, setReplyingTo } = useChatContext();
 
-  const projects = useQuery(api.projects.list, { workspaceId });
+  const sidebarData = useWorkspaceSidebar();
+  const projects = sidebarData?.projects;
+  const documents = sidebarData?.documents;
+  const diagrams = sidebarData?.diagrams;
+  const spreadsheets = sidebarData?.spreadsheets;
   const tasks = useQuery(api.tasks.listByWorkspace, { workspaceId, hideCompleted: true });
-  const documents = useQuery(api.documents.list, { workspaceId });
-  const diagrams = useQuery(api.diagrams.list, { workspaceId });
-  const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
   const currentUser = useQuery(api.users.viewer);
 

@@ -24,33 +24,42 @@ export const markRead = mutation({
   },
 });
 
-export const getUnreadCount = query({
-  args: { channelId: v.id("channels") },
-  returns: v.number(),
-  handler: async (ctx, { channelId }) => {
+
+export const getUnreadCounts = query({
+  args: { channelIds: v.array(v.id("channels")) },
+  returns: v.array(
+    v.object({ channelId: v.id("channels"), count: v.number() }),
+  ),
+  handler: async (ctx, { channelIds }) => {
+    if (channelIds.length > 50) throw new ConvexError("Too many channels");
+
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
-    const membership = await ctx.db
-      .query("channelMembers")
-      .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
-      .first();
+    return Promise.all(
+      channelIds.map(async (channelId) => {
+        const membership = await ctx.db
+          .query("channelMembers")
+          .withIndex("by_channel_user", (q) =>
+            q.eq("channelId", channelId).eq("userId", userId),
+          )
+          .first();
 
-    // No membership or no lastReadAt → treat as all read (0 unread)
-    if (!membership?.lastReadAt) return 0;
+        if (!membership?.lastReadAt) return { channelId, count: 0 };
 
-    const lastReadAt = membership.lastReadAt;
+        const lastReadAt = membership.lastReadAt;
+        const unreadMessages = await ctx.db
+          .query("messages")
+          .withIndex("undeleted_by_channel", (q) =>
+            q
+              .eq("channelId", channelId)
+              .eq("deleted", false)
+              .gt("_creationTime", lastReadAt),
+          )
+          .take(100);
 
-    // Count undeleted messages after lastReadAt
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("undeleted_by_channel", (q) =>
-        q.eq("channelId", channelId).eq("deleted", false)
-      )
-      .collect();
-
-    const unreadCount = messages.filter((m) => m._creationTime > lastReadAt).length;
-
-    return Math.min(unreadCount, 99);
+        return { channelId, count: Math.min(unreadMessages.length, 99) };
+      }),
+    );
   },
 });

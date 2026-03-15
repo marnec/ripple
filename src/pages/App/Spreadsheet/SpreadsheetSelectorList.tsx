@@ -1,5 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useMutation, useQuery } from "convex/react";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 import { ChevronRight, Plus, Table2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -42,7 +43,7 @@ export function SpreadsheetSelectorList({
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/spreadsheets");
 
-  const spreadsheets = useQuery(api.spreadsheets.list, { workspaceId });
+  const spreadsheets = useWorkspaceSidebar()?.spreadsheets;
   const createSpreadsheet = useMutation(api.spreadsheets.create);
   const toggleFavorite = useMutation(api.favorites.toggle);
 

@@ -15,7 +15,7 @@ import {
 
 export interface DocumentSelectorItemProps {
   idx: number;
-  document: Doc<"documents">;
+  document: Pick<Doc<"documents">, "_id" | "name">;
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
   onRenameDocument: (id: Id<"documents">) => void;

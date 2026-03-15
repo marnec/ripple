@@ -16,7 +16,7 @@ import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface DiagramSelectorItemProps {
   idx: number;
-  diagram: Doc<"diagrams">;
+  diagram: Pick<Doc<"diagrams">, "_id" | "name">;
   diagramId: Id<"diagrams"> | undefined;
   onDiagramSelect: (id: string) => void;
   onRenameDiagram: (id: Id<"diagrams">) => void;

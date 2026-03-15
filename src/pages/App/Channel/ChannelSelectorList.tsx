@@ -1,18 +1,12 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
 import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
-
-const channelsListByUserMembershipRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  Doc<"channels">[]
->("channels:listByUserMembership");
 import {
   SidebarMenuAction,
   SidebarMenuButton,
@@ -47,9 +41,20 @@ export function ChannelSelectorList({
 
   const navigate = useNavigate();
 
-  const channels = useQuery(channelsListByUserMembershipRef, {
+  const channels = useQuery(api.channels.listByUserMembership, {
     workspaceId: workspaceId,
   });
+
+  const channelIds = useMemo(() => channels?.map((c) => c._id).slice(0, 50) ?? [], [channels]);
+  const unreadCounts = useQuery(
+    api.channelReads.getUnreadCounts,
+    channelIds.length > 0 ? { channelIds } : "skip",
+  );
+  const unreadMap = useMemo(() => {
+    const m = new Map<string, number>();
+    unreadCounts?.forEach(({ channelId, count }) => m.set(channelId, count));
+    return m;
+  }, [unreadCounts]);
 
   const channelEntries = useMemo(
     () => channels?.map((c) => ({ id: c._id, name: c.name })),
@@ -158,6 +163,7 @@ export function ChannelSelectorList({
                       style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}
                       channel={channel}
                       channelId={channelId}
+                      unreadCount={unreadMap.get(channel._id) ?? 0}
                       onChannelSelect={(id) => {
                         if (id) {
                           const ch = channelMap.get(id);

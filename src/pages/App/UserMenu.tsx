@@ -47,7 +47,8 @@ export function NavUser() {
   const { signOut } = useAuthActions();
   const [showInvites, setShowInvites] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const pendingInvites = usePendingInvites();
+  const [menuOpened, setMenuOpened] = useState(false);
+  const pendingInvites = usePendingInvites(menuOpened);
   const { needRefresh, updateAndReload, checkForUpdate } = usePwaUpdate();
   const { canInstall, isIOSSafari, promptInstall } = useInstallPrompt();
   const [showIOSInstall, setShowIOSInstall] = useState(false);
@@ -62,7 +63,7 @@ export function NavUser() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => { if (open) setMenuOpened(true); }}>
           <DropdownMenuTrigger
             render={<SidebarMenuButton
               size="lg"

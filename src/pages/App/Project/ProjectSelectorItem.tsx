@@ -13,7 +13,7 @@ import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface ProjectSelectorItemProps {
   idx: number;
-  project: Doc<"projects">;
+  project: Pick<Doc<"projects">, "_id" | "name" | "color">;
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
   onManageProject: (id: Id<"projects">) => void;

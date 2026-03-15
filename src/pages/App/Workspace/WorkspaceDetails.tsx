@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex/react";
 import {
@@ -33,7 +34,7 @@ export function WorkspaceDetails() {
   const isMobile = useIsMobile();
 
   const workspace = useQuery(api.workspaces.get, { id });
-  const overview = useQuery(api.workspaces.overview, { workspaceId: id });
+  const overview = useWorkspaceSidebar()?.counts;
 
   if (workspace === null) {
     return <ResourceDeleted resourceType="workspace" />;
