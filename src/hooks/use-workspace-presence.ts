@@ -53,6 +53,13 @@ export function useWorkspacePresence() {
   const recreationCountRef = useRef(0);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
 
+  // Clear presence data on workspace or auth changes (NOT on reconnects,
+  // so follow-mode survives brief WebSocket reconnections)
+  useEffect(() => {
+    setPresenceMap(new Map());
+    setIsConnected(false);
+  }, [workspaceId, isAuthenticated]);
+
   // Track current location for sending updates
   const pathnameRef = useRef(pathname);
   const paramsRef = useRef(params);
@@ -205,7 +212,10 @@ export function useWorkspacePresence() {
         socketRef.current.close();
         socketRef.current = null;
       }
-      setPresenceMap(new Map());
+      // Don't clear presenceMap here — preserving stale data during reconnects
+      // lets follow-mode survive brief WebSocket interruptions. The map is
+      // cleared by a separate effect when workspaceId or auth changes, and
+      // atomically replaced when the next presence_snapshot arrives.
       setIsConnected(false);
     };
   }, [workspaceId, isAuthenticated, reconnectTrigger]);

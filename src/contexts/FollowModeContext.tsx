@@ -161,6 +161,9 @@ export function FollowModeProvider({
       prevPresenceRef.current = presence;
       requestAnimationFrame(() => {
         if (!followingUserIdRef.current) return;
+        // If presence recovered since we queued this callback (e.g. WebSocket
+        // reconnected and a new snapshot arrived), skip the stale clear.
+        if (prevPresenceRef.current !== null) return;
         toast("Lost connection", {
           description: `${followingUserNameRef.current} went offline`,
         });
