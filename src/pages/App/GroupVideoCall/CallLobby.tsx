@@ -72,6 +72,17 @@ export function CallLobby({
 
   const audioLevel = useAudioLevel(stream);
 
+  // Resolve device labels for the trigger display (Base UI Select can't
+  // resolve ItemText from portaled content before the popup is opened)
+  function deviceLabel(
+    devices: MediaDeviceInfo[],
+    id: string | undefined,
+  ): string | undefined {
+    if (!id) return undefined;
+    const d = devices.find((d) => d.deviceId === id);
+    return d?.label || undefined;
+  }
+
   const updatePrefs = useCallback((partial: Partial<DevicePreferences>) => {
     setPrefs((prev) => {
       const next = { ...prev, ...partial };
@@ -85,10 +96,10 @@ export function CallLobby({
       <div className="flex w-full max-w-3xl flex-col gap-5 rounded-xl border bg-card p-5 shadow-lg sm:p-6">
         <h2 className="text-center text-lg font-semibold">Ready to join?</h2>
 
-        {/* Two-column on md+: preview left, settings right */}
-        <div className="flex flex-col gap-5 md:flex-row md:gap-6">
-          {/* Left: video preview + audio level + toggles */}
-          <div className="flex flex-1 flex-col gap-3">
+        {/* Preview + settings stacked */}
+        <div className="flex flex-col gap-5">
+          {/* Video preview + audio level + toggles */}
+          <div className="flex flex-col gap-3">
             <VideoPreview
               stream={stream}
               videoEnabled={prefs.videoEnabled}
@@ -127,8 +138,8 @@ export function CallLobby({
             </div>
           </div>
 
-          {/* Right: device selectors */}
-          <div className="flex flex-col gap-3 md:w-56 md:justify-center">
+          {/* Device selectors */}
+          <div className="flex flex-col gap-3">
             {/* Microphone */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground">
@@ -141,14 +152,17 @@ export function CallLobby({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Default microphone" />
+                  <SelectValue placeholder="Default microphone">
+                    {deviceLabel(audioInputs, prefs.audioDeviceId) ??
+                      "Default microphone"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {audioInputs
-                    .filter((d) => d.deviceId)
+                    .filter((d) => d.deviceId && d.label)
                     .map((d) => (
                       <SelectItem key={d.deviceId} value={d.deviceId}>
-                        {d.label || `Microphone ${d.deviceId.slice(0, 5)}`}
+                        {d.label}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -167,14 +181,17 @@ export function CallLobby({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Default camera" />
+                  <SelectValue placeholder="Default camera">
+                    {deviceLabel(videoInputs, prefs.videoDeviceId) ??
+                      "Default camera"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {videoInputs
-                    .filter((d) => d.deviceId)
+                    .filter((d) => d.deviceId && d.label)
                     .map((d) => (
                       <SelectItem key={d.deviceId} value={d.deviceId}>
-                        {d.label || `Camera ${d.deviceId.slice(0, 5)}`}
+                        {d.label}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -193,14 +210,17 @@ export function CallLobby({
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Default speaker" />
+                  <SelectValue placeholder="Default speaker">
+                    {deviceLabel(audioOutputs, prefs.audioOutputDeviceId) ??
+                      "Default speaker"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {audioOutputs
-                    .filter((d) => d.deviceId)
+                    .filter((d) => d.deviceId && d.label)
                     .map((d) => (
                       <SelectItem key={d.deviceId} value={d.deviceId}>
-                        {d.label || `Speaker ${d.deviceId.slice(0, 5)}`}
+                        {d.label}
                       </SelectItem>
                     ))}
                 </SelectContent>
