@@ -2,10 +2,18 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
+import {
+  NOTIFICATION_GROUPS,
+  NOTIFICATION_CATEGORY_LABELS,
+  DEFAULT_PREFERENCES,
+  type NotificationCategory,
+} from "@shared/notificationCategories";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
@@ -81,6 +89,78 @@ export function WorkspaceSettings() {
           )}
         </form>
       </section>
+
+      <Separator className="my-6" />
+
+      <WorkspaceNotificationSettings />
     </div>
+  );
+}
+
+function WorkspaceNotificationSettings() {
+  const prefs = useQuery(api.notificationPreferences.get);
+  const savePrefs = useMutation(api.notificationPreferences.save);
+
+  const currentPrefs: Record<NotificationCategory, boolean> = useMemo(
+    () =>
+      prefs
+        ? (Object.fromEntries(
+            Object.entries(DEFAULT_PREFERENCES).map(([key]) => [
+              key,
+              prefs[key as NotificationCategory],
+            ]),
+          ) as Record<NotificationCategory, boolean>)
+        : { ...DEFAULT_PREFERENCES },
+    [prefs],
+  );
+
+  const handleCategoryToggle = useCallback(
+    (category: NotificationCategory, enabled: boolean) => {
+      const updated = { ...currentPrefs, [category]: enabled };
+      void savePrefs(updated);
+    },
+    [currentPrefs, savePrefs],
+  );
+
+  return (
+    <section className="mb-8">
+      <h2 className="text-lg font-semibold mb-4">Notifications</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Configure which workspace notifications you receive. Chat and task notifications are configured in each channel's and project's settings.
+      </p>
+      <div className="space-y-4">
+        {NOTIFICATION_GROUPS.map((group) => (
+          <div key={group.label} className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {group.label}
+            </p>
+            {group.perResource ? (
+              <p className="text-sm text-muted-foreground">
+                Configured per {group.perResource} in each {group.perResource}'s settings.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {group.categories.map((category) => (
+                  <div
+                    key={category}
+                    className="flex items-center justify-between py-0.5"
+                  >
+                    <span className="text-sm">
+                      {NOTIFICATION_CATEGORY_LABELS[category]}
+                    </span>
+                    <Switch
+                      checked={currentPrefs[category]}
+                      onCheckedChange={(checked) =>
+                        handleCategoryToggle(category, checked)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

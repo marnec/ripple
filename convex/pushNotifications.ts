@@ -1,12 +1,15 @@
 "use node";
 
-import { ConvexError, v } from "convex/values";
-import { Doc } from "./_generated/dataModel";
-import { action } from "./_generated/server";
-import { api, internal } from "./_generated/api";
-import * as webpush from "web-push";
+import { v } from "convex/values";
+import { internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { sendPushToFilteredUsers } from "./utils/sendPushToUsers";
 
-export const sendPushNotification = action({
+/**
+ * Send push notification for new channel messages to workspace members.
+ * Converted from public action to internalAction (should not be client-callable).
+ */
+export const sendPushNotification = internalAction({
   args: {
     channelId: v.id("channels"),
     body: v.string(),
@@ -18,8 +21,10 @@ export const sendPushNotification = action({
   returns: v.null(),
   handler: async (ctx, { author, body, channelId }) => {
     const channel = await ctx.runQuery(internal.channels.getInternal, { id: channelId });
-
-    if (!channel) throw new ConvexError(`Could not find channel=${channelId}`);
+    if (!channel) {
+      console.error(`Channel ${channelId} not found for push notification`);
+      return null;
+    }
 
     const notification = JSON.stringify({
       title: author.name,
@@ -29,60 +34,15 @@ export const sendPushNotification = action({
       },
     });
 
-    const subject = process.env.VAPID_SUBJECT;
-    const publicKey = process.env.VAPID_PUBLIC_KEY;
-    const privateKey = process.env.VAPID_PRIVATE_KEY;
-
-    if (!subject || !publicKey || !privateKey) {
-      throw new ConvexError("Missing required VAPID variables from environment");
-    }
-
-    webpush.setVapidDetails(subject, publicKey, privateKey);
-
-    const notificationOptions = {
-      TTL: 10000,
-      vapidDetails: {
-        subject,
-        publicKey,
-        privateKey,
-      },
-    };
-
-    // when channelMembers will be done, I'll need to filter users by channel
-    // for now I'll filter them by workspace
-    const workspaceUsers: { userId: Doc<"users">["_id"] }[] = await ctx.runQuery(
-      api.workspaceMembers.byWorkspace,
-      {
-        workspaceId: channel?.workspaceId,
-      },
+    const memberIds = await ctx.runQuery(
+      internal.workspaceMembers.listUserIds,
+      { workspaceId: channel.workspaceId },
     );
 
-    const workspaceSubscriptions: Doc<"pushSubscriptions">[] = await ctx.runQuery(
-      api.pushSubscription.usersSubscriptions,
-      {
-        usersIds: workspaceUsers
-          .map(({ userId }) => userId)
-          .filter((userId) => userId !== author.id),
-      },
-    );
+    const recipientIds = memberIds.filter((id) => id !== author.id);
 
-    await Promise.allSettled(
-      workspaceSubscriptions.map(async (subscription) => {
-        const { endpoint, expirationTime, keys } = subscription;
-        const id = endpoint.split("/").at(-1);
+    await sendPushToFilteredUsers(ctx, recipientIds, "chatChannelMessage", notification, channelId);
 
-        return webpush
-          .sendNotification({ endpoint, expirationTime, keys }, notification, notificationOptions)
-          .then(() => {
-            console.info(`Successfully sent notification to endpoint ID=${id}`);
-          })
-          .catch((error: { message: string }) => {
-            console.info(
-              `An error occurred while sending notification to endpoint=${id}, err=${error.message}`,
-            );
-          });
-      }),
-    );
     return null;
   },
 });

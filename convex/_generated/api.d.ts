@@ -131,6 +131,31 @@ export declare const api: {
       null
     >;
   };
+  channelNotificationPreferences: {
+    get: FunctionReference<
+      "query",
+      "public",
+      { channelId: Id<"channels"> },
+      {
+        _creationTime: number;
+        _id: Id<"channelNotificationPreferences">;
+        channelId: Id<"channels">;
+        chatChannelMessage: boolean;
+        chatMention: boolean;
+        userId: Id<"users">;
+      } | null
+    >;
+    save: FunctionReference<
+      "mutation",
+      "public",
+      {
+        channelId: Id<"channels">;
+        chatChannelMessage: boolean;
+        chatMention: boolean;
+      },
+      null
+    >;
+  };
   channelReads: {
     getUnreadCounts: FunctionReference<
       "query",
@@ -539,6 +564,12 @@ export declare const api: {
       { id: Id<"documents">; name: string },
       null
     >;
+    reportMention: FunctionReference<
+      "mutation",
+      "public",
+      { documentId: Id<"documents">; mentionedUserIds: Array<Id<"users">> },
+      null
+    >;
     search: FunctionReference<
       "query",
       "public",
@@ -832,6 +863,92 @@ export declare const api: {
       null
     >;
   };
+  notificationPreferences: {
+    get: FunctionReference<
+      "query",
+      "public",
+      {},
+      {
+        _creationTime: number;
+        _id: Id<"notificationPreferences">;
+        channelCreated: boolean;
+        channelDeleted: boolean;
+        chatChannelMessage: boolean;
+        chatMention: boolean;
+        diagramCreated: boolean;
+        diagramDeleted: boolean;
+        documentCreated: boolean;
+        documentDeleted: boolean;
+        documentMention: boolean;
+        projectCreated: boolean;
+        projectDeleted: boolean;
+        spreadsheetCreated: boolean;
+        spreadsheetDeleted: boolean;
+        taskAssigned: boolean;
+        taskComment: boolean;
+        taskCommentMention: boolean;
+        taskDescriptionMention: boolean;
+        taskStatusChange: boolean;
+        userId: Id<"users">;
+      } | null
+    >;
+    save: FunctionReference<
+      "mutation",
+      "public",
+      {
+        channelCreated: boolean;
+        channelDeleted: boolean;
+        chatChannelMessage: boolean;
+        chatMention: boolean;
+        diagramCreated: boolean;
+        diagramDeleted: boolean;
+        documentCreated: boolean;
+        documentDeleted: boolean;
+        documentMention: boolean;
+        projectCreated: boolean;
+        projectDeleted: boolean;
+        spreadsheetCreated: boolean;
+        spreadsheetDeleted: boolean;
+        taskAssigned: boolean;
+        taskComment: boolean;
+        taskCommentMention: boolean;
+        taskDescriptionMention: boolean;
+        taskStatusChange: boolean;
+      },
+      null
+    >;
+  };
+  projectNotificationPreferences: {
+    get: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      {
+        _creationTime: number;
+        _id: Id<"projectNotificationPreferences">;
+        projectId: Id<"projects">;
+        taskAssigned: boolean;
+        taskComment: boolean;
+        taskCommentMention: boolean;
+        taskDescriptionMention: boolean;
+        taskStatusChange: boolean;
+        userId: Id<"users">;
+      } | null
+    >;
+    save: FunctionReference<
+      "mutation",
+      "public",
+      {
+        projectId: Id<"projects">;
+        taskAssigned: boolean;
+        taskComment: boolean;
+        taskCommentMention: boolean;
+        taskDescriptionMention: boolean;
+        taskStatusChange: boolean;
+      },
+      null
+    >;
+  };
   projects: {
     create: FunctionReference<
       "mutation",
@@ -920,18 +1037,6 @@ export declare const api: {
       null
     >;
   };
-  pushNotifications: {
-    sendPushNotification: FunctionReference<
-      "action",
-      "public",
-      {
-        author: { id: Id<"users">; name: string };
-        body: string;
-        channelId: Id<"channels">;
-      },
-      null
-    >;
-  };
   pushSubscription: {
     registerSubscription: FunctionReference<
       "mutation",
@@ -949,20 +1054,6 @@ export declare const api: {
       "public",
       { endpoint: string },
       null
-    >;
-    usersSubscriptions: FunctionReference<
-      "query",
-      "public",
-      { usersIds: Array<Id<"users">> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"pushSubscriptions">;
-        device: string;
-        endpoint: string;
-        expirationTime: number | null;
-        keys: { auth: string; p256dh: string };
-        userId: Id<"users">;
-      }>
     >;
   };
   recentActivity: {
@@ -1448,6 +1539,12 @@ export declare const api: {
         yjsSnapshotId?: Id<"_storage">;
       }>
     >;
+    notifyDescriptionMentions: FunctionReference<
+      "mutation",
+      "public",
+      { mentionedUserIds: Array<Id<"users">>; taskId: Id<"tasks"> },
+      null
+    >;
     remove: FunctionReference<
       "mutation",
       "public",
@@ -1865,6 +1962,27 @@ export declare const internal: {
       } | null
     >;
   };
+  channelNotificationPreferences: {
+    getForUsersInChannel: FunctionReference<
+      "query",
+      "internal",
+      { channelId: Id<"channels">; userIds: Array<Id<"users">> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"channelNotificationPreferences">;
+        channelId: Id<"channels">;
+        chatChannelMessage: boolean;
+        chatMention: boolean;
+        userId: Id<"users">;
+      } | null>
+    >;
+    removeByChannel: FunctionReference<
+      "mutation",
+      "internal",
+      { channelId: Id<"channels"> },
+      null
+    >;
+  };
   channels: {
     getInternal: FunctionReference<
       "query",
@@ -2008,6 +2126,20 @@ export declare const internal: {
       null
     >;
   };
+  documentNotifications: {
+    notifyDocumentMention: FunctionReference<
+      "action",
+      "internal",
+      {
+        documentId: Id<"documents">;
+        documentName: string;
+        mentionedBy: { id: Id<"users">; name: string };
+        mentionedUserIds: Array<string>;
+        workspaceId: Id<"workspaces">;
+      },
+      null
+    >;
+  };
   emails: {
     sendWorkspaceInvite: FunctionReference<
       "action",
@@ -2141,6 +2273,136 @@ export declare const internal: {
       any
     >;
   };
+  notificationPreferences: {
+    getForUser: FunctionReference<
+      "query",
+      "internal",
+      { userId: Id<"users"> },
+      {
+        _creationTime: number;
+        _id: Id<"notificationPreferences">;
+        channelCreated: boolean;
+        channelDeleted: boolean;
+        chatChannelMessage: boolean;
+        chatMention: boolean;
+        diagramCreated: boolean;
+        diagramDeleted: boolean;
+        documentCreated: boolean;
+        documentDeleted: boolean;
+        documentMention: boolean;
+        projectCreated: boolean;
+        projectDeleted: boolean;
+        spreadsheetCreated: boolean;
+        spreadsheetDeleted: boolean;
+        taskAssigned: boolean;
+        taskComment: boolean;
+        taskCommentMention: boolean;
+        taskDescriptionMention: boolean;
+        taskStatusChange: boolean;
+        userId: Id<"users">;
+      } | null
+    >;
+    getForUsers: FunctionReference<
+      "query",
+      "internal",
+      { userIds: Array<Id<"users">> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"notificationPreferences">;
+        channelCreated: boolean;
+        channelDeleted: boolean;
+        chatChannelMessage: boolean;
+        chatMention: boolean;
+        diagramCreated: boolean;
+        diagramDeleted: boolean;
+        documentCreated: boolean;
+        documentDeleted: boolean;
+        documentMention: boolean;
+        projectCreated: boolean;
+        projectDeleted: boolean;
+        spreadsheetCreated: boolean;
+        spreadsheetDeleted: boolean;
+        taskAssigned: boolean;
+        taskComment: boolean;
+        taskCommentMention: boolean;
+        taskDescriptionMention: boolean;
+        taskStatusChange: boolean;
+        userId: Id<"users">;
+      } | null>
+    >;
+  };
+  projectNotificationPreferences: {
+    getForUsersInProject: FunctionReference<
+      "query",
+      "internal",
+      { projectId: Id<"projects">; userIds: Array<Id<"users">> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"projectNotificationPreferences">;
+        projectId: Id<"projects">;
+        taskAssigned: boolean;
+        taskComment: boolean;
+        taskCommentMention: boolean;
+        taskDescriptionMention: boolean;
+        taskStatusChange: boolean;
+        userId: Id<"users">;
+      } | null>
+    >;
+    removeByProject: FunctionReference<
+      "mutation",
+      "internal",
+      { projectId: Id<"projects"> },
+      null
+    >;
+  };
+  pushNotifications: {
+    sendPushNotification: FunctionReference<
+      "action",
+      "internal",
+      {
+        author: { id: Id<"users">; name: string };
+        body: string;
+        channelId: Id<"channels">;
+      },
+      null
+    >;
+  };
+  pushSubscription: {
+    usersSubscriptions: FunctionReference<
+      "query",
+      "internal",
+      { usersIds: Array<Id<"users">> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"pushSubscriptions">;
+        device: string;
+        endpoint: string;
+        expirationTime: number | null;
+        keys: { auth: string; p256dh: string };
+        userId: Id<"users">;
+      }>
+    >;
+  };
+  resourceNotifications: {
+    notifyResourceEvent: FunctionReference<
+      "action",
+      "internal",
+      {
+        event: "created" | "deleted";
+        resourceName: string;
+        resourceType:
+          | "document"
+          | "spreadsheet"
+          | "diagram"
+          | "project"
+          | "channel";
+        triggeredBy: { id: Id<"users">; name: string };
+        url?: string;
+        workspaceId: Id<"workspaces">;
+      },
+      null
+    >;
+  };
   snapshots: {
     getSnapshot: FunctionReference<
       "query",
@@ -2212,6 +2474,29 @@ export declare const internal: {
       },
       null
     >;
+    notifyTaskComment: FunctionReference<
+      "action",
+      "internal",
+      {
+        assigneeId: Id<"users">;
+        commentedBy: { id: Id<"users">; name: string };
+        taskId: Id<"tasks">;
+        taskTitle: string;
+      },
+      null
+    >;
+    notifyTaskStatusChange: FunctionReference<
+      "action",
+      "internal",
+      {
+        assigneeId: Id<"users">;
+        changedBy: { id: Id<"users">; name: string };
+        newStatusName: string;
+        taskId: Id<"tasks">;
+        taskTitle: string;
+      },
+      null
+    >;
     notifyUserMentions: FunctionReference<
       "action",
       "internal",
@@ -2223,6 +2508,27 @@ export declare const internal: {
         taskTitle: string;
       },
       null
+    >;
+  };
+  tasks: {
+    getInternal: FunctionReference<
+      "query",
+      "internal",
+      { taskId: Id<"tasks"> },
+      {
+        _creationTime: number;
+        _id: Id<"tasks">;
+        projectId: Id<"projects">;
+        workspaceId: Id<"workspaces">;
+      } | null
+    >;
+  };
+  workspaceMembers: {
+    listUserIds: FunctionReference<
+      "query",
+      "internal",
+      { workspaceId: Id<"workspaces"> },
+      Array<Id<"users">>
     >;
   };
 };
@@ -2421,6 +2727,36 @@ export declare const components: {
         "query",
         "internal",
         { action: string; fromTimestamp?: number; limit?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          action: string;
+          actorId?: string;
+          after?: any;
+          before?: any;
+          diff?: string;
+          ipAddress?: string;
+          metadata?: any;
+          resourceId?: string;
+          resourceType?: string;
+          retentionCategory?: string;
+          scope?: string;
+          sessionId?: string;
+          severity: "info" | "warning" | "error" | "critical";
+          tags?: Array<string>;
+          timestamp: number;
+          userAgent?: string;
+        }>
+      >;
+      queryByActionResource: FunctionReference<
+        "query",
+        "internal",
+        {
+          action: string;
+          fromTimestamp?: number;
+          limit?: number;
+          resourceId: string;
+        },
         Array<{
           _creationTime: number;
           _id: string;

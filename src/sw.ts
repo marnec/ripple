@@ -19,6 +19,8 @@ self.addEventListener("push", (event) => {
     ? JSON.parse(event.data.text())
     : { title: "Ripple", body: "You have a new notification" };
 
+  console.log("[SW] Push received:", data);
+
   const options: NotificationOptions = {
     body: data.body,
     icon: "/icons/icon-192.png",

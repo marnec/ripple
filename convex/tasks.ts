@@ -1,11 +1,11 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@shared/displayName";
-import { logTaskActivity } from "./auditLog";
+import { auditLog, logTaskActivity } from "./auditLog";
 
 const priorityValidator = v.union(
   v.literal("urgent"),
@@ -248,6 +248,29 @@ export const get = query({
       assignee,
       projectKey: project?.key,
       hasBlockers,
+    };
+  },
+});
+
+export const getInternal = internalQuery({
+  args: { taskId: v.id("tasks") },
+  returns: v.union(
+    v.object({
+      _id: v.id("tasks"),
+      _creationTime: v.number(),
+      projectId: v.id("projects"),
+      workspaceId: v.id("workspaces"),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { taskId }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) return null;
+    return {
+      _id: task._id,
+      _creationTime: task._creationTime,
+      projectId: task.projectId,
+      workspaceId: task.workspaceId,
     };
   },
 });
@@ -639,6 +662,84 @@ export const update = mutation({
       });
     }
 
+    // Status change notification (notify assignee if they didn't make the change)
+    const effectiveAssignee = assigneeId === null ? undefined : (assigneeId ?? task.assigneeId);
+    if (statusId !== undefined && statusId !== task.statusId && effectiveAssignee && effectiveAssignee !== userId) {
+      if (!currentUser) currentUser = await ctx.db.get(userId);
+      const newStatus = await ctx.db.get(statusId);
+      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskStatusChange, {
+        taskId,
+        assigneeId: effectiveAssignee,
+        taskTitle: title ?? task.title,
+        newStatusName: newStatus?.name ?? "Unknown",
+        changedBy: {
+          name: getUserDisplayName(currentUser),
+          id: userId,
+        },
+      });
+    }
+
+    return null;
+  },
+});
+
+export const notifyDescriptionMentions = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    mentionedUserIds: v.array(v.id("users")),
+  },
+  returns: v.null(),
+  handler: async (ctx, { taskId, mentionedUserIds }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new ConvexError("Task not found");
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) throw new ConvexError("Not a member of this workspace");
+
+    const filtered = mentionedUserIds.filter((id) => id !== userId);
+    if (filtered.length === 0) return null;
+
+    // Rate limit: check if a description_mention was logged for this task recently
+    const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+    const recentMentions = await auditLog.queryByActionResource(ctx, {
+      action: "tasks.description_mention",
+      resourceId: taskId,
+      limit: 1,
+      fromTimestamp: Date.now() - COOLDOWN_MS,
+    });
+
+    if (recentMentions.length > 0) return null;
+
+    // Log the mention event for future rate-limit checks
+    await logTaskActivity(ctx, {
+      taskId,
+      userId,
+      workspaceId: task.workspaceId,
+      type: "description_mention",
+      taskTitle: task.title,
+      newValue: filtered.join(","),
+    });
+
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+      taskId,
+      mentionedUserIds: filtered,
+      taskTitle: task.title,
+      mentionedBy: {
+        name: getUserDisplayName(user),
+        id: userId,
+      },
+      context: "task description",
+    });
+
     return null;
   },
 });
@@ -697,6 +798,20 @@ export const updatePosition = mutation({
           taskId, userId, workspaceId: task.workspaceId, type: "start_date_change",
           newValue: patchData.startDate,
           taskTitle: task.title,
+        });
+      }
+      // Notify assignee of status change (if they didn't make the change)
+      if (task.assigneeId && task.assigneeId !== userId) {
+        const currentUser = await ctx.db.get(userId);
+        await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskStatusChange, {
+          taskId,
+          assigneeId: task.assigneeId,
+          taskTitle: task.title,
+          newStatusName: newStatus.name,
+          changedBy: {
+            name: getUserDisplayName(currentUser),
+            id: userId,
+          },
         });
       }
     }

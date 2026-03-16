@@ -296,6 +296,50 @@ export default defineSchema({
     .index("by_endpoint", ["endpoint"])
     .index("by_user", ["userId"]),
 
+  channelNotificationPreferences: defineTable({
+    userId: v.id("users"),
+    channelId: v.id("channels"),
+    chatMention: v.boolean(),
+    chatChannelMessage: v.boolean(),
+  })
+    .index("by_user_channel", ["userId", "channelId"])
+    .index("by_channel", ["channelId"]),
+
+  projectNotificationPreferences: defineTable({
+    userId: v.id("users"),
+    projectId: v.id("projects"),
+    taskAssigned: v.boolean(),
+    taskDescriptionMention: v.boolean(),
+    taskCommentMention: v.boolean(),
+    taskComment: v.boolean(),
+    taskStatusChange: v.boolean(),
+  })
+    .index("by_user_project", ["userId", "projectId"])
+    .index("by_project", ["projectId"]),
+
+  notificationPreferences: defineTable({
+    userId: v.id("users"),
+    chatMention: v.boolean(),
+    chatChannelMessage: v.boolean(),
+    taskAssigned: v.boolean(),
+    taskDescriptionMention: v.boolean(),
+    taskCommentMention: v.boolean(),
+    taskComment: v.boolean(),
+    taskStatusChange: v.boolean(),
+    documentMention: v.boolean(),
+    documentCreated: v.boolean(),
+    documentDeleted: v.boolean(),
+    spreadsheetCreated: v.boolean(),
+    spreadsheetDeleted: v.boolean(),
+    diagramCreated: v.boolean(),
+    diagramDeleted: v.boolean(),
+    projectCreated: v.boolean(),
+    projectDeleted: v.boolean(),
+    channelCreated: v.boolean(),
+    channelDeleted: v.boolean(),
+  })
+    .index("by_user", ["userId"]),
+
   recentActivity: defineTable({
     userId: v.id("users"),
     workspaceId: v.id("workspaces"),

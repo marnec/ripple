@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation } from "./_generated/server";
 
 export const registerSubscription = mutation({
   args: {
@@ -56,7 +56,7 @@ export const unregisterSubscription = mutation({
   },
 });
 
-export const usersSubscriptions = query({
+export const usersSubscriptions = internalQuery({
   args: { usersIds: v.array(v.id("users")) },
   returns: v.array(v.object({
     _id: v.id("pushSubscriptions"),
@@ -71,9 +71,6 @@ export const usersSubscriptions = query({
     }),
   })),
   handler: async (ctx, { usersIds }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("User not authenticated");
-
     const results = await Promise.all(
       usersIds.map((id) =>
         ctx.db

@@ -169,6 +169,38 @@ export function extractDocBlockRefs(blocks: unknown[]): Set<string> {
   return refs;
 }
 
+/** Collect mention userIds from a list of inline nodes. */
+function collectInlineMentions(nodes: InlineNode[], refs: Set<string>) {
+  for (const ic of nodes) {
+    if (ic.type === "mention" && ic.props?.userId) {
+      refs.add(ic.props.userId);
+    }
+  }
+}
+
+/** Extract all @mention user IDs from the editor document tree. */
+export function extractMentions(blocks: unknown[]): Set<string> {
+  const refs = new Set<string>();
+  for (const block of blocks as EditorBlock[]) {
+    if (Array.isArray(block.content)) {
+      collectInlineMentions(block.content, refs);
+    }
+    if (block.content && !Array.isArray(block.content) && block.content.type === "tableContent") {
+      for (const row of block.content.rows) {
+        for (const cell of row.cells) {
+          collectInlineMentions(cell.content, refs);
+        }
+      }
+    }
+    if (block.children) {
+      for (const key of extractMentions(block.children)) {
+        refs.add(key);
+      }
+    }
+  }
+  return refs;
+}
+
 /** Collect cell ref keys from a list of inline nodes. */
 function collectInlineCellRefs(nodes: InlineNode[], refs: Set<string>) {
   for (const ic of nodes) {

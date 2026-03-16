@@ -17,7 +17,7 @@ import { useViewer } from "../UserContext";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
-import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs } from "../../../hooks/use-editor-tracking";
+import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs, extractMentions } from "../../../hooks/use-editor-tracking";
 import { useReferencedBlockDeleteProtection } from "../../../hooks/use-referenced-block-delete-protection";
 import { useReferencedBlocks } from "../../../hooks/use-referenced-blocks";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
@@ -83,6 +83,8 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     documentName: string;
   } | null>(null);
 
+  const reportMention = useMutation(api.documents.reportMention);
+
   const fileUpload = useUploadFile(document?.workspaceId);
 
   const { editor, isLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
@@ -128,6 +130,20 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     [removeBlockRef],
   );
   useEditorTracking(editor, extractDocBlockRefs, { onRemoved: onDocBlockRefsRemoved });
+
+  // Track @mention additions and notify mentioned users
+  const onMentionsChanged = useCallback(
+    (current: Set<string>, previous: Set<string>) => {
+      const newMentions = [...current].filter((id) => !previous.has(id));
+      if (newMentions.length === 0) return;
+      void reportMention({
+        documentId,
+        mentionedUserIds: newMentions as Id<"users">[],
+      });
+    },
+    [reportMention, documentId],
+  );
+  useEditorTracking(editor, extractMentions, { onChanged: onMentionsChanged });
 
   // Sync hard-embed references (diagrams, spreadsheets, documents) to contentReferences table
   const onEmbedsChanged = useCallback(

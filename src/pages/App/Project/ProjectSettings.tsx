@@ -4,11 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
+import {
+  TASK_NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CATEGORY_LABELS,
+  DEFAULT_PROJECT_TASK_PREFERENCES,
+  type TaskNotificationCategory,
+} from "@shared/notificationCategories";
 import { useMutation, useQuery } from "convex/react";
 import { Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
@@ -188,6 +195,9 @@ function ProjectSettingsContent({
         />
       </section>
 
+      {/* Notifications Section - visible to all users */}
+      <ProjectNotificationSettings projectId={projectId} />
+
       {/* Danger Zone - only visible to creator */}
       {isCreator && (
         <>
@@ -206,5 +216,61 @@ function ProjectSettingsContent({
         </>
       )}
     </div>
+  );
+}
+
+function ProjectNotificationSettings({ projectId }: { projectId: Id<"projects"> }) {
+  const projNotifPrefs = useQuery(api.projectNotificationPreferences.get, { projectId });
+  const savePrefs = useMutation(api.projectNotificationPreferences.save);
+
+  const currentPrefs: Record<TaskNotificationCategory, boolean> = useMemo(() => {
+    if (!projNotifPrefs) return { ...DEFAULT_PROJECT_TASK_PREFERENCES };
+    return Object.fromEntries(
+      TASK_NOTIFICATION_CATEGORIES.map((cat) => [cat, projNotifPrefs[cat]]),
+    ) as Record<TaskNotificationCategory, boolean>;
+  }, [projNotifPrefs]);
+
+  const handleToggle = useCallback(
+    (category: TaskNotificationCategory, enabled: boolean) => {
+      const updated = { ...currentPrefs, [category]: enabled, projectId };
+      // Turning on "comments on assigned tasks" also enables "mentioned in task comment"
+      if (category === "taskComment" && enabled) {
+        updated.taskCommentMention = true;
+      }
+      void savePrefs(updated);
+    },
+    [currentPrefs, savePrefs, projectId],
+  );
+
+  return (
+    <>
+      <Separator className="my-6" />
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold mb-4">Notifications</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Control which task notifications you receive for this project.
+        </p>
+        <div className="space-y-2">
+          {TASK_NOTIFICATION_CATEGORIES.map((category) => {
+            const lockedOn = category === "taskCommentMention" && currentPrefs.taskComment;
+            return (
+              <div
+                key={category}
+                className="flex items-center justify-between py-0.5"
+              >
+                <span className={`text-sm ${lockedOn ? "text-muted-foreground" : ""}`}>
+                  {NOTIFICATION_CATEGORY_LABELS[category]}
+                </span>
+                <Switch
+                  checked={currentPrefs[category]}
+                  disabled={lockedOn}
+                  onCheckedChange={(checked) => handleToggle(category, checked)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </>
   );
 }

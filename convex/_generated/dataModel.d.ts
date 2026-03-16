@@ -222,6 +222,31 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  channelNotificationPreferences: {
+    document: {
+      channelId: Id<"channels">;
+      chatChannelMessage: boolean;
+      chatMention: boolean;
+      userId: Id<"users">;
+      _id: Id<"channelNotificationPreferences">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "channelId"
+      | "chatChannelMessage"
+      | "chatMention"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel: ["channelId", "_creationTime"];
+      by_user_channel: ["userId", "channelId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   channels: {
     document: {
       isPublic: boolean;
@@ -540,6 +565,91 @@ export type DataModel = {
         filterFields: "channelId";
       };
     };
+    vectorIndexes: {};
+  };
+  notificationPreferences: {
+    document: {
+      channelCreated: boolean;
+      channelDeleted: boolean;
+      chatChannelMessage: boolean;
+      chatMention: boolean;
+      diagramCreated: boolean;
+      diagramDeleted: boolean;
+      documentCreated: boolean;
+      documentDeleted: boolean;
+      documentMention: boolean;
+      projectCreated: boolean;
+      projectDeleted: boolean;
+      spreadsheetCreated: boolean;
+      spreadsheetDeleted: boolean;
+      taskAssigned: boolean;
+      taskComment: boolean;
+      taskCommentMention: boolean;
+      taskDescriptionMention: boolean;
+      taskStatusChange: boolean;
+      userId: Id<"users">;
+      _id: Id<"notificationPreferences">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "channelCreated"
+      | "channelDeleted"
+      | "chatChannelMessage"
+      | "chatMention"
+      | "diagramCreated"
+      | "diagramDeleted"
+      | "documentCreated"
+      | "documentDeleted"
+      | "documentMention"
+      | "projectCreated"
+      | "projectDeleted"
+      | "spreadsheetCreated"
+      | "spreadsheetDeleted"
+      | "taskAssigned"
+      | "taskComment"
+      | "taskCommentMention"
+      | "taskDescriptionMention"
+      | "taskStatusChange"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_user: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  projectNotificationPreferences: {
+    document: {
+      projectId: Id<"projects">;
+      taskAssigned: boolean;
+      taskComment: boolean;
+      taskCommentMention: boolean;
+      taskDescriptionMention: boolean;
+      taskStatusChange: boolean;
+      userId: Id<"users">;
+      _id: Id<"projectNotificationPreferences">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "projectId"
+      | "taskAssigned"
+      | "taskComment"
+      | "taskCommentMention"
+      | "taskDescriptionMention"
+      | "taskStatusChange"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_project: ["projectId", "_creationTime"];
+      by_user_project: ["userId", "projectId", "_creationTime"];
+    };
+    searchIndexes: {};
     vectorIndexes: {};
   };
   projects: {

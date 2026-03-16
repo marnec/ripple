@@ -4,6 +4,8 @@ import { mutation, query } from "./_generated/server";
 import { DEFAULT_SPREADSHEET_NAME } from "@shared/constants";
 import { getEnrichedReferencesTo } from "./contentReferences";
 import { logActivity } from "./auditLog";
+import { getUserDisplayName } from "@shared/displayName";
+import { internal } from "./_generated/api";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -185,6 +187,16 @@ export const create = mutation({
       action: "created", newValue: spreadsheetName, resourceName: spreadsheetName, scope: workspaceId,
     });
 
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId,
+      resourceType: "spreadsheet",
+      resourceName: spreadsheetName,
+      event: "created",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      url: `/workspaces/${workspaceId}/spreadsheets/${spreadsheetId}`,
+    });
+
     return spreadsheetId;
   },
 });
@@ -272,6 +284,15 @@ export const remove = mutation({
     await logActivity(ctx, {
       userId, resourceType: "spreadsheets", resourceId: id,
       action: "deleted", oldValue: spreadsheet.name, resourceName: spreadsheet.name, scope: spreadsheet.workspaceId,
+    });
+
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId: spreadsheet.workspaceId,
+      resourceType: "spreadsheet",
+      resourceName: spreadsheet.name,
+      event: "deleted",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
     // Clean up cached cell references

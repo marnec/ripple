@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
-import { query } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
 
 const workspaceMemberValidator = v.object({
   _id: v.id("workspaceMembers"),
@@ -63,5 +63,17 @@ export const membersByWorkspace = query({
     return Promise.all(members.map(({ userId }) => ctx.db.get(userId))).then((users) =>
       users.filter((u) => u !== null),
     );
+  },
+});
+
+export const listUserIds = internalQuery({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.array(v.id("users")),
+  handler: async (ctx, { workspaceId }) => {
+    const members = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+    return members.map((m) => m.userId);
   },
 });

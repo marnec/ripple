@@ -1,10 +1,18 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { ChannelRole } from "@shared/enums";
+import {
+  CHAT_NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CATEGORY_LABELS,
+  DEFAULT_CHANNEL_CHAT_PREFERENCES,
+  type ChatNotificationCategory,
+} from "@shared/notificationCategories";
 import { QueryParams } from "@shared/types/routes";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -79,6 +87,10 @@ function ChannelSettingsContent({
         availableMembers={availableMembers}
       />
 
+      <Separator className="my-6" />
+
+      <ChannelNotificationSettings channelId={channelId} />
+
       {isAdmin && (
         <>
           <Separator className="my-6" />
@@ -89,6 +101,59 @@ function ChannelSettingsContent({
         </>
       )}
     </div>
+  );
+}
+
+function ChannelNotificationSettings({ channelId }: { channelId: Id<"channels"> }) {
+  const chanNotifPrefs = useQuery(api.channelNotificationPreferences.get, { channelId });
+  const savePrefs = useMutation(api.channelNotificationPreferences.save);
+
+  const currentPrefs: Record<ChatNotificationCategory, boolean> = useMemo(() => {
+    if (!chanNotifPrefs) return { ...DEFAULT_CHANNEL_CHAT_PREFERENCES };
+    return Object.fromEntries(
+      CHAT_NOTIFICATION_CATEGORIES.map((cat) => [cat, chanNotifPrefs[cat]]),
+    ) as Record<ChatNotificationCategory, boolean>;
+  }, [chanNotifPrefs]);
+
+  const handleToggle = useCallback(
+    (category: ChatNotificationCategory, enabled: boolean) => {
+      const updated = { ...currentPrefs, [category]: enabled, channelId };
+      // Turning on "new channel messages" also enables "@mentions in chat"
+      if (category === "chatChannelMessage" && enabled) {
+        updated.chatMention = true;
+      }
+      void savePrefs(updated);
+    },
+    [currentPrefs, savePrefs, channelId],
+  );
+
+  return (
+    <section className="mb-8">
+      <h2 className="text-lg font-semibold mb-4">Notifications</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Control which chat notifications you receive for this channel.
+      </p>
+      <div className="space-y-2">
+        {CHAT_NOTIFICATION_CATEGORIES.map((category) => {
+          const lockedOn = category === "chatMention" && currentPrefs.chatChannelMessage;
+          return (
+            <div
+              key={category}
+              className="flex items-center justify-between py-0.5"
+            >
+              <span className={`text-sm ${lockedOn ? "text-muted-foreground" : ""}`}>
+                {NOTIFICATION_CATEGORY_LABELS[category]}
+              </span>
+              <Switch
+                checked={currentPrefs[category]}
+                disabled={lockedOn}
+                onCheckedChange={(checked) => handleToggle(category, checked)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

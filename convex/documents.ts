@@ -2,7 +2,9 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { DEFAULT_DOC_NAME } from "@shared/constants";
-import { logActivity } from "./auditLog";
+import { auditLog, logActivity } from "./auditLog";
+import { getUserDisplayName } from "@shared/displayName";
+import { internal } from "./_generated/api";
 
 export const create = mutation({
   args: {
@@ -26,6 +28,16 @@ export const create = mutation({
     await logActivity(ctx, {
       userId, resourceType: "documents", resourceId: documentId,
       action: "created", newValue: documentName, resourceName: documentName, scope: workspaceId,
+    });
+
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId,
+      resourceType: "document",
+      resourceName: documentName,
+      event: "created",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      url: `/workspaces/${workspaceId}/documents/${documentId}`,
     });
 
     return documentId;
@@ -236,6 +248,15 @@ export const remove = mutation({
       action: "deleted", oldValue: document.name, resourceName: document.name, scope: document.workspaceId,
     });
 
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId: document.workspaceId,
+      resourceType: "document",
+      resourceName: document.name,
+      event: "deleted",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
+    });
+
     // Clean up outgoing content references from this document
     const outgoingRefs = await ctx.db
       .query("contentReferences")
@@ -244,6 +265,74 @@ export const remove = mutation({
     await Promise.all(outgoingRefs.map((r) => ctx.db.delete(r._id)));
 
     await ctx.db.delete(id);
+    return null;
+  },
+});
+
+/**
+ * Report new @mentions in a document (called from client-side when editor detects new mentions).
+ * Schedules push notifications to mentioned users.
+ */
+export const reportMention = mutation({
+  args: {
+    documentId: v.id("documents"),
+    mentionedUserIds: v.array(v.id("users")),
+  },
+  returns: v.null(),
+  handler: async (ctx, { documentId, mentionedUserIds }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const document = await ctx.db.get(documentId);
+    if (!document) throw new ConvexError("Document not found");
+
+    // Validate workspace membership
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
+      )
+      .first();
+    if (!membership) throw new ConvexError("Not a member of this workspace");
+
+    // Filter out self-mentions
+    const filteredMentions = mentionedUserIds.filter((id) => id !== userId);
+    if (filteredMentions.length === 0) return null;
+
+    // Rate limit: check if a document_mention was logged for this document recently
+    const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+    const recentMentions = await auditLog.queryByActionResource(ctx, {
+      action: "documents.document_mention",
+      resourceId: documentId,
+      limit: 1,
+      fromTimestamp: Date.now() - COOLDOWN_MS,
+    });
+
+    if (recentMentions.length > 0) return null;
+
+    // Log the mention event for future rate-limit checks
+    await logActivity(ctx, {
+      userId,
+      resourceType: "documents",
+      resourceId: documentId,
+      action: "document_mention",
+      resourceName: document.name,
+      newValue: filteredMentions.join(","),
+      scope: document.workspaceId,
+    });
+
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.documentNotifications.notifyDocumentMention, {
+      documentId,
+      documentName: document.name,
+      workspaceId: document.workspaceId,
+      mentionedUserIds: filteredMentions,
+      mentionedBy: {
+        name: getUserDisplayName(user),
+        id: userId,
+      },
+    });
+
     return null;
   },
 });

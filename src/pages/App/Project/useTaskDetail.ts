@@ -7,6 +7,26 @@ import { useDocumentCollaboration } from "../../../hooks/use-document-collaborat
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 
+/** Extract all @mention user IDs from task description blocks. */
+function extractMentionUserIds(blocks: any[]): Set<string> {
+  const ids = new Set<string>();
+  for (const block of blocks) {
+    if (Array.isArray(block.content)) {
+      for (const ic of block.content) {
+        if (ic.type === "userMention" && ic.props?.userId) {
+          ids.add(ic.props.userId);
+        }
+      }
+    }
+    if (block.children) {
+      for (const id of extractMentionUserIds(block.children)) {
+        ids.add(id);
+      }
+    }
+  }
+  return ids;
+}
+
 /** Extract all hard-embed reference keys from task description (diagrams + document block embeds). */
 function extractTaskEmbedRefs(blocks: any[]): Set<string> {
   const refs = new Set<string>();
@@ -76,6 +96,7 @@ export function useTaskDetail({
   const removeTask = useMutation(api.tasks.remove);
   const syncReferences = useMutation(api.contentReferences.syncReferences);
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
+  const notifyMentions = useMutation(api.tasks.notifyDescriptionMentions);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [titleValue, setTitleValue] = useState("");
@@ -175,6 +196,27 @@ export function useTaskDetail({
       if (docBlockRefDebounceRef.current) clearTimeout(docBlockRefDebounceRef.current);
     };
   }, [editor, taskId, removeBlockRef]);
+
+  // Track @mentions in task description and notify newly mentioned users
+  const prevMentionsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!editor || !taskId) return;
+    prevMentionsRef.current = extractMentionUserIds(editor.document);
+
+    const unsubscribe = editor.onChange(() => {
+      const current = extractMentionUserIds(editor.document);
+      const added = [...current].filter((id) => !prevMentionsRef.current.has(id));
+      if (added.length > 0) {
+        void notifyMentions({
+          taskId,
+          mentionedUserIds: added as Id<"users">[],
+        });
+      }
+      prevMentionsRef.current = current;
+    });
+
+    return () => { unsubscribe(); };
+  }, [editor, taskId, notifyMentions]);
 
   // Sync title when task loads
   useEffect(() => {

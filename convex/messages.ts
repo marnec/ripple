@@ -3,7 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
@@ -421,7 +421,7 @@ export const send = mutation({
       });
     }
 
-    await ctx.scheduler.runAfter(0, api.pushNotifications.sendPushNotification, {
+    await ctx.scheduler.runAfter(0, internal.pushNotifications.sendPushNotification, {
       channelId,
       body: plainText,
       author: {

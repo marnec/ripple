@@ -108,8 +108,9 @@ export const create = mutation({
     // Schedule mention notifications after database write
     const mentionedUserIds = extractMentionedUserIds(body);
     const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+    const user = await ctx.db.get(userId);
+
     if (filteredMentions.length > 0) {
-      const user = await ctx.db.get(userId);
       await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
         taskId,
         mentionedUserIds: filteredMentions,
@@ -119,6 +120,19 @@ export const create = mutation({
           id: userId,
         },
         context: "comment",
+      });
+    }
+
+    // Notify assignee about new comment (if they're not the commenter and not already mentioned)
+    if (task.assigneeId && task.assigneeId !== userId && !filteredMentions.includes(task.assigneeId)) {
+      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskComment, {
+        taskId,
+        assigneeId: task.assigneeId,
+        taskTitle: task.title,
+        commentedBy: {
+          name: getUserDisplayName(user),
+          id: userId,
+        },
       });
     }
 

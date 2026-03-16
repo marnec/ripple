@@ -3,6 +3,8 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums";
 import { logActivity } from "./auditLog";
+import { getUserDisplayName } from "@shared/displayName";
+import { internal } from "./_generated/api";
 
 const projectValidator = v.object({
   _id: v.id("projects"),
@@ -106,6 +108,16 @@ export const create = mutation({
     await logActivity(ctx, {
       userId, resourceType: "projects", resourceId: projectId,
       action: "created", newValue: name, resourceName: name, scope: workspaceId,
+    });
+
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId,
+      resourceType: "project",
+      resourceName: name,
+      event: "created",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      url: `/workspaces/${workspaceId}/projects/${projectId}`,
     });
 
     return projectId;
@@ -293,6 +305,15 @@ export const remove = mutation({
       action: "deleted", oldValue: project.name, resourceName: project.name, scope: project.workspaceId,
     });
 
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId: project.workspaceId,
+      resourceType: "project",
+      resourceName: project.name,
+      event: "deleted",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
+    });
+
     // Cascade delete: tasks, taskComments, and taskStatuses
     // 1. Delete all taskComments for tasks in this project
     const tasks = await ctx.db
@@ -351,6 +372,13 @@ export const remove = mutation({
       await Promise.all(cts.map((ct) => ctx.db.delete(ct._id)));
       await ctx.db.delete(cycle._id);
     }
+
+    // 5. Delete project notification preferences
+    const projNotifPrefs = await ctx.db
+      .query("projectNotificationPreferences")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+    await Promise.all(projNotifPrefs.map((p) => ctx.db.delete(p._id)));
 
     // Delete the project
     await ctx.db.delete(id);

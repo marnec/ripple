@@ -6,6 +6,8 @@ import { stream } from "convex-helpers/server/stream";
 import { getAll } from "convex-helpers/server/relationships";
 import schema from "./schema";
 import { logActivity } from "./auditLog";
+import { getUserDisplayName } from "@shared/displayName";
+import { internal } from "./_generated/api";
 
 export const create = mutation({
   args: {
@@ -39,6 +41,16 @@ export const create = mutation({
     await logActivity(ctx, {
       userId, resourceType: "channels", resourceId: channelId,
       action: "created", newValue: name, resourceName: name, scope: workspaceId,
+    });
+
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId,
+      resourceType: "channel",
+      resourceName: name,
+      event: "created",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      url: `/workspaces/${workspaceId}/channels/${channelId}`,
     });
 
     return channelId;
@@ -193,6 +205,15 @@ export const remove = mutation({
       action: "deleted", oldValue: channel.name, resourceName: channel.name, scope: channel.workspaceId,
     });
 
+    const user = await ctx.db.get(userId);
+    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+      workspaceId: channel.workspaceId,
+      resourceType: "channel",
+      resourceName: channel.name,
+      event: "deleted",
+      triggeredBy: { name: getUserDisplayName(user), id: userId },
+    });
+
     const channelMessages = await ctx.db
       .query("messages")
       .withIndex("by_channel", (q) => q.eq("channelId", id))
@@ -206,6 +227,13 @@ export const remove = mutation({
       await ctx.db.delete(doc._id);
       return null;
     }).collect();
+
+    // Delete channel notification preferences
+    const chanNotifPrefs = await ctx.db
+      .query("channelNotificationPreferences")
+      .withIndex("by_channel", (q) => q.eq("channelId", id))
+      .collect();
+    await Promise.all(chanNotifPrefs.map((p) => ctx.db.delete(p._id)));
 
     await ctx.db.delete(id);
     return null;
