@@ -203,7 +203,9 @@ export function WorkspaceTimeline({ workspaceId }: { workspaceId: Id<"workspaces
   ) as TimelineEntry[] | undefined;
   const [visible, setVisible] = useState(PAGE_SIZE);
 
-  if (allEntries === undefined) return null;
+  if (!allEntries) {
+    return <div ref={sentinelRef} />;
+  }
 
   if (allEntries.length === 0) {
     return (
@@ -217,7 +219,7 @@ export function WorkspaceTimeline({ workspaceId }: { workspaceId: Id<"workspaces
   const hasMore = visible < allEntries.length;
 
   return (
-    <div ref={sentinelRef} className="relative">
+    <div className="relative">
       {entries.length > 1 && (
         <div className="absolute left-2.5 top-3 bottom-3 w-px bg-border" />
       )}
