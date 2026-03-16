@@ -124,7 +124,7 @@ export function WorkspaceDetails() {
           })}
         </div>
 
-        {/* Tabs + legend */}
+        {/* Tabs + type filters */}
         <div className="flex items-center gap-1 flex-wrap">
           {!isMobile && (
             <button
@@ -153,8 +153,8 @@ export function WorkspaceDetails() {
             Activity
           </button>
 
-          {/* Node type filter switches — only shown on graph tab */}
-          {activeTab === "graph" && !isMobile && (
+          {/* Type filter switches — shared across graph and activity tabs */}
+          {!isMobile && (
             <div className="flex items-center gap-4 ml-auto">
               {NODE_TYPES.map((type) => {
                 const isVisible = !hiddenTypes.has(type);
@@ -179,7 +179,7 @@ export function WorkspaceDetails() {
       {/* Tab content */}
       {activeTab === "activity" && (
         <div className="container mx-auto px-4 pb-4">
-          <WorkspaceTimeline workspaceId={id} />
+          <WorkspaceTimeline workspaceId={id} hiddenTypes={hiddenTypes} />
         </div>
       )}
       {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (

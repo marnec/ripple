@@ -180,7 +180,17 @@ function formatRelativeTime(timestamp: number): string {
 const PAGE_SIZE = 5;
 const MAX_FETCH = 50;
 
-export function WorkspaceTimeline({ workspaceId }: { workspaceId: Id<"workspaces"> }) {
+// Map plural resourceType from audit log to singular type used in graph filters
+const RESOURCE_TYPE_TO_SINGULAR: Record<string, string> = {
+  documents: "document",
+  diagrams: "diagram",
+  spreadsheets: "spreadsheet",
+  channels: "channel",
+  projects: "project",
+  tasks: "task",
+};
+
+export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: Id<"workspaces">; hiddenTypes?: Set<string> }) {
   const [isVisible, setIsVisible] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -207,7 +217,16 @@ export function WorkspaceTimeline({ workspaceId }: { workspaceId: Id<"workspaces
     return <div ref={sentinelRef} />;
   }
 
-  if (allEntries.length === 0) {
+  // Filter by hidden types if provided
+  const filteredEntries = hiddenTypes && hiddenTypes.size > 0
+    ? allEntries.filter((entry) => {
+        if (!entry.resourceType) return true;
+        const singular = RESOURCE_TYPE_TO_SINGULAR[entry.resourceType];
+        return !singular || !hiddenTypes.has(singular);
+      })
+    : allEntries;
+
+  if (filteredEntries.length === 0) {
     return (
       <div className="text-sm text-muted-foreground">
         No recent activity
@@ -215,8 +234,8 @@ export function WorkspaceTimeline({ workspaceId }: { workspaceId: Id<"workspaces
     );
   }
 
-  const entries = allEntries.slice(0, visible);
-  const hasMore = visible < allEntries.length;
+  const entries = filteredEntries.slice(0, visible);
+  const hasMore = visible < filteredEntries.length;
 
   return (
     <div className="relative">
