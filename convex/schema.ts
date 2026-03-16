@@ -180,15 +180,6 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("undeleted_by_task", ["taskId", "deleted"]),
 
-  taskDependencies: defineTable({
-    taskId: v.id("tasks"), // source task
-    dependsOnTaskId: v.id("tasks"), // target task
-    type: v.union(v.literal("blocks"), v.literal("relates_to")),
-    creatorId: v.id("users"),
-  })
-    .index("by_task", ["taskId"])
-    .index("by_depends_on", ["dependsOnTaskId"])
-    .index("by_pair", ["taskId", "dependsOnTaskId"]),
 
   callSessions: defineTable({
     channelId: v.id("channels"),
@@ -222,15 +213,6 @@ export default defineSchema({
     .index("by_workspace_user_type", ["workspaceId", "userId", "resourceType"])
     .index("by_user_resource", ["userId", "resourceId"]),
 
-  contentReferences: defineTable({
-    sourceType: v.union(v.literal("document"), v.literal("task")),
-    sourceId: v.string(),
-    targetType: v.union(v.literal("diagram"), v.literal("spreadsheet"), v.literal("document")),
-    targetId: v.string(),
-    workspaceId: v.id("workspaces"),
-  })
-    .index("by_target", ["targetId"])
-    .index("by_source", ["sourceId"]),
 
   documentBlockRefs: defineTable({
     documentId: v.id("documents"),
@@ -339,6 +321,35 @@ export default defineSchema({
     channelDeleted: v.boolean(),
   })
     .index("by_user", ["userId"]),
+
+  edges: defineTable({
+    sourceType: v.union(
+      v.literal("document"),
+      v.literal("task"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+    ),
+    sourceId: v.string(),
+    targetType: v.union(
+      v.literal("document"),
+      v.literal("task"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+    ),
+    targetId: v.string(),
+    edgeType: v.union(
+      v.literal("embeds"),
+      v.literal("blocks"),
+      v.literal("relates_to"),
+    ),
+    workspaceId: v.id("workspaces"),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+  })
+    .index("by_target", ["targetId"])
+    .index("by_source", ["sourceId"])
+    .index("by_source_target", ["sourceId", "targetId"])
+    .index("by_workspace_target", ["workspaceId", "targetId"]),
 
   recentActivity: defineTable({
     userId: v.id("users"),

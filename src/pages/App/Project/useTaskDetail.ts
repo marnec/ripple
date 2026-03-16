@@ -98,7 +98,7 @@ export function useTaskDetail({
 
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
-  const syncReferences = useMutation(api.contentReferences.syncReferences);
+  const syncEdges = useMutation(api.edges.syncEdges);
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
   const notifyMentions = useMutation(api.tasks.notifyDescriptionMentions);
 
@@ -121,7 +121,7 @@ export function useTaskDetail({
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
 
-  // Parse "type|id" keys into contentReferences format
+  // Parse "type|id" keys into edges format
   const parseEmbedRefs = useCallback((keys: Set<string>) => {
     return [...keys].map((key) => {
       const [targetType, targetId] = key.split("|");
@@ -129,7 +129,7 @@ export function useTaskDetail({
     });
   }, []);
 
-  // Sync embed references (diagrams + document block embeds) to contentReferences table
+  // Sync embed references (diagrams + document block embeds) to edges table
   const prevEmbedsRef = useRef<Set<string>>(new Set());
   const embedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -139,7 +139,7 @@ export function useTaskDetail({
 
     // Sync on mount so pre-existing embeds get tracked
     if (initial.size > 0) {
-      void syncReferences({
+      void syncEdges({
         sourceType: "task",
         sourceId: taskId,
         references: parseEmbedRefs(initial),
@@ -153,7 +153,7 @@ export function useTaskDetail({
         const current = extractTaskEmbedRefs(editor.document);
         if (current.size !== prevEmbedsRef.current.size ||
             [...current].some((k) => !prevEmbedsRef.current.has(k))) {
-          void syncReferences({
+          void syncEdges({
             sourceType: "task",
             sourceId: taskId,
             references: parseEmbedRefs(current),
@@ -168,7 +168,7 @@ export function useTaskDetail({
       unsubscribe();
       if (embedDebounceRef.current) clearTimeout(embedDebounceRef.current);
     };
-  }, [editor, taskId, workspaceId, syncReferences, parseEmbedRefs]);
+  }, [editor, taskId, workspaceId, syncEdges, parseEmbedRefs]);
 
   // Track document block ref removals for cache cleanup
   const prevDocBlockRefsRef = useRef<Set<string>>(new Set());

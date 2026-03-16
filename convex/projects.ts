@@ -331,19 +331,19 @@ export const remove = mutation({
       })
     );
 
-    // 2. Clean up task dependencies, Yjs snapshots, and delete tasks
+    // 2. Clean up edges, Yjs snapshots, and delete tasks
     await Promise.all(
       tasks.map(async (task) => {
-        // Delete dependencies (both directions)
-        const outDeps = await ctx.db
-          .query("taskDependencies")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
+        // Delete all edges (embeds + dependencies, both directions)
+        const outEdges = await ctx.db
+          .query("edges")
+          .withIndex("by_source", (q) => q.eq("sourceId", task._id))
           .collect();
-        const inDeps = await ctx.db
-          .query("taskDependencies")
-          .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", task._id))
+        const inEdges = await ctx.db
+          .query("edges")
+          .withIndex("by_target", (q) => q.eq("targetId", task._id))
           .collect();
-        await Promise.all([...outDeps, ...inDeps].map((d) => ctx.db.delete(d._id)));
+        await Promise.all([...outEdges, ...inEdges].map((e) => ctx.db.delete(e._id)));
 
         if (task.yjsSnapshotId) {
           await ctx.storage.delete(task.yjsSnapshotId);

@@ -1,3 +1,4 @@
+import { Backlinks } from "@/components/Backlinks";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -190,6 +191,11 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           </Link>
         </HeaderSlot>
       )}
+
+      {/* Backlinks bar */}
+      <div className="px-3">
+        <Backlinks resourceId={diagramId} workspaceId={workspaceId} />
+      </div>
 
       {/* Canvas */}
       <div className="flex-1 overflow-hidden">

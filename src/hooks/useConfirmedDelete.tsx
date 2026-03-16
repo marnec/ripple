@@ -12,6 +12,7 @@ type DeleteResult = {
     sourceType: string;
     sourceId: string;
     sourceName: string;
+    edgeType: string;
     workspaceId: string;
     projectId?: string;
   }>;

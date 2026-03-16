@@ -270,33 +270,6 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
-  contentReferences: {
-    document: {
-      sourceId: string;
-      sourceType: "document" | "task";
-      targetId: string;
-      targetType: "diagram" | "spreadsheet" | "document";
-      workspaceId: Id<"workspaces">;
-      _id: Id<"contentReferences">;
-      _creationTime: number;
-    };
-    fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "sourceId"
-      | "sourceType"
-      | "targetId"
-      | "targetType"
-      | "workspaceId";
-    indexes: {
-      by_id: ["_id"];
-      by_creation_time: ["_creationTime"];
-      by_source: ["sourceId", "_creationTime"];
-      by_target: ["targetId", "_creationTime"];
-    };
-    searchIndexes: {};
-    vectorIndexes: {};
-  };
   cycles: {
     document: {
       creatorId: Id<"users">;
@@ -440,6 +413,41 @@ export type DataModel = {
         filterFields: "workspaceId";
       };
     };
+    vectorIndexes: {};
+  };
+  edges: {
+    document: {
+      createdAt: number;
+      createdBy?: Id<"users">;
+      edgeType: "embeds" | "blocks" | "relates_to";
+      sourceId: string;
+      sourceType: "document" | "task" | "diagram" | "spreadsheet";
+      targetId: string;
+      targetType: "document" | "task" | "diagram" | "spreadsheet";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"edges">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "createdBy"
+      | "edgeType"
+      | "sourceId"
+      | "sourceType"
+      | "targetId"
+      | "targetType"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_source: ["sourceId", "_creationTime"];
+      by_source_target: ["sourceId", "targetId", "_creationTime"];
+      by_target: ["targetId", "_creationTime"];
+      by_workspace_target: ["workspaceId", "targetId", "_creationTime"];
+    };
+    searchIndexes: {};
     vectorIndexes: {};
   };
   favorites: {
@@ -834,32 +842,6 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_task: ["taskId", "_creationTime"];
       undeleted_by_task: ["taskId", "deleted", "_creationTime"];
-    };
-    searchIndexes: {};
-    vectorIndexes: {};
-  };
-  taskDependencies: {
-    document: {
-      creatorId: Id<"users">;
-      dependsOnTaskId: Id<"tasks">;
-      taskId: Id<"tasks">;
-      type: "blocks" | "relates_to";
-      _id: Id<"taskDependencies">;
-      _creationTime: number;
-    };
-    fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "creatorId"
-      | "dependsOnTaskId"
-      | "taskId"
-      | "type";
-    indexes: {
-      by_id: ["_id"];
-      by_creation_time: ["_creationTime"];
-      by_depends_on: ["dependsOnTaskId", "_creationTime"];
-      by_pair: ["taskId", "dependsOnTaskId", "_creationTime"];
-      by_task: ["taskId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

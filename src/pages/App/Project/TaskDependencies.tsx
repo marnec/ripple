@@ -34,7 +34,7 @@ type TaskDependenciesProps = {
 };
 
 type DependencyItem = {
-  dependencyId: Id<"taskDependencies">;
+  edgeId: Id<"edges">;
   task: {
     _id: Id<"tasks">;
     title: string;
@@ -45,9 +45,9 @@ type DependencyItem = {
 };
 
 export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps) {
-  const deps = useQuery(api.taskDependencies.listByTask, { taskId });
-  const createDep = useMutation(api.taskDependencies.create);
-  const removeDep = useMutation(api.taskDependencies.remove);
+  const deps = useQuery(api.edges.listByTask, { taskId });
+  const createDep = useMutation(api.edges.createEdge);
+  const removeDep = useMutation(api.edges.removeEdge);
 
   const [addOpen, setAddOpen] = useState(false);
 
@@ -60,8 +60,8 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
   const totalCount = blocks.length + blockedBy.length + relatesTo.length;
   const hasDeps = totalCount > 0;
 
-  const handleRemove = (dependencyId: Id<"taskDependencies">) => {
-    void removeDep({ dependencyId });
+  const handleRemove = (edgeId: Id<"edges">) => {
+    void removeDep({ edgeId });
   };
 
   const handleAdd = async (selectedTaskId: Id<"tasks">, uiType: "blocks" | "is_blocked_by" | "relates_to") => {
@@ -154,7 +154,7 @@ function DependencyGroup({
   label: string;
   icon: React.ReactNode;
   items: DependencyItem[];
-  onRemove: (id: Id<"taskDependencies">) => void;
+  onRemove: (id: Id<"edges">) => void;
 }) {
   return (
     <div className="space-y-1">
@@ -166,7 +166,7 @@ function DependencyGroup({
         const taskIdStr = formatTaskId(item.task.projectKey, item.task.number);
         return (
           <div
-            key={item.dependencyId}
+            key={item.edgeId}
             className="flex items-center gap-2 pl-5 group"
           >
             {taskIdStr && (
@@ -186,7 +186,7 @@ function DependencyGroup({
               variant="ghost"
               size="icon"
               className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => onRemove(item.dependencyId)}
+              onClick={() => onRemove(item.edgeId)}
             >
               <X className="h-3 w-3" />
             </Button>

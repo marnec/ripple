@@ -235,12 +235,12 @@ export const get = query({
     const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
     const project = await ctx.db.get(task.projectId);
 
-    // Check if this task has any blockers (incoming "blocks" dependencies)
-    const blocker = await ctx.db
-      .query("taskDependencies")
-      .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", taskId))
-      .first();
-    const hasBlockers = blocker?.type === "blocks";
+    // Check if this task has any blockers (incoming "blocks" edges)
+    const blockerEdges = await ctx.db
+      .query("edges")
+      .withIndex("by_target", (q) => q.eq("targetId", taskId))
+      .collect();
+    const hasBlockers = blockerEdges.some((e) => e.edgeType === "blocks");
 
     return {
       ...task,
@@ -352,17 +352,17 @@ export const listByProject = query({
       tasks.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
         const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        const blocker = await ctx.db
-          .query("taskDependencies")
-          .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", task._id))
-          .first();
+        const blockerEdges = await ctx.db
+          .query("edges")
+          .withIndex("by_target", (q) => q.eq("targetId", task._id))
+          .collect();
 
         return {
           ...task,
           status,
           assignee,
           projectKey: project.key,
-          hasBlockers: blocker?.type === "blocks",
+          hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
         };
       })
     );
@@ -861,24 +861,17 @@ export const remove = mutation({
       await ctx.storage.delete(task.yjsSnapshotId);
     }
 
-    // Clean up outgoing content references from this task
-    const outgoingRefs = await ctx.db
-      .query("contentReferences")
+    // Clean up all edges (outgoing embeds + incoming references + task dependencies)
+    const outgoingEdges = await ctx.db
+      .query("edges")
       .withIndex("by_source", (q) => q.eq("sourceId", taskId))
       .collect();
-    await Promise.all(outgoingRefs.map((r) => ctx.db.delete(r._id)));
-
-    // Clean up task dependencies (both directions)
-    const outgoingDeps = await ctx.db
-      .query("taskDependencies")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect();
-    const incomingDeps = await ctx.db
-      .query("taskDependencies")
-      .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", taskId))
+    const incomingEdges = await ctx.db
+      .query("edges")
+      .withIndex("by_target", (q) => q.eq("targetId", taskId))
       .collect();
     await Promise.all(
-      [...outgoingDeps, ...incomingDeps].map((dep) => ctx.db.delete(dep._id))
+      [...outgoingEdges, ...incomingEdges].map((e) => ctx.db.delete(e._id))
     );
 
     // Delete the task document

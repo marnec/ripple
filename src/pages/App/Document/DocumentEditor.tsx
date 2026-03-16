@@ -1,3 +1,4 @@
+import { Backlinks } from "@/components/Backlinks";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -69,7 +70,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const removeCellRef = useMutation(api.spreadsheetCellRefs.removeCellRef);
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
-  const syncReferences = useMutation(api.contentReferences.syncReferences);
+  const syncEdges = useMutation(api.edges.syncEdges);
 
   const [cellRefDialog, setCellRefDialog] = useState<{
     open: boolean;
@@ -145,7 +146,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   );
   useEditorTracking(editor, extractMentions, { onChanged: onMentionsChanged });
 
-  // Sync hard-embed references (diagrams, spreadsheets, documents) to contentReferences table
+  // Sync hard-embed references (diagrams, spreadsheets, documents) to edges table
   const onEmbedsChanged = useCallback(
     (current: Set<string>) => {
       if (!document) return;
@@ -156,14 +157,14 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           targetId: key.slice(sep + 1),
         };
       });
-      void syncReferences({
+      void syncEdges({
         sourceType: "document",
         sourceId: documentId,
         references,
         workspaceId: document.workspaceId,
       });
     },
-    [document, documentId, syncReferences],
+    [document, documentId, syncEdges],
   );
   useEditorTracking(editor, extractHardEmbeds, {
     onChanged: onEmbedsChanged,
@@ -362,6 +363,11 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
                 handleBlockPickerInsert(blockId, blockPickerDialog);
               }}
             />
+          )}
+          {document && (
+            <div className="mt-4 mb-8">
+              <Backlinks resourceId={documentId} workspaceId={document.workspaceId} />
+            </div>
           )}
         </div>
       </div>

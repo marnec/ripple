@@ -243,35 +243,6 @@ export declare const api: {
       { roomId: string; token: string }
     >;
   };
-  contentReferences: {
-    getReferencesTo: FunctionReference<
-      "query",
-      "public",
-      { targetId: string },
-      Array<{
-        _id: Id<"contentReferences">;
-        projectId?: string;
-        sourceId: string;
-        sourceName: string;
-        sourceType: string;
-        workspaceId: string;
-      }>
-    >;
-    syncReferences: FunctionReference<
-      "mutation",
-      "public",
-      {
-        references: Array<{
-          targetId: string;
-          targetType: "diagram" | "spreadsheet" | "document";
-        }>;
-        sourceId: string;
-        sourceType: "document" | "task";
-        workspaceId: Id<"workspaces">;
-      },
-      null
-    >;
-  };
   cycles: {
     addTask: FunctionReference<
       "mutation",
@@ -444,7 +415,8 @@ export declare const api: {
       | { status: "deleted" }
       | {
           references: Array<{
-            _id: Id<"contentReferences">;
+            _id: Id<"edges">;
+            edgeType: string;
             projectId?: string;
             sourceId: string;
             sourceName: string;
@@ -592,6 +564,89 @@ export declare const api: {
       "mutation",
       "public",
       { id: Id<"documents">; tags: Array<string> },
+      null
+    >;
+  };
+  edges: {
+    createEdge: FunctionReference<
+      "mutation",
+      "public",
+      {
+        dependsOnTaskId: Id<"tasks">;
+        taskId: Id<"tasks">;
+        type: "blocks" | "relates_to";
+      },
+      Id<"edges">
+    >;
+    getBacklinks: FunctionReference<
+      "query",
+      "public",
+      { targetId: string; workspaceId?: Id<"workspaces"> },
+      Array<{
+        _id: Id<"edges">;
+        edgeType: string;
+        projectId?: string;
+        sourceId: string;
+        sourceName: string;
+        sourceType: string;
+        workspaceId: string;
+      }>
+    >;
+    listByTask: FunctionReference<
+      "query",
+      "public",
+      { taskId: Id<"tasks"> },
+      {
+        blockedBy: Array<{
+          edgeId: Id<"edges">;
+          task: {
+            _id: Id<"tasks">;
+            completed: boolean;
+            number?: number;
+            projectKey?: string;
+            title: string;
+          };
+        }>;
+        blocks: Array<{
+          edgeId: Id<"edges">;
+          task: {
+            _id: Id<"tasks">;
+            completed: boolean;
+            number?: number;
+            projectKey?: string;
+            title: string;
+          };
+        }>;
+        relatesTo: Array<{
+          edgeId: Id<"edges">;
+          task: {
+            _id: Id<"tasks">;
+            completed: boolean;
+            number?: number;
+            projectKey?: string;
+            title: string;
+          };
+        }>;
+      }
+    >;
+    removeEdge: FunctionReference<
+      "mutation",
+      "public",
+      { edgeId: Id<"edges"> },
+      null
+    >;
+    syncEdges: FunctionReference<
+      "mutation",
+      "public",
+      {
+        references: Array<{
+          targetId: string;
+          targetType: "diagram" | "spreadsheet" | "document";
+        }>;
+        sourceId: string;
+        sourceType: "document" | "task";
+        workspaceId: Id<"workspaces">;
+      },
       null
     >;
   };
@@ -1170,7 +1225,8 @@ export declare const api: {
       | { status: "deleted" }
       | {
           references: Array<{
-            _id: Id<"contentReferences">;
+            _id: Id<"edges">;
+            edgeType: string;
             projectId?: string;
             sourceId: string;
             sourceName: string;
@@ -1281,61 +1337,6 @@ export declare const api: {
       "mutation",
       "public",
       { body: string; id: Id<"taskComments"> },
-      null
-    >;
-  };
-  taskDependencies: {
-    create: FunctionReference<
-      "mutation",
-      "public",
-      {
-        dependsOnTaskId: Id<"tasks">;
-        taskId: Id<"tasks">;
-        type: "blocks" | "relates_to";
-      },
-      Id<"taskDependencies">
-    >;
-    listByTask: FunctionReference<
-      "query",
-      "public",
-      { taskId: Id<"tasks"> },
-      {
-        blockedBy: Array<{
-          dependencyId: Id<"taskDependencies">;
-          task: {
-            _id: Id<"tasks">;
-            completed: boolean;
-            number?: number;
-            projectKey?: string;
-            title: string;
-          };
-        }>;
-        blocks: Array<{
-          dependencyId: Id<"taskDependencies">;
-          task: {
-            _id: Id<"tasks">;
-            completed: boolean;
-            number?: number;
-            projectKey?: string;
-            title: string;
-          };
-        }>;
-        relatesTo: Array<{
-          dependencyId: Id<"taskDependencies">;
-          task: {
-            _id: Id<"tasks">;
-            completed: boolean;
-            number?: number;
-            projectKey?: string;
-            title: string;
-          };
-        }>;
-      }
-    >;
-    remove: FunctionReference<
-      "mutation",
-      "public",
-      { dependencyId: Id<"taskDependencies"> },
       null
     >;
   };
@@ -2058,20 +2059,6 @@ export declare const internal: {
       { userId: Id<"users">; userImage?: string; userName?: string }
     >;
   };
-  contentReferences: {
-    removeAllForSource: FunctionReference<
-      "mutation",
-      "internal",
-      { sourceId: string },
-      null
-    >;
-    removeAllForTarget: FunctionReference<
-      "mutation",
-      "internal",
-      { targetId: string },
-      null
-    >;
-  };
   documentBlockRefs: {
     checkMembership: FunctionReference<
       "query",
@@ -2137,6 +2124,20 @@ export declare const internal: {
         mentionedUserIds: Array<string>;
         workspaceId: Id<"workspaces">;
       },
+      null
+    >;
+  };
+  edges: {
+    removeAllForSource: FunctionReference<
+      "mutation",
+      "internal",
+      { sourceId: string },
+      null
+    >;
+    removeAllForTarget: FunctionReference<
+      "mutation",
+      "internal",
+      { targetId: string },
       null
     >;
   };

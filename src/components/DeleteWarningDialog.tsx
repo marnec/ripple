@@ -19,6 +19,7 @@ type Reference = {
   sourceType: string;
   sourceId: string;
   sourceName: string;
+  edgeType: string;
   workspaceId: string;
   projectId?: string;
 };
@@ -60,7 +61,7 @@ export function DeleteWarningDialog({
   preloadedReferences,
 }: DeleteWarningDialogProps) {
   const queriedReferences = useQuery(
-    api.contentReferences.getReferencesTo,
+    api.edges.getBacklinks,
     open && !preloadedReferences ? { targetId: resourceId } : "skip",
   );
 

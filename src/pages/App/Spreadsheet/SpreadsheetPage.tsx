@@ -1,4 +1,5 @@
 
+import { Backlinks } from "@/components/Backlinks";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
@@ -258,6 +259,11 @@ function SpreadsheetEditor({
           </Link>
         </HeaderSlot>
       )}
+      {/* Backlinks bar */}
+      <div className="px-3">
+        <Backlinks resourceId={spreadsheetId} workspaceId={spreadsheet.workspaceId} />
+      </div>
+
       <div className="flex-1 overflow-hidden">
         <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} referencedCellRefs={referencedCellRefs} />
       </div>

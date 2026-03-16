@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { DEFAULT_SPREADSHEET_NAME } from "@shared/constants";
-import { getEnrichedReferencesTo } from "./contentReferences";
+import { getEnrichedBacklinks } from "./edges";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
@@ -237,10 +237,11 @@ export const rename = mutation({
 });
 
 const referenceValidator = v.object({
-  _id: v.id("contentReferences"),
+  _id: v.id("edges"),
   sourceType: v.string(),
   sourceId: v.string(),
   sourceName: v.string(),
+  edgeType: v.string(),
   workspaceId: v.string(),
   projectId: v.optional(v.string()),
 });
@@ -275,7 +276,7 @@ export const remove = mutation({
 
     // Check for references unless force-deleting
     if (!force) {
-      const references = await getEnrichedReferencesTo(ctx, id);
+      const references = await getEnrichedBacklinks(ctx, id);
       if (references.length > 0) {
         return { status: "has_references" as const, references };
       }
@@ -302,12 +303,12 @@ export const remove = mutation({
       .collect();
     await Promise.all(cellRefs.map((ref) => ctx.db.delete(ref._id)));
 
-    // Clean up incoming content references pointing to this spreadsheet
-    const incomingRefs = await ctx.db
-      .query("contentReferences")
+    // Clean up incoming edges pointing to this spreadsheet
+    const incomingEdges = await ctx.db
+      .query("edges")
       .withIndex("by_target", (q) => q.eq("targetId", id))
       .collect();
-    await Promise.all(incomingRefs.map((r) => ctx.db.delete(r._id)));
+    await Promise.all(incomingEdges.map((e) => ctx.db.delete(e._id)));
 
     await ctx.db.delete(id);
     return { status: "deleted" as const };

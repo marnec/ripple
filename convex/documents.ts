@@ -257,12 +257,16 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
-    // Clean up outgoing content references from this document
-    const outgoingRefs = await ctx.db
-      .query("contentReferences")
+    // Clean up edges (both outgoing embeds and incoming references)
+    const outgoingEdges = await ctx.db
+      .query("edges")
       .withIndex("by_source", (q) => q.eq("sourceId", id))
       .collect();
-    await Promise.all(outgoingRefs.map((r) => ctx.db.delete(r._id)));
+    const incomingEdges = await ctx.db
+      .query("edges")
+      .withIndex("by_target", (q) => q.eq("targetId", id))
+      .collect();
+    await Promise.all([...outgoingEdges, ...incomingEdges].map((e) => ctx.db.delete(e._id)));
 
     await ctx.db.delete(id);
     return null;

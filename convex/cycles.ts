@@ -416,16 +416,16 @@ export const listCycleTasks = query({
       filtered.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
         const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        const blocker = await ctx.db
-          .query("taskDependencies")
-          .withIndex("by_depends_on", (q) => q.eq("dependsOnTaskId", task._id))
-          .first();
+        const blockerEdges = await ctx.db
+          .query("edges")
+          .withIndex("by_target", (q) => q.eq("targetId", task._id))
+          .collect();
         return {
           ...task,
           status,
           assignee,
           projectKey: project?.key,
-          hasBlockers: blocker?.type === "blocks",
+          hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
         };
       })
     );
