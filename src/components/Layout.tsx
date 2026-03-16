@@ -7,7 +7,6 @@ import { Outlet, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { CommandPalette } from "./CommandPalette";
-import { PullToRefresh } from "./PullToRefresh";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { FavoritesContext } from "../contexts/FavoritesContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
@@ -91,18 +90,16 @@ export function Layout() {
           )}
         </header>
         <div
-          className="relative flex h-[calc(100svh-4rem-var(--safe-area-top))] w-full"
+          className="relative h-[calc(100svh-4rem-var(--safe-area-top))] w-full overflow-auto"
         >
           {isFollowing && followColor && (
             <div
               className={`pointer-events-none absolute inset-0 z-30 ring-2 ring-inset ${followColor.ring}`}
             />
           )}
-          <PullToRefresh>
-            <HeaderSlotContext value={headerSlotNode}>
-              <Outlet />
-            </HeaderSlotContext>
-          </PullToRefresh>
+          <HeaderSlotContext value={headerSlotNode}>
+            <Outlet />
+          </HeaderSlotContext>
         </div>
       </SidebarInset>
       {workspaceId && (

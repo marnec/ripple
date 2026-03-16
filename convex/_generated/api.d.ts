@@ -593,6 +593,15 @@ export declare const api: {
         workspaceId: string;
       }>
     >;
+    getWorkspaceGraph: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      {
+        links: Array<{ edgeType: string; source: string; target: string }>;
+        nodes: Array<{ id: string; name: string; type: string }>;
+      }
+    >;
     listByTask: FunctionReference<
       "query",
       "public",

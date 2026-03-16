@@ -551,7 +551,7 @@ describe("message edges (via messages.send/update/remove)", () => {
 
   it("should create edges when sending a message with mentions", async () => {
     const t = createTestContext();
-    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await setupChannel(t, { workspaceId });
 
     // Create a user to mention
@@ -626,7 +626,7 @@ describe("message edges (via messages.send/update/remove)", () => {
 
   it("should remove edges when message is soft-deleted", async () => {
     const t = createTestContext();
-    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await setupChannel(t, { workspaceId });
 
     const mentionedUserId = await t.run(async (ctx) => {

@@ -4,20 +4,25 @@ import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex/react";
 import {
+  Clock,
   FileText,
   Hash,
   LayoutGrid,
+  Network,
   PenTool,
   Settings,
   Table,
   Users,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { QueryParams } from "@shared/types/routes";
 import { WorkspaceTimeline } from "./WorkspaceTimeline";
+import { WorkspaceGraph } from "./WorkspaceGraph";
+import { cn } from "@/lib/utils";
 
 const overviewCards = [
   { key: "members", label: "Members", icon: Users, to: "settings" },
@@ -28,21 +33,47 @@ const overviewCards = [
   { key: "spreadsheets", label: "Spreadsheets", icon: Table, to: "spreadsheets" },
 ] as const;
 
+type Tab = "activity" | "graph";
+
 export function WorkspaceDetails() {
   const { workspaceId } = useParams<QueryParams>();
   const id = workspaceId as Id<"workspaces">;
   const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState<Tab>("activity");
 
   const workspace = useQuery(api.workspaces.get, { id });
   const overview = useWorkspaceSidebar()?.counts;
+
+  // Measure the top section height so the graph can fill the remainder
+  const topRef = useRef<HTMLDivElement>(null);
+  const [graphWidth, setGraphWidth] = useState(0);
+  const [graphHeight, setGraphHeight] = useState(0);
+
+  useEffect(() => {
+    if (activeTab !== "graph" || !topRef.current) return;
+    const update = () => {
+      const topEl = topRef.current;
+      if (!topEl) return;
+      const topH = topEl.offsetHeight;
+      // Width = top section width minus horizontal padding (px-4 = 32px total)
+      const w = topEl.clientWidth - 32;
+      // Available height = viewport - header (4rem) - top section - bottom padding (1rem)
+      const h = window.innerHeight - 64 - topH - 16;
+      setGraphWidth(Math.max(200, w));
+      setGraphHeight(Math.max(200, h));
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [activeTab]);
 
   if (workspace === null) {
     return <ResourceDeleted resourceType="workspace" />;
   }
 
   return (
-    <div className="container mx-auto p-4 animate-fade-in">
-      <div className="space-y-4">
+    <div className="animate-fade-in">
+      <div ref={topRef} className="container mx-auto p-4 space-y-4">
         <div className="hidden md:flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold">
@@ -79,11 +110,50 @@ export function WorkspaceDetails() {
           })}
         </div>
 
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground mb-3">Recent activity</h2>
-          <WorkspaceTimeline workspaceId={id} />
+        {/* Tabs */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setActiveTab("activity")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              activeTab === "activity"
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+            )}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Activity
+          </button>
+          {!isMobile && (
+            <button
+              onClick={() => setActiveTab("graph")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === "graph"
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+              )}
+            >
+              <Network className="h-3.5 w-3.5" />
+              Graph
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Tab content */}
+      {activeTab === "activity" && (
+        <div className="container mx-auto px-4 pb-4">
+          <WorkspaceTimeline workspaceId={id} />
+        </div>
+      )}
+      {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
+        <div className="container mx-auto px-4 pb-4">
+          <div className="rounded-lg border bg-background overflow-hidden">
+            <WorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} />
+          </div>
+        </div>
+      )}
 
       {isMobile && (
         <HeaderSlot>

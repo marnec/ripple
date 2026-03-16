@@ -537,3 +537,109 @@ export const listByTask = query({
     return { blocks, blockedBy, relatesTo };
   },
 });
+
+// ── Graph query ─────────────────────────────────────────────────────
+
+const graphNodeValidator = v.object({
+  id: v.string(),
+  type: v.string(),
+  name: v.string(),
+});
+
+const graphLinkValidator = v.object({
+  source: v.string(),
+  target: v.string(),
+  edgeType: v.string(),
+});
+
+/**
+ * Get the full workspace knowledge graph: all nodes and edges.
+ * Powers the force-directed graph visualization.
+ */
+export const getWorkspaceGraph = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.object({
+    nodes: v.array(graphNodeValidator),
+    links: v.array(graphLinkValidator),
+  }),
+  handler: async (ctx, { workspaceId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { nodes: [], links: [] };
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .first();
+    if (!membership) return { nodes: [], links: [] };
+
+    // Fetch all edges in this workspace
+    const edges = await ctx.db
+      .query("edges")
+      .withIndex("by_workspace_target", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+
+    // Collect unique node IDs from edges
+    const nodeIds = new Map<string, string>(); // id → type
+    for (const edge of edges) {
+      nodeIds.set(edge.sourceId, edge.sourceType);
+      nodeIds.set(edge.targetId, edge.targetType);
+    }
+
+    // Batch-resolve node names
+    const nodes: Array<{ id: string; type: string; name: string }> = [];
+    for (const [id, type] of nodeIds) {
+      let name = "Unknown";
+      if (type === "document") {
+        const doc = await ctx.db.get(id as Id<"documents">);
+        if (!doc) continue;
+        name = doc.name;
+      } else if (type === "task") {
+        const task = await ctx.db.get(id as Id<"tasks">);
+        if (!task) continue;
+        name = task.title;
+      } else if (type === "diagram") {
+        const diagram = await ctx.db.get(id as Id<"diagrams">);
+        if (!diagram) continue;
+        name = diagram.name;
+      } else if (type === "spreadsheet") {
+        const spreadsheet = await ctx.db.get(id as Id<"spreadsheets">);
+        if (!spreadsheet) continue;
+        name = spreadsheet.name;
+      } else if (type === "user") {
+        const user = await ctx.db.get(id as Id<"users">);
+        if (!user) continue;
+        name = user.name ?? user.email ?? "User";
+      } else if (type === "project") {
+        const project = await ctx.db.get(id as Id<"projects">);
+        if (!project) continue;
+        name = project.name;
+      } else if (type === "channel") {
+        const channel = await ctx.db.get(id as Id<"channels">);
+        if (!channel) continue;
+        name = `#${channel.name}`;
+      } else if (type === "message") {
+        const message = await ctx.db.get(id as Id<"messages">);
+        if (!message) continue;
+        const channel = await ctx.db.get(message.channelId);
+        name = channel?.name ? `#${channel.name}` : "message";
+      } else {
+        continue;
+      }
+      nodes.push({ id, type, name });
+    }
+
+    // Only include edges where both source and target resolved
+    const validNodeIds = new Set(nodes.map((n) => n.id));
+    const links = edges
+      .filter((e) => validNodeIds.has(e.sourceId) && validNodeIds.has(e.targetId))
+      .map((e) => ({
+        source: e.sourceId,
+        target: e.targetId,
+        edgeType: e.edgeType as string,
+      }));
+
+    return { nodes, links };
+  },
+});
