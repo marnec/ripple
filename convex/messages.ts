@@ -7,6 +7,7 @@ import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
+import { extractMessageTargets } from "./edges";
 import { DatabaseReader } from "./_generated/server";
 
 const mentionedUsersValidator = v.record(v.string(), v.object({
@@ -395,7 +396,7 @@ export const send = mutation({
 
     if (!membership) throw new ConvexError("Not a member of this workspace");
 
-    await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       body,
       userId,
       channelId,
@@ -404,6 +405,23 @@ export const send = mutation({
       deleted: false,
       replyToId,
     });
+
+    // Create edges for all references in the message
+    const targets = extractMessageTargets(body);
+    const now = Date.now();
+    for (const target of targets) {
+      await ctx.db.insert("edges", {
+        sourceType: "message",
+        sourceId: messageId,
+        targetType: target.targetType,
+        targetId: target.targetId,
+        edgeType: "mentions",
+        workspaceId: channel.workspaceId,
+        createdBy: userId,
+        createdAt: now,
+        groupId: channelId,
+      });
+    }
 
     // Extract @mentions and schedule chat mention notifications
     const mentionedUserIds = extractMentionedUserIds(body);
@@ -445,6 +463,33 @@ export const update = mutation({
     if (message.userId !== userId) throw new ConvexError("Not authorized to update this message");
 
     await ctx.db.patch(id, { body, plainText });
+
+    // Re-sync edges: delete old, create new
+    const oldEdges = await ctx.db
+      .query("edges")
+      .withIndex("by_source", (q) => q.eq("sourceId", id))
+      .collect();
+    await Promise.all(oldEdges.map((e) => ctx.db.delete(e._id)));
+
+    const channel = await ctx.db.get(message.channelId);
+    if (channel) {
+      const targets = extractMessageTargets(body);
+      const now = Date.now();
+      for (const target of targets) {
+        await ctx.db.insert("edges", {
+          sourceType: "message",
+          sourceId: id,
+          targetType: target.targetType,
+          targetId: target.targetId,
+          edgeType: "mentions",
+          workspaceId: channel.workspaceId,
+          createdBy: userId,
+          createdAt: now,
+          groupId: message.channelId,
+        });
+      }
+    }
+
     return null;
   },
 });
@@ -461,6 +506,14 @@ export const remove = mutation({
     if (message.userId !== userId) throw new ConvexError("Not authorized to delete this message");
 
     await ctx.db.patch(id, { deleted: true });
+
+    // Clean up edges for this message
+    const messageEdges = await ctx.db
+      .query("edges")
+      .withIndex("by_source", (q) => q.eq("sourceId", id))
+      .collect();
+    await Promise.all(messageEdges.map((e) => ctx.db.delete(e._id)));
+
     return null;
   },
 });

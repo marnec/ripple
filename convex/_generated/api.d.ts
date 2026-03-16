@@ -585,6 +585,7 @@ export declare const api: {
       Array<{
         _id: Id<"edges">;
         edgeType: string;
+        groupId?: string;
         projectId?: string;
         sourceId: string;
         sourceName: string;
@@ -643,6 +644,17 @@ export declare const api: {
           targetId: string;
           targetType: "diagram" | "spreadsheet" | "document";
         }>;
+        sourceId: string;
+        sourceType: "document" | "task";
+        workspaceId: Id<"workspaces">;
+      },
+      null
+    >;
+    syncMentionEdges: FunctionReference<
+      "mutation",
+      "public",
+      {
+        mentionedUserIds: Array<string>;
         sourceId: string;
         sourceType: "document" | "task";
         workspaceId: Id<"workspaces">;

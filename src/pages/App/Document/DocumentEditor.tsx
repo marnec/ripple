@@ -71,6 +71,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
   const syncEdges = useMutation(api.edges.syncEdges);
+  const syncMentionEdges = useMutation(api.edges.syncMentionEdges);
 
   const [cellRefDialog, setCellRefDialog] = useState<{
     open: boolean;
@@ -132,19 +133,30 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   );
   useEditorTracking(editor, extractDocBlockRefs, { onRemoved: onDocBlockRefsRemoved });
 
-  // Track @mention additions and notify mentioned users
+  // Track @mention additions: sync to edges + notify new mentions
   const onMentionsChanged = useCallback(
     (current: Set<string>, previous: Set<string>) => {
+      // Sync mention edges (persistent graph)
+      if (document) {
+        void syncMentionEdges({
+          sourceType: "document",
+          sourceId: documentId,
+          mentionedUserIds: [...current],
+          workspaceId: document.workspaceId,
+        });
+      }
+      // Notify newly mentioned users
       const newMentions = [...current].filter((id) => !previous.has(id));
-      if (newMentions.length === 0) return;
-      void reportMention({
-        documentId,
-        mentionedUserIds: newMentions as Id<"users">[],
-      });
+      if (newMentions.length > 0) {
+        void reportMention({
+          documentId,
+          mentionedUserIds: newMentions as Id<"users">[],
+        });
+      }
     },
-    [reportMention, documentId],
+    [reportMention, documentId, document, syncMentionEdges],
   );
-  useEditorTracking(editor, extractMentions, { onChanged: onMentionsChanged });
+  useEditorTracking(editor, extractMentions, { onChanged: onMentionsChanged, syncOnMount: true });
 
   // Sync hard-embed references (diagrams, spreadsheets, documents) to edges table
   const onEmbedsChanged = useCallback(

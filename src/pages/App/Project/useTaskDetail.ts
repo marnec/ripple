@@ -99,6 +99,7 @@ export function useTaskDetail({
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);
   const syncEdges = useMutation(api.edges.syncEdges);
+  const syncMentionEdges = useMutation(api.edges.syncMentionEdges);
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
   const notifyMentions = useMutation(api.tasks.notifyDescriptionMentions);
 
@@ -201,14 +202,33 @@ export function useTaskDetail({
     };
   }, [editor, taskId, removeBlockRef]);
 
-  // Track @mentions in task description and notify newly mentioned users
+  // Track @mentions in task description: sync to edges + notify new mentions
   const prevMentionsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!editor || !taskId) return;
-    prevMentionsRef.current = extractMentionUserIds(editor.document);
+    const initial = extractMentionUserIds(editor.document);
+    prevMentionsRef.current = initial;
+
+    // Sync on mount so pre-existing mentions get tracked
+    if (initial.size > 0) {
+      void syncMentionEdges({
+        sourceType: "task",
+        sourceId: taskId,
+        mentionedUserIds: [...initial],
+        workspaceId,
+      });
+    }
 
     const unsubscribe = editor.onChange(() => {
       const current = extractMentionUserIds(editor.document);
+      // Sync mention edges (persistent graph)
+      void syncMentionEdges({
+        sourceType: "task",
+        sourceId: taskId,
+        mentionedUserIds: [...current],
+        workspaceId,
+      });
+      // Notify newly mentioned users
       const added = [...current].filter((id) => !prevMentionsRef.current.has(id));
       if (added.length > 0) {
         void notifyMentions({
@@ -220,7 +240,7 @@ export function useTaskDetail({
     });
 
     return () => { unsubscribe(); };
-  }, [editor, taskId, notifyMentions]);
+  }, [editor, taskId, workspaceId, notifyMentions, syncMentionEdges]);
 
   // Sync title when task loads
   useEffect(() => {

@@ -328,6 +328,7 @@ export default defineSchema({
       v.literal("task"),
       v.literal("diagram"),
       v.literal("spreadsheet"),
+      v.literal("message"),
     ),
     sourceId: v.string(),
     targetType: v.union(
@@ -335,21 +336,27 @@ export default defineSchema({
       v.literal("task"),
       v.literal("diagram"),
       v.literal("spreadsheet"),
+      v.literal("user"),
+      v.literal("project"),
+      v.literal("channel"),
     ),
     targetId: v.string(),
     edgeType: v.union(
       v.literal("embeds"),
       v.literal("blocks"),
       v.literal("relates_to"),
+      v.literal("mentions"),
     ),
     workspaceId: v.id("workspaces"),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
+    groupId: v.optional(v.string()), // generic grouping (e.g. channelId for message edges)
   })
     .index("by_target", ["targetId"])
     .index("by_source", ["sourceId"])
     .index("by_source_target", ["sourceId", "targetId"])
-    .index("by_workspace_target", ["workspaceId", "targetId"]),
+    .index("by_workspace_target", ["workspaceId", "targetId"])
+    .index("by_group_target", ["groupId", "targetId"]),
 
   recentActivity: defineTable({
     userId: v.id("users"),

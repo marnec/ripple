@@ -21,12 +21,14 @@ type Backlink = {
   edgeType: string;
   workspaceId: string;
   projectId?: string;
+  groupId?: string;
 };
 
 const EDGE_TYPE_LABELS: Record<string, string> = {
   embeds: "Embedded",
   blocks: "Blocks",
   relates_to: "Related",
+  mentions: "Mentioned",
 };
 
 function getSourceLink(ref: Backlink): string {
@@ -41,6 +43,9 @@ function getSourceLink(ref: Backlink): string {
   }
   if (ref.sourceType === "spreadsheet") {
     return `/workspaces/${ref.workspaceId}/spreadsheets/${ref.sourceId}`;
+  }
+  if (ref.sourceType === "message" && ref.groupId) {
+    return `/workspaces/${ref.workspaceId}/channels/${ref.groupId}`;
   }
   return "#";
 }

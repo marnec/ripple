@@ -419,11 +419,19 @@ export type DataModel = {
     document: {
       createdAt: number;
       createdBy?: Id<"users">;
-      edgeType: "embeds" | "blocks" | "relates_to";
+      edgeType: "embeds" | "blocks" | "relates_to" | "mentions";
+      groupId?: string;
       sourceId: string;
-      sourceType: "document" | "task" | "diagram" | "spreadsheet";
+      sourceType: "document" | "task" | "diagram" | "spreadsheet" | "message";
       targetId: string;
-      targetType: "document" | "task" | "diagram" | "spreadsheet";
+      targetType:
+        | "document"
+        | "task"
+        | "diagram"
+        | "spreadsheet"
+        | "user"
+        | "project"
+        | "channel";
       workspaceId: Id<"workspaces">;
       _id: Id<"edges">;
       _creationTime: number;
@@ -434,6 +442,7 @@ export type DataModel = {
       | "createdAt"
       | "createdBy"
       | "edgeType"
+      | "groupId"
       | "sourceId"
       | "sourceType"
       | "targetId"
@@ -442,6 +451,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_group_target: ["groupId", "targetId", "_creationTime"];
       by_source: ["sourceId", "_creationTime"];
       by_source_target: ["sourceId", "targetId", "_creationTime"];
       by_target: ["targetId", "_creationTime"];

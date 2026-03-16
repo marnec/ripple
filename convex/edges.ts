@@ -5,6 +5,12 @@ import { GenericQueryCtx } from "convex/server";
 import type { DataModel } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { logTaskActivity } from "./auditLog";
+import {
+  extractMentionedUserIds,
+  extractTaskMentionIds,
+  extractProjectIds,
+  extractResourceReferenceIds,
+} from "./utils/blocknote";
 
 // ── Validators ──────────────────────────────────────────────────────
 
@@ -16,6 +22,7 @@ const backlinkValidator = v.object({
   edgeType: v.string(),
   workspaceId: v.string(),
   projectId: v.optional(v.string()),
+  groupId: v.optional(v.string()),
 });
 
 const enrichedDepTaskValidator = v.object({
@@ -48,6 +55,7 @@ export async function getEnrichedBacklinks(
   edgeType: string;
   workspaceId: string;
   projectId?: string;
+  groupId?: string;
 }>> {
   const edges = await ctx.db
     .query("edges")
@@ -71,6 +79,14 @@ export async function getEnrichedBacklinks(
       } else if (edge.sourceType === "spreadsheet") {
         const spreadsheet = await ctx.db.get(edge.sourceId as Id<"spreadsheets">);
         sourceName = spreadsheet?.name ?? "Deleted spreadsheet";
+      } else if (edge.sourceType === "message") {
+        const message = await ctx.db.get(edge.sourceId as Id<"messages">);
+        if (message) {
+          const channel = await ctx.db.get(message.channelId);
+          sourceName = channel?.name ? `#${channel.name}` : "Deleted channel";
+        } else {
+          sourceName = "Deleted message";
+        }
       }
       return {
         _id: edge._id,
@@ -80,6 +96,7 @@ export async function getEnrichedBacklinks(
         edgeType: edge.edgeType as string,
         workspaceId: edge.workspaceId as string,
         projectId,
+        groupId: edge.groupId,
       };
     }),
   );
@@ -147,6 +164,70 @@ export const syncEdges = mutation({
           targetType: ref.targetType,
           targetId: ref.targetId,
           edgeType: "embeds",
+          workspaceId,
+          createdBy: userId,
+          createdAt: Date.now(),
+        });
+      }
+    }
+
+    return null;
+  },
+});
+
+/**
+ * Sync mention edges for a source (document or task).
+ * Called by the client editor on content change (debounced).
+ * Diffs against existing mention edges: deletes removed, inserts added.
+ */
+export const syncMentionEdges = mutation({
+  args: {
+    sourceType: v.union(v.literal("document"), v.literal("task")),
+    sourceId: v.string(),
+    mentionedUserIds: v.array(v.string()),
+    workspaceId: v.id("workspaces"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { sourceType, sourceId, mentionedUserIds, workspaceId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .first();
+    if (!membership) throw new ConvexError("Access denied");
+
+    // Get existing mention edges for this source
+    const existing = await ctx.db
+      .query("edges")
+      .withIndex("by_source", (q) => q.eq("sourceId", sourceId))
+      .collect();
+
+    const existingMentions = existing.filter((e) => e.edgeType === "mentions");
+    const existingByTarget = new Map(
+      existingMentions.map((e) => [e.targetId, e]),
+    );
+    const newTargetIds = new Set(mentionedUserIds);
+
+    // Delete removed
+    for (const edge of existingMentions) {
+      if (!newTargetIds.has(edge.targetId)) {
+        await ctx.db.delete(edge._id);
+      }
+    }
+
+    // Insert added
+    for (const mentionedUserId of mentionedUserIds) {
+      if (!existingByTarget.has(mentionedUserId)) {
+        await ctx.db.insert("edges", {
+          sourceType,
+          sourceId,
+          targetType: "user",
+          targetId: mentionedUserId,
+          edgeType: "mentions",
           workspaceId,
           createdBy: userId,
           createdAt: Date.now(),
@@ -281,6 +362,33 @@ export const removeEdge = mutation({
     return null;
   },
 });
+
+// ── Message edges ───────────────────────────────────────────────────
+
+/**
+ * Extract all reference targets from a message body.
+ * Pure function — no DB access.
+ */
+export function extractMessageTargets(body: string): Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> {
+  const targets: Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> = [];
+  const seen = new Set<string>();
+
+  const add = (targetType: typeof targets[number]["targetType"], targetId: string) => {
+    if (!seen.has(targetId)) {
+      seen.add(targetId);
+      targets.push({ targetType, targetId });
+    }
+  };
+
+  for (const userId of extractMentionedUserIds(body)) add("user", userId);
+  for (const taskId of extractTaskMentionIds(body)) add("task", taskId);
+  for (const projectId of extractProjectIds(body)) add("project", projectId);
+  for (const ref of extractResourceReferenceIds(body)) {
+    add(ref.type as "document" | "diagram" | "spreadsheet", ref.id);
+  }
+
+  return targets;
+}
 
 // ── Cascade cleanup ─────────────────────────────────────────────────
 

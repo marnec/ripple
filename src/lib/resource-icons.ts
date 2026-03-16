@@ -8,6 +8,7 @@ import {
   MessageSquare,
   PenTool,
   Table2,
+  User,
 } from "lucide-react";
 
 /**
@@ -35,4 +36,6 @@ export const RESOURCE_TYPE_ICONS: Record<string, LucideIcon> = {
   project: Folder,
   channel: MessageSquare,
   task: ListTodo,
+  user: User,
+  message: MessageSquare,
 };
