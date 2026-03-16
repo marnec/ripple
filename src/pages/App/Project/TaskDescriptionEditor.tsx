@@ -1,14 +1,16 @@
 import { cn } from "@/lib/utils";
+import { isSingleCell } from "@shared/cellRef";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { FileText, PenTool } from "lucide-react";
+import { FileText, PenTool, Table } from "lucide-react";
 import { useMutation } from "convex/react";
 import { useCallback, useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
+import { CellRefDialog } from "../Document/CellRefDialog";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 
@@ -16,6 +18,7 @@ type TaskDescriptionEditorProps = {
   editor: any;
   documents?: Array<{ _id: string; name: string }>;
   diagrams?: Array<{ _id: string; name: string }>;
+  spreadsheets?: Array<{ _id: string; name: string }>;
   members?: Array<{ userId: string; name?: string | null; image?: string }>;
   className?: string;
   hideLabel?: boolean;
@@ -25,17 +28,25 @@ export function TaskDescriptionEditor({
   editor,
   documents,
   diagrams,
+  spreadsheets,
   members,
   className,
   hideLabel,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
+  const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
 
   const [blockPickerDialog, setBlockPickerDialog] = useState<{
     open: boolean;
     documentId: Id<"documents">;
     documentName: string;
+  } | null>(null);
+
+  const [cellRefDialog, setCellRefDialog] = useState<{
+    open: boolean;
+    spreadsheetId: Id<"spreadsheets">;
+    spreadsheetName: string;
   } | null>(null);
 
   const getMemberItems = useMemberSuggestions({
@@ -66,6 +77,49 @@ export function TaskDescriptionEditor({
       setBlockPickerDialog(null);
     },
     [editor, blockPickerDialog, ensureBlockRef],
+  );
+
+  const handleCellRefInsert = useCallback(
+    (cellRef: string | null) => {
+      if (!editor || !cellRefDialog) return;
+
+      const { spreadsheetId } = cellRefDialog;
+      editor.focus();
+
+      if (cellRef) {
+        if (isSingleCell(cellRef)) {
+          editor.insertInlineContent([
+            {
+              type: "spreadsheetCellRef",
+              props: { spreadsheetId, cellRef },
+            },
+            " ",
+          ]);
+        } else {
+          editor.insertBlocks(
+            [
+              {
+                type: "spreadsheetRange" as const,
+                props: { spreadsheetId, cellRef } as any,
+              },
+            ],
+            editor.getTextCursorPosition().block,
+            "after",
+          );
+        }
+        void ensureCellRef({ spreadsheetId, cellRef });
+      } else {
+        editor.insertInlineContent([
+          {
+            type: "spreadsheetLink",
+            props: { spreadsheetId },
+          },
+          " ",
+        ]);
+      }
+      setCellRefDialog(null);
+    },
+    [editor, cellRefDialog, ensureCellRef],
   );
 
   if (!editor) {
@@ -149,6 +203,28 @@ export function TaskDescriptionEditor({
                   });
               }
 
+              if (spreadsheets) {
+                spreadsheets
+                  .filter((s) =>
+                    s.name.toLowerCase().includes(query.toLowerCase())
+                  )
+                  .slice(0, 5)
+                  .forEach((s) => {
+                    items.push({
+                      title: s.name,
+                      onItemClick: () => {
+                        setCellRefDialog({
+                          open: true,
+                          spreadsheetId: s._id as Id<"spreadsheets">,
+                          spreadsheetName: s.name,
+                        });
+                      },
+                      icon: <Table className="h-4 w-4" />,
+                      group: "Spreadsheets",
+                    });
+                  });
+              }
+
               return items;
             }}
           />
@@ -167,6 +243,16 @@ export function TaskDescriptionEditor({
           documentId={blockPickerDialog.documentId}
           documentName={blockPickerDialog.documentName}
           onInsert={handleBlockPickerInsert}
+        />
+      )}
+      {cellRefDialog && (
+        <CellRefDialog
+          open={cellRefDialog.open}
+          onOpenChange={(open) => {
+            if (!open) setCellRefDialog(null);
+          }}
+          spreadsheetName={cellRefDialog.spreadsheetName}
+          onInsert={handleCellRefInsert}
         />
       )}
     </div>

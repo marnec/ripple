@@ -171,6 +171,7 @@ export function TaskDetailSheet({
                     editor={detail.editor}
                     documents={detail.documents}
                     diagrams={detail.diagrams}
+                    spreadsheets={detail.spreadsheets}
                     members={detail.members}
                     className="min-h-50"
                     hideLabel

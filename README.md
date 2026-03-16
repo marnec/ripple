@@ -14,8 +14,7 @@ NEXT STEPS:
 - [x] add navigation to access settings of various things
 
 - knowledge-graph
-    - [ ] add task description embedding in tasks (auto add relates-to relationship)
-    - [ ] add table embedding in tasks
+    - [x] add table embedding in tasks
     - [ ] explore pdf reading, annotation and embedding
     - [ ] add a obsidian style backlinks to resources (this might be harder than it seems)
 

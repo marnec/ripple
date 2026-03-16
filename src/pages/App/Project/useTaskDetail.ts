@@ -37,6 +37,9 @@ function extractTaskEmbedRefs(blocks: any[]): Set<string> {
     if (block.type === "documentBlockEmbed" && block.props?.documentId) {
       refs.add(`document|${block.props.documentId}`);
     }
+    if (block.type === "spreadsheetRange" && block.props?.spreadsheetId) {
+      refs.add(`spreadsheet|${block.props.spreadsheetId}`);
+    }
     if (Array.isArray(block.content)) {
       for (const ic of block.content) {
         if (ic.type === "diagramEmbed" && ic.props?.diagramId) {
@@ -90,6 +93,7 @@ export function useTaskDetail({
   const members = rawMembers?.map((m) => ({ ...m, userId: m._id }));
   const diagrams = useQuery(api.diagrams.list, suggestionDataEnabled ? { workspaceId } : "skip");
   const documents = useQuery(api.documents.list, suggestionDataEnabled ? { workspaceId } : "skip");
+  const spreadsheets = useQuery(api.spreadsheets.list, suggestionDataEnabled ? { workspaceId } : "skip");
   const currentUser = useQuery(api.users.viewer);
 
   const updateTask = useMutation(api.tasks.update);
@@ -121,7 +125,7 @@ export function useTaskDetail({
   const parseEmbedRefs = useCallback((keys: Set<string>) => {
     return [...keys].map((key) => {
       const [targetType, targetId] = key.split("|");
-      return { targetType: targetType as "diagram" | "document", targetId };
+      return { targetType: targetType as "diagram" | "document" | "spreadsheet", targetId };
     });
   }, []);
 
@@ -301,6 +305,7 @@ export function useTaskDetail({
     members,
     diagrams,
     documents,
+    spreadsheets,
     currentUser,
     editor,
     editorLoading,
