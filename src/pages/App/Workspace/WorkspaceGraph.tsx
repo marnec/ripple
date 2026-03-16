@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject, type LinkObject } from "react-force-graph-2d";
+import { getNodeColor, getNodeSize } from "./graphConstants";
 
 type GraphNode = NodeObject & {
   id: string;
@@ -17,37 +18,6 @@ type GraphLink = LinkObject & {
   target: string | GraphNode;
   edgeType: string;
 };
-
-const NODE_COLORS: Record<string, { light: string; dark: string }> = {
-  document: { light: "#3b82f6", dark: "#60a5fa" },
-  task: { light: "#8b5cf6", dark: "#a78bfa" },
-  diagram: { light: "#f59e0b", dark: "#fbbf24" },
-  spreadsheet: { light: "#10b981", dark: "#34d399" },
-  user: { light: "#ec4899", dark: "#f472b6" },
-  project: { light: "#f97316", dark: "#fb923c" },
-  channel: { light: "#06b6d4", dark: "#22d3ee" },
-  message: { light: "#06b6d4", dark: "#22d3ee" },
-};
-
-const NODE_SIZE: Record<string, number> = {
-  document: 5,
-  task: 4,
-  diagram: 5,
-  spreadsheet: 5,
-  user: 6,
-  project: 7,
-  channel: 6,
-  message: 3,
-};
-
-function getNodeColor(type: string, isDark: boolean): string {
-  const colors = NODE_COLORS[type] ?? { light: "#6b7280", dark: "#9ca3af" };
-  return isDark ? colors.dark : colors.light;
-}
-
-function getNodeSize(type: string): number {
-  return NODE_SIZE[type] ?? 4;
-}
 
 function getNodeRoute(node: GraphNode, workspaceId: string): string | null {
   switch (node.type) {
@@ -64,8 +34,14 @@ function getNodeRoute(node: GraphNode, workspaceId: string): string | null {
   }
 }
 
+type WorkspaceGraphProps = {
+  workspaceId: Id<"workspaces">;
+  width: number;
+  height: number;
+  hiddenTypes: Set<string>;
+};
 
-export function WorkspaceGraph({ workspaceId, width: propWidth, height: propHeight }: { workspaceId: Id<"workspaces">; width: number; height: number }) {
+export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes }: WorkspaceGraphProps) {
   const graph = useQuery(api.edges.getWorkspaceGraph, { workspaceId });
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
@@ -73,9 +49,6 @@ export function WorkspaceGraph({ workspaceId, width: propWidth, height: propHeig
   const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink>>(undefined);
   const hoveredNodeRef = useRef<string | null>(null);
   const nodesRef = useRef<GraphNode[]>([]);
-  const width = propWidth;
-  const height = propHeight;
-
 
 
   // Clamp node positions on every tick
@@ -105,7 +78,7 @@ export function WorkspaceGraph({ workspaceId, width: propWidth, height: propHeig
   );
 
   const wrapperRef = useRef<HTMLDivElement>(null);
-  
+
   const handleNodeHover = useCallback((node: GraphNode | null) => {
     hoveredNodeRef.current = node?.id ?? null;
     if (wrapperRef.current) {
@@ -143,10 +116,18 @@ export function WorkspaceGraph({ workspaceId, width: propWidth, height: propHeig
     [isDark],
   );
 
+  // Filter graph data based on hidden types
   const graphData = useMemo(() => {
     if (!graph) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
-    return { nodes: graph.nodes as GraphNode[], links: graph.links as GraphLink[] };
-  }, [graph]);
+    const nodes = (graph.nodes as GraphNode[]).filter((n) => !hiddenTypes.has(n.type));
+    const visibleIds = new Set(nodes.map((n) => n.id));
+    const links = (graph.links as GraphLink[]).filter((l) => {
+      const sourceId = typeof l.source === "string" ? l.source : l.source.id;
+      const targetId = typeof l.target === "string" ? l.target : l.target.id;
+      return visibleIds.has(sourceId) && visibleIds.has(targetId);
+    });
+    return { nodes, links };
+  }, [graph, hiddenTypes]);
 
   useEffect(() => {
     nodesRef.current = graphData.nodes;
@@ -156,54 +137,43 @@ export function WorkspaceGraph({ workspaceId, width: propWidth, height: propHeig
 
   if (graphData.nodes.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-        No connections yet. Mention resources in documents, tasks, or chat to build the graph.
+      <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ width, height }}>
+        {graph.nodes.length === 0
+          ? "No connections yet. Mention resources in documents, tasks, or chat to build the graph."
+          : "All node types are hidden. Click a type in the legend to show it."}
       </div>
     );
   }
 
   return (
-    <div ref={wrapperRef} className="overflow-hidden relative" style={{ width, height }}>
+    <div ref={wrapperRef} className="overflow-hidden" style={{ width, height }}>
       <ForceGraph2D
-          ref={fgRef}
-          width={width}
-          height={height}
-          graphData={graphData}
-          nodeCanvasObject={paintNode}
-          nodePointerAreaPaint={(node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
-            const size = getNodeSize(node.type);
-            ctx.beginPath();
-            ctx.arc(node.x ?? 0, node.y ?? 0, size + 2, 0, 2 * Math.PI);
-            ctx.fillStyle = color;
-            ctx.fill();
-          }}
-          onNodeClick={handleNodeClick}
-          onNodeHover={handleNodeHover}
-          onEngineTick={handleEngineTick}
-          linkColor={() => isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}
-          linkWidth={0.5}
-          backgroundColor="rgba(0,0,0,0)"
-          cooldownTicks={100}
-          d3AlphaDecay={0.02}
-          d3VelocityDecay={0.3}
-          autoPauseRedraw={false}
-          enableNodeDrag={true}
-          enableZoomInteraction={true}
-          enablePanInteraction={true}
+        ref={fgRef}
+        width={width}
+        height={height}
+        graphData={graphData}
+        nodeCanvasObject={paintNode}
+        nodePointerAreaPaint={(node: GraphNode, color: string, ctx: CanvasRenderingContext2D) => {
+          const size = getNodeSize(node.type);
+          ctx.beginPath();
+          ctx.arc(node.x ?? 0, node.y ?? 0, size + 2, 0, 2 * Math.PI);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }}
+        onNodeClick={handleNodeClick}
+        onNodeHover={handleNodeHover}
+        onEngineTick={handleEngineTick}
+        linkColor={() => isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}
+        linkWidth={0.5}
+        backgroundColor="rgba(0,0,0,0)"
+        cooldownTicks={100}
+        d3AlphaDecay={0.02}
+        d3VelocityDecay={0.3}
+        autoPauseRedraw={false}
+        enableNodeDrag={true}
+        enableZoomInteraction={true}
+        enablePanInteraction={true}
       />
-
-      {/* Legend */}
-      <div className="absolute bottom-3 left-3 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground pointer-events-none">
-        {["document", "task", "diagram", "spreadsheet", "user", "project", "channel"].map((type) => (
-          <span key={type} className="flex items-center gap-1">
-            <span
-              className="inline-block w-2 h-2 rounded-full"
-              style={{ backgroundColor: getNodeColor(type, isDark) }}
-            />
-            {type}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }

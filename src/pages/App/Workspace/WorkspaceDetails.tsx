@@ -22,7 +22,9 @@ import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { QueryParams } from "@shared/types/routes";
 import { WorkspaceTimeline } from "./WorkspaceTimeline";
 import { WorkspaceGraph } from "./WorkspaceGraph";
+import { NODE_TYPES, getNodeColor } from "./graphConstants";
 import { cn } from "@/lib/utils";
+import { useTheme } from "next-themes";
 
 const overviewCards = [
   { key: "members", label: "Members", icon: Users, to: "settings" },
@@ -33,16 +35,29 @@ const overviewCards = [
   { key: "spreadsheets", label: "Spreadsheets", icon: Table, to: "spreadsheets" },
 ] as const;
 
-type Tab = "activity" | "graph";
+type Tab = "graph" | "activity";
 
 export function WorkspaceDetails() {
   const { workspaceId } = useParams<QueryParams>();
   const id = workspaceId as Id<"workspaces">;
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<Tab>("activity");
+  const [activeTab, setActiveTab] = useState<Tab>(isMobile ? "activity" : "graph");
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   const workspace = useQuery(api.workspaces.get, { id });
   const overview = useWorkspaceSidebar()?.counts;
+
+  // Node type visibility for graph filtering
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const toggleType = (type: string) => {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
 
   // Measure the top section height so the graph can fill the remainder
   const topRef = useRef<HTMLDivElement>(null);
@@ -55,9 +70,7 @@ export function WorkspaceDetails() {
       const topEl = topRef.current;
       if (!topEl) return;
       const topH = topEl.offsetHeight;
-      // Width = top section width minus horizontal padding (px-4 = 32px total)
       const w = topEl.clientWidth - 32;
-      // Available height = viewport - header (4rem) - top section - bottom padding (1rem)
       const h = window.innerHeight - 64 - topH - 16;
       setGraphWidth(Math.max(200, w));
       setGraphHeight(Math.max(200, h));
@@ -110,20 +123,8 @@ export function WorkspaceDetails() {
           })}
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setActiveTab("activity")}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              activeTab === "activity"
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
-            )}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            Activity
-          </button>
+        {/* Tabs + legend */}
+        <div className="flex items-center gap-1 flex-wrap">
           {!isMobile && (
             <button
               onClick={() => setActiveTab("graph")}
@@ -138,6 +139,44 @@ export function WorkspaceDetails() {
               Graph
             </button>
           )}
+          <button
+            onClick={() => setActiveTab("activity")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              activeTab === "activity"
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+            )}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            Activity
+          </button>
+
+          {/* Node type legend/filter — only shown on graph tab */}
+          {activeTab === "graph" && !isMobile && (
+            <div className="flex items-center gap-2 ml-auto">
+              {NODE_TYPES.map((type) => {
+                const isHidden = hiddenTypes.has(type);
+                return (
+                  <button
+                    key={type}
+                    onClick={() => toggleType(type)}
+                    className={cn(
+                      "flex items-center gap-1 text-[11px] transition-opacity",
+                      isHidden ? "opacity-30" : "opacity-100",
+                    )}
+                    title={isHidden ? `Show ${type} nodes` : `Hide ${type} nodes`}
+                  >
+                    <span
+                      className="inline-block w-2 h-2 rounded-full"
+                      style={{ backgroundColor: getNodeColor(type, isDark) }}
+                    />
+                    <span className="text-muted-foreground">{type}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -149,9 +188,7 @@ export function WorkspaceDetails() {
       )}
       {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
         <div className="container mx-auto px-4 pb-4">
-          <div className="rounded-lg border bg-background overflow-hidden">
-            <WorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} />
-          </div>
+          <WorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} />
         </div>
       )}
 
