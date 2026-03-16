@@ -544,6 +544,7 @@ const graphNodeValidator = v.object({
   id: v.string(),
   type: v.string(),
   name: v.string(),
+  groupId: v.optional(v.string()),
 });
 
 const graphLinkValidator = v.object({
@@ -587,10 +588,11 @@ export const getWorkspaceGraph = query({
       nodeIds.set(edge.targetId, edge.targetType);
     }
 
-    // Batch-resolve node names
-    const nodes: Array<{ id: string; type: string; name: string }> = [];
+    // Batch-resolve node names and groupIds
+    const nodes: Array<{ id: string; type: string; name: string; groupId?: string }> = [];
     for (const [id, type] of nodeIds) {
       let name = "Unknown";
+      let groupId: string | undefined;
       if (type === "document") {
         const doc = await ctx.db.get(id as Id<"documents">);
         if (!doc) continue;
@@ -599,6 +601,7 @@ export const getWorkspaceGraph = query({
         const task = await ctx.db.get(id as Id<"tasks">);
         if (!task) continue;
         name = task.title;
+        groupId = task.projectId;
       } else if (type === "diagram") {
         const diagram = await ctx.db.get(id as Id<"diagrams">);
         if (!diagram) continue;
@@ -624,10 +627,11 @@ export const getWorkspaceGraph = query({
         if (!message) continue;
         const channel = await ctx.db.get(message.channelId);
         name = channel?.name ? `#${channel.name}` : "message";
+        groupId = message.channelId;
       } else {
         continue;
       }
-      nodes.push({ id, type, name });
+      nodes.push({ id, type, name, groupId });
     }
 
     // Only include edges where both source and target resolved

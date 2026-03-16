@@ -11,6 +11,7 @@ type GraphNode = NodeObject & {
   id: string;
   type: string;
   name: string;
+  groupId?: string;
 };
 
 type GraphLink = LinkObject & {
@@ -116,17 +117,37 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes }: Work
     [isDark],
   );
 
-  // Filter graph data based on hidden types
+  // Filter graph data and add synthetic group links (project→task, channel→message)
   const graphData = useMemo(() => {
     if (!graph) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
     const nodes = (graph.nodes as GraphNode[]).filter((n) => !hiddenTypes.has(n.type));
     const visibleIds = new Set(nodes.map((n) => n.id));
+
     const links = (graph.links as GraphLink[]).filter((l) => {
       const sourceId = typeof l.source === "string" ? l.source : l.source.id;
       const targetId = typeof l.target === "string" ? l.target : l.target.id;
       return visibleIds.has(sourceId) && visibleIds.has(targetId);
     });
-    return { nodes, links };
+
+    // Add synthetic "contains" links from group parent to child
+    // (project→task, channel→message) for visual clustering
+    const groupLinks: GraphLink[] = [];
+    const seen = new Set<string>();
+    for (const node of nodes) {
+      if (node.groupId && visibleIds.has(node.groupId)) {
+        const key = `${node.groupId}→${node.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          groupLinks.push({
+            source: node.groupId,
+            target: node.id,
+            edgeType: "contains",
+          });
+        }
+      }
+    }
+
+    return { nodes, links: [...links, ...groupLinks] };
   }, [graph, hiddenTypes]);
 
   useEffect(() => {
@@ -163,12 +184,23 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes }: Work
         onNodeClick={handleNodeClick}
         onNodeHover={handleNodeHover}
         onEngineTick={handleEngineTick}
-        linkColor={() => isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}
-        linkWidth={0.5}
+        linkColor={(link: GraphLink) => {
+          const et = typeof link.edgeType === "string" ? link.edgeType : "";
+          if (et === "contains") return isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
+          return isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+        }}
+        linkWidth={(link: GraphLink) => {
+          const et = typeof link.edgeType === "string" ? link.edgeType : "";
+          return et === "contains" ? 0.3 : 0.5;
+        }}
+        linkLineDash={(link: GraphLink) => {
+          const et = typeof link.edgeType === "string" ? link.edgeType : "";
+          return et === "contains" ? [2, 2] : null;
+        }}
         backgroundColor="rgba(0,0,0,0)"
-        cooldownTicks={100}
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
+        cooldownTicks={200}
+        d3AlphaDecay={0.05}
+        d3VelocityDecay={0.6}
         autoPauseRedraw={false}
         enableNodeDrag={true}
         enableZoomInteraction={true}

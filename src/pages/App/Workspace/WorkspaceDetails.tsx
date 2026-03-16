@@ -24,6 +24,7 @@ import { WorkspaceTimeline } from "./WorkspaceTimeline";
 import { WorkspaceGraph } from "./WorkspaceGraph";
 import { NODE_TYPES, getNodeColor } from "./graphConstants";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 import { useTheme } from "next-themes";
 
 const overviewCards = [
@@ -152,27 +153,22 @@ export function WorkspaceDetails() {
             Activity
           </button>
 
-          {/* Node type legend/filter — only shown on graph tab */}
+          {/* Node type filter switches — only shown on graph tab */}
           {activeTab === "graph" && !isMobile && (
-            <div className="flex items-center gap-2 ml-auto">
+            <div className="flex items-center gap-4 ml-auto">
               {NODE_TYPES.map((type) => {
-                const isHidden = hiddenTypes.has(type);
+                const isVisible = !hiddenTypes.has(type);
+                const color = getNodeColor(type, isDark);
                 return (
-                  <button
-                    key={type}
-                    onClick={() => toggleType(type)}
-                    className={cn(
-                      "flex items-center gap-1 text-[11px] transition-opacity",
-                      isHidden ? "opacity-30" : "opacity-100",
-                    )}
-                    title={isHidden ? `Show ${type} nodes` : `Hide ${type} nodes`}
-                  >
-                    <span
-                      className="inline-block w-2 h-2 rounded-full"
-                      style={{ backgroundColor: getNodeColor(type, isDark) }}
+                  <label key={type} className="flex items-center gap-2 cursor-pointer select-none">
+                    <Switch
+                      size="sm"
+                      checked={isVisible}
+                      onCheckedChange={() => toggleType(type)}
+                      style={isVisible ? { backgroundColor: color } : undefined}
                     />
-                    <span className="text-muted-foreground">{type}</span>
-                  </button>
+                    <span className="text-xs text-muted-foreground capitalize">{type}</span>
+                  </label>
                 );
               })}
             </div>

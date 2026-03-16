@@ -599,7 +599,12 @@ export declare const api: {
       { workspaceId: Id<"workspaces"> },
       {
         links: Array<{ edgeType: string; source: string; target: string }>;
-        nodes: Array<{ id: string; name: string; type: string }>;
+        nodes: Array<{
+          groupId?: string;
+          id: string;
+          name: string;
+          type: string;
+        }>;
       }
     >;
     listByTask: FunctionReference<
