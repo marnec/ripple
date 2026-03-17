@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { useTheme } from "next-themes";
+import { getNodeColor } from "./graphConstants";
 
 type TimelineEntry = {
   _id: string;
@@ -82,15 +84,28 @@ function getActionIcon(action: string) {
   }
 }
 
-function getResourceIcon(resourceType?: string) {
-  const iconClass = "h-3 w-3";
+// Map plural audit log resourceType → singular graph type for color lookup
+const RESOURCE_TYPE_TO_GRAPH_TYPE: Record<string, string> = {
+  documents: "document",
+  diagrams: "diagram",
+  spreadsheets: "spreadsheet",
+  channels: "channel",
+  projects: "project",
+  tasks: "task",
+};
+
+function getResourceIcon(resourceType: string | undefined, isDark: boolean) {
+  const iconClass = "h-3.5 w-3.5";
+  const graphType = resourceType ? RESOURCE_TYPE_TO_GRAPH_TYPE[resourceType] : undefined;
+  const color = graphType ? getNodeColor(graphType, isDark) : undefined;
+  const style = color ? { color } : undefined;
   switch (resourceType) {
-    case "documents": return <FileText className={iconClass} />;
-    case "diagrams": return <PenTool className={iconClass} />;
-    case "spreadsheets": return <Table2 className={iconClass} />;
-    case "channels": return <Hash className={iconClass} />;
-    case "projects": return <Folder className={iconClass} />;
-    case "tasks": return <ListTodo className={iconClass} />;
+    case "documents": return <FileText className={iconClass} style={style} />;
+    case "diagrams": return <PenTool className={iconClass} style={style} />;
+    case "spreadsheets": return <Table2 className={iconClass} style={style} />;
+    case "channels": return <Hash className={iconClass} style={style} />;
+    case "projects": return <Folder className={iconClass} style={style} />;
+    case "tasks": return <ListTodo className={iconClass} style={style} />;
     default: return null;
   }
 }
@@ -203,6 +218,8 @@ const itemVariants = {
 const entryCache = new Map<string, TimelineEntry[]>();
 
 export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: Id<"workspaces">; hiddenTypes?: Set<string> }) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
   const [isVisible, setIsVisible] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -264,7 +281,7 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
   return (
     <div ref={sentinelRef} className="relative">
       {entries.length > 1 && (
-        <div className="absolute left-2.5 top-3 bottom-3 w-px bg-border" />
+        <div className="absolute left-2.75 top-3 bottom-3 w-px bg-border" />
       )}
       <AnimatePresence initial={false} mode="popLayout">
         {entries.map((entry) => (
@@ -275,18 +292,18 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
             initial="initial"
             animate="animate"
             exit="exit"
-            className="relative flex items-start gap-2 py-1 overflow-hidden"
+            className="relative flex items-start gap-2.5 py-1.5 overflow-hidden"
           >
-            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground z-10">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground z-10">
               {getActionIcon(entry.action)}
             </div>
-            <div className="flex-1 min-w-0 text-xs text-muted-foreground leading-5">
-              <span className="inline-flex items-center gap-1">
-                {getResourceIcon(entry.resourceType)}
+            <div className="flex-1 min-w-0 text-sm text-muted-foreground leading-6">
+              <span className="inline-flex items-center gap-1.5">
+                {getResourceIcon(entry.resourceType, isDark)}
                 {formatAction(entry)}
               </span>
             </div>
-            <span className="text-[10px] text-muted-foreground/60 shrink-0 leading-5">
+            <span className="text-xs text-muted-foreground/60 shrink-0 leading-6">
               {formatRelativeTime(entry.timestamp)}
             </span>
           </motion.div>
