@@ -154,46 +154,39 @@ export function WorkspaceDetails() {
                   </button>
                 )}
 
-                {/* Clickable content — navigates to resource list */}
-                <Link to={card.to} className="flex flex-col items-center gap-1.5">
-                  <card.icon
-                    className="size-5 transition-colors"
-                    style={{ color }}
-                  />
-                  <span className="text-2xl font-semibold tabular-nums">
-                    {count ?? "\u2013"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {card.label}
-                  </span>
-                </Link>
-
-                {/* Sub-count (projects inside tasks card) */}
-                {card.subCount && subFilterType && subCount !== undefined && (
-                  <div className={cn(
-                    "flex items-center gap-1.5 mt-1 transition-opacity",
-                    isSubHidden && "opacity-40",
-                  )}>
+                {/* Card content */}
+                {card.subCount && subFilterType ? (
+                  /* Dual counter: primary + sub side by side */
+                  <div className="flex items-center gap-4">
+                    <Link to={card.to} className={cn("flex flex-col items-center gap-1 flex-1", isHidden && "opacity-40")}>
+                      <card.icon className="size-4 transition-colors" style={{ color }} />
+                      <span className="text-xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
+                      <span className="text-[11px] text-muted-foreground">{card.label}</span>
+                    </Link>
+                    <div className="w-px h-8 bg-border" />
+                    <Link to={card.to} className={cn("flex flex-col items-center gap-1 flex-1", isSubHidden && "opacity-40")}>
+                      <card.subCount.icon className="size-4 transition-colors" style={{ color: getNodeColor(subFilterType, isDark) }} />
+                      <span className="text-xl font-semibold tabular-nums">{subCount ?? "\u2013"}</span>
+                      <span className="text-[11px] text-muted-foreground">{card.subCount.label}</span>
+                    </Link>
+                    {/* Sub eye toggle — top left */}
                     {!isMobile && (
                       <button
                         onClick={() => toggleType(subFilterType)}
-                        className="p-0.5 rounded text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        className="absolute top-2 left-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                         title={isSubHidden ? `Show ${card.subCount.label}` : `Hide ${card.subCount.label}`}
                       >
-                        {isSubHidden
-                          ? <EyeOff className="size-3" />
-                          : <Eye className="size-3" />
-                        }
+                        {isSubHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                       </button>
                     )}
-                    <card.subCount.icon
-                      className="size-3"
-                      style={{ color: getNodeColor(subFilterType, isDark) }}
-                    />
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {subCount} {card.subCount.label}
-                    </span>
                   </div>
+                ) : (
+                  /* Single counter */
+                  <Link to={card.to} className="flex flex-col items-center gap-1.5">
+                    <card.icon className="size-5 transition-colors" style={{ color }} />
+                    <span className="text-2xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
+                    <span className="text-xs text-muted-foreground">{card.label}</span>
+                  </Link>
                 )}
               </div>
             );
