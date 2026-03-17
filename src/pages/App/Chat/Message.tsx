@@ -24,6 +24,7 @@ import { MessageRenderer } from "./MessageRenderer";
 import { hasImageBlocks } from "./messageUtils";
 import type { GroupPosition, MessageGroupInfo } from "./messageGrouping";
 import { MessageQuotePreview } from "./MessageQuotePreview";
+import { Avatar, AvatarFallback, AvatarImage } from "../../../components/ui/avatar";
 
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
 
@@ -40,13 +41,13 @@ const BUBBLE_RADIUS: Record<"own" | "other", Record<GroupPosition, string>> = {
   own: {
     solo:   "rounded-2xl rounded-br-sm",
     first:  "rounded-2xl rounded-br-sm",
-    middle: "rounded-2xl rounded-tr-sm rounded-br-sm",
+    middle: "rounded-r-sm rounded-l-2xl",
     last:   "rounded-2xl rounded-tr-sm",
   },
   other: {
     solo:   "rounded-2xl rounded-bl-sm",
     first:  "rounded-2xl rounded-bl-sm",
-    middle: "rounded-2xl rounded-tl-sm rounded-bl-sm",
+    middle: "rounded-l-sm rounded-r-2xl",
     last:   "rounded-2xl rounded-tl-sm",
   },
 };
@@ -54,7 +55,6 @@ const BUBBLE_RADIUS: Record<"own" | "other", Record<GroupPosition, string>> = {
 const DEFAULT_GROUP_INFO: MessageGroupInfo = {
   position: "solo",
   showAuthor: true,
-  showTimestamp: true, // unused in Message but part of MessageGroupInfo
 };
 
 type MessageProps = {
@@ -123,59 +123,99 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProp
 
   const formattedTime = new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' });
 
+  const initials = author
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  // Avatar visible on the last message of a group (visual bottom) or solo
+  const showAvatar = position === "last" || position === "solo";
+  // For own messages, use the viewer's profile image
+  const avatarImage = userIsAuthor ? user?.image : message.authorImage;
+  const avatarName = userIsAuthor ? (user?.name ?? user?.email ?? "You") : author;
+  const avatarInitials = userIsAuthor
+    ? (user?.name ?? user?.email ?? "Y").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+    : initials;
+
   return (
     <>
       <ContextMenu>
         <li
           ref={messageRef}
           className={cn(
-            "relative flex flex-col text-sm animate-slide-up sm:items-start",
-            userIsAuthor ? "items-end" : "items-start",
+            "relative flex flex-col text-sm animate-slide-up",
             position === "solo" || position === "last" ? "mb-2" : "mb-px",
           )}
         >
-          <ContextMenuTrigger className={cn("max-w-[85%] sm:max-w-[70%]", userIsAuthor && "ml-auto sm:ml-0")}>
-            <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
-            <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
-            <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
-            <MentionedResourcesContext.Provider value={message.mentionedResources ?? {}}>
-              <div
-                className={cn(
-                  "w-fit transition-all",
-                  BUBBLE_RADIUS[radiusSide][position],
-                  userIsAuthor
-                    ? "bg-message-own text-message-own-foreground ml-auto sm:ml-0"
-                    : "bg-muted",
-                  messageHasImages ? "overflow-hidden" : "px-3 py-1.5",
-                )}
-              >
-                {showAuthor && (
-                  <div className="text-xs font-semibold text-primary mb-0.5">{author}</div>
-                )}
-                {message.replyToId && (
-                  <div className={messageHasImages ? "px-3 pt-1.5" : undefined}>
-                    <MessageQuotePreview message={message.replyTo ?? null} compact />
-                  </div>
-                )}
-                <div className="flex items-end gap-2">
-                  <div className="min-w-0 flex-1">
-                    <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
-                  </div>
-                  <span className={cn(
-                    "shrink-0 self-end translate-y-0.5 text-[10px] leading-none select-none",
-                    userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60",
-                  )}>
-                    {formattedTime}
-                  </span>
-                </div>
-              </div>
-            </MentionedResourcesContext.Provider>
-            </MentionedProjectsContext.Provider>
-            </MentionedTasksContext.Provider>
-            </MentionedUsersContext.Provider>
-          </ContextMenuTrigger>
+          {/* Message row: avatar + bubble */}
+          <div className={cn(
+            "flex items-end",
+            userIsAuthor ? "flex-row-reverse sm:flex-row" : "flex-row",
+          )}>
+            {/* Avatar column */}
+            <div className={cn("w-7 shrink-0", userIsAuthor ? "ml-1.5 sm:ml-0 sm:mr-1.5" : "mr-1.5")}>
+              {showAvatar ? (
+                <Avatar className="size-6">
+                  <AvatarImage src={avatarImage} alt={avatarName} />
+                  <AvatarFallback className="text-[10px]">{avatarInitials}</AvatarFallback>
+                </Avatar>
+              ) : (
+                <div className="size-6" />
+              )}
+            </div>
 
-          <MessageReactions messageId={message._id} />
+            {/* Bubble */}
+            <ContextMenuTrigger className={cn(
+              "min-w-0 max-w-[85%] sm:max-w-[70%]",
+              userIsAuthor && "ml-auto sm:ml-0",
+            )}>
+              <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
+              <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
+              <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
+              <MentionedResourcesContext.Provider value={message.mentionedResources ?? {}}>
+                <div
+                  className={cn(
+                    "w-fit transition-all",
+                    BUBBLE_RADIUS[radiusSide][position],
+                    userIsAuthor
+                      ? "bg-message-own text-message-own-foreground ml-auto sm:ml-0"
+                      : "bg-muted",
+                    messageHasImages ? "overflow-hidden" : "px-3 py-1.5",
+                  )}
+                >
+                  {showAuthor && (
+                    <div className="text-xs font-semibold text-primary mb-0.5">{author}</div>
+                  )}
+                  {message.replyToId && (
+                    <div className={messageHasImages ? "px-3 pt-1.5" : undefined}>
+                      <MessageQuotePreview message={message.replyTo ?? null} compact />
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                    </div>
+                    <span className={cn(
+                      "shrink-0 self-end translate-y-0.5 text-[10px] leading-none select-none",
+                      userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60",
+                    )}>
+                      {formattedTime}
+                    </span>
+                  </div>
+                </div>
+              </MentionedResourcesContext.Provider>
+              </MentionedProjectsContext.Provider>
+              </MentionedTasksContext.Provider>
+              </MentionedUsersContext.Provider>
+            </ContextMenuTrigger>
+          </div>
+
+          {/* Reactions — indented past avatar for other people's messages */}
+          <div className={cn("pl-8.5", userIsAuthor && "sm:pl-8.5 pl-0 flex justify-end sm:justify-start")}>
+            <MessageReactions messageId={message._id} />
+          </div>
         </li>
         <ContextMenuContent className="w-56">
           {/* Quick reaction row */}

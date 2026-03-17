@@ -17,6 +17,7 @@ export type MentionedResource = { name: string; type: "document" | "diagram" | "
 
 export interface MessageWithAuthor extends Doc<"messages"> {
   author: string;
+  authorImage?: string;
   replyTo: ReplyToInfo;
   mentionedUsers: Record<string, MentionedUser>;
   mentionedTasks: Record<string, MentionedTask>;

@@ -821,6 +821,7 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"messages">;
           author: string;
+          authorImage?: string;
           body: string;
           channelId: Id<"channels">;
           deleted: boolean;
@@ -872,6 +873,7 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"messages">;
           author: string;
+          authorImage?: string;
           body: string;
           channelId: Id<"channels">;
           deleted: boolean;
@@ -916,6 +918,7 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"messages">;
         author: string;
+        authorImage?: string;
         body: string;
         channelId: Id<"channels">;
         deleted: boolean;

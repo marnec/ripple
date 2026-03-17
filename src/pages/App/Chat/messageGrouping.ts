@@ -6,8 +6,6 @@ export type MessageGroupInfo = {
   position: GroupPosition;
   /** Show author name (first/solo for other people's messages) */
   showAuthor: boolean;
-  /** Show timestamp (first/solo) */
-  showTimestamp: boolean;
 };
 
 const GROUP_TIME_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
@@ -56,7 +54,6 @@ export function computeGroupPositions(
     return {
       position,
       showAuthor: (position === "solo" || position === "first") && !isOwn,
-      showTimestamp: position === "solo" || position === "first",
     };
   });
 }

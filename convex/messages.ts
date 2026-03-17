@@ -40,6 +40,7 @@ const enrichedMessageValidator = v.object({
   deleted: v.boolean(),
   replyToId: v.optional(v.id("messages")),
   author: v.string(),
+  authorImage: v.optional(v.string()),
   replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
   mentionedUsers: mentionedUsersValidator,
   mentionedTasks: mentionedTasksValidator,
@@ -345,10 +346,10 @@ export const list = query({
     const users = await getAll(ctx.db, userIds);
     const userMap = new Map(users.map((u, i) => [userIds[i], u]));
 
-    // Add the author's name to each message
+    // Add the author's name and image to each message
     const messagesWithAuthor = messagesPage.page.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: getUserDisplayName(user) };
+      return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
     const messagesWithReplyTo = await enrichWithReplyTo(ctx, messagesWithAuthor, userMap);
@@ -561,7 +562,7 @@ export const search = query({
     // Add author information
     const searchResultsWithAuthor = searchResults.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: getUserDisplayName(user) };
+      return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
     const searchResultsWithReplyTo = await enrichWithReplyTo(ctx, searchResultsWithAuthor, userMap);
@@ -633,7 +634,7 @@ export const getMessageContext = query({
     // Add author information
     const messagesWithAuthor = allMessages.map((message) => {
       const user = userMap.get(message.userId);
-      return { ...message, author: getUserDisplayName(user) };
+      return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
     const messagesWithReplyTo = await enrichWithReplyTo(ctx, messagesWithAuthor, userMap);
