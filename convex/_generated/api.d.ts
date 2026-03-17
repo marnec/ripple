@@ -599,19 +599,24 @@ export declare const api: {
       { id: string; type: string },
       string | null
     >;
+    getWorkspaceCounts: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      {
+        channel: number;
+        diagram: number;
+        document: number;
+        project: number;
+        spreadsheet: number;
+        task: number;
+      }
+    >;
     getWorkspaceGraph: FunctionReference<
       "query",
       "public",
       { workspaceId: Id<"workspaces"> },
       {
-        counts: {
-          channel: number;
-          diagram: number;
-          document: number;
-          project: number;
-          spreadsheet: number;
-          task: number;
-        };
         links: Array<{ edgeType: string; source: string; target: string }>;
         nodes: Array<{ groupId?: string; id: string; type: string }>;
       }

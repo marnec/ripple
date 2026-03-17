@@ -49,6 +49,7 @@ type WorkspaceGraphProps = {
 
 export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highlightedType }: WorkspaceGraphProps) {
   const graph = useQuery(api.edges.getWorkspaceGraph, { workspaceId });
+  const counts = useQuery(api.edges.getWorkspaceCounts, { workspaceId });
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -205,20 +206,22 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
       }
     }
 
-    // Generate anonymous isolated nodes from aggregate counts
+    // Generate anonymous isolated nodes from aggregate counts (from separate query)
     const isolatedNodes: GraphNode[] = [];
-    const counts = graph.counts as Record<string, number>;
-    for (const type of COUNTABLE_TYPES) {
-      if (hiddenTypes.has(type)) continue;
-      const total = counts[type] ?? 0;
-      const connected = connectedCounts.get(type) ?? 0;
-      const isolatedCount = Math.max(0, total - connected);
-      for (let i = 0; i < isolatedCount; i++) {
-        isolatedNodes.push({
-          id: `__isolated_${type}_${i}`,
-          type,
-          isolated: true,
-        });
+    if (counts) {
+      const countsRecord = counts as Record<string, number>;
+      for (const type of COUNTABLE_TYPES) {
+        if (hiddenTypes.has(type)) continue;
+        const total = countsRecord[type] ?? 0;
+        const connected = connectedCounts.get(type) ?? 0;
+        const isolatedCount = Math.max(0, total - connected);
+        for (let i = 0; i < isolatedCount; i++) {
+          isolatedNodes.push({
+            id: `__isolated_${type}_${i}`,
+            type,
+            isolated: true,
+          });
+        }
       }
     }
 
@@ -249,7 +252,7 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
     }
 
     return { nodes: allNodes, links: [...links, ...groupLinks] };
-  }, [graph, hiddenTypes]);
+  }, [graph, counts, hiddenTypes]);
 
   useEffect(() => {
     nodesRef.current = graphData.nodes;

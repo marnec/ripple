@@ -155,6 +155,13 @@ export const syncEdges = mutation({
       }
     }
 
+    // Resolve source groupId once (projectId for tasks)
+    let groupId: string | undefined;
+    if (sourceType === "task") {
+      const task = await ctx.db.get(sourceId as Id<"tasks">);
+      groupId = task?.projectId;
+    }
+
     // Insert added
     for (const ref of references) {
       if (!existingByTarget.has(ref.targetId)) {
@@ -167,6 +174,7 @@ export const syncEdges = mutation({
           workspaceId,
           createdBy: userId,
           createdAt: Date.now(),
+          groupId,
         });
       }
     }
@@ -219,6 +227,13 @@ export const syncMentionEdges = mutation({
       }
     }
 
+    // Resolve source groupId once (projectId for tasks)
+    let groupId: string | undefined;
+    if (sourceType === "task") {
+      const task = await ctx.db.get(sourceId as Id<"tasks">);
+      groupId = task?.projectId;
+    }
+
     // Insert added
     for (const mentionedUserId of mentionedUserIds) {
       if (!existingByTarget.has(mentionedUserId)) {
@@ -231,6 +246,7 @@ export const syncMentionEdges = mutation({
           workspaceId,
           createdBy: userId,
           createdAt: Date.now(),
+          groupId,
         });
       }
     }
@@ -305,6 +321,7 @@ export const createEdge = mutation({
       workspaceId: task.workspaceId,
       createdBy: userId,
       createdAt: Date.now(),
+      groupId: task.projectId,
     });
 
     // Log activity
@@ -571,20 +588,20 @@ const graphCountsValidator = v.object({
 });
 
 /**
- * Get the workspace knowledge graph: edges + connected nodes + aggregate counts.
+ * Get the workspace knowledge graph: edges + connected nodes.
  * No name resolution — labels are lazy-loaded via getNodeLabel on hover.
- * Counts enable the client to generate anonymous isolated nodes.
+ * Counts are fetched separately via getWorkspaceCounts to avoid coupling
+ * graph reactivity to every resource creation/deletion in the workspace.
  */
 export const getWorkspaceGraph = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.object({
     nodes: v.array(graphNodeValidator),
     links: v.array(graphLinkValidator),
-    counts: graphCountsValidator,
   }),
   handler: async (ctx, { workspaceId }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return { nodes: [], links: [], counts: { document: 0, diagram: 0, spreadsheet: 0, project: 0, channel: 0, task: 0 } };
+    if (!userId) return { nodes: [], links: [] };
 
     const membership = await ctx.db
       .query("workspaceMembers")
@@ -592,43 +609,52 @@ export const getWorkspaceGraph = query({
         q.eq("workspaceId", workspaceId).eq("userId", userId),
       )
       .first();
-    if (!membership) return { nodes: [], links: [], counts: { document: 0, diagram: 0, spreadsheet: 0, project: 0, channel: 0, task: 0 } };
+    if (!membership) return { nodes: [], links: [] };
 
-    // Fetch edges + aggregate counts in parallel
-    const [edgeRows, docCount, diaCount, ssCount, projCount, chanCount, taskCount] = await Promise.all([
-      ctx.db
-        .query("edges")
-        .withIndex("by_workspace_target", (q) => q.eq("workspaceId", workspaceId))
-        .collect(),
-      documentsByWorkspace.count(ctx, { namespace: workspaceId }),
-      diagramsByWorkspace.count(ctx, { namespace: workspaceId }),
-      spreadsheetsByWorkspace.count(ctx, { namespace: workspaceId }),
-      projectsByWorkspace.count(ctx, { namespace: workspaceId }),
-      channelsByWorkspace.count(ctx, { namespace: workspaceId }),
-      tasksByWorkspace.count(ctx, { namespace: workspaceId }),
-    ]);
+    const edgeRows = await ctx.db
+      .query("edges")
+      .withIndex("by_workspace_target", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
 
-    // Collect unique node IDs from edges
+    // Collect unique node IDs and derive groupIds from edges
     const nodeIds = new Map<string, string>(); // id → type
+    const nodeGroupIds = new Map<string, string>(); // id → groupId (from source edges)
     for (const edge of edgeRows) {
       nodeIds.set(edge.sourceId, edge.sourceType);
       nodeIds.set(edge.targetId, edge.targetType);
+      // Source's groupId is denormalized on the edge
+      if (edge.groupId && !nodeGroupIds.has(edge.sourceId)) {
+        nodeGroupIds.set(edge.sourceId, edge.groupId);
+      }
     }
 
-    // Resolve only groupId for tasks and messages (no names)
+    // For task/message nodes that only appear as targets, do parallel lookups
+    const needsLookup: Array<[string, string]> = [];
+    for (const [id, type] of nodeIds) {
+      if ((type === "task" || type === "message") && !nodeGroupIds.has(id)) {
+        needsLookup.push([id, type]);
+      }
+    }
+
+    if (needsLookup.length > 0) {
+      const resolved = await Promise.all(
+        needsLookup.map(async ([id, type]) => {
+          if (type === "task") {
+            const task = await ctx.db.get(id as Id<"tasks">);
+            return [id, task?.projectId] as const;
+          }
+          const message = await ctx.db.get(id as Id<"messages">);
+          return [id, message?.channelId] as const;
+        }),
+      );
+      for (const [id, groupId] of resolved) {
+        if (groupId) nodeGroupIds.set(id, groupId);
+      }
+    }
+
     const nodes: Array<{ id: string; type: string; groupId?: string }> = [];
     for (const [id, type] of nodeIds) {
-      let groupId: string | undefined;
-      if (type === "task") {
-        const task = await ctx.db.get(id as Id<"tasks">);
-        if (!task) continue;
-        groupId = task.projectId;
-      } else if (type === "message") {
-        const message = await ctx.db.get(id as Id<"messages">);
-        if (!message) continue;
-        groupId = message.channelId;
-      }
-      nodes.push({ id, type, groupId });
+      nodes.push({ id, type, groupId: nodeGroupIds.get(id) });
     }
 
     const validNodeIds = new Set(nodes.map((n) => n.id));
@@ -640,17 +666,47 @@ export const getWorkspaceGraph = query({
         edgeType: e.edgeType as string,
       }));
 
+    return { nodes, links };
+  },
+});
+
+/**
+ * Aggregate resource counts per workspace.
+ * Separated from getWorkspaceGraph so that creating/deleting any resource
+ * (document, task, etc.) does NOT invalidate the graph structure subscription.
+ */
+export const getWorkspaceCounts = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: graphCountsValidator,
+  handler: async (ctx, { workspaceId }) => {
+    const userId = await getAuthUserId(ctx);
+    const empty = { document: 0, diagram: 0, spreadsheet: 0, project: 0, channel: 0, task: 0 };
+    if (!userId) return empty;
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .first();
+    if (!membership) return empty;
+
+    const [docCount, diaCount, ssCount, projCount, chanCount, taskCount] = await Promise.all([
+      documentsByWorkspace.count(ctx, { namespace: workspaceId }),
+      diagramsByWorkspace.count(ctx, { namespace: workspaceId }),
+      spreadsheetsByWorkspace.count(ctx, { namespace: workspaceId }),
+      projectsByWorkspace.count(ctx, { namespace: workspaceId }),
+      channelsByWorkspace.count(ctx, { namespace: workspaceId }),
+      tasksByWorkspace.count(ctx, { namespace: workspaceId }),
+    ]);
+
     return {
-      nodes,
-      links,
-      counts: {
-        document: docCount,
-        diagram: diaCount,
-        spreadsheet: ssCount,
-        project: projCount,
-        channel: chanCount,
-        task: taskCount,
-      },
+      document: docCount,
+      diagram: diaCount,
+      spreadsheet: ssCount,
+      project: projCount,
+      channel: chanCount,
+      task: taskCount,
     };
   },
 });
