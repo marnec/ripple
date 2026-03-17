@@ -593,18 +593,27 @@ export declare const api: {
         workspaceId: string;
       }>
     >;
+    getNodeLabel: FunctionReference<
+      "query",
+      "public",
+      { id: string; type: string },
+      string | null
+    >;
     getWorkspaceGraph: FunctionReference<
       "query",
       "public",
       { workspaceId: Id<"workspaces"> },
       {
+        counts: {
+          channel: number;
+          diagram: number;
+          document: number;
+          project: number;
+          spreadsheet: number;
+          task: number;
+        };
         links: Array<{ edgeType: string; source: string; target: string }>;
-        nodes: Array<{
-          groupId?: string;
-          id: string;
-          name: string;
-          type: string;
-        }>;
+        nodes: Array<{ groupId?: string; id: string; type: string }>;
       }
     >;
     listByTask: FunctionReference<

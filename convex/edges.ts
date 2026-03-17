@@ -538,12 +538,20 @@ export const listByTask = query({
   },
 });
 
-// ── Graph query ─────────────────────────────────────────────────────
+// ── Graph queries ───────────────────────────────────────────────────
+
+import {
+  documentsByWorkspace,
+  diagramsByWorkspace,
+  spreadsheetsByWorkspace,
+  projectsByWorkspace,
+  channelsByWorkspace,
+  tasksByWorkspace,
+} from "./workspaceAggregates";
 
 const graphNodeValidator = v.object({
   id: v.string(),
   type: v.string(),
-  name: v.string(),
   groupId: v.optional(v.string()),
 });
 
@@ -553,19 +561,30 @@ const graphLinkValidator = v.object({
   edgeType: v.string(),
 });
 
+const graphCountsValidator = v.object({
+  document: v.number(),
+  diagram: v.number(),
+  spreadsheet: v.number(),
+  project: v.number(),
+  channel: v.number(),
+  task: v.number(),
+});
+
 /**
- * Get the full workspace knowledge graph: all nodes and edges.
- * Powers the force-directed graph visualization.
+ * Get the workspace knowledge graph: edges + connected nodes + aggregate counts.
+ * No name resolution — labels are lazy-loaded via getNodeLabel on hover.
+ * Counts enable the client to generate anonymous isolated nodes.
  */
 export const getWorkspaceGraph = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.object({
     nodes: v.array(graphNodeValidator),
     links: v.array(graphLinkValidator),
+    counts: graphCountsValidator,
   }),
   handler: async (ctx, { workspaceId }) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return { nodes: [], links: [] };
+    if (!userId) return { nodes: [], links: [], counts: { document: 0, diagram: 0, spreadsheet: 0, project: 0, channel: 0, task: 0 } };
 
     const membership = await ctx.db
       .query("workspaceMembers")
@@ -573,70 +592,47 @@ export const getWorkspaceGraph = query({
         q.eq("workspaceId", workspaceId).eq("userId", userId),
       )
       .first();
-    if (!membership) return { nodes: [], links: [] };
+    if (!membership) return { nodes: [], links: [], counts: { document: 0, diagram: 0, spreadsheet: 0, project: 0, channel: 0, task: 0 } };
 
-    // Fetch all edges in this workspace
-    const edges = await ctx.db
-      .query("edges")
-      .withIndex("by_workspace_target", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
+    // Fetch edges + aggregate counts in parallel
+    const [edgeRows, docCount, diaCount, ssCount, projCount, chanCount, taskCount] = await Promise.all([
+      ctx.db
+        .query("edges")
+        .withIndex("by_workspace_target", (q) => q.eq("workspaceId", workspaceId))
+        .collect(),
+      documentsByWorkspace.count(ctx, { namespace: workspaceId }),
+      diagramsByWorkspace.count(ctx, { namespace: workspaceId }),
+      spreadsheetsByWorkspace.count(ctx, { namespace: workspaceId }),
+      projectsByWorkspace.count(ctx, { namespace: workspaceId }),
+      channelsByWorkspace.count(ctx, { namespace: workspaceId }),
+      tasksByWorkspace.count(ctx, { namespace: workspaceId }),
+    ]);
 
     // Collect unique node IDs from edges
     const nodeIds = new Map<string, string>(); // id → type
-    for (const edge of edges) {
+    for (const edge of edgeRows) {
       nodeIds.set(edge.sourceId, edge.sourceType);
       nodeIds.set(edge.targetId, edge.targetType);
     }
 
-    // Batch-resolve node names and groupIds
-    const nodes: Array<{ id: string; type: string; name: string; groupId?: string }> = [];
+    // Resolve only groupId for tasks and messages (no names)
+    const nodes: Array<{ id: string; type: string; groupId?: string }> = [];
     for (const [id, type] of nodeIds) {
-      let name = "Unknown";
       let groupId: string | undefined;
-      if (type === "document") {
-        const doc = await ctx.db.get(id as Id<"documents">);
-        if (!doc) continue;
-        name = doc.name;
-      } else if (type === "task") {
+      if (type === "task") {
         const task = await ctx.db.get(id as Id<"tasks">);
         if (!task) continue;
-        name = task.title;
         groupId = task.projectId;
-      } else if (type === "diagram") {
-        const diagram = await ctx.db.get(id as Id<"diagrams">);
-        if (!diagram) continue;
-        name = diagram.name;
-      } else if (type === "spreadsheet") {
-        const spreadsheet = await ctx.db.get(id as Id<"spreadsheets">);
-        if (!spreadsheet) continue;
-        name = spreadsheet.name;
-      } else if (type === "user") {
-        const user = await ctx.db.get(id as Id<"users">);
-        if (!user) continue;
-        name = user.name ?? user.email ?? "User";
-      } else if (type === "project") {
-        const project = await ctx.db.get(id as Id<"projects">);
-        if (!project) continue;
-        name = project.name;
-      } else if (type === "channel") {
-        const channel = await ctx.db.get(id as Id<"channels">);
-        if (!channel) continue;
-        name = `#${channel.name}`;
       } else if (type === "message") {
         const message = await ctx.db.get(id as Id<"messages">);
         if (!message) continue;
-        const channel = await ctx.db.get(message.channelId);
-        name = channel?.name ? `#${channel.name}` : "message";
         groupId = message.channelId;
-      } else {
-        continue;
       }
-      nodes.push({ id, type, name, groupId });
+      nodes.push({ id, type, groupId });
     }
 
-    // Only include edges where both source and target resolved
     const validNodeIds = new Set(nodes.map((n) => n.id));
-    const links = edges
+    const links = edgeRows
       .filter((e) => validNodeIds.has(e.sourceId) && validNodeIds.has(e.targetId))
       .map((e) => ({
         source: e.sourceId,
@@ -644,6 +640,69 @@ export const getWorkspaceGraph = query({
         edgeType: e.edgeType as string,
       }));
 
-    return { nodes, links };
+    return {
+      nodes,
+      links,
+      counts: {
+        document: docCount,
+        diagram: diaCount,
+        spreadsheet: ssCount,
+        project: projCount,
+        channel: chanCount,
+        task: taskCount,
+      },
+    };
+  },
+});
+
+/**
+ * Lazy-load a single node's display label.
+ * Called on hover from the graph UI.
+ */
+export const getNodeLabel = query({
+  args: { id: v.string(), type: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { id, type }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    switch (type) {
+      case "document": {
+        const doc = await ctx.db.get(id as Id<"documents">);
+        return doc?.name ?? null;
+      }
+      case "task": {
+        const task = await ctx.db.get(id as Id<"tasks">);
+        return task?.title ?? null;
+      }
+      case "diagram": {
+        const diagram = await ctx.db.get(id as Id<"diagrams">);
+        return diagram?.name ?? null;
+      }
+      case "spreadsheet": {
+        const spreadsheet = await ctx.db.get(id as Id<"spreadsheets">);
+        return spreadsheet?.name ?? null;
+      }
+      case "user": {
+        const user = await ctx.db.get(id as Id<"users">);
+        return user ? (user.name ?? user.email ?? "User") : null;
+      }
+      case "project": {
+        const project = await ctx.db.get(id as Id<"projects">);
+        return project?.name ?? null;
+      }
+      case "channel": {
+        const channel = await ctx.db.get(id as Id<"channels">);
+        return channel ? `#${channel.name}` : null;
+      }
+      case "message": {
+        const message = await ctx.db.get(id as Id<"messages">);
+        if (!message) return null;
+        const channel = await ctx.db.get(message.channelId);
+        return channel ? `#${channel.name}` : null;
+      }
+      default:
+        return null;
+    }
   },
 });

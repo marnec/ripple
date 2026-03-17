@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { api } from "../../../../convex/_generated/api";
@@ -10,8 +10,8 @@ import { getNodeColor, getNodeSize } from "./graphConstants";
 type GraphNode = NodeObject & {
   id: string;
   type: string;
-  name: string;
   groupId?: string;
+  isolated?: boolean;
 };
 
 type GraphLink = LinkObject & {
@@ -21,6 +21,7 @@ type GraphLink = LinkObject & {
 };
 
 function getNodeRoute(node: GraphNode, workspaceId: string): string | null {
+  if (node.isolated) return null;
   switch (node.type) {
     case "document":
       return `/workspaces/${workspaceId}/documents/${node.id}`;
@@ -34,6 +35,9 @@ function getNodeRoute(node: GraphNode, workspaceId: string): string | null {
       return null;
   }
 }
+
+// Types that get isolated placeholder nodes from aggregate counts
+const COUNTABLE_TYPES = ["document", "diagram", "spreadsheet", "project", "channel", "task"] as const;
 
 type WorkspaceGraphProps = {
   workspaceId: Id<"workspaces">;
@@ -51,8 +55,27 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
   const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink>>(undefined);
   const hoveredNodeRef = useRef<string | null>(null);
   const highlightedTypeRef = useRef<string | null>(null);
-  highlightedTypeRef.current = highlightedType ?? null;
+  useEffect(() => {
+    highlightedTypeRef.current = highlightedType ?? null;
+  }, [highlightedType]);
   const nodesRef = useRef<GraphNode[]>([]);
+
+  // ── Lazy label loading with 200ms debounce ──────────────────────────
+  const labelCacheRef = useRef(new Map<string, string>());
+  const [labelQuery, setLabelQuery] = useState<{ id: string; type: string } | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const labelResult = useQuery(
+    api.edges.getNodeLabel,
+    labelQuery ? { id: labelQuery.id, type: labelQuery.type } : "skip",
+  );
+
+  // Cache the label result when it arrives
+  useEffect(() => {
+    if (labelResult && labelQuery) {
+      labelCacheRef.current.set(labelQuery.id, labelResult);
+    }
+  }, [labelResult, labelQuery]);
 
 
   // Clamp node positions on every tick
@@ -86,7 +109,22 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
   const handleNodeHover = useCallback((node: GraphNode | null) => {
     hoveredNodeRef.current = node?.id ?? null;
     if (wrapperRef.current) {
-      wrapperRef.current.style.cursor = node ? "pointer" : "default";
+      wrapperRef.current.style.cursor = node && !node.isolated ? "pointer" : "default";
+    }
+
+    // Clear pending timer
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+
+    // Start 200ms debounce for label fetch
+    if (node && !node.isolated && !labelCacheRef.current.has(node.id)) {
+      const nodeId = node.id;
+      const nodeType = node.type;
+      hoverTimerRef.current = setTimeout(() => {
+        setLabelQuery({ id: nodeId, type: nodeType });
+      }, 200);
     }
   }, []);
 
@@ -103,6 +141,9 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
       const x = node.x ?? 0;
       const y = node.y ?? 0;
 
+      // Isolated nodes are slightly transparent
+      const alpha = node.isolated ? 0.4 : 1;
+
       if (isHighlighted) {
         ctx.beginPath();
         ctx.arc(x, y, size + 3, 0, 2 * Math.PI);
@@ -112,42 +153,86 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
 
       ctx.beginPath();
       ctx.arc(x, y, size, 0, 2 * Math.PI);
-      ctx.fillStyle = isTypeHighlighted && !isHovered
-        ? color  // full color, slightly larger effect from glow
-        : color;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
       ctx.fill();
+      ctx.globalAlpha = 1;
 
-      // Only show labels when zoomed in enough to read them
-      const zoom = ctx.getTransform().a; // scale factor from transform matrix
+      // Show label: from cache if available, only when zoomed in or highlighted
+      const zoom = ctx.getTransform().a;
       if (zoom > 3 || isHighlighted) {
-        const label = node.name.length > 20 ? node.name.slice(0, 18) + "…" : node.name;
-        ctx.font = `${isHighlighted ? "bold " : ""}3px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillStyle = isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)";
-        ctx.fillText(label, x, y + size + 2);
+        const cachedLabel = node.isolated ? undefined : labelCacheRef.current.get(node.id);
+        if (cachedLabel) {
+          const label = cachedLabel.length > 20 ? cachedLabel.slice(0, 18) + "…" : cachedLabel;
+          ctx.font = `${isHighlighted ? "bold " : ""}3px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          ctx.fillStyle = isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)";
+          ctx.fillText(label, x, y + size + 2);
+        }
       }
     },
     [isDark],
   );
 
-  // Filter graph data and add synthetic group links (project→task, channel→message)
+  // Build graph data: connected nodes from edges + anonymous isolated nodes from counts
   const graphData = useMemo(() => {
     if (!graph) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
-    const nodes = (graph.nodes as GraphNode[]).filter((n) => !hiddenTypes.has(n.type));
-    const visibleIds = new Set(nodes.map((n) => n.id));
 
+    // Connected nodes from edges (no names)
+    const connectedNodes = (graph.nodes as GraphNode[]).filter((n) => !hiddenTypes.has(n.type));
+    const visibleIds = new Set(connectedNodes.map((n) => n.id));
+
+    // Count connected nodes per type, including group parents
+    // (channels referenced by message groupId, projects referenced by task groupId)
+    const connectedCounts = new Map<string, number>();
+    const countedIds = new Set<string>();
+    for (const node of connectedNodes) {
+      if (!countedIds.has(node.id)) {
+        countedIds.add(node.id);
+        connectedCounts.set(node.type, (connectedCounts.get(node.type) ?? 0) + 1);
+      }
+      // Group parent is implicitly connected
+      if (node.groupId && !countedIds.has(node.groupId)) {
+        countedIds.add(node.groupId);
+        // Infer parent type from child type
+        const parentType = node.type === "task" ? "project" : node.type === "message" ? "channel" : undefined;
+        if (parentType) {
+          connectedCounts.set(parentType, (connectedCounts.get(parentType) ?? 0) + 1);
+        }
+      }
+    }
+
+    // Generate anonymous isolated nodes from aggregate counts
+    const isolatedNodes: GraphNode[] = [];
+    const counts = graph.counts as Record<string, number>;
+    for (const type of COUNTABLE_TYPES) {
+      if (hiddenTypes.has(type)) continue;
+      const total = counts[type] ?? 0;
+      const connected = connectedCounts.get(type) ?? 0;
+      const isolatedCount = Math.max(0, total - connected);
+      for (let i = 0; i < isolatedCount; i++) {
+        isolatedNodes.push({
+          id: `__isolated_${type}_${i}`,
+          type,
+          isolated: true,
+        });
+      }
+    }
+
+    const allNodes = [...connectedNodes, ...isolatedNodes];
+
+    // Filter links
     const links = (graph.links as GraphLink[]).filter((l) => {
       const sourceId = typeof l.source === "string" ? l.source : l.source.id;
       const targetId = typeof l.target === "string" ? l.target : l.target.id;
       return visibleIds.has(sourceId) && visibleIds.has(targetId);
     });
 
-    // Add synthetic "contains" links from group parent to child
-    // (project→task, channel→message) for visual clustering
+    // Synthetic "contains" links (project→task, channel→message)
     const groupLinks: GraphLink[] = [];
     const seen = new Set<string>();
-    for (const node of nodes) {
+    for (const node of allNodes) {
       if (node.groupId && visibleIds.has(node.groupId)) {
         const key = `${node.groupId}→${node.id}`;
         if (!seen.has(key)) {
@@ -161,7 +246,7 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
       }
     }
 
-    return { nodes, links: [...links, ...groupLinks] };
+    return { nodes: allNodes, links: [...links, ...groupLinks] };
   }, [graph, hiddenTypes]);
 
   useEffect(() => {
@@ -173,9 +258,7 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
   if (graphData.nodes.length === 0) {
     return (
       <div className="flex items-center justify-center text-sm text-muted-foreground" style={{ width, height }}>
-        {graph.nodes.length === 0
-          ? "No connections yet. Mention resources in documents, tasks, or chat to build the graph."
-          : "All node types are hidden. Click a type in the legend to show it."}
+        All node types are hidden. Click a type in the legend to show it.
       </div>
     );
   }
