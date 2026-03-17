@@ -1843,6 +1843,7 @@ export declare const api: {
           members: number;
           projects: number;
           spreadsheets: number;
+          tasks: number;
         };
         diagrams: Array<{
           _creationTime: number;

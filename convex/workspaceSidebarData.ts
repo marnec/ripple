@@ -7,7 +7,8 @@ import {
   documentsByWorkspace,
   membersByWorkspace,
   projectsByWorkspace,
-  spreadsheetsByWorkspace
+  spreadsheetsByWorkspace,
+  tasksByWorkspace,
 } from "./workspaceAggregates";
 
 export const get = query({
@@ -53,6 +54,7 @@ export const get = query({
       documents: v.number(),
       diagrams: v.number(),
       spreadsheets: v.number(),
+      tasks: v.number(),
     }),
   }),
   handler: async (ctx, { workspaceId }) => {
@@ -91,7 +93,7 @@ export const get = query({
       ]);
 
     // O(log n) aggregate counts — no full table scans
-    const [membersCount, channelsCount, projectsCount, documentsCount, diagramsCount, spreadsheetsCount] =
+    const [membersCount, channelsCount, projectsCount, documentsCount, diagramsCount, spreadsheetsCount, tasksCount] =
       await Promise.all([
         membersByWorkspace.count(ctx, { namespace: workspaceId }),
         channelsByWorkspace.count(ctx, { namespace: workspaceId }),
@@ -99,6 +101,7 @@ export const get = query({
         documentsByWorkspace.count(ctx, { namespace: workspaceId }),
         diagramsByWorkspace.count(ctx, { namespace: workspaceId }),
         spreadsheetsByWorkspace.count(ctx, { namespace: workspaceId }),
+        tasksByWorkspace.count(ctx, { namespace: workspaceId }),
       ]);
 
     return {
@@ -134,6 +137,7 @@ export const get = query({
         documents: documentsCount,
         diagrams: diagramsCount,
         spreadsheets: spreadsheetsCount,
+        tasks: tasksCount,
       },
     };
   },

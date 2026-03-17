@@ -5,15 +5,19 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex/react";
 import {
   Clock,
+  Eye,
+  EyeOff,
   FileText,
   Hash,
   LayoutGrid,
+  ListTodo,
   Network,
   PenTool,
   Settings,
   Table,
   Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -22,20 +26,31 @@ import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { QueryParams } from "@shared/types/routes";
 import { WorkspaceTimeline } from "./WorkspaceTimeline";
 import { WorkspaceGraph } from "./WorkspaceGraph";
-import { NODE_TYPES, getNodeColor } from "./graphConstants";
+import { getNodeColor } from "./graphConstants";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Switch } from "@/components/ui/switch";
 import { useTheme } from "next-themes";
 
-const overviewCards = [
-  { key: "members", label: "Members", icon: Users, to: "settings" },
-  { key: "channels", label: "Channels", icon: Hash, to: "channels" },
-  { key: "projects", label: "Projects", icon: LayoutGrid, to: "projects" },
-  { key: "documents", label: "Documents", icon: FileText, to: "documents" },
-  { key: "diagrams", label: "Diagrams", icon: PenTool, to: "diagrams" },
-  { key: "spreadsheets", label: "Spreadsheets", icon: Table, to: "spreadsheets" },
-] as const;
+type OverviewCard = {
+  key: string;
+  filterType: string;        // singular type for graph filtering
+  label: string;
+  icon: LucideIcon;
+  to: string;
+  subCount?: { key: string; label: string; icon: LucideIcon };
+};
+
+const overviewCards: OverviewCard[] = [
+  { key: "members", filterType: "user", label: "Members", icon: Users, to: "settings" },
+  { key: "channels", filterType: "channel", label: "Channels", icon: Hash, to: "channels" },
+  {
+    key: "projects", filterType: "project", label: "Projects", icon: LayoutGrid, to: "projects",
+    subCount: { key: "tasks", label: "Tasks", icon: ListTodo },
+  },
+  { key: "documents", filterType: "document", label: "Documents", icon: FileText, to: "documents" },
+  { key: "diagrams", filterType: "diagram", label: "Diagrams", icon: PenTool, to: "diagrams" },
+  { key: "spreadsheets", filterType: "spreadsheet", label: "Spreadsheets", icon: Table, to: "spreadsheets" },
+];
 
 type Tab = "graph" | "activity";
 
@@ -50,7 +65,7 @@ export function WorkspaceDetails() {
   const workspace = useQuery(api.workspaces.get, { id });
   const overview = useWorkspaceSidebar()?.counts;
 
-  // Node type visibility for graph filtering
+  // Node type visibility for graph/activity filtering
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
   const toggleType = (type: string) => {
     setHiddenTypes((prev) => {
@@ -104,29 +119,85 @@ export function WorkspaceDetails() {
           </Button>
         </div>
 
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+        {/* Resource cards with integrated filter toggles */}
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-6">
           {overviewCards.map((card) => {
-            const count = overview?.[card.key];
+            const count = overview?.[card.key as keyof typeof overview];
+            const subCount = card.subCount ? overview?.[card.subCount.key as keyof typeof overview] : undefined;
+            const color = getNodeColor(card.filterType, isDark);
+            const isHidden = hiddenTypes.has(card.filterType);
+            const isSubHidden = card.subCount ? hiddenTypes.has("task") : false;
+
             return (
-              <Link
+              <div
                 key={card.key}
-                to={card.to}
-                className="group flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-colors hover:bg-accent/50"
+                className={cn(
+                  "group relative flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-all",
+                  isHidden ? "opacity-40" : "hover:bg-accent/50",
+                )}
               >
-                <card.icon className="size-5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                <span className="text-2xl font-semibold tabular-nums">
-                  {count ?? "\u2013"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {card.label}
-                </span>
-              </Link>
+                {/* Eye toggle — top right */}
+                {!isMobile && (
+                  <button
+                    onClick={() => toggleType(card.filterType)}
+                    className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                    title={isHidden ? `Show ${card.label}` : `Hide ${card.label}`}
+                  >
+                    {isHidden
+                      ? <EyeOff className="size-3.5" />
+                      : <Eye className="size-3.5" />
+                    }
+                  </button>
+                )}
+
+                {/* Clickable content — navigates to resource list */}
+                <Link to={card.to} className="flex flex-col items-center gap-1.5">
+                  <card.icon
+                    className="size-5 transition-colors"
+                    style={{ color }}
+                  />
+                  <span className="text-2xl font-semibold tabular-nums">
+                    {count ?? "\u2013"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {card.label}
+                  </span>
+                </Link>
+
+                {/* Sub-count (tasks inside projects) */}
+                {card.subCount && subCount !== undefined && (
+                  <div className={cn(
+                    "flex items-center gap-1.5 mt-1 transition-opacity",
+                    isSubHidden && "opacity-40",
+                  )}>
+                    {!isMobile && (
+                      <button
+                        onClick={() => toggleType("task")}
+                        className="p-0.5 rounded text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        title={isSubHidden ? "Show Tasks" : "Hide Tasks"}
+                      >
+                        {isSubHidden
+                          ? <EyeOff className="size-3" />
+                          : <Eye className="size-3" />
+                        }
+                      </button>
+                    )}
+                    <card.subCount.icon
+                      className="size-3"
+                      style={{ color: getNodeColor("task", isDark) }}
+                    />
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {subCount} {card.subCount.label}
+                    </span>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
 
-        {/* Tabs + type filters */}
-        <div className="flex items-center gap-1 flex-wrap">
+        {/* Tabs */}
+        <div className="flex items-center gap-1">
           {!isMobile && (
             <button
               onClick={() => setActiveTab("graph")}
@@ -153,26 +224,6 @@ export function WorkspaceDetails() {
             <Clock className="h-3.5 w-3.5" />
             Activity
           </button>
-
-          {/* Type filter switches — shared across graph and activity tabs */}
-          {!isMobile && (
-            <div className="flex items-center gap-4 ml-auto">
-              {NODE_TYPES.map((type) => {
-                const isVisible = !hiddenTypes.has(type);
-                const color = getNodeColor(type, isDark);
-                return (
-                  <label key={type} className="flex items-center gap-2 cursor-pointer select-none">
-                    <Switch
-                      checked={isVisible}
-                      onCheckedChange={() => toggleType(type)}
-                      style={isVisible ? { backgroundColor: color } : undefined}
-                    />
-                    <span className="text-xs text-muted-foreground capitalize">{type}</span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
 
