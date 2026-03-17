@@ -8,7 +8,7 @@ import {
   StrikethroughIcon,
   UnderlineIcon,
 } from "@radix-ui/react-icons";
-import { ImageIcon, Phone } from "lucide-react";
+import { ImageIcon } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
@@ -35,8 +35,6 @@ type FormattingToolbarProps = {
   onImagePreview: (blobUrl: string) => void;
   onImageReady: (urls: ImageUploadResult) => void;
   onImageUploadFailed: () => void;
-  showCallButton?: boolean;
-  onStartCall?: () => void;
 };
 
 export function FormattingToolbar({
@@ -45,8 +43,6 @@ export function FormattingToolbar({
   onImagePreview,
   onImageReady,
   onImageUploadFailed,
-  showCallButton,
-  onStartCall,
 }: FormattingToolbarProps) {
   const [activeStyles, setActiveStyles] = useState<Record<StyleKey, boolean>>({
     bold: false,
@@ -87,62 +83,54 @@ export function FormattingToolbar({
   };
 
   return (
-    <div className="flex justify-between items-center">
-      <div className="flex flex-row gap-2">
-        {STYLE_TOGGLES.map(({ key, icon: Icon, title }) => (
-          <Toggle
-            key={key}
-            variant="outline"
-            size="sm"
-            pressed={activeStyles[key]}
-            title={title}
-            onClick={() => {
-              editor.toggleStyles({ [key]: true });
-              setActiveStyles((prev) => ({ ...prev, [key]: !prev[key] }));
-              editor.focus();
-            }}
-          >
-            <Icon className="h-4 w-4" />
-          </Toggle>
-        ))}
-
-        <Button
+    <div className="flex flex-row gap-2">
+      {STYLE_TOGGLES.map(({ key, icon: Icon, title }) => (
+        <Toggle
+          key={key}
           variant="outline"
           size="sm"
-          title="Link (Ctrl + K)"
+          pressed={activeStyles[key]}
+          title={title}
           onClick={() => {
-            const text = editor.getSelectedText();
-            const link = editor.getSelectedLinkUrl();
-            editor.createLink(link ?? text, text);
+            editor.toggleStyles({ [key]: true });
+            setActiveStyles((prev) => ({ ...prev, [key]: !prev[key] }));
             editor.focus();
           }}
         >
-          <Link1Icon />
-        </Button>
+          <Icon className="h-4 w-4" />
+        </Toggle>
+      ))}
 
-        <Button
-          variant="outline"
-          size="sm"
-          title="Attach image"
-          disabled={!uploadImageWithThumbnail}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <ImageIcon className="h-4 w-4" />
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => void handleAttachImage(e)}
-        />
-      </div>
-      {showCallButton && onStartCall && (
-        <Button variant="ghost" size="icon" onClick={onStartCall} title="Start a call" className="sm:w-18 sm:gap-1.5 sm:px-3">
-          <Phone className="h-4 w-4" />
-          <span className="hidden sm:inline text-sm">Join</span>
-        </Button>
-      )}
+      <Button
+        variant="outline"
+        size="sm"
+        title="Link (Ctrl + K)"
+        onClick={() => {
+          const text = editor.getSelectedText();
+          const link = editor.getSelectedLinkUrl();
+          editor.createLink(link ?? text, text);
+          editor.focus();
+        }}
+      >
+        <Link1Icon />
+      </Button>
+
+      <Button
+        variant="outline"
+        size="sm"
+        title="Attach image"
+        disabled={!uploadImageWithThumbnail}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <ImageIcon className="h-4 w-4" />
+      </Button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => void handleAttachImage(e)}
+      />
     </div>
   );
 }

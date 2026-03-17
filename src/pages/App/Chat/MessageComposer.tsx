@@ -12,7 +12,7 @@ import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { File, FolderKanban, PenTool, SendHorizonal, Table2, X } from "lucide-react";
+import { File, FolderKanban, PenTool, Phone, SendHorizonal, Table2, X } from "lucide-react";
 import { RippleSpinner } from "../../../components/RippleSpinner";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
@@ -264,15 +264,21 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   return (
     <div className="flex shrink-0 sm:flex-col flex-col-reverse p-2 pb-[calc(0.5rem+var(--safe-area-bottom))] max-w-full border-t gap-2">
-      <FormattingToolbar
-        editor={editor}
-        uploadImageWithThumbnail={fileUpload?.uploadImageWithThumbnail}
-        onImagePreview={handleImagePreview}
-        onImageReady={handleImageReady}
-        onImageUploadFailed={handleImageUploadFailed}
-        showCallButton={showCallButton}
-        onStartCall={() => void navigate("videocall")}
-      />
+      <div className="flex justify-between items-center">
+        <FormattingToolbar
+          editor={editor}
+          uploadImageWithThumbnail={fileUpload?.uploadImageWithThumbnail}
+          onImagePreview={handleImagePreview}
+          onImageReady={handleImageReady}
+          onImageUploadFailed={handleImageUploadFailed}
+        />
+        {showCallButton && (
+          <Button variant="ghost" size="icon" onClick={() => void navigate("videocall")} title="Start a call" className="sm:w-18 sm:gap-1.5 sm:px-3">
+            <Phone className="h-4 w-4" />
+            <span className="hidden sm:inline text-sm">Join</span>
+          </Button>
+        )}
+      </div>
       {replyingTo && (
         <MessageQuotePreview
           message={{
