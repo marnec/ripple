@@ -12,7 +12,7 @@ import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { File, FolderKanban, PenTool, Phone, SendHorizonal, Table2, X } from "lucide-react";
+import { Command, CornerDownLeft, File, FolderKanban, PenTool, Phone, SendHorizonal, Table2, X } from "lucide-react";
 import { RippleSpinner } from "../../../components/RippleSpinner";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
@@ -46,7 +46,6 @@ const schema = BlockNoteSchema.create({
 });
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
-const modKey = isMac ? "Cmd" : "Ctrl";
 
 const dictionary = {
   ...en,
@@ -326,14 +325,14 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
           <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
         </BlockNoteView>
-        <div className="flex shrink-0 flex-col items-center gap-1">
+        <div className="flex shrink-0 flex-col items-end gap-1">
           <Button disabled={!canSend} onClick={sendMessage} size="icon" className="sm:w-18 sm:gap-1.5 sm:px-3 transition-transform active:scale-95">
             <SendHorizonal className="h-4 w-4" />
             <span className="hidden sm:inline text-sm">Send</span>
           </Button>
           <div className="hidden sm:flex items-center gap-0.5">
-            <Kbd>{modKey}</Kbd>
-            <Kbd>Enter</Kbd>
+            <Kbd>{isMac ? <Command /> : "Ctrl"}</Kbd>
+            <Kbd><CornerDownLeft /></Kbd>
           </div>
         </div>
       </div>
