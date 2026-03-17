@@ -50,6 +50,9 @@
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
 
+  --color-message-own: var(--message-own);
+  --color-message-own-foreground: var(--message-own-foreground);
+
   --color-favorite: hsl(var(--favorite));
   --color-favorite-foreground: hsl(var(--favorite-foreground));
   --color-unfavorited: hsl(var(--unfavorited));
@@ -189,6 +192,9 @@
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
 
+  --message-own: oklch(0.92 0.02 250);
+  --message-own-foreground: oklch(0.205 0 0);
+
   --favorite: 45 93% 47%;
   --favorite-foreground: 38 92% 40%;
   --unfavorited: 217 91% 60%;
@@ -239,6 +245,9 @@
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
+
+  --message-own: oklch(0.30 0.04 250);
+  --message-own-foreground: oklch(0.985 0 0);
 
   --favorite: 45 93% 47%;
   --favorite-foreground: 45 80% 70%;

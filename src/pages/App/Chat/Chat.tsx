@@ -209,12 +209,13 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
               {(messages || []).map((message, index) => (
                 <Fragment key={message.isomorphicId}>
                   {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
-                    <>
-                      <Separator orientation="horizontal" className="-mt-7" />
-                      <div className="self-center text-muted px-2 z-10 bg-card">
-                        {new Date(message._creationTime).toDateString()}
-                      </div>
-                    </>
+                    <div className="flex items-center gap-3 my-2">
+                      <Separator orientation="horizontal" className="flex-1" />
+                      <span className="shrink-0 text-xs text-muted-foreground/70 select-none">
+                        {new Date(message._creationTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </span>
+                      <Separator orientation="horizontal" className="flex-1" />
+                    </div>
                   )}
                   <Message
                     message={message}

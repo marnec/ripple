@@ -1,4 +1,5 @@
 import { UserContext } from "@/pages/App/UserContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
@@ -37,23 +38,23 @@ const QUICK_EMOJIS = [
 
 const BUBBLE_RADIUS: Record<"own" | "other", Record<GroupPosition, string>> = {
   own: {
-    solo:   "rounded-xl rounded-tr-none",
-    first:  "rounded-xl rounded-tr-none rounded-br-sm",
-    middle: "rounded-xl rounded-tr-sm rounded-br-sm",
-    last:   "rounded-xl rounded-tr-sm",
+    solo:   "rounded-2xl rounded-br-sm",
+    first:  "rounded-2xl rounded-br-sm",
+    middle: "rounded-2xl rounded-tr-sm rounded-br-sm",
+    last:   "rounded-2xl rounded-tr-sm",
   },
   other: {
-    solo:   "rounded-xl rounded-tl-none",
-    first:  "rounded-xl rounded-tl-none rounded-bl-sm",
-    middle: "rounded-xl rounded-tl-sm rounded-bl-sm",
-    last:   "rounded-xl rounded-tl-sm",
+    solo:   "rounded-2xl rounded-bl-sm",
+    first:  "rounded-2xl rounded-bl-sm",
+    middle: "rounded-2xl rounded-tl-sm rounded-bl-sm",
+    last:   "rounded-2xl rounded-tl-sm",
   },
 };
 
 const DEFAULT_GROUP_INFO: MessageGroupInfo = {
   position: "solo",
   showAuthor: true,
-  showTimestamp: true,
+  showTimestamp: true, // unused in Message but part of MessageGroupInfo
 };
 
 type MessageProps = {
@@ -65,8 +66,12 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProp
   const { author, body, userId, _creationTime } = message;
   const user = useContext(UserContext);
 
+  const isMobile = useIsMobile();
   const userIsAuthor = userId === user?._id;
-  const { position, showAuthor, showTimestamp } = groupInfo;
+  const { position, showAuthor } = groupInfo;
+  // On desktop all messages are left-aligned → use "other" (left-side) radius for all
+  // On mobile own messages are right-aligned → use "own" (right-side) radius
+  const radiusSide = (userIsAuthor && isMobile) ? "own" : "other";
   const messageRef = useRef<HTMLLIElement>(null);
 
   const { setEditingMessage, setReplyingTo } = useChatContext()
@@ -116,52 +121,53 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProp
     setLightboxUrl(fullUrl);
   }, []);
 
+  const formattedTime = new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' });
+
   return (
     <>
       <ContextMenu>
         <li
           ref={messageRef}
           className={cn(
-            "relative flex flex-col text-sm animate-slide-up",
+            "relative flex flex-col text-sm animate-slide-up sm:items-start",
             userIsAuthor ? "items-end" : "items-start",
-            position === "solo" || position === "last" ? "mb-3" : "mb-0.5",
+            position === "solo" || position === "last" ? "mb-2" : "mb-px",
           )}
         >
-          {(showAuthor || showTimestamp) && (
-            <div
-              className={cn("flex items-center gap-3", userIsAuthor ? "flex-row" : "flex-row-reverse")}
-            >
-              {showTimestamp && (
-                <div className="mb-1 text-xs text-muted-foreground/70">
-                  {new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' })}
-                </div>
-              )}
-              {showAuthor && (
-                <div className="mb-1 text-sm font-medium">{author}</div>
-              )}
-            </div>
-          )}
-
-          <ContextMenuTrigger className="w-full">
+          <ContextMenuTrigger className={cn("max-w-[85%] sm:max-w-[70%]", userIsAuthor && "ml-auto sm:ml-0")}>
             <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
             <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
             <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
             <MentionedResourcesContext.Provider value={message.mentionedResources ?? {}}>
               <div
                 className={cn(
-                  "max-w-[85%] w-fit bg-muted transition-all",
-                  BUBBLE_RADIUS[userIsAuthor ? "own" : "other"][position],
-                  userIsAuthor && "ml-auto",
-                  messageHasImages ? "overflow-hidden" : "px-3 py-2",
+                  "w-fit transition-all",
+                  BUBBLE_RADIUS[radiusSide][position],
+                  userIsAuthor
+                    ? "bg-message-own text-message-own-foreground ml-auto sm:ml-0"
+                    : "bg-muted",
+                  messageHasImages ? "overflow-hidden" : "px-3 py-1.5",
                 )}
-                title={!showTimestamp ? new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' }) : undefined}
               >
+                {showAuthor && (
+                  <div className="text-xs font-semibold text-primary mb-0.5">{author}</div>
+                )}
                 {message.replyToId && (
-                  <div className={messageHasImages ? "px-3 pt-2" : undefined}>
+                  <div className={messageHasImages ? "px-3 pt-1.5" : undefined}>
                     <MessageQuotePreview message={message.replyTo ?? null} compact />
                   </div>
                 )}
-                <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                <div className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                  </div>
+                  <span className={cn(
+                    "shrink-0 self-end translate-y-0.5 text-[10px] leading-none select-none",
+                    userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60",
+                  )}>
+                    {formattedTime}
+                  </span>
+                </div>
               </div>
             </MentionedResourcesContext.Provider>
             </MentionedProjectsContext.Provider>
