@@ -158,10 +158,13 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      // Show label: from cache if available, only when zoomed in or highlighted
+      // Show label: only on hover for all nodes, or when zoomed in / type-highlighted for connected nodes with cached labels
       const zoom = ctx.getTransform().a;
-      if (zoom > 3 || isHighlighted) {
-        const cachedLabel = node.isolated ? undefined : labelCacheRef.current.get(node.id);
+      const showLabel = node.isolated ? isHovered : (zoom > 3 || isHighlighted);
+      if (showLabel) {
+        const cachedLabel = node.isolated
+          ? `isolated ${node.type}`
+          : labelCacheRef.current.get(node.id);
         if (cachedLabel) {
           const label = cachedLabel.length > 20 ? cachedLabel.slice(0, 18) + "…" : cachedLabel;
           ctx.font = `${isHighlighted ? "bold " : ""}3px sans-serif`;

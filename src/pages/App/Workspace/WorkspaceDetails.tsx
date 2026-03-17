@@ -228,6 +228,11 @@ export function WorkspaceDetails() {
             <Clock className="h-3.5 w-3.5" />
             Activity
           </button>
+          {activeTab === "graph" && !isMobile && (
+            <span className="text-[11px] text-muted-foreground/50 ml-2">
+              Hover a node to reveal its name
+            </span>
+          )}
         </div>
       </div>
 
