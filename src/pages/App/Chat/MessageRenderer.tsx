@@ -40,7 +40,7 @@ export function MessageRenderer({ blocks, onImageClick }: MessageRendererProps) 
           <img
             src={thumbnailUrl}
             alt=""
-            className="max-w-xs sm:max-w-sm max-h-80 rounded-sm hover:brightness-90 transition-[filter]"
+            className="max-w-xs sm:max-w-sm max-h-80 hover:brightness-90 transition-[filter]"
             loading="lazy"
           />
         </button>
