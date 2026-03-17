@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   Calendar,
@@ -177,18 +178,29 @@ function formatRelativeTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 20;
 const MAX_FETCH = 50;
 
-// Map plural resourceType from audit log to singular type used in graph filters
-const RESOURCE_TYPE_TO_SINGULAR: Record<string, string> = {
-  documents: "document",
-  diagrams: "diagram",
-  spreadsheets: "spreadsheet",
-  channels: "channel",
-  projects: "project",
-  tasks: "task",
+// Map singular type (graph) → plural resourceType (audit log)
+const SINGULAR_TO_RESOURCE_TYPE: Record<string, string> = {
+  document: "documents",
+  diagram: "diagrams",
+  spreadsheet: "spreadsheets",
+  channel: "channels",
+  project: "projects",
+  task: "tasks",
 };
+
+const ALL_RESOURCE_TYPES = Object.values(SINGULAR_TO_RESOURCE_TYPE);
+
+const itemVariants = {
+  initial: { opacity: 0, height: 0 },
+  animate: { opacity: 1, height: "auto", transition: { duration: 0.2, ease: "easeOut" as const } },
+  exit: { opacity: 0, height: 0, transition: { duration: 0.15, ease: "easeIn" as const } },
+};
+
+// Module-scoped cache to preserve entries across query arg changes (prevents flash)
+const entryCache = new Map<string, TimelineEntry[]>();
 
 export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: Id<"workspaces">; hiddenTypes?: Set<string> }) {
   const [isVisible, setIsVisible] = useState(false);
@@ -207,26 +219,38 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
     return () => observer.disconnect();
   }, []);
 
-  const allEntries = useQuery(
+  // Compute allowed resource types for server-side filtering
+  const resourceTypes = hiddenTypes && hiddenTypes.size > 0
+    ? ALL_RESOURCE_TYPES.filter((rt) => {
+        const singular = Object.entries(SINGULAR_TO_RESOURCE_TYPE).find(([, v]) => v === rt)?.[0];
+        return !singular || !hiddenTypes.has(singular);
+      })
+    : undefined;
+
+  const queryResult = useQuery(
     api.workspaceTimeline.list,
-    isVisible ? { workspaceId, limit: MAX_FETCH } : "skip",
+    isVisible ? { workspaceId, limit: MAX_FETCH, resourceTypes } : "skip",
   ) as TimelineEntry[] | undefined;
+
+  // Keep showing previous entries while new query loads (prevents flash)
+  // Keep previous results visible while new query loads (prevents flash).
+  // This is a module-scoped cache keyed by workspaceId — survives re-renders
+  // without triggering cascading setState or reading refs during render.
+  const allEntries = useMemo(() => {
+    if (queryResult !== undefined) {
+      entryCache.set(workspaceId, queryResult);
+      return queryResult;
+    }
+    return entryCache.get(workspaceId) ?? [];
+  }, [queryResult, workspaceId]);
+
   const [visible, setVisible] = useState(PAGE_SIZE);
 
-  if (!allEntries) {
+  if (allEntries.length === 0 && queryResult === undefined) {
     return <div ref={sentinelRef} />;
   }
 
-  // Filter by hidden types if provided
-  const filteredEntries = hiddenTypes && hiddenTypes.size > 0
-    ? allEntries.filter((entry) => {
-        if (!entry.resourceType) return true;
-        const singular = RESOURCE_TYPE_TO_SINGULAR[entry.resourceType];
-        return !singular || !hiddenTypes.has(singular);
-      })
-    : allEntries;
-
-  if (filteredEntries.length === 0) {
+  if (allEntries.length === 0) {
     return (
       <div className="text-sm text-muted-foreground">
         No recent activity
@@ -234,17 +258,25 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
     );
   }
 
-  const entries = filteredEntries.slice(0, visible);
-  const hasMore = visible < filteredEntries.length;
+  const entries = allEntries.slice(0, visible);
+  const hasMore = visible < allEntries.length;
 
   return (
-    <div className="relative">
+    <div ref={sentinelRef} className="relative">
       {entries.length > 1 && (
         <div className="absolute left-2.5 top-3 bottom-3 w-px bg-border" />
       )}
-      <div className="space-y-0.5">
+      <AnimatePresence initial={false} mode="popLayout">
         {entries.map((entry) => (
-          <div key={entry._id} className="relative flex items-start gap-2 py-1">
+          <motion.div
+            key={entry._id}
+            layout
+            variants={itemVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="relative flex items-start gap-2 py-1 overflow-hidden"
+          >
             <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground z-10">
               {getActionIcon(entry.action)}
             </div>
@@ -257,9 +289,9 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
             <span className="text-[10px] text-muted-foreground/60 shrink-0 leading-5">
               {formatRelativeTime(entry.timestamp)}
             </span>
-          </div>
+          </motion.div>
         ))}
-      </div>
+      </AnimatePresence>
       {hasMore && (
         <button
           onClick={() => setVisible((v) => v + PAGE_SIZE)}

@@ -24,6 +24,7 @@ import { WorkspaceTimeline } from "./WorkspaceTimeline";
 import { WorkspaceGraph } from "./WorkspaceGraph";
 import { NODE_TYPES, getNodeColor } from "./graphConstants";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { useTheme } from "next-themes";
 
@@ -86,8 +87,8 @@ export function WorkspaceDetails() {
   }
 
   return (
-    <div className="animate-fade-in">
-      <div ref={topRef} className="container mx-auto p-4 space-y-4">
+    <div className="animate-fade-in flex flex-col h-[calc(100vh-64px)]">
+      <div ref={topRef} className="container mx-auto p-4 space-y-4 shrink-0">
         <div className="hidden md:flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-semibold">
@@ -162,7 +163,6 @@ export function WorkspaceDetails() {
                 return (
                   <label key={type} className="flex items-center gap-2 cursor-pointer select-none">
                     <Switch
-                      size="sm"
                       checked={isVisible}
                       onCheckedChange={() => toggleType(type)}
                       style={isVisible ? { backgroundColor: color } : undefined}
@@ -178,9 +178,11 @@ export function WorkspaceDetails() {
 
       {/* Tab content */}
       {activeTab === "activity" && (
-        <div className="container mx-auto px-4 pb-4">
-          <WorkspaceTimeline workspaceId={id} hiddenTypes={hiddenTypes} />
-        </div>
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="container mx-auto px-4 pb-4">
+            <WorkspaceTimeline workspaceId={id} hiddenTypes={hiddenTypes} />
+          </div>
+        </ScrollArea>
       )}
       {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
         <div className="container mx-auto px-4 pb-4">

@@ -1876,7 +1876,11 @@ export declare const api: {
     list: FunctionReference<
       "query",
       "public",
-      { limit?: number; workspaceId: Id<"workspaces"> },
+      {
+        limit?: number;
+        resourceTypes?: Array<string>;
+        workspaceId: Id<"workspaces">;
+      },
       Array<{
         _id: string;
         action: string;
