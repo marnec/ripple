@@ -135,6 +135,13 @@ export const router = createBrowserRouter(
                   element: <Documents />,
                 },
                 {
+                  path: "import",
+                  lazy: () =>
+                    import("./pages/App/Document/DocumentImport").then((m) => ({
+                      Component: m.DocumentImport,
+                    })),
+                },
+                {
                   path: ":documentId",
                   lazy: () =>
                     import("./pages/App/Document/DocumentEditor").then((m) => ({

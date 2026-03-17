@@ -11,17 +11,23 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 export const create = mutation({
   args: {
     workspaceId: v.id("workspaces"),
+    name: v.optional(v.string()),
   },
   returns: v.id("documents"),
-  handler: async (ctx, { workspaceId }) => {
+  handler: async (ctx, { workspaceId, name }) => {
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     const userId = await getAuthUserId(ctx);
 
     if (!userId) throw new ConvexError("Not authenticated");
 
-    const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-    const documentName = `${DEFAULT_DOC_NAME} ${date} ${time}`;
+    let documentName: string;
+    if (name) {
+      documentName = name;
+    } else {
+      const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+      documentName = `${DEFAULT_DOC_NAME} ${date} ${time}`;
+    }
 
     const documentId = await db.insert("documents", {
       workspaceId,

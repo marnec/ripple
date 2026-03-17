@@ -21,6 +21,7 @@ type ResourceListPageProps = {
   createDialog?: React.ReactNode;
   showFavorites?: boolean;
   subPath?: string;
+  secondaryAction?: React.ReactNode;
 };
 
 export function ResourceListPage({
@@ -32,6 +33,7 @@ export function ResourceListPage({
   createDialog,
   showFavorites = true,
   subPath,
+  secondaryAction,
 }: ResourceListPageProps) {
   const wsId = workspaceId as Id<"workspaces">;
   const isMobile = useIsMobile();
@@ -63,12 +65,15 @@ export function ResourceListPage({
               {title} in this workspace.
             </p>
           </div>
-          {onCreate && (
-            <Button onClick={onCreate} size="sm">
-              <Plus className="mr-1.5 h-4 w-4" />
-              {createLabel ?? `New ${resourceType}`}
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {secondaryAction}
+            {onCreate && (
+              <Button onClick={onCreate} size="sm">
+                <Plus className="mr-1.5 h-4 w-4" />
+                {createLabel ?? `New ${resourceType}`}
+              </Button>
+            )}
+          </div>
         </div>
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
@@ -106,11 +111,16 @@ export function ResourceListPage({
         />
       </div>
       {createDialog}
-      {isMobile && onCreate && (
+      {isMobile && (onCreate || secondaryAction) && (
         <HeaderSlot>
-          <Button onClick={onCreate} size="sm" variant="ghost" className="h-7 w-7 p-0">
-            <Plus className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {secondaryAction}
+            {onCreate && (
+              <Button onClick={onCreate} size="sm" variant="ghost" className="h-7 w-7 p-0">
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </HeaderSlot>
       )}
     </div>

@@ -1,3 +1,5 @@
+import "@blocknote/core/fonts/inter.css";
+import "@blocknote/shadcn/style.css";
 import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
@@ -11,7 +13,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Link2, Link2Off, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
@@ -47,6 +49,9 @@ export function DocumentEditorContainer() {
 export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) {
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const importedHTML = (location.state as { importedHTML?: string } | null)?.importedHTML;
+  const importInjectedRef = useRef(false);
   const document = useQuery(api.documents.get, { id: documentId });
   useRecordVisit(document?.workspaceId, "document", documentId, document?.name);
   const diagrams = useQuery(
@@ -96,6 +101,15 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     schema,
     uploadFile: fileUpload?.uploadFile,
   });
+
+  // Inject imported content (from .docx import) once when the editor is ready
+  useEffect(() => {
+    if (!editor || !importedHTML || importInjectedRef.current) return;
+    importInjectedRef.current = true;
+    const blocks = editor.tryParseHTMLToBlocks(importedHTML);
+    editor.replaceBlocks(editor.document, blocks);
+    window.history.replaceState({}, "");
+  }, [editor, importedHTML]);
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
 

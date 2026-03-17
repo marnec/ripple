@@ -18,6 +18,8 @@ interface BreadcrumbItemData {
   category?: string;
 }
 
+const KNOWN_SUBPAGES = new Set(["settings", "import", "videocall", "tasks", "cycles", "my-tasks"]);
+
 export function DynamicBreadcrumb() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,7 +31,7 @@ export function DynamicBreadcrumb() {
     for (let i = 0; i < pathSegments.length; i++) {
       const segment = pathSegments[i];
       const href = `/${pathSegments.slice(0, i + 1).join("/")}`;
-      const isResource = i % 2 !== 0;
+      const isResource = i % 2 !== 0 && !KNOWN_SUBPAGES.has(segment);
 
       if (isResource) {
         built.push({ href, label: segment, resourceId: segment });

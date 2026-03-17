@@ -495,7 +495,7 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { workspaceId: Id<"workspaces"> },
+      { name?: string; workspaceId: Id<"workspaces"> },
       Id<"documents">
     >;
     get: FunctionReference<

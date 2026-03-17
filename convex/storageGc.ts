@@ -81,7 +81,7 @@ export const runGarbageCollection = internalMutation({
       .query("_storage")
       .paginate({
         numItems: BATCH_SIZE,
-        cursor: args.cursor === null ? undefined : args.cursor,
+        cursor: args.cursor ?? null,
       });
 
     let batchDeleted = 0;
