@@ -2,7 +2,6 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
-import mammoth from "mammoth";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -40,7 +39,8 @@ export function DocumentImport() {
 
         // 2. Convert docx → HTML
         setStatus("Converting document…");
-        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const mammoth = await import("mammoth");
+        const result = await mammoth.default.convertToHtml({ arrayBuffer });
         const html = result.value;
 
         if (!html || html.trim().length === 0) {
