@@ -41,13 +41,13 @@ const BUBBLE_RADIUS: Record<"own" | "other", Record<GroupPosition, string>> = {
   own: {
     solo:   "rounded-lg rounded-br-sm",
     first:  "rounded-lg rounded-br-sm",
-    middle: "rounded-r-sm rounded-l-xl",
+    middle: "rounded-r-sm rounded-l-lg",
     last:   "rounded-lg rounded-tr-sm",
   },
   other: {
     solo:   "rounded-lg rounded-bl-sm",
     first:  "rounded-lg rounded-bl-sm",
-    middle: "rounded-l-sm rounded-r-xl",
+    middle: "rounded-l-sm rounded-r-lg",
     last:   "rounded-lg rounded-tl-sm",
   },
 };
