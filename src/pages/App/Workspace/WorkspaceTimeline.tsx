@@ -281,7 +281,7 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
   return (
     <div ref={sentinelRef} className="relative">
       {entries.length > 1 && (
-        <div className="absolute left-2.75 top-3 bottom-3 w-px bg-border" />
+        <div className="absolute left-2.5 md:left-2.75 top-3 bottom-3 w-px bg-border" />
       )}
       <AnimatePresence initial={false} mode="popLayout">
         {entries.map((entry) => (
@@ -292,18 +292,18 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
             initial="initial"
             animate="animate"
             exit="exit"
-            className="relative flex items-start gap-2.5 py-1.5 overflow-hidden"
+            className="relative flex items-start gap-2 md:gap-2.5 py-1 md:py-1.5 overflow-hidden"
           >
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground z-10">
+            <div className="flex h-5 w-5 md:h-6 md:w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground z-10">
               {getActionIcon(entry.action)}
             </div>
-            <div className="flex-1 min-w-0 text-sm text-muted-foreground leading-6">
-              <span className="inline-flex items-center gap-1.5">
+            <div className="flex-1 min-w-0 text-xs md:text-sm text-muted-foreground leading-5 md:leading-6">
+              <span className="inline-flex items-center gap-1 md:gap-1.5 flex-wrap">
                 {getResourceIcon(entry.resourceType, isDark)}
-                {formatAction(entry)}
+                <span>{formatAction(entry)}</span>
               </span>
             </div>
-            <span className="text-xs text-muted-foreground/60 shrink-0 leading-6">
+            <span className="text-[10px] md:text-xs text-muted-foreground/60 shrink-0 leading-5 md:leading-6">
               {formatRelativeTime(entry.timestamp)}
             </span>
           </motion.div>
