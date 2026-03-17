@@ -1,4 +1,4 @@
-import { Backlinks } from "@/components/Backlinks";
+import { BacklinksDrawerTrigger } from "@/components/BacklinksDrawer";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,7 +119,7 @@ function TaskDetailPageContent({
             workspaceId={workspaceId}
           />
 
-          <Backlinks resourceId={taskId} workspaceId={workspaceId} />
+          <BacklinksDrawerTrigger resourceId={taskId} workspaceId={workspaceId} />
 
           <div className="space-y-2 animate-fade-in">
             <div className="flex items-center justify-between">

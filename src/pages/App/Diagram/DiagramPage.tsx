@@ -1,4 +1,4 @@
-import { Backlinks } from "@/components/Backlinks";
+import { BacklinksDrawerTrigger } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -156,6 +156,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
             workspaceId={workspaceId}
           />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{diagram?.name}</h1>
+          <BacklinksDrawerTrigger resourceId={diagramId} workspaceId={workspaceId} />
         </div>
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} />
@@ -191,11 +192,6 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           </Link>
         </HeaderSlot>
       )}
-
-      {/* Backlinks bar */}
-      <div className="px-3">
-        <Backlinks resourceId={diagramId} workspaceId={workspaceId} />
-      </div>
 
       {/* Canvas */}
       <div className="flex-1 overflow-hidden">

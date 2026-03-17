@@ -1,5 +1,5 @@
 
-import { Backlinks } from "@/components/Backlinks";
+import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
@@ -162,6 +162,7 @@ function SpreadsheetEditor({
   const viewer = useViewer();
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
   const [showRefHighlights, setShowRefHighlights] = useState(false);
+  const [backlinksOpen, setBacklinksOpen] = useState(false);
 
   // Stabilize ref identity to prevent unnecessary JSpreadsheetGrid re-renders
   const referencedCellRefs = useMemo(
@@ -216,7 +217,12 @@ function SpreadsheetEditor({
           {hasRefs && (
             <button
               type="button"
-              onClick={() => setShowRefHighlights((v) => !v)}
+              onClick={() => {
+                setShowRefHighlights((v) => {
+                  if (!v) setBacklinksOpen(true);
+                  return !v;
+                });
+              }}
               className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-2"
               title={showRefHighlights ? "Hide reference highlights" : "Show reference highlights"}
             >
@@ -259,10 +265,12 @@ function SpreadsheetEditor({
           </Link>
         </HeaderSlot>
       )}
-      {/* Backlinks bar */}
-      <div className="px-3">
-        <Backlinks resourceId={spreadsheetId} workspaceId={spreadsheet.workspaceId} />
-      </div>
+      <BacklinksDrawer
+        resourceId={spreadsheetId}
+        workspaceId={spreadsheet.workspaceId}
+        open={backlinksOpen}
+        onOpenChange={setBacklinksOpen}
+      />
 
       <div className="flex-1 overflow-hidden">
         <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} referencedCellRefs={referencedCellRefs} />

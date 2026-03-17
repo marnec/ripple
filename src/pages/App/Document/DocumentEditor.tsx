@@ -1,4 +1,4 @@
-import { Backlinks } from "@/components/Backlinks";
+import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -189,6 +189,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   // Track which blocks in this document are referenced by embeds elsewhere
   const { referencedBlockIds, hasReferencedBlocks } = useReferencedBlocks(documentId);
   const [showReferencedBlocks, setShowReferencedBlocks] = useState(false);
+  const [backlinksOpen, setBacklinksOpen] = useState(false);
   // stylesActive keeps the <style> tag in the DOM during the exit transition
   const [stylesActive, setStylesActive] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -202,6 +203,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       clearTimeout(hideTimerRef.current);
       setStylesActive(true);
       setShowReferencedBlocks(true);
+      setBacklinksOpen(true);
     }
   }, [showReferencedBlocks]);
 
@@ -377,9 +379,12 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             />
           )}
           {document && (
-            <div className="mt-4 mb-8">
-              <Backlinks resourceId={documentId} workspaceId={document.workspaceId} />
-            </div>
+            <BacklinksDrawer
+              resourceId={documentId}
+              workspaceId={document.workspaceId}
+              open={backlinksOpen}
+              onOpenChange={setBacklinksOpen}
+            />
           )}
         </div>
       </div>
