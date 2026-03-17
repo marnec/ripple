@@ -40,15 +40,18 @@ type WorkspaceGraphProps = {
   width: number;
   height: number;
   hiddenTypes: Set<string>;
+  highlightedType?: string | null;
 };
 
-export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes }: WorkspaceGraphProps) {
+export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highlightedType }: WorkspaceGraphProps) {
   const graph = useQuery(api.edges.getWorkspaceGraph, { workspaceId });
   const navigate = useNavigate();
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink>>(undefined);
   const hoveredNodeRef = useRef<string | null>(null);
+  const highlightedTypeRef = useRef<string | null>(null);
+  highlightedTypeRef.current = highlightedType ?? null;
   const nodesRef = useRef<GraphNode[]>([]);
 
 
@@ -92,10 +95,15 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes }: Work
       const size = getNodeSize(node.type);
       const color = getNodeColor(node.type, isDark);
       const isHovered = hoveredNodeRef.current === node.id;
+      const ht = highlightedTypeRef.current;
+      const isTypeHighlighted = ht === node.type
+        || (ht === "channel" && node.type === "message")
+        || (ht === "project" && node.type === "task");
+      const isHighlighted = isHovered || isTypeHighlighted;
       const x = node.x ?? 0;
       const y = node.y ?? 0;
 
-      if (isHovered) {
+      if (isHighlighted) {
         ctx.beginPath();
         ctx.arc(x, y, size + 3, 0, 2 * Math.PI);
         ctx.fillStyle = `${color}33`;
@@ -104,11 +112,13 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes }: Work
 
       ctx.beginPath();
       ctx.arc(x, y, size, 0, 2 * Math.PI);
-      ctx.fillStyle = color;
+      ctx.fillStyle = isTypeHighlighted && !isHovered
+        ? color  // full color, slightly larger effect from glow
+        : color;
       ctx.fill();
 
       const label = node.name.length > 20 ? node.name.slice(0, 18) + "…" : node.name;
-      ctx.font = `${isHovered ? "bold " : ""}3px sans-serif`;
+      ctx.font = `${isHighlighted ? "bold " : ""}3px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillStyle = isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)";

@@ -37,15 +37,15 @@ type OverviewCard = {
   label: string;
   icon: LucideIcon;
   to: string;
-  subCount?: { key: string; label: string; icon: LucideIcon };
+  subCount?: { key: string; label: string; icon: LucideIcon; filterType?: string };
 };
 
 const overviewCards: OverviewCard[] = [
   { key: "members", filterType: "user", label: "Members", icon: Users, to: "settings" },
   { key: "channels", filterType: "channel", label: "Channels", icon: Hash, to: "channels" },
   {
-    key: "projects", filterType: "project", label: "Projects", icon: LayoutGrid, to: "projects",
-    subCount: { key: "tasks", label: "Tasks", icon: ListTodo },
+    key: "tasks", filterType: "task", label: "Tasks", icon: ListTodo, to: "projects",
+    subCount: { key: "projects", label: "Projects", icon: LayoutGrid, filterType: "project" },
   },
   { key: "documents", filterType: "document", label: "Documents", icon: FileText, to: "documents" },
   { key: "diagrams", filterType: "diagram", label: "Diagrams", icon: PenTool, to: "diagrams" },
@@ -67,6 +67,7 @@ export function WorkspaceDetails() {
 
   // Node type visibility for graph/activity filtering
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  const [highlightedType, setHighlightedType] = useState<string | null>(null);
   const toggleType = (type: string) => {
     setHiddenTypes((prev) => {
       const next = new Set(prev);
@@ -126,7 +127,8 @@ export function WorkspaceDetails() {
             const subCount = card.subCount ? overview?.[card.subCount.key as keyof typeof overview] : undefined;
             const color = getNodeColor(card.filterType, isDark);
             const isHidden = hiddenTypes.has(card.filterType);
-            const isSubHidden = card.subCount ? hiddenTypes.has("task") : false;
+            const subFilterType = card.subCount?.filterType ?? card.subCount?.key;
+            const isSubHidden = subFilterType ? hiddenTypes.has(subFilterType) : false;
 
             return (
               <div
@@ -135,6 +137,8 @@ export function WorkspaceDetails() {
                   "group relative flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-all",
                   isHidden ? "opacity-40" : "hover:bg-accent/50",
                 )}
+                onMouseEnter={() => setHighlightedType(card.filterType)}
+                onMouseLeave={() => setHighlightedType(null)}
               >
                 {/* Eye toggle — top right */}
                 {!isMobile && (
@@ -164,17 +168,17 @@ export function WorkspaceDetails() {
                   </span>
                 </Link>
 
-                {/* Sub-count (tasks inside projects) */}
-                {card.subCount && subCount !== undefined && (
+                {/* Sub-count (projects inside tasks card) */}
+                {card.subCount && subFilterType && subCount !== undefined && (
                   <div className={cn(
                     "flex items-center gap-1.5 mt-1 transition-opacity",
                     isSubHidden && "opacity-40",
                   )}>
                     {!isMobile && (
                       <button
-                        onClick={() => toggleType("task")}
+                        onClick={() => toggleType(subFilterType)}
                         className="p-0.5 rounded text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-                        title={isSubHidden ? "Show Tasks" : "Hide Tasks"}
+                        title={isSubHidden ? `Show ${card.subCount.label}` : `Hide ${card.subCount.label}`}
                       >
                         {isSubHidden
                           ? <EyeOff className="size-3" />
@@ -184,7 +188,7 @@ export function WorkspaceDetails() {
                     )}
                     <card.subCount.icon
                       className="size-3"
-                      style={{ color: getNodeColor("task", isDark) }}
+                      style={{ color: getNodeColor(subFilterType, isDark) }}
                     />
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {subCount} {card.subCount.label}
@@ -237,7 +241,7 @@ export function WorkspaceDetails() {
       )}
       {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
         <div className="container mx-auto px-4 pb-4">
-          <WorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} />
+          <WorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} highlightedType={highlightedType} />
         </div>
       )}
 
