@@ -4,6 +4,8 @@ import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
+import { triggers } from "./workspaceAggregates";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 export const create = mutation({
   args: {
@@ -12,6 +14,7 @@ export const create = mutation({
   },
   returns: v.id("workspaces"),
   handler: async (ctx, { name, description }) => {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -21,7 +24,7 @@ export const create = mutation({
       ownerId: userId,
     });
 
-    await ctx.db.insert("workspaceMembers", {
+    await db.insert("workspaceMembers", {
       workspaceId,
       userId,
       role: WorkspaceRole.ADMIN,

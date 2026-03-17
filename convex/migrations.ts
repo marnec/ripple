@@ -95,6 +95,13 @@ export const runAll = migrations.runner([
   internal.migrations.stripDiagramFields,
   internal.migrations.stripChannelRoleCount,
   internal.migrations.stripSpreadsheetFields,
+  internal.migrations.backfillDocumentAggregates,
+  internal.migrations.backfillDiagramAggregates,
+  internal.migrations.backfillSpreadsheetAggregates,
+  internal.migrations.backfillProjectAggregates,
+  internal.migrations.backfillChannelAggregates,
+  internal.migrations.backfillMemberAggregates,
+  internal.migrations.backfillTaskAggregates,
 ]);
 
 /**
@@ -273,6 +280,71 @@ export const backfillAuditScope = internalMutation({
       cursor: scan.cursor,
       isDone: scan.isDone,
     };
+  },
+});
+
+/**
+ * Backfill workspace aggregate counts from existing data.
+ * Run after deploying the aggregate components.
+ *
+ * npx convex run migrations:runAll
+ */
+import {
+  documentsByWorkspace,
+  diagramsByWorkspace,
+  spreadsheetsByWorkspace,
+  projectsByWorkspace,
+  channelsByWorkspace,
+  membersByWorkspace,
+  tasksByWorkspace,
+} from "./workspaceAggregates.js";
+
+export const backfillDocumentAggregates = migrations.define({
+  table: "documents",
+  migrateOne: async (ctx, doc) => {
+    await documentsByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillDiagramAggregates = migrations.define({
+  table: "diagrams",
+  migrateOne: async (ctx, doc) => {
+    await diagramsByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillSpreadsheetAggregates = migrations.define({
+  table: "spreadsheets",
+  migrateOne: async (ctx, doc) => {
+    await spreadsheetsByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillProjectAggregates = migrations.define({
+  table: "projects",
+  migrateOne: async (ctx, doc) => {
+    await projectsByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillChannelAggregates = migrations.define({
+  table: "channels",
+  migrateOne: async (ctx, doc) => {
+    await channelsByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillMemberAggregates = migrations.define({
+  table: "workspaceMembers",
+  migrateOne: async (ctx, doc) => {
+    await membersByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillTaskAggregates = migrations.define({
+  table: "tasks",
+  migrateOne: async (ctx, doc) => {
+    await tasksByWorkspace.insertIfDoesNotExist(ctx, doc);
   },
 });
 

@@ -16,17 +16,13 @@ const allTaskPrefs = {
 };
 
 async function setupProject(
-  t: ReturnType<typeof import("convex-test").convexTest>,
+  asUser: ReturnType<typeof import("convex-test").convexTest>["withIdentity"] extends (i: any) => infer R ? R : never,
   workspaceId: Id<"workspaces">,
-  creatorId: Id<"users">,
 ) {
-  return await t.run(async (ctx) => {
-    return await ctx.db.insert("projects", {
-      name: "Test Project",
-      workspaceId,
-      creatorId,
-      color: "bg-blue-500",
-    });
+  return await asUser.mutation(api.projects.create, {
+    name: "Test Project",
+    workspaceId,
+    color: "bg-blue-500",
   });
 }
 
@@ -34,8 +30,8 @@ describe("projectNotificationPreferences", () => {
   describe("get", () => {
     it("returns null when no preferences exist", async () => {
       const t = createTestContext();
-      const { workspaceId, asUser, userId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, userId);
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const projectId = await setupProject(asUser, workspaceId);
 
       const prefs = await asUser.query(api.projectNotificationPreferences.get, { projectId });
       expect(prefs).toBeNull();
@@ -43,8 +39,8 @@ describe("projectNotificationPreferences", () => {
 
     it("rejects unauthenticated caller", async () => {
       const t = createTestContext();
-      const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, userId);
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const projectId = await setupProject(asUser, workspaceId);
 
       await expect(
         t.query(api.projectNotificationPreferences.get, { projectId }),
@@ -53,8 +49,8 @@ describe("projectNotificationPreferences", () => {
 
     it("rejects non-workspace member", async () => {
       const t = createTestContext();
-      const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, userId);
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const projectId = await setupProject(asUser, workspaceId);
       const { asUser: outsider } = await setupAuthenticatedUser(t, {
         name: "Outsider",
         email: "outsider@test.com",
@@ -69,8 +65,8 @@ describe("projectNotificationPreferences", () => {
   describe("save", () => {
     it("creates preferences when none exist", async () => {
       const t = createTestContext();
-      const { workspaceId, asUser, userId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, userId);
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const projectId = await setupProject(asUser, workspaceId);
 
       await asUser.mutation(api.projectNotificationPreferences.save, {
         projectId,
@@ -85,8 +81,8 @@ describe("projectNotificationPreferences", () => {
 
     it("updates existing preferences (upsert)", async () => {
       const t = createTestContext();
-      const { workspaceId, asUser, userId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, userId);
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const projectId = await setupProject(asUser, workspaceId);
 
       await asUser.mutation(api.projectNotificationPreferences.save, {
         projectId,
@@ -112,8 +108,8 @@ describe("projectNotificationPreferences", () => {
 
     it("rejects unauthenticated caller", async () => {
       const t = createTestContext();
-      const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, userId);
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const projectId = await setupProject(asUser, workspaceId);
 
       await expect(
         t.mutation(api.projectNotificationPreferences.save, {
@@ -128,7 +124,7 @@ describe("projectNotificationPreferences", () => {
     it("returns batch results for multiple users", async () => {
       const t = createTestContext();
       const { workspaceId, asUser: admin, userId: adminId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, adminId);
+      const projectId = await setupProject(admin, workspaceId);
       const { userId: user2Id } = await setupAuthenticatedUser(t, {
         name: "User 2",
         email: "u2@test.com",
@@ -162,8 +158,8 @@ describe("projectNotificationPreferences", () => {
   describe("cascade delete", () => {
     it("deletes project notification preferences when project is deleted", async () => {
       const t = createTestContext();
-      const { workspaceId, asUser, userId } = await setupWorkspaceWithAdmin(t);
-      const projectId = await setupProject(t, workspaceId, userId);
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const projectId = await setupProject(asUser, workspaceId);
 
       // Create task statuses (required for project deletion)
       await t.run(async (ctx) => {

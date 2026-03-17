@@ -5,6 +5,8 @@ import { DEFAULT_DOC_NAME } from "@shared/constants";
 import { auditLog, logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
+import { triggers } from "./workspaceAggregates";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 export const create = mutation({
   args: {
@@ -12,6 +14,7 @@ export const create = mutation({
   },
   returns: v.id("documents"),
   handler: async (ctx, { workspaceId }) => {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
     const userId = await getAuthUserId(ctx);
 
     if (!userId) throw new ConvexError("Not authenticated");
@@ -20,7 +23,7 @@ export const create = mutation({
     const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     const documentName = `${DEFAULT_DOC_NAME} ${date} ${time}`;
 
-    const documentId = await ctx.db.insert("documents", {
+    const documentId = await db.insert("documents", {
       workspaceId,
       name: documentName,
     });
@@ -268,7 +271,8 @@ export const remove = mutation({
       .collect();
     await Promise.all([...outgoingEdges, ...incomingEdges].map((e) => ctx.db.delete(e._id)));
 
-    await ctx.db.delete(id);
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(id);
     return null;
   },
 });

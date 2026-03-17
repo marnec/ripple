@@ -5,6 +5,8 @@ import { WorkspaceRole } from "@shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
+import { triggers } from "./workspaceAggregates";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 const projectValidator = v.object({
   _id: v.id("projects"),
@@ -65,7 +67,8 @@ export const create = mutation({
     }
 
     // Create the project
-    const projectId = await ctx.db.insert("projects", {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const projectId = await db.insert("projects", {
       name,
       color,
       workspaceId,
@@ -381,7 +384,8 @@ export const remove = mutation({
     await Promise.all(projNotifPrefs.map((p) => ctx.db.delete(p._id)));
 
     // Delete the project
-    await ctx.db.delete(id);
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(id);
 
     return null;
   },

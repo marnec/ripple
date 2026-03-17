@@ -8,6 +8,8 @@ import schema from "./schema";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
+import { triggers } from "./workspaceAggregates";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 export const create = mutation({
   args: {
@@ -28,7 +30,8 @@ export const create = mutation({
 
     if (!membership) throw new ConvexError("Not a member of this workspace");
 
-    const channelId = await ctx.db.insert("channels", {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const channelId = await db.insert("channels", {
       name,
       workspaceId,
       isPublic,
@@ -243,7 +246,8 @@ export const remove = mutation({
       .collect();
     await Promise.all(chanNotifPrefs.map((p) => ctx.db.delete(p._id)));
 
-    await ctx.db.delete(id);
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(id);
     return null;
   },
 });

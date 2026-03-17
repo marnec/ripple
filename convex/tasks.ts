@@ -6,6 +6,8 @@ import { internal } from "./_generated/api";
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@shared/displayName";
 import { auditLog, logTaskActivity } from "./auditLog";
+import { triggers } from "./workspaceAggregates";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 const priorityValidator = v.union(
   v.literal("urgent"),
@@ -166,7 +168,8 @@ export const create = mutation({
     await ctx.db.patch(args.projectId, { taskCounter: nextNumber });
 
     // Create task with all fields
-    const taskId = await ctx.db.insert("tasks", {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const taskId = await db.insert("tasks", {
       projectId: args.projectId,
       workspaceId: project.workspaceId,
       title: args.title,
@@ -875,7 +878,8 @@ export const remove = mutation({
     );
 
     // Delete the task document
-    await ctx.db.delete(taskId);
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(taskId);
     return null;
   },
 });

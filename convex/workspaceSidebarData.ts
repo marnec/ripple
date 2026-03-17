@@ -1,6 +1,14 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
+import {
+  channelsByWorkspace,
+  diagramsByWorkspace,
+  documentsByWorkspace,
+  membersByWorkspace,
+  projectsByWorkspace,
+  spreadsheetsByWorkspace
+} from "./workspaceAggregates";
 
 export const get = query({
   args: { workspaceId: v.id("workspaces") },
@@ -59,16 +67,9 @@ export const get = query({
       .first();
     if (!membership) throw new ConvexError("Not a workspace member");
 
-    const [members, channels, projects, documents, diagrams, spreadsheets] =
+    // Fetch lists for sidebar navigation (limited — only need recent items)
+    const [projects, documents, diagrams, spreadsheets] =
       await Promise.all([
-        ctx.db
-          .query("workspaceMembers")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect(),
-        ctx.db
-          .query("channels")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect(),
         ctx.db
           .query("projects")
           .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
@@ -87,6 +88,17 @@ export const get = query({
           .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
           .order("desc")
           .collect(),
+      ]);
+
+    // O(log n) aggregate counts — no full table scans
+    const [membersCount, channelsCount, projectsCount, documentsCount, diagramsCount, spreadsheetsCount] =
+      await Promise.all([
+        membersByWorkspace.count(ctx, { namespace: workspaceId }),
+        channelsByWorkspace.count(ctx, { namespace: workspaceId }),
+        projectsByWorkspace.count(ctx, { namespace: workspaceId }),
+        documentsByWorkspace.count(ctx, { namespace: workspaceId }),
+        diagramsByWorkspace.count(ctx, { namespace: workspaceId }),
+        spreadsheetsByWorkspace.count(ctx, { namespace: workspaceId }),
       ]);
 
     return {
@@ -116,12 +128,12 @@ export const get = query({
         tags: s.tags,
       })),
       counts: {
-        members: members.length,
-        channels: channels.length,
-        projects: projects.length,
-        documents: documents.length,
-        diagrams: diagrams.length,
-        spreadsheets: spreadsheets.length,
+        members: membersCount,
+        channels: channelsCount,
+        projects: projectsCount,
+        documents: documentsCount,
+        diagrams: diagramsCount,
+        spreadsheets: spreadsheetsCount,
       },
     };
   },

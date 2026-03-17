@@ -6,6 +6,8 @@ import { getEnrichedBacklinks } from "./edges";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
+import { triggers } from "./workspaceAggregates";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -177,7 +179,8 @@ export const create = mutation({
     const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     const spreadsheetName = name || `${DEFAULT_SPREADSHEET_NAME} ${date} ${time}`;
 
-    const spreadsheetId = await ctx.db.insert("spreadsheets", {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const spreadsheetId = await db.insert("spreadsheets", {
       workspaceId,
       name: spreadsheetName,
     });
@@ -310,7 +313,8 @@ export const remove = mutation({
       .collect();
     await Promise.all(incomingEdges.map((e) => ctx.db.delete(e._id)));
 
-    await ctx.db.delete(id);
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(id);
     return { status: "deleted" as const };
   },
 });

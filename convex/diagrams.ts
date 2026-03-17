@@ -6,6 +6,8 @@ import { getEnrichedBacklinks } from "./edges";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
+import { triggers } from "./workspaceAggregates";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -177,7 +179,8 @@ export const create = mutation({
     const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     const diagramName = name || `${DEFAULT_DIAGRAM_NAME} ${date} ${time}`;
 
-    const diagramId = await ctx.db.insert("diagrams", {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const diagramId = await db.insert("diagrams", {
       workspaceId,
       name: diagramName,
     });
@@ -308,7 +311,8 @@ export const remove = mutation({
       .collect();
     await Promise.all(incomingEdges.map((e) => ctx.db.delete(e._id)));
 
-    await ctx.db.delete(id);
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(id);
     return { status: "deleted" as const };
   },
 });
