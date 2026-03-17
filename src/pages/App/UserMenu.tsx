@@ -50,7 +50,7 @@ export function NavUser() {
   const [menuOpened, setMenuOpened] = useState(false);
   const pendingInvites = usePendingInvites(menuOpened);
   const { needRefresh, updateAndReload, checkForUpdate } = usePwaUpdate();
-  const { canInstall, isIOSSafari, promptInstall } = useInstallPrompt();
+  const { canInstall, isInstalled, isIOSSafari, promptInstall } = useInstallPrompt();
   const [showIOSInstall, setShowIOSInstall] = useState(false);
   const [installDotDismissed, setInstallDotDismissed] = useState(
     () => localStorage.getItem("ripple:install-dot-seen") === "1",
@@ -132,12 +132,18 @@ export function NavUser() {
                 <Settings />
                 Settings
               </DropdownMenuItem>
-              {canInstall ? (
+              {canInstall && (
                 <DropdownMenuItem onSelect={() => { dismissInstallDot(); if (isIOSSafari) { setShowIOSInstall(true); } else { void promptInstall(); } }}>
                   <Download />
                   Install app
+                  {!installDotDismissed && (
+                    <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full bg-blue-600 px-1.5 text-[10px]">
+                      1
+                    </Badge>
+                  )}
                 </DropdownMenuItem>
-              ) : needRefresh ? (
+              )}
+              {isInstalled && (needRefresh ? (
                 <DropdownMenuItem onSelect={updateAndReload}>
                   <RefreshCw />
                   Update available
@@ -150,7 +156,7 @@ export function NavUser() {
                   <RefreshCw />
                   Check for updates
                 </DropdownMenuItem>
-              )}
+              ))}
               <DropdownMenuItem onSelect={() => setShowInvites(true)}>
                 <Mail />
                 Invitations
