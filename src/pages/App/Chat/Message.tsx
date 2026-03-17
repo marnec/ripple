@@ -21,6 +21,7 @@ import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext,
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
 import { hasImageBlocks } from "./messageUtils";
+import type { GroupPosition, MessageGroupInfo } from "./messageGrouping";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
@@ -34,15 +35,38 @@ const QUICK_EMOJIS = [
   { unified: "1f389", native: "\uD83C\uDF89" },
 ];
 
-type MessageProps = {
-  message: MessageWithAuthor;
+const BUBBLE_RADIUS: Record<"own" | "other", Record<GroupPosition, string>> = {
+  own: {
+    solo:   "rounded-xl rounded-tr-none",
+    first:  "rounded-xl rounded-tr-none rounded-br-sm",
+    middle: "rounded-xl rounded-tr-sm rounded-br-sm",
+    last:   "rounded-xl rounded-tr-sm",
+  },
+  other: {
+    solo:   "rounded-xl rounded-tl-none",
+    first:  "rounded-xl rounded-tl-none rounded-bl-sm",
+    middle: "rounded-xl rounded-tl-sm rounded-bl-sm",
+    last:   "rounded-xl rounded-tl-sm",
+  },
 };
 
-export function Message({ message }: MessageProps) {
+const DEFAULT_GROUP_INFO: MessageGroupInfo = {
+  position: "solo",
+  showAuthor: true,
+  showTimestamp: true,
+};
+
+type MessageProps = {
+  message: MessageWithAuthor;
+  groupInfo?: MessageGroupInfo;
+};
+
+export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProps) {
   const { author, body, userId, _creationTime } = message;
   const user = useContext(UserContext);
 
   const userIsAuthor = userId === user?._id;
+  const { position, showAuthor, showTimestamp } = groupInfo;
   const messageRef = useRef<HTMLLIElement>(null);
 
   const { setEditingMessage, setReplyingTo } = useChatContext()
@@ -98,16 +122,25 @@ export function Message({ message }: MessageProps) {
         <li
           ref={messageRef}
           className={cn(
-            "flex flex-col text-sm animate-slide-up",
+            "relative flex flex-col text-sm animate-slide-up",
             userIsAuthor ? "items-end" : "items-start",
+            position === "solo" || position === "last" ? "mb-3" : "mb-0.5",
           )}
         >
-          <div
-            className={cn("flex items-center gap-3", userIsAuthor ? "flex-row" : "flex-row-reverse")}
-          >
-            <div className="mb-1 text-xs text-muted-foreground/70">{new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' })}</div>
-            <div className="mb-1 text-sm font-medium">{author}</div>
-          </div>
+          {(showAuthor || showTimestamp) && (
+            <div
+              className={cn("flex items-center gap-3", userIsAuthor ? "flex-row" : "flex-row-reverse")}
+            >
+              {showTimestamp && (
+                <div className="mb-1 text-xs text-muted-foreground/70">
+                  {new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' })}
+                </div>
+              )}
+              {showAuthor && (
+                <div className="mb-1 text-sm font-medium">{author}</div>
+              )}
+            </div>
+          )}
 
           <ContextMenuTrigger className="w-full">
             <MentionedUsersContext.Provider value={message.mentionedUsers ?? {}}>
@@ -116,10 +149,12 @@ export function Message({ message }: MessageProps) {
             <MentionedResourcesContext.Provider value={message.mentionedResources ?? {}}>
               <div
                 className={cn(
-                  "max-w-[85%] w-fit rounded-xl bg-muted transition-all",
-                  userIsAuthor ? "rounded-tr-none ml-auto" : "rounded-tl-none",
+                  "max-w-[85%] w-fit bg-muted transition-all",
+                  BUBBLE_RADIUS[userIsAuthor ? "own" : "other"][position],
+                  userIsAuthor && "ml-auto",
                   messageHasImages ? "overflow-hidden" : "px-3 py-2",
                 )}
+                title={!showTimestamp ? new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' }) : undefined}
               >
                 {message.replyToId && (
                   <div className={messageHasImages ? "px-3 pt-2" : undefined}>

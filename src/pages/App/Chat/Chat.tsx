@@ -8,7 +8,7 @@ import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { SearchIcon, Settings } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -21,6 +21,8 @@ import { MessageComposer } from "./MessageComposer";
 import { MessageContext } from "./MessageContext";
 import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
+import { computeGroupPositions } from "./messageGrouping";
+import { UserContext } from "@/pages/App/UserContext";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 
 export type ChatVariant = "full" | "compact";
@@ -53,6 +55,12 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
     isLoading,
     loadMore,
   } = usePaginatedQuery(api.messages.list, { channelId }, { initialNumItems: 25 });
+
+  const user = useContext(UserContext);
+  const groupInfos = useMemo(
+    () => computeGroupPositions(messages ?? [], user?._id),
+    [messages, user?._id],
+  );
 
   const sendMessage = useMutation(api.messages.send);
   const editMessage = useMutation(api.messages.update);
@@ -210,6 +218,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
                   )}
                   <Message
                     message={message}
+                    groupInfo={groupInfos[index]}
                   />
                 </Fragment>
               ))}

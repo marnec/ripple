@@ -107,7 +107,7 @@ export function MessageList({ children, messages, userSentMessageRef }: MessageL
       className="relative h-full **:data-[slot=scroll-area-viewport]:h-full **:data-[slot=scroll-area-viewport]:overscroll-contain"
       ref={scrollAreaRef}
     >
-      <ol ref={messageListRef} className="flex grow flex-col-reverse gap-4 px-4 py-4">
+      <ol ref={messageListRef} className="flex grow flex-col-reverse px-4 py-4">
         {children}
       </ol>
       {showScrollButton && (

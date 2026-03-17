@@ -140,7 +140,7 @@ export function FormattingToolbar({
       {showCallButton && onStartCall && (
         <Button variant="ghost" size="icon" onClick={onStartCall} title="Start a call" className="sm:w-18 sm:gap-1.5 sm:px-3">
           <Phone className="h-4 w-4" />
-          <span className="hidden sm:inline text-sm">Call</span>
+          <span className="hidden sm:inline text-sm">Join</span>
         </Button>
       )}
     </div>
