@@ -117,12 +117,16 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
         : color;
       ctx.fill();
 
-      const label = node.name.length > 20 ? node.name.slice(0, 18) + "…" : node.name;
-      ctx.font = `${isHighlighted ? "bold " : ""}3px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillStyle = isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)";
-      ctx.fillText(label, x, y + size + 2);
+      // Only show labels when zoomed in enough to read them
+      const zoom = ctx.getTransform().a; // scale factor from transform matrix
+      if (zoom > 3 || isHighlighted) {
+        const label = node.name.length > 20 ? node.name.slice(0, 18) + "…" : node.name;
+        ctx.font = `${isHighlighted ? "bold " : ""}3px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillStyle = isDark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)";
+        ctx.fillText(label, x, y + size + 2);
+      }
     },
     [isDark],
   );
