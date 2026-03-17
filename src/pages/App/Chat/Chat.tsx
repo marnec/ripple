@@ -226,7 +226,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
               {variant === "full" && messages && (
                 <Button
                   variant="outline"
-                  className="self-center sm:w-fit w-full"
+                  className="self-center sm:w-fit w-full mb-4"
                   disabled={status === "Exhausted" || isLoading || !messages?.length}
                   onClick={() => loadMore(25)}
                 >
