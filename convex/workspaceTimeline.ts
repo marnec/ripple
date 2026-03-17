@@ -62,19 +62,33 @@ export const list = query({
           .filter((id): id is string => id !== undefined),
       ),
     ];
+    // Resolve system actors (e.g. "system:garbage-collector") without DB lookup
+    const SYSTEM_ACTOR_NAMES: Record<string, string> = {
+      "system:garbage-collector": "Garbage Collector",
+    };
+
     const userDocs = await Promise.all(
       actorIds.map(async (id) => {
+        if (id.startsWith("system:")) return null;
         const normalized = ctx.db.normalizeId("users", id);
         return normalized ? ctx.db.get(normalized) : null;
       }),
     );
     const userMap = new Map<string, { name: string; image?: string }>();
     for (let i = 0; i < actorIds.length; i++) {
-      const doc = userDocs[i];
-      userMap.set(actorIds[i], {
-        name: doc ? getUserDisplayName(doc) : "Unknown",
-        image: doc?.image ?? undefined,
-      });
+      const id = actorIds[i];
+      if (id.startsWith("system:")) {
+        userMap.set(id, {
+          name: SYSTEM_ACTOR_NAMES[id] ?? "System",
+          image: undefined,
+        });
+      } else {
+        const doc = userDocs[i];
+        userMap.set(id, {
+          name: doc ? getUserDisplayName(doc) : "Unknown",
+          image: doc?.image ?? undefined,
+        });
+      }
     }
 
     type MetadataShape = { resourceName?: string; oldValue?: string; newValue?: string };

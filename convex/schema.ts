@@ -93,6 +93,7 @@ export default defineSchema({
     yjsSnapshotId: v.optional(v.id("_storage")),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_yjsSnapshotId", ["yjsSnapshotId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
   diagrams: defineTable({
@@ -102,6 +103,7 @@ export default defineSchema({
     yjsSnapshotId: v.optional(v.id("_storage")),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_yjsSnapshotId", ["yjsSnapshotId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
   spreadsheets: defineTable({
@@ -111,6 +113,7 @@ export default defineSchema({
     yjsSnapshotId: v.optional(v.id("_storage")),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_yjsSnapshotId", ["yjsSnapshotId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
   projects: defineTable({
@@ -169,7 +172,8 @@ export default defineSchema({
     .index("by_project_status", ["projectId", "statusId"])
     .index("by_workspace", ["workspaceId"])
     .index("by_project_status_position", ["projectId", "statusId", "position"])
-    .index("by_project_number", ["projectId", "number"]),
+    .index("by_project_number", ["projectId", "number"])
+    .index("by_yjsSnapshotId", ["yjsSnapshotId"]),
 
   taskComments: defineTable({
     taskId: v.id("tasks"),

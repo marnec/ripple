@@ -299,6 +299,11 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
+    // Clean up Yjs snapshot from storage
+    if (spreadsheet.yjsSnapshotId) {
+      await ctx.storage.delete(spreadsheet.yjsSnapshotId);
+    }
+
     // Clean up cached cell references
     const cellRefs = await ctx.db
       .query("spreadsheetCellRefs")

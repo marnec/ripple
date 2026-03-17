@@ -36,8 +36,9 @@ export const saveSnapshot = internalMutation({
 
     if (!resource) {
       console.warn(
-        `saveSnapshot: Resource ${resourceType}:${resourceId} not found (may have been deleted)`
+        `saveSnapshot: Resource ${resourceType}:${resourceId} not found (may have been deleted). Cleaning up orphaned blob.`
       );
+      await ctx.storage.delete(storageId);
       return null;
     }
 

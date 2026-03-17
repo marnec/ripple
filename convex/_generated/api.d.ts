@@ -2592,6 +2592,19 @@ export declare const internal: {
       null
     >;
   };
+  storageGc: {
+    runGarbageCollection: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        cursor: string | null;
+        totalDeleted?: number;
+        totalScanned?: number;
+        workspaceCounts?: string;
+      },
+      null
+    >;
+  };
   taskNotifications: {
     notifyTaskAssignment: FunctionReference<
       "action",
