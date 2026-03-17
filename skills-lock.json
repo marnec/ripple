@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "bundle-size-optimization": {
+      "source": "aj-geddes/useful-ai-prompts",
+      "sourceType": "github",
+      "computedHash": "ffaef343a22b7c359e060061bb1d8a8836ba44e41c6508f8ed6f1ccf2e8a05ff"
+    }
+  }
+}
