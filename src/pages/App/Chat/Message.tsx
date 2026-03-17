@@ -39,16 +39,16 @@ const QUICK_EMOJIS = [
 
 const BUBBLE_RADIUS: Record<"own" | "other", Record<GroupPosition, string>> = {
   own: {
-    solo:   "rounded-2xl rounded-br-sm",
-    first:  "rounded-2xl rounded-br-sm",
-    middle: "rounded-r-sm rounded-l-2xl",
-    last:   "rounded-2xl rounded-tr-sm",
+    solo:   "rounded-lg rounded-br-sm",
+    first:  "rounded-lg rounded-br-sm",
+    middle: "rounded-r-sm rounded-l-xl",
+    last:   "rounded-lg rounded-tr-sm",
   },
   other: {
-    solo:   "rounded-2xl rounded-bl-sm",
-    first:  "rounded-2xl rounded-bl-sm",
-    middle: "rounded-l-sm rounded-r-2xl",
-    last:   "rounded-2xl rounded-tl-sm",
+    solo:   "rounded-lg rounded-bl-sm",
+    first:  "rounded-lg rounded-bl-sm",
+    middle: "rounded-l-sm rounded-r-xl",
+    last:   "rounded-lg rounded-tl-sm",
   },
 };
 
@@ -182,24 +182,32 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProp
                     userIsAuthor
                       ? "bg-message-own text-message-own-foreground ml-auto sm:ml-0"
                       : "bg-muted",
-                    messageHasImages ? "overflow-hidden" : "px-3 py-1.5",
-                    showAvatar && !messageHasImages && (radiusSide === "own" ? "bubble-tail-right" : "bubble-tail-left"),
+                    !messageHasImages && "px-3 py-1.5",
+                    showAvatar && (radiusSide === "own" ? "bubble-tail-right" : "bubble-tail-left"),
                   )}
                 >
                   {showAuthor && (
-                    <div className="text-xs font-semibold text-primary mb-0.5">{author}</div>
+                    <div className={cn("text-xs font-semibold text-primary mb-0.5", messageHasImages && "px-3 pt-1.5")}>{author}</div>
                   )}
                   {message.replyToId && (
                     <div className={messageHasImages ? "px-3 pt-1.5" : undefined}>
                       <MessageQuotePreview message={message.replyTo ?? null} compact />
                     </div>
                   )}
-                  <div className="flex items-end gap-2">
-                    <div className="min-w-0 flex-1">
+                  {messageHasImages && (
+                    <div className="overflow-hidden rounded-t-[inherit]">
                       <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
                     </div>
+                  )}
+                  <div className={cn("flex items-end gap-2", messageHasImages && "px-2 py-1")}>
+                    {!messageHasImages && (
+                      <div className="min-w-0 flex-1">
+                        <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                      </div>
+                    )}
                     <span className={cn(
                       "shrink-0 self-end translate-y-0.5 text-[10px] leading-none select-none",
+                      messageHasImages && "ml-auto",
                       userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60",
                     )}>
                       {formattedTime}
