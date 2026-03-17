@@ -18,3 +18,38 @@
 .bn-editor {
   padding-inline: 0;
 }
+
+/* Chat bubble tail — curved wedge connecting bubble to avatar */
+.bubble-tail-left,
+.bubble-tail-right {
+  position: relative;
+  overflow: visible;
+}
+
+.bubble-tail-left {
+  border-bottom-left-radius: 0 !important;
+}
+
+.bubble-tail-right {
+  border-bottom-right-radius: 0 !important;
+}
+
+.bubble-tail-left::after,
+.bubble-tail-right::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 16px;
+  background: inherit;
+}
+
+.bubble-tail-left::after {
+  left: -8px;
+  clip-path: path("M 10 0 C 10 9, 5 14, 0 16 L 10 16 Z");
+}
+
+.bubble-tail-right::after {
+  right: -8px;
+  clip-path: path("M 0 0 C 0 9, 5 14, 10 16 L 0 16 Z");
+}

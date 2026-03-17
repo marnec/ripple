@@ -183,6 +183,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProp
                       ? "bg-message-own text-message-own-foreground ml-auto sm:ml-0"
                       : "bg-muted",
                     messageHasImages ? "overflow-hidden" : "px-3 py-1.5",
+                    showAvatar && !messageHasImages && (radiusSide === "own" ? "bubble-tail-right" : "bubble-tail-left"),
                   )}
                 >
                   {showAuthor && (
