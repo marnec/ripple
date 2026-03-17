@@ -135,8 +135,7 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
       const isHovered = hoveredNodeRef.current === node.id;
       const ht = highlightedTypeRef.current;
       const isTypeHighlighted = ht === node.type
-        || (ht === "channel" && node.type === "message")
-        || (ht === "project" && node.type === "task");
+        || (ht === "channel" && node.type === "message");
       const isHighlighted = isHovered || isTypeHighlighted;
       const x = node.x ?? 0;
       const y = node.y ?? 0;

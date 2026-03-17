@@ -130,6 +130,69 @@ export function WorkspaceDetails() {
             const subFilterType = card.subCount?.filterType ?? card.subCount?.key;
             const isSubHidden = subFilterType ? hiddenTypes.has(subFilterType) : false;
 
+            if (card.subCount && subFilterType) {
+              // Dual counter card: primary + sub side by side, independent hover/hide
+              return (
+                <div
+                  key={card.key}
+                  className="group relative flex items-center rounded-lg border p-4 text-center transition-all"
+                >
+                  {/* Left side: primary type */}
+                  <Link
+                    to={card.to}
+                    className={cn(
+                      "flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all",
+                      isHidden ? "opacity-40" : "hover:bg-accent/50",
+                    )}
+                    onMouseEnter={() => setHighlightedType(card.filterType)}
+                    onMouseLeave={() => setHighlightedType(null)}
+                  >
+                    <card.icon className="size-4 transition-colors" style={{ color }} />
+                    <span className="text-xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
+                    <span className="text-[11px] text-muted-foreground">{card.label}</span>
+                  </Link>
+
+                  <div className="w-px h-8 bg-border shrink-0" />
+
+                  {/* Right side: sub type */}
+                  <Link
+                    to={card.to}
+                    className={cn(
+                      "flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all",
+                      isSubHidden ? "opacity-40" : "hover:bg-accent/50",
+                    )}
+                    onMouseEnter={() => setHighlightedType(subFilterType)}
+                    onMouseLeave={() => setHighlightedType(null)}
+                  >
+                    <card.subCount.icon className="size-4 transition-colors" style={{ color: getNodeColor(subFilterType, isDark) }} />
+                    <span className="text-xl font-semibold tabular-nums">{subCount ?? "\u2013"}</span>
+                    <span className="text-[11px] text-muted-foreground">{card.subCount.label}</span>
+                  </Link>
+
+                  {/* Eye toggles: left for primary, right for sub */}
+                  {!isMobile && (
+                    <>
+                      <button
+                        onClick={() => toggleType(card.filterType)}
+                        className="absolute top-2 left-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        title={isHidden ? `Show ${card.label}` : `Hide ${card.label}`}
+                      >
+                        {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      </button>
+                      <button
+                        onClick={() => toggleType(subFilterType)}
+                        className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        title={isSubHidden ? `Show ${card.subCount.label}` : `Hide ${card.subCount.label}`}
+                      >
+                        {isSubHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            }
+
+            // Single counter card
             return (
               <div
                 key={card.key}
@@ -140,54 +203,20 @@ export function WorkspaceDetails() {
                 onMouseEnter={() => setHighlightedType(card.filterType)}
                 onMouseLeave={() => setHighlightedType(null)}
               >
-                {/* Eye toggle — top right */}
                 {!isMobile && (
                   <button
                     onClick={() => toggleType(card.filterType)}
                     className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                     title={isHidden ? `Show ${card.label}` : `Hide ${card.label}`}
                   >
-                    {isHidden
-                      ? <EyeOff className="size-3.5" />
-                      : <Eye className="size-3.5" />
-                    }
+                    {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   </button>
                 )}
-
-                {/* Card content */}
-                {card.subCount && subFilterType ? (
-                  /* Dual counter: primary + sub side by side */
-                  <div className="flex items-center gap-4">
-                    <Link to={card.to} className={cn("flex flex-col items-center gap-1 flex-1", isHidden && "opacity-40")}>
-                      <card.icon className="size-4 transition-colors" style={{ color }} />
-                      <span className="text-xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
-                      <span className="text-[11px] text-muted-foreground">{card.label}</span>
-                    </Link>
-                    <div className="w-px h-8 bg-border" />
-                    <Link to={card.to} className={cn("flex flex-col items-center gap-1 flex-1", isSubHidden && "opacity-40")}>
-                      <card.subCount.icon className="size-4 transition-colors" style={{ color: getNodeColor(subFilterType, isDark) }} />
-                      <span className="text-xl font-semibold tabular-nums">{subCount ?? "\u2013"}</span>
-                      <span className="text-[11px] text-muted-foreground">{card.subCount.label}</span>
-                    </Link>
-                    {/* Sub eye toggle — top left */}
-                    {!isMobile && (
-                      <button
-                        onClick={() => toggleType(subFilterType)}
-                        className="absolute top-2 left-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-                        title={isSubHidden ? `Show ${card.subCount.label}` : `Hide ${card.subCount.label}`}
-                      >
-                        {isSubHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  /* Single counter */
-                  <Link to={card.to} className="flex flex-col items-center gap-1.5">
-                    <card.icon className="size-5 transition-colors" style={{ color }} />
-                    <span className="text-2xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
-                    <span className="text-xs text-muted-foreground">{card.label}</span>
-                  </Link>
-                )}
+                <Link to={card.to} className="flex flex-col items-center gap-1.5">
+                  <card.icon className="size-5 transition-colors" style={{ color }} />
+                  <span className="text-2xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
+                  <span className="text-xs text-muted-foreground">{card.label}</span>
+                </Link>
               </div>
             );
           })}
