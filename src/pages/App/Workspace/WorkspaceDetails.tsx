@@ -18,15 +18,18 @@ import {
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { QueryParams } from "@shared/types/routes";
 import { WorkspaceTimeline } from "./WorkspaceTimeline";
-import { WorkspaceGraph } from "./WorkspaceGraph";
 import { getNodeColor } from "./graphConstants";
+
+const LazyWorkspaceGraph = React.lazy(() =>
+  import("./WorkspaceGraph").then((m) => ({ default: m.WorkspaceGraph })),
+);
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTheme } from "next-themes";
@@ -268,7 +271,9 @@ export function WorkspaceDetails() {
       )}
       {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
         <div className="container mx-auto px-4 pb-4">
-          <WorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} highlightedType={highlightedType} />
+          <Suspense fallback={<div style={{ width: graphWidth, height: graphHeight }} />}>
+            <LazyWorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} highlightedType={highlightedType} />
+          </Suspense>
         </div>
       )}
 

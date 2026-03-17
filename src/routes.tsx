@@ -1,31 +1,21 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { RouteErrorFallback } from "./components/RouteErrorFallback";
 import App from "./pages/App/App";
-import { ChannelVideoCall } from "./pages/App/Channel/ChannelCall";
 import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
-import { ChannelSettings } from "./pages/App/Channel/ChannelSettings";
 import { ChatContainer } from "./pages/App/Chat/ChatContainer";
-import { DiagramPage } from "./pages/App/Diagram/DiagramPage";
 import { Diagrams } from "./pages/App/Diagram/Diagrams";
-import { DiagramSettings } from "./pages/App/Diagram/DiagramSettings";
-import { SpreadsheetPage } from "./pages/App/Spreadsheet/SpreadsheetPage";
 import { Spreadsheets } from "./pages/App/Spreadsheet/Spreadsheets";
-import { SpreadsheetSettings } from "./pages/App/Spreadsheet/SpreadsheetSettings";
-import { DocumentEditorContainer } from "./pages/App/Document/DocumentEditor";
 import { Documents } from "./pages/App/Document/Documents";
-import { DocumentSettings } from "./pages/App/Document/DocumentSettings";
 import { ProjectLayout } from "./pages/App/Project/ProjectLayout";
 import { ProjectOverview } from "./pages/App/Project/ProjectOverview";
 import { ProjectTasksPage } from "./pages/App/Project/ProjectTasksPage";
 import { ProjectCycles } from "./pages/App/Project/ProjectCycles";
 import { CycleDetail } from "./pages/App/Project/CycleDetail";
 import { Projects } from "./pages/App/Project/Projects";
-import { ProjectSettings } from "./pages/App/Project/ProjectSettings";
 import { MyTasks } from "./pages/App/Project/MyTasks";
 import { TaskDetailPage } from "./pages/App/Project/TaskDetailPage";
 import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
 import { Workspaces } from "./pages/App/Workspace/Workspaces";
-import { WorkspaceSettings } from "./pages/App/Workspace/WorkspaceSettings";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 import { LoginPage } from "./pages/LoginPage";
 import { UserProfilePage } from "./pages/UserProfilePage";
@@ -55,7 +45,10 @@ export const router = createBrowserRouter(
             },
             {
               path: "settings",
-              element: <WorkspaceSettings />,
+              lazy: () =>
+                import("./pages/App/Workspace/WorkspaceSettings").then((m) => ({
+                  Component: m.WorkspaceSettings,
+                })),
             },
             {
               path: "my-tasks",
@@ -74,11 +67,17 @@ export const router = createBrowserRouter(
                 },
                 {
                   path: ":channelId/videocall",
-                  element: <ChannelVideoCall />,
+                  lazy: () =>
+                    import("./pages/App/Channel/ChannelCall").then((m) => ({
+                      Component: m.ChannelVideoCall,
+                    })),
                 },
                 {
                   path: ":channelId/settings",
-                  element: <ChannelSettings />,
+                  lazy: () =>
+                    import("./pages/App/Channel/ChannelSettings").then((m) => ({
+                      Component: m.ChannelSettings,
+                    })),
                 },
               ],
             },
@@ -115,7 +114,12 @@ export const router = createBrowserRouter(
                     },
                     {
                       path: "settings",
-                      element: <ProjectSettings />,
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectSettings").then(
+                          (m) => ({
+                            Component: m.ProjectSettings,
+                          }),
+                        ),
                     },
                   ],
                 },
@@ -130,11 +134,19 @@ export const router = createBrowserRouter(
                 },
                 {
                   path: ":documentId",
-                  element: <DocumentEditorContainer />,
+                  lazy: () =>
+                    import("./pages/App/Document/DocumentEditor").then((m) => ({
+                      Component: m.DocumentEditorContainer,
+                    })),
                 },
                 {
                   path: ":documentId/settings",
-                  element: <DocumentSettings />,
+                  lazy: () =>
+                    import("./pages/App/Document/DocumentSettings").then(
+                      (m) => ({
+                        Component: m.DocumentSettings,
+                      }),
+                    ),
                 },
               ],
             },
@@ -147,11 +159,17 @@ export const router = createBrowserRouter(
                 },
                 {
                   path: ":diagramId",
-                  element: <DiagramPage />,
+                  lazy: () =>
+                    import("./pages/App/Diagram/DiagramPage").then((m) => ({
+                      Component: m.DiagramPage,
+                    })),
                 },
                 {
                   path: ":diagramId/settings",
-                  element: <DiagramSettings />,
+                  lazy: () =>
+                    import("./pages/App/Diagram/DiagramSettings").then((m) => ({
+                      Component: m.DiagramSettings,
+                    })),
                 },
               ],
             },
@@ -164,11 +182,21 @@ export const router = createBrowserRouter(
                 },
                 {
                   path: ":spreadsheetId",
-                  element: <SpreadsheetPage />,
+                  lazy: () =>
+                    import("./pages/App/Spreadsheet/SpreadsheetPage").then(
+                      (m) => ({
+                        Component: m.SpreadsheetPage,
+                      }),
+                    ),
                 },
                 {
                   path: ":spreadsheetId/settings",
-                  element: <SpreadsheetSettings />,
+                  lazy: () =>
+                    import("./pages/App/Spreadsheet/SpreadsheetSettings").then(
+                      (m) => ({
+                        Component: m.SpreadsheetSettings,
+                      }),
+                    ),
                 },
               ],
             },
