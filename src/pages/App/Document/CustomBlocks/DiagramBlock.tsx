@@ -1,14 +1,16 @@
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { useDiagramPreview } from "@/hooks/use-diagram-preview";
 import { defaultProps } from "@blocknote/core";
 import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
 import { CircleSlash } from "lucide-react";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../../convex/_generated/dataModel";
 
 
 const DiagramView = ({
   diagramId,
+  onAspectRatioChange,
 }: {
   diagramId: Id<"diagrams">;
   onAspectRatioChange?: (ratio: number) => void;
@@ -18,17 +20,26 @@ const DiagramView = ({
   const navigate = useNavigate();
   const { workspaceId } = useParams<{ workspaceId: string }>();
 
+  const svgContainerRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node || !onAspectRatioChange) return;
+      const svg = node.querySelector("svg");
+      if (!svg) return;
+      const { width, height } = svg.viewBox.baseVal;
+      if (width > 0 && height > 0) {
+        onAspectRatioChange(height / width);
+      }
+    },
+    [onAspectRatioChange],
+  );
+
   const handleClick = () => {
     if (diagram && workspaceId) {
       void navigate(`/workspaces/${workspaceId}/diagrams/${diagramId}`);
     }
   };
 
-  if (isLoading) {
-    return <div className="h-40 w-full" />;
-  }
-
-  if (diagram === null) {
+  if (!isLoading && diagram === null) {
     return (
       <div data-embed-deleted className="w-full flex flex-col items-center justify-center p-3 border rounded-lg text-center text-muted-foreground bg-secondary h-40 gap-2">
         <CircleSlash className="h-10 w-10 text-destructive" />
@@ -39,29 +50,24 @@ const DiagramView = ({
     );
   }
 
-  if (svgHtml) {
-    return (
-      <div className="relative group animate-fade-in">
-        <div className="w-full text-xs text-right text-muted-foreground rounded-tr rounded-bl min-h-lh animate-fade-in">
-          {diagram?.name}
-        </div>
-        <div
-          className="w-full cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
-          onClick={handleClick}
-          dangerouslySetInnerHTML={{ __html: svgHtml }}
-        />
-      </div>
-    );
-  }
-
-  // No SVG available — empty diagram or never generated
   return (
-    <div
-      className="w-full flex flex-col items-center justify-center p-3 text-center text-muted-foreground bg-secondary h-40 gap-2 cursor-pointer hover:bg-muted/50 transition-colors animate-fade-in"
-      onClick={handleClick}
-    >
-      <p>Click to view or edit this diagram.</p>
-      <p className="text-sm text-muted-foreground">Diagrams use live collaboration and cannot be previewed inline.</p>
+    <div className="relative w-full min-h-40 h-full" onClick={handleClick}>
+      {svgHtml ? (
+        <div className="animate-fade-in cursor-pointer">
+          <div className="w-full text-xs text-right text-muted-foreground rounded-tr rounded-bl min-h-lh">
+            {diagram?.name}
+          </div>
+          <div
+            ref={svgContainerRef}
+            className="w-full hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
+            dangerouslySetInnerHTML={{ __html: svgHtml }}
+          />
+        </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <RippleSpinner />
+        </div>
+      )}
     </div>
   );
 };
@@ -74,6 +80,9 @@ const diagramPropSchema = {
   width: {
     default: 512,
   },
+  aspectRatio: {
+    default: 0,
+  },
 } as const;
 
 type DiagramBlockProps = ReactCustomBlockRenderProps<"diagram", typeof diagramPropSchema, "none">;
@@ -83,8 +92,22 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
 
-  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+  const [aspectRatio, setAspectRatio] = useState<number | null>(
+    block.props.aspectRatio || null,
+  );
   const [showHandles, setShowHandles] = useState(false);
+
+  const handleAspectRatioChange = useCallback(
+    (ratio: number) => {
+      setAspectRatio(ratio);
+      if (ratio !== block.props.aspectRatio) {
+        editor.updateBlock(block, {
+          props: { aspectRatio: ratio },
+        });
+      }
+    },
+    [block, editor],
+  );
 
   const resizeHandleMouseDownHandler = (
     event: React.MouseEvent,
@@ -182,7 +205,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
       <div className="p-3 border rounded-lg h-full">
         <DiagramView
           diagramId={diagramId as Id<"diagrams">}
-          onAspectRatioChange={setAspectRatio}
+          onAspectRatioChange={handleAspectRatioChange}
         />
       </div>
       {showHandles && (

@@ -342,7 +342,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           </Link>
         </HeaderSlot>
       )}
-      <div className="flex-1 overflow-y-scroll scrollbar-stable">
+      <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
         <div className="px-2 sm:px-20 max-w-full">
           {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
