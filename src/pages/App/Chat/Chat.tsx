@@ -220,6 +220,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
                   <Message
                     message={message}
                     groupInfo={groupInfos[index]}
+                    index={index}
                   />
                 </Fragment>
               ))}

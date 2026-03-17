@@ -57,12 +57,16 @@ const DEFAULT_GROUP_INFO: MessageGroupInfo = {
   showAuthor: true,
 };
 
+const MESSAGE_STAGGER_DELAY = 5;
+const MESSAGE_STAGGER_CAP = 30;
+
 type MessageProps = {
   message: MessageWithAuthor;
   groupInfo?: MessageGroupInfo;
+  index?: number;
 };
 
-export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProps) {
+export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: MessageProps) {
   const { author, body, userId, _creationTime } = message;
   const user = useContext(UserContext);
 
@@ -145,9 +149,13 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO }: MessageProp
         <li
           ref={messageRef}
           className={cn(
-            "relative flex flex-col text-sm animate-slide-up",
+            "relative flex flex-col text-sm animate-fade-in",
             position === "solo" || position === "last" ? "mb-2" : "mb-px",
           )}
+          style={{
+            animationDelay: `${Math.min(index, MESSAGE_STAGGER_CAP) * MESSAGE_STAGGER_DELAY}ms`,
+            animationFillMode: "backwards",
+          }}
         >
           {/* Message row: avatar + bubble */}
           <div className={cn(
