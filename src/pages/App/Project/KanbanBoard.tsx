@@ -17,7 +17,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import React, { Suspense, useMemo, useState } from "react";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -26,7 +26,10 @@ import { AddColumnDialog } from "./AddColumnDialog";
 import { CreateTaskInline } from "./CreateTaskInline";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { KanbanColumn } from "./KanbanColumn";
-import { TaskDetailSheet } from "./TaskDetailSheet";
+
+const LazyTaskDetailSheet = React.lazy(() =>
+  import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
+);
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 
@@ -336,15 +339,17 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       </DndContext>
 
       {/* Task Detail Sheet */}
-      <TaskDetailSheet
-        taskId={selectedTaskId}
-        open={selectedTaskId !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedTaskId(null);
-        }}
-        workspaceId={workspaceId}
-        projectId={projectId}
-      />
+      <Suspense fallback={null}>
+        <LazyTaskDetailSheet
+          taskId={selectedTaskId}
+          open={selectedTaskId !== null}
+          onOpenChange={(open) => {
+            if (!open) setSelectedTaskId(null);
+          }}
+          workspaceId={workspaceId}
+          projectId={projectId}
+        />
+      </Suspense>
 
       {/* Add Column Dialog */}
       <AddColumnDialog

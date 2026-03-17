@@ -1,11 +1,16 @@
 import { Layout } from "@/components/Layout";
 import { Authenticated, Unauthenticated, useQuery } from "convex/react";
-import { useEffect } from "react";
+import React, { Suspense, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useReadLocalStorage } from "usehooks-ts";
 import { api } from "../../../convex/_generated/api";
-import { FloatingCallWindow } from "../../components/FloatingCallWindow";
 import { ActiveCallProvider } from "../../contexts/ActiveCallContext";
+
+const LazyFloatingCallWindow = React.lazy(() =>
+  import("../../components/FloatingCallWindow").then((m) => ({
+    default: m.FloatingCallWindow,
+  })),
+);
 import { FollowModeProvider } from "../../contexts/FollowModeContext";
 import { WorkspacePresenceProvider } from "../../contexts/WorkspacePresenceContext";
 import { SidebarProvider } from "../../components/ui/sidebar";
@@ -34,7 +39,9 @@ export default function App() {
               <FollowModeProvider>
                 <SidebarProvider>
                 <Layout />
-                <FloatingCallWindow />
+                <Suspense fallback={null}>
+                  <LazyFloatingCallWindow />
+                </Suspense>
                 </SidebarProvider>
               </FollowModeProvider>
             </WorkspacePresenceProvider>

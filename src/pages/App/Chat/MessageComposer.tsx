@@ -1,7 +1,9 @@
 import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
+import "@blocknote/core/fonts/inter.css";
 import { en } from '@blocknote/core/locales';
 import { useCreateBlockNote, useEditorChange, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
+import "@blocknote/shadcn/style.css";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";

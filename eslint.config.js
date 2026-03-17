@@ -9,6 +9,7 @@ export default tseslint.config(
       "dist/**",
       "convex/_generated/**",
       ".wrangler/**",
+      ".claude/**",
       "postcss.config.js",
       "tailwind.config.js",
       "vite.config.ts",

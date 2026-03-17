@@ -1,4 +1,4 @@
-import type React from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -7,12 +7,14 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { CheckSquare, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { TaskDetailSheet } from "./TaskDetailSheet";
+
+const LazyTaskDetailSheet = React.lazy(() =>
+  import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
+);
 import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
@@ -338,13 +340,15 @@ export function MyTasks() {
           projectId fallback: use any valid project ID so queries don't
           receive "" while the sheet is closed (open={false}). */}
       {workspaceId && (
-        <TaskDetailSheet
-          taskId={selectedTaskId as Id<"tasks"> | null}
-          open={!!selectedTaskId}
-          onOpenChange={(open) => { if (!open) { setSelectedTaskId(null); } }}
-          workspaceId={workspaceId as Id<"workspaces">}
-          projectId={selectedProjectId ?? tasks?.[0]?.projectId ?? ("" as Id<"projects">)}
-        />
+        <Suspense fallback={null}>
+          <LazyTaskDetailSheet
+            taskId={selectedTaskId as Id<"tasks"> | null}
+            open={!!selectedTaskId}
+            onOpenChange={(open) => { if (!open) { setSelectedTaskId(null); } }}
+            workspaceId={workspaceId as Id<"workspaces">}
+            projectId={selectedProjectId ?? tasks?.[0]?.projectId ?? ("" as Id<"projects">)}
+          />
+        </Suspense>
       )}
     </div>
   );

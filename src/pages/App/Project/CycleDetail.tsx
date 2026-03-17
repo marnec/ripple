@@ -4,12 +4,15 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
 import { X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
-import { TaskDetailSheet } from "./TaskDetailSheet";
+
+const LazyTaskDetailSheet = React.lazy(() =>
+  import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
+);
 import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
@@ -183,13 +186,15 @@ function CycleDetailContent({
       </div>
 
       {/* Task detail sheet (desktop) */}
-      <TaskDetailSheet
-        taskId={selectedTaskId}
-        open={selectedTaskId !== null}
-        onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
-        workspaceId={workspaceId}
-        projectId={projectId}
-      />
+      <Suspense fallback={null}>
+        <LazyTaskDetailSheet
+          taskId={selectedTaskId}
+          open={selectedTaskId !== null}
+          onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
+          workspaceId={workspaceId}
+          projectId={projectId}
+        />
+      </Suspense>
 
       {/* Add tasks dialog */}
       <AddTasksToCycleDialog

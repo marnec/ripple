@@ -3,12 +3,10 @@ import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Message } from "@/pages/App/Chat/Message";
 import { MessageList } from "@/pages/App/Chat/MessageList";
-import "@blocknote/core/fonts/inter.css";
-import "@blocknote/shadcn/style.css";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { SearchIcon, Settings } from "lucide-react";
-import { Fragment, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -17,8 +15,11 @@ import { Input } from "../../../components/ui/input";
 import { Separator } from "../../../components/ui/separator";
 import { toast } from "sonner";
 import "./message-composer.css";
-import { MessageComposer } from "./MessageComposer";
 import { MessageContext } from "./MessageContext";
+
+const LazyMessageComposer = React.lazy(() =>
+  import("./MessageComposer").then((m) => ({ default: m.MessageComposer })),
+);
 import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
 import { computeGroupPositions } from "./messageGrouping";
@@ -237,12 +238,14 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
             </MessageList>
           </div>
 
-          <MessageComposer
-            handleSubmit={(content, plainText) => void handleSubmit(content, plainText)}
-            channelId={channelId}
-            workspaceId={workspaceId as Id<"workspaces">}
-            showCallButton={variant === "full"}
-          />
+          <Suspense fallback={<div className="shrink-0 h-24 border-t" />}>
+            <LazyMessageComposer
+              handleSubmit={(content: string, plainText: string) => void handleSubmit(content, plainText)}
+              channelId={channelId}
+              workspaceId={workspaceId as Id<"workspaces">}
+              showCallButton={variant === "full"}
+            />
+          </Suspense>
         </div>
       )}
     </ChatContext.Provider>

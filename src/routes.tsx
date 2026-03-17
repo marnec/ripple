@@ -13,7 +13,6 @@ import { ProjectCycles } from "./pages/App/Project/ProjectCycles";
 import { CycleDetail } from "./pages/App/Project/CycleDetail";
 import { Projects } from "./pages/App/Project/Projects";
 import { MyTasks } from "./pages/App/Project/MyTasks";
-import { TaskDetailPage } from "./pages/App/Project/TaskDetailPage";
 import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
 import { Workspaces } from "./pages/App/Workspace/Workspaces";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
@@ -102,7 +101,10 @@ export const router = createBrowserRouter(
                     },
                     {
                       path: "tasks/:taskId",
-                      element: <TaskDetailPage />,
+                      lazy: () =>
+                        import("./pages/App/Project/TaskDetailPage").then(
+                          (m) => ({ Component: m.TaskDetailPage }),
+                        ),
                     },
                     {
                       path: "cycles",

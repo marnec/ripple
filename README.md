@@ -16,7 +16,7 @@ NEXT STEPS:
 - knowledge-graph
     - [x] add table embedding in tasks
     - [ ] explore pdf reading, annotation and embedding
-    - [ ] add a obsidian style backlinks to resources (this might be harder than it seems)
+    - [x] add a obsidian style backlinks to resources (this might be harder than it seems)
 
 keyboard accessiblity
     - [x] command palette

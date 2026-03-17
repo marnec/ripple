@@ -1,16 +1,18 @@
-import type React from "react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, useQuery } from "convex/react";
 import { CheckSquare, ArrowRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { CreateTaskInline } from "./CreateTaskInline";
-import { TaskDetailSheet } from "./TaskDetailSheet";
+
+const LazyTaskDetailSheet = React.lazy(() =>
+  import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
+);
 import { TaskRow } from "./TaskRow";
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
@@ -164,15 +166,17 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
       )}
 
       {/* Task Detail Sheet */}
-      <TaskDetailSheet
-        taskId={selectedTaskId}
-        open={sheetOpen}
-        onOpenChange={(open) => {
-          if (!open) setSelectedTaskId(null);
-        }}
-        workspaceId={workspaceId}
-        projectId={projectId}
-      />
+      <Suspense fallback={null}>
+        <LazyTaskDetailSheet
+          taskId={selectedTaskId}
+          open={sheetOpen}
+          onOpenChange={(open) => {
+            if (!open) setSelectedTaskId(null);
+          }}
+          workspaceId={workspaceId}
+          projectId={projectId}
+        />
+      </Suspense>
     </div>
   );
 }
