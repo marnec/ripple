@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
 import { usePwaUpdate } from "@/hooks/use-pwa-update";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import { PendingInvitesDialog } from "./Workspace/PendingInvites";
 import { UserSettingsDialog } from "./UserSettingsDialog";
@@ -49,8 +50,10 @@ export function NavUser() {
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpened, setMenuOpened] = useState(false);
   const pendingInvites = usePendingInvites(menuOpened);
-  const { needRefresh, updateAndReload, checkForUpdate } = usePwaUpdate();
-  const { canInstall, isInstalled, isIOSSafari, promptInstall } = useInstallPrompt();
+  const { needRefresh, updateAndReload } = usePwaUpdate();
+  const convexHasUpdate = useVersionCheck();
+  const hasUpdate = needRefresh || convexHasUpdate;
+  const { canInstall, isIOSSafari, promptInstall } = useInstallPrompt();
   const [showIOSInstall, setShowIOSInstall] = useState(false);
   const [installDotDismissed, setInstallDotDismissed] = useState(
     () => localStorage.getItem("ripple:install-dot-seen") === "1",
@@ -78,7 +81,7 @@ export function NavUser() {
                   />
                   <AvatarFallback className="rounded-lg">CN</AvatarFallback>
                 </Avatar>
-                {(needRefresh || (canInstall && !installDotDismissed) || pendingInvites.length > 0) && (
+                {(hasUpdate || (canInstall && !installDotDismissed) || pendingInvites.length > 0) && (
                   <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-blue-600 ring-2 ring-sidebar" />
                 )}
               </div>
@@ -143,20 +146,15 @@ export function NavUser() {
                   )}
                 </DropdownMenuItem>
               )}
-              {isInstalled && (needRefresh ? (
-                <DropdownMenuItem onSelect={updateAndReload}>
+              {hasUpdate && (
+                <DropdownMenuItem onSelect={needRefresh ? updateAndReload : () => window.location.reload()}>
                   <RefreshCw />
                   Update available
                   <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full bg-blue-600 px-1.5 text-[10px]">
                     1
                   </Badge>
                 </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onSelect={() => void checkForUpdate()}>
-                  <RefreshCw />
-                  Check for updates
-                </DropdownMenuItem>
-              ))}
+              )}
               <DropdownMenuItem onSelect={() => setShowInvites(true)}>
                 <Mail />
                 Invitations

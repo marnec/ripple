@@ -1726,6 +1726,10 @@ export declare const api: {
       } | null
     >;
   };
+  version: {
+    get: FunctionReference<"query", "public", {}, number | null>;
+    set: FunctionReference<"mutation", "public", {}, null>;
+  };
   workspaceInvites: {
     accept: FunctionReference<
       "mutation",

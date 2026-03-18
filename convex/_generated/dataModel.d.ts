@@ -27,6 +27,20 @@ import type { GenericId } from "convex/values";
  */
 
 export type DataModel = {
+  appVersion: {
+    document: {
+      deployedAt: number;
+      _id: Id<"appVersion">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "deployedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   authAccounts: {
     document: {
       emailVerified?: string;

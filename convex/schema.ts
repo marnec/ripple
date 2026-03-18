@@ -362,6 +362,10 @@ export default defineSchema({
     .index("by_workspace_target", ["workspaceId", "targetId"])
     .index("by_group_target", ["groupId", "targetId"]),
 
+  appVersion: defineTable({
+    deployedAt: v.number(),
+  }),
+
   recentActivity: defineTable({
     userId: v.id("users"),
     workspaceId: v.id("workspaces"),
