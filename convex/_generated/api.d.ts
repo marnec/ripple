@@ -804,6 +804,21 @@ export declare const api: {
         userIds: Array<string>;
       }>
     >;
+    listForMessages: FunctionReference<
+      "query",
+      "public",
+      { messageIds: Array<Id<"messages">> },
+      Record<
+        string,
+        Array<{
+          count: number;
+          currentUserReacted: boolean;
+          emoji: string;
+          emojiNative: string;
+          userIds: Array<string>;
+        }>
+      >
+    >;
     toggle: FunctionReference<
       "mutation",
       "public",

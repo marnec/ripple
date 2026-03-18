@@ -3,6 +3,7 @@ import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { TooltipProvider } from "../../../components/ui/tooltip";
 import { MessageReactionPill } from "./MessageReactionPill";
+import { useReactions } from "./ReactionsContext";
 
 type Props = {
   messageId: Id<"messages">;
@@ -17,14 +18,14 @@ type Reaction = {
 };
 
 export function MessageReactions({ messageId }: Props) {
-  const reactions = useQuery(api.messageReactions.listForMessage, { messageId });
+  const reactions = useReactions(messageId);
 
   // Collect all unique user IDs from all reactions (cast to Id<"users"> for query)
   const allUserIds = reactions?.flatMap((r) => r.userIds) ?? [];
   const uniqueUserIds = Array.from(new Set(allUserIds)) as Id<"users">[];
 
   // Batch-fetch all users in a single query
-  const userMap = useQuery(api.users.getByIds, { ids: uniqueUserIds });
+  const userMap = useQuery(api.users.getByIds, uniqueUserIds.length > 0 ? { ids: uniqueUserIds } : "skip");
 
   if (!reactions || reactions.length === 0 || !userMap) {
     return null;

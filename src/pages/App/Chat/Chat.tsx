@@ -23,6 +23,7 @@ const LazyMessageComposer = React.lazy(() =>
 import { SearchDialog } from "./SearchDialog";
 import { ChatContext, type EditingMessage, type ReplyingToMessage } from "./ChatContext";
 import { computeGroupPositions } from "./messageGrouping";
+import { ReactionsContext } from "./ReactionsContext";
 import { UserContext } from "@/pages/App/UserContext";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 
@@ -58,6 +59,14 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   } = usePaginatedQuery(api.messages.list, { channelId }, { initialNumItems: 25 });
 
   const user = useContext(UserContext);
+  const messageIds = useMemo(
+    () => (messages ?? []).map((m) => m._id),
+    [messages],
+  );
+  const reactionsMap = useQuery(
+    api.messageReactions.listForMessages,
+    messageIds.length > 0 ? { messageIds } : "skip",
+  );
   const groupInfos = useMemo(
     () => computeGroupPositions(messages ?? [], user?._id),
     [messages, user?._id],
@@ -204,6 +213,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           )}
 
           <div className="min-h-0 flex-1">
+            <ReactionsContext.Provider value={reactionsMap ?? {}}>
             <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef}>
               {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
@@ -236,6 +246,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
                 </Button>
               )}
             </MessageList>
+            </ReactionsContext.Provider>
           </div>
 
           <Suspense fallback={<div className="shrink-0 h-24 border-t" />}>

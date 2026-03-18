@@ -38,45 +38,72 @@ export const toggle = mutation({
   },
 });
 
+const reactionGroupValidator = v.object({
+  emoji: v.string(),
+  emojiNative: v.string(),
+  count: v.number(),
+  userIds: v.array(v.string()),
+  currentUserReacted: v.boolean(),
+});
+
+/** Group raw reactions by emoji for a single message. */
+function groupReactions(
+  reactions: { emoji: string; emojiNative: string; userId: string }[],
+  currentUserId: string,
+) {
+  const grouped: Record<string, { emoji: string; emojiNative: string; count: number; userIds: string[] }> = {};
+  for (const r of reactions) {
+    if (!grouped[r.emoji]) {
+      grouped[r.emoji] = { emoji: r.emoji, emojiNative: r.emojiNative, count: 0, userIds: [] };
+    }
+    grouped[r.emoji].count++;
+    grouped[r.emoji].userIds.push(r.userId);
+  }
+  return Object.values(grouped).map((g) => ({
+    ...g,
+    currentUserReacted: g.userIds.includes(currentUserId),
+  }));
+}
+
+/** Batch-fetch reactions for multiple messages in a single query. */
+export const listForMessages = query({
+  args: { messageIds: v.array(v.id("messages")) },
+  returns: v.record(v.string(), v.array(reactionGroupValidator)),
+  handler: async (ctx, { messageIds }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Unauthenticated");
+
+    const results: Record<string, { emoji: string; emojiNative: string; count: number; userIds: string[]; currentUserReacted: boolean }[]> = {};
+
+    await Promise.all(
+      messageIds.map(async (messageId) => {
+        const reactions = await ctx.db
+          .query("messageReactions")
+          .withIndex("by_message", (q) => q.eq("messageId", messageId))
+          .collect();
+        const grouped = groupReactions(reactions, userId);
+        if (grouped.length > 0) {
+          results[messageId] = grouped;
+        }
+      }),
+    );
+
+    return results;
+  },
+});
+
 export const listForMessage = query({
   args: { messageId: v.id("messages") },
-  returns: v.array(v.object({
-    emoji: v.string(),
-    emojiNative: v.string(),
-    count: v.number(),
-    userIds: v.array(v.string()),
-    currentUserReacted: v.boolean(),
-  })),
+  returns: v.array(reactionGroupValidator),
   handler: async (ctx, { messageId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Unauthenticated");
 
-    // Fetch all reactions for this message
     const reactions = await ctx.db
       .query("messageReactions")
       .withIndex("by_message", (q) => q.eq("messageId", messageId))
       .collect();
 
-    // Group by emoji using reduce
-    const grouped = reactions.reduce((acc, reaction) => {
-      const key = reaction.emoji;
-      if (!acc[key]) {
-        acc[key] = {
-          emoji: reaction.emoji,
-          emojiNative: reaction.emojiNative,
-          count: 0,
-          userIds: [],
-        };
-      }
-      acc[key].count++;
-      acc[key].userIds.push(reaction.userId);
-      return acc;
-    }, {} as Record<string, { emoji: string; emojiNative: string; count: number; userIds: string[] }>);
-
-    // Convert to array and add currentUserReacted flag
-    return Object.values(grouped).map((group) => ({
-      ...group,
-      currentUserReacted: group.userIds.includes(userId),
-    }));
+    return groupReactions(reactions, userId);
   },
 });

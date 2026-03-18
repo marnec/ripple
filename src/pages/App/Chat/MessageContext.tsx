@@ -1,10 +1,12 @@
 import { useQuery } from "convex/react";
+import { useMemo } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Message } from "./Message";
 import { Button } from "../../../components/ui/button";
 import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { ScrollArea } from "../../../components/ui/scroll-area";
+import { ReactionsContext } from "./ReactionsContext";
 
 interface MessageContextProps {
   messageId: Id<"messages">;
@@ -16,6 +18,18 @@ interface MessageContextProps {
 export function MessageContext({ messageId, channelId: _channelId, onClose, onBackToChat }: MessageContextProps) {
   const contextData = useQuery(api.messages.getMessageContext, { messageId });
 
+  const messages = contextData?.messages;
+  const targetIndex = contextData?.targetIndex;
+
+  const contextMessageIds = useMemo(
+    () => (messages ?? []).map((m) => m._id),
+    [messages],
+  );
+  const reactionsMap = useQuery(
+    api.messageReactions.listForMessages,
+    contextMessageIds.length > 0 ? { messageIds: contextMessageIds } : "skip",
+  );
+
   if (!contextData) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -24,9 +38,8 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
     );
   }
 
-  const { messages, targetMessageId: _targetMessageId, targetIndex } = contextData;
-
   return (
+    <ReactionsContext.Provider value={reactionsMap ?? {}}>
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between p-4 border-b bg-muted/30">
@@ -52,7 +65,7 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
       {/* Messages */}
       <ScrollArea className="min-h-0 flex-1 overflow-hidden">
         <div className="space-y-4 p-4">
-          {messages.map((message, index) => (
+          {messages!.map((message, index) => (
             <div key={message.isomorphicId}>
               {/* Highlight the target message */}
               <div
@@ -69,5 +82,6 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
         </div>
       </ScrollArea>
     </div>
+    </ReactionsContext.Provider>
   );
-} 
+}

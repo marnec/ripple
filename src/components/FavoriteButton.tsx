@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { Star } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
@@ -23,14 +23,8 @@ export function FavoriteButton({
   variant = "ghost",
   className,
 }: FavoriteButtonProps) {
-  // Optimistic value from sidebar data — available immediately
-  const optimistic = useOptimisticIsFavorited(resourceType, resourceId);
-  // Confirmed value from per-resource query — arrives later
-  const confirmed = useQuery(api.favorites.isFavorited, { resourceId });
+  const isFavorited = useOptimisticIsFavorited(resourceType, resourceId) ?? false;
   const toggle = useMutation(api.favorites.toggle);
-
-  // Use confirmed value when available, otherwise fall back to optimistic
-  const isFavorited = confirmed ?? optimistic ?? false;
 
   const handleToggle = (e: React.MouseEvent) => {
     e.preventDefault();
