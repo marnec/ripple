@@ -90,7 +90,7 @@ export function useTaskDetail({
   suggestionDataEnabled?: boolean;
 }) {
   const task = useQuery(api.tasks.get, taskId ? { taskId } : "skip");
-  const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
+  const statuses = useQuery(api.taskStatuses.listByProject, projectId ? { projectId } : "skip");
   const rawMembers = useWorkspaceMembers();
   const members = rawMembers?.map((m) => ({ ...m, userId: m._id }));
   const diagrams = useQuery(api.diagrams.list, suggestionDataEnabled ? { workspaceId } : "skip");
