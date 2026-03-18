@@ -9,12 +9,13 @@ import { ExcalidrawEditor } from "./ExcalidrawEditor";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useViewer } from "../UserContext";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { useTheme } from "next-themes";
 import { Settings } from "lucide-react";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
+import { useSnapshotFallback } from "@/hooks/use-snapshot-fallback";
 import { ActiveUsers } from "../Document/ActiveUsers";
 import { ConnectionStatus } from "../Document/ConnectionStatus";
 import { useRecordVisit } from "@/hooks/use-record-visit";
@@ -23,7 +24,6 @@ import { getCameraFromAppState } from "@/lib/canvas-coordinates";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import { Theme } from "@excalidraw/excalidraw/element/types";
 import { yjsToExcalidraw } from "y-excalidraw";
-import * as Y from "yjs";
 
 function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
   const isMobile = useIsMobile();
@@ -53,45 +53,16 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   const { remotePointers } = useDiagramCursorAwareness(awareness);
 
   // Cold-start snapshot fallback: offline + loading (no IndexedDB data)
-  const isColdStart = isOffline && isLoading;
-  const snapshotUrl = useQuery(
-    api.snapshots.getSnapshotUrl,
-    isColdStart ? { resourceType: "diagram", resourceId: diagramId } : "skip"
-  );
+  const { isColdStart, snapshotDoc } = useSnapshotFallback({
+    isOffline,
+    hasContent: !isLoading,
+    resourceType: "diagram",
+    resourceId: diagramId,
+  });
 
-  const [snapshotElements, setSnapshotElements] = useState<any[] | null>(null);
-
-  // Fetch and convert snapshot when URL is available
-  useEffect(() => {
-    if (!snapshotUrl || !isColdStart) {
-      return;
-    }
-
-    const controller = new AbortController();
-
-    const loadSnapshot = async () => {
-      try {
-        const response = await fetch(snapshotUrl, { signal: controller.signal });
-        const arrayBuffer = await response.arrayBuffer();
-        const tempDoc = new Y.Doc();
-        Y.applyUpdateV2(tempDoc, new Uint8Array(arrayBuffer));
-        const yElementsArray = tempDoc.getArray<Y.Map<any>>("elements");
-        const elements = yjsToExcalidraw(yElementsArray);
-        setSnapshotElements(elements);
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error("Failed to load diagram snapshot:", error);
-        }
-      }
-    };
-
-    void loadSnapshot();
-
-    return () => {
-      controller.abort();
-      setSnapshotElements(null);
-    };
-  }, [snapshotUrl, isColdStart]);
+  const snapshotElements = snapshotDoc
+    ? yjsToExcalidraw(snapshotDoc.getArray("elements"))
+    : null;
 
   // Jump to user's cursor position
   const handleJumpToUser = (user: { clientId: number }) => {
