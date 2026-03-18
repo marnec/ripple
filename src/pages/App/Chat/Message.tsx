@@ -21,6 +21,7 @@ import { useChatContext } from "./ChatContext";
 import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
+import { useReactions } from "./ReactionsContext";
 import { hasImageBlocks } from "./messageUtils";
 import type { GroupPosition, MessageGroupInfo } from "./messageGrouping";
 import { MessageQuotePreview } from "./MessageQuotePreview";
@@ -111,6 +112,9 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
   };
 
+  const reactions = useReactions(message._id);
+  const hasReactions = !!reactions?.length;
+
   const blocks = JSON.parse(body);
   const messageHasImages = hasImageBlocks(blocks);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -157,14 +161,14 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
             userIsAuthor ? "flex-row-reverse sm:flex-row" : "flex-row",
           )}>
             {/* Avatar column */}
-            <div className={cn("w-7 shrink-0", userIsAuthor ? "ml-1.5 sm:ml-0 sm:mr-1.5" : "mr-1.5")}>
+            <div className={cn("w-9.5 shrink-0", userIsAuthor ? "ml-1.5 sm:ml-0 sm:mr-1.5" : "mr-1.5")}>
               {showAvatar ? (
-                <Avatar className="size-6">
+                <Avatar className="size-8">
                   <AvatarImage src={avatarImage} alt={avatarName} />
-                  <AvatarFallback className="text-[10px]">{avatarInitials}</AvatarFallback>
+                  <AvatarFallback className="text-xs">{avatarInitials}</AvatarFallback>
                 </Avatar>
               ) : (
-                <div className="size-6" />
+                <div className="size-8" />
               )}
             </div>
 
@@ -184,7 +188,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                     userIsAuthor
                       ? "bg-message-own text-message-own-foreground ml-auto sm:ml-0"
                       : "bg-muted",
-                    !messageHasImages && "px-3 py-1.5",
+                    !messageHasImages && (hasReactions ? "px-3 pt-1.5" : "px-3 py-1.5"),
                     showAvatar && (radiusSide === "own" ? "bubble-tail-right" : "bubble-tail-left"),
                   )}
                 >
@@ -196,36 +200,38 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                       <MessageQuotePreview message={message.replyTo ?? null} compact />
                     </div>
                   )}
-                  {messageHasImages && (
-                    <div className="overflow-hidden rounded-t-[inherit]">
+                  {messageHasImages ? (
+                    <>
+                      <div className="overflow-hidden rounded-t-[inherit]">
+                        <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                      </div>
+                      <div className="flex items-end gap-3 px-2 py-1">
+                        <MessageReactions messageId={message._id} />
+                        <span className={cn("ml-auto shrink-0 text-[10px] leading-none select-none", userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60")}>{formattedTime}</span>
+                      </div>
+                    </>
+                  ) : hasReactions ? (
+                    <>
                       <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
-                    </div>
-                  )}
-                  <div className={cn("flex items-end gap-2", messageHasImages && "px-2 py-1")}>
-                    {!messageHasImages && (
+                      <div className="flex items-end gap-3 pt-1 pb-1.5">
+                        <MessageReactions messageId={message._id} />
+                        <span className={cn("ml-auto shrink-0 text-[10px] leading-none select-none", userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60")}>{formattedTime}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-end gap-2">
                       <div className="min-w-0 flex-1">
                         <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
                       </div>
-                    )}
-                    <span className={cn(
-                      "shrink-0 self-end translate-y-0.5 text-[10px] leading-none select-none",
-                      messageHasImages && "ml-auto",
-                      userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60",
-                    )}>
-                      {formattedTime}
-                    </span>
-                  </div>
+                      <span className={cn("shrink-0 self-end translate-y-0.5 text-[10px] leading-none select-none", userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60")}>{formattedTime}</span>
+                    </div>
+                  )}
                 </div>
               </MentionedResourcesContext.Provider>
               </MentionedProjectsContext.Provider>
               </MentionedTasksContext.Provider>
               </MentionedUsersContext.Provider>
             </ContextMenuTrigger>
-          </div>
-
-          {/* Reactions — indented past avatar for other people's messages */}
-          <div className={cn("pl-8.5", userIsAuthor && "sm:pl-8.5 pl-0 flex justify-end sm:justify-start")}>
-            <MessageReactions messageId={message._id} />
           </div>
         </li>
         <ContextMenuContent className="w-56">

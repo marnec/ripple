@@ -27,13 +27,13 @@ export function MessageReactions({ messageId }: Props) {
   // Batch-fetch all users in a single query
   const userMap = useQuery(api.users.getByIds, uniqueUserIds.length > 0 ? { ids: uniqueUserIds } : "skip");
 
-  if (!reactions || reactions.length === 0 || !userMap) {
+  if (!reactions || reactions.length === 0) {
     return null;
   }
 
   return (
     <TooltipProvider>
-      <div className="mt-1 flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {reactions.map((reaction: Reaction) => (
           <MessageReactionPill
             key={reaction.emoji}
@@ -43,7 +43,7 @@ export function MessageReactions({ messageId }: Props) {
             count={reaction.count}
             userIds={reaction.userIds}
             currentUserReacted={reaction.currentUserReacted}
-            userMap={userMap}
+            userMap={userMap ?? {}}
           />
         ))}
       </div>

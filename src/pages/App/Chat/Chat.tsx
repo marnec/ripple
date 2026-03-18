@@ -211,7 +211,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
             <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef}>
               {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
-              {(messages || []).map((message, index) => (
+              {(messageIds.length === 0 || reactionsMap !== undefined) && (messages || []).map((message, index) => (
                 <Fragment key={message.isomorphicId}>
                   {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
                     <div className="flex items-center gap-3 my-2">

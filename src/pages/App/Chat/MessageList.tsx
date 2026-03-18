@@ -104,10 +104,10 @@ export function MessageList({ children, messages, userSentMessageRef }: MessageL
 
   return (
     <ScrollArea
-      className="relative h-full **:data-[slot=scroll-area-viewport]:h-full **:data-[slot=scroll-area-viewport]:overscroll-contain"
+      className="relative h-full **:data-[slot=scroll-area-viewport]:h-full **:data-[slot=scroll-area-viewport]:overscroll-contain *:data-[slot=scroll-area-scrollbar]:hidden *:data-[slot=scroll-area-scrollbar]:sm:flex"
       ref={scrollAreaRef}
     >
-      <ol ref={messageListRef} className="flex grow flex-col-reverse px-4 py-4">
+      <ol ref={messageListRef} className="flex grow flex-col-reverse px-1 py-4 sm:px-4">
         {children}
       </ol>
       {showScrollButton && (
