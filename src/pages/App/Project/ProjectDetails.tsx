@@ -1,4 +1,5 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import {
   Tabs,
@@ -71,7 +72,7 @@ function ProjectDetailsContent({
   // Pre-fetch tasks to show a loading indicator beside the tabs
   const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
-  const members = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  const members = useWorkspaceMembers();
   const contentLoading = tasks === undefined || statuses === undefined;
 
   if (project === null) {

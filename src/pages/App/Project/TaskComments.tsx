@@ -1,4 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { Button } from "@/components/ui/button";
 import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
 import { SuggestionMenuController, useCreateBlockNote } from "@blocknote/react";
@@ -26,7 +27,7 @@ type TaskCommentsProps = {
 
 export function TaskComments({ taskId, currentUserId, workspaceId }: TaskCommentsProps) {
   const comments = useQuery(api.taskComments.list, { taskId });
-  const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  const workspaceMembers = useWorkspaceMembers();
   const createComment = useMutation(api.taskComments.create);
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);

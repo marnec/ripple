@@ -1,3 +1,4 @@
+import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -61,7 +62,7 @@ function CycleDetailContent({
   const cycle = useQuery(api.cycles.get, { cycleId });
   const cycleTasks = useQuery(api.cycles.listCycleTasks, { cycleId, hideCompleted: false });
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
-  const members = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  const members = useWorkspaceMembers();
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.cycles.removeTask);
 

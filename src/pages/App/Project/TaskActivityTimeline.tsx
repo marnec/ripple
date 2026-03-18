@@ -1,4 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
@@ -129,9 +130,9 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
 
 export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp }: TaskActivityTimelineProps) {
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
-  // Use pre-fetched members when available; fall back to own query for standalone usage
-  const ownMembers = useQuery(api.workspaceMembers.membersByWorkspace, membersProp ? "skip" : { workspaceId });
-  const workspaceMembers = membersProp ?? ownMembers;
+  // Use pre-fetched members when available; fall back to workspace context
+  const contextMembers = useWorkspaceMembers();
+  const workspaceMembers = membersProp ?? contextMembers;
   const createComment = useMutation(api.taskComments.create);
   const updateComment = useMutation(api.taskComments.update);
   const removeComment = useMutation(api.taskComments.remove);

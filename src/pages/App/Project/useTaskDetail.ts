@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
+import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
@@ -90,7 +91,7 @@ export function useTaskDetail({
 }) {
   const task = useQuery(api.tasks.get, taskId ? { taskId } : "skip");
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
-  const rawMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  const rawMembers = useWorkspaceMembers();
   const members = rawMembers?.map((m) => ({ ...m, userId: m._id }));
   const diagrams = useQuery(api.diagrams.list, suggestionDataEnabled ? { workspaceId } : "skip");
   const documents = useQuery(api.documents.list, suggestionDataEnabled ? { workspaceId } : "skip");

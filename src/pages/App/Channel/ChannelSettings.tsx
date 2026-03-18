@@ -12,6 +12,7 @@ import {
 } from "@shared/notificationCategories";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
+import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
 import { useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
@@ -30,7 +31,7 @@ function ChannelSettingsContent({
 }) {
   const channel = useQuery(api.channels.get, { id: channelId });
   const channelMembers = useQuery(api.channelMembers.membersByChannel, { channelId });
-  const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
+  const workspaceMembers = useWorkspaceMembers();
   const currentUser = useViewer();
 
   if (

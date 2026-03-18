@@ -11,6 +11,7 @@ import { useActiveCall } from "../contexts/ActiveCallContext";
 import { FavoritesContext } from "../contexts/FavoritesContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
 import { HeaderSlotContext, useHeaderSlotRef } from "../contexts/HeaderSlotContext";
+import { WorkspaceMembersProvider } from "../contexts/WorkspaceMembersContext";
 import { WorkspaceSidebarProvider } from "../contexts/WorkspaceSidebarContext";
 import { DynamicBreadcrumb } from "./Breadcrumb";
 import { FollowModeIndicator } from "./FollowModeIndicator";
@@ -114,9 +115,11 @@ export function Layout() {
 
   if (workspaceId) {
     return (
-      <WorkspaceSidebarProvider workspaceId={workspaceId}>
-        {inner}
-      </WorkspaceSidebarProvider>
+      <WorkspaceMembersProvider workspaceId={workspaceId}>
+        <WorkspaceSidebarProvider workspaceId={workspaceId}>
+          {inner}
+        </WorkspaceSidebarProvider>
+      </WorkspaceMembersProvider>
     );
   }
 
