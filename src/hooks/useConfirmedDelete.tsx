@@ -37,43 +37,64 @@ type PendingDelete = {
   references: DeleteResult["references"];
 };
 
+type DeleteMutationFn = (args: { id: any; force?: boolean }) => Promise<DeleteResult>;
+
+async function executeDelete(
+  deleteMutation: DeleteMutationFn,
+  id: Id<"diagrams"> | Id<"spreadsheets">,
+  resourceType: "diagram" | "spreadsheet",
+  name: string,
+  setPending: (v: PendingDelete | null) => void,
+  onDeleted?: () => void,
+) {
+  try {
+    const result = await deleteMutation({ id: id as any });
+    if (result?.status === "has_references") {
+      setPending({ id, name, references: result.references });
+    } else {
+      toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
+      onDeleted?.();
+    }
+  } catch (error) {
+    toast.error(`Error deleting ${resourceType}`, {
+      description: error instanceof Error ? error.message : "Please try again",
+    });
+  }
+}
+
+async function executeForceDelete(
+  deleteMutation: DeleteMutationFn,
+  pending: PendingDelete,
+  resourceType: "diagram" | "spreadsheet",
+  setPending: (v: PendingDelete | null) => void,
+  onDeleted?: () => void,
+) {
+  try {
+    await deleteMutation({ id: pending.id as any, force: true });
+    toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
+    setPending(null);
+    onDeleted?.();
+  } catch (error) {
+    toast.error(`Error deleting ${resourceType}`, {
+      description: error instanceof Error ? error.message : "Please try again",
+    });
+  }
+}
+
 export function useConfirmedDelete(
   resourceType: "diagram" | "spreadsheet",
   options?: { onDeleted?: () => void },
 ) {
   const config = RESOURCE_CONFIGS[resourceType];
-  const deleteMutation = useMutation(config.mutation);
+  const deleteMutation = useMutation(config.mutation) as unknown as DeleteMutationFn;
   const [pending, setPending] = useState<PendingDelete | null>(null);
 
-  const requestDelete = async (id: Id<"diagrams"> | Id<"spreadsheets">, name: string) => {
-    try {
-      const result = (await deleteMutation({ id: id as any })) as DeleteResult;
+  const requestDelete = (id: Id<"diagrams"> | Id<"spreadsheets">, name: string) =>
+    executeDelete(deleteMutation, id, resourceType, name, setPending, options?.onDeleted);
 
-      if (result?.status === "has_references") {
-        setPending({ id, name, references: result.references });
-      } else {
-        toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
-        options?.onDeleted?.();
-      }
-    } catch (error) {
-      toast.error(`Error deleting ${resourceType}`, {
-        description: error instanceof Error ? error.message : "Please try again",
-      });
-    }
-  };
-
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (!pending) return;
-    try {
-      await deleteMutation({ id: pending.id as any, force: true });
-      toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
-      setPending(null);
-      options?.onDeleted?.();
-    } catch (error) {
-      toast.error(`Error deleting ${resourceType}`, {
-        description: error instanceof Error ? error.message : "Please try again",
-      });
-    }
+    return executeForceDelete(deleteMutation, pending, resourceType, setPending, options?.onDeleted);
   };
 
   const dialog = pending ? (

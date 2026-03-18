@@ -29,6 +29,86 @@ function urlB64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
+async function getSubscription(): Promise<PushSubscription | null> {
+  const registration = await navigator.serviceWorker.getRegistration();
+
+  if (!registration) {
+    throw new ConvexError("No service worker registration found.");
+  }
+
+  const subscription = await registration.pushManager.getSubscription();
+
+  if (!subscription) {
+    console.warn("No subscription found");
+    return null;
+  }
+
+  return subscription;
+}
+
+async function createSubscription(): Promise<PushSubscription> {
+  const registration = await navigator.serviceWorker.getRegistration();
+
+  if (!registration) {
+    throw new ConvexError("No service worker registration found.");
+  }
+
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
+  });
+
+  if (!subscription) {
+    throw new ConvexError("Could not create a subscription");
+  }
+
+  return subscription;
+}
+
+async function doSubscribeUser(
+  registerSubscription: (args: PushSubscriptionJSON & { device: string }) => Promise<unknown>,
+  deviceId: string,
+  setPermission: (p: NotificationPermission) => void,
+  setIsSubscribed: (v: boolean) => void,
+  setError: (e: unknown) => void,
+) {
+  try {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      throw new Error("Push notifications are not supported in this browser.");
+    }
+    const result = await Notification.requestPermission();
+    setPermission(result);
+
+    if (result === "denied") {
+      console.error("The user explicitly denied the permission request.");
+      return;
+    }
+
+    if (result === "granted") {
+      console.info("The user accepted the permission request.");
+    }
+
+    let pushSubscription = await getSubscription();
+
+    if (!pushSubscription) {
+      pushSubscription = await createSubscription();
+    }
+
+    setIsSubscribed(true);
+
+    const subscription = pushSubscription.toJSON();
+
+    if (!subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+      throw new ConvexError("The pushManager subscription is malformed");
+    }
+
+    await registerSubscription({ ...(subscription as PushSubscriptionJSON), device: deviceId });
+  } catch (err) {
+    console.error("Failed to subscribe the user:", err);
+    setError(err);
+  }
+}
+
 export const usePushNotifications = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -39,43 +119,14 @@ export const usePushNotifications = () => {
   const unregisterSubscription = useMutation(api.pushSubscription.unregisterSubscription);
   const deviceId = useDeviceId();
 
-  const subscribeUser = async () => {
-    try {
-      if (typeof window === "undefined" || !("Notification" in window)) {
-        throw new Error("Push notifications are not supported in this browser.");
-      }
-      const result = await Notification.requestPermission();
-      setPermission(result);
-
-      if (result === "denied") {
-        console.error("The user explicitly denied the permission request.");
-        return;
-      }
-
-      if (result === "granted") {
-        console.info("The user accepted the permission request.");
-      }
-
-      let pushSubscription = await getSubscription();
-
-      if (!pushSubscription) {
-        pushSubscription = await createSubscription();
-      }
-
-      setIsSubscribed(true);
-
-      const subscription = pushSubscription.toJSON();
-
-      if (!subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
-        throw new ConvexError("The pushManager subscription is malformed");
-      }
-
-      await registerSubscription({ ...(subscription as PushSubscriptionJSON), device: deviceId });
-    } catch (err) {
-      console.error("Failed to subscribe the user:", err);
-      setError(err);
-    }
-  };
+  const subscribeUser = () =>
+    doSubscribeUser(
+      registerSubscription as (args: PushSubscriptionJSON & { device: string }) => Promise<unknown>,
+      deviceId,
+      setPermission,
+      setIsSubscribed,
+      setError,
+    );
 
   const unsubscribeUser = async () => {
     const subscription = await getSubscription();
@@ -92,42 +143,6 @@ export const usePushNotifications = () => {
     }
 
     await unregisterSubscription({ endpoint: subscription.endpoint });
-  };
-
-  const getSubscription = async (): Promise<PushSubscription | null> => {
-    const registration = await navigator.serviceWorker.getRegistration();
-
-    if (!registration) {
-      throw new ConvexError("No service worker registration found.");
-    }
-
-    const subscription = await registration.pushManager.getSubscription();
-
-    if (!subscription) {
-      console.warn("No subscription found");
-      return null;
-    }
-
-    return subscription;
-  };
-
-  const createSubscription = async (): Promise<PushSubscription> => {
-    const registration = await navigator.serviceWorker.getRegistration();
-
-    if (!registration) {
-      throw new ConvexError("No service worker registration found.");
-    }
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
-    });
-
-    if (!subscription) {
-      throw new ConvexError("Could not create a subscription");
-    }
-
-    return subscription;
   };
 
   return { isSubscribed, permission, error, getSubscription, subscribeUser, unsubscribeUser };
