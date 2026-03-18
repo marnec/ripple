@@ -17,7 +17,7 @@ import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import { QueryParams } from "@shared/types/routes";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
-import { LayoutGroup, motion } from "framer-motion";
+import { LayoutGroup, m } from "framer-motion";
 import { CheckSquare } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
@@ -127,7 +127,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
         {workspaceId && (
           <LayoutGroup>
             {/* Channels */}
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="pb-0">
                 <SidebarMenu>
                   <ChannelSelectorList
@@ -140,14 +140,14 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   />
                 </SidebarMenu>
               </SidebarGroup>
-            </motion.div>
+            </m.div>
 
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarSeparator />
-            </motion.div>
+            </m.div>
 
             {/* My Tasks + Projects */}
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
                   <SidebarMenuItem>
@@ -172,14 +172,14 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   />
                 </SidebarMenu>
               </SidebarGroup>
-            </motion.div>
+            </m.div>
 
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarSeparator />
-            </motion.div>
+            </m.div>
 
             {/* Documents, Diagrams, Spreadsheets */}
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
                   <DocumentSelectorList
@@ -193,8 +193,8 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   />
                 </SidebarMenu>
               </SidebarGroup>
-            </motion.div>
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            </m.div>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
                   <DiagramSelectorList
@@ -208,8 +208,8 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   />
                 </SidebarMenu>
               </SidebarGroup>
-            </motion.div>
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            </m.div>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
                   <SpreadsheetSelectorList
@@ -223,14 +223,14 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   />
                 </SidebarMenu>
               </SidebarGroup>
-            </motion.div>
+            </m.div>
 
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarSeparator />
-            </motion.div>
+            </m.div>
 
             {/* Recents */}
-            <motion.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
                   <RecentsSidebarSection
@@ -240,7 +240,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   />
                 </SidebarMenu>
               </SidebarGroup>
-            </motion.div>
+            </m.div>
           </LayoutGroup>
         )}
       </SidebarContent>

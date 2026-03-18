@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import {
   ArrowRight,
   Calendar,
@@ -285,7 +285,7 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
       )}
       <AnimatePresence initial={false} mode="popLayout">
         {entries.map((entry) => (
-          <motion.div
+          <m.div
             key={entry._id}
             layout
             variants={itemVariants}
@@ -306,7 +306,7 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
             <span className="text-[10px] md:text-xs text-muted-foreground/60 shrink-0 leading-5 md:leading-6">
               {formatRelativeTime(entry.timestamp)}
             </span>
-          </motion.div>
+          </m.div>
         ))}
       </AnimatePresence>
       {hasMore && (

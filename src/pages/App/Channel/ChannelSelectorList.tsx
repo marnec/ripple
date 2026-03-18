@@ -2,7 +2,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
 
 import { useQuery } from "convex/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
 import { memo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -126,7 +126,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
               {displayList.map((item, idx) => {
                 if (item.removed) {
                   return (
-                    <motion.div
+                    <m.div
                       key={item.id}
                       layout
                       initial={{ opacity: 0, x: -20 }}
@@ -140,7 +140,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
                             <span className="truncate line-through">{item.name || "unknown"}</span>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
-                    </motion.div>
+                    </m.div>
                   );
                 }
 
@@ -148,7 +148,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
                 if (!channel) return null;
 
                 return (
-                  <motion.div
+                  <m.div
                     key={channel._id}
                     layout
                     initial={{ opacity: 0, x: -20 }}
@@ -172,7 +172,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
                       onManageChannel={navigateToChannelSettings}
                       onStartCall={navigateToVideoCall}
                     />
-                  </motion.div>
+                  </m.div>
                 );
               })}
             </AnimatePresence>

@@ -10,7 +10,7 @@ import {
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
 import { useLocalRecents } from "@/hooks/use-local-recents";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { memo } from "react";
 import { ChevronRight, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -45,7 +45,7 @@ export const RecentsSidebarSection = memo(function RecentsSidebarSection({ works
                 const Icon = RESOURCE_TYPE_ICONS[item.resourceType as keyof typeof RESOURCE_TYPE_ICONS];
 
                 return (
-                  <motion.div
+                  <m.div
                     key={item.resourceId}
                     layout
                     initial={{ opacity: 0, x: -20 }}
@@ -74,7 +74,7 @@ export const RecentsSidebarSection = memo(function RecentsSidebarSection({ works
                           <span className="truncate">{item.resourceName}</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>
-                  </motion.div>
+                  </m.div>
                 );
               })}
             </AnimatePresence>

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import {
   animate,
-  motion,
+  m,
   useMotionTemplate,
   useMotionValue,
   useReducedMotion,
@@ -75,12 +75,12 @@ export function SwipeToReveal({
       style={style}
     >
       {/* Fade gradient on the left edge, fixed in place while content slides away */}
-      <motion.div
+      <m.div
         style={{ opacity: fadeOpacity }}
         className="absolute inset-y-0 left-0 w-16 bg-linear-to-l from-transparent to-card pointer-events-none z-20"
       />
 
-      <motion.div
+      <m.div
         drag="x"
         dragConstraints={{ right: 0 }}
         dragElastic={{ left: 0.1, right: 0 }}
@@ -129,7 +129,7 @@ export function SwipeToReveal({
         >
           {action}
         </div>
-      </motion.div>
+      </m.div>
     </div>
   );
 }
