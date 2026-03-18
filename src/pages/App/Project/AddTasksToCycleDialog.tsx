@@ -41,7 +41,6 @@ function AddTasksList({
         placeholder="Search tasks…"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
-        autoFocus
       />
 
       <div className="max-h-64 overflow-y-auto space-y-1 mt-2">

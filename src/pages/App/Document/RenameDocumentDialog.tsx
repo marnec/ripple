@@ -61,7 +61,6 @@ export function RenameDocumentDialog({
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter new document name"
               required
-              autoFocus
             />
           </ResponsiveDialogBody>
           <ResponsiveDialogFooter>

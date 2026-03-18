@@ -62,7 +62,6 @@ export function RenameDiagramDialog({
               placeholder="Diagram name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoFocus
             />
           </ResponsiveDialogBody>
           <ResponsiveDialogFooter>

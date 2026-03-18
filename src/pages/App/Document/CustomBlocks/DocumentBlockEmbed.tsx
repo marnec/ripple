@@ -65,6 +65,14 @@ function DocumentBlockView({
       <div
         className="w-full border-l-3 border-primary/30 pl-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors rounded-r-md"
         onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
       >
         <p className={`text-sm leading-relaxed ${blockType === "heading" ? "font-semibold" : ""}`}>
           {textContent}

@@ -68,6 +68,14 @@ export function ActiveUsers({ remoteUsers, currentUser, max = 5, className, onUs
                 render={<div
                   className={onUserClick ? "cursor-pointer" : undefined}
                   onClick={() => onUserClick?.(user)}
+                  role={onUserClick ? "button" : undefined}
+                  tabIndex={onUserClick ? 0 : undefined}
+                  onKeyDown={onUserClick ? (e: React.KeyboardEvent) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onUserClick(user);
+                    }
+                  } : undefined}
                 />}
               >
                   <Avatar

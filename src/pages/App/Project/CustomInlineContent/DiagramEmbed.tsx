@@ -52,6 +52,14 @@ const DiagramEmbedView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
         className="my-2 border rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-40"
         contentEditable={false}
         onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
         dangerouslySetInnerHTML={{ __html: svgHtml }}
       />
     );
@@ -62,6 +70,14 @@ const DiagramEmbedView = ({ diagramId }: { diagramId: Id<"diagrams"> }) => {
       className="my-2 border rounded-lg p-2 cursor-pointer hover:bg-muted/50 transition-colors h-20 flex items-center justify-center text-muted-foreground text-sm"
       contentEditable={false}
       onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
     >
       Click to view diagram
     </div>

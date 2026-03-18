@@ -129,7 +129,6 @@ export function KanbanColumn({
                 if (e.key === "Escape") cancelRename();
               }}
               className="h-7 flex-1 text-sm font-semibold"
-              autoFocus
             />
           ) : (
             <h3 className="font-semibold text-sm flex-1">{status.name}</h3>

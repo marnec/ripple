@@ -17,7 +17,6 @@ type ResourceSearchInputProps = {
   onChange?: (value: string) => void;
   onSubmit?: (parsed: ParsedSearch) => void;
   placeholder?: string;
-  autoFocus?: boolean;
   compact?: boolean;
 };
 
@@ -27,7 +26,6 @@ export function ResourceSearchInput({
   onChange,
   onSubmit,
   placeholder = "Search... #tag to filter",
-  autoFocus,
   compact,
 }: ResourceSearchInputProps) {
   const [internalValue, setInternalValue] = useState("");
@@ -109,7 +107,6 @@ export function ResourceSearchInput({
           onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          autoFocus={autoFocus}
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
         />
         {value && (

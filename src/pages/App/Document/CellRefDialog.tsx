@@ -96,7 +96,6 @@ export function CellRefDialog({
                 setCellRef(e.target.value);
                 setError(null);
               }}
-              autoFocus
             />
             {error && (
               <p className="text-sm text-destructive">{error}</p>

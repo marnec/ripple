@@ -125,7 +125,6 @@ export function CreateProjectDialog({
                   <FormControl>
                     <Input
                       {...field}
-                      autoFocus
                       placeholder="Enter project name"
                       onChange={(e) => {
                         field.onChange(e);

@@ -62,7 +62,6 @@ function BlockPickerBody({
         placeholder="Search blocks..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        autoFocus
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto">

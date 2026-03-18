@@ -48,7 +48,7 @@ const DiagramView = ({
   }
 
   return (
-    <div className="relative w-full min-h-40 h-full" onClick={handleClick}>
+    <div className="relative w-full min-h-40 h-full" onClick={handleClick} role="button" tabIndex={0} onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } }}>
       {svgHtml ? (
         <div className="animate-fade-in cursor-pointer">
           <div className="w-full text-xs text-right text-muted-foreground rounded-tr rounded-bl min-h-lh">
@@ -206,6 +206,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
         <>
           <div
             className="bn-resize-handle"
+            role="separator"
             style={{
               ...resizeHandleStyle,
               top: "50%",
@@ -217,6 +218,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
           />
           <div
             className="bn-resize-handle"
+            role="separator"
             style={{
               ...resizeHandleStyle,
               top: "50%",

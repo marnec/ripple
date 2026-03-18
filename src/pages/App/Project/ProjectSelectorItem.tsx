@@ -38,7 +38,18 @@ export function ProjectSelectorItem({
     >
       <SidebarMenuSubButton
         render={
-          <div onClick={() => onProjectSelect(project._id)} className="cursor-pointer pr-6" />
+          <div
+            onClick={() => onProjectSelect(project._id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onProjectSelect(project._id);
+              }
+            }}
+            className="cursor-pointer pr-6"
+          />
         }
         isActive={project._id === projectId}
       >

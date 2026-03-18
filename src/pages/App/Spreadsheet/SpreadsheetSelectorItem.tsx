@@ -37,7 +37,18 @@ export function SpreadsheetSelectorItem({
     <SidebarMenuSubItem className="group/subitem relative animate-fade-in"
       style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}>
       <SidebarMenuSubButton
-        render={<div onClick={() => onSpreadsheetSelect(spreadsheet._id)} className="cursor-pointer pr-6" />}
+        render={<div
+          onClick={() => onSpreadsheetSelect(spreadsheet._id)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onSpreadsheetSelect(spreadsheet._id);
+            }
+          }}
+          className="cursor-pointer pr-6"
+        />}
         isActive={spreadsheet._id === spreadsheetId}
       >
           <span className="truncate">{spreadsheet.name}</span>

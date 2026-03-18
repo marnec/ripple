@@ -100,7 +100,7 @@ export function renderBlockGroups(blocks: Block[]): React.ReactNode[] {
       result.push(
         <ul key={`ul-${i}`} className="list-disc pl-6 my-1">
           {items.map((item, j) => (
-            <li key={j}>
+            <li key={item.id ?? `li-${j}`}>
               {renderInlineContent(item.content)}
               {item.children && item.children.length > 0 && renderBlockGroups(item.children)}
             </li>
@@ -116,7 +116,7 @@ export function renderBlockGroups(blocks: Block[]): React.ReactNode[] {
       result.push(
         <ol key={`ol-${i}`} className="list-decimal pl-6 my-1">
           {items.map((item, j) => (
-            <li key={j}>
+            <li key={item.id ?? `li-${j}`}>
               {renderInlineContent(item.content)}
               {item.children && item.children.length > 0 && renderBlockGroups(item.children)}
             </li>
@@ -213,11 +213,11 @@ function TableRenderer({ content }: { content: Block["content"] }) {
     <table className="border-collapse my-1 text-sm">
       <tbody>
         {rows.map((row, ri) => (
-          <tr key={ri}>
+          <tr key={`row-${ri}`}>
             {row.cells.map((cell, ci) => (
-              <td key={ci} className="border border-muted-foreground/20 px-2 py-1">
+              <td key={`cell-${ri}-${ci}`} className="border border-muted-foreground/20 px-2 py-1">
                 {cell.map((cellContent, pi) => (
-                  <React.Fragment key={pi}>{renderInlineArray(cellContent)}</React.Fragment>
+                  <React.Fragment key={`p-${pi}`}>{renderInlineArray(cellContent)}</React.Fragment>
                 ))}
               </td>
             ))}
@@ -237,7 +237,7 @@ function renderInlineContent(content: Block["content"]): React.ReactNode {
 }
 
 function renderInlineArray(items: InlineContent[]): React.ReactNode {
-  return items.map((item, i) => <InlineRenderer key={i} content={item} />);
+  return items.map((item, i) => <InlineRenderer key={`inline-${i}`} content={item} />);
 }
 
 function InlineRenderer({ content }: { content: InlineContent }) {
@@ -254,7 +254,7 @@ function InlineRenderer({ content }: { content: InlineContent }) {
           className="text-primary underline underline-offset-2 hover:text-primary/80"
         >
           {content.content.map((c, i) => (
-            <StyledText key={i} text={c.text} styles={c.styles} />
+            <StyledText key={`link-text-${i}`} text={c.text} styles={c.styles} />
           ))}
         </a>
       );

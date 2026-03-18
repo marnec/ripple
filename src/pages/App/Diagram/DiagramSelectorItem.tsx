@@ -37,7 +37,18 @@ export function DiagramSelectorItem({
     <SidebarMenuSubItem className="group/subitem relative animate-fade-in"
       style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}>
       <SidebarMenuSubButton
-        render={<div onClick={() => onDiagramSelect(diagram._id)} className="cursor-pointer pr-6" />}
+        render={<div
+          onClick={() => onDiagramSelect(diagram._id)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onDiagramSelect(diagram._id);
+            }
+          }}
+          className="cursor-pointer pr-6"
+        />}
         isActive={diagram._id === diagramId}
       >
           <span className="truncate">{diagram.name}</span>

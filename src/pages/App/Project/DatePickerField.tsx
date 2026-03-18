@@ -51,7 +51,6 @@ export function DatePickerField({
             onSelect={(date) =>
               onChange(date ? toISODateString(date) : null)
             }
-            autoFocus
           />
         </PopoverContent>
       </Popover>

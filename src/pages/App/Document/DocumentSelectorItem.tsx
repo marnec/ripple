@@ -36,7 +36,18 @@ export function DocumentSelectorItem({
     <SidebarMenuSubItem className="group/subitem relative animate-fade-in"
       style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}>
       <SidebarMenuSubButton
-        render={<div onClick={() => onDocumentSelect(document._id)} className="cursor-pointer pr-6" />}
+        render={<div
+          onClick={() => onDocumentSelect(document._id)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onDocumentSelect(document._id);
+            }
+          }}
+          className="cursor-pointer pr-6"
+        />}
         isActive={document._id === documentId}
       >
           <span className="truncate">{document.name}</span>

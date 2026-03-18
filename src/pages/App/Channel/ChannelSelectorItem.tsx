@@ -37,7 +37,18 @@ export function ChannelSelectorItem({
   return (
     <SidebarMenuSubItem className={cn("group/subitem relative", className)} style={style}>
       <SidebarMenuSubButton
-        render={<div onClick={() => onChannelSelect(channel._id)} className="cursor-pointer pr-6" />}
+        render={<div
+          onClick={() => onChannelSelect(channel._id)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onChannelSelect(channel._id);
+            }
+          }}
+          className="cursor-pointer pr-6"
+        />}
         isActive={channel._id === channelId}
       >
           <div className="flex items-end shrink-0">

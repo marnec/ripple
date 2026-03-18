@@ -59,6 +59,15 @@ export const RecentsSidebarSection = memo(function RecentsSidebarSection({ works
                             if (isMobile) setOpen(false);
                             void navigate(getResourceUrl(workspaceId, item.resourceType, item.resourceId));
                           }}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e: React.KeyboardEvent) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              if (isMobile) setOpen(false);
+                              void navigate(getResourceUrl(workspaceId, item.resourceType, item.resourceId));
+                            }
+                          }}
                           className="cursor-pointer"
                         />}>
                           {Icon && <Icon className="size-3.5" />}

@@ -59,6 +59,14 @@ const DocumentLinkView = ({ documentId }: { documentId: Id<"documents"> }) => {
       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-sm font-medium cursor-pointer hover:bg-muted/80 transition-colors align-middle"
       contentEditable={false}
       onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick(e as unknown as React.MouseEvent);
+        }
+      }}
     >
       <FileText className="h-3.5 w-3.5 shrink-0" />
       <span className="max-w-50 truncate">{document.name}</span>

@@ -95,9 +95,9 @@ export function KanbanCardPresenter({
           {task.labels && task.labels.length > 0 ? (
             <Tooltip>
               <TooltipTrigger className="flex items-center gap-1 overflow-hidden w-full mask-[linear-gradient(to_right,black_calc(100%-20px),transparent)]">
-                {task.labels.map((label, index) => (
+                {task.labels.map((label) => (
                   <Badge
-                    key={index}
+                    key={label}
                     variant="secondary"
                     className="text-xs py-0 shrink-0"
                   >
@@ -107,9 +107,9 @@ export function KanbanCardPresenter({
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-64">
                 <div className="flex flex-wrap gap-1">
-                  {task.labels.map((label, index) => (
+                  {task.labels.map((label) => (
                     <span
-                      key={index}
+                      key={label}
                       className="text-xs rounded bg-background/20 px-1.5 py-0.5"
                     >
                       {label}

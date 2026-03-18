@@ -211,6 +211,14 @@ const ResizableSpreadsheetRange = ({
         <span
           className="text-xs text-muted-foreground cursor-pointer hover:underline truncate max-w-[60%]"
           onClick={handleNavigate}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleNavigate();
+            }
+          }}
         >
           {caption}
         </span>
@@ -231,6 +239,14 @@ const ResizableSpreadsheetRange = ({
         <div
           className="absolute inset-0 cursor-pointer"
           onClick={handleNavigate}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleNavigate();
+            }
+          }}
         />
       )}
 
@@ -239,6 +255,7 @@ const ResizableSpreadsheetRange = ({
         <>
           <div
             className="bn-resize-handle"
+            role="separator"
             style={{
               ...RESIZE_HANDLE_STYLE,
               top: "50%",
@@ -250,6 +267,7 @@ const ResizableSpreadsheetRange = ({
           />
           <div
             className="bn-resize-handle"
+            role="separator"
             style={{
               ...RESIZE_HANDLE_STYLE,
               top: "50%",

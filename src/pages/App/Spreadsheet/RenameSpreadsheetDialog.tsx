@@ -61,7 +61,6 @@ export function RenameSpreadsheetDialog({
               placeholder="Spreadsheet name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoFocus
             />
           </ResponsiveDialogBody>
           <ResponsiveDialogFooter>

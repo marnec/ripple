@@ -54,7 +54,6 @@ function SearchContent({
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
-          autoFocus
         />
       </div>
 
@@ -90,6 +89,14 @@ function SearchContent({
                 key={message._id}
                 className="p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
                 onClick={() => onJumpToMessage(message._id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onJumpToMessage(message._id);
+                  }
+                }}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
