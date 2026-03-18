@@ -21,16 +21,6 @@ async function resolveResourceName(
   return "title" in resource ? resource.title : resource.name;
 }
 
-export const getResourceName = query({
-  args: {
-    resourceId: resourceIdValidator,
-  },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { resourceId }) => {
-    return resolveResourceName(ctx, resourceId);
-  },
-});
-
 export const getResourceNames = query({
   args: {
     resourceIds: v.array(resourceIdValidator),

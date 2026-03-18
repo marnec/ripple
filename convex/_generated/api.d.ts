@@ -36,22 +36,6 @@ export declare const api: {
     signOut: FunctionReference<"action", "public", {}, any>;
   };
   breadcrumb: {
-    getResourceName: FunctionReference<
-      "query",
-      "public",
-      {
-        resourceId:
-          | Id<"workspaces">
-          | Id<"channels">
-          | Id<"projects">
-          | Id<"documents">
-          | Id<"diagrams">
-          | Id<"spreadsheets">
-          | Id<"tasks">
-          | Id<"cycles">;
-      },
-      string | null
-    >;
     getResourceNames: FunctionReference<
       "query",
       "public",
