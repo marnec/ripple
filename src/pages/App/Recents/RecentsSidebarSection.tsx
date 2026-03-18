@@ -11,6 +11,7 @@ import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
 import { useLocalRecents } from "@/hooks/use-local-recents";
 import { AnimatePresence, motion } from "framer-motion";
+import { memo } from "react";
 import { ChevronRight, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -21,7 +22,7 @@ interface RecentsSidebarSectionProps {
   onToggle: () => void;
 }
 
-export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: RecentsSidebarSectionProps) {
+export const RecentsSidebarSection = memo(function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: RecentsSidebarSectionProps) {
   const navigate = useNavigate();
   const { isMobile, setOpen } = useSidebar();
   const recents = useLocalRecents(workspaceId, 5);
@@ -72,4 +73,4 @@ export function RecentsSidebarSection({ workspaceId, isOpen, onToggle }: Recents
         </CollapsibleContent>
     </Collapsible>
   );
-}
+});

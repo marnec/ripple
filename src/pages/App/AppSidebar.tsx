@@ -18,6 +18,7 @@ import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { LayoutGroup, motion } from "framer-motion";
 import { CheckSquare } from "lucide-react";
+import { useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
@@ -44,7 +45,8 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
 
   const workspaces = useQuery(api.workspaces.list);
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
-  const handleChannelSelect = (id: string | null) => {
+
+  const handleChannelSelect = useCallback((id: string | null) => {
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/channels`);
     } else {
@@ -52,58 +54,62 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
       if (isMobile) setOpen(false);
       if (settings.notificationsEnabled) void subscribeUser();
     }
-  };
+  }, [navigate, workspaceId, isMobile, setOpen, settings.notificationsEnabled, subscribeUser]);
 
-  const handleDocumentSelect = (id: string | null) => {
+  const handleDocumentSelect = useCallback((id: string | null) => {
     if (isMobile) setOpen(false);
-
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/documents`);
     } else {
       void navigate(`/workspaces/${workspaceId}/documents/${id}`);
     }
-  };
+  }, [navigate, workspaceId, isMobile, setOpen]);
 
-  const handleDiagramSelect = (id: string | null) => {
+  const handleDiagramSelect = useCallback((id: string | null) => {
     if (isMobile) setOpen(false);
-
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/diagrams`);
     } else {
       void navigate(`/workspaces/${workspaceId}/diagrams/${id}`);
     }
-  };
+  }, [navigate, workspaceId, isMobile, setOpen]);
 
-  const handleSpreadsheetSelect = (id: string | null) => {
+  const handleSpreadsheetSelect = useCallback((id: string | null) => {
     if (isMobile) setOpen(false);
-
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/spreadsheets`);
     } else {
       void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}`);
     }
-  };
+  }, [navigate, workspaceId, isMobile, setOpen]);
 
-  const handleWorkspaceSelect = (id: string) => {
+  const handleWorkspaceSelect = useCallback((id: string) => {
     void navigate(`/workspaces/${id}`);
-  };
+  }, [navigate]);
 
-  const handleProjectSelect = (id: string | null) => {
+  const handleProjectSelect = useCallback((id: string | null) => {
     if (isMobile) setOpen(false);
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/projects`);
     } else {
       void navigate(`/workspaces/${workspaceId}/projects/${id}/tasks`);
     }
-  };
+  }, [navigate, workspaceId, isMobile, setOpen]);
 
-  const handleMyTasksClick = () => {
+  const handleMyTasksClick = useCallback(() => {
     if (!workspaceId) return;
-    if (isMobile) if (isMobile) setOpen(false);
+    if (isMobile) setOpen(false);
     void navigate(`/workspaces/${workspaceId}/my-tasks`);
-  };
+  }, [navigate, workspaceId, isMobile, setOpen]);
 
   const isMyTasksActive = location.pathname.includes("/my-tasks");
+
+  const toggleChannels = useCallback(() => toggle("channels"), [toggle]);
+  const toggleProjects = useCallback(() => toggle("projects"), [toggle]);
+  const toggleDocuments = useCallback(() => toggle("documents"), [toggle]);
+  const toggleDiagrams = useCallback(() => toggle("diagrams"), [toggle]);
+  const toggleSpreadsheets = useCallback(() => toggle("spreadsheets"), [toggle]);
+  const toggleRecents = useCallback(() => toggle("recents"), [toggle]);
 
   return (
     <Sidebar collapsible="offcanvas">
@@ -128,7 +134,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     workspaceId={workspaceId}
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("channels")}
-                    onToggle={() => toggle("channels")}
+                    onToggle={toggleChannels}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -159,7 +165,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     onProjectSelect={handleProjectSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("projects")}
-                    onToggle={() => toggle("projects")}
+                    onToggle={toggleProjects}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -179,7 +185,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     onDocumentSelect={handleDocumentSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("documents")}
-                    onToggle={() => toggle("documents")}
+                    onToggle={toggleDocuments}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -193,7 +199,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     onDiagramSelect={handleDiagramSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("diagrams")}
-                    onToggle={() => toggle("diagrams")}
+                    onToggle={toggleDiagrams}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -207,7 +213,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     onSpreadsheetSelect={handleSpreadsheetSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("spreadsheets")}
-                    onToggle={() => toggle("spreadsheets")}
+                    onToggle={toggleSpreadsheets}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -224,7 +230,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   <RecentsSidebarSection
                     workspaceId={workspaceId}
                     isOpen={isOpen("recents")}
-                    onToggle={() => toggle("recents")}
+                    onToggle={toggleRecents}
                   />
                 </SidebarMenu>
               </SidebarGroup>

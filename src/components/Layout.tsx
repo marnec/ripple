@@ -2,7 +2,8 @@ import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
 import { QueryParams } from "@shared/types/routes";
 import { Phone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Profiler, useEffect, useState } from "react";
+import { onRenderCallback } from "../lib/profiler-logger";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -61,7 +62,9 @@ export function Layout() {
 
   const inner = (
     <FavoritesContext.Provider value={allFavoriteIds ?? undefined}>
+      <Profiler id="AppSidebar" onRender={onRenderCallback}>
       <AppSidebar allFavoriteIds={allFavoriteIds} />
+      </Profiler>
       <SidebarInset className="min-w-0">
         <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
           {isMobile ? (
@@ -99,7 +102,9 @@ export function Layout() {
             />
           )}
           <HeaderSlotContext value={headerSlotNode}>
+            <Profiler id="PageContent" onRender={onRenderCallback}>
             <Outlet />
+            </Profiler>
           </HeaderSlotContext>
         </div>
       </SidebarInset>

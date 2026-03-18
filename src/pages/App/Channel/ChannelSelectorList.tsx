@@ -4,7 +4,7 @@ import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -29,7 +29,7 @@ export interface ChannelSelectorListProps {
   onToggle: () => void;
 }
 
-export function ChannelSelectorList({
+export const ChannelSelectorList = memo(function ChannelSelectorList({
   workspaceId,
   channelId,
   onChannelSelect,
@@ -189,4 +189,4 @@ export function ChannelSelectorList({
         />
     </Collapsible>
   );
-}
+});

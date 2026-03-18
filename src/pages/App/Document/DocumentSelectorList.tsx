@@ -1,7 +1,7 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useMutation } from "convex/react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ChevronRight, File, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -34,7 +34,7 @@ export type DocumentSelectorProps = {
   onToggle: () => void;
 };
 
-export function DocumentSelectorList({
+export const DocumentSelectorList = memo(function DocumentSelectorList({
   workspaceId,
   documentId,
   onDocumentSelect,
@@ -116,4 +116,4 @@ export function DocumentSelectorList({
         )}
     </Collapsible>
   );
-}
+});

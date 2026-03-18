@@ -1,7 +1,7 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useMutation } from "convex/react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ChevronRight, PenTool, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -29,7 +29,7 @@ export type DiagramSelectorProps = {
   onToggle: () => void;
 };
 
-export function DiagramSelectorList({
+export const DiagramSelectorList = memo(function DiagramSelectorList({
   workspaceId,
   diagramId,
   onDiagramSelect,
@@ -111,4 +111,4 @@ export function DiagramSelectorList({
         )}
     </Collapsible>
   );
-}
+});

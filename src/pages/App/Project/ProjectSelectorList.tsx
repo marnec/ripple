@@ -1,7 +1,7 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useMutation } from "convex/react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -29,7 +29,7 @@ export interface ProjectSelectorListProps {
   onToggle: () => void;
 }
 
-export function ProjectSelectorList({
+export const ProjectSelectorList = memo(function ProjectSelectorList({
   workspaceId,
   projectId,
   onProjectSelect,
@@ -102,4 +102,4 @@ export function ProjectSelectorList({
       />
     </Collapsible>
   );
-}
+});

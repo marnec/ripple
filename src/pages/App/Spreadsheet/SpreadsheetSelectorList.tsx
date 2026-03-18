@@ -1,7 +1,7 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useMutation } from "convex/react";
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { ChevronRight, Plus, Table2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -29,7 +29,7 @@ export type SpreadsheetSelectorProps = {
   onToggle: () => void;
 };
 
-export function SpreadsheetSelectorList({
+export const SpreadsheetSelectorList = memo(function SpreadsheetSelectorList({
   workspaceId,
   spreadsheetId,
   onSpreadsheetSelect,
@@ -111,4 +111,4 @@ export function SpreadsheetSelectorList({
         )}
     </Collapsible>
   );
-}
+});
