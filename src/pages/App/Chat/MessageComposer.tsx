@@ -288,6 +288,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             author: replyingTo.author,
             plainText: replyPreviewText,
             deleted: false,
+            imageUrl: replyingTo.imageUrl,
           }}
           onCancel={() => setReplyingTo(null)}
         />

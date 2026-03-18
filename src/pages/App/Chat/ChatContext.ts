@@ -9,6 +9,7 @@ export type ReplyingToMessage = {
   author: string;
   plainText: string;
   body: string;
+  imageUrl?: string;
 } | null;
 
 type ChatContextType = {

@@ -41,7 +41,7 @@ const enrichedMessageValidator = v.object({
   replyToId: v.optional(v.id("messages")),
   author: v.string(),
   authorImage: v.optional(v.string()),
-  replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean() })),
+  replyTo: v.union(v.null(), v.object({ author: v.string(), plainText: v.string(), deleted: v.boolean(), imageUrl: v.optional(v.string()) })),
   mentionedUsers: mentionedUsersValidator,
   mentionedTasks: mentionedTasksValidator,
   mentionedProjects: mentionedProjectsValidator,
@@ -239,7 +239,7 @@ async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
   ctx: { db: DatabaseReader },
   messages: T[],
   userMap: Map<string, Doc<"users"> | null>,
-): Promise<(T & { replyTo: { author: string; plainText: string; deleted: boolean } | null })[]> {
+): Promise<(T & { replyTo: { author: string; plainText: string; deleted: boolean; imageUrl?: string } | null })[]> {
   // Batch-fetch parent messages
   const parentIds = [...new Set(
     messages.filter(m => m.replyToId).map(m => m.replyToId!)
@@ -294,12 +294,20 @@ async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
     }
     const parentUser = userMap.get(parent.userId);
     const plainText = extractPlainTextFromBody(parent.body, userNameMap, projectNameMap) || parent.plainText;
+    let imageUrl: string | undefined;
+    try {
+      const blocks: { type: string; props?: { url?: string } }[] = JSON.parse(parent.body);
+      imageUrl = blocks.find((b) => b.type === "image")?.props?.url;
+    } catch {
+      // non-JSON body — no image
+    }
     return {
       ...msg,
       replyTo: {
         author: getUserDisplayName(parentUser),
         plainText,
         deleted: parent.deleted,
+        ...(imageUrl ? { imageUrl } : {}),
       },
     };
   });

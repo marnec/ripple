@@ -842,6 +842,7 @@ export declare const api: {
           replyTo: null | {
             author: string;
             deleted: boolean;
+            imageUrl?: string;
             plainText: string;
           };
           replyToId?: Id<"messages">;
@@ -894,6 +895,7 @@ export declare const api: {
           replyTo: null | {
             author: string;
             deleted: boolean;
+            imageUrl?: string;
             plainText: string;
           };
           replyToId?: Id<"messages">;
@@ -936,7 +938,12 @@ export declare const api: {
           { email?: string | null; image?: string; name: string | null }
         >;
         plainText: string;
-        replyTo: null | { author: string; deleted: boolean; plainText: string };
+        replyTo: null | {
+          author: string;
+          deleted: boolean;
+          imageUrl?: string;
+          plainText: string;
+        };
         replyToId?: Id<"messages">;
         userId: Id<"users">;
       }>

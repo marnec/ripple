@@ -86,12 +86,21 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
   const handleReply = () => {
     // Clear edit mode (mutually exclusive)
     setEditingMessage({ id: null, body: null });
+    // Extract image URL if the message contains an image
+    let imageUrl: string | undefined;
+    try {
+      const parsedBlocks: { type: string; props?: { url?: string } }[] = JSON.parse(message.body);
+      imageUrl = parsedBlocks.find((b) => b.type === "image")?.props?.url;
+    } catch {
+      // non-JSON body
+    }
     // Enter reply mode
     setReplyingTo({
       id: message._id,
       author: message.author,
       plainText: message.plainText,
       body: message.body,
+      ...(imageUrl ? { imageUrl } : {}),
     });
   };
 

@@ -7,6 +7,7 @@ type MessageQuotePreviewProps = {
     author: string;
     plainText: string;
     deleted: boolean;
+    imageUrl?: string;
   } | null;
   onCancel?: () => void;
 };
@@ -33,9 +34,16 @@ export function MessageQuotePreview({ message, onCancel }: MessageQuotePreviewPr
 
   return (
     <div className="flex items-start gap-2 px-3 py-1 mb-1 bg-muted/50 rounded-sm border-l-4 border-primary">
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold text-xs text-muted-foreground">{message.author}</div>
-        <div className="truncate text-sm">{truncatedText}</div>
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        {message.imageUrl && (
+          <img src={message.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+        )}
+        <div className="min-w-0">
+          <div className="font-semibold text-xs text-muted-foreground">{message.author}</div>
+          <div className="truncate text-sm">
+            {truncatedText || (message.imageUrl ? "📷 Image" : "")}
+          </div>
+        </div>
       </div>
       {onCancel && (
         <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCancel}>

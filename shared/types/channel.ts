@@ -8,6 +8,7 @@ export type ReplyToInfo = {
   author: string;
   plainText: string;
   deleted: boolean;
+  imageUrl?: string;
 } | null;
 
 export type MentionedUser = { name: string | null; email?: string | null; image?: string };
