@@ -1,11 +1,11 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+
 import { useMutation } from "convex/react";
 import { memo, useMemo, useState } from "react";
 import { ChevronRight, PenTool, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarMenuAction,
   SidebarMenuButton,
@@ -24,6 +24,7 @@ export type DiagramSelectorProps = {
   workspaceId: Id<"workspaces">;
   diagramId: Id<"diagrams"> | undefined;
   onDiagramSelect: (id: string | null) => void;
+  diagrams?: { _id: string; name: string; tags?: string[]; _creationTime: number }[];
   allFavoriteIds: AllFavoriteIds | undefined;
   isOpen: boolean;
   onToggle: () => void;
@@ -33,6 +34,7 @@ export const DiagramSelectorList = memo(function DiagramSelectorList({
   workspaceId,
   diagramId,
   onDiagramSelect,
+  diagrams: diagramsProp,
   allFavoriteIds,
   isOpen,
   onToggle,
@@ -43,7 +45,7 @@ export const DiagramSelectorList = memo(function DiagramSelectorList({
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/diagrams");
 
-  const diagrams = useWorkspaceSidebar()?.diagrams;
+  const diagrams = diagramsProp as unknown as Doc<"diagrams">[] | undefined;
   const createDiagram = useMutation(api.diagrams.create);
   const toggleFavorite = useMutation(api.favorites.toggle);
 

@@ -1,6 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+
 import { useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
@@ -25,6 +25,7 @@ export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
+  channels?: { _id: string; _creationTime: number; name: string; workspaceId: string; isPublic: boolean }[];
   isOpen: boolean;
   onToggle: () => void;
 }
@@ -33,6 +34,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
   workspaceId,
   channelId,
   onChannelSelect,
+  channels: channelsProp,
   isOpen,
   onToggle,
 }: ChannelSelectorListProps) {
@@ -42,9 +44,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
 
   const navigate = useNavigate();
 
-  const sidebarData = useWorkspaceSidebar();
-  // Channels from aggregated sidebar query — shape matches Doc<"channels"> (schema has no extra fields)
-  const channels = sidebarData?.channels as unknown as Doc<"channels">[] | undefined;
+  const channels = channelsProp as unknown as Doc<"channels">[] | undefined;
 
   const channelIds = useMemo(() => channels?.map((c) => c._id).slice(0, 50) ?? [], [channels]);
   const unreadCounts = useQuery(

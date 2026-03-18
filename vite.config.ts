@@ -8,7 +8,11 @@ import fs from "fs";
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    react({
+      babel: {
+        plugins: ["babel-plugin-react-compiler"],
+      },
+    }),
     VitePWA({
       strategies: "injectManifest",
       srcDir: "src",

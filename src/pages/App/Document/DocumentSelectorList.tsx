@@ -1,11 +1,11 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+
 import { useMutation } from "convex/react";
 import { memo, useMemo, useState } from "react";
 import { ChevronRight, File, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarMenuAction,
   SidebarMenuButton,
@@ -29,6 +29,7 @@ export type DocumentSelectorProps = {
   workspaceId: Id<"workspaces">;
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
+  documents?: { _id: string; name: string; tags?: string[]; _creationTime: number }[];
   allFavoriteIds: AllFavoriteIds | undefined;
   isOpen: boolean;
   onToggle: () => void;
@@ -38,6 +39,7 @@ export const DocumentSelectorList = memo(function DocumentSelectorList({
   workspaceId,
   documentId,
   onDocumentSelect,
+  documents: documentsProp,
   allFavoriteIds,
   isOpen,
   onToggle,
@@ -48,7 +50,7 @@ export const DocumentSelectorList = memo(function DocumentSelectorList({
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/documents");
 
-  const documents = useWorkspaceSidebar()?.documents;
+  const documents = documentsProp as unknown as Doc<"documents">[] | undefined;
   const createDocument = useMutation(api.documents.create);
   const toggleFavorite = useMutation(api.favorites.toggle);
 

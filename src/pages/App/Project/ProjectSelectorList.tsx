@@ -1,11 +1,11 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+
 import { useMutation } from "convex/react";
 import { memo, useMemo, useState } from "react";
 import { ChevronRight, Folder, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarMenuAction,
   SidebarMenuButton,
@@ -24,6 +24,7 @@ export interface ProjectSelectorListProps {
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
+  projects?: { _id: string; name: string; color: string; key?: string; _creationTime: number }[];
   allFavoriteIds: AllFavoriteIds | undefined;
   isOpen: boolean;
   onToggle: () => void;
@@ -33,6 +34,7 @@ export const ProjectSelectorList = memo(function ProjectSelectorList({
   workspaceId,
   projectId,
   onProjectSelect,
+  projects: projectsProp,
   allFavoriteIds,
   isOpen,
   onToggle,
@@ -44,8 +46,7 @@ export const ProjectSelectorList = memo(function ProjectSelectorList({
   const isListActive = location.pathname.endsWith("/projects");
   const toggleFavorite = useMutation(api.favorites.toggle);
 
-  const projects = useWorkspaceSidebar()?.projects;
-
+  const projects = projectsProp as unknown as Doc<"projects">[] | undefined;
   const favoriteSet = useMemo(() => new Set(allFavoriteIds?.project ?? []), [allFavoriteIds]);
   const favoriteProjects = useMemo(
     () => projects?.filter((p) => favoriteSet.has(p._id)).slice(0, MAX_SIDEBAR_FAVORITES),

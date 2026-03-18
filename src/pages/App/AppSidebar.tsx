@@ -15,6 +15,7 @@ import { useUserSettings } from "@/hooks/use-user-settings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import { QueryParams } from "@shared/types/routes";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
 import { LayoutGroup, motion } from "framer-motion";
 import { CheckSquare } from "lucide-react";
@@ -45,6 +46,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
 
   const workspaces = useQuery(api.workspaces.list);
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
+  const sidebarData = useWorkspaceSidebar();
 
   const handleChannelSelect = useCallback((id: string | null) => {
     if (!id) {
@@ -132,6 +134,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   <ChannelSelectorList
                     channelId={channelId}
                     workspaceId={workspaceId}
+                    channels={sidebarData?.channels}
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("channels")}
                     onToggle={toggleChannels}
@@ -162,6 +165,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   <ProjectSelectorList
                     workspaceId={workspaceId}
                     projectId={projectId}
+                    projects={sidebarData?.projects}
                     onProjectSelect={handleProjectSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("projects")}
@@ -182,6 +186,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   <DocumentSelectorList
                     workspaceId={workspaceId}
                     documentId={documentId}
+                    documents={sidebarData?.documents}
                     onDocumentSelect={handleDocumentSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("documents")}
@@ -196,6 +201,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   <DiagramSelectorList
                     workspaceId={workspaceId}
                     diagramId={diagramId}
+                    diagrams={sidebarData?.diagrams}
                     onDiagramSelect={handleDiagramSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("diagrams")}
@@ -210,6 +216,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                   <SpreadsheetSelectorList
                     workspaceId={workspaceId}
                     spreadsheetId={spreadsheetId}
+                    spreadsheets={sidebarData?.spreadsheets}
                     onSpreadsheetSelect={handleSpreadsheetSelect}
                     allFavoriteIds={allFavoriteIds ?? undefined}
                     isOpen={isOpen("spreadsheets")}

@@ -1,11 +1,11 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+
 import { useMutation } from "convex/react";
 import { memo, useMemo, useState } from "react";
 import { ChevronRight, Plus, Table2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarMenuAction,
   SidebarMenuButton,
@@ -24,6 +24,7 @@ export type SpreadsheetSelectorProps = {
   workspaceId: Id<"workspaces">;
   spreadsheetId: Id<"spreadsheets"> | undefined;
   onSpreadsheetSelect: (id: string | null) => void;
+  spreadsheets?: { _id: string; name: string; tags?: string[]; _creationTime: number }[];
   allFavoriteIds: AllFavoriteIds | undefined;
   isOpen: boolean;
   onToggle: () => void;
@@ -33,6 +34,7 @@ export const SpreadsheetSelectorList = memo(function SpreadsheetSelectorList({
   workspaceId,
   spreadsheetId,
   onSpreadsheetSelect,
+  spreadsheets: spreadsheetsProp,
   allFavoriteIds,
   isOpen,
   onToggle,
@@ -43,7 +45,7 @@ export const SpreadsheetSelectorList = memo(function SpreadsheetSelectorList({
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/spreadsheets");
 
-  const spreadsheets = useWorkspaceSidebar()?.spreadsheets;
+  const spreadsheets = spreadsheetsProp as unknown as Doc<"spreadsheets">[] | undefined;
   const createSpreadsheet = useMutation(api.spreadsheets.create);
   const toggleFavorite = useMutation(api.favorites.toggle);
 
