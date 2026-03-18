@@ -1,7 +1,6 @@
 import { MessageWithAuthor } from "@shared/types/channel";
 import { ArrowDown } from "lucide-react";
 import React, { PropsWithChildren, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useResizeObserver } from "usehooks-ts";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 
 const NEAR_BOTTOM_THRESHOLD = 100;
@@ -11,12 +10,12 @@ type MessageListProps = PropsWithChildren & {
   onLoadMore: () => void;
   isLoading: boolean;
   userSentMessageRef?: React.RefObject<boolean>;
+  messagesReady: boolean;
 };
 
-export function MessageList({ children, messages, userSentMessageRef }: MessageListProps) {
+export function MessageList({ children, messages, userSentMessageRef, messagesReady }: MessageListProps) {
   const messageListRef = useRef<HTMLOListElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { height = 0 } = useResizeObserver({ ref: messageListRef as React.RefObject<HTMLElement>, box: "border-box" });
   const previousLastMessage = useRef<MessageWithAuthor | null>(null);
   const previousMessagesLength = useRef(0);
 
@@ -56,21 +55,32 @@ export function MessageList({ children, messages, userSentMessageRef }: MessageL
     return () => viewport.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Initial scroll to bottom — fires once when children are actually in the DOM.
+  // messagesReady becomes true only after reactions loaded + messages exist,
+  // meaning children have been committed to the DOM in this same render.
+  const initialScrollDone = useRef(false);
   useLayoutEffect(() => {
-    if (!messageListRef?.current) return;
+    if (!messagesReady || initialScrollDone.current) return;
+    const viewport = getViewport();
+    if (!viewport) return;
+    // scrollHeight - clientHeight = maximum scrollTop = physical bottom = newest messages.
+    viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight;
+    initialScrollDone.current = true;
+    previousLastMessage.current = messages[0];
+    previousMessagesLength.current = messages.length;
+  }, [messagesReady, messages]);
+
+  // Ongoing scroll management: new messages + load-more position compensation.
+  useLayoutEffect(() => {
+    if (!messageListRef?.current || !initialScrollDone.current) return;
 
     if (previousLastMessage.current?.isomorphicId !== messages?.[0]?.isomorphicId) {
-      // New message arrived
-      const isFirstRender = !previousLastMessage.current;
-      if (isFirstRender || userSentMessageRef?.current || isNearBottomRef.current) {
-        // Always scroll on first render, user's own message, or when near bottom
-        messageListRef.current.scrollIntoView({
-          behavior: isFirstRender ? "instant" : "smooth",
-          block: "end",
-          inline: "end",
-        });
+      // New message at the bottom
+      if (userSentMessageRef?.current || isNearBottomRef.current) {
+        const viewport = getViewport();
+        viewport?.scrollTo({ top: viewport.scrollHeight, behavior: "smooth" });
       } else {
-        // User is scrolled up and received a message — show notification dot
+        // User is scrolled up — show notification dot
         hasNewMessagesRef.current = true;
       }
     } else {
@@ -88,7 +98,7 @@ export function MessageList({ children, messages, userSentMessageRef }: MessageL
     }
     previousLastMessage.current = messages[0];
     previousMessagesLength.current = messages.length;
-  }, [height, messages, userSentMessageRef]);
+  }, [messages, userSentMessageRef]);
 
   // Sync hasNewMessages ref to state after layout effect
   useEffect(() => {

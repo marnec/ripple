@@ -64,6 +64,12 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
     api.messageReactions.listForMessages,
     messageIds.length > 0 ? { messageIds } : "skip",
   );
+  // Gate messages behind reactions on initial load to prevent layout shift.
+  // Once reactions have loaded once, never hide messages again (load-more must not blank the list).
+  const [hasLoadedReactions, setHasLoadedReactions] = useState(reactionsMap !== undefined);
+  if (!hasLoadedReactions && reactionsMap !== undefined) {
+    setHasLoadedReactions(true);
+  }
   const groupInfos = computeGroupPositions(messages ?? [], user?._id);
 
   const sendMessage = useMutation(api.messages.send);
@@ -208,10 +214,10 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
 
           <div className="min-h-0 flex-1">
             <ReactionsContext.Provider value={reactionsMap ?? {}}>
-            <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef}>
+            <MessageList messages={messages} onLoadMore={handleLoadMore} isLoading={isLoading} userSentMessageRef={userSentMessageRef} messagesReady={hasLoadedReactions && (messages ?? []).length > 0}>
               {/* {!messages && <LoadingSpinner className="h-12 w-12 self-center" />} */}
 
-              {(messageIds.length === 0 || reactionsMap !== undefined) && (messages || []).map((message, index) => (
+              {(messageIds.length === 0 || hasLoadedReactions) && (messages || []).map((message, index) => (
                 <Fragment key={message.isomorphicId}>
                   {!!index && wereSentInDifferentDays(message, messages[index - 1]) && (
                     <div className="flex items-center gap-3 my-2">
