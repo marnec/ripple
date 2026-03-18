@@ -197,7 +197,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                   )}
                   {message.replyToId && (
                     <div className={messageHasImages ? "px-3 pt-1.5" : undefined}>
-                      <MessageQuotePreview message={message.replyTo ?? null} compact />
+                      <MessageQuotePreview message={message.replyTo ?? null} />
                     </div>
                   )}
                   {messageHasImages ? (
