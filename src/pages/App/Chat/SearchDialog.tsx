@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -139,6 +139,11 @@ function SearchDialogBody({
 
 export function SearchDialog({ channelId, onJumpToMessage, children, initialSearchTerm = "", isOpen, onOpenChange }: SearchDialogProps) {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
+  const [prevInitialSearchTerm, setPrevInitialSearchTerm] = useState(initialSearchTerm);
+  if (initialSearchTerm !== prevInitialSearchTerm) {
+    setPrevInitialSearchTerm(initialSearchTerm);
+    setSearchTerm(initialSearchTerm);
+  }
 
   const searchResults = useQuery(
     api.messages.search,
@@ -150,10 +155,6 @@ export function SearchDialog({ channelId, onJumpToMessage, children, initialSear
     onOpenChange(false);
     setSearchTerm("");
   };
-
-  useEffect(() => {
-    setSearchTerm(initialSearchTerm);
-  }, [initialSearchTerm]);
 
   return (
     <ResponsiveDialog open={isOpen} onOpenChange={onOpenChange} direction="top">

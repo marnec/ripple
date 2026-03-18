@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "convex/react";
+import { useViewer } from "../UserContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -94,7 +95,7 @@ export function useTaskDetail({
   const diagrams = useQuery(api.diagrams.list, suggestionDataEnabled ? { workspaceId } : "skip");
   const documents = useQuery(api.documents.list, suggestionDataEnabled ? { workspaceId } : "skip");
   const spreadsheets = useQuery(api.spreadsheets.list, suggestionDataEnabled ? { workspaceId } : "skip");
-  const currentUser = useQuery(api.users.viewer);
+  const currentUser = useViewer();
 
   const updateTask = useMutation(api.tasks.update);
   const removeTask = useMutation(api.tasks.remove);

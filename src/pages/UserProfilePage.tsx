@@ -1,7 +1,7 @@
 import { UserContext } from "@/pages/App/UserContext";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -12,12 +12,13 @@ export function UserProfilePage() {
   const updateUser = useMutation(api.users.update);
   const navigate = useNavigate();
 
-  const [name, setName] = useState("");
-
   const userName = user?.name || "";
-  useEffect(() => {
+  const [name, setName] = useState(userName);
+  const [prevUserName, setPrevUserName] = useState(userName);
+  if (userName !== prevUserName) {
+    setPrevUserName(userName);
     setName(userName);
-  }, [userName]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

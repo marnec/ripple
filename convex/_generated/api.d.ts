@@ -1853,6 +1853,13 @@ export declare const api: {
       "public",
       { workspaceId: Id<"workspaces"> },
       {
+        channels: Array<{
+          _creationTime: number;
+          _id: Id<"channels">;
+          isPublic: boolean;
+          name: string;
+          workspaceId: Id<"workspaces">;
+        }>;
         counts: {
           channels: number;
           diagrams: number;

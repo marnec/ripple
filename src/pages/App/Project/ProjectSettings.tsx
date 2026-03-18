@@ -14,6 +14,7 @@ import {
   type TaskNotificationCategory,
 } from "@shared/notificationCategories";
 import { useMutation, useQuery } from "convex/react";
+import { useViewer } from "../UserContext";
 import { Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -57,7 +58,7 @@ function ProjectSettingsContent({
   const navigate = useNavigate();
   // Queries
   const project = useQuery(api.projects.get, { id: projectId });
-  const currentUser = useQuery(api.users.viewer);
+  const currentUser = useViewer();
   const projectHasTasks = useQuery(api.tasks.hasAnyTasks, { projectId });
 
   // Mutations

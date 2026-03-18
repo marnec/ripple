@@ -1,4 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { getAll } from "convex-helpers/server/relationships";
 import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
 import {
@@ -47,6 +48,15 @@ export const get = query({
         tags: v.optional(v.array(v.string())),
       }),
     ),
+    channels: v.array(
+      v.object({
+        _id: v.id("channels"),
+        _creationTime: v.number(),
+        name: v.string(),
+        workspaceId: v.id("workspaces"),
+        isPublic: v.boolean(),
+      }),
+    ),
     counts: v.object({
       members: v.number(),
       channels: v.number(),
@@ -70,7 +80,7 @@ export const get = query({
     if (!membership) throw new ConvexError("Not a workspace member");
 
     // Fetch lists for sidebar navigation (limited — only need recent items)
-    const [projects, documents, diagrams, spreadsheets] =
+    const [projects, documents, diagrams, spreadsheets, userChannelMemberships, publicChannels] =
       await Promise.all([
         ctx.db
           .query("projects")
@@ -90,7 +100,22 @@ export const get = query({
           .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
           .order("desc")
           .collect(),
+        ctx.db
+          .query("channelMembers")
+          .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
+          .collect(),
+        ctx.db
+          .query("channels")
+          .withIndex("by_isPublicInWorkspace", (q) => q.eq("isPublic", true).eq("workspaceId", workspaceId))
+          .collect(),
       ]);
+
+    // Resolve private channels from memberships + merge with public channels
+    const privateChannelIds = userChannelMemberships.map((m) => m.channelId);
+    const privateChannels = (await getAll(ctx.db, privateChannelIds))
+      .filter((c): c is NonNullable<typeof c> => c !== null);
+    const allChannels = [...privateChannels, ...publicChannels]
+      .sort((a, b) => b._creationTime - a._creationTime);
 
     // O(log n) aggregate counts — no full table scans
     const [membersCount, channelsCount, projectsCount, documentsCount, diagramsCount, spreadsheetsCount, tasksCount] =
@@ -129,6 +154,13 @@ export const get = query({
         _creationTime: s._creationTime,
         name: s.name,
         tags: s.tags,
+      })),
+      channels: allChannels.map((c) => ({
+        _id: c._id,
+        _creationTime: c._creationTime,
+        name: c.name,
+        workspaceId: c.workspaceId,
+        isPublic: c.isPublic,
       })),
       counts: {
         members: membersCount,

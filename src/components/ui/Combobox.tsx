@@ -46,6 +46,8 @@ type ComboboxProps = {
   total?: number;
 };
 
+const EMPTY_SELECTED: string[] = [];
+
 const popOverStyles = {
   width: "var(--anchor-width)",
 };
@@ -63,13 +65,14 @@ export function Combobox({
   unselectMsg = "None",
   onSearchChange,
   disabled = false,
-  selected = [],
+  selected = EMPTY_SELECTED,
   popoverSameWidthAsTrigger = true,
   align,
   popoverContentClassName,
   total,
 }: ComboboxProps) {
   const [open, setOpenState] = React.useState(false);
+  const listboxId = React.useId();
 
   const more = total ? total - items.length : 0;
 
@@ -90,6 +93,7 @@ export function Combobox({
             variant="outline"
             role="combobox"
             aria-expanded={open}
+            aria-controls={listboxId}
             className={cn("justify-between", className)}
             disabled={disabled}
           />
@@ -110,7 +114,7 @@ export function Combobox({
             placeholder={searchPlaceholder}
             onValueChange={handleOnSearchChange}
           />
-          <CommandList>
+          <CommandList id={listboxId}>
             <CommandEmpty>{noResultsMsg}</CommandEmpty>
             <CommandGroup>
               {unselect && (

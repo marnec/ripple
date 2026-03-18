@@ -19,6 +19,7 @@ import { RippleSpinner } from "../../../components/RippleSpinner";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import { useViewer } from "../UserContext";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@shared/displayName";
@@ -74,7 +75,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const spreadsheets = sidebarData?.spreadsheets;
   const tasks = useQuery(api.tasks.listByWorkspace, { workspaceId, hideCompleted: true });
   const workspaceMembers = useQuery(api.workspaceMembers.membersByWorkspace, { workspaceId });
-  const currentUser = useQuery(api.users.viewer);
+  const currentUser = useViewer();
 
   const fileUpload = useUploadFile(workspaceId);
 

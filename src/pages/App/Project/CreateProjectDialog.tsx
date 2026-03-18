@@ -20,8 +20,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
-import { useEffect, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import * as z from "zod";
 import { api } from "../../../../convex/_generated/api";
@@ -59,7 +59,6 @@ export function CreateProjectDialog({
 }) {
   const createProject = useMutation(api.projects.create);
   const navigate = useNavigate();
-  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const [keyManuallyEdited, setKeyManuallyEdited] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -71,26 +70,12 @@ export function CreateProjectDialog({
     },
   });
 
-  const watchedName = useWatch({ control: form.control, name: "name" });
-
-  useEffect(() => {
-    if (!keyManuallyEdited) {
-      form.setValue("key", deriveKeyFromName(watchedName));
-    }
-  }, [watchedName, keyManuallyEdited, form]);
-
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       setKeyManuallyEdited(false);
     }
     onOpenChange(nextOpen);
   };
-
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => nameInputRef.current?.focus(), 0);
-    }
-  }, [open]);
 
   const handleCreate = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -140,8 +125,14 @@ export function CreateProjectDialog({
                   <FormControl>
                     <Input
                       {...field}
-                      ref={nameInputRef}
+                      autoFocus
                       placeholder="Enter project name"
+                      onChange={(e) => {
+                        field.onChange(e);
+                        if (!keyManuallyEdited) {
+                          form.setValue("key", deriveKeyFromName(e.target.value));
+                        }
+                      }}
                     />
                   </FormControl>
                   <FormMessage />

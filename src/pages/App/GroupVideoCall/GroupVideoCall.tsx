@@ -3,7 +3,6 @@ import {
   useRealtimeKitMeeting,
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
-import { useQuery } from "convex/react";
 import { Eye, LogOut, Monitor, MonitorOff } from "lucide-react";
 import { MessageSquare } from "lucide-react";
 import {
@@ -15,7 +14,7 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../../../../convex/_generated/api";
+import { useViewer } from "../UserContext";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import { useActiveCall } from "../../../contexts/ActiveCallContext";
@@ -321,7 +320,7 @@ const GroupVideoCall = ({
   channelId: Id<"channels">;
   workspaceId: Id<"workspaces">;
 }) => {
-  const user = useQuery(api.users.viewer);
+  const user = useViewer();
   const callCtx = useActiveCall();
   const navigate = useNavigate();
 

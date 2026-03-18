@@ -67,9 +67,11 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
       return;
     }
 
+    const controller = new AbortController();
+
     const loadSnapshot = async () => {
       try {
-        const response = await fetch(snapshotUrl);
+        const response = await fetch(snapshotUrl, { signal: controller.signal });
         const arrayBuffer = await response.arrayBuffer();
         const tempDoc = new Y.Doc();
         Y.applyUpdateV2(tempDoc, new Uint8Array(arrayBuffer));
@@ -77,14 +79,16 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
         const elements = yjsToExcalidraw(yElementsArray);
         setSnapshotElements(elements);
       } catch (error) {
-        console.error("Failed to load diagram snapshot:", error);
+        if (!controller.signal.aborted) {
+          console.error("Failed to load diagram snapshot:", error);
+        }
       }
     };
 
     void loadSnapshot();
 
-    // Cleanup when conditions change
     return () => {
+      controller.abort();
       setSnapshotElements(null);
     };
   }, [snapshotUrl, isColdStart]);

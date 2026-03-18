@@ -35,12 +35,11 @@ export function ExcalidrawEditor({
   const { resolvedTheme } = useTheme();
   const bindingRef = useRef<ExcalidrawBinding | null>(null);
 
-  // Notify parent when API is ready
-  useEffect(() => {
-    if (excalidrawAPI) {
-      onExcalidrawAPI(excalidrawAPI);
-    }
-  }, [excalidrawAPI, onExcalidrawAPI]);
+  // Notify parent directly in callback (event handler, not effect)
+  const handleExcalidrawAPI = useCallback((api: ExcalidrawImperativeAPI) => {
+    setExcalidrawAPI(api);
+    onExcalidrawAPI(api);
+  }, [onExcalidrawAPI]);
 
   // Set up y-excalidraw binding — it handles:
   // - Bidirectional element/asset sync
@@ -85,9 +84,9 @@ export function ExcalidrawEditor({
         .excalidraw .undo-redo-buttons { display: none !important; }
         .excalidraw .HelpButton { display: none !important; }
       `}</style>
-      
+
       <Excalidraw
-        excalidrawAPI={(api) => setExcalidrawAPI(api)}
+        excalidrawAPI={handleExcalidrawAPI}
         isCollaborating={true}
         theme={resolvedTheme as Theme}
         initialData={{

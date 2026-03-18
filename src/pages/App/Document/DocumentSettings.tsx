@@ -9,6 +9,7 @@ import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
+import { useViewer } from "../UserContext";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -28,7 +29,7 @@ function DocumentSettingsContent({
   const navigate = useNavigate();
   // Queries
   const document = useQuery(api.documents.get, { id: documentId });
-  const currentUser = useQuery(api.users.viewer);
+  const currentUser = useViewer();
 
   // Mutations
   const renameDocument = useMutation(api.documents.rename);
