@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 const COOKIE_NAME = "sidebar:sections";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -34,18 +34,15 @@ function writeCookie(state: Record<SectionKey, boolean>) {
 export function useSidebarSections() {
   const [sections, setSections] = useState(readCookie);
 
-  const isOpen = useCallback((key: SectionKey) => sections[key] ?? true, [sections]);
+  const isOpen = (key: SectionKey) => sections[key] ?? true;
 
-  const toggle = useCallback(
-    (key: SectionKey) => {
-      setSections((prev) => {
-        const next = { ...prev, [key]: !prev[key] };
-        writeCookie(next);
-        return next;
-      });
-    },
-    [],
-  );
+  const toggle = (key: SectionKey) => {
+    setSections((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      writeCookie(next);
+      return next;
+    });
+  };
 
   return { isOpen, toggle };
 }

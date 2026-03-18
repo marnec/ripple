@@ -1,5 +1,4 @@
 import { useQuery } from "convex/react";
-import { useMemo } from "react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
@@ -8,10 +7,7 @@ export function useReferencedBlocks(documentId: Id<"documents">) {
     documentId,
   });
 
-  const referencedBlockIds = useMemo(
-    () => new Set(blockIds ?? []),
-    [blockIds],
-  );
+  const referencedBlockIds = new Set(blockIds ?? []);
 
   return {
     referencedBlockIds,

@@ -7,7 +7,6 @@ import { Eye, LogOut, Monitor, MonitorOff } from "lucide-react";
 import { MessageSquare } from "lucide-react";
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -192,29 +191,29 @@ function ControlsBar() {
     (m) => m.self.screenShareEnabled,
   );
 
-  const toggleAudio = useCallback(async () => {
+  const toggleAudio = async () => {
     if (audioEnabled) {
       await meeting.self.disableAudio();
     } else {
       await meeting.self.enableAudio();
     }
-  }, [meeting.self, audioEnabled]);
+  };
 
-  const toggleVideo = useCallback(async () => {
+  const toggleVideo = async () => {
     if (videoEnabled) {
       await meeting.self.disableVideo();
     } else {
       await meeting.self.enableVideo();
     }
-  }, [meeting.self, videoEnabled]);
+  };
 
-  const toggleScreenShare = useCallback(async () => {
+  const toggleScreenShare = async () => {
     if (screenShareEnabled) {
       await meeting.self.disableScreenShare();
     } else {
       await meeting.self.enableScreenShare();
     }
-  }, [meeting.self, screenShareEnabled]);
+  };
 
   return (
     <div className="flex items-center justify-center gap-3 border-t bg-background px-4 py-3 pb-[calc(0.75rem+var(--safe-area-bottom))]">
@@ -332,22 +331,19 @@ const GroupVideoCall = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, workspaceId]);
 
-  const handleBack = useCallback(() => {
+  const handleBack = () => {
     void navigate(
       `/workspaces/${workspaceId}/channels/${channelId}`,
     );
-  }, [navigate, workspaceId, channelId]);
+  };
 
-  const handleJoin = useCallback(
-    (prefs: { audioEnabled: boolean; videoEnabled: boolean; audioDeviceId?: string; videoDeviceId?: string }) => {
-      void callCtx.joinCall({
-        ...prefs,
-        userName: user?.name || "Anonymous",
-        userImage: user?.image ?? undefined,
-      });
-    },
-    [callCtx, user],
-  );
+  const handleJoin = (prefs: { audioEnabled: boolean; videoEnabled: boolean; audioDeviceId?: string; videoDeviceId?: string }) => {
+    void callCtx.joinCall({
+      ...prefs,
+      userName: user?.name || "Anonymous",
+      userImage: user?.image ?? undefined,
+    });
+  };
 
   // If already joined this channel's call (e.g., returning from floating), show meeting room
   if (callCtx.status === "joined" && callCtx.meeting && callCtx.channelId === channelId) {

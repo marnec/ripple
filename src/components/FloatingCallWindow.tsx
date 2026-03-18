@@ -4,7 +4,7 @@ import {
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
 import { Eye, LogOut, Maximize2, Mic, MicOff, Video, VideoOff } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
@@ -49,21 +49,21 @@ function FloatingCallContent() {
     };
   }, [meeting.self, videoTrack]);
 
-  const toggleAudio = useCallback(async () => {
+  const toggleAudio = async () => {
     if (audioEnabled) {
       await meeting.self.disableAudio();
     } else {
       await meeting.self.enableAudio();
     }
-  }, [meeting.self, audioEnabled]);
+  };
 
-  const toggleVideo = useCallback(async () => {
+  const toggleVideo = async () => {
     if (videoEnabled) {
       await meeting.self.disableVideo();
     } else {
       await meeting.self.enableVideo();
     }
-  }, [meeting.self, videoEnabled]);
+  };
 
   // Show first remote participant's video if available
   const firstRemote = participants[0];
@@ -245,7 +245,7 @@ export function FloatingCallWindow() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
+  const onPointerDown = (e: React.PointerEvent) => {
     // Only drag from the window chrome, not from buttons
     if ((e.target as HTMLElement).closest("button")) return;
     dragging.current = true;
@@ -255,20 +255,20 @@ export function FloatingCallWindow() {
       y: e.clientY - position.y,
     };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [position]);
+  };
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
+  const onPointerMove = (e: React.PointerEvent) => {
     if (!dragging.current) return;
     const { width, height } = getPipSize();
     const x = Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - width));
     const y = Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - height));
     setPosition({ x, y });
-  }, []);
+  };
 
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = () => {
     dragging.current = false;
     setIsDragging(false);
-  }, []);
+  };
 
   if (!isFloating || !meeting) return null;
 

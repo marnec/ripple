@@ -7,7 +7,6 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -35,7 +34,7 @@ export const FormulaPickerDropdown = forwardRef<
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [trackedQuery, setTrackedQuery] = useState(query);
   const listRef = useRef<HTMLDivElement>(null);
-  const matches = useMemo(() => filterFormulas(query), [query]);
+  const matches = filterFormulas(query);
 
   // Reset selection when query changes (adjust state during render)
   if (trackedQuery !== query) {

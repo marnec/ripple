@@ -1,6 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getUserDisplayName } from "@shared/displayName";
-import { useCallback } from "react";
 
 type Member = {
   _id?: string;
@@ -32,39 +31,36 @@ export function useMemberSuggestions({
   limit = 10,
   group = "Workspace members",
 }: MemberSuggestionsOptions) {
-  return useCallback(
-    async (query: string) => {
-      if (!members) return [];
-      return members
-        .filter((m) => {
-          if (excludeUserId && (m._id === excludeUserId || m.userId === excludeUserId)) {
-            return false;
-          }
-          return (m.name ?? "").toLowerCase().includes(query.toLowerCase());
-        })
-        .slice(0, limit)
-        .map((m) => {
-          const userId = m._id ?? m.userId ?? "";
-          return {
-            title: getUserDisplayName(m),
-            onItemClick: () => {
-              editor.insertInlineContent([
-                { type: mentionType, props: { userId } },
-                " ",
-              ]);
-            },
-            icon: (
-              <Avatar className="h-5 w-5">
-                {m.image && <AvatarImage src={m.image} />}
-                <AvatarFallback className="text-xs">
-                  {m.name?.slice(0, 2).toUpperCase() ?? "?"}
-                </AvatarFallback>
-              </Avatar>
-            ),
-            group,
-          };
-        });
-    },
-    [members, editor, mentionType, excludeUserId, limit, group],
-  );
+  return async (query: string) => {
+    if (!members) return [];
+    return members
+      .filter((m) => {
+        if (excludeUserId && (m._id === excludeUserId || m.userId === excludeUserId)) {
+          return false;
+        }
+        return (m.name ?? "").toLowerCase().includes(query.toLowerCase());
+      })
+      .slice(0, limit)
+      .map((m) => {
+        const userId = m._id ?? m.userId ?? "";
+        return {
+          title: getUserDisplayName(m),
+          onItemClick: () => {
+            editor.insertInlineContent([
+              { type: mentionType, props: { userId } },
+              " ",
+            ]);
+          },
+          icon: (
+            <Avatar className="h-5 w-5">
+              {m.image && <AvatarImage src={m.image} />}
+              <AvatarFallback className="text-xs">
+                {m.name?.slice(0, 2).toUpperCase() ?? "?"}
+              </AvatarFallback>
+            </Avatar>
+          ),
+          group,
+        };
+      });
+  };
 }

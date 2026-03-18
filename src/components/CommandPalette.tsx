@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -60,7 +60,7 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
     hasSearch ? { workspaceId, searchText: search } : "skip",
   );
 
-  const searchGroups = useMemo(() => {
+  const searchGroups = (() => {
     if (!hasSearch) return [];
     return [
       { type: "channel" as const, label: "Channels", items: channels },
@@ -69,7 +69,7 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
       { type: "spreadsheet" as const, label: "Spreadsheets", items: spreadsheets },
       { type: "project" as const, label: "Projects", items: projects },
     ].filter((g) => g.items && g.items.length > 0);
-  }, [hasSearch, channels, documents, diagrams, spreadsheets, projects]);
+  })();
 
   const handleSelect = (resourceType: string, resourceId: string) => {
     onOpenChange(false);

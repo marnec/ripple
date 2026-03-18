@@ -6,7 +6,7 @@ import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { SearchResults } from "./SearchResults";
 
@@ -51,9 +51,9 @@ export function ResourceListPage({
     handleFavoriteToggle,
   } = useDebouncedSearch(workspaceId, resourceType, showFavorites);
 
-  const handleLoadingChange = useCallback((loading: boolean) => {
+  const handleLoadingChange = (loading: boolean) => {
     setIsLoading(loading);
-  }, []);
+  };
 
   return (
     <div className="container mx-auto p-4 animate-fade-in">

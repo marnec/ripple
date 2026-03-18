@@ -17,7 +17,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
-import React, { Suspense, useMemo, useState } from "react";
+import React, { Suspense, useState } from "react";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -114,7 +114,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   );
 
   // Group tasks by status; when sort active, preserve sort order from useFilteredTasks
-  const tasksByStatus = useMemo(() => {
+  const tasksByStatus = (() => {
     if (!tasks || !statuses) return {};
 
     const grouped: Record<string, typeof tasks> = {};
@@ -141,10 +141,10 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       }
     }
     return grouped;
-  }, [tasks, statuses, isSorting]);
+  })();
 
   // Total task counts per status (always from allTasks, ignoring hide filter)
-  const totalCountByStatus = useMemo(() => {
+  const totalCountByStatus = (() => {
     if (!allTasks || !statuses) return {};
     const counts: Record<string, number> = {};
     for (const status of statuses) {
@@ -156,7 +156,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       }
     }
     return counts;
-  }, [allTasks, statuses]);
+  })();
 
   const handleDragStart = (event: DragStartEvent) => {
     setDndSuppressed(true);

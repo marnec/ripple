@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 
 type FilterableTask = {
@@ -18,62 +17,60 @@ export function useFilteredTasks<T extends FilterableTask>(
   filters: TaskFilters,
   sort: TaskSort,
 ): T[] | undefined {
-  return useMemo(() => {
-    if (!tasks) return undefined;
+  if (!tasks) return undefined;
 
-    let result = tasks;
+  let result = tasks;
 
-    // Filter by completion
-    if (filters.completionFilter === "uncompleted") {
-      result = result.filter((t) => !t.completed);
-    } else if (filters.completionFilter === "completed") {
-      result = result.filter((t) => t.completed);
-    }
+  // Filter by completion
+  if (filters.completionFilter === "uncompleted") {
+    result = result.filter((t) => !t.completed);
+  } else if (filters.completionFilter === "completed") {
+    result = result.filter((t) => t.completed);
+  }
 
-    // Filter by assignee
-    if (filters.assigneeIds.length > 0) {
-      result = result.filter(
-        (t) => t.assigneeId && filters.assigneeIds.includes(t.assigneeId)
-      );
-    }
+  // Filter by assignee
+  if (filters.assigneeIds.length > 0) {
+    result = result.filter(
+      (t) => t.assigneeId && filters.assigneeIds.includes(t.assigneeId)
+    );
+  }
 
-    // Filter by priority
-    if (filters.priorities.length > 0) {
-      result = result.filter((t) => filters.priorities.includes(t.priority));
-    }
+  // Filter by priority
+  if (filters.priorities.length > 0) {
+    result = result.filter((t) => filters.priorities.includes(t.priority));
+  }
 
-    // Sort
-    if (sort) {
-      result = [...result].sort((a, b) => {
-        let cmp = 0;
-        switch (sort.field) {
-          case "created":
-            cmp = a._creationTime - b._creationTime;
-            break;
-          case "dueDate": {
-            // Tasks without dates sort to the end
-            const aDate = a.dueDate ?? "";
-            const bDate = b.dueDate ?? "";
-            if (!aDate && !bDate) cmp = 0;
-            else if (!aDate) cmp = 1;
-            else if (!bDate) cmp = -1;
-            else cmp = aDate.localeCompare(bDate);
-            break;
-          }
-          case "startDate": {
-            const aDate = a.startDate ?? "";
-            const bDate = b.startDate ?? "";
-            if (!aDate && !bDate) cmp = 0;
-            else if (!aDate) cmp = 1;
-            else if (!bDate) cmp = -1;
-            else cmp = aDate.localeCompare(bDate);
-            break;
-          }
+  // Sort
+  if (sort) {
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      switch (sort.field) {
+        case "created":
+          cmp = a._creationTime - b._creationTime;
+          break;
+        case "dueDate": {
+          // Tasks without dates sort to the end
+          const aDate = a.dueDate ?? "";
+          const bDate = b.dueDate ?? "";
+          if (!aDate && !bDate) cmp = 0;
+          else if (!aDate) cmp = 1;
+          else if (!bDate) cmp = -1;
+          else cmp = aDate.localeCompare(bDate);
+          break;
         }
-        return sort.direction === "asc" ? cmp : -cmp;
-      });
-    }
+        case "startDate": {
+          const aDate = a.startDate ?? "";
+          const bDate = b.startDate ?? "";
+          if (!aDate && !bDate) cmp = 0;
+          else if (!aDate) cmp = 1;
+          else if (!bDate) cmp = -1;
+          else cmp = aDate.localeCompare(bDate);
+          break;
+        }
+      }
+      return sort.direction === "asc" ? cmp : -cmp;
+    });
+  }
 
-    return result;
-  }, [tasks, filters.completionFilter, filters.assigneeIds, filters.priorities, sort]);
+  return result;
 }

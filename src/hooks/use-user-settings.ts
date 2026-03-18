@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 export interface UserSettings {
   notificationsEnabled: boolean;
@@ -53,7 +53,7 @@ function emitChange() {
 export function useUserSettings() {
   const settings = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const updateSettings = useCallback((patch: Partial<UserSettings>) => {
+  const updateSettings = (patch: Partial<UserSettings>) => {
     const current = getSnapshot();
     const next = { ...current, ...patch };
     const raw = JSON.stringify(next);
@@ -61,7 +61,7 @@ export function useUserSettings() {
     cachedRaw = raw;
     cachedSettings = next;
     emitChange();
-  }, []);
+  };
 
   return [settings, updateSettings] as const;
 }

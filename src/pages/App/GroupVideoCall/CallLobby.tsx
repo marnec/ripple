@@ -1,5 +1,5 @@
 import { ArrowLeft, Phone } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import {
   Select,
@@ -83,13 +83,13 @@ export function CallLobby({
     return d?.label || undefined;
   }
 
-  const updatePrefs = useCallback((partial: Partial<DevicePreferences>) => {
+  const updatePrefs = (partial: Partial<DevicePreferences>) => {
     setPrefs((prev) => {
       const next = { ...prev, ...partial };
       savePreferences(next);
       return next;
     });
-  }, []);
+  };
 
   return (
     <div className="flex h-full w-full items-center justify-center overflow-y-auto p-4">

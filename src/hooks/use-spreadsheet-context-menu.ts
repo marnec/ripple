@@ -1,4 +1,4 @@
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -97,46 +97,40 @@ export function useSpreadsheetContextMenu(
    * Register the capture-phase contextmenu listener on a wrapper element.
    * Returns a cleanup function for use in useEffect.
    */
-  const registerContextMenu = useCallback(
-    (wrapper: HTMLElement) => {
-      const onContextMenu = (e: MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
+  const registerContextMenu = (wrapper: HTMLElement) => {
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-        const target = e.target as HTMLElement;
-        const table = wrapper.querySelector(".jss_worksheet") as HTMLElement;
-        const ctx = resolveClickContext(target, table);
-        if (ctx) {
-          const menuW = 220;
-          const menuH = ctx.type === "cell" ? 240 : 130;
-          const x = Math.min(e.clientX, window.innerWidth - menuW);
-          const y = Math.min(e.clientY, window.innerHeight - menuH);
-          setMenu({ x: Math.max(0, x), y: Math.max(0, y), ctx });
-        } else {
-          setMenu(null);
-        }
-      };
+      const target = e.target as HTMLElement;
+      const table = wrapper.querySelector(".jss_worksheet") as HTMLElement;
+      const ctx = resolveClickContext(target, table);
+      if (ctx) {
+        const menuW = 220;
+        const menuH = ctx.type === "cell" ? 240 : 130;
+        const x = Math.min(e.clientX, window.innerWidth - menuW);
+        const y = Math.min(e.clientY, window.innerHeight - menuH);
+        setMenu({ x: Math.max(0, x), y: Math.max(0, y), ctx });
+      } else {
+        setMenu(null);
+      }
+    };
 
-      wrapper.addEventListener("contextmenu", onContextMenu, true);
-      return () =>
-        wrapper.removeEventListener("contextmenu", onContextMenu, true);
-    },
-    [],
-  );
+    wrapper.addEventListener("contextmenu", onContextMenu, true);
+    return () =>
+      wrapper.removeEventListener("contextmenu", onContextMenu, true);
+  };
 
   // --- Action helpers ---
 
-  const act = useCallback(
-    (fn: (w: Worksheet, ctx: ClickContext) => void) => {
-      return () => {
-        const w = worksheetRef.current;
-        if (!w || !menu) return;
-        fn(w, menu.ctx);
-        setMenu(null);
-      };
-    },
-    [menu, worksheetRef],
-  );
+  const act = (fn: (w: Worksheet, ctx: ClickContext) => void) => {
+    return () => {
+      const w = worksheetRef.current;
+      if (!w || !menu) return;
+      fn(w, menu.ctx);
+      setMenu(null);
+    };
+  };
 
   const actions = {
     insertRowAbove: act((w, ctx) => {
@@ -165,7 +159,7 @@ export function useSpreadsheetContextMenu(
     }),
   };
 
-  const dismiss = useCallback(() => setMenu(null), []);
+  const dismiss = () => setMenu(null);
 
   return { menu, menuRef, registerContextMenu, actions, dismiss };
 }

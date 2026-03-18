@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { cn } from "@/lib/utils";
@@ -49,7 +49,7 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
 
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
-  const closeAllSwipes = useCallback(() => setSwipeOpenId(null), []);
+  const closeAllSwipes = () => setSwipeOpenId(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Close swipe when tapping anywhere outside the task list
@@ -64,8 +64,7 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   }, [swipeOpenId]);
 
   // Advance task to the next status in column order (wraps around)
-  const advanceStatus = useCallback(
-    (taskId: string, currentStatusId: string) => {
+  const advanceStatus = (taskId: string, currentStatusId: string) => {
       if (!statuses || statuses.length === 0) return;
       const idx = statuses.findIndex((s) => s._id === currentStatusId);
       const nextStatus = statuses[(idx + 1) % statuses.length];
@@ -74,19 +73,14 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
         statusId: nextStatus._id as Id<"taskStatuses">,
       });
       setSwipeOpenId(null);
-    },
-    [statuses, updateTask],
-  );
+    };
 
   // Get next status label for a given task
-  const getNextStatus = useCallback(
-    (currentStatusId: string) => {
+  const getNextStatus = (currentStatusId: string) => {
       if (!statuses || statuses.length === 0) return null;
       const idx = statuses.findIndex((s) => s._id === currentStatusId);
       return statuses[(idx + 1) % statuses.length];
-    },
-    [statuses],
-  );
+    };
 
   if (allTasks === undefined || tasks === undefined) {
     return null;

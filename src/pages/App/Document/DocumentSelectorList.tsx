@@ -1,7 +1,7 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 import { useMutation } from "convex/react";
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import { ChevronRight, File, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -54,11 +54,8 @@ export const DocumentSelectorList = memo(function DocumentSelectorList({
   const createDocument = useMutation(api.documents.create);
   const toggleFavorite = useMutation(api.favorites.toggle);
 
-  const favoriteSet = useMemo(() => new Set(allFavoriteIds?.document ?? []), [allFavoriteIds]);
-  const favoriteDocs = useMemo(
-    () => documents?.filter((d) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES),
-    [documents, favoriteSet],
-  );
+  const favoriteSet = new Set(allFavoriteIds?.document ?? []);
+  const favoriteDocs = documents?.filter((d) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES);
 
   const handleUnstar = (id: Id<"documents">) => {
     void toggleFavorite({ workspaceId, resourceType: "document", resourceId: id });

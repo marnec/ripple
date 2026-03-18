@@ -3,7 +3,7 @@ import { useDiagramPreview } from "@/hooks/use-diagram-preview";
 import { defaultProps } from "@blocknote/core";
 import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
 import { CircleSlash } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Id } from "../../../../../convex/_generated/dataModel";
 
@@ -20,8 +20,7 @@ const DiagramView = ({
   const navigate = useNavigate();
   const { workspaceId } = useParams<{ workspaceId: string }>();
 
-  const svgContainerRef = useCallback(
-    (node: HTMLDivElement | null) => {
+  const svgContainerRef = (node: HTMLDivElement | null) => {
       if (!node || !onAspectRatioChange) return;
       const svg = node.querySelector("svg");
       if (!svg) return;
@@ -29,9 +28,7 @@ const DiagramView = ({
       if (width > 0 && height > 0) {
         onAspectRatioChange(height / width);
       }
-    },
-    [onAspectRatioChange],
-  );
+    };
 
   const handleClick = () => {
     if (diagram && workspaceId) {
@@ -97,17 +94,14 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   );
   const [showHandles, setShowHandles] = useState(false);
 
-  const handleAspectRatioChange = useCallback(
-    (ratio: number) => {
+  const handleAspectRatioChange = (ratio: number) => {
       setAspectRatio(ratio);
       if (ratio !== block.props.aspectRatio) {
         editor.updateBlock(block, {
           props: { aspectRatio: ratio },
         });
       }
-    },
-    [block, editor],
-  );
+    };
 
   const resizeHandleMouseDownHandler = (
     event: React.MouseEvent,

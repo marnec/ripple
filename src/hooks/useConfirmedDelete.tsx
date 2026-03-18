@@ -1,7 +1,7 @@
 import { DeleteWarningDialog } from "@/components/DeleteWarningDialog";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
@@ -45,27 +45,24 @@ export function useConfirmedDelete(
   const deleteMutation = useMutation(config.mutation);
   const [pending, setPending] = useState<PendingDelete | null>(null);
 
-  const requestDelete = useCallback(
-    async (id: Id<"diagrams"> | Id<"spreadsheets">, name: string) => {
-      try {
-        const result = (await deleteMutation({ id: id as any })) as DeleteResult;
+  const requestDelete = async (id: Id<"diagrams"> | Id<"spreadsheets">, name: string) => {
+    try {
+      const result = (await deleteMutation({ id: id as any })) as DeleteResult;
 
-        if (result?.status === "has_references") {
-          setPending({ id, name, references: result.references });
-        } else {
-          toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
-          options?.onDeleted?.();
-        }
-      } catch (error) {
-        toast.error(`Error deleting ${resourceType}`, {
-          description: error instanceof Error ? error.message : "Please try again",
-        });
+      if (result?.status === "has_references") {
+        setPending({ id, name, references: result.references });
+      } else {
+        toast.success(`${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} deleted`);
+        options?.onDeleted?.();
       }
-    },
-    [deleteMutation, resourceType, options],
-  );
+    } catch (error) {
+      toast.error(`Error deleting ${resourceType}`, {
+        description: error instanceof Error ? error.message : "Please try again",
+      });
+    }
+  };
 
-  const confirmDelete = useCallback(async () => {
+  const confirmDelete = async () => {
     if (!pending) return;
     try {
       await deleteMutation({ id: pending.id as any, force: true });
@@ -77,7 +74,7 @@ export function useConfirmedDelete(
         description: error instanceof Error ? error.message : "Please try again",
       });
     }
-  }, [pending, deleteMutation, resourceType, options]);
+  };
 
   const dialog = pending ? (
     <DeleteWarningDialog

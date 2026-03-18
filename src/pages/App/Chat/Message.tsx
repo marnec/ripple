@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation } from "convex/react";
 import { CornerUpLeft, Loader2, Pencil, Plus, Trash2, X as XIcon } from "lucide-react";
-import React, { Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useContext, useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import {
   ContextMenu,
@@ -82,7 +82,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
   const deleteMessage = useMutation(api.messages.remove)
   const toggleReaction = useMutation(api.messageReactions.toggle);
 
-  const handleReply = useCallback(() => {
+  const handleReply = () => {
     // Clear edit mode (mutually exclusive)
     setEditingMessage({ id: null, body: null });
     // Enter reply mode
@@ -92,38 +92,32 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
       plainText: message.plainText,
       body: message.body,
     });
-  }, [message, setEditingMessage, setReplyingTo]);
+  };
 
-  const handleEdit = useCallback(() => {
+  const handleEdit = () => {
     setReplyingTo(null); // Clear reply mode (mutually exclusive)
     setEditingMessage({ id: message._id, body: message.body });
-  }, [message, setEditingMessage, setReplyingTo]);
+  };
 
-  const handleDelete = useCallback(() => void deleteMessage({ id: message._id }), [message, deleteMessage])
+  const handleDelete = () => void deleteMessage({ id: message._id });
 
-  const handleQuickReaction = useCallback(
-    (unified: string, native: string) => {
-      void toggleReaction({ messageId: message._id, emoji: unified, emojiNative: native });
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    },
-    [message._id, toggleReaction],
-  );
+  const handleQuickReaction = (unified: string, native: string) => {
+    void toggleReaction({ messageId: message._id, emoji: unified, emojiNative: native });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  };
 
-  const handleEmojiClick = useCallback(
-    (emojiData: { unified: string; emoji: string }) => {
-      void toggleReaction({ messageId: message._id, emoji: emojiData.unified, emojiNative: emojiData.emoji });
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    },
-    [message._id, toggleReaction],
-  );
+  const handleEmojiClick = (emojiData: { unified: string; emoji: string }) => {
+    void toggleReaction({ messageId: message._id, emoji: emojiData.unified, emojiNative: emojiData.emoji });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  };
 
-  const blocks = useMemo(() => JSON.parse(body), [body]);
-  const messageHasImages = useMemo(() => hasImageBlocks(blocks), [blocks]);
+  const blocks = JSON.parse(body);
+  const messageHasImages = hasImageBlocks(blocks);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  const handleImageClick = useCallback((_thumbnailUrl: string, fullUrl: string) => {
+  const handleImageClick = (_thumbnailUrl: string, fullUrl: string) => {
     setLightboxUrl(fullUrl);
-  }, []);
+  };
 
   const formattedTime = new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' });
 

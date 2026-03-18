@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 
@@ -24,57 +24,51 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
     workspaceIdRef.current = workspaceId;
   }, [workspaceId]);
 
-  const uploadSingleFile = useCallback(
-    async (file: File): Promise<string> => {
-      const wsId = workspaceIdRef.current;
-      if (!wsId) throw new Error("Workspace not available for upload");
+  const uploadSingleFile = async (file: File): Promise<string> => {
+    const wsId = workspaceIdRef.current;
+    if (!wsId) throw new Error("Workspace not available for upload");
 
-      const uploadUrl = await generateUploadUrl();
+    const uploadUrl = await generateUploadUrl();
 
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
+    const result = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
 
-      if (!result.ok) {
-        throw new Error(`Upload failed: ${result.statusText}`);
-      }
+    if (!result.ok) {
+      throw new Error(`Upload failed: ${result.statusText}`);
+    }
 
-      const { storageId } = (await result.json()) as {
-        storageId: Id<"_storage">;
-      };
+    const { storageId } = (await result.json()) as {
+      storageId: Id<"_storage">;
+    };
 
-      const url = await saveMedia({
-        storageId,
-        workspaceId: wsId,
-        fileName: file.name,
-        mimeType: file.type,
-        size: file.size,
-        type: "image",
-      });
+    const url = await saveMedia({
+      storageId,
+      workspaceId: wsId,
+      fileName: file.name,
+      mimeType: file.type,
+      size: file.size,
+      type: "image",
+    });
 
-      return url;
-    },
-    [generateUploadUrl, saveMedia],
-  );
+    return url;
+  };
 
-  const uploadImageWithThumbnail = useCallback(
-    async (original: File, thumbnail: File, isOriginal: boolean): Promise<ImageUploadResult> => {
-      if (isOriginal) {
-        const url = await uploadSingleFile(original);
-        return { url, fullUrl: url };
-      }
+  const uploadImageWithThumbnail = async (original: File, thumbnail: File, isOriginal: boolean): Promise<ImageUploadResult> => {
+    if (isOriginal) {
+      const url = await uploadSingleFile(original);
+      return { url, fullUrl: url };
+    }
 
-      const [thumbnailUrl, fullUrl] = await Promise.all([
-        uploadSingleFile(thumbnail),
-        uploadSingleFile(original),
-      ]);
+    const [thumbnailUrl, fullUrl] = await Promise.all([
+      uploadSingleFile(thumbnail),
+      uploadSingleFile(original),
+    ]);
 
-      return { url: thumbnailUrl, fullUrl };
-    },
-    [uploadSingleFile],
-  );
+    return { url: thumbnailUrl, fullUrl };
+  };
 
   return workspaceId
     ? { uploadFile: uploadSingleFile, uploadImageWithThumbnail }

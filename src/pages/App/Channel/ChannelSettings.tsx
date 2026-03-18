@@ -14,7 +14,6 @@ import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
-import { useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -110,24 +109,21 @@ function ChannelNotificationSettings({ channelId }: { channelId: Id<"channels"> 
   const chanNotifPrefs = useQuery(api.channelNotificationPreferences.get, { channelId });
   const savePrefs = useMutation(api.channelNotificationPreferences.save);
 
-  const currentPrefs: Record<ChatNotificationCategory, boolean> = useMemo(() => {
+  const currentPrefs: Record<ChatNotificationCategory, boolean> = (() => {
     if (!chanNotifPrefs) return { ...DEFAULT_CHANNEL_CHAT_PREFERENCES };
     return Object.fromEntries(
       CHAT_NOTIFICATION_CATEGORIES.map((cat) => [cat, chanNotifPrefs[cat]]),
     ) as Record<ChatNotificationCategory, boolean>;
-  }, [chanNotifPrefs]);
+  })();
 
-  const handleToggle = useCallback(
-    (category: ChatNotificationCategory, enabled: boolean) => {
-      const updated = { ...currentPrefs, [category]: enabled, channelId };
-      // Turning on "new channel messages" also enables "@mentions in chat"
-      if (category === "chatChannelMessage" && enabled) {
-        updated.chatMention = true;
-      }
-      void savePrefs(updated);
-    },
-    [currentPrefs, savePrefs, channelId],
-  );
+  const handleToggle = (category: ChatNotificationCategory, enabled: boolean) => {
+    const updated = { ...currentPrefs, [category]: enabled, channelId };
+    // Turning on "new channel messages" also enables "@mentions in chat"
+    if (category === "chatChannelMessage" && enabled) {
+      updated.chatMention = true;
+    }
+    void savePrefs(updated);
+  };
 
   return (
     <section className="mb-8">

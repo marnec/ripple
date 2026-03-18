@@ -4,7 +4,7 @@ import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
 import { useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Doc, Id } from "../../../../convex/_generated/dataModel";
@@ -46,30 +46,27 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
 
   const channels = channelsProp as unknown as Doc<"channels">[] | undefined;
 
-  const channelIds = useMemo(() => channels?.map((c) => c._id).slice(0, 50) ?? [], [channels]);
+  const channelIds = channels?.map((c) => c._id).slice(0, 50) ?? [];
   const unreadCounts = useQuery(
     api.channelReads.getUnreadCounts,
     channelIds.length > 0 ? { channelIds } : "skip",
   );
-  const unreadMap = useMemo(() => {
+  const unreadMap = (() => {
     const m = new Map<string, number>();
     unreadCounts?.forEach(({ channelId, count }) => m.set(channelId, count));
     return m;
-  }, [unreadCounts]);
+  })();
 
-  const channelEntries = useMemo(
-    () => channels?.map((c) => ({ id: c._id, name: c.name })),
-    [channels],
-  );
+  const channelEntries = channels?.map((c) => ({ id: c._id, name: c.name }));
   const { displayList, newCount, removedCount, acknowledgeAll, acknowledgeOne, autoAcknowledgeNext } =
     useAcknowledgedChannels(workspaceId, channelEntries, isChannelListVisible);
 
   // Build a map from id → Doc for live channels
-  const channelMap = useMemo(() => {
+  const channelMap = (() => {
     const m = new Map<string, Doc<"channels">>();
     if (channels) for (const c of channels) m.set(c._id, c);
     return m;
-  }, [channels]);
+  })();
 
   const navigateToChannelSettings = (id: Id<"channels">) => {
     if (isMobile) setOpen(false);

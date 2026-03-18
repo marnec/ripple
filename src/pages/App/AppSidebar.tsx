@@ -19,7 +19,6 @@ import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex/react";
 import { LayoutGroup, motion } from "framer-motion";
 import { CheckSquare } from "lucide-react";
-import { useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
@@ -48,7 +47,7 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
   const sidebarData = useWorkspaceSidebar();
 
-  const handleChannelSelect = useCallback((id: string | null) => {
+  const handleChannelSelect = (id: string | null) => {
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/channels`);
     } else {
@@ -56,62 +55,62 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
       if (isMobile) setOpen(false);
       if (settings.notificationsEnabled) void subscribeUser();
     }
-  }, [navigate, workspaceId, isMobile, setOpen, settings.notificationsEnabled, subscribeUser]);
+  };
 
-  const handleDocumentSelect = useCallback((id: string | null) => {
+  const handleDocumentSelect = (id: string | null) => {
     if (isMobile) setOpen(false);
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/documents`);
     } else {
       void navigate(`/workspaces/${workspaceId}/documents/${id}`);
     }
-  }, [navigate, workspaceId, isMobile, setOpen]);
+  };
 
-  const handleDiagramSelect = useCallback((id: string | null) => {
+  const handleDiagramSelect = (id: string | null) => {
     if (isMobile) setOpen(false);
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/diagrams`);
     } else {
       void navigate(`/workspaces/${workspaceId}/diagrams/${id}`);
     }
-  }, [navigate, workspaceId, isMobile, setOpen]);
+  };
 
-  const handleSpreadsheetSelect = useCallback((id: string | null) => {
+  const handleSpreadsheetSelect = (id: string | null) => {
     if (isMobile) setOpen(false);
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/spreadsheets`);
     } else {
       void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}`);
     }
-  }, [navigate, workspaceId, isMobile, setOpen]);
+  };
 
-  const handleWorkspaceSelect = useCallback((id: string) => {
+  const handleWorkspaceSelect = (id: string) => {
     void navigate(`/workspaces/${id}`);
-  }, [navigate]);
+  };
 
-  const handleProjectSelect = useCallback((id: string | null) => {
+  const handleProjectSelect = (id: string | null) => {
     if (isMobile) setOpen(false);
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/projects`);
     } else {
       void navigate(`/workspaces/${workspaceId}/projects/${id}/tasks`);
     }
-  }, [navigate, workspaceId, isMobile, setOpen]);
+  };
 
-  const handleMyTasksClick = useCallback(() => {
+  const handleMyTasksClick = () => {
     if (!workspaceId) return;
     if (isMobile) setOpen(false);
     void navigate(`/workspaces/${workspaceId}/my-tasks`);
-  }, [navigate, workspaceId, isMobile, setOpen]);
+  };
 
   const isMyTasksActive = location.pathname.includes("/my-tasks");
 
-  const toggleChannels = useCallback(() => toggle("channels"), [toggle]);
-  const toggleProjects = useCallback(() => toggle("projects"), [toggle]);
-  const toggleDocuments = useCallback(() => toggle("documents"), [toggle]);
-  const toggleDiagrams = useCallback(() => toggle("diagrams"), [toggle]);
-  const toggleSpreadsheets = useCallback(() => toggle("spreadsheets"), [toggle]);
-  const toggleRecents = useCallback(() => toggle("recents"), [toggle]);
+  const toggleChannels = () => toggle("channels");
+  const toggleProjects = () => toggle("projects");
+  const toggleDocuments = () => toggle("documents");
+  const toggleDiagrams = () => toggle("diagrams");
+  const toggleSpreadsheets = () => toggle("spreadsheets");
+  const toggleRecents = () => toggle("recents");
 
   return (
     <Sidebar collapsible="offcanvas">

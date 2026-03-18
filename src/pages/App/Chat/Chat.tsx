@@ -6,7 +6,7 @@ import { MessageList } from "@/pages/App/Chat/MessageList";
 import { MessageWithAuthor } from "@shared/types/channel";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { SearchIcon, Settings } from "lucide-react";
-import React, { Fragment, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, Suspense, useContext, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -59,18 +59,12 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   } = usePaginatedQuery(api.messages.list, { channelId }, { initialNumItems: 25 });
 
   const user = useContext(UserContext);
-  const messageIds = useMemo(
-    () => (messages ?? []).map((m) => m._id),
-    [messages],
-  );
+  const messageIds = (messages ?? []).map((m) => m._id);
   const reactionsMap = useQuery(
     api.messageReactions.listForMessages,
     messageIds.length > 0 ? { messageIds } : "skip",
   );
-  const groupInfos = useMemo(
-    () => computeGroupPositions(messages ?? [], user?._id),
-    [messages, user?._id],
-  );
+  const groupInfos = computeGroupPositions(messages ?? [], user?._id);
 
   const sendMessage = useMutation(api.messages.send);
   const editMessage = useMutation(api.messages.update);

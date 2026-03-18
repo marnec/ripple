@@ -1,5 +1,5 @@
 import { useAction, useConvexAuth } from "convex/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import PartySocket from "partysocket";
 import { api } from "../../convex/_generated/api";
@@ -55,20 +55,23 @@ export function useWorkspacePresence() {
 
   // Clear presence data on workspace or auth changes (NOT on reconnects,
   // so follow-mode survives brief WebSocket reconnections)
-  useEffect(() => {
+  const resetKey = `${workspaceId}_${isAuthenticated}`;
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (prevResetKey !== resetKey) {
+    setPrevResetKey(resetKey);
     setPresenceMap(new Map());
     setIsConnected(false);
-  }, [workspaceId, isAuthenticated]);
+  }
 
   // Track current location for sending updates
   const pathnameRef = useRef(pathname);
   const paramsRef = useRef(params);
-  pathnameRef.current = pathname;
-  paramsRef.current = params;
-
-  // Stable ref for getToken to avoid effect re-runs
   const getTokenRef = useRef(getToken);
-  getTokenRef.current = getToken;
+  useEffect(() => {
+    pathnameRef.current = pathname;
+    paramsRef.current = params;
+    getTokenRef.current = getToken;
+  });
 
   // Connect to presence party
   useEffect(() => {
@@ -221,7 +224,7 @@ export function useWorkspacePresence() {
   }, [workspaceId, isAuthenticated, reconnectTrigger]);
 
   // Send presence_update on route changes (while connected)
-  const sendPresenceUpdate = useCallback(() => {
+  const sendPresenceUpdate = () => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN)
       return;
 
@@ -236,11 +239,10 @@ export function useWorkspacePresence() {
         resourceId,
       }),
     );
-  }, []);
+  };
 
   useEffect(() => {
     sendPresenceUpdate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pathname,
     params.workspaceId,

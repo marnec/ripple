@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { api } from "../../../../convex/_generated/api";
@@ -80,7 +80,7 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
 
 
   // Clamp node positions on every tick
-  const handleEngineTick = useCallback(() => {
+  const handleEngineTick = () => {
     if (width === 0 || height === 0) return;
     const padding = 50;
     const halfW = width / 2 - padding;
@@ -95,19 +95,16 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
         if (node.y > halfH) { node.y = halfH; if (node.vy !== undefined) node.vy = 0; }
       }
     }
-  }, [width, height]);
+  };
 
-  const handleNodeClick = useCallback(
-    (node: GraphNode) => {
+  const handleNodeClick = (node: GraphNode) => {
       const route = getNodeRoute(node, workspaceId);
       if (route) void navigate(route);
-    },
-    [navigate, workspaceId],
-  );
+    };
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const handleNodeHover = useCallback((node: GraphNode | null) => {
+  const handleNodeHover = (node: GraphNode | null) => {
     hoveredNodeRef.current = node?.id ?? null;
     if (wrapperRef.current) {
       wrapperRef.current.style.cursor = node && !node.isolated ? "pointer" : "default";
@@ -127,10 +124,9 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
         setLabelQuery({ id: nodeId, type: nodeType });
       }, 200);
     }
-  }, []);
+  };
 
-  const paintNode = useCallback(
-    (node: GraphNode, ctx: CanvasRenderingContext2D) => {
+  const paintNode = (node: GraphNode, ctx: CanvasRenderingContext2D) => {
       const size = getNodeSize(node.type);
       const color = getNodeColor(node.type, isDark);
       const isHovered = hoveredNodeRef.current === node.id;
@@ -174,12 +170,10 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
           ctx.fillText(label, x, y + size + 2);
         }
       }
-    },
-    [isDark],
-  );
+    };
 
   // Build graph data: connected nodes from edges + anonymous isolated nodes from counts
-  const graphData = useMemo(() => {
+  const graphData = (() => {
     if (!graph) return { nodes: [] as GraphNode[], links: [] as GraphLink[] };
 
     // Connected nodes from edges (no names)
@@ -252,7 +246,7 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
     }
 
     return { nodes: allNodes, links: [...links, ...groupLinks] };
-  }, [graph, counts, hiddenTypes]);
+  })();
 
   useEffect(() => {
     nodesRef.current = graphData.nodes;

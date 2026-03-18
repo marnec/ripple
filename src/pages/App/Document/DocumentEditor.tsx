@@ -11,7 +11,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
 import { Link2, Link2Off, Settings } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -120,78 +120,66 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   });
 
   // Track cell ref removals and clean up orphaned cache entries
-  const onCellRefsRemoved = useCallback(
-    (removed: Set<string>) => {
-      for (const key of removed) {
-        const sep = key.indexOf("|");
-        const spreadsheetId = key.slice(0, sep) as Id<"spreadsheets">;
-        const cellRef = key.slice(sep + 1);
-        void removeCellRef({ spreadsheetId, cellRef });
-      }
-    },
-    [removeCellRef],
-  );
+  const onCellRefsRemoved = (removed: Set<string>) => {
+    for (const key of removed) {
+      const sep = key.indexOf("|");
+      const spreadsheetId = key.slice(0, sep) as Id<"spreadsheets">;
+      const cellRef = key.slice(sep + 1);
+      void removeCellRef({ spreadsheetId, cellRef });
+    }
+  };
   useEditorTracking(editor, extractCellRefs, { onRemoved: onCellRefsRemoved });
 
   // Track document block ref removals
-  const onDocBlockRefsRemoved = useCallback(
-    (removed: Set<string>) => {
-      for (const key of removed) {
-        const sep = key.indexOf("|");
-        const docId = key.slice(0, sep) as Id<"documents">;
-        const blockId = key.slice(sep + 1);
-        void removeBlockRef({ documentId: docId, blockId });
-      }
-    },
-    [removeBlockRef],
-  );
+  const onDocBlockRefsRemoved = (removed: Set<string>) => {
+    for (const key of removed) {
+      const sep = key.indexOf("|");
+      const docId = key.slice(0, sep) as Id<"documents">;
+      const blockId = key.slice(sep + 1);
+      void removeBlockRef({ documentId: docId, blockId });
+    }
+  };
   useEditorTracking(editor, extractDocBlockRefs, { onRemoved: onDocBlockRefsRemoved });
 
   // Track @mention additions: sync to edges + notify new mentions
-  const onMentionsChanged = useCallback(
-    (current: Set<string>, previous: Set<string>) => {
-      // Sync mention edges (persistent graph)
-      if (document) {
-        void syncMentionEdges({
-          sourceType: "document",
-          sourceId: documentId,
-          mentionedUserIds: [...current],
-          workspaceId: document.workspaceId,
-        });
-      }
-      // Notify newly mentioned users
-      const newMentions = [...current].filter((id) => !previous.has(id));
-      if (newMentions.length > 0) {
-        void reportMention({
-          documentId,
-          mentionedUserIds: newMentions as Id<"users">[],
-        });
-      }
-    },
-    [reportMention, documentId, document, syncMentionEdges],
-  );
+  const onMentionsChanged = (current: Set<string>, previous: Set<string>) => {
+    // Sync mention edges (persistent graph)
+    if (document) {
+      void syncMentionEdges({
+        sourceType: "document",
+        sourceId: documentId,
+        mentionedUserIds: [...current],
+        workspaceId: document.workspaceId,
+      });
+    }
+    // Notify newly mentioned users
+    const newMentions = [...current].filter((id) => !previous.has(id));
+    if (newMentions.length > 0) {
+      void reportMention({
+        documentId,
+        mentionedUserIds: newMentions as Id<"users">[],
+      });
+    }
+  };
   useEditorTracking(editor, extractMentions, { onChanged: onMentionsChanged, syncOnMount: true });
 
   // Sync hard-embed references (diagrams, spreadsheets, documents) to edges table
-  const onEmbedsChanged = useCallback(
-    (current: Set<string>) => {
-      if (!document) return;
-      const references = [...current].map((key) => {
-        const sep = key.indexOf("|");
-        return {
-          targetType: key.slice(0, sep) as "diagram" | "spreadsheet" | "document",
-          targetId: key.slice(sep + 1),
-        };
-      });
-      void syncEdges({
-        sourceType: "document",
-        sourceId: documentId,
-        references,
-        workspaceId: document.workspaceId,
-      });
-    },
-    [document, documentId, syncEdges],
-  );
+  const onEmbedsChanged = (current: Set<string>) => {
+    if (!document) return;
+    const references = [...current].map((key) => {
+      const sep = key.indexOf("|");
+      return {
+        targetType: key.slice(0, sep) as "diagram" | "spreadsheet" | "document",
+        targetId: key.slice(sep + 1),
+      };
+    });
+    void syncEdges({
+      sourceType: "document",
+      sourceId: documentId,
+      references,
+      workspaceId: document.workspaceId,
+    });
+  };
   useEditorTracking(editor, extractHardEmbeds, {
     onChanged: onEmbedsChanged,
     syncOnMount: true,
@@ -208,7 +196,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const [stylesActive, setStylesActive] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const handleToggleReferences = useCallback(() => {
+  const handleToggleReferences = () => {
     if (showReferencedBlocks) {
       setShowReferencedBlocks(false);
       clearTimeout(hideTimerRef.current);
@@ -219,25 +207,22 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       setShowReferencedBlocks(true);
       setBacklinksOpen(true);
     }
-  }, [showReferencedBlocks]);
+  };
 
   useEffect(() => () => clearTimeout(hideTimerRef.current), []);
 
   // Protect referenced blocks from accidental deletion
-  const onReferencedBlocksDeleted = useCallback(
-    (blockIds: string[]) => {
-      for (const blockId of blockIds) {
-        void removeBlockRef({ documentId, blockId });
-      }
-    },
-    [removeBlockRef, documentId],
-  );
+  const onReferencedBlocksDeleted = (blockIds: string[]) => {
+    for (const blockId of blockIds) {
+      void removeBlockRef({ documentId, blockId });
+    }
+  };
   useReferencedBlockDeleteProtection(editor, referencedBlockIds, onReferencedBlocksDeleted);
 
   // Build dynamic CSS rules targeting referenced blocks by their stable data-id
   // (ProseMirror preserves data-id but wipes custom attributes on re-render)
   // stylesActive keeps the <style> in the DOM during exit so the transition can play out.
-  const referencedBlockStyles = useMemo(() => {
+  const referencedBlockStyles = (() => {
     if (!stylesActive || referencedBlockIds.size === 0) return null;
     const rules = [...referencedBlockIds]
       .map((id) => `.bn-block-outer[data-id="${id}"] > .bn-block`)
@@ -258,7 +243,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   padding-left: 0;
   transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
 }`;
-  }, [showReferencedBlocks, stylesActive, referencedBlockIds]);
+  })();
 
   // Cold-start snapshot fallback: offline + no editor from IndexedDB
   const { isColdStart, snapshotDoc } = useSnapshotFallback({

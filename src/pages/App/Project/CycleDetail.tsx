@@ -5,7 +5,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useMutation, useQuery } from "convex/react";
 import { X } from "lucide-react";
-import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -67,7 +67,7 @@ function CycleDetailContent({
   const removeTask = useMutation(api.cycles.removeTask);
 
   const filteredTasks = useFilteredTasks(cycleTasks, filters, sort);
-  const closeAllSwipes = useCallback(() => setSwipeOpenId(null), []);
+  const closeAllSwipes = () => setSwipeOpenId(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Close swipe when tapping anywhere outside the task list

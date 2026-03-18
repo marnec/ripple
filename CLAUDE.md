@@ -30,6 +30,7 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 - **Backend**: Convex (database, server functions, auth)
 - **Real-time**: partyserver + y-partyserver (Yjs sync via Cloudflare Durable Objects), WebRTC (video calls)
 - **Editor**: BlockNote with custom blocks (Excalidraw diagrams)
+- **Compiler**: React Compiler (`babel-plugin-react-compiler`) is active — **do not use `useCallback` or `useMemo`** for performance optimization. The compiler handles memoization automatically. Only use these hooks if there is a semantic reason beyond caching (which is essentially never with React Compiler).
 
 ### Directory Structure
 ```

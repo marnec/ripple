@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type { ExcalidrawBinding } from "y-excalidraw";
 import * as Y from "yjs";
@@ -51,8 +51,8 @@ export function useDiagramCollaboration({
   const bindingRef = useRef<ExcalidrawBinding | null>(null);
 
   // Create stable Yjs structures for Excalidraw elements and assets
-  const yElements = useMemo(() => yDoc.getArray<Y.Map<any>>("elements"), [yDoc]);
-  const yAssets = useMemo(() => yDoc.getMap("assets"), [yDoc]);
+  const yElements = yDoc.getArray<Y.Map<any>>("elements");
+  const yAssets = yDoc.getMap("assets");
 
   // Set up IndexedDB persistence for offline cache
   // CRITICAL: Decouple from provider - IndexedDB initializes independently

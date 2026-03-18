@@ -6,7 +6,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { FileText, PenTool, Table } from "lucide-react";
 import { useMutation } from "convex/react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
@@ -55,8 +55,7 @@ export function TaskDescriptionEditor({
     group: "Project members",
   });
 
-  const handleBlockPickerInsert = useCallback(
-    (blockId: string) => {
+  const handleBlockPickerInsert = (blockId: string) => {
       if (!editor || !blockPickerDialog) return;
 
       const { documentId } = blockPickerDialog;
@@ -75,12 +74,9 @@ export function TaskDescriptionEditor({
 
       void ensureBlockRef({ documentId, blockId });
       setBlockPickerDialog(null);
-    },
-    [editor, blockPickerDialog, ensureBlockRef],
-  );
+    };
 
-  const handleCellRefInsert = useCallback(
-    (cellRef: string | null) => {
+  const handleCellRefInsert = (cellRef: string | null) => {
       if (!editor || !cellRefDialog) return;
 
       const { spreadsheetId } = cellRefDialog;
@@ -118,9 +114,7 @@ export function TaskDescriptionEditor({
         ]);
       }
       setCellRefDialog(null);
-    },
-    [editor, cellRefDialog, ensureCellRef],
-  );
+    };
 
   if (!editor) {
     return <div className={className} />;

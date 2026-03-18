@@ -8,7 +8,7 @@ import {
   useTransform,
   type ValueAnimationTransition,
 } from "framer-motion";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 const MAX_TRANSLATE = 80; // px the row slides open
 const THRESHOLD = 60; // px drag needed to snap open/closed
@@ -43,13 +43,10 @@ export function SwipeToReveal({
   const isOpen = controlledOpen ?? internalOpen;
   const reduceMotion = useReducedMotion();
 
-  const setOpen = useCallback(
-    (v: boolean) => {
-      setInternalOpen(v);
-      onOpenChange?.(v);
-    },
-    [onOpenChange],
-  );
+  const setOpen = (v: boolean) => {
+    setInternalOpen(v);
+    onOpenChange?.(v);
+  };
 
   const x = useMotionValue(0);
   // Exposed as CSS var so the action panel can size itself with it

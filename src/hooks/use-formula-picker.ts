@@ -1,5 +1,5 @@
 import type { FormulaPickerHandle } from "@/pages/App/Spreadsheet/FormulaPickerDropdown";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 interface FormulaPickerState {
   visible: boolean;
@@ -22,56 +22,53 @@ export function useFormulaPicker() {
   const formulaPickerHandleRef = useRef<FormulaPickerHandle>(null);
 
   /** Call from jspreadsheet's `oneditionstart` callback. */
-  const onEditionStart = useCallback(
-    (td: HTMLTableCellElement, wrapper: HTMLElement) => {
-      requestAnimationFrame(() => {
-        const editorEl =
-          td.querySelector<HTMLInputElement>("input") ??
-          td.querySelector<HTMLTextAreaElement>("textarea");
-        if (!editorEl) return;
-        editorInputRef.current = editorEl;
+  const onEditionStart = (td: HTMLTableCellElement, wrapper: HTMLElement) => {
+    requestAnimationFrame(() => {
+      const editorEl =
+        td.querySelector<HTMLInputElement>("input") ??
+        td.querySelector<HTMLTextAreaElement>("textarea");
+      if (!editorEl) return;
+      editorInputRef.current = editorEl;
 
-        const onInput = () => {
-          const value = editorEl.value;
-          if (value.startsWith("=") && value.length >= 1) {
-            const query = value.substring(1);
-            if (!query.includes("(")) {
-              const rect = td.getBoundingClientRect();
-              setFormulaPicker({
-                visible: true,
-                position: { x: rect.left, y: rect.bottom + 2 },
-                query,
-              });
-            } else {
-              setFormulaPicker(null);
-            }
+      const onInput = () => {
+        const value = editorEl.value;
+        if (value.startsWith("=") && value.length >= 1) {
+          const query = value.substring(1);
+          if (!query.includes("(")) {
+            const rect = td.getBoundingClientRect();
+            setFormulaPicker({
+              visible: true,
+              position: { x: rect.left, y: rect.bottom + 2 },
+              query,
+            });
           } else {
             setFormulaPicker(null);
           }
-        };
+        } else {
+          setFormulaPicker(null);
+        }
+      };
 
-        editorEl.addEventListener("input", onInput);
-        inputListenerRef.current = onInput;
+      editorEl.addEventListener("input", onInput);
+      inputListenerRef.current = onInput;
 
-        // Dismiss on scroll
-        const scrollContainer =
-          wrapper.querySelector(".jss_content") || wrapper;
-        const onScroll = () => setFormulaPicker(null);
-        scrollContainer.addEventListener("scroll", onScroll, {
-          passive: true,
-        });
-        scrollListenerRef.current = () =>
-          scrollContainer.removeEventListener("scroll", onScroll);
-
-        // Check initial value (user may have typed "=" to trigger editor)
-        onInput();
+      // Dismiss on scroll
+      const scrollContainer =
+        wrapper.querySelector(".jss_content") || wrapper;
+      const onScroll = () => setFormulaPicker(null);
+      scrollContainer.addEventListener("scroll", onScroll, {
+        passive: true,
       });
-    },
-    [],
-  );
+      scrollListenerRef.current = () =>
+        scrollContainer.removeEventListener("scroll", onScroll);
+
+      // Check initial value (user may have typed "=" to trigger editor)
+      onInput();
+    });
+  };
 
   /** Call from jspreadsheet's `oneditionend` callback. */
-  const onEditionEnd = useCallback(() => {
+  const onEditionEnd = () => {
     if (editorInputRef.current && inputListenerRef.current) {
       editorInputRef.current.removeEventListener(
         "input",
@@ -83,10 +80,10 @@ export function useFormulaPicker() {
     inputListenerRef.current = null;
     scrollListenerRef.current = null;
     setFormulaPicker(null);
-  }, []);
+  };
 
   /** Insert the selected formula into the active cell editor. */
-  const insertFormula = useCallback((formulaName: string) => {
+  const insertFormula = (formulaName: string) => {
     const el = editorInputRef.current;
     if (!el) return;
     el.value = `=${formulaName}(`;
@@ -95,38 +92,35 @@ export function useFormulaPicker() {
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.focus();
     setFormulaPicker(null);
-  }, []);
+  };
 
   /**
    * Register capture-phase keyboard interception on the wrapper element.
    * Must be called in a useEffect so it can be cleaned up.
    */
-  const registerKeyboardInterception = useCallback(
-    (wrapper: HTMLElement) => {
-      if (!formulaPicker?.visible) return undefined;
+  const registerKeyboardInterception = (wrapper: HTMLElement) => {
+    if (!formulaPicker?.visible) return undefined;
 
-      const onKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.stopPropagation();
-          e.preventDefault();
-          formulaPickerHandleRef.current?.handleKey(e.key);
-        } else if (e.key === "Enter" || e.key === "Tab") {
-          e.stopPropagation();
-          e.preventDefault();
-          const selected = formulaPickerHandleRef.current?.handleKey("Enter");
-          if (selected) insertFormula(selected);
-        } else if (e.key === "Escape") {
-          e.stopPropagation();
-          e.preventDefault();
-          setFormulaPicker(null);
-        }
-      };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.stopPropagation();
+        e.preventDefault();
+        formulaPickerHandleRef.current?.handleKey(e.key);
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        e.stopPropagation();
+        e.preventDefault();
+        const selected = formulaPickerHandleRef.current?.handleKey("Enter");
+        if (selected) insertFormula(selected);
+      } else if (e.key === "Escape") {
+        e.stopPropagation();
+        e.preventDefault();
+        setFormulaPicker(null);
+      }
+    };
 
-      wrapper.addEventListener("keydown", onKeyDown, true);
-      return () => wrapper.removeEventListener("keydown", onKeyDown, true);
-    },
-    [formulaPicker?.visible, insertFormula],
-  );
+    wrapper.addEventListener("keydown", onKeyDown, true);
+    return () => wrapper.removeEventListener("keydown", onKeyDown, true);
+  };
 
   return {
     formulaPicker,

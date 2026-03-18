@@ -8,7 +8,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import React, { useMemo } from "react";
+import React from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 
@@ -37,7 +37,7 @@ export function DynamicBreadcrumb() {
   const sidebarData = useWorkspaceSidebar();
   const workspaces = useQuery(api.workspaces.list);
 
-  const items = useMemo(() => {
+  const items = (() => {
     const pathSegments = location.pathname.split("/").filter(Boolean);
     const built: BreadcrumbItemData[] = [];
     for (let i = 0; i < pathSegments.length; i++) {
@@ -56,10 +56,10 @@ export function DynamicBreadcrumb() {
       }
     }
     return built;
-  }, [location.pathname]);
+  })();
 
   // Resolve names client-side from sidebar data + workspace list when possible
-  const localNames = useMemo(() => {
+  const localNames = (() => {
     const map = new Map<string, string>();
     for (const item of items) {
       if (!item.resourceId || !item.category) continue;
@@ -76,27 +76,24 @@ export function DynamicBreadcrumb() {
       if (found) map.set(item.resourceId, found.name);
     }
     return map;
-  }, [sidebarData, workspaces, items]);
+  })();
 
   // Only fetch from server for IDs not resolved locally (tasks, cycles, workspaces)
-  const unresolvedIds = useMemo(
-    () => items
-      .filter((item) => item.resourceId && !localNames.has(item.resourceId))
-      .map((item) => item.resourceId!),
-    [items, localNames],
-  );
+  const unresolvedIds = items
+    .filter((item) => item.resourceId && !localNames.has(item.resourceId))
+    .map((item) => item.resourceId!);
   const serverNamesMap = useQuery(
     api.breadcrumb.getResourceNames,
     unresolvedIds.length > 0 ? { resourceIds: unresolvedIds as any } : "skip",
   );
 
   // Merge local + server names
-  const namesMap = useMemo(() => {
+  const namesMap = (() => {
     const merged: Record<string, string | null> = {};
     for (const [id, name] of localNames) merged[id] = name;
     if (serverNamesMap) Object.assign(merged, serverNamesMap);
     return merged;
-  }, [localNames, serverNamesMap]);
+  })();
 
   // Show "..." only for unresolved IDs that are still loading from the server
   const isLoading = unresolvedIds.length > 0 && !serverNamesMap;

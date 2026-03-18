@@ -9,7 +9,7 @@ import {
   UnderlineIcon,
 } from "@radix-ui/react-icons";
 import { ImageIcon } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import { Toggle } from "../../../components/ui/toggle";
 import { generateThumbnail } from "@/lib/image-thumbnail";
@@ -53,7 +53,7 @@ export function FormattingToolbar({
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const syncStyles = useCallback(() => {
+  const syncStyles = () => {
     const styles = editor.getActiveStyles();
     setActiveStyles({
       bold: !!styles.bold,
@@ -62,7 +62,7 @@ export function FormattingToolbar({
       strike: !!styles.strike,
       code: !!styles.code,
     });
-  }, [editor]);
+  };
 
   useEditorSelectionChange(syncStyles, editor);
   useEditorChange(syncStyles, editor);

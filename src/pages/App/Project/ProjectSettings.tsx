@@ -16,7 +16,7 @@ import {
 import { useMutation, useQuery } from "convex/react";
 import { useViewer } from "../UserContext";
 import { Trash2 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
@@ -224,24 +224,21 @@ function ProjectNotificationSettings({ projectId }: { projectId: Id<"projects"> 
   const projNotifPrefs = useQuery(api.projectNotificationPreferences.get, { projectId });
   const savePrefs = useMutation(api.projectNotificationPreferences.save);
 
-  const currentPrefs: Record<TaskNotificationCategory, boolean> = useMemo(() => {
+  const currentPrefs: Record<TaskNotificationCategory, boolean> = (() => {
     if (!projNotifPrefs) return { ...DEFAULT_PROJECT_TASK_PREFERENCES };
     return Object.fromEntries(
       TASK_NOTIFICATION_CATEGORIES.map((cat) => [cat, projNotifPrefs[cat]]),
     ) as Record<TaskNotificationCategory, boolean>;
-  }, [projNotifPrefs]);
+  })();
 
-  const handleToggle = useCallback(
-    (category: TaskNotificationCategory, enabled: boolean) => {
+  const handleToggle = (category: TaskNotificationCategory, enabled: boolean) => {
       const updated = { ...currentPrefs, [category]: enabled, projectId };
       // Turning on "comments on assigned tasks" also enables "mentioned in task comment"
       if (category === "taskComment" && enabled) {
         updated.taskCommentMention = true;
       }
       void savePrefs(updated);
-    },
-    [currentPrefs, savePrefs, projectId],
-  );
+    };
 
   return (
     <>

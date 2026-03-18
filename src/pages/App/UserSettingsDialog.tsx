@@ -17,7 +17,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useUserSettings } from "@/hooks/use-user-settings";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { Label } from "@/components/ui/label";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Settings } from "lucide-react";
 
@@ -41,22 +41,19 @@ export function UserSettingsDialog({
     typeof window !== "undefined" && "Notification" in window;
   const permissionDenied = pushNotifications.permission === "denied";
 
-  const handleNotificationsChange = useCallback(
-    async (enabled: boolean) => {
-      setBusy(true);
-      try {
-        updateSettings({ notificationsEnabled: enabled });
-        if (enabled) {
-          await pushRef.current.subscribeUser();
-        } else {
-          await pushRef.current.unsubscribeUser();
-        }
-      } finally {
-        setBusy(false);
+  const handleNotificationsChange = async (enabled: boolean) => {
+    setBusy(true);
+    try {
+      updateSettings({ notificationsEnabled: enabled });
+      if (enabled) {
+        await pushRef.current.subscribeUser();
+      } else {
+        await pushRef.current.unsubscribeUser();
       }
-    },
-    [updateSettings],
-  );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const masterEnabled = settings.notificationsEnabled;
 

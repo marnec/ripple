@@ -1,5 +1,4 @@
 import { useQuery } from "convex/react";
-import { useMemo } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { Message } from "./Message";
@@ -21,10 +20,7 @@ export function MessageContext({ messageId, channelId: _channelId, onClose, onBa
   const messages = contextData?.messages;
   const targetIndex = contextData?.targetIndex;
 
-  const contextMessageIds = useMemo(
-    () => (messages ?? []).map((m) => m._id),
-    [messages],
-  );
+  const contextMessageIds = (messages ?? []).map((m) => m._id);
   const reactionsMap = useQuery(
     api.messageReactions.listForMessages,
     contextMessageIds.length > 0 ? { messageIds: contextMessageIds } : "skip",

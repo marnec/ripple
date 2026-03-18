@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useAction } from "convex/react";
 import {
   ResponsiveDialog,
@@ -142,12 +142,12 @@ export function BlockPickerDialog({
 
   const isLoading = open && blocks === null;
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     if (!blocks) return [];
     if (!search.trim()) return blocks;
     const q = search.toLowerCase();
     return blocks.filter((b) => b.text.toLowerCase().includes(q));
-  }, [blocks, search]);
+  })();
 
   const handleSelect = (blockId: string) => {
     onInsert(blockId);

@@ -13,7 +13,7 @@ import {
   type NotificationCategory,
 } from "@shared/notificationCategories";
 import { useMutation, useQuery } from "convex/react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
@@ -101,26 +101,19 @@ function WorkspaceNotificationSettings() {
   const prefs = useQuery(api.notificationPreferences.get);
   const savePrefs = useMutation(api.notificationPreferences.save);
 
-  const currentPrefs: Record<NotificationCategory, boolean> = useMemo(
-    () =>
-      prefs
+  const currentPrefs: Record<NotificationCategory, boolean> = prefs
         ? (Object.fromEntries(
             Object.entries(DEFAULT_PREFERENCES).map(([key]) => [
               key,
               prefs[key as NotificationCategory],
             ]),
           ) as Record<NotificationCategory, boolean>)
-        : { ...DEFAULT_PREFERENCES },
-    [prefs],
-  );
+        : { ...DEFAULT_PREFERENCES };
 
-  const handleCategoryToggle = useCallback(
-    (category: NotificationCategory, enabled: boolean) => {
+  const handleCategoryToggle = (category: NotificationCategory, enabled: boolean) => {
       const updated = { ...currentPrefs, [category]: enabled };
       void savePrefs(updated);
-    },
-    [currentPrefs, savePrefs],
-  );
+    };
 
   return (
     <section className="mb-8">

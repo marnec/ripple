@@ -1,6 +1,6 @@
 import { isSingleCell } from "@shared/cellRef";
 import { FileText, PenTool, Table } from "lucide-react";
-import { useCallback, createElement } from "react";
+import { createElement } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import type { DocumentSchemaEditor } from "./schema";
 
@@ -104,72 +104,66 @@ export function useDocumentSuggestions({
     );
   };
 
-  const handleCellRefInsert = useCallback(
-    (cellRef: string | null, cellRefDialog: CellRefDialogOpen) => {
-      if (!editor) return;
+  const handleCellRefInsert = (cellRef: string | null, cellRefDialog: CellRefDialogOpen) => {
+    if (!editor) return;
 
-      const { spreadsheetId } = cellRefDialog;
-      editor.focus();
+    const { spreadsheetId } = cellRefDialog;
+    editor.focus();
 
-      if (cellRef) {
-        if (isSingleCell(cellRef)) {
-          editor.insertInlineContent([
-            {
-              type: "spreadsheetCellRef",
-              props: { spreadsheetId, cellRef },
-            },
-            " ",
-          ]);
-        } else {
-          editor.insertBlocks(
-            [
-              {
-                type: "spreadsheetRange" as const,
-                props: { spreadsheetId, cellRef } as any,
-              },
-            ],
-            editor.getTextCursorPosition().block,
-            "after",
-          );
-        }
-        void ensureCellRef({ spreadsheetId, cellRef });
-      } else {
+    if (cellRef) {
+      if (isSingleCell(cellRef)) {
         editor.insertInlineContent([
           {
-            type: "spreadsheetLink",
-            props: { spreadsheetId },
+            type: "spreadsheetCellRef",
+            props: { spreadsheetId, cellRef },
           },
           " ",
         ]);
+      } else {
+        editor.insertBlocks(
+          [
+            {
+              type: "spreadsheetRange" as const,
+              props: { spreadsheetId, cellRef } as any,
+            },
+          ],
+          editor.getTextCursorPosition().block,
+          "after",
+        );
       }
-      setCellRefDialog(null);
-    },
-    [editor, ensureCellRef, setCellRefDialog],
-  );
+      void ensureCellRef({ spreadsheetId, cellRef });
+    } else {
+      editor.insertInlineContent([
+        {
+          type: "spreadsheetLink",
+          props: { spreadsheetId },
+        },
+        " ",
+      ]);
+    }
+    setCellRefDialog(null);
+  };
 
-  const handleBlockPickerInsert = useCallback(
-    (blockId: string, blockPickerDialog: BlockPickerDialogOpen) => {
-      if (!editor) return;
+  const handleBlockPickerInsert = (blockId: string, blockPickerDialog: BlockPickerDialogOpen) => {
+    if (!editor) return;
 
-      const { documentId } = blockPickerDialog;
-      editor.focus();
+    const { documentId } = blockPickerDialog;
+    editor.focus();
 
-      editor.insertBlocks(
-        [
-          {
-            type: "documentBlockEmbed" as const,
-            props: { documentId, blockId } as any,
-          },
-        ],
-        editor.getTextCursorPosition().block,
-        "after",
-      );
+    editor.insertBlocks(
+      [
+        {
+          type: "documentBlockEmbed" as const,
+          props: { documentId, blockId } as any,
+        },
+      ],
+      editor.getTextCursorPosition().block,
+      "after",
+    );
 
-      void ensureBlockRef({ documentId, blockId });
-      setBlockPickerDialog(null);
-    },
-    [editor, ensureBlockRef, setBlockPickerDialog],
-  );
+    void ensureBlockRef({ documentId, blockId });
+    setBlockPickerDialog(null);
+  };
 
   return { getHashItems, handleCellRefInsert, handleBlockPickerInsert };
 }

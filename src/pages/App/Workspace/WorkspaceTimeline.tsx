@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -253,13 +253,13 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
   // Keep previous results visible while new query loads (prevents flash).
   // This is a module-scoped cache keyed by workspaceId — survives re-renders
   // without triggering cascading setState or reading refs during render.
-  const allEntries = useMemo(() => {
+  const allEntries = (() => {
     if (queryResult !== undefined) {
       entryCache.set(workspaceId, queryResult);
       return queryResult;
     }
     return entryCache.get(workspaceId) ?? [];
-  }, [queryResult, workspaceId]);
+  })();
 
   const [visible, setVisible] = useState(PAGE_SIZE);
 

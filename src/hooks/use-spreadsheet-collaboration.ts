@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import { getUserColor } from "../lib/user-colors";
@@ -67,7 +67,7 @@ export function useSpreadsheetCollaboration({
   }, [spreadsheetId, yDoc]);
 
   // Get deterministic user color
-  const userColor = useMemo(() => getUserColor(userId), [userId]);
+  const userColor = getUserColor(userId);
 
   // Set awareness user info
   useEffect(() => {

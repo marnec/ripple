@@ -7,7 +7,7 @@ import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview"
 import { parseRange } from "@shared/cellRef";
 import { useQuery } from "convex/react";
 import { CircleSlash } from "lucide-react";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
@@ -85,19 +85,19 @@ const ResizableSpreadsheetRange = ({
   const [hovered, setHovered] = useState(false);
 
   // --- Derived data ---
-  const range = useMemo(() => parseRange(cellRef), [cellRef]);
+  const range = parseRange(cellRef);
   const colCount = range ? range.endCol - range.startCol + 1 : 0;
   const rowCount = range ? range.endRow - range.startRow + 1 : 0;
-  const values: string[][] = useMemo(() => localValues ?? [], [localValues]);
+  const values: string[][] = localValues ?? [];
 
   // --- Actions ---
-  const toggleHeaders = useCallback(() => {
+  const toggleHeaders = () => {
     editor.updateBlock(block, {
       props: { showHeaders: !showHeaders },
     });
-  }, [editor, block, showHeaders]);
+  };
 
-  const cloneAsTable = useCallback(() => {
+  const cloneAsTable = () => {
     if (!range) return;
     const content = buildTableContent({
       values,
@@ -115,15 +115,15 @@ const ResizableSpreadsheetRange = ({
         "after",
       );
     }, 0);
-  }, [editor, block, values, rowCount, colCount, showHeaders, range]);
+  };
 
-  const cloneAsLinkedRange = useCallback(() => {
+  const cloneAsLinkedRange = () => {
     editor.insertBlocks(
       [{ type: "spreadsheetRange" as const, props: { spreadsheetId, cellRef, width: block.props.width, showHeaders } } as any],
       block,
       "after",
     );
-  }, [editor, block, spreadsheetId, cellRef, showHeaders]);
+  };
 
   const handleNavigate = () => {
     if (spreadsheet && workspaceId) {

@@ -19,7 +19,7 @@ import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
 import { Circle, Link2, Link2Off, Settings, WifiOff } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
 import * as Y from "yjs";
@@ -165,11 +165,7 @@ function SpreadsheetEditor({
   const [backlinksOpen, setBacklinksOpen] = useState(false);
 
   // Stabilize ref identity to prevent unnecessary JSpreadsheetGrid re-renders
-  const referencedCellRefs = useMemo(
-    () => (showRefHighlights ? rawRefs ?? [] : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(rawRefs), showRefHighlights],
-  );
+  const referencedCellRefs = showRefHighlights ? rawRefs ?? [] : [];
 
   const hasRefs = (rawRefs?.length ?? 0) > 0;
 
@@ -187,10 +183,7 @@ function SpreadsheetEditor({
 
   const { remoteUsers } = useCursorAwareness(awareness);
 
-  const remoteUserClientIds = useMemo(
-    () => new Set(remoteUsers.map((u) => u.clientId)),
-    [remoteUsers],
-  );
+  const remoteUserClientIds = new Set(remoteUsers.map((u) => u.clientId));
 
   if (spreadsheet === undefined || viewer === undefined) {
     return <div className="h-full w-full" />;

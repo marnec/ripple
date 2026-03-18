@@ -5,7 +5,6 @@ import { useAction, useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -83,70 +82,64 @@ export function ActiveCallProvider({
     channelIdRef.current = channelId;
   }, [meeting, channelId]);
 
-  const enterLobby = useCallback(
-    (cId: Id<"channels">, wId: Id<"workspaces">) => {
-      // Only enter lobby if we're not already in a call for this channel
-      if (status === "joined" && channelId === cId) return;
-      setChannelId(cId);
-      setWorkspaceId(wId);
-      setStatus("lobby");
-      setError(null);
-    },
-    [status, channelId],
-  );
+  const enterLobby = (cId: Id<"channels">, wId: Id<"workspaces">) => {
+    // Only enter lobby if we're not already in a call for this channel
+    if (status === "joined" && channelId === cId) return;
+    setChannelId(cId);
+    setWorkspaceId(wId);
+    setStatus("lobby");
+    setError(null);
+  };
 
-  const joinCall = useCallback(
-    async (prefs: DevicePreferences) => {
-      if (!channelId) return;
-      try {
-        setStatus("joining");
+  const joinCall = async (prefs: DevicePreferences) => {
+    if (!channelId) return;
+    try {
+      setStatus("joining");
 
-        const { authToken } = await joinCallAction({
-          channelId,
-          userName: prefs.userName ?? "Anonymous",
-          userImage: prefs.userImage,
-        });
+      const { authToken } = await joinCallAction({
+        channelId,
+        userName: prefs.userName ?? "Anonymous",
+        userImage: prefs.userImage,
+      });
 
-        const m = await initMeeting({
-          authToken,
-          defaults: {
-            audio: prefs.audioEnabled,
-            video: prefs.videoEnabled,
-          },
-        });
+      const m = await initMeeting({
+        authToken,
+        defaults: {
+          audio: prefs.audioEnabled,
+          video: prefs.videoEnabled,
+        },
+      });
 
-        if (m) {
-          await m.join();
+      if (m) {
+        await m.join();
 
-          if (prefs.audioDeviceId) {
-            const audioDevices = await m.self.getAudioDevices();
-            const selected = audioDevices.find(
-              (d: { deviceId: string }) => d.deviceId === prefs.audioDeviceId,
-            );
-            if (selected) await m.self.setDevice(selected);
-          }
-          if (prefs.videoDeviceId) {
-            const videoDevices = await m.self.getVideoDevices();
-            const selected = videoDevices.find(
-              (d: { deviceId: string }) => d.deviceId === prefs.videoDeviceId,
-            );
-            if (selected) await m.self.setDevice(selected);
-          }
-
-          setStatus("joined");
+        if (prefs.audioDeviceId) {
+          const audioDevices = await m.self.getAudioDevices();
+          const selected = audioDevices.find(
+            (d: { deviceId: string }) => d.deviceId === prefs.audioDeviceId,
+          );
+          if (selected) await m.self.setDevice(selected);
         }
-      } catch (err) {
-        console.error("Failed to join call:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to join call",
-        );
-        setStatus("error");
-      }
-    },
-    [channelId, joinCallAction, initMeeting],
-  );
+        if (prefs.videoDeviceId) {
+          const videoDevices = await m.self.getVideoDevices();
+          const selected = videoDevices.find(
+            (d: { deviceId: string }) => d.deviceId === prefs.videoDeviceId,
+          );
+          if (selected) await m.self.setDevice(selected);
+        }
 
-  const leaveCall = useCallback(async () => {
+        setStatus("joined");
+      }
+    } catch (err) {
+      console.error("Failed to join call:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to join call",
+      );
+      setStatus("error");
+    }
+  };
+
+  const leaveCall = async () => {
     const m = meetingRef.current;
     const cId = channelIdRef.current;
     if (m) {
@@ -166,15 +159,15 @@ export function ActiveCallProvider({
     setChannelId(null);
     setWorkspaceId(null);
     setError(null);
-  }, [endSession, navigate, workspaceId, channelId]);
+  };
 
-  const returnToCall = useCallback(() => {
+  const returnToCall = () => {
     if (workspaceId && channelId) {
       void navigate(
         `/workspaces/${workspaceId}/channels/${channelId}/videocall`,
       );
     }
-  }, [navigate, workspaceId, channelId]);
+  };
 
   // Cleanup on provider unmount (tab close, logout)
   useEffect(() => {

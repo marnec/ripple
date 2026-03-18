@@ -11,7 +11,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
 import { LayoutList, Kanban } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { startViewTransition } from "@/hooks/use-view-transition";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -56,20 +56,14 @@ function ProjectTasksContent({
   const [sortBlocked, setSortBlocked] = useState(false);
   const sortBlockedTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
-  const handleSortBlocked = useCallback(() => {
+  const handleSortBlocked = () => {
     setSortBlocked(true);
     if (sortBlockedTimer.current) clearTimeout(sortBlockedTimer.current);
     sortBlockedTimer.current = setTimeout(() => setSortBlocked(false), 2500);
-  }, []);
+  };
 
-  const setFiltersAnimated = useCallback(
-    (next: TaskFilters) => startViewTransition(() => setFilters(next)),
-    []
-  );
-  const setSortAnimated = useCallback(
-    (next: TaskSort) => startViewTransition(() => setSort(next)),
-    []
-  );
+  const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
+  const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
 
   // Pre-fetch tasks to show a loading indicator beside the tabs
   const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });

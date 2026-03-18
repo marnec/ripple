@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { buildSearchString, parseSearchInput } from "@/lib/search-utils";
 
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
@@ -59,54 +59,42 @@ export function useDebouncedSearch(
   const [resetKey, setResetKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const persistState = useCallback(
-    (q: string, t: string[], fav: FavoriteFilter) => {
-      writeSearchState(workspaceId, resourceType, { q, tags: t, isFavorite: fav });
-    },
-    [workspaceId, resourceType],
-  );
+  const persistState = (q: string, t: string[], fav: FavoriteFilter) => {
+    writeSearchState(workspaceId, resourceType, { q, tags: t, isFavorite: fav });
+  };
 
-  const flushSearch = useCallback(
-    (value: string) => {
-      const parsed = parseSearchInput(value);
-      setSearchQuery(parsed.searchText);
-      setTags(parsed.tags);
-      persistState(parsed.searchText, parsed.tags, isFavorite);
-    },
-    [persistState, isFavorite],
-  );
+  const flushSearch = (value: string) => {
+    const parsed = parseSearchInput(value);
+    setSearchQuery(parsed.searchText);
+    setTags(parsed.tags);
+    persistState(parsed.searchText, parsed.tags, isFavorite);
+  };
 
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setLocalSearchValue(value);
-      setIsSearchDebouncing(true);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        setIsSearchDebouncing(false);
-        flushSearch(value);
-      }, 300);
-    },
-    [flushSearch],
-  );
-
-  const handleSearchSubmit = useCallback(
-    (parsed: { searchText: string; tags: string[] }) => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      const value = buildSearchString(parsed.searchText, parsed.tags);
-      setLocalSearchValue(value);
+  const handleSearchChange = (value: string) => {
+    setLocalSearchValue(value);
+    setIsSearchDebouncing(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
       setIsSearchDebouncing(false);
       flushSearch(value);
-    },
-    [flushSearch],
-  );
+    }, 300);
+  };
 
-  const handleFavoriteToggle = useCallback(() => {
+  const handleSearchSubmit = (parsed: { searchText: string; tags: string[] }) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const value = buildSearchString(parsed.searchText, parsed.tags);
+    setLocalSearchValue(value);
+    setIsSearchDebouncing(false);
+    flushSearch(value);
+  };
+
+  const handleFavoriteToggle = () => {
     const cycle: FavoriteFilter[] = ["all", "favorites", "unfavorited"];
     const idx = cycle.indexOf(isFavorite);
     const next = cycle[(idx + 1) % cycle.length];
     setIsFavorite(next);
     persistState(searchQuery, tags, next);
-  }, [isFavorite, persistState, searchQuery, tags]);
+  };
 
   useEffect(() => {
     const handler = (e: Event) => {

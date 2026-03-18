@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -64,25 +64,19 @@ function ProjectGroupTasks({
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId: group.projectId });
   const updateTask = useMutation(api.tasks.update);
 
-  const advanceStatus = useCallback(
-    (taskId: string, currentStatusId: string) => {
+  const advanceStatus = (taskId: string, currentStatusId: string) => {
       if (!statuses || statuses.length === 0) return;
       const idx = statuses.findIndex((s) => s._id === currentStatusId);
       const nextStatus = statuses[(idx + 1) % statuses.length];
       void updateTask({ taskId: taskId as Id<"tasks">, statusId: nextStatus._id as Id<"taskStatuses"> });
       setSwipeOpenId(null);
-    },
-    [statuses, updateTask, setSwipeOpenId]
-  );
+    };
 
-  const getNextStatus = useCallback(
-    (currentStatusId: string) => {
+  const getNextStatus = (currentStatusId: string) => {
       if (!statuses || statuses.length === 0) return null;
       const idx = statuses.findIndex((s) => s._id === currentStatusId);
       return statuses[(idx + 1) % statuses.length];
-    },
-    [statuses]
-  );
+    };
 
   return (
     <div className="divide-y divide-border">
@@ -176,18 +170,12 @@ export function MyTasks() {
     return () => document.removeEventListener("click", onTap);
   }, [swipeOpenId]);
 
-  const setFiltersAnimated = useCallback(
-    (next: TaskFilters) => startViewTransition(() => setFilters(next)),
-    []
-  );
-  const setSortAnimated = useCallback(
-    (next: TaskSort) => startViewTransition(() => setSort(next)),
-    []
-  );
+  const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
+  const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
 
   const filteredTasks = useFilteredTasks(tasks, filters, sort);
 
-  const groupedTasks = useMemo(() => {
+  const groupedTasks = (() => {
     if (!filteredTasks) return [];
     const groups = new Map<string, ProjectGroup>();
     for (const task of filteredTasks) {
@@ -204,7 +192,7 @@ export function MyTasks() {
       groups.get(key)!.tasks.push(task);
     }
     return Array.from(groups.values());
-  }, [filteredTasks]);
+  })();
 
   const toggleGroup = (projectId: string) => {
     setClosedGroups((prev) => {
@@ -215,17 +203,14 @@ export function MyTasks() {
     });
   };
 
-  const handleTaskClick = useCallback(
-    (taskId: string, projectId: Id<"projects">) => {
+  const handleTaskClick = (taskId: string, projectId: Id<"projects">) => {
       if (isMobile) {
         void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`);
       } else {
         setSelectedTaskId(taskId);
         setSelectedProjectId(projectId);
       }
-    },
-    [isMobile, navigate, workspaceId]
-  );
+    };
 
   if (tasks === undefined) {
     return (

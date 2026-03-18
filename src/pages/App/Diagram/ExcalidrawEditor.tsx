@@ -7,7 +7,7 @@ import {
 } from "@excalidraw/excalidraw/types";
 import { Theme } from "@excalidraw/excalidraw/element/types";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
 import type { Awareness } from "y-protocols/awareness";
 import type YProvider from "y-partyserver/provider";
@@ -36,10 +36,10 @@ export function ExcalidrawEditor({
   const bindingRef = useRef<ExcalidrawBinding | null>(null);
 
   // Notify parent directly in callback (event handler, not effect)
-  const handleExcalidrawAPI = useCallback((api: ExcalidrawImperativeAPI) => {
+  const handleExcalidrawAPI = (api: ExcalidrawImperativeAPI) => {
     setExcalidrawAPI(api);
     onExcalidrawAPI(api);
-  }, [onExcalidrawAPI]);
+  };
 
   // Set up y-excalidraw binding — it handles:
   // - Bidirectional element/asset sync
@@ -64,14 +64,11 @@ export function ExcalidrawEditor({
 
   // Broadcast pointer position to other users via awareness
   // (The binding exposes onPointerUpdate but doesn't auto-connect it)
-  const handlePointerUpdate = useCallback(
-    (payload: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "down" | "up" }) => {
-      if (bindingRef.current) {
-        bindingRef.current.onPointerUpdate(payload);
-      }
-    },
-    [],
-  );
+  const handlePointerUpdate = (payload: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "down" | "up" }) => {
+    if (bindingRef.current) {
+      bindingRef.current.onPointerUpdate(payload);
+    }
+  };
 
   return (
     <div className="relative h-full w-full overflow-hidden">

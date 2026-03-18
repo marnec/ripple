@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
@@ -125,12 +125,13 @@ export function useTaskDetail({
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
 
   // Parse "type|id" keys into edges format
-  const parseEmbedRefs = useCallback((keys: Set<string>) => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- React Compiler memoizes
+  const parseEmbedRefs = (keys: Set<string>) => {
     return [...keys].map((key) => {
       const [targetType, targetId] = key.split("|");
       return { targetType: targetType as "diagram" | "document" | "spreadsheet", targetId };
     });
-  }, []);
+  };
 
   // Sync embed references (diagrams + document block embeds) to edges table
   const prevEmbedsRef = useRef<Set<string>>(new Set());

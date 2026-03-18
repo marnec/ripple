@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { createPortal } from "react-dom";
 
 const HeaderSlotContext = createContext<HTMLDivElement | null>(null);
@@ -10,9 +10,9 @@ const HeaderSlotContext = createContext<HTMLDivElement | null>(null);
  */
 export function useHeaderSlotRef() {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
-  const callbackRef = useCallback((el: HTMLDivElement | null) => {
+  const callbackRef = (el: HTMLDivElement | null) => {
     setNode(el);
-  }, []);
+  };
   return [callbackRef, node] as const;
 }
 
