@@ -10,6 +10,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import React, { useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 
 interface BreadcrumbItemData {
   href: string;
@@ -20,10 +21,21 @@ interface BreadcrumbItemData {
 
 const KNOWN_SUBPAGES = new Set(["settings", "import", "videocall", "tasks", "cycles", "my-tasks"]);
 
+/** Category segment → which sidebar list contains that resource type. */
+const SIDEBAR_CATEGORY: Record<string, "projects" | "documents" | "diagrams" | "spreadsheets" | "channels"> = {
+  projects: "projects",
+  documents: "documents",
+  diagrams: "diagrams",
+  spreadsheets: "spreadsheets",
+  channels: "channels",
+};
+
 export function DynamicBreadcrumb() {
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
+  const sidebarData = useWorkspaceSidebar();
+  const workspaces = useQuery(api.workspaces.list);
 
   const items = useMemo(() => {
     const pathSegments = location.pathname.split("/").filter(Boolean);
@@ -34,7 +46,7 @@ export function DynamicBreadcrumb() {
       const isResource = i % 2 !== 0 && !KNOWN_SUBPAGES.has(segment);
 
       if (isResource) {
-        built.push({ href, label: segment, resourceId: segment });
+        built.push({ href, label: segment, resourceId: segment, category: pathSegments[i - 1] });
       } else {
         built.push({
           href,
@@ -46,21 +58,54 @@ export function DynamicBreadcrumb() {
     return built;
   }, [location.pathname]);
 
-  // Collect all resource IDs and batch-fetch their names in a single query
-  const resourceIds = useMemo(
-    () => items.filter((item) => item.resourceId).map((item) => item.resourceId!),
-    [items],
+  // Resolve names client-side from sidebar data + workspace list when possible
+  const localNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of items) {
+      if (!item.resourceId || !item.category) continue;
+      if (item.category === "workspaces") {
+        const ws = workspaces?.find((w) => w._id === item.resourceId);
+        if (ws) map.set(item.resourceId, ws.name);
+        continue;
+      }
+      if (!sidebarData) continue;
+      const listKey = SIDEBAR_CATEGORY[item.category];
+      if (!listKey) continue;
+      const list = sidebarData[listKey] as { _id: string; name: string }[];
+      const found = list?.find((r) => r._id === item.resourceId);
+      if (found) map.set(item.resourceId, found.name);
+    }
+    return map;
+  }, [sidebarData, workspaces, items]);
+
+  // Only fetch from server for IDs not resolved locally (tasks, cycles, workspaces)
+  const unresolvedIds = useMemo(
+    () => items
+      .filter((item) => item.resourceId && !localNames.has(item.resourceId))
+      .map((item) => item.resourceId!),
+    [items, localNames],
   );
-  const namesMap = useQuery(
+  const serverNamesMap = useQuery(
     api.breadcrumb.getResourceNames,
-    resourceIds.length > 0 ? { resourceIds: resourceIds as any } : "skip",
+    unresolvedIds.length > 0 ? { resourceIds: unresolvedIds as any } : "skip",
   );
+
+  // Merge local + server names
+  const namesMap = useMemo(() => {
+    const merged: Record<string, string | null> = {};
+    for (const [id, name] of localNames) merged[id] = name;
+    if (serverNamesMap) Object.assign(merged, serverNamesMap);
+    return merged;
+  }, [localNames, serverNamesMap]);
+
+  // Show "..." only for unresolved IDs that are still loading from the server
+  const isLoading = unresolvedIds.length > 0 && !serverNamesMap;
 
   if (isMobile) {
     const currentItem = items.length > 0 ? items[items.length - 1] : null;
     if (!currentItem) return null;
     const displayName = currentItem.resourceId
-      ? (namesMap === undefined ? "..." : (namesMap?.[currentItem.resourceId] ?? currentItem.label))
+      ? (namesMap[currentItem.resourceId] ?? (isLoading ? "..." : currentItem.label))
       : currentItem.label;
     return <span className="text-sm font-medium truncate">{displayName}</span>;
   }
@@ -72,7 +117,7 @@ export function DynamicBreadcrumb() {
           const delay = `${index * 50}ms`;
           let displayName: string;
           if (item.resourceId) {
-            displayName = namesMap === undefined ? "..." : (namesMap?.[item.resourceId] ?? item.label);
+            displayName = namesMap[item.resourceId] ?? (isLoading ? "..." : item.label);
           } else {
             displayName = item.label;
           }
