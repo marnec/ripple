@@ -101,17 +101,47 @@ export function useDiagramCursorAwareness(awareness: Awareness | null) {
       }
     });
 
-    setRemotePointers(pointers);
+    // Use functional update to bail out if the visible data hasn't changed.
+    // This prevents re-renders from the 1-second interval or remote awareness
+    // events that don't actually change any displayed value (same position, same idle state, etc).
+    setRemotePointers((prev) => {
+      if (
+        prev.length === pointers.length &&
+        prev.every((p, i) => {
+          const n = pointers[i];
+          return (
+            p.clientId === n.clientId &&
+            p.pointer?.x === n.pointer?.x &&
+            p.pointer?.y === n.pointer?.y &&
+            p.isIdle === n.isIdle &&
+            p.lastUpdate === n.lastUpdate &&
+            p.lockedElements.length === n.lockedElements.length
+          );
+        })
+      ) {
+        return prev; // Same reference → React bails out
+      }
+      return pointers;
+    });
   }, [awareness, isDarkTheme]);
 
   useEffect(() => {
     if (!awareness) return;
 
     const handleAwarenessChange = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
+      const localClientId = awareness.clientID;
+
+      // If only the local client changed (e.g. local cursor move), skip entirely —
+      // local state is filtered out in updateRemotePointers anyway, and calling
+      // setRemotePointers with a new array reference would re-render DiagramPageContent
+      // on every single pointer move.
+      const nonLocalChanged = [...added, ...updated, ...removed].filter((id) => id !== localClientId);
+      if (nonLocalChanged.length === 0) return;
+
       const now = Date.now();
 
-      // Update timestamps for changed clients
-      [...added, ...updated].forEach((clientId) => {
+      // Update timestamps for changed remote clients
+      [...added, ...updated].filter((id) => id !== localClientId).forEach((clientId) => {
         clientTimestampsRef.current.set(clientId, now);
 
         // Track pointer position changes
