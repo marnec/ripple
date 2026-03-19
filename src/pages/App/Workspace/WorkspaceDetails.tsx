@@ -280,7 +280,7 @@ export function WorkspaceDetails() {
         </ScrollArea>
       )}
       {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
-        <div className="container mx-auto px-4 pb-4">
+        <div className="container mx-auto px-4 pb-4 overflow-hidden">
           <Suspense fallback={<div style={{ width: graphWidth, height: graphHeight }} />}>
             <LazyWorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} highlightedType={highlightedType} />
           </Suspense>
