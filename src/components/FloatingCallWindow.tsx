@@ -3,7 +3,7 @@ import {
   useRealtimeKitMeeting,
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
-import { Eye, LogOut, Maximize2, Mic, MicOff, Video, VideoOff } from "lucide-react";
+import { Eye, LogOut, Maximize2, Mic, MicOff, Video, VideoOff, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useActiveCall } from "../contexts/ActiveCallContext";
@@ -28,7 +28,7 @@ function getPipSize() {
 
 function FloatingCallContent() {
   const { meeting } = useRealtimeKitMeeting();
-  const { leaveCall, returnToCall } = useActiveCall();
+  const { leaveCall, returnToCall, dismissPip } = useActiveCall();
   const { startFollowing, isFollowing, followingUserId } = useFollowMode();
 
   const audioEnabled = useRealtimeKitSelector((m) => m.self.audioEnabled);
@@ -199,6 +199,15 @@ function FloatingCallContent() {
             <Maximize2 className="h-3.5 w-3.5" />
           </Button>
           <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={dismissPip}
+            title="Hide window"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+          <Button
             variant="destructive"
             size="icon"
             className="h-7 w-7"
@@ -214,7 +223,7 @@ function FloatingCallContent() {
 }
 
 export function FloatingCallWindow() {
-  const { meeting, isFloating } = useActiveCall();
+  const { meeting, isFloating, isPipDismissed } = useActiveCall();
 
   // Responsive PIP size
   const [pipSize, setPipSize] = useState(getPipSize);
@@ -270,7 +279,7 @@ export function FloatingCallWindow() {
     setIsDragging(false);
   };
 
-  if (!isFloating || !meeting) return null;
+  if (!isFloating || !meeting || isPipDismissed) return null;
 
   return createPortal(
     <div
@@ -281,6 +290,7 @@ export function FloatingCallWindow() {
         left: position.x,
         top: position.y,
         cursor: isDragging ? "grabbing" : "grab",
+        touchAction: "none",
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

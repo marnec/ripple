@@ -19,10 +19,8 @@ import { FollowModeIndicator } from "./FollowModeIndicator";
 import { AppSidebar } from "@/pages/App/AppSidebar";
 
 function CallIndicator() {
-  const { status, isFloating, returnToCall } = useActiveCall();
+  const { status, returnToCall } = useActiveCall();
   if (status !== "joined") return null;
-  // Only show when on the call route (not floating — floating has its own window)
-  if (isFloating) return null;
 
   return (
     <button
@@ -31,7 +29,7 @@ function CallIndicator() {
       title="In call"
     >
       <Phone className="h-3 w-3" />
-      In call
+      <span className="hidden sm:inline">In call</span>
     </button>
   );
 }

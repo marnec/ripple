@@ -35,6 +35,8 @@ interface ActiveCallContextValue {
   status: CallStatus;
   error: string | null;
   isFloating: boolean;
+  isPipDismissed: boolean;
+  dismissPip: () => void;
   enterLobby: (channelId: Id<"channels">, workspaceId: Id<"workspaces">) => void;
   joinCall: (prefs: DevicePreferences) => Promise<void>;
   leaveCall: () => Promise<void>;
@@ -61,6 +63,7 @@ export function ActiveCallProvider({
   const [workspaceId, setWorkspaceId] = useState<Id<"workspaces"> | null>(null);
   const [status, setStatus] = useState<CallStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [isPipDismissed, setIsPipDismissed] = useState(false);
 
   const joinCallAction = useAction(joinCallRef);
   const endSession = useMutation(endSessionRef);
@@ -73,6 +76,11 @@ export function ActiveCallProvider({
     meeting !== null &&
     channelId !== null &&
     !location.pathname.endsWith("/videocall");
+
+  // Reset pip dismissed state when user returns to the call page
+  useEffect(() => {
+    if (!isFloating) setIsPipDismissed(false);
+  }, [isFloating]);
 
   // Stable refs for cleanup
   const meetingRef = useRef(meeting);
@@ -188,6 +196,8 @@ export function ActiveCallProvider({
         status,
         error,
         isFloating,
+        isPipDismissed,
+        dismissPip: () => setIsPipDismissed(true),
         enterLobby,
         joinCall,
         leaveCall,
