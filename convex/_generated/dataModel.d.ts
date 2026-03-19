@@ -279,7 +279,7 @@ export type DataModel = {
     searchIndexes: {
       by_name: {
         searchField: "name";
-        filterFields: "workspaceId";
+        filterFields: "isPublic" | "workspaceId";
       };
     };
     vectorIndexes: {};

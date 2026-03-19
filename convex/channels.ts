@@ -256,9 +256,10 @@ export const search = query({
   args: {
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
+    isPublic: v.optional(v.boolean()),
   },
-  returns: v.array(v.object({ _id: v.id("channels"), name: v.string() })),
-  handler: async (ctx, { workspaceId, searchText }) => {
+  returns: v.array(v.object({ _id: v.id("channels"), name: v.string(), isPublic: v.boolean() })),
+  handler: async (ctx, { workspaceId, searchText, isPublic }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -272,8 +273,16 @@ export const search = query({
     if (searchText?.trim()) {
       results = await ctx.db
         .query("channels")
-        .withSearchIndex("by_name", (q) =>
-          q.search("name", searchText).eq("workspaceId", workspaceId),
+        .withSearchIndex("by_name", (q) => {
+          const base = q.search("name", searchText).eq("workspaceId", workspaceId);
+          return isPublic !== undefined ? base.eq("isPublic", isPublic) : base;
+        })
+        .collect();
+    } else if (isPublic !== undefined) {
+      results = await ctx.db
+        .query("channels")
+        .withIndex("by_isPublicInWorkspace", (q) =>
+          q.eq("isPublic", isPublic).eq("workspaceId", workspaceId),
         )
         .collect();
     } else {
@@ -286,6 +295,7 @@ export const search = query({
     return results.map((c) => ({
       _id: c._id,
       name: c.name,
+      isPublic: c.isPublic,
     }));
   },
 });

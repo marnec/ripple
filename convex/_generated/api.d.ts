@@ -206,8 +206,12 @@ export declare const api: {
     search: FunctionReference<
       "query",
       "public",
-      { searchText?: string; workspaceId: Id<"workspaces"> },
-      Array<{ _id: Id<"channels">; name: string }>
+      {
+        isPublic?: boolean;
+        searchText?: string;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{ _id: Id<"channels">; isPublic: boolean; name: string }>
     >;
     update: FunctionReference<
       "mutation",

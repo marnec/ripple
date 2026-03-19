@@ -1,3 +1,4 @@
+import { ChannelVisibilityFilterButton } from "@/components/ChannelVisibilityFilterButton";
 import { FavoriteFilterButton } from "@/components/FavoriteFilterButton";
 import { ResourceSearchInput } from "@/components/ResourceSearchInput";
 import { RippleSpinner } from "@/components/RippleSpinner";
@@ -44,11 +45,13 @@ export function ResourceListPage({
     searchQuery,
     tags,
     isFavorite,
+    channelVisibility,
     isSearchDebouncing,
     resetKey,
     handleSearchChange,
     handleSearchSubmit,
     handleFavoriteToggle,
+    handleChannelVisibilityToggle,
   } = useDebouncedSearch(workspaceId, resourceType, showFavorites);
 
   const handleLoadingChange = (loading: boolean) => {
@@ -89,6 +92,9 @@ export function ResourceListPage({
           {showFavorites && (
             <FavoriteFilterButton value={isFavorite} onToggle={handleFavoriteToggle} />
           )}
+          {resourceType === "channel" && (
+            <ChannelVisibilityFilterButton value={channelVisibility} onToggle={handleChannelVisibilityToggle} />
+          )}
           <div
             className="transition-opacity duration-200"
             style={{
@@ -105,6 +111,7 @@ export function ResourceListPage({
           tags={tags.length > 0 ? tags : undefined}
           isFavorite={favoriteFilterToBoolean(isFavorite)}
           favoriteFilter={isFavorite}
+          channelVisibility={channelVisibility}
           onLoadingChange={handleLoadingChange}
           showFavorites={showFavorites}
           subPath={subPath}

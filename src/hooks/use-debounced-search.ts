@@ -3,6 +3,7 @@ import { buildSearchString, parseSearchInput } from "@/lib/search-utils";
 
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
 export type FavoriteFilter = "all" | "favorites" | "unfavorited";
+export type ChannelVisibilityFilter = "all" | "public" | "private";
 
 /** Convert a FavoriteFilter to the boolean | undefined expected by Convex search queries. */
 export function favoriteFilterToBoolean(filter: FavoriteFilter): boolean | undefined {
@@ -18,26 +19,31 @@ function getStorageKey(workspaceId: string, resourceType: ResourceType) {
 function readSearchState(workspaceId: string, resourceType: ResourceType) {
   try {
     const raw = localStorage.getItem(getStorageKey(workspaceId, resourceType));
-    if (!raw) return { q: "", tags: [] as string[], isFavorite: "all" as FavoriteFilter };
-    const parsed = JSON.parse(raw) as { q?: string; tags?: string[]; isFavorite?: boolean | FavoriteFilter };
+    if (!raw) return { q: "", tags: [] as string[], isFavorite: "all" as FavoriteFilter, channelVisibility: "all" as ChannelVisibilityFilter };
+    const parsed = JSON.parse(raw) as { q?: string; tags?: string[]; isFavorite?: boolean | FavoriteFilter; channelVisibility?: ChannelVisibilityFilter };
     // Migrate old boolean values
     let fav: FavoriteFilter = "all";
     if (parsed.isFavorite === true || parsed.isFavorite === "favorites") fav = "favorites";
     else if (parsed.isFavorite === "unfavorited") fav = "unfavorited";
+    const vis: ChannelVisibilityFilter =
+      parsed.channelVisibility === "public" || parsed.channelVisibility === "private"
+        ? parsed.channelVisibility
+        : "all";
     return {
       q: parsed.q || "",
       tags: parsed.tags ?? [],
       isFavorite: fav,
+      channelVisibility: vis,
     };
   } catch {
-    return { q: "", tags: [] as string[], isFavorite: "all" as FavoriteFilter };
+    return { q: "", tags: [] as string[], isFavorite: "all" as FavoriteFilter, channelVisibility: "all" as ChannelVisibilityFilter };
   }
 }
 
 function writeSearchState(
   workspaceId: string,
   resourceType: ResourceType,
-  state: { q: string; tags: string[]; isFavorite: FavoriteFilter },
+  state: { q: string; tags: string[]; isFavorite: FavoriteFilter; channelVisibility: ChannelVisibilityFilter },
 ) {
   localStorage.setItem(getStorageKey(workspaceId, resourceType), JSON.stringify(state));
 }
@@ -51,6 +57,9 @@ export function useDebouncedSearch(
   const [searchQuery, setSearchQuery] = useState(stored.q);
   const [tags, setTags] = useState(stored.tags);
   const [isFavorite, setIsFavorite] = useState<FavoriteFilter>(showFavorites ? stored.isFavorite : "all");
+  const [channelVisibility, setChannelVisibility] = useState<ChannelVisibilityFilter>(
+    resourceType === "channel" ? stored.channelVisibility : "all",
+  );
 
   const [localSearchValue, setLocalSearchValue] = useState(
     () => buildSearchString(stored.q, stored.tags),
@@ -59,8 +68,8 @@ export function useDebouncedSearch(
   const [resetKey, setResetKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const persistState = (q: string, t: string[], fav: FavoriteFilter) => {
-    writeSearchState(workspaceId, resourceType, { q, tags: t, isFavorite: fav });
+  const persistState = (q: string, t: string[], fav: FavoriteFilter, vis: ChannelVisibilityFilter = channelVisibility) => {
+    writeSearchState(workspaceId, resourceType, { q, tags: t, isFavorite: fav, channelVisibility: vis });
   };
 
   const flushSearch = (value: string) => {
@@ -96,6 +105,14 @@ export function useDebouncedSearch(
     persistState(searchQuery, tags, next);
   };
 
+  const handleChannelVisibilityToggle = () => {
+    const cycle: ChannelVisibilityFilter[] = ["all", "public", "private"];
+    const idx = cycle.indexOf(channelVisibility);
+    const next = cycle[(idx + 1) % cycle.length];
+    setChannelVisibility(next);
+    persistState(searchQuery, tags, isFavorite, next);
+  };
+
   useEffect(() => {
     const handler = (e: Event) => {
       const { workspaceId: eid, resourceType: ert } = (e as CustomEvent).detail as { workspaceId: string; resourceType: string };
@@ -107,6 +124,7 @@ export function useDebouncedSearch(
       setLocalSearchValue(buildSearchString(fresh.q, fresh.tags));
       setIsSearchDebouncing(false);
       if (showFavorites) setIsFavorite(fresh.isFavorite);
+      if (resourceType === "channel") setChannelVisibility(fresh.channelVisibility);
       setResetKey((k) => k + 1);
     };
     window.addEventListener("ripple:search-preselect", handler);
@@ -124,10 +142,12 @@ export function useDebouncedSearch(
     searchQuery,
     tags,
     isFavorite,
+    channelVisibility,
     isSearchDebouncing,
     resetKey,
     handleSearchChange,
     handleSearchSubmit,
     handleFavoriteToggle,
+    handleChannelVisibilityToggle,
   };
 }

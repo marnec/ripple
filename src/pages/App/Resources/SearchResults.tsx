@@ -10,12 +10,12 @@ import {
 import { useOptimisticIsFavorited } from "@/contexts/FavoritesContext";
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { FavoriteFilter } from "@/hooks/use-debounced-search";
+import type { ChannelVisibilityFilter, FavoriteFilter } from "@/hooks/use-debounced-search";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { format, isThisYear } from "date-fns";
-import { Star, StarOff, Video } from "lucide-react";
+import { Globe, Lock, Star, StarOff, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -24,7 +24,7 @@ import { Id } from "../../../../convex/_generated/dataModel";
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
 type FavoritableType = "document" | "diagram" | "spreadsheet" | "project";
 
-type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number };
+type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; isPublic?: boolean };
 
 const SEARCH_APIS = {
   document: api.documents.search,
@@ -34,7 +34,16 @@ const SEARCH_APIS = {
   channel: api.channels.search,
 } as const;
 
-function getEmptyMessage(resourceType: ResourceType, favoriteFilter?: FavoriteFilter): string {
+function channelVisibilityToBoolean(filter: ChannelVisibilityFilter): boolean | undefined {
+  if (filter === "public") return true;
+  if (filter === "private") return false;
+  return undefined;
+}
+
+function getEmptyMessage(resourceType: ResourceType, favoriteFilter?: FavoriteFilter, channelVisibility?: ChannelVisibilityFilter): string {
+  if (resourceType === "channel" && channelVisibility && channelVisibility !== "all") {
+    return `No ${channelVisibility} channels found.`;
+  }
   switch (favoriteFilter) {
     case "favorites":
       return `No favorite ${resourceType}s yet. Star a ${resourceType} to see it here.`;
@@ -50,6 +59,15 @@ function compactDate(timestamp: number): string {
   return isThisYear(date) ? format(date, "MMM d") : format(date, "MMM d, yyyy");
 }
 
+function ChannelVisibilityBadge({ isPublic }: { isPublic: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      {isPublic ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+      <span className="hidden sm:inline">{isPublic ? "Public" : "Private"}</span>
+    </span>
+  );
+}
+
 export type SearchResultsProps = {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
@@ -57,6 +75,7 @@ export type SearchResultsProps = {
   tags?: string[];
   isFavorite?: boolean;
   favoriteFilter?: FavoriteFilter;
+  channelVisibility?: ChannelVisibilityFilter;
   onLoadingChange?: (loading: boolean) => void;
   showFavorites?: boolean;
   subPath?: string;
@@ -68,11 +87,11 @@ function useResourceSearch(
   searchText?: string,
   tags?: string[],
   isFavorite?: boolean,
+  channelIsPublic?: boolean,
 ) {
-  // channels.search has a simpler signature (no tags/isFavorite)
   const channelResults = useQuery(
     SEARCH_APIS.channel,
-    resourceType === "channel" ? { workspaceId, searchText } : "skip",
+    resourceType === "channel" ? { workspaceId, searchText, isPublic: channelIsPublic } : "skip",
   );
 
   const resourceResults = useQuery(
@@ -190,13 +209,16 @@ function ResourceMobileRow({
         )
       }
     >
-      {/* Fixed-height row: icon | name | [star state] | [date] */}
+      {/* Fixed-height row: icon | name | [visibility or star] | date */}
       <Link
         to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`}
         className="flex w-full items-center gap-2.5 px-3 py-2.5 bg-card hover:bg-accent transition-colors text-sm h-14"
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="flex-1 min-w-0 truncate font-medium">{resource.name}</span>
+        {isChannel && resource.isPublic !== undefined && (
+          <ChannelVisibilityBadge isPublic={resource.isPublic} />
+        )}
         {canFavorite && (
           <Star
             className={cn(
@@ -226,11 +248,19 @@ export function SearchResults({
   tags,
   isFavorite,
   favoriteFilter,
+  channelVisibility,
   onLoadingChange,
   showFavorites,
   subPath,
 }: SearchResultsProps) {
-  const results = useResourceSearch(resourceType, workspaceId, searchText, tags, isFavorite);
+  const results = useResourceSearch(
+    resourceType,
+    workspaceId,
+    searchText,
+    tags,
+    isFavorite,
+    channelVisibilityToBoolean(channelVisibility ?? "all"),
+  );
   const rendered = useAnimatedQuery(results);
   const isMobile = useIsMobile();
 
@@ -262,7 +292,7 @@ export function SearchResults({
     return (
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          {getEmptyMessage(resourceType, favoriteFilter)}
+          {getEmptyMessage(resourceType, favoriteFilter, channelVisibility)}
         </p>
       </div>
     );
@@ -317,6 +347,9 @@ export function SearchResults({
               <CardTitle className="truncate text-base">
                 {resource.name}
               </CardTitle>
+              {resourceType === "channel" && resource.isPublic !== undefined && (
+                <ChannelVisibilityBadge isPublic={resource.isPublic} />
+              )}
             </CardHeader>
             <CardContent className="flex flex-1 flex-col justify-between pt-0">
               <div className="flex flex-wrap gap-1">
