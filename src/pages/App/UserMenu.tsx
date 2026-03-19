@@ -51,7 +51,7 @@ export function NavUser() {
   const [menuOpened, setMenuOpened] = useState(false);
   const pendingInvites = usePendingInvites(menuOpened);
   const { needRefresh, updateAndReload } = usePwaUpdate();
-  const convexHasUpdate = useVersionCheck();
+  const { hasUpdate: convexHasUpdate, acknowledge } = useVersionCheck();
   const hasUpdate = needRefresh || convexHasUpdate;
   const { canInstall, isIOSSafari, promptInstall } = useInstallPrompt();
   const [showIOSInstall, setShowIOSInstall] = useState(false);
@@ -157,7 +157,7 @@ export function NavUser() {
                 </DropdownMenuItem>
               )}
               {hasUpdate && (
-                <DropdownMenuItem onSelect={needRefresh ? updateAndReload : () => window.location.reload()}>
+                <DropdownMenuItem onSelect={() => { acknowledge(); updateAndReload(); }}>
                   <RefreshCw />
                   Update available
                   <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full bg-blue-600 px-1.5 text-[10px]">
