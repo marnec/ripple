@@ -4,41 +4,16 @@ import {
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
 import { Eye, LogOut, Monitor, MonitorOff } from "lucide-react";
-import { MessageSquare } from "lucide-react";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useViewer } from "../UserContext";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import { useActiveCall } from "../../../contexts/ActiveCallContext";
 import { useFollowMode } from "../../../contexts/FollowModeContext";
-import { Chat } from "../Chat/Chat";
 import { CallLobby } from "./CallLobby";
 import { CameraToggle, MicToggle } from "./MediaToggle";
 import { VideoTile } from "./VideoTile";
-
-// --- Meeting room context ---
-
-interface MeetingRoomContextValue {
-  channelId: Id<"channels">;
-  chatOpen: boolean;
-  toggleChat: () => void;
-}
-
-const MeetingRoomContext = createContext<MeetingRoomContextValue | null>(null);
-
-function useMeetingRoom() {
-  const ctx = useContext(MeetingRoomContext);
-  if (!ctx)
-    throw new Error("useMeetingRoom must be used within MeetingRoom");
-  return ctx;
-}
 
 // --- Participant video tile ---
 
@@ -179,7 +154,6 @@ function VideoGrid() {
 
 function ControlsBar() {
   const { meeting } = useRealtimeKitMeeting();
-  const { chatOpen, toggleChat } = useMeetingRoom();
   const { leaveCall } = useActiveCall();
   const audioEnabled = useRealtimeKitSelector(
     (m) => m.self.audioEnabled,
@@ -239,15 +213,6 @@ function ControlsBar() {
         )}
       </Button>
       <Button
-        variant={chatOpen ? "default" : "secondary"}
-        size="icon"
-        className="h-11 w-11 md:h-9 md:w-9"
-        onClick={toggleChat}
-        title={chatOpen ? "Close chat" : "Open chat"}
-      >
-        <MessageSquare className="h-5 w-5" />
-      </Button>
-      <Button
         variant="destructive"
         onClick={() => void leaveCall()}
         className="gap-2 h-11 md:h-9"
@@ -261,52 +226,14 @@ function ControlsBar() {
 
 // --- Meeting room (once joined) ---
 
-function MeetingRoom({
-  channelId,
-}: {
-  channelId: Id<"channels">;
-}) {
-  const [chatOpen, setChatOpen] = useState(false);
-
+function MeetingRoom() {
   return (
-    <MeetingRoomContext.Provider
-      value={{
-        channelId,
-        chatOpen,
-        toggleChat: () => setChatOpen((o) => !o),
-      }}
-    >
-      <div className="flex h-full flex-col">
-        <div className="flex min-h-0 flex-1">
-          {/* Video grid */}
-          <div className="flex flex-1 flex-col overflow-y-auto p-4">
-            <VideoGrid />
-          </div>
-          {/* Chat sidebar — intentionally desktop-only (lg+). On mobile/tablet the
-             video grid takes full width; chat is accessible from the channel after leaving. */}
-          {chatOpen && (
-            <div className="hidden w-80 border-l lg:flex lg:flex-col lg:overflow-hidden">
-              <div className="flex items-center justify-between border-b px-3 py-2">
-                <span className="text-sm font-medium">Chat</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setChatOpen(false)}
-                  title="Close chat"
-                >
-                  <MessageSquare className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <Chat channelId={channelId} variant="compact" />
-              </div>
-            </div>
-          )}
-        </div>
-        <ControlsBar />
+    <div className="flex h-full flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+        <VideoGrid />
       </div>
-    </MeetingRoomContext.Provider>
+      <ControlsBar />
+    </div>
   );
 }
 
@@ -350,7 +277,7 @@ const GroupVideoCall = ({
     return (
       <div className="h-full w-full overflow-hidden">
         <RealtimeKitProvider value={callCtx.meeting}>
-          <MeetingRoom channelId={channelId} />
+          <MeetingRoom />
         </RealtimeKitProvider>
       </div>
     );
