@@ -104,7 +104,7 @@ export function DynamicBreadcrumb() {
     const displayName = currentItem.resourceId
       ? (namesMap[currentItem.resourceId] ?? (isLoading ? "..." : currentItem.label))
       : currentItem.label;
-    return <span className="text-sm font-medium truncate">{displayName}</span>;
+    return <span className="text-base font-semibold truncate">{displayName}</span>;
   }
 
   return (
