@@ -48,11 +48,11 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
   const sidebarData = useWorkspaceSidebar();
 
   const handleChannelSelect = (id: string | null) => {
+    if (isMobile) setOpen(false);
     if (!id) {
       void navigate(`/workspaces/${workspaceId}/channels`);
     } else {
       void navigate(`/workspaces/${workspaceId}/channels/${id}`);
-      if (isMobile) setOpen(false);
       if (settings.notificationsEnabled) void subscribeUser();
     }
   };
