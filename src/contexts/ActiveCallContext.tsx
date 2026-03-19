@@ -77,10 +77,13 @@ export function ActiveCallProvider({
     channelId !== null &&
     !location.pathname.endsWith("/videocall");
 
-  // Reset pip dismissed state when user returns to the call page
-  useEffect(() => {
+  // Reset pip dismissed state when user returns to the call page.
+  // Adjusted during render (not in an effect) to avoid a cascading-render cycle.
+  const [prevIsFloating, setPrevIsFloating] = useState(isFloating);
+  if (prevIsFloating !== isFloating) {
+    setPrevIsFloating(isFloating);
     if (!isFloating) setIsPipDismissed(false);
-  }, [isFloating]);
+  }
 
   // Stable refs for cleanup
   const meetingRef = useRef(meeting);

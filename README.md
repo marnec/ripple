@@ -1,6 +1,8 @@
 NEXT STEPS:
 - investigate rework all deletion cascade to soft-deletion with scheduled garbage collection (also investigate n+1 problem and analyze submitted component for cascading delete)
 
+- explore convex component for hirearchical tags for both direct usage (replace existing tag system) and to understand how optimized hireachical system work
+
 - [x] there is still a problem sometimes with the in-call follow action not working
 
 - [x] extend audit-log usage
