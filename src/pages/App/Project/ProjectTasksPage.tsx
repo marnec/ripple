@@ -6,17 +6,20 @@ import {
   TabsTrigger,
   TabsContent,
 } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex/react";
-import { LayoutList, Kanban } from "lucide-react";
+import { LayoutList, Kanban, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { startViewTransition } from "@/hooks/use-view-transition";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { KanbanBoard } from "./KanbanBoard";
+import { CreateTaskDialog } from "./CreateTaskDialog";
 import { Tasks } from "./Tasks";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 
@@ -47,6 +50,8 @@ function ProjectTasksContent({
 
   // Force list view on mobile — kanban doesn't work on small screens
   const effectiveView = isMobile ? "list" : view;
+  const [dialogOpen, setDialogOpen] = useState(false);
+
   const [filters, setFilters] = useState<TaskFilters>({
     completionFilter: "uncompleted" as const,
     assigneeIds: [],
@@ -98,7 +103,21 @@ function ProjectTasksContent({
             )}
             {!isMobile && contentLoading && <RippleSpinner size={24} />}
           </div>
+          {!isMobile && (
+            <Button size="sm" onClick={() => setDialogOpen(true)}>
+              <Plus className="h-4 w-4" />
+              New task
+            </Button>
+          )}
         </div>
+
+        {isMobile && (
+          <HeaderSlot>
+            <Button variant="ghost" size="icon" onClick={() => setDialogOpen(true)} aria-label="New task">
+              <Plus className="size-4" />
+            </Button>
+          </HeaderSlot>
+        )}
 
         {/* Shared toolbar — stable across views */}
         <TaskToolbar
@@ -118,6 +137,13 @@ function ProjectTasksContent({
           <Tasks projectId={projectId} workspaceId={workspaceId} filters={filters} sort={sort} />
         </TabsContent>
       </Tabs>
+
+      <CreateTaskDialog
+        projectId={projectId}
+        workspaceId={workspaceId}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </div>
   );
 }

@@ -8,7 +8,6 @@ import { CheckSquare, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { CreateTaskInline } from "./CreateTaskInline";
 
 const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
@@ -90,16 +89,13 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
 
   return (
     <div>
-      {/* Inline Task Creation */}
-      <CreateTaskInline projectId={projectId} workspaceId={workspaceId} />
-
       {/* Task List */}
       {totalCount === 0 ? (
         <div className="py-12 text-center">
           <CheckSquare className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
           <h3 className="text-lg font-medium mb-1">No tasks yet</h3>
           <p className="text-sm text-muted-foreground">
-            Create your first task using the input above
+            Use the New task button to get started
           </p>
         </div>
       ) : (

@@ -23,7 +23,6 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { AddColumnDialog } from "./AddColumnDialog";
-import { CreateTaskInline } from "./CreateTaskInline";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { KanbanColumn } from "./KanbanColumn";
 
@@ -279,9 +278,6 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
 
   return (
     <div className="flex flex-col flex-1 min-h-0 animate-fade-in">
-      {/* Create task — matches list view layout */}
-      <CreateTaskInline projectId={projectId} workspaceId={workspaceId} />
-
       {/* Kanban Board */}
       <DndContext
         sensors={sensors}
