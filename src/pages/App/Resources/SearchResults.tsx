@@ -1,4 +1,5 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -6,17 +7,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useOptimisticIsFavorited } from "@/contexts/FavoritesContext";
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { FavoriteFilter } from "@/hooks/use-debounced-search";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
-import { useQuery } from "convex/react";
-import { formatDistanceToNow } from "date-fns";
-import { useEffect, useRef } from "react";
-import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { useMutation, useQuery } from "convex/react";
+import { format, isThisYear } from "date-fns";
+import { Star, StarOff, Video } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
+type FavoritableType = "document" | "diagram" | "spreadsheet" | "project";
 
 type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number };
 
@@ -37,6 +43,11 @@ function getEmptyMessage(resourceType: ResourceType, favoriteFilter?: FavoriteFi
     default:
       return "No results found.";
   }
+}
+
+function compactDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  return isThisYear(date) ? format(date, "MMM d") : format(date, "MMM d, yyyy");
 }
 
 export type SearchResultsProps = {
@@ -89,6 +100,125 @@ function useIsLoadingCallback(
   }, [isLoading, onLoadingChange]);
 }
 
+// ─── Mobile list row ─────────────────────────────────────────────────────────
+
+type ResourceMobileRowProps = {
+  resource: SearchResult;
+  resourceType: ResourceType;
+  workspaceId: Id<"workspaces">;
+  subPath?: string;
+  showFavorites?: boolean;
+  isSwipeOpen: boolean;
+  onSwipeOpenChange: (open: boolean) => void;
+  onSwipeStart: () => void;
+};
+
+function ResourceMobileRow({
+  resource,
+  resourceType,
+  workspaceId,
+  subPath,
+  showFavorites,
+  isSwipeOpen,
+  onSwipeOpenChange,
+  onSwipeStart,
+}: ResourceMobileRowProps) {
+  const Icon = RESOURCE_TYPE_ICONS[resourceType];
+  const isChannel = resourceType === "channel";
+  const canFavorite = showFavorites !== false && !isChannel;
+  // Safe cast: useOptimisticIsFavorited doesn't support "channel"; canFavorite
+  // guards all channel star rendering — "document" is a harmless fallback.
+  const favType: FavoritableType = isChannel ? "document" : resourceType;
+  const isFavorited = useOptimisticIsFavorited(favType, resource._id) ?? false;
+  const toggle = useMutation(api.favorites.toggle);
+  const navigate = useNavigate();
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void toggle({ workspaceId, resourceType: favType, resourceId: resource._id });
+    onSwipeOpenChange(false);
+  };
+
+  const handleJoinCall = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSwipeOpenChange(false);
+    void navigate(`${resource._id}/videocall`);
+  };
+
+  return (
+    <SwipeToReveal
+      enabled
+      open={isSwipeOpen}
+      onOpenChange={onSwipeOpenChange}
+      onSwipeStart={onSwipeStart}
+      className={isChannel ? "rounded-none" : undefined}
+      style={
+        !isChannel
+          ? ({
+              viewTransitionName: `--resource-${resource._id}`,
+              viewTransitionClass: "resource-card",
+            } as React.CSSProperties)
+          : undefined
+      }
+      action={
+        isChannel ? (
+          <button
+            onClick={handleJoinCall}
+            className="flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1 bg-blue-500"
+          >
+            <Video className="h-4 w-4" />
+            <span className="text-[10px] font-medium leading-tight">Join call</span>
+          </button>
+        ) : (
+          <button
+            onClick={handleToggle}
+            className={cn(
+              "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
+              isFavorited ? "bg-rose-500" : "bg-amber-500",
+            )}
+          >
+            {isFavorited ? (
+              <StarOff className="h-4 w-4" />
+            ) : (
+              <Star className="h-4 w-4" />
+            )}
+            <span className="text-[10px] font-medium leading-tight">
+              {isFavorited ? "Unstar" : "Star"}
+            </span>
+          </button>
+        )
+      }
+    >
+      {/* Fixed-height row: icon | name | [star state] | [date] */}
+      <Link
+        to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`}
+        className="flex w-full items-center gap-2.5 px-3 py-2.5 bg-card hover:bg-accent transition-colors text-sm h-14"
+      >
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="flex-1 min-w-0 truncate font-medium">{resource.name}</span>
+        {canFavorite && (
+          <Star
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 transition-colors",
+              isFavorited
+                ? "fill-yellow-400 text-yellow-400"
+                : "text-muted-foreground/30",
+            )}
+          />
+        )}
+        {resource._creationTime != null && (
+          <span className="text-xs text-muted-foreground shrink-0">
+            {compactDate(resource._creationTime)}
+          </span>
+        )}
+      </Link>
+    </SwipeToReveal>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function SearchResults({
   workspaceId,
   resourceType,
@@ -102,6 +232,23 @@ export function SearchResults({
 }: SearchResultsProps) {
   const results = useResourceSearch(resourceType, workspaceId, searchText, tags, isFavorite);
   const rendered = useAnimatedQuery(results);
+  const isMobile = useIsMobile();
+
+  // Track which row has its swipe action revealed (only one at a time)
+  const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const closeAllSwipes = () => setSwipeOpenId(null);
+
+  // Close swipe when tapping anywhere outside the list
+  useEffect(() => {
+    if (!swipeOpenId) return;
+    const onTap = (e: Event) => {
+      if (listRef.current?.contains(e.target as Node)) return;
+      setSwipeOpenId(null);
+    };
+    document.addEventListener("click", onTap, { passive: true });
+    return () => document.removeEventListener("click", onTap);
+  }, [swipeOpenId]);
 
   // Loading = query re-subscribing (undefined) while we have stale data buffered
   useIsLoadingCallback(results === undefined, onLoadingChange);
@@ -121,6 +268,38 @@ export function SearchResults({
     );
   }
 
+  // ── Mobile: separated row items with swipe-to-reveal action ─────────────
+  if (isMobile) {
+    // Channels: flat grouped list (no rounded per-item, divider-separated)
+    // Others:   pill cards with gap between each item
+    const isChannel = resourceType === "channel";
+    return (
+      <div
+        ref={listRef}
+        className={
+          isChannel
+            ? "flex flex-col overflow-hidden rounded-lg border border-border divide-y divide-border"
+            : "flex flex-col gap-1.5"
+        }
+      >
+        {rendered.map((resource) => (
+          <ResourceMobileRow
+            key={resource._id}
+            resource={resource}
+            resourceType={resourceType}
+            workspaceId={workspaceId}
+            subPath={subPath}
+            showFavorites={showFavorites}
+            isSwipeOpen={swipeOpenId === resource._id}
+            onSwipeOpenChange={(open) => setSwipeOpenId(open ? resource._id : null)}
+            onSwipeStart={closeAllSwipes}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // ── Desktop: card grid with always-visible star ───────────────────────────
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {rendered.map((resource) => (
@@ -133,7 +312,7 @@ export function SearchResults({
           } as React.CSSProperties}
         >
           <Link to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`} className="flex grow flex-col">
-            <CardHeader className="flex flex-row items-center gap-2">
+            <CardHeader className="flex flex-row items-center gap-2 pr-9">
               <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
               <CardTitle className="truncate text-base">
                 {resource.name}
@@ -155,16 +334,13 @@ export function SearchResults({
               </div>
               {resource._creationTime != null && (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Created{" "}
-                  {formatDistanceToNow(resource._creationTime, {
-                    addSuffix: true,
-                  })}
+                  {compactDate(resource._creationTime)}
                 </p>
               )}
             </CardContent>
           </Link>
           {showFavorites !== false && resourceType !== "channel" && (
-            <div className="absolute right-2 top-2 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:[&:has(:focus-visible)]:opacity-100">
+            <div className="absolute right-2 top-2">
               <FavoriteButton
                 resourceType={resourceType}
                 resourceId={resource._id}
