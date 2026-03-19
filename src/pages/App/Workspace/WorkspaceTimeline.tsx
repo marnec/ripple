@@ -181,16 +181,13 @@ function formatAction(entry: TimelineEntry): React.ReactNode {
   }
 }
 
-function formatRelativeTime(timestamp: number): string {
-  const diff = Date.now() - timestamp;
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(timestamp).toLocaleDateString();
+function formatDateTime(timestamp: number): string {
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
 }
 
 const PAGE_SIZE = 20;
@@ -297,15 +294,13 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
             <div className="flex h-5 w-5 md:h-6 md:w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground z-10">
               {getActionIcon(entry.action)}
             </div>
-            <div className="flex-1 min-w-0 text-xs md:text-sm text-muted-foreground leading-5 md:leading-6">
-              <span className="inline-flex items-center gap-1 md:gap-1.5 flex-wrap">
-                {getResourceIcon(entry.resourceType, isDark)}
-                <span>{formatAction(entry)}</span>
-              </span>
+            <div className="flex-1 min-w-0 text-xs text-muted-foreground leading-5 wrap-anywhere">
+              {entry.resourceType && (
+                <span className="inline-flex items-center mr-1 align-middle">{getResourceIcon(entry.resourceType, isDark)}</span>
+              )}
+              {formatAction(entry)}
+              <span className="text-muted-foreground/50 ml-1">· {formatDateTime(entry.timestamp)}</span>
             </div>
-            <span className="text-[10px] md:text-xs text-muted-foreground/60 shrink-0 leading-5 md:leading-6">
-              {formatRelativeTime(entry.timestamp)}
-            </span>
           </m.div>
         ))}
       </AnimatePresence>
