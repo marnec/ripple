@@ -63,6 +63,11 @@ export function NavUser() {
     setInstallDotDismissed(true);
   };
 
+  const showNotificationsDot =
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    Notification.permission === "default";
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -81,7 +86,7 @@ export function NavUser() {
                   />
                   <AvatarFallback className="rounded-lg">CN</AvatarFallback>
                 </Avatar>
-                {(hasUpdate || (canInstall && !installDotDismissed) || pendingInvites.length > 0) && (
+                {(hasUpdate || (canInstall && !installDotDismissed) || pendingInvites.length > 0 || showNotificationsDot) && (
                   <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-blue-600 ring-2 ring-sidebar" />
                 )}
               </div>
@@ -134,6 +139,11 @@ export function NavUser() {
               <DropdownMenuItem onSelect={() => setShowSettings(true)}>
                 <Settings />
                 Settings
+                {showNotificationsDot && (
+                  <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full bg-blue-600 px-1.5 text-[10px]">
+                    1
+                  </Badge>
+                )}
               </DropdownMenuItem>
               {canInstall && (
                 <DropdownMenuItem onSelect={() => { dismissInstallDot(); if (isIOSSafari) { setShowIOSInstall(true); } else { void promptInstall(); } }}>

@@ -72,7 +72,12 @@ export function UserSettingsDialog({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-sm font-medium">Notifications</Label>
+                <Label className="text-sm font-medium flex items-center gap-1.5">
+                  Notifications
+                  {notificationsSupported && !permissionDenied && pushNotifications.permission === "default" && (
+                    <span className="size-2 rounded-full bg-blue-600" />
+                  )}
+                </Label>
                 {permissionDenied && (
                   <p className="text-xs text-muted-foreground">
                     Blocked by browser. Reset in site settings.
@@ -85,7 +90,7 @@ export function UserSettingsDialog({
                 )}
               </div>
               <Switch
-                checked={settings.notificationsEnabled}
+                checked={settings.notificationsEnabled && !permissionDenied}
                 onCheckedChange={(checked) =>
                   void handleNotificationsChange(checked)
                 }
