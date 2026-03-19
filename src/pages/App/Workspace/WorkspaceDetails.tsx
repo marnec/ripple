@@ -125,7 +125,7 @@ export function WorkspaceDetails() {
         </div>
 
         {/* Resource cards with integrated filter toggles */}
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-6">
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {overviewCards.map((card) => {
             const count = overview?.[card.key as keyof typeof overview];
             const subCount = card.subCount ? overview?.[card.subCount.key as keyof typeof overview] : undefined;
