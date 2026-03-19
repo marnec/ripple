@@ -9,6 +9,7 @@ import {
 } from "../../../components/ui/responsive-dropdown-menu";
 import { SidebarMenuSubButton, SidebarMenuSubItem } from "../../../components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { ProjectColorTag } from "@/components/ProjectColorTag";
 import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface ProjectSelectorItemProps {
@@ -53,7 +54,7 @@ export function ProjectSelectorItem({
         }
         isActive={project._id === projectId}
       >
-        <span className={`w-2 h-2 rounded-full shrink-0 ${project.color}`} />
+        <ProjectColorTag color={project.color} />
         <span className="truncate">{project.name}</span>
       </SidebarMenuSubButton>
       <ResponsiveDropdownMenu>

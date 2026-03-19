@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { ProjectColorTag } from "@/components/ProjectColorTag";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { startViewTransition } from "@/hooks/use-view-transition";
@@ -281,10 +282,7 @@ export function MyTasks() {
                         ) : (
                           <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                         )}
-                        <span
-                          className={cn("w-2 h-2 rounded-full shrink-0", group.projectColor)}
-                          aria-hidden="true"
-                        />
+                        <ProjectColorTag color={group.projectColor} />
                         <span className="text-sm font-medium text-left flex-1 truncate">
                           {group.projectName}
                         </span>

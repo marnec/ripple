@@ -1,4 +1,5 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { ProjectColorTag } from "@/components/ProjectColorTag";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
@@ -60,10 +61,8 @@ function ProjectLayoutContent({
           />
           {!isLoading && (
             <div className="flex items-center gap-2 min-w-0 animate-fade-in">
+              <ProjectColorTag color={project.color} />
               <h1 className="text-lg font-semibold truncate">{project.name}</h1>
-              {project.color && (
-                <span className={`w-2 h-2 rounded-full ${project.color} shrink-0`} />
-              )}
             </div>
           )}
         </div>

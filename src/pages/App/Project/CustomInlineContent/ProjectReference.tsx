@@ -4,7 +4,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { Id } from "../../../../../convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useParams } from "react-router-dom";
-import { cn } from "@/lib/utils";
+import { ProjectColorTag } from "@/components/ProjectColorTag";
 
 export const ProjectReference = createReactInlineContentSpec(
   {
@@ -76,7 +76,7 @@ const ProjectReferenceView = ({
         }
       }}
     >
-      <span className={cn("h-2 w-2 rounded-full shrink-0", project.color)} />
+      <ProjectColorTag color={project.color} />
       <span className="max-w-50 truncate">{project.name}</span>
     </span>
   );

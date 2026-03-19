@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { ProjectColorTag } from "@/components/ProjectColorTag";
 import { useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
@@ -33,7 +33,7 @@ export function ProjectReferenceChip({ projectId }: ProjectReferenceChipProps) {
                    rounded-full bg-background/60 hover:bg-background/80
                    transition-colors cursor-pointer text-sm font-medium align-middle"
       >
-        <span className={cn("h-2 w-2 rounded-full shrink-0", cached.color)} />
+        <ProjectColorTag color={cached.color} />
         <span className="max-w-50 truncate">{cached.name}</span>
       </button>
     );
@@ -63,7 +63,7 @@ export function ProjectReferenceChip({ projectId }: ProjectReferenceChipProps) {
                  rounded-full bg-background/60 hover:bg-background/80
                  transition-colors cursor-pointer text-sm font-medium align-middle"
     >
-      <span className={cn("h-2 w-2 rounded-full shrink-0", project.color)} />
+      <ProjectColorTag color={project.color} />
       <span className="max-w-50 truncate">{project.name}</span>
     </button>
   );
