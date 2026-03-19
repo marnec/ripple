@@ -1,7 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Avatar,
   AvatarFallback,
@@ -44,8 +43,8 @@ export const UserMentionRenderer = ({ userId }: { userId: string }) => {
   if (user === undefined) {
     return (
       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 dark:bg-blue-400/10 align-middle">
-        <Skeleton className="h-4 w-4 rounded-full shrink-0" />
-        <Skeleton className="h-3.5 w-14 rounded" />
+        <span className="animate-pulse bg-muted h-4 w-4 rounded-full shrink-0 inline-block" />
+        <span className="animate-pulse bg-muted h-3.5 w-14 rounded inline-block" />
       </span>
     );
   }
