@@ -15,21 +15,27 @@ cleanupOutdatedCaches();
 
 // Push notification handler
 self.addEventListener("push", (event) => {
-  const data = event.data
-    ? JSON.parse(event.data.text())
-    : { title: "Ripple", body: "You have a new notification" };
-
-  console.log("[SW] Push received:", data);
+  let data: { title: string; body: string; data?: { url?: string } } = {
+    title: "Ripple",
+    body: "You have a new notification",
+  };
+  try {
+    if (event.data) {
+      data = JSON.parse(event.data.text()) as typeof data;
+    }
+  } catch {
+    // Malformed payload — fall through to default
+  }
 
   const options: NotificationOptions = {
     body: data.body,
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
-    data: {
-      url: data.data?.url,
-    },
+    data: { url: data.data?.url },
   };
 
+  // Always call showNotification so the browser never shows its own fallback
+  // ("[App name], tap to copy the URL for this app") due to userVisibleOnly: true.
   event.waitUntil(self.registration.showNotification(data.title, options));
 });
 
