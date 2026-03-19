@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import React, { Suspense, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
@@ -61,6 +61,7 @@ export function WorkspaceDetails() {
   const { workspaceId } = useParams<QueryParams>();
   const id = workspaceId as Id<"workspaces">;
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>(isMobile ? "activity" : "graph");
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -138,16 +139,17 @@ export function WorkspaceDetails() {
               return (
                 <div
                   key={card.key}
-                  className="group relative flex items-center rounded-lg border p-4 text-center transition-all"
+                  className="group relative flex items-stretch rounded-lg border text-center overflow-hidden"
                 >
                   <Link to={card.to} className="absolute inset-0 z-0" aria-label={`${card.label} and ${card.subCount.label}`} />
 
                   {/* Left side: primary type */}
                   <div
                     className={cn(
-                      "relative z-1 flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all pointer-events-none",
-                      isHidden ? "opacity-40" : "",
+                      "relative z-1 flex flex-col items-center justify-center gap-1 flex-1 p-4 transition-all cursor-pointer",
+                      isHidden ? "opacity-40" : "hover:bg-accent/50",
                     )}
+                    onClick={() => void navigate(card.to)}
                     onMouseEnter={() => setHighlightedType(card.filterType)}
                     onMouseLeave={() => setHighlightedType(null)}
                   >
@@ -156,14 +158,15 @@ export function WorkspaceDetails() {
                     <span className="text-[11px] text-muted-foreground">{card.label}</span>
                   </div>
 
-                  <div className="relative z-1 w-px h-8 bg-border shrink-0 pointer-events-none" />
+                  <div className="relative z-1 w-px self-stretch bg-border shrink-0" />
 
                   {/* Right side: sub type */}
                   <div
                     className={cn(
-                      "relative z-1 flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all pointer-events-none",
-                      isSubHidden ? "opacity-40" : "",
+                      "relative z-1 flex flex-col items-center justify-center gap-1 flex-1 p-4 transition-all cursor-pointer",
+                      isSubHidden ? "opacity-40" : "hover:bg-accent/50",
                     )}
+                    onClick={() => void navigate(card.to)}
                     onMouseEnter={() => setHighlightedType(subFilterType)}
                     onMouseLeave={() => setHighlightedType(null)}
                   >
@@ -176,14 +179,14 @@ export function WorkspaceDetails() {
                   {!isMobile && (
                     <>
                       <button
-                        onClick={() => toggleType(card.filterType)}
+                        onClick={(e) => { e.stopPropagation(); toggleType(card.filterType); }}
                         className="absolute top-2 left-2 z-10 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                         title={isHidden ? `Show ${card.label}` : `Hide ${card.label}`}
                       >
                         {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                       </button>
                       <button
-                        onClick={() => toggleType(subFilterType)}
+                        onClick={(e) => { e.stopPropagation(); toggleType(subFilterType); }}
                         className="absolute top-2 right-2 z-10 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                         title={isSubHidden ? `Show ${card.subCount.label}` : `Hide ${card.subCount.label}`}
                       >
@@ -200,23 +203,24 @@ export function WorkspaceDetails() {
               <div
                 key={card.key}
                 className={cn(
-                  "group relative flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-all",
+                  "group relative flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-all cursor-pointer",
                   isHidden ? "opacity-40" : "hover:bg-accent/50",
                 )}
+                onClick={() => void navigate(card.to)}
                 onMouseEnter={() => setHighlightedType(card.filterType)}
                 onMouseLeave={() => setHighlightedType(null)}
               >
                 <Link to={card.to} className="absolute inset-0 z-0" aria-label={card.label} />
                 {!isMobile && (
                   <button
-                    onClick={() => toggleType(card.filterType)}
+                    onClick={(e) => { e.stopPropagation(); toggleType(card.filterType); }}
                     className="absolute top-2 right-2 z-10 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                     title={isHidden ? `Show ${card.label}` : `Hide ${card.label}`}
                   >
                     {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   </button>
                 )}
-                <div className="pointer-events-none flex flex-col items-center gap-1.5">
+                <div className="flex flex-col items-center gap-1.5">
                   <card.icon className="size-5 transition-colors" style={{ color }} />
                   <span className="text-2xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
                   <span className="text-xs text-muted-foreground">{card.label}</span>
