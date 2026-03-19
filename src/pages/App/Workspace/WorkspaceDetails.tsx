@@ -236,8 +236,10 @@ export function WorkspaceDetails() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1">
-          {!isMobile && (
+        {isMobile ? (
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-0.5">Activity</p>
+        ) : (
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab("graph")}
               className={cn(
@@ -250,34 +252,42 @@ export function WorkspaceDetails() {
               <Network className="h-3.5 w-3.5" />
               Graph
             </button>
-          )}
-          <button
-            onClick={() => setActiveTab("activity")}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              activeTab === "activity"
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+            <button
+              onClick={() => setActiveTab("activity")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === "activity"
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Activity
+            </button>
+            {activeTab === "graph" && (
+              <span className="text-[11px] text-muted-foreground/50 ml-2">
+                Hover a node to reveal its name
+              </span>
             )}
-          >
-            <Clock className="h-3.5 w-3.5" />
-            Activity
-          </button>
-          {activeTab === "graph" && !isMobile && (
-            <span className="text-[11px] text-muted-foreground/50 ml-2">
-              Hover a node to reveal its name
-            </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Tab content */}
       {activeTab === "activity" && (
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="container mx-auto px-4 pb-4">
-            <WorkspaceTimeline workspaceId={id} hiddenTypes={hiddenTypes} />
+        isMobile ? (
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="px-2 pb-4">
+              <WorkspaceTimeline workspaceId={id} hiddenTypes={hiddenTypes} />
+            </div>
           </div>
-        </ScrollArea>
+        ) : (
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="container mx-auto px-4 pb-4">
+              <WorkspaceTimeline workspaceId={id} hiddenTypes={hiddenTypes} />
+            </div>
+          </ScrollArea>
+        )
       )}
       {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
         <div className="container mx-auto px-4 pb-4 overflow-hidden">

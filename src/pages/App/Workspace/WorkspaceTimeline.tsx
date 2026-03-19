@@ -299,8 +299,10 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
                 <span className="inline-flex items-center mr-1 align-middle">{getResourceIcon(entry.resourceType, isDark)}</span>
               )}
               {formatAction(entry)}
-              <span className="text-muted-foreground/50 ml-1">· {formatDateTime(entry.timestamp)}</span>
             </div>
+            <span className="text-[10px] text-muted-foreground/50 shrink-0 leading-5 tabular-nums">
+              {formatDateTime(entry.timestamp)}
+            </span>
           </m.div>
         ))}
       </AnimatePresence>
