@@ -130,7 +130,7 @@ export function WorkspaceDetails() {
         </div>
 
         {/* Resource cards with integrated filter toggles */}
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <div className="grid gap-2 md:gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {overviewCards.map((card) => {
             const count = overview?.[card.key as keyof typeof overview];
             const subCount = card.subCount ? overview?.[card.subCount.key as keyof typeof overview] : undefined;
@@ -151,16 +151,16 @@ export function WorkspaceDetails() {
                   {/* Left side: primary type */}
                   <div
                     className={cn(
-                      "relative z-1 flex flex-col items-center justify-center gap-1 flex-1 p-4 transition-all cursor-pointer",
+                      "relative z-1 flex flex-col items-center justify-center gap-0.5 flex-1 p-3 md:p-4 transition-all cursor-pointer",
                       isHidden ? "opacity-40" : "hover:bg-accent/50",
                     )}
                     onClick={() => void navigate(card.to)}
                     onMouseEnter={() => setHighlightedType(card.filterType)}
                     onMouseLeave={() => setHighlightedType(null)}
                   >
-                    <card.icon className="size-4 transition-colors" style={{ color }} />
-                    <span className="text-xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
-                    <span className="text-[11px] text-muted-foreground">{card.label}</span>
+                    <card.icon className="size-3.5 md:size-4 transition-colors" style={{ color }} />
+                    <span className="text-lg md:text-xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
+                    <span className="text-[10px] md:text-[11px] text-muted-foreground">{card.label}</span>
                   </div>
 
                   <div className="relative z-1 w-px h-8 self-center bg-border shrink-0" />
@@ -168,16 +168,16 @@ export function WorkspaceDetails() {
                   {/* Right side: sub type */}
                   <div
                     className={cn(
-                      "relative z-1 flex flex-col items-center justify-center gap-1 flex-1 p-4 transition-all cursor-pointer",
+                      "relative z-1 flex flex-col items-center justify-center gap-0.5 flex-1 p-3 md:p-4 transition-all cursor-pointer",
                       isSubHidden ? "opacity-40" : "hover:bg-accent/50",
                     )}
                     onClick={() => void navigate(card.to)}
                     onMouseEnter={() => setHighlightedType(subFilterType)}
                     onMouseLeave={() => setHighlightedType(null)}
                   >
-                    <card.subCount.icon className="size-4 transition-colors" style={{ color: getNodeColor(subFilterType, isDark) }} />
-                    <span className="text-xl font-semibold tabular-nums">{subCount ?? "\u2013"}</span>
-                    <span className="text-[11px] text-muted-foreground">{card.subCount.label}</span>
+                    <card.subCount.icon className="size-3.5 md:size-4 transition-colors" style={{ color: getNodeColor(subFilterType, isDark) }} />
+                    <span className="text-lg md:text-xl font-semibold tabular-nums">{subCount ?? "\u2013"}</span>
+                    <span className="text-[10px] md:text-[11px] text-muted-foreground">{card.subCount.label}</span>
                   </div>
 
                   {/* Eye toggles: left for primary, right for sub */}
@@ -208,7 +208,7 @@ export function WorkspaceDetails() {
               <div
                 key={card.key}
                 className={cn(
-                  "group relative flex flex-col items-center gap-1.5 rounded-lg border p-4 text-center transition-all cursor-pointer",
+                  "group relative flex flex-col items-center gap-1 md:gap-1.5 rounded-lg border p-3 md:p-4 text-center transition-all cursor-pointer",
                   isHidden ? "opacity-40" : "hover:bg-accent/50",
                 )}
                 onClick={() => void navigate(card.to)}
@@ -225,9 +225,9 @@ export function WorkspaceDetails() {
                     {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   </button>
                 )}
-                <div className="flex flex-col items-center gap-1.5">
-                  <card.icon className="size-5 transition-colors" style={{ color }} />
-                  <span className="text-2xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
+                <div className="flex flex-col items-center gap-1 md:gap-1.5">
+                  <card.icon className="size-4 md:size-5 transition-colors" style={{ color }} />
+                  <span className="text-xl md:text-2xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
                   <span className="text-xs text-muted-foreground">{card.label}</span>
                 </div>
               </div>
