@@ -1,6 +1,12 @@
 if (import.meta.env.DEV) {
   await import("./wdyr");
 }
+// Install Temporal on globalThis for @schedule-x/calendar (which reads it as a global).
+// We intentionally do NOT use 'temporal-polyfill/global' — that entry point also patches
+// Intl.DateTimeFormat and Date.prototype, which wraps the global constructor and slows
+// down every navigation that internally calls new Intl.DateTimeFormat().
+import { Temporal as _Temporal } from "temporal-polyfill";
+(globalThis as Record<string, unknown>).Temporal = _Temporal;
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { LazyMotion, domMax } from "framer-motion";

@@ -11,6 +11,6 @@ if (import.meta.env.DEV) {
     logOnDifferentValues: false,
     logOwnerReasons: true,
     // Track all components matching these names (covers non-memo'd function components)
-    include: [/AppSidebar/, /Layout/, /ChannelSelectorList/, /ProjectSelectorList/, /DocumentSelectorList/, /DiagramSelectorList/, /SpreadsheetSelectorList/, /Chat$/, /MessageComposer/, /Message$/, /DynamicBreadcrumb/, /WorkspaceSidebarProvider/, /WorkspaceMembersProvider/],
+    include: [/AppSidebar/, /Layout/, /ChannelSelectorList/, /ProjectSelectorList/, /DocumentSelectorList/, /DiagramSelectorList/, /SpreadsheetSelectorList/, /Chat$/, /MessageComposer/, /Message$/, /DynamicBreadcrumb/, /WorkspaceSidebarProvider/, /WorkspaceMembersProvider/, /ProjectCalendar/, /CalendarRenderer/],
   });
 }

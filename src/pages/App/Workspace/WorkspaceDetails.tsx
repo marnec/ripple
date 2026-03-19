@@ -62,11 +62,8 @@ export function WorkspaceDetails() {
   const id = workspaceId as Id<"workspaces">;
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>(isMobile ? "activity" : "graph");
-
-  useEffect(() => {
-    if (isMobile && activeTab === "graph") setActiveTab("activity");
-  }, [isMobile, activeTab]);
+  const [activeTab, setActiveTab] = useState<Tab>("graph");
+  const effectiveTab: Tab = isMobile && activeTab === "graph" ? "activity" : activeTab;
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
@@ -91,7 +88,7 @@ export function WorkspaceDetails() {
   const [graphHeight, setGraphHeight] = useState(0);
 
   useEffect(() => {
-    if (activeTab !== "graph" || !topRef.current) return;
+    if (effectiveTab !== "graph" || !topRef.current) return;
     const update = () => {
       const topEl = topRef.current;
       if (!topEl) return;
@@ -105,7 +102,7 @@ export function WorkspaceDetails() {
     const ro = new ResizeObserver(update);
     ro.observe(topRef.current);
     return () => ro.disconnect();
-  }, [activeTab]);
+  }, [effectiveTab]);
 
   if (workspace === null) {
     return <ResourceDeleted resourceType="workspace" />;
@@ -244,7 +241,7 @@ export function WorkspaceDetails() {
               onClick={() => setActiveTab("graph")}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                activeTab === "graph"
+                effectiveTab === "graph"
                   ? "bg-accent text-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
               )}
@@ -256,7 +253,7 @@ export function WorkspaceDetails() {
               onClick={() => setActiveTab("activity")}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                activeTab === "activity"
+                effectiveTab === "activity"
                   ? "bg-accent text-foreground"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
               )}
@@ -264,7 +261,7 @@ export function WorkspaceDetails() {
               <Clock className="h-3.5 w-3.5" />
               Activity
             </button>
-            {activeTab === "graph" && (
+            {effectiveTab === "graph" && (
               <span className="text-[11px] text-muted-foreground/50 ml-2">
                 Hover a node to reveal its name
               </span>
@@ -274,7 +271,7 @@ export function WorkspaceDetails() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "activity" && (
+      {effectiveTab === "activity" && (
         isMobile ? (
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="px-2 pb-4">
@@ -289,7 +286,7 @@ export function WorkspaceDetails() {
           </ScrollArea>
         )
       )}
-      {activeTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
+      {effectiveTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
         <div className="container mx-auto px-4 pb-4 overflow-hidden">
           <Suspense fallback={<div style={{ width: graphWidth, height: graphHeight }} />}>
             <LazyWorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} highlightedType={highlightedType} />

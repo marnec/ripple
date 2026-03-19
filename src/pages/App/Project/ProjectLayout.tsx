@@ -5,7 +5,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
-import { LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
+import { CalendarDays, LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
 import { useParams, NavLink, Outlet } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -30,6 +30,7 @@ const tabs = [
   { label: "Overview", icon: LayoutDashboard, to: ".", end: true },
   { label: "Tasks", icon: ListTodo, to: "tasks", end: false },
   { label: "Cycles", icon: RefreshCw, to: "cycles", end: false },
+  { label: "Calendar", icon: CalendarDays, to: "calendar", end: false },
   { label: "Settings", icon: Settings, to: "settings", end: false },
 ];
 

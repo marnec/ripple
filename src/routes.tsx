@@ -115,6 +115,13 @@ export const router = createBrowserRouter(
                       element: <CycleDetail />,
                     },
                     {
+                      path: "calendar",
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectCalendar").then(
+                          (m) => ({ Component: m.ProjectCalendar }),
+                        ),
+                    },
+                    {
                       path: "settings",
                       lazy: () =>
                         import("./pages/App/Project/ProjectSettings").then(

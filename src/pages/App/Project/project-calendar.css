@@ -1,0 +1,54 @@
+@import '@schedule-x/theme-default/dist/index.css';
+
+.sx__calendar {
+  border: unset;
+}
+
+.sx__calendar-wrapper {
+  --sx-color-background: var(--color-background);
+  --sx-color-on-background: var(--color-foreground);
+  --sx-color-on-surface: var(--color-foreground);
+  --sx-color-surface: var(--color-background);
+  --sx-color-surface-dim: var(--color-muted);
+  --sx-color-surface-container: var(--color-card);
+  --sx-color-surface-container-low: var(--color-muted);
+  --sx-color-surface-container-high: var(--color-muted);
+  --sx-color-surface-bright: var(--color-background);
+  --sx-color-outline-variant: var(--color-border);
+  --sx-color-on-surface: var(--color-foreground);
+  --sx-color-neutral: var(--color-muted-foreground);
+  --sx-color-neutral-variant: var(--color-muted-foreground);
+  --sx-color-primary: var(--color-primary);
+  --sx-font-family: var(--font-sans);
+
+  overflow: hidden;
+  height: 100%;
+
+  /*
+   * Extract the calendar from the root view-transition snapshot.
+   * schedule-x applies `transition: all` to its internal elements and calls
+   * scrollIntoViewIfNeeded on init, which forces a 94ms reflow. When the root
+   * VT crossfade captures a snapshot mid-transition it produces a stuttered
+   * or flickering crossfade. Giving the wrapper its own VT name lifts it out
+   * of the root screenshot; suppressing the resulting animation means it just
+   * renders in-place while the page shell (header + tabs) crossfades normally.
+   */
+  view-transition-name: sx-calendar;
+}
+
+::view-transition-old(sx-calendar),
+::view-transition-new(sx-calendar) {
+  animation: none;
+}
+
+/* Disable all schedule-x navigation and event animations — the class-based
+   animation approach (render → 12ms gap → add class) causes a visible
+   flash before the animation starts, reading as a double-animation. */
+.sx__calendar-wrapper .sx__slide-left,
+.sx__calendar-wrapper .sx__slide-right,
+.sx__calendar-wrapper .sx__date-grid-event.is-event-new,
+.sx__calendar-wrapper .sx__time-grid-event.is-event-new,
+.sx__calendar-wrapper .sx__month-grid-event.is-event-new,
+.sx__calendar-wrapper .sx__month-agenda-event.is-event-new {
+  animation: none;
+}
