@@ -102,8 +102,9 @@ export function WorkspaceDetails() {
       setGraphHeight(Math.max(200, h));
     };
     update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    const ro = new ResizeObserver(update);
+    ro.observe(topRef.current);
+    return () => ro.disconnect();
   }, [activeTab]);
 
   if (workspace === null) {
