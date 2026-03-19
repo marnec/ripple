@@ -158,7 +158,7 @@ export function WorkspaceDetails() {
                     <span className="text-[11px] text-muted-foreground">{card.label}</span>
                   </div>
 
-                  <div className="relative z-1 w-px self-stretch bg-border shrink-0" />
+                  <div className="relative z-1 w-px h-8 self-center bg-border shrink-0" />
 
                   {/* Right side: sub type */}
                   <div
