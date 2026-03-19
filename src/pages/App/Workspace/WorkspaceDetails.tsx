@@ -140,12 +140,13 @@ export function WorkspaceDetails() {
                   key={card.key}
                   className="group relative flex items-center rounded-lg border p-4 text-center transition-all"
                 >
+                  <Link to={card.to} className="absolute inset-0 z-0" aria-label={`${card.label} and ${card.subCount.label}`} />
+
                   {/* Left side: primary type */}
-                  <Link
-                    to={card.to}
+                  <div
                     className={cn(
-                      "flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all",
-                      isHidden ? "opacity-40" : "hover:bg-accent/50",
+                      "relative z-1 flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all pointer-events-none",
+                      isHidden ? "opacity-40" : "",
                     )}
                     onMouseEnter={() => setHighlightedType(card.filterType)}
                     onMouseLeave={() => setHighlightedType(null)}
@@ -153,16 +154,15 @@ export function WorkspaceDetails() {
                     <card.icon className="size-4 transition-colors" style={{ color }} />
                     <span className="text-xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
                     <span className="text-[11px] text-muted-foreground">{card.label}</span>
-                  </Link>
+                  </div>
 
-                  <div className="w-px h-8 bg-border shrink-0" />
+                  <div className="relative z-1 w-px h-8 bg-border shrink-0 pointer-events-none" />
 
                   {/* Right side: sub type */}
-                  <Link
-                    to={card.to}
+                  <div
                     className={cn(
-                      "flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all",
-                      isSubHidden ? "opacity-40" : "hover:bg-accent/50",
+                      "relative z-1 flex flex-col items-center gap-1 flex-1 rounded-md py-2 transition-all pointer-events-none",
+                      isSubHidden ? "opacity-40" : "",
                     )}
                     onMouseEnter={() => setHighlightedType(subFilterType)}
                     onMouseLeave={() => setHighlightedType(null)}
@@ -170,21 +170,21 @@ export function WorkspaceDetails() {
                     <card.subCount.icon className="size-4 transition-colors" style={{ color: getNodeColor(subFilterType, isDark) }} />
                     <span className="text-xl font-semibold tabular-nums">{subCount ?? "\u2013"}</span>
                     <span className="text-[11px] text-muted-foreground">{card.subCount.label}</span>
-                  </Link>
+                  </div>
 
                   {/* Eye toggles: left for primary, right for sub */}
                   {!isMobile && (
                     <>
                       <button
                         onClick={() => toggleType(card.filterType)}
-                        className="absolute top-2 left-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        className="absolute top-2 left-2 z-10 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                         title={isHidden ? `Show ${card.label}` : `Hide ${card.label}`}
                       >
                         {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                       </button>
                       <button
                         onClick={() => toggleType(subFilterType)}
-                        className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                        className="absolute top-2 right-2 z-10 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                         title={isSubHidden ? `Show ${card.subCount.label}` : `Hide ${card.subCount.label}`}
                       >
                         {isSubHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -206,20 +206,21 @@ export function WorkspaceDetails() {
                 onMouseEnter={() => setHighlightedType(card.filterType)}
                 onMouseLeave={() => setHighlightedType(null)}
               >
+                <Link to={card.to} className="absolute inset-0 z-0" aria-label={card.label} />
                 {!isMobile && (
                   <button
                     onClick={() => toggleType(card.filterType)}
-                    className="absolute top-2 right-2 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                    className="absolute top-2 right-2 z-10 p-1 rounded-md text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                     title={isHidden ? `Show ${card.label}` : `Hide ${card.label}`}
                   >
                     {isHidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   </button>
                 )}
-                <Link to={card.to} className="flex flex-col items-center gap-1.5">
+                <div className="pointer-events-none flex flex-col items-center gap-1.5">
                   <card.icon className="size-5 transition-colors" style={{ color }} />
                   <span className="text-2xl font-semibold tabular-nums">{count ?? "\u2013"}</span>
                   <span className="text-xs text-muted-foreground">{card.label}</span>
-                </Link>
+                </div>
               </div>
             );
           })}

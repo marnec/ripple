@@ -341,39 +341,42 @@ export function SearchResults({
             viewTransitionClass: "resource-card",
           } as React.CSSProperties}
         >
-          <Link to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`} className="flex grow flex-col">
-            <CardHeader className="flex flex-row items-center gap-2 pr-9">
-              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <CardTitle className="truncate text-base">
-                {resource.name}
-              </CardTitle>
-              {resourceType === "channel" && resource.isPublic !== undefined && (
-                <ChannelVisibilityBadge isPublic={resource.isPublic} />
-              )}
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col justify-between pt-0">
-              <div className="flex flex-wrap gap-1">
-                {resource.tags && resource.tags.length > 0 ? (
-                  resource.tags.map((tag: string) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="secondary" className="invisible text-xs">
-                    &nbsp;
+          <Link
+            to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`}
+            className="absolute inset-0 z-0"
+            aria-label={resource.name}
+          />
+          <CardHeader className="pointer-events-none flex flex-row items-center gap-2 pr-9">
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <CardTitle className="truncate text-base">
+              {resource.name}
+            </CardTitle>
+            {resourceType === "channel" && resource.isPublic !== undefined && (
+              <ChannelVisibilityBadge isPublic={resource.isPublic} />
+            )}
+          </CardHeader>
+          <CardContent className="pointer-events-none flex flex-1 flex-col justify-between pt-0">
+            <div className="flex flex-wrap gap-1">
+              {resource.tags && resource.tags.length > 0 ? (
+                resource.tags.map((tag: string) => (
+                  <Badge key={tag} variant="secondary" className="text-xs">
+                    {tag}
                   </Badge>
-                )}
-              </div>
-              {resource._creationTime != null && (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {compactDate(resource._creationTime)}
-                </p>
+                ))
+              ) : (
+                <Badge variant="secondary" className="invisible text-xs">
+                  &nbsp;
+                </Badge>
               )}
-            </CardContent>
-          </Link>
+            </div>
+            {resource._creationTime != null && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                {compactDate(resource._creationTime)}
+              </p>
+            )}
+          </CardContent>
           {showFavorites !== false && resourceType !== "channel" && (
-            <div className="absolute right-2 top-2">
+            <div className="absolute right-2 top-2 z-10">
               <FavoriteButton
                 resourceType={resourceType}
                 resourceId={resource._id}
