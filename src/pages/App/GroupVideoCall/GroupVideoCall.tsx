@@ -11,6 +11,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import { useActiveCall } from "../../../contexts/ActiveCallContext";
 import { useFollowMode } from "../../../contexts/FollowModeContext";
+import { RippleSpinner } from "../../../components/RippleSpinner";
 import { CallLobby } from "./CallLobby";
 import { CameraToggle, MicToggle } from "./MediaToggle";
 import { VideoTile } from "./VideoTile";
@@ -307,7 +308,7 @@ const GroupVideoCall = ({
   // Joining state
   return (
     <div className="flex h-full items-center justify-center">
-      <p className="text-muted-foreground">Joining call...</p>
+      <RippleSpinner size={96} />
     </div>
   );
 };
