@@ -3,7 +3,7 @@ if (import.meta.env.DEV) {
 }
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
-import { LazyMotion, domAnimation } from "framer-motion";
+import { LazyMotion, domMax } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -23,7 +23,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <PwaUpdateProvider>
           <Toaster />
           <ConvexAuthProvider client={convex}>
-            <LazyMotion features={domAnimation} strict>
+            <LazyMotion features={domMax} strict>
               <RouterProvider router={router} />
             </LazyMotion>
           </ConvexAuthProvider>
