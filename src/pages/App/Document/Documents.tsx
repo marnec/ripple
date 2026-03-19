@@ -53,8 +53,8 @@ export function Documents() {
             size="sm"
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload className="mr-1.5 h-4 w-4" />
-            Import
+            <Upload className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Import</span>
           </Button>
         }
       />
