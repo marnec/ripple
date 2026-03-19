@@ -63,6 +63,10 @@ export function WorkspaceDetails() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>(isMobile ? "activity" : "graph");
+
+  useEffect(() => {
+    if (isMobile && activeTab === "graph") setActiveTab("activity");
+  }, [isMobile, activeTab]);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
