@@ -222,6 +222,8 @@ function CalendarRenderer({
   isDark: boolean;
   onEventClick: (id: string | number) => void;
 }) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
   const [calendarApp] = useState<CalendarApp>(() =>
     createCalendar({
       views: [createViewWeek(), createViewMonthGrid()],
@@ -234,6 +236,22 @@ function CalendarRenderer({
       callbacks: {
         onEventClick(event) {
           onEventClick(event.id);
+        },
+        onRangeUpdate() {
+          // schedule-x adds the slide class inside a requestAnimationFrame,
+          // which means new content is painted at its final position for one
+          // frame before the animation starts — a visible FOUC. Hide the view
+          // container synchronously here (before the new content paints), then
+          // remove the override with a double-rAF so schedule-x's own rAF
+          // has already run and the CSS animation is in control of opacity.
+          const vc = wrapperRef.current?.querySelector<HTMLElement>(".sx__view-container");
+          if (!vc) return;
+          vc.style.opacity = "0";
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              vc.style.opacity = "";
+            });
+          });
         },
       },
     }),
@@ -276,7 +294,7 @@ function CalendarRenderer({
   }, [taskEvents, calendarApp]);
 
   return (
-    <div style={{ height: "100%" }}>
+    <div style={{ height: "100%" }} ref={wrapperRef}>
       <ScheduleXCalendar calendarApp={calendarApp} />
     </div>
   );

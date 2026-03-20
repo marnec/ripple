@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { VIEW_TRANSITIONS_DISABLED } from "./use-view-transition";
 import type React from "react";
 import { flushSync } from "react-dom";
 import { isMobileSidebarOpen } from "./use-view-transition";
@@ -103,8 +104,9 @@ export function useAnimatedQuery<T>(
 
     absorbed.current = false;
 
-    // If mid-transition, API unsupported, or mobile sidebar open, apply directly
-    if (transitioning.current || !document.startViewTransition || isMobileSidebarOpen()) {
+    // If mid-transition, API unsupported, mobile sidebar open, or globally
+    // disabled (for layout-shift investigation), apply directly.
+    if (transitioning.current || !document.startViewTransition || isMobileSidebarOpen() || VIEW_TRANSITIONS_DISABLED) {
       setRendered(liveData);
       return;
     }

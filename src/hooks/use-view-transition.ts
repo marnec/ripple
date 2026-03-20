@@ -15,8 +15,10 @@ export function isMobileSidebarOpen() {
  * Falls back to a plain synchronous call when the API is unsupported
  * or when the mobile sidebar is open (to avoid z-order glitches).
  */
+export const VIEW_TRANSITIONS_DISABLED = false;
+
 export function startViewTransition(callback: () => void) {
-  if (!document.startViewTransition || isMobileSidebarOpen()) {
+  if (VIEW_TRANSITIONS_DISABLED || !document.startViewTransition || isMobileSidebarOpen()) {
     callback();
     return;
   }

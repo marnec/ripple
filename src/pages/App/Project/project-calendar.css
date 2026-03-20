@@ -21,22 +21,35 @@
   --sx-color-primary: var(--color-primary);
   --sx-font-family: var(--font-sans);
 
-  overflow: hidden;
   height: 100%;
+  overflow: hidden;
 
   /*
    * Creates a new stacking context, containing schedule-x's internal z-indices
    * so they don't bleed out and overlap the task drawer.
+   * Using isolation:isolate instead of view-transition-name so this element
+   * never participates in page-level view transitions.
    */
-  view-transition-name: sx-calendar;
+  isolation: isolate;
 }
 
-/* Prevent horizontal layout shift when the scrollbar appears/disappears.
-   .sx__view-container is overflow-y:auto — when the 1600px week grid makes it
-   scrollable, a ~15px scrollbar eats into the flex column widths and shifts every
-   column left. scrollbar-gutter:stable reserves that space even when no scrollbar
-   is shown, so the layout is identical in both states. */
+/* ScheduleXCalendar renders .sx-react-calendar-wrapper with no height, breaking
+   the height: 100% chain from our wrapper → .sx__calendar-wrapper → .sx__calendar.
+   Bridging it here ensures schedule-x's internal layout gets a definite height. */
+.sx-react-calendar-wrapper {
+  height: 100%;
+}
+
+/* .sx__view-container is the scrollable body (time grid / month grid).
+   min-height: 0 lets flex shrink it below its content size so overflow-y: auto
+   can take over and scroll the time grid within the bounded calendar height.
+   Without this, min-height: auto in a column-flex context forces it to 2400px+,
+   making the outer layout scroll instead of the calendar body.
+   scrollbar-gutter: stable prevents layout shift when the scrollbar appears
+   (the 1600px week grid is wide enough to trigger a vertical scrollbar, which
+   would otherwise shift the day columns left by ~15px). */
 .sx__calendar-wrapper .sx__view-container {
+  min-height: 0;
   scrollbar-gutter: stable;
   scroll-behavior: auto;
 }
