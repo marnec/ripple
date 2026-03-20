@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import {
   createCalendar,
   createViewWeek,
@@ -230,6 +230,7 @@ function CalendarRenderer({
       backgroundEvents: bgEvents,
       calendars: calendarsConfig,
       isDark,
+      theme: "shadcn",
       callbacks: {
         onEventClick(event) {
           onEventClick(event.id);
@@ -238,12 +239,47 @@ function CalendarRenderer({
     }),
   );
 
-  // Sync live Convex task data into schedule-x (external system sync via useEffect)
+  // Sync live Convex task data into schedule-x incrementally.
+  // events.set() tears down and rebuilds ALL event DOM nodes, triggering
+  // is-event-new on every event on every update. Using add/update/remove
+  // leaves unchanged events in place — no flash, no spurious animations.
+  const eventsKeyRef = useRef("");
   useEffect(() => {
-    calendarApp.events.set(taskEvents);
+    const key = taskEvents
+      .map((e) => `${e.id}|${String(e.start)}|${String(e.end)}|${e.title}|${e.calendarId ?? ""}`)
+      .join(",");
+    if (key === eventsKeyRef.current) return;
+    eventsKeyRef.current = key;
+
+    const existing = calendarApp.events.getAll();
+    const existingMap = new Map(existing.map((e) => [String(e.id), e]));
+    const newMap = new Map(taskEvents.map((e) => [String(e.id), e]));
+
+    for (const [id] of existingMap) {
+      if (!newMap.has(id)) calendarApp.events.remove(id);
+    }
+    for (const [id, event] of newMap) {
+      if (!existingMap.has(id)) {
+        calendarApp.events.add(event);
+      } else {
+        const prev = existingMap.get(id)!;
+        if (
+          String(prev.start) !== String(event.start) ||
+          String(prev.end) !== String(event.end) ||
+          prev.title !== event.title ||
+          prev.calendarId !== event.calendarId
+        ) {
+          calendarApp.events.update(event);
+        }
+      }
+    }
   }, [taskEvents, calendarApp]);
 
-  return <ScheduleXCalendar calendarApp={calendarApp} />;
+  return (
+    <div style={{ height: "100%" }}>
+      <ScheduleXCalendar calendarApp={calendarApp} />
+    </div>
+  );
 }
 CalendarRenderer.whyDidYouRender = true;
 

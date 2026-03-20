@@ -1,4 +1,4 @@
-@import '@schedule-x/theme-default/dist/index.css';
+@import '@schedule-x/theme-shadcn/dist/index.css';
 
 .sx__calendar {
   border: unset;
@@ -25,30 +25,62 @@
   height: 100%;
 
   /*
-   * Extract the calendar from the root view-transition snapshot.
-   * schedule-x applies `transition: all` to its internal elements and calls
-   * scrollIntoViewIfNeeded on init, which forces a 94ms reflow. When the root
-   * VT crossfade captures a snapshot mid-transition it produces a stuttered
-   * or flickering crossfade. Giving the wrapper its own VT name lifts it out
-   * of the root screenshot; suppressing the resulting animation means it just
-   * renders in-place while the page shell (header + tabs) crossfades normally.
+   * Creates a new stacking context, containing schedule-x's internal z-indices
+   * so they don't bleed out and overlap the task drawer.
    */
   view-transition-name: sx-calendar;
 }
 
-::view-transition-old(sx-calendar),
-::view-transition-new(sx-calendar) {
-  animation: none;
+/* Prevent horizontal layout shift when the scrollbar appears/disappears.
+   .sx__view-container is overflow-y:auto — when the 1600px week grid makes it
+   scrollable, a ~15px scrollbar eats into the flex column widths and shifts every
+   column left. scrollbar-gutter:stable reserves that space even when no scrollbar
+   is shown, so the layout is identical in both states. */
+.sx__calendar-wrapper .sx__view-container {
+  scrollbar-gutter: stable;
+  scroll-behavior: auto;
 }
 
-/* Disable all schedule-x navigation and event animations — the class-based
-   animation approach (render → 12ms gap → add class) causes a visible
-   flash before the animation starts, reading as a double-animation. */
-.sx__calendar-wrapper .sx__slide-left,
-.sx__calendar-wrapper .sx__slide-right,
+/* Override the built-in slide animations to remove the opacity/blur fade.
+   The default sx-slide-left/right start at opacity 0.1 + blur, which causes
+   every event to visually "flash in" on each month navigation. A pure
+   translate keeps the spatial cue without the brightness flash. */
+/* Replace the default slide (opacity: 0.1 + blur) with a clean translate+fade.
+   Starting at opacity: 0 hides the inherent FOUC in schedule-x's animation
+   approach (it adds the slide class inside requestAnimationFrame, so the new
+   content paints at its final position on frame 1 before the animation starts).
+   opacity: 0 makes that first frame invisible; no blur, no haze. */
+@keyframes sx-slide-left-translate {
+  from { transform: translateX(6%); opacity: 0; }
+  to   { transform: translateX(0);  opacity: 1; }
+}
+@keyframes sx-slide-right-translate {
+  from { transform: translateX(-6%); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+.sx__calendar-wrapper .sx__slide-left {
+  animation: sx-slide-left-translate 0.2s ease-out;
+}
+.sx__calendar-wrapper .sx__slide-right {
+  animation: sx-slide-right-translate 0.2s ease-out;
+}
+
+
 .sx__calendar-wrapper .sx__date-grid-event.is-event-new,
 .sx__calendar-wrapper .sx__time-grid-event.is-event-new,
 .sx__calendar-wrapper .sx__month-grid-event.is-event-new,
 .sx__calendar-wrapper .sx__month-agenda-event.is-event-new {
   animation: none;
 }
+
+/* Disable all schedule-x navigation and event animations — the class-based
+   animation approach (render → 12ms gap → add class) causes a visible
+   flash before the animation starts, reading as a double-animation. */
+/* .sx__calendar-wrapper .sx__slide-left,
+.sx__calendar-wrapper .sx__slide-right,
+.sx__calendar-wrapper .sx__date-grid-event.is-event-new,
+.sx__calendar-wrapper .sx__time-grid-event.is-event-new,
+.sx__calendar-wrapper .sx__month-grid-event.is-event-new,
+.sx__calendar-wrapper .sx__month-agenda-event.is-event-new {
+  animation: none;
+} */
