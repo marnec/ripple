@@ -315,6 +315,7 @@ export declare const api: {
         hasBlockers: boolean;
         labels?: Array<string>;
         number?: number;
+        plannedStartDate?: string;
         position?: string;
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;

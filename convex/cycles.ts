@@ -73,6 +73,7 @@ const enrichedTaskValidator = v.object({
   number: v.optional(v.number()),
   dueDate: v.optional(v.string()),
   startDate: v.optional(v.string()),
+  plannedStartDate: v.optional(v.string()),
   estimate: v.optional(v.number()),
   status: v.union(taskStatusValidator, v.null()),
   assignee: v.union(userValidator, v.null()),

@@ -271,6 +271,14 @@ function CustomEventContent({ calendarEvent, hasStartDate }: { calendarEvent: an
   );
 }
 
+// Stable reference — must not be defined inline in JSX. ScheduleXCalendar's
+// useEffect has `customComponents` as a dependency and calls calendarApp.render()
+// on change, which replays the slide-in animation on every CalendarRenderer re-render.
+const CALENDAR_CUSTOM_COMPONENTS = {
+  dateGridEvent: CustomEventContent,
+  monthGridEvent: CustomEventContent,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Calendar header
 // ─────────────────────────────────────────────────────────────────────────────
@@ -375,7 +383,8 @@ function ProjectCalendarContent({
 
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [selectedCycle, setSelectedCycle] = useState<CycleWithProgress | null>(null);
-  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [hoveredDropDate, setHoveredDropDate] = useState<string | null>(null);
+  const hoveredDropDateRef = useRef<string | null>(null);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(false);
   const [commitmentMode, setCommitmentMode] = useState(false);
   const [clickCreateDate, setClickCreateDate] = useState<string | null>(null);
@@ -398,26 +407,29 @@ function ProjectCalendarContent({
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
   const unscheduledTasks = (unscheduled ?? []) as EnrichedTask[];
 
-  const bgKey = bgEvents
-    .map((e) => `${String(e.start)}:${String(e.end)}`)
-    .join("|");
-  const calendarKey = String(isDark) + "|" + bgKey;
+  const calendarKey = String(isDark);
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    setIsDraggingOver(true);
+    const date = findDateAtPoint(e.clientX, e.clientY);
+    if (date !== hoveredDropDateRef.current) {
+      hoveredDropDateRef.current = date;
+      setHoveredDropDate(date);
+    }
   }
 
   function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDraggingOver(false);
+      hoveredDropDateRef.current = null;
+      setHoveredDropDate(null);
     }
   }
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
-    setIsDraggingOver(false);
+    hoveredDropDateRef.current = null;
+    setHoveredDropDate(null);
     const taskId = e.dataTransfer.getData("task-id") as Id<"tasks">;
     if (!taskId) return;
     const date = findDateAtPoint(e.clientX, e.clientY);
@@ -470,8 +482,8 @@ function ProjectCalendarContent({
             onClickCycle={handleCycleClick}
           />
           {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
-          {isDraggingOver && (
-            <div className="absolute inset-0 border-2 border-dashed border-primary/50 rounded-lg pointer-events-none bg-primary/5 z-10" />
+          {hoveredDropDate && (
+            <style>{`.sx__calendar-wrapper [data-date="${hoveredDropDate}"] { background: color-mix(in srgb, var(--color-primary) 15%, transparent) !important; }`}</style>
           )}
         </CalendarSidebarInset>
 
@@ -755,6 +767,16 @@ function CalendarRenderer({
     });
   }, [rangeVersion]);
 
+  // Sync cycle background events into schedule-x imperatively (avoids remount).
+  const bgEventsKeyRef = useRef("");
+  useEffect(() => {
+    const key = bgEvents.map((e) => `${String(e.start)}:${String(e.end)}`).join("|");
+    if (key === bgEventsKeyRef.current) return;
+    bgEventsKeyRef.current = key;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (calendarApp as any).$app.calendarEvents.backgroundEvents.value = bgEvents;
+  }, [bgEvents, calendarApp]);
+
   // Sync live Convex task data into schedule-x incrementally.
   const eventsKeyRef = useRef("");
   useEffect(() => {
@@ -799,10 +821,7 @@ function CalendarRenderer({
     <div style={{ height: "100%" }} ref={wrapperRef}>
       <ScheduleXCalendar
         calendarApp={calendarApp}
-        customComponents={{
-          dateGridEvent: CustomEventContent,
-          monthGridEvent: CustomEventContent,
-        }}
+        customComponents={CALENDAR_CUSTOM_COMPONENTS}
       />
     </div>
   );
