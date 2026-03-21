@@ -337,6 +337,12 @@ export declare const api: {
         yjsSnapshotId?: Id<"_storage">;
       }>
     >;
+    listTaskCycleDueDates: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      Array<{ cycleDueDate: string; taskId: Id<"tasks"> }>
+    >;
     remove: FunctionReference<
       "mutation",
       "public",
@@ -1402,10 +1408,10 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         labels?: Array<string>;
+        plannedStartDate?: string;
         position?: string;
         priority?: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
-        startDate?: string;
         statusId?: Id<"taskStatuses">;
         title: string;
         workspaceId: Id<"workspaces">;
@@ -1436,11 +1442,11 @@ export declare const api: {
         hasBlockers: boolean;
         labels?: Array<string>;
         number?: number;
+        plannedStartDate?: string;
         position?: string;
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
-        startDate?: string;
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -1454,6 +1460,7 @@ export declare const api: {
         } | null;
         statusId: Id<"taskStatuses">;
         title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       } | null
@@ -1487,6 +1494,7 @@ export declare const api: {
         estimate?: number;
         labels?: Array<string>;
         number?: number;
+        plannedStartDate?: string;
         position?: string;
         priority: "urgent" | "high" | "medium" | "low";
         project: {
@@ -1503,7 +1511,6 @@ export declare const api: {
         } | null;
         projectId: Id<"projects">;
         projectKey?: string;
-        startDate?: string;
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -1517,6 +1524,7 @@ export declare const api: {
         } | null;
         statusId: Id<"taskStatuses">;
         title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>
@@ -1545,11 +1553,11 @@ export declare const api: {
         hasBlockers: boolean;
         labels?: Array<string>;
         number?: number;
+        plannedStartDate?: string;
         position?: string;
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
-        startDate?: string;
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -1563,6 +1571,7 @@ export declare const api: {
         } | null;
         statusId: Id<"taskStatuses">;
         title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>
@@ -1581,14 +1590,62 @@ export declare const api: {
         estimate?: number;
         labels?: Array<string>;
         number?: number;
+        plannedStartDate?: string;
         position?: string;
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
-        startDate?: string;
         status: { color: string; isCompleted: boolean; name: string } | null;
         statusId: Id<"taskStatuses">;
         title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
+    >;
+    listUnscheduled: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assignee: {
+          _creationTime: number;
+          _id: Id<"users">;
+          email?: string;
+          emailVerificationTime?: number;
+          image?: string;
+          isAnonymous?: boolean;
+          name?: string;
+        } | null;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        hasBlockers: boolean;
+        labels?: Array<string>;
+        number?: number;
+        plannedStartDate?: string;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        projectId: Id<"projects">;
+        projectKey?: string;
+        status: {
+          _creationTime: number;
+          _id: Id<"taskStatuses">;
+          color: string;
+          isCompleted: boolean;
+          isDefault: boolean;
+          name: string;
+          order: number;
+          projectId: Id<"projects">;
+          setsStartDate?: boolean;
+        } | null;
+        statusId: Id<"taskStatuses">;
+        title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>
@@ -1613,9 +1670,9 @@ export declare const api: {
         dueDate?: string | null;
         estimate?: number | null;
         labels?: Array<string>;
+        plannedStartDate?: string | null;
         position?: string;
         priority?: "urgent" | "high" | "medium" | "low";
-        startDate?: string | null;
         statusId?: Id<"taskStatuses">;
         taskId: Id<"tasks">;
         title?: string;
@@ -2415,6 +2472,18 @@ export declare const internal: {
       any
     >;
     stripSpreadsheetFields: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    stripTaskStartDate: FunctionReference<
       "mutation",
       "internal",
       {

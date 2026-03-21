@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
 
 const cycleStatusValidator = v.union(
@@ -373,6 +374,50 @@ export const removeTask = mutation({
     }
 
     return null;
+  },
+});
+
+/**
+ * Returns { taskId, cycleDueDate } pairs for all tasks in cycles that have a
+ * due date, scoped to a project. Used by the calendar for soft deadline inheritance:
+ * tasks with no own dueDate inherit their cycle's dueDate for conflict detection.
+ */
+export const listTaskCycleDueDates = query({
+  args: { projectId: v.id("projects") },
+  returns: v.array(v.object({ taskId: v.id("tasks"), cycleDueDate: v.string() })),
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const project = await ctx.db.get(projectId);
+    if (!project) return [];
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) return [];
+
+    const cycles = await ctx.db
+      .query("cycles")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+
+    const pairs: { taskId: Id<"tasks">; cycleDueDate: string }[] = [];
+    for (const cycle of cycles) {
+      if (!cycle.dueDate) continue;
+      const cts = await ctx.db
+        .query("cycleTasks")
+        .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
+        .collect();
+      for (const ct of cts) {
+        pairs.push({ taskId: ct.taskId, cycleDueDate: cycle.dueDate });
+      }
+    }
+
+    return pairs;
   },
 });
 

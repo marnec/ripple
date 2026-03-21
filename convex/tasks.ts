@@ -54,7 +54,11 @@ const baseTaskFields = {
   yjsSnapshotId: v.optional(v.id("_storage")),
   number: v.optional(v.number()),
   dueDate: v.optional(v.string()),
-  startDate: v.optional(v.string()),
+  plannedStartDate: v.optional(v.string()),
+  workPeriods: v.optional(v.array(v.object({
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }))),
   estimate: v.optional(v.number()),
 };
 
@@ -97,7 +101,7 @@ export const create = mutation({
     labels: v.optional(v.array(v.string())),
     position: v.optional(v.string()),
     dueDate: v.optional(v.string()),
-    startDate: v.optional(v.string()),
+    plannedStartDate: v.optional(v.string()),
     estimate: v.optional(v.number()),
   },
   returns: v.id("tasks"),
@@ -182,7 +186,7 @@ export const create = mutation({
       position,
       number: nextNumber,
       dueDate: args.dueDate,
-      startDate: args.startDate,
+      plannedStartDate: args.plannedStartDate,
       estimate: args.estimate,
     });
 
@@ -525,11 +529,11 @@ export const update = mutation({
     labels: v.optional(v.array(v.string())),
     position: v.optional(v.string()),
     dueDate: v.optional(v.union(v.string(), v.null())),
-    startDate: v.optional(v.union(v.string(), v.null())),
+    plannedStartDate: v.optional(v.union(v.string(), v.null())),
     estimate: v.optional(v.union(v.number(), v.null())),
   },
   returns: v.null(),
-  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, labels, position, dueDate, startDate, estimate }) => {
+  handler: async (ctx, { taskId, title, statusId, assigneeId, priority, labels, position, dueDate, plannedStartDate, estimate }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new ConvexError("Not authenticated");
 
@@ -559,12 +563,12 @@ export const update = mutation({
     if (position !== undefined) patch.position = position;
     if (dueDate === null) patch.dueDate = undefined;
     else if (dueDate !== undefined) patch.dueDate = dueDate;
-    if (startDate === null) patch.startDate = undefined;
-    else if (startDate !== undefined) patch.startDate = startDate;
+    if (plannedStartDate === null) patch.plannedStartDate = undefined;
+    else if (plannedStartDate !== undefined) patch.plannedStartDate = plannedStartDate;
     if (estimate === null) patch.estimate = undefined;
     else if (estimate !== undefined) patch.estimate = estimate;
 
-    // If statusId changed: look up new status, sync completed field both ways
+    // If statusId changed: look up new status, sync completed field and work periods
     if (statusId !== undefined) {
       const newStatus = await ctx.db.get(statusId);
       if (!newStatus) throw new ConvexError("Status not found");
@@ -573,9 +577,18 @@ export const update = mutation({
       // Two-way sync: auto-complete when moving TO a completed status,
       // auto-uncomplete when moving to a non-completed status
       patch.completed = newStatus.isCompleted;
-      // Auto-set startDate when moving to a status with setsStartDate, if not already set
-      if (newStatus.setsStartDate && !task.startDate && startDate === undefined) {
-        patch.startDate = new Date().toISOString().slice(0, 10);
+
+      const existingPeriods: { startedAt: number; completedAt?: number }[] = task.workPeriods ?? [];
+      const openPeriod = existingPeriods.find((p) => p.completedAt === undefined);
+
+      if (newStatus.setsStartDate && !openPeriod) {
+        // Append a new open work period
+        patch.workPeriods = [...existingPeriods, { startedAt: Date.now() }];
+      } else if (newStatus.isCompleted && openPeriod) {
+        // Close the open work period
+        patch.workPeriods = existingPeriods.map((p) =>
+          p.completedAt === undefined ? { ...p, completedAt: Date.now() } : p
+        );
       }
     }
 
@@ -629,12 +642,11 @@ export const update = mutation({
         taskTitle: task.title,
       });
     }
-    if ((startDate !== undefined && startDate !== task.startDate) ||
-        (patch.startDate !== undefined && !task.startDate)) {
+    if (plannedStartDate !== undefined && plannedStartDate !== task.plannedStartDate) {
       await logTaskActivity(ctx, {
         taskId, userId, workspaceId: task.workspaceId, type: "start_date_change",
-        oldValue: task.startDate ?? undefined,
-        newValue: (startDate ?? patch.startDate) ?? undefined,
+        oldValue: task.plannedStartDate ?? undefined,
+        newValue: plannedStartDate ?? undefined,
         taskTitle: task.title,
       });
     }
@@ -780,10 +792,18 @@ export const updatePosition = mutation({
     };
     // Two-way sync: auto-complete/uncomplete based on destination status
     patchData.completed = newStatus.isCompleted;
-    // Auto-set startDate when moving to a status with setsStartDate, if not already set
-    if (newStatus.setsStartDate && !task.startDate) {
-      patchData.startDate = new Date().toISOString().slice(0, 10);
+
+    const existingPeriods: { startedAt: number; completedAt?: number }[] = task.workPeriods ?? [];
+    const openPeriod = existingPeriods.find((p) => p.completedAt === undefined);
+
+    if (newStatus.setsStartDate && !openPeriod) {
+      patchData.workPeriods = [...existingPeriods, { startedAt: Date.now() }];
+    } else if (newStatus.isCompleted && openPeriod) {
+      patchData.workPeriods = existingPeriods.map((p: { startedAt: number; completedAt?: number }) =>
+        p.completedAt === undefined ? { ...p, completedAt: Date.now() } : p
+      );
     }
+
     await ctx.db.patch(taskId, patchData);
 
     // Log status change if status actually changed (kanban drag)
@@ -795,14 +815,6 @@ export const updatePosition = mutation({
         newValue: newStatus.name,
         taskTitle: task.title,
       });
-      // Log auto-set start date
-      if (patchData.startDate && !task.startDate) {
-        await logTaskActivity(ctx, {
-          taskId, userId, workspaceId: task.workspaceId, type: "start_date_change",
-          newValue: patchData.startDate,
-          taskTitle: task.title,
-        });
-      }
       // Notify assignee of status change (if they didn't make the change)
       if (task.assigneeId && task.assigneeId !== userId) {
         const currentUser = await ctx.db.get(userId);
@@ -820,6 +832,72 @@ export const updatePosition = mutation({
     }
 
     return null;
+  },
+});
+
+const PRIORITY_ORDER: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+export const listUnscheduled = query({
+  args: { projectId: v.id("projects") },
+  returns: v.array(enrichedTaskValidator),
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const project = await ctx.db.get(projectId);
+    if (!project) return [];
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) return [];
+
+    // Fetch all non-completed tasks in this project
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project_completed", (q) =>
+        q.eq("projectId", projectId).eq("completed", false)
+      )
+      .collect();
+
+    // Keep only tasks with no plannedStartDate
+    const unscheduled = tasks.filter((t) => t.plannedStartDate === undefined);
+
+    // Enrich: status, assignee, projectKey, hasBlockers
+    const enriched = await Promise.all(
+      unscheduled.map(async (task) => {
+        const status = await ctx.db.get(task.statusId);
+        const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
+        const blockerEdges = await ctx.db
+          .query("edges")
+          .withIndex("by_target", (q) => q.eq("targetId", task._id))
+          .collect();
+        return {
+          ...task,
+          status,
+          assignee,
+          projectKey: project.key,
+          hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
+        };
+      })
+    );
+
+    // Sort by priority: urgent → high → medium → low
+    enriched.sort((a, b) => {
+      const pa = PRIORITY_ORDER[a.priority] ?? 99;
+      const pb = PRIORITY_ORDER[b.priority] ?? 99;
+      return pa - pb;
+    });
+
+    return enriched;
   },
 });
 

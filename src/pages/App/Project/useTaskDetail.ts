@@ -305,8 +305,8 @@ export function useTaskDetail({
     if (taskId) void updateTask({ taskId, dueDate: date });
   };
 
-  const handleStartDateChange = (date: string | null) => {
-    if (taskId) void updateTask({ taskId, startDate: date });
+  const handlePlannedStartDateChange = (date: string | null) => {
+    if (taskId) void updateTask({ taskId, plannedStartDate: date });
   };
 
   const handleEstimateChange = (value: number | null) => {
@@ -350,7 +350,7 @@ export function useTaskDetail({
     setShowDeleteDialog,
     handleDelete,
     handleDueDateChange,
-    handleStartDateChange,
+    handlePlannedStartDateChange,
     handleEstimateChange,
   };
 }

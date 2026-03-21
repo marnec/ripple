@@ -162,7 +162,12 @@ export default defineSchema({
     yjsSnapshotId: v.optional(v.id("_storage")),
     number: v.optional(v.number()), // sequential task number within project (e.g., 42 for ENG-42)
     dueDate: v.optional(v.string()), // ISO date string "2026-03-15"
-    startDate: v.optional(v.string()), // ISO date string
+    startDate: v.optional(v.string()), // deprecated — migration strips this field
+    plannedStartDate: v.optional(v.string()), // ISO date string, set by PM via calendar
+    workPeriods: v.optional(v.array(v.object({
+      startedAt: v.number(), // ms timestamp, auto-set by setsStartDate status transition
+      completedAt: v.optional(v.number()), // ms timestamp, auto-set by isCompleted status transition
+    }))),
     estimate: v.optional(v.number()), // effort estimate in hours
   })
     .index("by_project", ["projectId"])

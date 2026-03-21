@@ -17,6 +17,7 @@ import {
   getPriorityLabel,
   isOverdue,
 } from "@/lib/task-utils";
+import { computeHofstadterLabels } from "@/lib/calendar-utils";
 import { Clock, X } from "lucide-react";
 import { useState } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
@@ -32,7 +33,7 @@ type TaskPropertiesProps = {
     assignee: { name?: string | null; image?: string } | null;
     labels?: string[];
     dueDate?: string;
-    startDate?: string;
+    plannedStartDate?: string;
     estimate?: number;
   };
   statuses: Array<{ _id: Id<"taskStatuses">; name: string; color: string }>;
@@ -185,46 +186,57 @@ export function TaskProperties({
         />
       </PropertyRow>
 
-      {/* Start Date */}
-      <PropertyRow label="Start Date">
+      {/* Planned Start */}
+      <PropertyRow label="Planned Start">
         <DatePickerField
-          value={task.startDate}
+          value={task.plannedStartDate}
           onChange={onStartDateChange}
-          placeholder="No start date"
+          placeholder="No planned start"
         />
       </PropertyRow>
 
       {/* Estimate */}
       <PropertyRow label="Estimate">
-        <Select
-          value={task.estimate != null ? String(task.estimate) : "none"}
-          onValueChange={(val) => {
-            if (val !== null) onEstimateChange(val === "none" ? null : Number(val));
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>
-                  {task.estimate != null
-                    ? formatEstimate(task.estimate)
-                    : "No estimate"}
-                </span>
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">
-              <span className="text-muted-foreground">No estimate</span>
-            </SelectItem>
-            {ESTIMATE_PRESETS.map((hours) => (
-              <SelectItem key={hours} value={String(hours)}>
-                {formatEstimate(hours)}
+        <div className="space-y-1">
+          <Select
+            value={task.estimate != null ? String(task.estimate) : "none"}
+            onValueChange={(val) => {
+              if (val !== null) onEstimateChange(val === "none" ? null : Number(val));
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {task.estimate != null
+                      ? formatEstimate(task.estimate)
+                      : "No estimate"}
+                  </span>
+                </div>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">
+                <span className="text-muted-foreground">No estimate</span>
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              {ESTIMATE_PRESETS.map((hours) => (
+                <SelectItem key={hours} value={String(hours)}>
+                  {formatEstimate(hours)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {task.estimate != null && (() => {
+            const { plan, commit } = computeHofstadterLabels(task.estimate);
+            return (
+              <div className="flex gap-3 px-1 text-xs text-muted-foreground">
+                <span>{plan}</span>
+                <span>{commit}</span>
+              </div>
+            );
+          })()}
+        </div>
       </PropertyRow>
 
       {/* Labels */}

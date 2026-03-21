@@ -101,6 +101,43 @@ describe("tasks.create", () => {
     expect(task2?.number).toBe(2);
   });
 
+  it("stores plannedStartDate when provided", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Scheduled task",
+      plannedStartDate: "2026-04-01",
+    });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.plannedStartDate).toBe("2026-04-01");
+    expect((task as any)?.startDate).toBeUndefined();
+  });
+
+  it("task created with plannedStartDate is excluded from listUnscheduled and visible in listByProject with the correct date", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Click-created task",
+      plannedStartDate: "2026-05-12",
+    });
+
+    const unscheduled = await asUser.query(api.tasks.listUnscheduled, { projectId });
+    expect(unscheduled.map((t) => t._id)).not.toContain(taskId);
+
+    const all = await asUser.query(api.tasks.listByProject, { projectId, hideCompleted: false });
+    const created = all.find((t) => t._id === taskId);
+    expect(created?.plannedStartDate).toBe("2026-05-12");
+  });
+
   it("accepts explicit priority and labels", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
@@ -247,29 +284,61 @@ describe("tasks.update", () => {
     expect(task?.completed).toBe(false);
   });
 
-  it("auto-sets startDate when moving to In Progress", async () => {
+  it("opens a work period when moving to a setsStartDate status", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
-    const { projectId, inProgressId } = await setupProjectWithStatuses(t, {
-      workspaceId,
-      userId,
-    });
+    const { projectId, inProgressId } = await setupProjectWithStatuses(t, { workspaceId, userId });
 
-    const taskId = await asUser.mutation(api.tasks.create, {
-      projectId,
-      workspaceId,
-      title: "Start me",
-    });
-
-    await asUser.mutation(api.tasks.update, {
-      taskId,
-      statusId: inProgressId,
-    });
+    const taskId = await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "Start me" });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: inProgressId });
 
     const task = await t.run(async (ctx) => ctx.db.get(taskId));
-    expect(task?.startDate).toBeDefined();
-    // Should be today's date in ISO format
-    expect(task?.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(task?.workPeriods).toHaveLength(1);
+    expect(task?.workPeriods![0].startedAt).toBeTypeOf("number");
+    expect(task?.workPeriods![0].completedAt).toBeUndefined();
+  });
+
+  it("closes the open work period when moving to a completed status", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, inProgressId, doneId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "Finish me" });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: inProgressId });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: doneId });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.workPeriods).toHaveLength(1);
+    expect(task?.workPeriods![0].completedAt).toBeTypeOf("number");
+  });
+
+  it("appends a new work period when a completed task is restarted", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, inProgressId, doneId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "Restart me" });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: inProgressId });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: doneId });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: inProgressId });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.workPeriods).toHaveLength(2);
+    expect(task?.workPeriods![0].completedAt).toBeTypeOf("number");
+    expect(task?.workPeriods![1].completedAt).toBeUndefined();
+  });
+
+  it("does not duplicate work period when moved to setsStartDate while already open", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, inProgressId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "No dupe" });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: inProgressId });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: inProgressId });
+
+    const task = await t.run(async (ctx) => ctx.db.get(taskId));
+    expect(task?.workPeriods).toHaveLength(1);
   });
 
   it("clears assignee when set to null", async () => {
@@ -379,6 +448,109 @@ describe("tasks.remove", () => {
     await expect(
       asStranger.mutation(api.tasks.remove, { taskId }),
     ).rejects.toThrow("Not a member of this workspace");
+  });
+});
+
+describe("tasks.listUnscheduled", () => {
+  it("returns tasks that have no plannedStartDate", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Unscheduled task",
+    });
+
+    const result = await asUser.query(api.tasks.listUnscheduled, { projectId });
+    expect(result).toHaveLength(1);
+    expect(result[0]._id).toBe(taskId);
+  });
+
+  it("excludes tasks that have a plannedStartDate", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    // One scheduled, one not
+    await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Scheduled",
+      plannedStartDate: "2026-04-01",
+    });
+    const unscheduledId = await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Unscheduled",
+    });
+
+    const result = await asUser.query(api.tasks.listUnscheduled, { projectId });
+    expect(result).toHaveLength(1);
+    expect(result[0]._id).toBe(unscheduledId);
+  });
+
+  it("excludes completed tasks even when they have no plannedStartDate", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, doneId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Done but unscheduled",
+    });
+    await asUser.mutation(api.tasks.update, { taskId, statusId: doneId });
+
+    const result = await asUser.query(api.tasks.listUnscheduled, { projectId });
+    expect(result).toEqual([]);
+  });
+
+  it("sorts results by priority: urgent first, low last", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "Low task", priority: "low" });
+    await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "Urgent task", priority: "urgent" });
+    await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "Medium task", priority: "medium" });
+    await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "High task", priority: "high" });
+
+    const result = await asUser.query(api.tasks.listUnscheduled, { projectId });
+    expect(result.map((t) => t.priority)).toEqual(["urgent", "high", "medium", "low"]);
+  });
+
+  it("returns empty array for non-workspace members", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    await asUser.mutation(api.tasks.create, { projectId, workspaceId, title: "Private task" });
+
+    const { asUser: asStranger } = await setupAuthenticatedUser(t, {
+      name: "Stranger",
+      email: "stranger@test.com",
+    });
+
+    const result = await asStranger.query(api.tasks.listUnscheduled, { projectId });
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array when all tasks have a plannedStartDate", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Already scheduled",
+      plannedStartDate: "2026-04-01",
+    });
+
+    const result = await asUser.query(api.tasks.listUnscheduled, { projectId });
+    expect(result).toEqual([]);
   });
 });
 

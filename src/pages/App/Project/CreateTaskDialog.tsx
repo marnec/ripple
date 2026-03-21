@@ -19,6 +19,7 @@ type CreateTaskDialogProps = {
   workspaceId: Id<"workspaces">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  plannedStartDate?: string;
 };
 
 export function CreateTaskDialog({
@@ -26,6 +27,7 @@ export function CreateTaskDialog({
   workspaceId,
   open,
   onOpenChange,
+  plannedStartDate,
 }: CreateTaskDialogProps) {
   const [title, setTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -42,7 +44,7 @@ export function CreateTaskDialog({
     if (!trimmedTitle) return;
 
     setIsCreating(true);
-    createTask({ projectId, workspaceId, title: trimmedTitle })
+    createTask({ projectId, workspaceId, title: trimmedTitle, plannedStartDate })
       .then(() => {
         setTitle("");
         onOpenChange(false);

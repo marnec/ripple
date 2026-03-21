@@ -110,7 +110,7 @@ function TaskDetailPageContent({
             onAddLabel={detail.handleAddLabel}
             onRemoveLabel={detail.handleRemoveLabel}
             onDueDateChange={detail.handleDueDateChange}
-            onStartDateChange={detail.handleStartDateChange}
+            onStartDateChange={detail.handlePlannedStartDateChange}
             onEstimateChange={detail.handleEstimateChange}
           />
 

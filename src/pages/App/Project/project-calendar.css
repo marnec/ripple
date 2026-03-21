@@ -86,6 +86,44 @@
   animation: none;
 }
 
+/* ─── Custom event content ─────────────────────────────────────────────────── */
+
+.sx-event-content {
+  flex: 1; /* Fill the schedule-x wrapper so multi-day events visually span */
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px;
+  height: 100%;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sx-event-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.sx-event-title {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Dashed outline for tasks with no estimate */
+.sx-event-content[data-no-estimate] {
+  border: 1px dashed currentColor;
+  border-radius: 3px;
+  opacity: 0.75;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 /* Disable all schedule-x navigation and event animations — the class-based
    animation approach (render → 12ms gap → add class) causes a visible
    flash before the animation starts, reading as a double-animation. */

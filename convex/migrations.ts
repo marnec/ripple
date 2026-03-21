@@ -102,6 +102,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillChannelAggregates,
   internal.migrations.backfillMemberAggregates,
   internal.migrations.backfillTaskAggregates,
+  internal.migrations.stripTaskStartDate,
 ]);
 
 /**
@@ -345,6 +346,16 @@ export const backfillTaskAggregates = migrations.define({
   table: "tasks",
   migrateOne: async (ctx, doc) => {
     await tasksByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const stripTaskStartDate = migrations.define({
+  table: "tasks",
+  migrateOne: async (ctx, task) => {
+    const legacy = task as Record<string, unknown>;
+    if (legacy.startDate !== undefined) {
+      await ctx.db.patch(task._id, { startDate: undefined } as any);
+    }
   },
 });
 

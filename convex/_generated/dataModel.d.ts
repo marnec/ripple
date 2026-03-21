@@ -882,12 +882,14 @@ export type DataModel = {
       estimate?: number;
       labels?: Array<string>;
       number?: number;
+      plannedStartDate?: string;
       position?: string;
       priority: "urgent" | "high" | "medium" | "low";
       projectId: Id<"projects">;
       startDate?: string;
       statusId: Id<"taskStatuses">;
       title: string;
+      workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
       workspaceId: Id<"workspaces">;
       yjsSnapshotId?: Id<"_storage">;
       _id: Id<"tasks">;
@@ -903,12 +905,14 @@ export type DataModel = {
       | "estimate"
       | "labels"
       | "number"
+      | "plannedStartDate"
       | "position"
       | "priority"
       | "projectId"
       | "startDate"
       | "statusId"
       | "title"
+      | "workPeriods"
       | "workspaceId"
       | "yjsSnapshotId";
     indexes: {
