@@ -52,8 +52,9 @@ export function useCalendarInteractions({
   // 2. Desktop sidebar
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(false);
 
-  // 3. Task detail sheet
+  // 3. Task detail sheet (desktop) / task action drawer (mobile)
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+  const [mobileTaskId, setMobileTaskId] = useState<Id<"tasks"> | null>(null);
 
   // 4. Cycle detail sheet
   const [selectedCycle, setSelectedCycle] = useState<CycleWithProgress | null>(null);
@@ -108,8 +109,21 @@ export function useCalendarInteractions({
     taskSheet: {
       taskId: selectedTaskId,
       open: selectedTaskId !== null,
-      onEventClick: (id: string | number) => setSelectedTaskId(String(id) as Id<"tasks">),
+      onEventClick: (id: string | number) => {
+        if (isMobile) setMobileTaskId(String(id) as Id<"tasks">);
+        else setSelectedTaskId(String(id) as Id<"tasks">);
+      },
       onOpenChange: (open: boolean) => { if (!open) setSelectedTaskId(null); },
+    },
+
+    mobileTaskDrawer: {
+      taskId: mobileTaskId,
+      open: mobileTaskId !== null,
+      onOpenChange: (open: boolean) => { if (!open) setMobileTaskId(null); },
+      onUnschedule: () => {
+        if (mobileTaskId) void updateTask({ taskId: mobileTaskId, plannedStartDate: null });
+        setMobileTaskId(null);
+      },
     },
 
     cycleSheet: {
@@ -130,8 +144,10 @@ export function useCalendarInteractions({
 
     dayClick: {
       onClickDate: (date: string) => {
-        if (isMobile) setMobileDayDate(date);
-        else setClickCreateDate(date);
+        // schedule-x may pass a Temporal.PlainDate object despite the string type annotation
+        const dateStr = String(date);
+        if (isMobile) setMobileDayDate(dateStr);
+        else setClickCreateDate(dateStr);
       },
       clickCreateDate,
       onCreateDialogChange: (open: boolean) => { if (!open) setClickCreateDate(null); },
@@ -140,7 +156,7 @@ export function useCalendarInteractions({
     },
 
     scheduleTask: (taskId: Id<"tasks">, date: string) =>
-      void updateTask({ taskId, plannedStartDate: date }),
+      void updateTask({ taskId, plannedStartDate: String(date) }),
     unscheduleTask: (taskId: Id<"tasks">) =>
       void updateTask({ taskId, plannedStartDate: null }),
   };

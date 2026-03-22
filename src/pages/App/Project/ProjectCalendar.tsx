@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from "react";
+import React, { createContext, Suspense, useContext, useEffect, useRef, useState } from "react";
 import {
   createCalendar,
   createViewMonthGrid,
@@ -7,12 +7,13 @@ import {
   type CalendarType,
   type CalendarApp,
 } from "@schedule-x/calendar";
+import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
 import { ScheduleXCalendar } from "@schedule-x/react";
 import { Temporal } from "temporal-polyfill";
 import { useQuery } from "convex/react";
 import { useTheme } from "next-themes";
-import { CalendarDays, ListTodo, PanelRightOpen, PanelRightClose, TrendingUp } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { CalendarCheck, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, ListTodo, PanelRightOpen, PanelRightClose, TrendingUp } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "../../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
@@ -252,67 +253,144 @@ function CustomEventContent({ calendarEvent, hasStartDate }: { calendarEvent: an
 const CALENDAR_CUSTOM_COMPONENTS = {
   dateGridEvent: CustomEventContent,
   monthGridEvent: CustomEventContent,
+  headerContent: CalendarHeaderContent,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Calendar header
+// Calendar header context — threads dynamic state into the schedule-x slot
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CalendarHeader({
-  commitmentMode,
-  onCommitmentModeChange,
-  unscheduledCount,
-  sidebarOpen,
-  onSidebarToggle,
-}: {
+type CalendarHeaderContextValue = {
   commitmentMode: boolean;
   onCommitmentModeChange: (value: boolean) => void;
   unscheduledCount: number;
   sidebarOpen: boolean;
   onSidebarToggle: () => void;
-}) {
+  calendarControls: ReturnType<typeof createCalendarControlsPlugin>;
+  /** Bumped on every range update so the header re-reads the current date. */
+  rangeVersion: number;
+};
+
+const CalendarHeaderContext = createContext<CalendarHeaderContextValue | null>(null);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Schedule-X headerContent slot — rendered inside the calendar by schedule-x
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CalendarHeaderContent() {
+  const ctx = useContext(CalendarHeaderContext);
+  if (!ctx) return null;
+
+  const {
+    commitmentMode,
+    onCommitmentModeChange,
+    unscheduledCount,
+    sidebarOpen,
+    onSidebarToggle,
+    calendarControls,
+    rangeVersion: _rangeVersion, // consumed only to trigger re-render on nav
+  } = ctx;
+
+  const currentLabel = (() => {
+    try {
+      const d = calendarControls.getDate();
+      if (!d) return "";
+      return d.toLocaleString("en-US", { month: "long", year: "numeric" });
+    } catch {
+      return "";
+    }
+  })();
+
   return (
-    <div className="flex items-center justify-between shrink-0 gap-2">
-      {/* Planned / Commitment toggle */}
-      <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
-        <button
-          className={`px-2.5 py-1 rounded transition-colors ${
-            !commitmentMode
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => onCommitmentModeChange(false)}
+    <div className="flex items-center justify-between w-full gap-2 px-1">
+      {/* Left: nav + current month label */}
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => {
+            const d = calendarControls.getDate();
+            calendarControls.setDate(d.subtract({ months: 1 }));
+          }}
+          aria-label="Previous month"
         >
-          Planned
-        </button>
-        <button
-          className={`px-2.5 py-1 rounded transition-colors ${
-            commitmentMode
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => onCommitmentModeChange(true)}
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => {
+            const d = calendarControls.getDate();
+            calendarControls.setDate(d.add({ months: 1 }));
+          }}
+          aria-label="Next month"
         >
-          Commitment
-        </button>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <span className="text-sm font-medium tabular-nums min-w-30">
+          {currentLabel}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-muted-foreground"
+          onClick={() => calendarControls.setDate(Temporal.Now.plainDateISO())}
+          aria-label="Today"
+        >
+          <CalendarCheck className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden sm:inline">Today</span>
+        </Button>
       </div>
 
-      {/* Unscheduled sidebar toggle — desktop only */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onSidebarToggle}
-        disabled={unscheduledCount === 0 && !sidebarOpen}
-        className="hidden md:flex"
-      >
-        {sidebarOpen ? (
-          <PanelRightClose className="h-4 w-4 mr-1.5" />
-        ) : (
-          <PanelRightOpen className="h-4 w-4 mr-1.5" />
-        )}
-        <ListTodo className="h-4 w-4 mr-1" />
-        Unscheduled {unscheduledCount > 0 && `(${unscheduledCount})`}
-      </Button>
+      {/* Right: Planned/Commitment toggle + Unscheduled sidebar button */}
+      <div className="flex items-center gap-2">
+        {/* Planned / Commitment toggle */}
+        <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
+          <button
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
+              !commitmentMode
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => onCommitmentModeChange(false)}
+            aria-label="Planned"
+          >
+            <CalendarRange className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">Planned</span>
+          </button>
+          <button
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
+              commitmentMode
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => onCommitmentModeChange(true)}
+            aria-label="Commitment"
+          >
+            <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">Commitment</span>
+          </button>
+        </div>
+
+        {/* Unscheduled sidebar toggle — desktop only */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onSidebarToggle}
+          disabled={unscheduledCount === 0 && !sidebarOpen}
+          className="hidden md:flex h-7 text-xs"
+        >
+          {sidebarOpen ? (
+            <PanelRightClose className="h-3.5 w-3.5 mr-1.5" />
+          ) : (
+            <PanelRightOpen className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          <ListTodo className="h-3.5 w-3.5 mr-1" />
+          Unscheduled {unscheduledCount > 0 && `(${unscheduledCount})`}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -377,14 +455,6 @@ function ProjectCalendarContent({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6 pb-4 gap-2">
-      <CalendarHeader
-        commitmentMode={ix.commitmentMode}
-        onCommitmentModeChange={ix.setCommitmentMode}
-        unscheduledCount={unscheduledTasks.length}
-        sidebarOpen={ix.sidebar.open}
-        onSidebarToggle={ix.sidebar.toggle}
-      />
-
       {/* Main area: calendar + right push sidebar (desktop only) */}
       <CalendarSidebarProvider
         open={ix.sidebar.open}
@@ -405,6 +475,11 @@ function ProjectCalendarContent({
             onEventClick={ix.taskSheet.onEventClick}
             onClickDate={ix.dayClick.onClickDate}
             onClickCycle={ix.cycleSheet.onCycleClick}
+            commitmentMode={ix.commitmentMode}
+            onCommitmentModeChange={ix.setCommitmentMode}
+            unscheduledCount={unscheduledTasks.length}
+            sidebarOpen={ix.sidebar.open}
+            onSidebarToggle={ix.sidebar.toggle}
           />
           {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
           {ix.dragDrop.hoveredDropDate && (
@@ -428,6 +503,17 @@ function ProjectCalendarContent({
           </CalendarSidebarContent>
         </CalendarSidebar>
       </CalendarSidebarProvider>
+
+      {/* Mobile: task-tap action drawer */}
+      <MobileTaskActionDrawer
+        taskId={ix.mobileTaskDrawer.taskId}
+        task={allTasks.find((t) => t._id === ix.mobileTaskDrawer.taskId) ?? null}
+        open={ix.mobileTaskDrawer.open}
+        onOpenChange={ix.mobileTaskDrawer.onOpenChange}
+        onUnschedule={ix.mobileTaskDrawer.onUnschedule}
+        workspaceId={workspaceId}
+        projectId={projectId}
+      />
 
       {/* Mobile: day-tap bottom drawer */}
       <DayScheduleDrawer
@@ -500,6 +586,61 @@ function UnscheduledTaskItem({ task }: { task: EnrichedTask }) {
       />
       <span className="truncate text-foreground">{task.title}</span>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile: task-tap action drawer
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MobileTaskActionDrawer({
+  taskId,
+  task,
+  open,
+  onOpenChange,
+  onUnschedule,
+  workspaceId,
+  projectId,
+}: {
+  taskId: Id<"tasks"> | null;
+  task: EnrichedTask | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUnschedule: () => void;
+  workspaceId: Id<"workspaces">;
+  projectId: Id<"projects">;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange} direction="bottom">
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle className="text-base truncate">{task?.title ?? ""}</DrawerTitle>
+        </DrawerHeader>
+        <div className="flex flex-col gap-1 px-4 pb-6 pb-safe">
+          <Button
+            variant="ghost"
+            className="justify-start h-11 text-sm"
+            onClick={() => {
+              onOpenChange(false);
+              void navigate(
+                `/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`
+              );
+            }}
+          >
+            View task details
+          </Button>
+          <Button
+            variant="ghost"
+            className="justify-start h-11 text-sm text-muted-foreground"
+            onClick={onUnschedule}
+          >
+            Unschedule
+          </Button>
+        </div>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -625,6 +766,11 @@ function CalendarRenderer({
   onEventClick,
   onClickDate,
   onClickCycle,
+  commitmentMode,
+  onCommitmentModeChange,
+  unscheduledCount,
+  sidebarOpen,
+  onSidebarToggle,
 }: {
   taskEvents: CalendarEventExternal[];
   bgEvents: BackgroundEvent[];
@@ -633,6 +779,11 @@ function CalendarRenderer({
   onEventClick: (id: string | number) => void;
   onClickDate?: (date: string) => void;
   onClickCycle?: (name: string) => void;
+  commitmentMode: boolean;
+  onCommitmentModeChange: (value: boolean) => void;
+  unscheduledCount: number;
+  sidebarOpen: boolean;
+  onSidebarToggle: () => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -654,6 +805,8 @@ function CalendarRenderer({
   }, []);
   const [rangeVersion, setRangeVersion] = useState(0);
 
+  const [calendarControls] = useState(() => createCalendarControlsPlugin());
+
   const [calendarApp] = useState<CalendarApp>(() =>
     createCalendar({
       views: [createViewMonthGrid()],
@@ -663,6 +816,7 @@ function CalendarRenderer({
       calendars: CALENDARS_CONFIG,
       isDark,
       theme: "shadcn",
+      plugins: [calendarControls],
       callbacks: {
         onEventClick(event) {
           onEventClick(event.id);
@@ -696,7 +850,7 @@ function CalendarRenderer({
     const key = bgEvents.map((e) => `${String(e.start)}:${String(e.end)}`).join("|");
     if (key === bgEventsKeyRef.current) return;
     bgEventsKeyRef.current = key;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line react-hooks/immutability
     (calendarApp as any).$app.calendarEvents.backgroundEvents.value = bgEvents;
   }, [bgEvents, calendarApp]);
 
@@ -741,12 +895,24 @@ function CalendarRenderer({
   }, [taskEvents, calendarApp]);
 
   return (
-    <div style={{ height: "100%" }} ref={wrapperRef}>
-      <ScheduleXCalendar
-        calendarApp={calendarApp}
-        customComponents={CALENDAR_CUSTOM_COMPONENTS}
-      />
-    </div>
+    <CalendarHeaderContext.Provider
+      value={{
+        commitmentMode,
+        onCommitmentModeChange,
+        unscheduledCount,
+        sidebarOpen,
+        onSidebarToggle,
+        calendarControls,
+        rangeVersion,
+      }}
+    >
+      <div style={{ height: "100%" }} ref={wrapperRef}>
+        <ScheduleXCalendar
+          calendarApp={calendarApp}
+          customComponents={CALENDAR_CUSTOM_COMPONENTS}
+        />
+      </div>
+    </CalendarHeaderContext.Provider>
   );
 }
 CalendarRenderer.whyDidYouRender = true;
