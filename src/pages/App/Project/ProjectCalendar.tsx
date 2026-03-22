@@ -9,7 +9,7 @@ import {
 } from "@schedule-x/calendar";
 import { ScheduleXCalendar } from "@schedule-x/react";
 import { Temporal } from "temporal-polyfill";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useTheme } from "next-themes";
 import { CalendarDays, ListTodo, PanelRightOpen, PanelRightClose, TrendingUp } from "lucide-react";
 import { useParams } from "react-router-dom";
@@ -17,6 +17,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "../../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { useCalendarInteractions, type CycleWithProgress } from "./useCalendarInteractions";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { Button } from "@/components/ui/button";
@@ -118,17 +119,6 @@ type EnrichedTask = {
   status: { color: string; name: string } | null;
 };
 
-type CycleWithProgress = {
-  _id: string;
-  name: string;
-  startDate?: string;
-  dueDate?: string;
-  status: "draft" | "upcoming" | "active" | "completed";
-  totalTasks: number;
-  completedTasks: number;
-  progressPercent: number;
-};
-
 type EventMeta = {
   statusColor: string;
   hasEstimate: boolean;
@@ -222,21 +212,6 @@ function buildCycleBackgroundEvents(cycles: CycleWithProgress[]): BackgroundEven
         opacity: "0.6",
       },
     }));
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Drag helpers (desktop only)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function findDateAtPoint(x: number, y: number): string | null {
-  const els = document.elementsFromPoint(x, y);
-  for (const el of els) {
-    const d =
-      el.getAttribute("data-time-grid-day") ??
-      el.getAttribute("data-date");
-    if (d) return d;
-  }
-  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -376,28 +351,21 @@ function ProjectCalendarContent({
   const unscheduled = useQuery(api.tasks.listUnscheduled, { projectId });
   const cycles = useQuery(api.cycles.listByProject, { projectId });
   const taskCycleDueDatePairs = useQuery(api.cycles.listTaskCycleDueDates, { projectId });
-  const updateTask = useMutation(api.tasks.update);
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
   const isDark = resolvedTheme === "dark";
 
-  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
-  const [selectedCycle, setSelectedCycle] = useState<CycleWithProgress | null>(null);
-  const [hoveredDropDate, setHoveredDropDate] = useState<string | null>(null);
-  const hoveredDropDateRef = useRef<string | null>(null);
-  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(false);
-  const [commitmentMode, setCommitmentMode] = useState(false);
-  const [clickCreateDate, setClickCreateDate] = useState<string | null>(null);
+  const ix = useCalendarInteractions({
+    isMobile,
+    cycles: cycles as CycleWithProgress[] | undefined,
+  });
 
   const cycleTasks = useQuery(
     api.cycles.listCycleTasks,
-    selectedCycle ? { cycleId: selectedCycle._id as Id<"cycles"> } : "skip",
+    ix.cycleSheet.cycle ? { cycleId: ix.cycleSheet.cycle._id as Id<"cycles"> } : "skip",
   );
-  // Mobile: date tapped on the calendar
-  const [mobileDayDate, setMobileDayDate] = useState<string | null>(null);
-  const sheetOpen = selectedTaskId !== null;
 
-  const multiplier: 1 | 5 = commitmentMode ? 5 : 1;
+  const multiplier: 1 | 5 = ix.commitmentMode ? 5 : 1;
   const allTasks = (tasks ?? []) as EnrichedTask[];
   const taskCycleDueDate = new Map(
     (taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
@@ -407,83 +375,40 @@ function ProjectCalendarContent({
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
   const unscheduledTasks = (unscheduled ?? []) as EnrichedTask[];
 
-  const calendarKey = String(isDark);
-
-  function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const date = findDateAtPoint(e.clientX, e.clientY);
-    if (date !== hoveredDropDateRef.current) {
-      hoveredDropDateRef.current = date;
-      setHoveredDropDate(date);
-    }
-  }
-
-  function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      hoveredDropDateRef.current = null;
-      setHoveredDropDate(null);
-    }
-  }
-
-  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    hoveredDropDateRef.current = null;
-    setHoveredDropDate(null);
-    const taskId = e.dataTransfer.getData("task-id") as Id<"tasks">;
-    if (!taskId) return;
-    const date = findDateAtPoint(e.clientX, e.clientY);
-    if (!date) return;
-    void updateTask({ taskId, plannedStartDate: date });
-  }
-
-  function handleCycleClick(name: string) {
-    const cycle = (cycles ?? []).find((c) => c.name === name) as CycleWithProgress | undefined;
-    if (cycle) setSelectedCycle(cycle);
-  }
-
-  function handleDayClick(date: string) {
-    if (isMobile) {
-      setMobileDayDate(date);
-    } else {
-      setClickCreateDate(date);
-    }
-  }
-
   return (
     <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6 pb-4 gap-2">
       <CalendarHeader
-        commitmentMode={commitmentMode}
-        onCommitmentModeChange={setCommitmentMode}
+        commitmentMode={ix.commitmentMode}
+        onCommitmentModeChange={ix.setCommitmentMode}
         unscheduledCount={unscheduledTasks.length}
-        sidebarOpen={desktopSidebarOpen}
-        onSidebarToggle={() => setDesktopSidebarOpen((o) => !o)}
+        sidebarOpen={ix.sidebar.open}
+        onSidebarToggle={ix.sidebar.toggle}
       />
 
       {/* Main area: calendar + right push sidebar (desktop only) */}
       <CalendarSidebarProvider
-        open={desktopSidebarOpen}
-        onOpenChange={setDesktopSidebarOpen}
+        open={ix.sidebar.open}
+        onOpenChange={ix.sidebar.onOpenChange}
         className="flex-1 min-h-0"
       >
         <CalendarSidebarInset
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onDragOver={ix.dragDrop.onDragOver}
+          onDragLeave={ix.dragDrop.onDragLeave}
+          onDrop={ix.dragDrop.onDrop}
         >
           <CalendarRenderer
-            key={calendarKey}
+            key={String(isDark)}
             taskEvents={taskEvents}
             bgEvents={bgEvents}
             defaultView="month-grid"
             isDark={isDark}
-            onEventClick={(id) => setSelectedTaskId(id as Id<"tasks">)}
-            onClickDate={handleDayClick}
-            onClickCycle={handleCycleClick}
+            onEventClick={ix.taskSheet.onEventClick}
+            onClickDate={ix.dayClick.onClickDate}
+            onClickCycle={ix.cycleSheet.onCycleClick}
           />
           {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
-          {hoveredDropDate && (
-            <style>{`.sx__calendar-wrapper [data-date="${hoveredDropDate}"] { background: color-mix(in srgb, var(--color-primary) 15%, transparent) !important; }`}</style>
+          {ix.dragDrop.hoveredDropDate && (
+            <style>{`.sx__calendar-wrapper [data-date="${ix.dragDrop.hoveredDropDate}"] { background: color-mix(in srgb, var(--color-primary) 15%, transparent) !important; }`}</style>
           )}
         </CalendarSidebarInset>
 
@@ -506,22 +431,20 @@ function ProjectCalendarContent({
 
       {/* Mobile: day-tap bottom drawer */}
       <DayScheduleDrawer
-        date={mobileDayDate}
-        open={mobileDayDate !== null}
-        onOpenChange={(open) => { if (!open) setMobileDayDate(null); }}
+        date={ix.dayClick.mobileDayDate}
+        open={ix.dayClick.mobileDayDate !== null}
+        onOpenChange={ix.dayClick.onMobileDrawerChange}
         allTasks={allTasks}
         unscheduledTasks={unscheduledTasks}
-        onSchedule={(taskId, date) => void updateTask({ taskId, plannedStartDate: date })}
-        onUnschedule={(taskId) => void updateTask({ taskId, plannedStartDate: null })}
+        onSchedule={ix.scheduleTask}
+        onUnschedule={ix.unscheduleTask}
       />
 
       <Suspense fallback={null}>
         <LazyTaskDetailSheet
-          taskId={selectedTaskId}
-          open={sheetOpen}
-          onOpenChange={(open) => {
-            if (!open) setSelectedTaskId(null);
-          }}
+          taskId={ix.taskSheet.taskId}
+          open={ix.taskSheet.open}
+          onOpenChange={ix.taskSheet.onOpenChange}
           workspaceId={workspaceId}
           projectId={projectId}
         />
@@ -531,16 +454,16 @@ function ProjectCalendarContent({
         <LazyCreateTaskDialog
           projectId={projectId}
           workspaceId={workspaceId}
-          open={clickCreateDate !== null}
-          onOpenChange={(open) => { if (!open) setClickCreateDate(null); }}
-          plannedStartDate={clickCreateDate ?? undefined}
+          open={ix.dayClick.clickCreateDate !== null}
+          onOpenChange={ix.dayClick.onCreateDialogChange}
+          plannedStartDate={ix.dayClick.clickCreateDate ?? undefined}
         />
       </Suspense>
 
       <CycleDetailSheet
-        cycle={selectedCycle}
+        cycle={ix.cycleSheet.cycle}
         tasks={cycleTasks as EnrichedTask[] | undefined}
-        onClose={() => setSelectedCycle(null)}
+        onClose={ix.cycleSheet.onClose}
       />
     </div>
   );
