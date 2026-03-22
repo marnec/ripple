@@ -1,4 +1,5 @@
-import React, { createContext, Suspense, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, Suspense, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   createCalendar,
   createViewMonthGrid,
@@ -134,7 +135,6 @@ const CAL_NORMAL = "normal";
 const CAL_NORMAL_INACTIVE = "normal-inactive";
 const CAL_CONFLICT = "conflict";
 const CAL_CONFLICT_INACTIVE = "conflict-inactive";
-const CAL_GHOST = "ghost";
 
 const CALENDARS_CONFIG: Record<string, CalendarType> = {
   [CAL_NORMAL]: {
@@ -156,11 +156,6 @@ const CALENDARS_CONFIG: Record<string, CalendarType> = {
     colorName: "conflict-inactive",
     lightColors: { main: "#ef4444", container: "#ef444414", onContainer: "#374151" },
     darkColors: { main: "#ef4444", container: "#ef444414", onContainer: "#d1d5db" },
-  },
-  [CAL_GHOST]: {
-    colorName: "ghost",
-    lightColors: { main: "#64748b", container: "#64748b20", onContainer: "#374151" },
-    darkColors: { main: "#94a3b8", container: "#94a3b820", onContainer: "#d1d5db" },
   },
 };
 
@@ -229,22 +224,26 @@ function buildCycleBackgroundEvents(cycles: CycleWithProgress[]): BackgroundEven
 function CustomEventContent({ calendarEvent, hasStartDate }: { calendarEvent: any; hasStartDate?: boolean }) {
   const meta = calendarEvent._meta as EventMeta | undefined;
   const calendarId = calendarEvent.calendarId as string;
-  const isGhost = calendarId === CAL_GHOST;
   return (
     <div
-      className={cn("sx-event-content", isGhost && "sx-event-ghost")}
+      className="sx-event-content"
       style={{
         backgroundColor: meta?.hasEstimate ? `var(--sx-color-${calendarId}-container)` : undefined,
-        borderInlineStart: (meta?.hasEstimate && hasStartDate && !isGhost) ? `4px solid var(--sx-color-${calendarId}-main)` : undefined,
+        borderInlineStart: (meta?.hasEstimate && hasStartDate) ? `4px solid var(--sx-color-${calendarId}-main)` : undefined,
       }}
       data-no-estimate={meta?.hasEstimate ? undefined : "true"}
-      draggable={!isGhost}
-      onDragStart={isGhost ? undefined : (e) => {
+      draggable
+      onDragStart={(e) => {
         e.dataTransfer.setData("task-id", String(calendarEvent.id));
         e.dataTransfer.effectAllowed = "move";
         startDrag(String(calendarEvent.id));
+        const blank = document.createElement("div");
+        blank.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;";
+        document.body.appendChild(blank);
+        e.dataTransfer.setDragImage(blank, 0, 0);
+        requestAnimationFrame(() => blank.remove());
       }}
-      onDragEnd={isGhost ? undefined : () => endDrag()}
+      onDragEnd={() => endDrag()}
     >
       {meta?.statusColor && (
         <span
@@ -406,6 +405,97 @@ function CalendarHeaderContent() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CalendarGhostOverlay — Framer Motion drag preview that springs between days
+// ─────────────────────────────────────────────────────────────────────────────
+
+type GhostPos = { top: number; left: number; width: number; height: number };
+
+function CalendarGhostOverlay({
+  task,
+  hoveredDropDate,
+  multiplier,
+}: {
+  task: EnrichedTask;
+  hoveredDropDate: string;
+  multiplier: 1 | 5;
+}) {
+  const [pos, setPos] = useState<GhostPos | null>(null);
+
+  useLayoutEffect(() => {
+    const dayEl = document.querySelector(`[data-date="${hoveredDropDate}"]`);
+    if (!dayEl) { setPos(null); return; }
+
+    const dayRect = dayEl.getBoundingClientRect();
+
+    // Measure event height and top offset from an existing schedule-x event so
+    // the overlay aligns with where a real event would appear in the day cell.
+    let topOffset = 24; // fallback: approximate day-number header height
+    let eventHeight = 22; // fallback: approximate event row height
+    const refEvent = document.querySelector(".sx__month-grid-event");
+    const refCell = refEvent?.closest("[data-date]");
+    if (refEvent && refCell) {
+      const eventRect = refEvent.getBoundingClientRect();
+      const cellRect = refCell.getBoundingClientRect();
+      topOffset = Math.round(eventRect.top - cellRect.top);
+      eventHeight = Math.round(eventRect.height);
+    }
+
+    // Span width across multi-day estimate, clamping to the same calendar row.
+    const days = estimateToDays(task.estimate, multiplier);
+    let width = dayRect.width - 4;
+    if (days > 1) {
+      const endDate = addCalendarDays(hoveredDropDate, days - 1);
+      const endEl = document.querySelector(`[data-date="${endDate}"]`);
+      if (endEl) {
+        const endRect = endEl.getBoundingClientRect();
+        if (Math.abs(endRect.top - dayRect.top) < 10) {
+          width = endRect.right - dayRect.left - 4;
+        }
+      }
+    }
+
+    setPos({ top: dayRect.top + topOffset, left: dayRect.left + 2, width, height: eventHeight });
+  }, [hoveredDropDate, task.estimate, multiplier]);
+
+  const statusColor = task.status ? tailwindToHex(task.status.color) : "#6b7280";
+  const hasEstimate = !!task.estimate;
+
+  return (
+    <AnimatePresence>
+      {pos && (
+        <motion.div
+          key="ghost"
+          style={{
+            position: "fixed",
+            height: pos.height,
+            zIndex: 1000,
+            overflow: "hidden",
+            pointerEvents: "none",
+            borderRadius: "3px",
+          }}
+          initial={{ opacity: 0, top: pos.top, left: pos.left, width: pos.width }}
+          animate={{ opacity: 0.75, top: pos.top, left: pos.left, width: pos.width }}
+          exit={{ opacity: 0 }}
+          transition={{ type: "spring", stiffness: 500, damping: 35, mass: 0.5 }}
+        >
+          <div
+            className="sx-event-content"
+            style={{
+              backgroundColor: hasEstimate ? "color-mix(in srgb, var(--color-muted-foreground) 15%, transparent)" : undefined,
+              borderInlineStart: hasEstimate ? "4px solid color-mix(in srgb, var(--color-muted-foreground) 60%, transparent)" : undefined,
+              border: !hasEstimate ? "1px dashed color-mix(in srgb, var(--color-muted-foreground) 60%, transparent)" : undefined,
+            }}
+          >
+            <span className="sx-event-dot" style={{ backgroundColor: statusColor }} />
+            <span className="sx-event-title">{task.title}</span>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Route entry
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -455,39 +545,60 @@ function ProjectCalendarContent({
 
   const multiplier: 1 | 5 = ix.commitmentMode ? 5 : 1;
   const allTasks = (tasks ?? []) as EnrichedTask[];
+  const unscheduledTasks = (unscheduled ?? []) as EnrichedTask[];
   const taskCycleDueDate = new Map(
     (taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
   );
-  const baseTaskEvents = buildTaskEvents(allTasks, multiplier, taskCycleDueDate);
 
-  // Ghost event: projected position while dragging a task over the calendar
-  const { draggedTaskId, hoveredDropDate } = ix.dragDrop;
-  const ghostEvent: CalendarEventExternal | null = (() => {
-    if (!draggedTaskId || !hoveredDropDate) return null;
-    const task = allTasks.find((t) => t._id === draggedTaskId)
-      ?? (unscheduled ?? []).find((t) => (t as EnrichedTask)._id === draggedTaskId) as EnrichedTask | undefined;
-    if (!task) return null;
-    const days = estimateToDays(task.estimate, multiplier);
-    const endDate = addCalendarDays(hoveredDropDate, days - 1);
-    const meta: EventMeta = {
-      statusColor: task.status ? tailwindToHex(task.status.color) : "#6b7280",
-      hasEstimate: !!task.estimate,
-    };
-    const ev = {
-      id: `ghost-${draggedTaskId}`,
-      title: task.title,
-      start: Temporal.PlainDate.from(hoveredDropDate),
-      end: Temporal.PlainDate.from(endDate),
-      calendarId: CAL_GHOST,
-    } as CalendarEventExternal;
-    (ev as any)._meta = meta;
-    return ev;
+  const { draggedTaskId, hoveredDropDate, pendingSchedule, clearPendingSchedule } = ix.dragDrop;
+
+  // Resolve the task being dragged (scheduled or unscheduled) for the ghost overlay.
+  const draggedTask =
+    draggedTaskId
+      ? (allTasks.find((t) => t._id === draggedTaskId) ??
+         (unscheduledTasks.find((t) => t._id === draggedTaskId) as EnrichedTask | undefined) ??
+         null)
+      : null;
+
+  // Clear the optimistic pending schedule once Convex data has caught up.
+  useEffect(() => {
+    if (!pendingSchedule) return;
+    const task = allTasks.find((t) => t._id === pendingSchedule.taskId);
+    if (task && task.plannedStartDate === pendingSchedule.date) {
+      clearPendingSchedule();
+    }
+  }, [allTasks, pendingSchedule, clearPendingSchedule]);
+
+  // Build base events:
+  //  - During drag: exclude the dragged task (overlay ghost replaces it)
+  //  - After drop: apply pending schedule optimistically until server round-trip
+  const tasksForEvents = allTasks
+    .filter((t) => t._id !== draggedTaskId)
+    .map((t) =>
+      pendingSchedule?.taskId === t._id
+        ? { ...t, plannedStartDate: pendingSchedule.date }
+        : t,
+    );
+
+  const baseTaskEvents = buildTaskEvents(tasksForEvents, multiplier, taskCycleDueDate);
+
+  // For a previously-unscheduled task being optimistically shown after drop:
+  // it won't be in allTasks yet, so synthesize its event from the unscheduled list.
+  const pendingUnscheduledEvents: CalendarEventExternal[] = (() => {
+    if (!pendingSchedule) return [];
+    if (allTasks.some((t) => t._id === pendingSchedule.taskId)) return [];
+    const task = unscheduledTasks.find((t) => t._id === pendingSchedule.taskId);
+    if (!task) return [];
+    return buildTaskEvents(
+      [{ ...task, plannedStartDate: pendingSchedule.date }],
+      multiplier,
+      taskCycleDueDate,
+    );
   })();
 
-  const taskEvents = ghostEvent ? [...baseTaskEvents, ghostEvent] : baseTaskEvents;
+  const taskEvents = [...baseTaskEvents, ...pendingUnscheduledEvents];
   const bgEvents = buildCycleBackgroundEvents((cycles ?? []) as CycleWithProgress[]);
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
-  const unscheduledTasks = (unscheduled ?? []) as EnrichedTask[];
 
   return (
     <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6 pb-4 gap-2">
@@ -518,10 +629,20 @@ function ProjectCalendarContent({
             onSidebarToggle={ix.sidebar.toggle}
           />
           {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
-          {ix.dragDrop.hoveredDropDate && (
-            <style>{`.sx__calendar-wrapper [data-date="${ix.dragDrop.hoveredDropDate}"] { background: color-mix(in srgb, var(--color-primary) 15%, transparent) !important; }`}</style>
-          )}
         </CalendarSidebarInset>
+
+        {/* Animated ghost overlay — rendered outside the inset so it can use
+            position:fixed and escape any overflow clipping. */}
+        <AnimatePresence>
+          {draggedTask && hoveredDropDate && (
+            <CalendarGhostOverlay
+              key={draggedTask._id}
+              task={draggedTask}
+              hoveredDropDate={hoveredDropDate}
+              multiplier={multiplier}
+            />
+          )}
+        </AnimatePresence>
 
         <CalendarSidebar side="right" className="hidden md:flex">
           <CalendarSidebarHeader>
@@ -614,6 +735,11 @@ function UnscheduledTaskItem({ task }: { task: EnrichedTask }) {
         e.dataTransfer.setData("task-id", task._id);
         e.dataTransfer.effectAllowed = "move";
         startDrag(task._id);
+        const ghost = document.createElement("div");
+        ghost.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;";
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, 0, 0);
+        requestAnimationFrame(() => ghost.remove());
       }}
       onDragEnd={() => endDrag()}
       className="flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted cursor-grab active:cursor-grabbing select-none"

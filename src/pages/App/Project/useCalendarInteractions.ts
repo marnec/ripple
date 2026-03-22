@@ -71,6 +71,11 @@ export function useCalendarInteractions({
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const draggedTaskIdRef = useRef<string | null>(null);
 
+  // 7. Optimistic schedule: holds the committed (taskId, date) pair until the
+  //    Convex query catches up, preventing the task from snapping back to its
+  //    old position between the drop and the server round-trip.
+  const [pendingSchedule, setPendingSchedule] = useState<{ taskId: string; date: string } | null>(null);
+
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -106,7 +111,11 @@ export function useCalendarInteractions({
     if (!taskId) return;
     const date = findDateAtPoint(e.clientX, e.clientY);
     if (!date) return;
-    void updateTask({ taskId, plannedStartDate: date });
+    // Optimistically show the task at its new position before the server responds.
+    setPendingSchedule({ taskId, date });
+    void updateTask({ taskId, plannedStartDate: date }).catch(() => {
+      setPendingSchedule(null);
+    });
   }
 
   return {
@@ -153,6 +162,8 @@ export function useCalendarInteractions({
     dragDrop: {
       hoveredDropDate,
       draggedTaskId,
+      pendingSchedule,
+      clearPendingSchedule: () => setPendingSchedule(null),
       onDragOver: handleDragOver,
       onDragLeave: handleDragLeave,
       onDrop: handleDrop,
