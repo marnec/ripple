@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
+import { currentDragTaskId, endDrag } from "./dragTracker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -67,6 +68,8 @@ export function useCalendarInteractions({
   //    ref avoids stale closure in handleDragOver (called on every mousemove).
   const [hoveredDropDate, setHoveredDropDate] = useState<string | null>(null);
   const hoveredDropDateRef = useRef<string | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const draggedTaskIdRef = useRef<string | null>(null);
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -76,12 +79,19 @@ export function useCalendarInteractions({
       hoveredDropDateRef.current = date;
       setHoveredDropDate(date);
     }
+    const tid = currentDragTaskId;
+    if (tid !== draggedTaskIdRef.current) {
+      draggedTaskIdRef.current = tid;
+      setDraggedTaskId(tid);
+    }
   }
 
   function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       hoveredDropDateRef.current = null;
       setHoveredDropDate(null);
+      draggedTaskIdRef.current = null;
+      setDraggedTaskId(null);
     }
   }
 
@@ -89,6 +99,9 @@ export function useCalendarInteractions({
     e.preventDefault();
     hoveredDropDateRef.current = null;
     setHoveredDropDate(null);
+    draggedTaskIdRef.current = null;
+    setDraggedTaskId(null);
+    endDrag();
     const taskId = e.dataTransfer.getData("task-id") as Id<"tasks">;
     if (!taskId) return;
     const date = findDateAtPoint(e.clientX, e.clientY);
@@ -110,8 +123,10 @@ export function useCalendarInteractions({
       taskId: selectedTaskId,
       open: selectedTaskId !== null,
       onEventClick: (id: string | number) => {
-        if (isMobile) setMobileTaskId(String(id) as Id<"tasks">);
-        else setSelectedTaskId(String(id) as Id<"tasks">);
+        const idStr = String(id);
+        if (idStr.startsWith("ghost-")) return;
+        if (isMobile) setMobileTaskId(idStr as Id<"tasks">);
+        else setSelectedTaskId(idStr as Id<"tasks">);
       },
       onOpenChange: (open: boolean) => { if (!open) setSelectedTaskId(null); },
     },
@@ -137,6 +152,7 @@ export function useCalendarInteractions({
 
     dragDrop: {
       hoveredDropDate,
+      draggedTaskId,
       onDragOver: handleDragOver,
       onDragLeave: handleDragLeave,
       onDrop: handleDrop,

@@ -129,6 +129,16 @@
   opacity: 0.75;
 }
 
+/* Ghost event: drag-drop projection at the drop target day */
+.sx-event-ghost {
+  opacity: 0.6;
+  pointer-events: none;
+  border: 2px dashed currentColor !important;
+  border-radius: 3px;
+  background: transparent !important;
+  border-inline-start: 2px dashed currentColor !important;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /* Disable all schedule-x navigation and event animations — the class-based

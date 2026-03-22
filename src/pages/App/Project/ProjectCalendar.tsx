@@ -19,6 +19,7 @@ import { api } from "../../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useCalendarInteractions, type CycleWithProgress } from "./useCalendarInteractions";
+import { startDrag, endDrag } from "./dragTracker";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { Button } from "@/components/ui/button";
@@ -133,6 +134,7 @@ const CAL_NORMAL = "normal";
 const CAL_NORMAL_INACTIVE = "normal-inactive";
 const CAL_CONFLICT = "conflict";
 const CAL_CONFLICT_INACTIVE = "conflict-inactive";
+const CAL_GHOST = "ghost";
 
 const CALENDARS_CONFIG: Record<string, CalendarType> = {
   [CAL_NORMAL]: {
@@ -154,6 +156,11 @@ const CALENDARS_CONFIG: Record<string, CalendarType> = {
     colorName: "conflict-inactive",
     lightColors: { main: "#ef4444", container: "#ef444414", onContainer: "#374151" },
     darkColors: { main: "#ef4444", container: "#ef444414", onContainer: "#d1d5db" },
+  },
+  [CAL_GHOST]: {
+    colorName: "ghost",
+    lightColors: { main: "#64748b", container: "#64748b20", onContainer: "#374151" },
+    darkColors: { main: "#94a3b8", container: "#94a3b820", onContainer: "#d1d5db" },
   },
 };
 
@@ -222,19 +229,22 @@ function buildCycleBackgroundEvents(cycles: CycleWithProgress[]): BackgroundEven
 function CustomEventContent({ calendarEvent, hasStartDate }: { calendarEvent: any; hasStartDate?: boolean }) {
   const meta = calendarEvent._meta as EventMeta | undefined;
   const calendarId = calendarEvent.calendarId as string;
+  const isGhost = calendarId === CAL_GHOST;
   return (
     <div
-      className="sx-event-content"
+      className={cn("sx-event-content", isGhost && "sx-event-ghost")}
       style={{
         backgroundColor: meta?.hasEstimate ? `var(--sx-color-${calendarId}-container)` : undefined,
-        borderInlineStart: (meta?.hasEstimate && hasStartDate) ? `4px solid var(--sx-color-${calendarId}-main)` : undefined,
+        borderInlineStart: (meta?.hasEstimate && hasStartDate && !isGhost) ? `4px solid var(--sx-color-${calendarId}-main)` : undefined,
       }}
       data-no-estimate={meta?.hasEstimate ? undefined : "true"}
-      draggable
-      onDragStart={(e) => {
+      draggable={!isGhost}
+      onDragStart={isGhost ? undefined : (e) => {
         e.dataTransfer.setData("task-id", String(calendarEvent.id));
         e.dataTransfer.effectAllowed = "move";
+        startDrag(String(calendarEvent.id));
       }}
+      onDragEnd={isGhost ? undefined : () => endDrag()}
     >
       {meta?.statusColor && (
         <span
@@ -448,7 +458,33 @@ function ProjectCalendarContent({
   const taskCycleDueDate = new Map(
     (taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
   );
-  const taskEvents = buildTaskEvents(allTasks, multiplier, taskCycleDueDate);
+  const baseTaskEvents = buildTaskEvents(allTasks, multiplier, taskCycleDueDate);
+
+  // Ghost event: projected position while dragging a task over the calendar
+  const { draggedTaskId, hoveredDropDate } = ix.dragDrop;
+  const ghostEvent: CalendarEventExternal | null = (() => {
+    if (!draggedTaskId || !hoveredDropDate) return null;
+    const task = allTasks.find((t) => t._id === draggedTaskId)
+      ?? (unscheduled ?? []).find((t) => (t as EnrichedTask)._id === draggedTaskId) as EnrichedTask | undefined;
+    if (!task) return null;
+    const days = estimateToDays(task.estimate, multiplier);
+    const endDate = addCalendarDays(hoveredDropDate, days - 1);
+    const meta: EventMeta = {
+      statusColor: task.status ? tailwindToHex(task.status.color) : "#6b7280",
+      hasEstimate: !!task.estimate,
+    };
+    const ev = {
+      id: `ghost-${draggedTaskId}`,
+      title: task.title,
+      start: Temporal.PlainDate.from(hoveredDropDate),
+      end: Temporal.PlainDate.from(endDate),
+      calendarId: CAL_GHOST,
+    } as CalendarEventExternal;
+    (ev as any)._meta = meta;
+    return ev;
+  })();
+
+  const taskEvents = ghostEvent ? [...baseTaskEvents, ghostEvent] : baseTaskEvents;
   const bgEvents = buildCycleBackgroundEvents((cycles ?? []) as CycleWithProgress[]);
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
   const unscheduledTasks = (unscheduled ?? []) as EnrichedTask[];
@@ -577,7 +613,9 @@ function UnscheduledTaskItem({ task }: { task: EnrichedTask }) {
       onDragStart={(e) => {
         e.dataTransfer.setData("task-id", task._id);
         e.dataTransfer.effectAllowed = "move";
+        startDrag(task._id);
       }}
+      onDragEnd={() => endDrag()}
       className="flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted cursor-grab active:cursor-grabbing select-none"
     >
       <span
