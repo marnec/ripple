@@ -120,7 +120,7 @@ export function WorkspaceDetails() {
               {workspace?.description || "No description available."}
             </p>
           </div>
-          <Button size="sm" variant="outline" render={<Link to="settings" />} className="inline-flex items-center gap-1.5">
+          <Button size="sm" variant="outline" render={<Link to={`/workspaces/${workspaceId}/settings`} />} className="inline-flex items-center gap-1.5">
             <Settings className="h-4 w-4" />
             Settings
           </Button>
@@ -143,7 +143,7 @@ export function WorkspaceDetails() {
                   key={card.key}
                   className="group relative flex items-stretch rounded-lg border text-center overflow-hidden"
                 >
-                  <Link to={card.to} className="absolute inset-0 z-0" aria-label={`${card.label} and ${card.subCount.label}`} />
+                  <Link to={`/workspaces/${workspaceId}/${card.to}`} className="absolute inset-0 z-0" aria-label={`${card.label} and ${card.subCount.label}`} />
 
                   {/* Left side: primary type */}
                   <div
@@ -151,7 +151,7 @@ export function WorkspaceDetails() {
                       "relative z-1 flex flex-col items-center justify-center gap-0.5 flex-1 p-3 md:p-4 transition-all cursor-pointer",
                       isHidden ? "opacity-40" : "hover:bg-accent/50",
                     )}
-                    onClick={() => void navigate(card.to)}
+                    onClick={() => void navigate(`/workspaces/${workspaceId}/${card.to}`)}
                     onMouseEnter={() => setHighlightedType(card.filterType)}
                     onMouseLeave={() => setHighlightedType(null)}
                   >
@@ -168,7 +168,7 @@ export function WorkspaceDetails() {
                       "relative z-1 flex flex-col items-center justify-center gap-0.5 flex-1 p-3 md:p-4 transition-all cursor-pointer",
                       isSubHidden ? "opacity-40" : "hover:bg-accent/50",
                     )}
-                    onClick={() => void navigate(card.to)}
+                    onClick={() => void navigate(`/workspaces/${workspaceId}/${card.to}`)}
                     onMouseEnter={() => setHighlightedType(subFilterType)}
                     onMouseLeave={() => setHighlightedType(null)}
                   >
@@ -208,11 +208,11 @@ export function WorkspaceDetails() {
                   "group relative flex flex-col items-center gap-1 md:gap-1.5 rounded-lg border p-3 md:p-4 text-center transition-all cursor-pointer",
                   isHidden ? "opacity-40" : "hover:bg-accent/50",
                 )}
-                onClick={() => void navigate(card.to)}
+                onClick={() => void navigate(`/workspaces/${workspaceId}/${card.to}`)}
                 onMouseEnter={() => setHighlightedType(card.filterType)}
                 onMouseLeave={() => setHighlightedType(null)}
               >
-                <Link to={card.to} className="absolute inset-0 z-0" aria-label={card.label} />
+                <Link to={`/workspaces/${workspaceId}/${card.to}`} className="absolute inset-0 z-0" aria-label={card.label} />
                 {!isMobile && (
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleType(card.filterType); }}
