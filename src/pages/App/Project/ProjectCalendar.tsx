@@ -52,10 +52,6 @@ const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
 );
 
-const LazyCreateTaskDialog = React.lazy(() =>
-  import("./CreateTaskDialog").then((m) => ({ default: m.CreateTaskDialog })),
-);
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,7 +222,7 @@ function CustomEventContent({ calendarEvent, hasStartDate }: { calendarEvent: an
   const calendarId = calendarEvent.calendarId as string;
   return (
     <div
-      className="sx-event-content"
+      className="sx-event-content cursor-grab active:cursor-grabbing"
       style={{
         backgroundColor: meta?.hasEstimate ? `var(--sx-color-${calendarId}-container)` : undefined,
         borderInlineStart: (meta?.hasEstimate && hasStartDate) ? `4px solid var(--sx-color-${calendarId}-main)` : undefined,
@@ -690,16 +686,6 @@ function ProjectCalendarContent({
           onOpenChange={ix.taskSheet.onOpenChange}
           workspaceId={workspaceId}
           projectId={projectId}
-        />
-      </Suspense>
-
-      <Suspense fallback={null}>
-        <LazyCreateTaskDialog
-          projectId={projectId}
-          workspaceId={workspaceId}
-          open={ix.dayClick.clickCreateDate !== null}
-          onOpenChange={ix.dayClick.onCreateDialogChange}
-          plannedStartDate={ix.dayClick.clickCreateDate ?? undefined}
         />
       </Suspense>
 

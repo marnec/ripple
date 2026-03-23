@@ -60,8 +60,7 @@ export function useCalendarInteractions({
   // 4. Cycle detail sheet
   const [selectedCycle, setSelectedCycle] = useState<CycleWithProgress | null>(null);
 
-  // 5. Day click: desktop = create dialog, mobile = day drawer
-  const [clickCreateDate, setClickCreateDate] = useState<string | null>(null);
+  // 5. Day click: mobile = day drawer
   const [mobileDayDate, setMobileDayDate] = useState<string | null>(null);
 
   // 6. Drag-drop: dual-write — state drives the CSS highlight re-render,
@@ -172,12 +171,8 @@ export function useCalendarInteractions({
     dayClick: {
       onClickDate: (date: string) => {
         // schedule-x may pass a Temporal.PlainDate object despite the string type annotation
-        const dateStr = String(date);
-        if (isMobile) setMobileDayDate(dateStr);
-        else setClickCreateDate(dateStr);
+        if (isMobile) setMobileDayDate(String(date));
       },
-      clickCreateDate,
-      onCreateDialogChange: (open: boolean) => { if (!open) setClickCreateDate(null); },
       mobileDayDate,
       onMobileDrawerChange: (open: boolean) => { if (!open) setMobileDayDate(null); },
     },

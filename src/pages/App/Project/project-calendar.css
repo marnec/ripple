@@ -130,6 +130,13 @@
 }
 
 
+/* Cycle background events are clickable — show pointer cursor */
+.sx__date-grid-background-event,
+.sx__month-grid-background-event,
+.sx__time-grid-background-event {
+  cursor: pointer;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /* Disable all schedule-x navigation and event animations — the class-based
