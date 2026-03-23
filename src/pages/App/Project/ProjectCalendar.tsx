@@ -1,4 +1,4 @@
-import React, { createContext, Suspense, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   createCalendar,
@@ -20,12 +20,20 @@ import { api } from "../../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useCalendarInteractions, type CycleWithProgress, desktopStrategy, mobileStrategy } from "./useCalendarInteractions";
+import {
+  ResponsiveDropdownMenu,
+  ResponsiveDropdownMenuTrigger,
+  ResponsiveDropdownMenuContent,
+  ResponsiveDropdownMenuItem,
+
+} from "@/components/ui/responsive-dropdown-menu";
 import { useCalendarSync } from "./useCalendarSync";
 import { calendarDragContext } from "./calendarDragContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Drawer,
   DrawerContent,
@@ -49,9 +57,6 @@ import {
 } from "@/components/ui/sheet";
 import "./project-calendar.css";
 
-const LazyTaskDetailSheet = React.lazy(() =>
-  import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -122,7 +127,19 @@ type EnrichedTask = {
 type EventMeta = {
   statusColor: string;
   hasEstimate: boolean;
+  taskId: string;
+  isActual: boolean;
+  hasActualData: boolean;
+  actualHours?: number;
+  plannedHours?: number;
 };
+
+type CalendarTaskMenuContextValue = {
+  onNavigate: (taskId: string) => void;
+  onUnschedule: (taskId: string) => void;
+};
+
+const CalendarTaskMenuContext = createContext<CalendarTaskMenuContextValue | null>(null);
 
 type TaskCalendarEvent = CalendarEventExternal & {
   readonly _meta: EventMeta;
@@ -136,6 +153,8 @@ const CAL_NORMAL = "normal";
 const CAL_NORMAL_INACTIVE = "normal-inactive";
 const CAL_CONFLICT = "conflict";
 const CAL_CONFLICT_INACTIVE = "conflict-inactive";
+
+const CAL_ACTUAL = "actual";
 
 const CALENDARS_CONFIG: Record<string, CalendarType> = {
   [CAL_NORMAL]: {
@@ -158,6 +177,11 @@ const CALENDARS_CONFIG: Record<string, CalendarType> = {
     lightColors: { main: "#ef4444", container: "#ef444414", onContainer: "#374151" },
     darkColors: { main: "#ef4444", container: "#ef444414", onContainer: "#d1d5db" },
   },
+  [CAL_ACTUAL]: {
+    colorName: "actual",
+    lightColors: { main: "#6366f1", container: "#6366f110", onContainer: "#6366f1" },
+    darkColors: { main: "#818cf8", container: "#818cf810", onContainer: "#818cf8" },
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,6 +201,16 @@ function getTaskCalendarId(
   return hasOpenPeriod ? CAL_NORMAL : CAL_NORMAL_INACTIVE;
 }
 
+function fmtHours(h: number): string {
+  return Number.isInteger(h) ? `${h}h` : `${h.toFixed(1)}h`;
+}
+
+function totalCompletedHours(workPeriods: { startedAt: number; completedAt?: number }[]): number {
+  return workPeriods
+    .filter((p) => p.completedAt !== undefined)
+    .reduce((acc, p) => acc + (p.completedAt! - p.startedAt), 0) / 3_600_000;
+}
+
 function buildTaskEvents(
   tasks: EnrichedTask[],
   multiplier: 1 | 5 = 1,
@@ -189,9 +223,18 @@ function buildTaskEvents(
       const endDate = addCalendarDays(t.plannedStartDate!, days - 1);
       const calendarId = getTaskCalendarId(t, multiplier, taskCycleDueDate);
 
+      const completedPeriods = (t.workPeriods ?? []).filter((p) => p.completedAt !== undefined);
+      const hasActualData = completedPeriods.length > 0;
+      const actualHours = hasActualData ? totalCompletedHours(t.workPeriods!) : undefined;
+
       const meta: EventMeta = {
         statusColor: t.status ? tailwindToHex(t.status.color) : "#6b7280",
         hasEstimate: !!t.estimate,
+        taskId: t._id,
+        isActual: false,
+        hasActualData,
+        actualHours,
+        plannedHours: t.estimate,
       };
 
       return {
@@ -200,6 +243,40 @@ function buildTaskEvents(
         start: Temporal.PlainDate.from(t.plannedStartDate!),
         end: Temporal.PlainDate.from(endDate),
         calendarId,
+        _meta: meta,
+      } as TaskCalendarEvent;
+    });
+}
+
+function buildWorkPeriodEvents(task: EnrichedTask): TaskCalendarEvent[] {
+  if (!task.workPeriods) return [];
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return task.workPeriods
+    .filter((p) => p.completedAt !== undefined)
+    .map((p, i) => {
+      const startDate = Temporal.Instant.fromEpochMilliseconds(p.startedAt)
+        .toZonedDateTimeISO(tz)
+        .toPlainDate()
+        .toString();
+      const endDate = Temporal.Instant.fromEpochMilliseconds(p.completedAt!)
+        .toZonedDateTimeISO(tz)
+        .toPlainDate()
+        .toString();
+      const meta: EventMeta = {
+        statusColor: task.status ? tailwindToHex(task.status.color) : "#6b7280",
+        hasEstimate: false,
+        taskId: task._id,
+        isActual: true,
+        hasActualData: false,
+        actualHours: undefined,
+        plannedHours: undefined,
+      };
+      return {
+        id: `actual-${task._id}-${i}`,
+        title: task.title,
+        start: Temporal.PlainDate.from(startDate),
+        end: Temporal.PlainDate.from(endDate),
+        calendarId: CAL_ACTUAL,
         _meta: meta,
       } as TaskCalendarEvent;
     });
@@ -228,7 +305,27 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
   const event = calendarEvent as TaskCalendarEvent;
   const meta: EventMeta = event._meta;
   const calendarId = calendarEvent.calendarId as string;
-  return (
+  const callbacks = useContext(CalendarTaskMenuContext);
+
+  // Actual work-period events: read-only ghost style, no menu.
+  if (meta.isActual) {
+    return (
+      <div
+        className="sx-event-content"
+        style={{
+          backgroundColor: "transparent",
+          border: `1.5px dashed ${meta.statusColor}`,
+          borderInlineStart: undefined,
+          opacity: 0.65,
+        }}
+      >
+        <span className="sx-event-dot" style={{ backgroundColor: meta.statusColor }} />
+        <span className="sx-event-title">{calendarEvent.title}</span>
+      </div>
+    );
+  }
+
+  const eventInner = (
     <div
       className="sx-event-content cursor-grab active:cursor-grabbing"
       style={{
@@ -250,15 +347,35 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
       onDragEnd={() => calendarDragContext.clearDragTask()}
     >
       {meta.statusColor && (
-        <span
-          className="sx-event-dot"
-          style={{ backgroundColor: meta.statusColor }}
-        />
+        <span className="sx-event-dot" style={{ backgroundColor: meta.statusColor }} />
       )}
       <span className="sx-event-title">{calendarEvent.title}</span>
+      {meta.actualHours !== undefined && (
+        <span className="sx-event-actual ml-auto shrink-0 tabular-nums opacity-60 text-[10px]">
+          {fmtHours(meta.actualHours)}
+          {meta.plannedHours !== undefined ? ` / ${fmtHours(meta.plannedHours)}` : " actual"}
+        </span>
+      )}
     </div>
   );
+
+  if (!callbacks) return eventInner;
+
+  return (
+    <ResponsiveDropdownMenu>
+      <ResponsiveDropdownMenuTrigger render={eventInner} />
+      <ResponsiveDropdownMenuContent>
+        <ResponsiveDropdownMenuItem onSelect={() => callbacks.onNavigate(meta.taskId)}>
+          View task details
+        </ResponsiveDropdownMenuItem>
+        <ResponsiveDropdownMenuItem onSelect={() => callbacks.onUnschedule(meta.taskId)}>
+          Unschedule
+        </ResponsiveDropdownMenuItem>
+      </ResponsiveDropdownMenuContent>
+    </ResponsiveDropdownMenu>
+  );
 }
+
 
 // Stable reference — must not be defined inline in JSX. ScheduleXCalendar's
 // useEffect has `customComponents` as a dependency and calls calendarApp.render()
@@ -582,6 +699,8 @@ function ProjectCalendarContent({
       return (order[a.priority] ?? 99) - (order[b.priority] ?? 99);
     });
 
+  const scheduledTasks: EnrichedTask[] = allTasks.filter((t) => !!t.plannedStartDate);
+
   const taskCycleDueDate = new Map<string, string>(
     (calendarData?.taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
   );
@@ -632,11 +751,24 @@ function ProjectCalendarContent({
     );
   })();
 
-  const taskEvents = [...baseTaskEvents, ...pendingUnscheduledEvents];
+  // Actual-time overlay: build work-period events for all toggled tasks.
+  const { visibleTaskIds: visibleActualTaskIds } = ix.actualView;
+  const workPeriodEvents = allTasks
+    .filter((t) => visibleActualTaskIds.has(t._id))
+    .flatMap((t) => buildWorkPeriodEvents(t));
+  const taskEvents = [...baseTaskEvents, ...pendingUnscheduledEvents, ...workPeriodEvents];
   const bgEvents = buildCycleBackgroundEvents(cycles ?? []);
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
 
+  const navigate = useNavigate();
+  const taskMenuCallbacks: CalendarTaskMenuContextValue = {
+    onNavigate: (taskId) =>
+      void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`),
+    onUnschedule: (taskId) => ix.unscheduleTask(taskId as Id<"tasks">),
+  };
+
   return (
+    <CalendarTaskMenuContext.Provider value={taskMenuCallbacks}>
     <CalendarHeaderConfigContext.Provider value={{
       commitmentMode: ix.commitmentMode,
       onCommitmentModeChange: ix.setCommitmentMode,
@@ -686,6 +818,7 @@ function ProjectCalendarContent({
         </AnimatePresence>
 
         <CalendarSidebar side="right" className="hidden md:flex">
+          {/* Top section: unscheduled tasks (draggable) */}
           <CalendarSidebarHeader>
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -696,38 +829,29 @@ function ProjectCalendarContent({
               </span>
             </div>
           </CalendarSidebarHeader>
-          <CalendarSidebarContent>
+          <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
             <UnscheduledTaskList tasks={unscheduledTasks} />
+          </CalendarSidebarContent>
+
+          {/* Bottom section: scheduled tasks with actual-time toggles */}
+          <div className="border-t shrink-0" />
+          <CalendarSidebarHeader>
+            <ScheduledSectionHeader
+              tasks={scheduledTasks}
+              visibleActualTaskIds={visibleActualTaskIds}
+              onSetAll={ix.actualView.setAll}
+              onClearAll={ix.actualView.clearAll}
+            />
+          </CalendarSidebarHeader>
+          <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
+            <ScheduledTaskList
+              tasks={scheduledTasks}
+              visibleActualTaskIds={visibleActualTaskIds}
+              onToggle={ix.actualView.toggle}
+            />
           </CalendarSidebarContent>
         </CalendarSidebar>
       </CalendarSidebarProvider>
-
-      {/* Mobile task action drawer */}
-      {ix.taskFocus?.surface === "drawer" && (
-        <MobileTaskActionDrawer
-          taskId={ix.taskFocus.taskId}
-          task={allTasks.find((t) => t._id === ix.taskFocus?.taskId) ?? null}
-          open={true}
-          onOpenChange={(open) => { if (!open) ix.clearTaskFocus(); }}
-          onUnschedule={() => {
-            if (ix.taskFocus?.surface === "drawer") ix.unscheduleTask(ix.taskFocus.taskId);
-            ix.clearTaskFocus();
-          }}
-          workspaceId={workspaceId}
-          projectId={projectId}
-        />
-      )}
-
-      {/* Desktop task detail sheet */}
-      <Suspense fallback={null}>
-        <LazyTaskDetailSheet
-          taskId={ix.taskFocus?.surface === "sheet" ? ix.taskFocus.taskId : null}
-          open={ix.taskFocus?.surface === "sheet"}
-          onOpenChange={(open) => { if (!open) ix.clearTaskFocus(); }}
-          workspaceId={workspaceId}
-          projectId={projectId}
-        />
-      </Suspense>
 
       {/* Mobile: day-tap bottom drawer */}
       <DayScheduleDrawer
@@ -747,6 +871,7 @@ function ProjectCalendarContent({
       />
     </div>
     </CalendarHeaderConfigContext.Provider>
+    </CalendarTaskMenuContext.Provider>
   );
 }
 ProjectCalendarContent.whyDidYouRender = true;
@@ -791,58 +916,104 @@ function UnscheduledTaskItem({ task }: { task: EnrichedTask }) {
   );
 }
 
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Mobile: task-tap action drawer
+// Desktop sidebar: scheduled tasks with actual-time toggles
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MobileTaskActionDrawer({
-  taskId,
-  task,
-  open,
-  onOpenChange,
-  onUnschedule,
-  workspaceId,
-  projectId,
+function hasActualData(task: EnrichedTask): boolean {
+  return !!task.workPeriods?.some((p) => p.completedAt !== undefined);
+}
+
+function ScheduledSectionHeader({
+  tasks,
+  visibleActualTaskIds,
+  onSetAll,
+  onClearAll,
 }: {
-  taskId: Id<"tasks"> | null;
-  task: EnrichedTask | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onUnschedule: () => void;
-  workspaceId: Id<"workspaces">;
-  projectId: Id<"projects">;
+  tasks: EnrichedTask[];
+  visibleActualTaskIds: Set<string>;
+  onSetAll: (ids: string[]) => void;
+  onClearAll: () => void;
 }) {
-  const navigate = useNavigate();
+  const togglable = tasks.filter(hasActualData);
+  const allOn = togglable.length > 0 && togglable.every((t) => visibleActualTaskIds.has(t._id));
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} direction="bottom">
-      <DrawerContent>
-        <DrawerHeader>
-          <DrawerTitle className="text-base truncate">{task?.title ?? ""}</DrawerTitle>
-        </DrawerHeader>
-        <div className="flex flex-col gap-1 px-4 pb-6 pb-safe">
-          <Button
-            variant="ghost"
-            className="justify-start h-11 text-sm"
-            onClick={() => {
-              onOpenChange(false);
-              void navigate(
-                `/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`
-              );
-            }}
-          >
-            View task details
-          </Button>
-          <Button
-            variant="ghost"
-            className="justify-start h-11 text-sm text-muted-foreground"
-            onClick={onUnschedule}
-          >
-            Unschedule
-          </Button>
-        </div>
-      </DrawerContent>
-    </Drawer>
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        Scheduled
+      </span>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground tabular-nums">{tasks.length}</span>
+        {togglable.length > 0 && (
+          <Switch
+            checked={allOn}
+            onCheckedChange={(checked) =>
+              checked ? onSetAll(togglable.map((t) => t._id)) : onClearAll()
+            }
+            aria-label="Toggle actual times for all scheduled tasks"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScheduledTaskList({
+  tasks,
+  visibleActualTaskIds,
+  onToggle,
+}: {
+  tasks: EnrichedTask[];
+  visibleActualTaskIds: Set<string>;
+  onToggle: (taskId: string) => void;
+}) {
+  if (tasks.length === 0) {
+    return (
+      <p className="px-3 py-3 text-xs text-muted-foreground">
+        No scheduled tasks
+      </p>
+    );
+  }
+  return (
+    <div className="p-2 space-y-0.5">
+      {tasks.map((task) => (
+        <ScheduledTaskItem
+          key={task._id}
+          task={task}
+          isVisible={visibleActualTaskIds.has(task._id)}
+          onToggle={onToggle}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ScheduledTaskItem({
+  task,
+  isVisible,
+  onToggle,
+}: {
+  task: EnrichedTask;
+  isVisible: boolean;
+  onToggle: (taskId: string) => void;
+}) {
+  const canToggle = hasActualData(task);
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted select-none">
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ backgroundColor: task.status ? tailwindToHex(task.status.color) : "#6b7280" }}
+      />
+      <span className="truncate text-foreground flex-1">{task.title}</span>
+      <Switch
+        checked={isVisible && canToggle}
+        disabled={!canToggle}
+        onCheckedChange={() => onToggle(task._id)}
+        aria-label={`Toggle actual times for ${task.title}`}
+      />
+    </div>
   );
 }
 

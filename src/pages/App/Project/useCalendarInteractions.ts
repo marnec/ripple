@@ -19,27 +19,19 @@ export type CycleWithProgress = {
   progressPercent: number;
 };
 
-export type TaskFocusTarget =
-  | { surface: "sheet"; taskId: Id<"tasks"> }
-  | { surface: "drawer"; taskId: Id<"tasks"> }
-  | null;
-
 export type DayFocusTarget =
   | { surface: "drawer"; date: string }
   | null;
 
 export interface CalendarInteractionStrategy {
-  resolveTaskFocus(taskId: Id<"tasks">): TaskFocusTarget;
   resolveDayFocus(date: string): DayFocusTarget;
 }
 
 export const desktopStrategy: CalendarInteractionStrategy = {
-  resolveTaskFocus: (taskId) => ({ surface: "sheet", taskId }),
   resolveDayFocus: (_date) => null,
 };
 
 export const mobileStrategy: CalendarInteractionStrategy = {
-  resolveTaskFocus: (taskId) => ({ surface: "drawer", taskId }),
   resolveDayFocus: (date) => ({ surface: "drawer", date }),
 };
 
@@ -79,13 +71,13 @@ export function useCalendarInteractions({
   // 2. Desktop sidebar
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(false);
 
-  // 3. Task focus (replaces selectedTaskId + mobileTaskId)
-  const [taskFocus, setTaskFocus] = useState<TaskFocusTarget>(null);
+  // 3. Actual-time visibility — show work periods for selected tasks
+  const [visibleActualTaskIds, setVisibleActualTaskIds] = useState<Set<string>>(new Set());
 
   // 4. Cycle detail sheet
   const [selectedCycle, setSelectedCycle] = useState<CycleWithProgress | null>(null);
 
-  // 5. Day focus (replaces mobileDayDate)
+  // 5. Day focus (mobile day-tap)
   const [dayFocus, setDayFocus] = useState<DayFocusTarget>(null);
 
   // 6. Drag-drop: dual-write — state drives the CSS highlight re-render,
@@ -152,12 +144,26 @@ export function useCalendarInteractions({
       toggle: () => setDesktopSidebarOpen((o) => !o),
     },
 
-    taskFocus,
-    clearTaskFocus: () => setTaskFocus(null),
+    actualView: {
+      visibleTaskIds: visibleActualTaskIds,
+      toggle: (taskId: string) => {
+        setVisibleActualTaskIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(taskId)) next.delete(taskId);
+          else next.add(taskId);
+          return next;
+        });
+      },
+      setAll: (taskIds: string[]) => setVisibleActualTaskIds(new Set(taskIds)),
+      clearAll: () => setVisibleActualTaskIds(new Set()),
+    },
+
+    // Task menu interactions are handled inside CustomEventContent via
+    // ResponsiveDropdownMenu. This callback is still wired to schedule-x but
+    // only needs to ignore synthetic/non-task event IDs.
     onEventClick: (id: string | number) => {
       const idStr = String(id);
-      if (idStr.startsWith("ghost-")) return;
-      setTaskFocus(strategy.resolveTaskFocus(idStr as Id<"tasks">));
+      if (idStr.startsWith("ghost-") || idStr.startsWith("actual-")) return;
     },
 
     dayFocus,
