@@ -321,8 +321,22 @@ function formatWorkPeriodTooltip(startMs: number, endMs: number): string {
     : `${fmtDate(start)} ${fmtTime(start)} – ${fmtDate(end)} ${fmtTime(end)}`;
 }
 
-function ActualEventContent({ meta, title }: { meta: EventMeta; title: string }) {
+// Module-level tracker so all segments of the same multi-row event can share
+// hover state without going through React context or schedule-x event updates.
+const actualHoverSubs = new Map<string, Set<(h: boolean) => void>>();
+function subscribeActualHover(id: string, cb: (h: boolean) => void) {
+  if (!actualHoverSubs.has(id)) actualHoverSubs.set(id, new Set());
+  actualHoverSubs.get(id)!.add(cb);
+  return () => actualHoverSubs.get(id)?.delete(cb);
+}
+function notifyActualHover(id: string, hovered: boolean) {
+  actualHoverSubs.get(id)?.forEach((cb) => cb(hovered));
+}
+
+function ActualEventContent({ meta, title, eventId }: { meta: EventMeta; title: string; eventId: string }) {
   const [hovered, setHovered] = useState(false);
+
+  useEffect(() => subscribeActualHover(eventId, setHovered) as () => void, [eventId]);
 
   const inner = (
     <div
@@ -335,8 +349,8 @@ function ActualEventContent({ meta, title }: { meta: EventMeta; title: string })
         transition: "opacity 0.12s",
         cursor: "default",
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => notifyActualHover(eventId, true)}
+      onMouseLeave={() => notifyActualHover(eventId, false)}
     >
       <span className="sx-event-dot" style={{ backgroundColor: meta.statusColor }} />
       <span className="sx-event-title">{title}</span>
@@ -372,7 +386,7 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
 
   // Actual work-period events: hover highlight + tooltip.
   if (meta.isActual) {
-    return <ActualEventContent meta={meta} title={calendarEvent.title} />;
+    return <ActualEventContent meta={meta} title={calendarEvent.title} eventId={String(calendarEvent.id)} />;
   }
 
   const eventInner = (
