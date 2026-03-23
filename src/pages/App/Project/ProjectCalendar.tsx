@@ -19,8 +19,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "../../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { useCalendarInteractions, type CycleWithProgress } from "./useCalendarInteractions";
-import { startDrag, endDrag } from "./dragTracker";
+import { useCalendarInteractions, type CycleWithProgress, desktopStrategy, mobileStrategy } from "./useCalendarInteractions";
+import { useCalendarSync } from "./useCalendarSync";
+import { calendarDragContext } from "./calendarDragContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
 import { Button } from "@/components/ui/button";
@@ -123,6 +124,10 @@ type EventMeta = {
   hasEstimate: boolean;
 };
 
+type TaskCalendarEvent = CalendarEventExternal & {
+  readonly _meta: EventMeta;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Calendar ID constants — 4 visual states
 // ─────────────────────────────────────────────────────────────────────────────
@@ -176,7 +181,7 @@ function buildTaskEvents(
   tasks: EnrichedTask[],
   multiplier: 1 | 5 = 1,
   taskCycleDueDate: Map<string, string> = new Map(),
-): CalendarEventExternal[] {
+): TaskCalendarEvent[] {
   return tasks
     .filter((t) => !!t.plannedStartDate)
     .map((t) => {
@@ -189,16 +194,14 @@ function buildTaskEvents(
         hasEstimate: !!t.estimate,
       };
 
-      const event = {
+      return {
         id: t._id,
         title: t.title,
         start: Temporal.PlainDate.from(t.plannedStartDate!),
         end: Temporal.PlainDate.from(endDate),
         calendarId,
-      } as CalendarEventExternal;
-
-      (event as any)._meta = meta;
-      return event;
+        _meta: meta,
+      } as TaskCalendarEvent;
     });
 }
 
@@ -221,31 +224,32 @@ function buildCycleBackgroundEvents(cycles: CycleWithProgress[]): BackgroundEven
 // Custom event content — status dot + title (draggable for rescheduling)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CustomEventContent({ calendarEvent, hasStartDate }: { calendarEvent: any; hasStartDate?: boolean }) {
-  const meta = calendarEvent._meta as EventMeta | undefined;
+function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
+  const event = calendarEvent as TaskCalendarEvent;
+  const meta: EventMeta = event._meta;
   const calendarId = calendarEvent.calendarId as string;
   return (
     <div
       className="sx-event-content cursor-grab active:cursor-grabbing"
       style={{
-        backgroundColor: meta?.hasEstimate ? `var(--sx-color-${calendarId}-container)` : undefined,
+        backgroundColor: meta.hasEstimate ? `var(--sx-color-${calendarId}-container)` : undefined,
         borderInlineStart: `4px solid var(--sx-color-${calendarId})`,
       }}
-      data-no-estimate={meta?.hasEstimate ? undefined : "true"}
+      data-no-estimate={meta.hasEstimate ? undefined : "true"}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("task-id", String(calendarEvent.id));
         e.dataTransfer.effectAllowed = "move";
-        startDrag(String(calendarEvent.id));
+        calendarDragContext.setDragTask(String(calendarEvent.id));
         const blank = document.createElement("div");
         blank.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;";
         document.body.appendChild(blank);
         e.dataTransfer.setDragImage(blank, 0, 0);
         requestAnimationFrame(() => blank.remove());
       }}
-      onDragEnd={() => endDrag()}
+      onDragEnd={() => calendarDragContext.clearDragTask()}
     >
-      {meta?.statusColor && (
+      {meta.statusColor && (
         <span
           className="sx-event-dot"
           style={{ backgroundColor: meta.statusColor }}
@@ -410,54 +414,65 @@ function CalendarHeaderContent() {
 
 type GhostPos = { top: number; left: number; width: number; height: number };
 
+function resolveGhostPosition({
+  calendarRoot,
+  date,
+  spanDays,
+}: {
+  calendarRoot: Element | null;
+  date: string;
+  spanDays: number;
+}): GhostPos | null {
+  if (!calendarRoot) return null;
+  const dayEl = calendarRoot.querySelector(`[data-date="${date}"]`);
+  if (!dayEl) return null;
+  const dayRect = dayEl.getBoundingClientRect();
+
+  let topOffset = 24;
+  let eventHeight = 22;
+  const refEvent = calendarRoot.querySelector(".sx__month-grid-event");
+  const refCell = refEvent?.closest("[data-date]");
+  if (refEvent && refCell) {
+    const eventRect = refEvent.getBoundingClientRect();
+    const cellRect = refCell.getBoundingClientRect();
+    topOffset = Math.round(eventRect.top - cellRect.top);
+    eventHeight = Math.round(eventRect.height);
+  }
+
+  let width = dayRect.width - 4;
+  if (spanDays > 1) {
+    const endDate = addCalendarDays(date, spanDays - 1);
+    const endEl = calendarRoot.querySelector(`[data-date="${endDate}"]`);
+    if (endEl) {
+      const endRect = endEl.getBoundingClientRect();
+      if (Math.abs(endRect.top - dayRect.top) < 10) {
+        width = endRect.right - dayRect.left - 4;
+      }
+    }
+  }
+
+  return { top: dayRect.top + topOffset, left: dayRect.left + 2, width, height: eventHeight };
+}
+
 function CalendarGhostOverlay({
   task,
   hoveredDropDate,
   multiplier,
   calendarId,
+  wrapperRef,
 }: {
   task: EnrichedTask;
   hoveredDropDate: string;
   multiplier: 1 | 5;
   calendarId: string;
+  wrapperRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const [pos, setPos] = useState<GhostPos | null>(null);
 
   useLayoutEffect(() => {
-    const dayEl = document.querySelector(`[data-date="${hoveredDropDate}"]`);
-    if (!dayEl) { setPos(null); return; }
-
-    const dayRect = dayEl.getBoundingClientRect();
-
-    // Measure event height and top offset from an existing schedule-x event so
-    // the overlay aligns with where a real event would appear in the day cell.
-    let topOffset = 24; // fallback: approximate day-number header height
-    let eventHeight = 22; // fallback: approximate event row height
-    const refEvent = document.querySelector(".sx__month-grid-event");
-    const refCell = refEvent?.closest("[data-date]");
-    if (refEvent && refCell) {
-      const eventRect = refEvent.getBoundingClientRect();
-      const cellRect = refCell.getBoundingClientRect();
-      topOffset = Math.round(eventRect.top - cellRect.top);
-      eventHeight = Math.round(eventRect.height);
-    }
-
-    // Span width across multi-day estimate, clamping to the same calendar row.
-    const days = estimateToDays(task.estimate, multiplier);
-    let width = dayRect.width - 4;
-    if (days > 1) {
-      const endDate = addCalendarDays(hoveredDropDate, days - 1);
-      const endEl = document.querySelector(`[data-date="${endDate}"]`);
-      if (endEl) {
-        const endRect = endEl.getBoundingClientRect();
-        if (Math.abs(endRect.top - dayRect.top) < 10) {
-          width = endRect.right - dayRect.left - 4;
-        }
-      }
-    }
-
-    setPos({ top: dayRect.top + topOffset, left: dayRect.left + 2, width, height: eventHeight });
-  }, [hoveredDropDate, task.estimate, multiplier]);
+    const spanDays = estimateToDays(task.estimate, multiplier);
+    setPos(resolveGhostPosition({ calendarRoot: wrapperRef.current, date: hoveredDropDate, spanDays }));
+  }, [wrapperRef, hoveredDropDate, task.estimate, multiplier]);
 
   const statusColor = task.status ? tailwindToHex(task.status.color) : "#6b7280";
   const hasEstimate = !!task.estimate;
@@ -533,6 +548,7 @@ function ProjectCalendarContent({
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects">;
 }) {
+  const calendarWrapperRef = useRef<HTMLDivElement>(null);
   const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
   const calendarData = useQuery(api.cycles.listForCalendar, { projectId });
   const { resolvedTheme } = useTheme();
@@ -541,9 +557,11 @@ function ProjectCalendarContent({
 
   const cycles = calendarData?.cycles as CycleWithProgress[] | undefined;
 
+  const strategy = isMobile ? mobileStrategy : desktopStrategy;
   const ix = useCalendarInteractions({
-    isMobile,
+    strategy,
     cycles,
+    dragContext: calendarDragContext,
   });
 
   const cycleTasks = useQuery(
@@ -552,6 +570,7 @@ function ProjectCalendarContent({
   );
 
   const multiplier: 1 | 5 = ix.commitmentMode ? 5 : 1;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const allTasks = (tasks ?? []) as EnrichedTask[];
 
   const unscheduledTasks: EnrichedTask[] = allTasks
@@ -571,7 +590,7 @@ function ProjectCalendarContent({
   const draggedTask =
     draggedTaskId
       ? (allTasks.find((t) => t._id === draggedTaskId) ??
-         (unscheduledTasks.find((t) => t._id === draggedTaskId) as EnrichedTask | undefined) ??
+         unscheduledTasks.find((t) => t._id === draggedTaskId) ??
          null)
       : null;
 
@@ -599,7 +618,7 @@ function ProjectCalendarContent({
 
   // For a previously-unscheduled task being optimistically shown after drop:
   // it won't be in allTasks yet, so synthesize its event from the unscheduled list.
-  const pendingUnscheduledEvents: CalendarEventExternal[] = (() => {
+  const pendingUnscheduledEvents: TaskCalendarEvent[] = (() => {
     if (!pendingSchedule) return [];
     if (allTasks.some((t) => t._id === pendingSchedule.taskId)) return [];
     const task = unscheduledTasks.find((t) => t._id === pendingSchedule.taskId);
@@ -634,14 +653,15 @@ function ProjectCalendarContent({
             bgEvents={bgEvents}
             defaultView="month-grid"
             isDark={isDark}
-            onEventClick={ix.taskSheet.onEventClick}
-            onClickDate={ix.dayClick.onClickDate}
+            onEventClick={ix.onEventClick}
+            onClickDate={ix.onClickDate}
             onClickCycle={ix.cycleSheet.onCycleClick}
             commitmentMode={ix.commitmentMode}
             onCommitmentModeChange={ix.setCommitmentMode}
             unscheduledCount={unscheduledTasks.length}
             sidebarOpen={ix.sidebar.open}
             onSidebarToggle={ix.sidebar.toggle}
+            wrapperRef={calendarWrapperRef}
           />
           {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
         </CalendarSidebarInset>
@@ -656,6 +676,7 @@ function ProjectCalendarContent({
               hoveredDropDate={hoveredDropDate}
               multiplier={multiplier}
               calendarId={getTaskCalendarId(draggedTask, multiplier, taskCycleDueDate)}
+              wrapperRef={calendarWrapperRef}
             />
           )}
         </AnimatePresence>
@@ -677,37 +698,43 @@ function ProjectCalendarContent({
         </CalendarSidebar>
       </CalendarSidebarProvider>
 
-      {/* Mobile: task-tap action drawer */}
-      <MobileTaskActionDrawer
-        taskId={ix.mobileTaskDrawer.taskId}
-        task={allTasks.find((t) => t._id === ix.mobileTaskDrawer.taskId) ?? null}
-        open={ix.mobileTaskDrawer.open}
-        onOpenChange={ix.mobileTaskDrawer.onOpenChange}
-        onUnschedule={ix.mobileTaskDrawer.onUnschedule}
-        workspaceId={workspaceId}
-        projectId={projectId}
-      />
+      {/* Mobile task action drawer */}
+      {ix.taskFocus?.surface === "drawer" && (
+        <MobileTaskActionDrawer
+          taskId={ix.taskFocus.taskId}
+          task={allTasks.find((t) => t._id === ix.taskFocus?.taskId) ?? null}
+          open={true}
+          onOpenChange={(open) => { if (!open) ix.clearTaskFocus(); }}
+          onUnschedule={() => {
+            if (ix.taskFocus?.surface === "drawer") ix.unscheduleTask(ix.taskFocus.taskId);
+            ix.clearTaskFocus();
+          }}
+          workspaceId={workspaceId}
+          projectId={projectId}
+        />
+      )}
+
+      {/* Desktop task detail sheet */}
+      <Suspense fallback={null}>
+        <LazyTaskDetailSheet
+          taskId={ix.taskFocus?.surface === "sheet" ? ix.taskFocus.taskId : null}
+          open={ix.taskFocus?.surface === "sheet"}
+          onOpenChange={(open) => { if (!open) ix.clearTaskFocus(); }}
+          workspaceId={workspaceId}
+          projectId={projectId}
+        />
+      </Suspense>
 
       {/* Mobile: day-tap bottom drawer */}
       <DayScheduleDrawer
-        date={ix.dayClick.mobileDayDate}
-        open={ix.dayClick.mobileDayDate !== null}
-        onOpenChange={ix.dayClick.onMobileDrawerChange}
+        date={ix.dayFocus?.surface === "drawer" ? ix.dayFocus.date : null}
+        open={ix.dayFocus?.surface === "drawer"}
+        onOpenChange={(open) => { if (!open) ix.clearDayFocus(); }}
         allTasks={allTasks}
         unscheduledTasks={unscheduledTasks}
         onSchedule={ix.scheduleTask}
         onUnschedule={ix.unscheduleTask}
       />
-
-      <Suspense fallback={null}>
-        <LazyTaskDetailSheet
-          taskId={ix.taskSheet.taskId}
-          open={ix.taskSheet.open}
-          onOpenChange={ix.taskSheet.onOpenChange}
-          workspaceId={workspaceId}
-          projectId={projectId}
-        />
-      </Suspense>
 
       <CycleDetailSheet
         cycle={ix.cycleSheet.cycle}
@@ -740,14 +767,14 @@ function UnscheduledTaskItem({ task }: { task: EnrichedTask }) {
       onDragStart={(e) => {
         e.dataTransfer.setData("task-id", task._id);
         e.dataTransfer.effectAllowed = "move";
-        startDrag(task._id);
+        calendarDragContext.setDragTask(task._id);
         const ghost = document.createElement("div");
         ghost.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;";
         document.body.appendChild(ghost);
         e.dataTransfer.setDragImage(ghost, 0, 0);
         requestAnimationFrame(() => ghost.remove());
       }}
-      onDragEnd={() => endDrag()}
+      onDragEnd={() => calendarDragContext.clearDragTask()}
       className="flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-muted cursor-grab active:cursor-grabbing select-none"
     >
       <span
@@ -941,8 +968,9 @@ function CalendarRenderer({
   unscheduledCount,
   sidebarOpen,
   onSidebarToggle,
+  wrapperRef,
 }: {
-  taskEvents: CalendarEventExternal[];
+  taskEvents: TaskCalendarEvent[];
   bgEvents: BackgroundEvent[];
   defaultView: string;
   isDark: boolean;
@@ -954,8 +982,8 @@ function CalendarRenderer({
   unscheduledCount: number;
   sidebarOpen: boolean;
   onSidebarToggle: () => void;
+  wrapperRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Stable ref so the event listener never needs to be re-registered.
   const onClickCycleRef = useRef(onClickCycle);
@@ -972,7 +1000,7 @@ function CalendarRenderer({
     }
     wrapper.addEventListener("click", handleClick, true);
     return () => wrapper.removeEventListener("click", handleClick, true);
-  }, []);
+  }, [wrapperRef]);
   const [rangeVersion, setRangeVersion] = useState(0);
 
   const [calendarControls] = useState(() => createCalendarControlsPlugin());
@@ -1012,57 +1040,9 @@ function CalendarRenderer({
         vc.style.opacity = "";
       });
     });
-  }, [rangeVersion]);
+  }, [rangeVersion, wrapperRef]);
 
-  // Sync cycle background events into schedule-x imperatively (avoids remount).
-  const bgEventsKeyRef = useRef("");
-  useEffect(() => {
-    const key = bgEvents.map((e) => `${String(e.start)}:${String(e.end)}`).join("|");
-    if (key === bgEventsKeyRef.current) return;
-    bgEventsKeyRef.current = key;
-    // eslint-disable-next-line react-hooks/immutability
-    (calendarApp as any).$app.calendarEvents.backgroundEvents.value = bgEvents;
-  }, [bgEvents, calendarApp]);
-
-  // Sync live Convex task data into schedule-x incrementally.
-  const eventsKeyRef = useRef("");
-  useEffect(() => {
-    const key = taskEvents
-      .map((e) => {
-        const meta = (e as any)._meta as EventMeta | undefined;
-        return `${e.id}|${String(e.start)}|${String(e.end)}|${e.title}|${e.calendarId ?? ""}|${meta?.statusColor ?? ""}|${meta?.hasEstimate ?? ""}`;
-      })
-      .join(",");
-    if (key === eventsKeyRef.current) return;
-    eventsKeyRef.current = key;
-
-    const existing = calendarApp.events.getAll();
-    const existingMap = new Map(existing.map((e) => [String(e.id), e]));
-    const newMap = new Map(taskEvents.map((e) => [String(e.id), e]));
-
-    for (const [id] of existingMap) {
-      if (!newMap.has(id)) calendarApp.events.remove(id);
-    }
-    for (const [id, event] of newMap) {
-      if (!existingMap.has(id)) {
-        calendarApp.events.add(event);
-      } else {
-        const prev = existingMap.get(id)!;
-        const prevMeta = (prev as any)._meta as EventMeta | undefined;
-        const newMeta = (event as any)._meta as EventMeta | undefined;
-        if (
-          String(prev.start) !== String(event.start) ||
-          String(prev.end) !== String(event.end) ||
-          prev.title !== event.title ||
-          prev.calendarId !== event.calendarId ||
-          prevMeta?.statusColor !== newMeta?.statusColor ||
-          prevMeta?.hasEstimate !== newMeta?.hasEstimate
-        ) {
-          calendarApp.events.update(event);
-        }
-      }
-    }
-  }, [taskEvents, calendarApp]);
+  useCalendarSync(calendarApp, taskEvents, bgEvents);
 
   return (
     <CalendarHeaderContext.Provider

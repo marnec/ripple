@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { currentDragTaskId, endDrag } from "./dragTracker";
+import { type DragContext } from "./dragContext";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -17,6 +17,30 @@ export type CycleWithProgress = {
   totalTasks: number;
   completedTasks: number;
   progressPercent: number;
+};
+
+export type TaskFocusTarget =
+  | { surface: "sheet"; taskId: Id<"tasks"> }
+  | { surface: "drawer"; taskId: Id<"tasks"> }
+  | null;
+
+export type DayFocusTarget =
+  | { surface: "drawer"; date: string }
+  | null;
+
+export interface CalendarInteractionStrategy {
+  resolveTaskFocus(taskId: Id<"tasks">): TaskFocusTarget;
+  resolveDayFocus(date: string): DayFocusTarget;
+}
+
+export const desktopStrategy: CalendarInteractionStrategy = {
+  resolveTaskFocus: (taskId) => ({ surface: "sheet", taskId }),
+  resolveDayFocus: (_date) => null,
+};
+
+export const mobileStrategy: CalendarInteractionStrategy = {
+  resolveTaskFocus: (taskId) => ({ surface: "drawer", taskId }),
+  resolveDayFocus: (date) => ({ surface: "drawer", date }),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,11 +63,13 @@ function findDateAtPoint(x: number, y: number): string | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useCalendarInteractions({
-  isMobile,
+  strategy,
   cycles,
+  dragContext,
 }: {
-  isMobile: boolean;
+  strategy: CalendarInteractionStrategy;
   cycles: CycleWithProgress[] | undefined;
+  dragContext: DragContext;
 }) {
   const updateTask = useMutation(api.tasks.update);
 
@@ -53,15 +79,14 @@ export function useCalendarInteractions({
   // 2. Desktop sidebar
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(false);
 
-  // 3. Task detail sheet (desktop) / task action drawer (mobile)
-  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
-  const [mobileTaskId, setMobileTaskId] = useState<Id<"tasks"> | null>(null);
+  // 3. Task focus (replaces selectedTaskId + mobileTaskId)
+  const [taskFocus, setTaskFocus] = useState<TaskFocusTarget>(null);
 
   // 4. Cycle detail sheet
   const [selectedCycle, setSelectedCycle] = useState<CycleWithProgress | null>(null);
 
-  // 5. Day click: mobile = day drawer
-  const [mobileDayDate, setMobileDayDate] = useState<string | null>(null);
+  // 5. Day focus (replaces mobileDayDate)
+  const [dayFocus, setDayFocus] = useState<DayFocusTarget>(null);
 
   // 6. Drag-drop: dual-write — state drives the CSS highlight re-render,
   //    ref avoids stale closure in handleDragOver (called on every mousemove).
@@ -83,7 +108,7 @@ export function useCalendarInteractions({
       hoveredDropDateRef.current = date;
       setHoveredDropDate(date);
     }
-    const tid = currentDragTaskId;
+    const tid = dragContext.currentTaskId;
     if (tid !== draggedTaskIdRef.current) {
       draggedTaskIdRef.current = tid;
       setDraggedTaskId(tid);
@@ -105,7 +130,7 @@ export function useCalendarInteractions({
     setHoveredDropDate(null);
     draggedTaskIdRef.current = null;
     setDraggedTaskId(null);
-    endDrag();
+    dragContext.clearDragTask();
     const taskId = e.dataTransfer.getData("task-id") as Id<"tasks">;
     if (!taskId) return;
     const date = findDateAtPoint(e.clientX, e.clientY);
@@ -127,26 +152,20 @@ export function useCalendarInteractions({
       toggle: () => setDesktopSidebarOpen((o) => !o),
     },
 
-    taskSheet: {
-      taskId: selectedTaskId,
-      open: selectedTaskId !== null,
-      onEventClick: (id: string | number) => {
-        const idStr = String(id);
-        if (idStr.startsWith("ghost-")) return;
-        if (isMobile) setMobileTaskId(idStr as Id<"tasks">);
-        else setSelectedTaskId(idStr as Id<"tasks">);
-      },
-      onOpenChange: (open: boolean) => { if (!open) setSelectedTaskId(null); },
+    taskFocus,
+    clearTaskFocus: () => setTaskFocus(null),
+    onEventClick: (id: string | number) => {
+      const idStr = String(id);
+      if (idStr.startsWith("ghost-")) return;
+      setTaskFocus(strategy.resolveTaskFocus(idStr as Id<"tasks">));
     },
 
-    mobileTaskDrawer: {
-      taskId: mobileTaskId,
-      open: mobileTaskId !== null,
-      onOpenChange: (open: boolean) => { if (!open) setMobileTaskId(null); },
-      onUnschedule: () => {
-        if (mobileTaskId) void updateTask({ taskId: mobileTaskId, plannedStartDate: null });
-        setMobileTaskId(null);
-      },
+    dayFocus,
+    clearDayFocus: () => setDayFocus(null),
+    onClickDate: (date: string) => {
+      // schedule-x may pass a Temporal.PlainDate object despite the string type annotation
+      const target = strategy.resolveDayFocus(String(date));
+      if (target) setDayFocus(target);
     },
 
     cycleSheet: {
@@ -166,15 +185,6 @@ export function useCalendarInteractions({
       onDragOver: handleDragOver,
       onDragLeave: handleDragLeave,
       onDrop: handleDrop,
-    },
-
-    dayClick: {
-      onClickDate: (date: string) => {
-        // schedule-x may pass a Temporal.PlainDate object despite the string type annotation
-        if (isMobile) setMobileDayDate(String(date));
-      },
-      mobileDayDate,
-      onMobileDrawerChange: (open: boolean) => { if (!open) setMobileDayDate(null); },
     },
 
     scheduleTask: (taskId: Id<"tasks">, date: string) =>
