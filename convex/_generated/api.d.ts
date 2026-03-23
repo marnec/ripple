@@ -338,6 +338,32 @@ export declare const api: {
         yjsSnapshotId?: Id<"_storage">;
       }>
     >;
+    listForCalendar: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      {
+        cycles: Array<{
+          _creationTime: number;
+          _id: Id<"cycles">;
+          completedTasks: number;
+          creatorId: Id<"users">;
+          description?: string;
+          dueDate?: string;
+          name: string;
+          progressPercent: number;
+          projectId: Id<"projects">;
+          startDate?: string;
+          status: "draft" | "upcoming" | "active" | "completed";
+          totalTasks: number;
+          workspaceId: Id<"workspaces">;
+        }>;
+        taskCycleDueDatePairs: Array<{
+          cycleDueDate: string;
+          taskId: Id<"tasks">;
+        }>;
+      }
+    >;
     listTaskCycleDueDates: FunctionReference<
       "query",
       "public",

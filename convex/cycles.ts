@@ -422,6 +422,66 @@ export const listTaskCycleDueDates = query({
   },
 });
 
+/**
+ * Combined query for the calendar view: returns cycles with progress AND
+ * task→cycleDueDate pairs in a single round-trip, avoiding two separate
+ * subscriptions that both fetch the same cycles/cycleTasks data.
+ */
+export const listForCalendar = query({
+  args: { projectId: v.id("projects") },
+  returns: v.object({
+    cycles: v.array(cycleWithProgressValidator),
+    taskCycleDueDatePairs: v.array(
+      v.object({ taskId: v.id("tasks"), cycleDueDate: v.string() })
+    ),
+  }),
+  handler: async (ctx, { projectId }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { cycles: [], taskCycleDueDatePairs: [] };
+
+    const project = await ctx.db.get(projectId);
+    if (!project) return { cycles: [], taskCycleDueDatePairs: [] };
+
+    const membership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
+      )
+      .first();
+    if (!membership) return { cycles: [], taskCycleDueDatePairs: [] };
+
+    const rawCycles = await ctx.db
+      .query("cycles")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+
+    const taskCycleDueDatePairs: { taskId: Id<"tasks">; cycleDueDate: string }[] = [];
+
+    const cycles = await Promise.all(
+      rawCycles.map(async (cycle) => {
+        const cts = await ctx.db
+          .query("cycleTasks")
+          .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
+          .collect();
+        const total = cts.length;
+        const tasks = await Promise.all(cts.map((ct) => ctx.db.get(ct.taskId)));
+        const completed = tasks.filter((t) => t?.completed).length;
+        const progressPercent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+        if (cycle.dueDate) {
+          for (const ct of cts) {
+            taskCycleDueDatePairs.push({ taskId: ct.taskId, cycleDueDate: cycle.dueDate });
+          }
+        }
+
+        return { ...cycle, totalTasks: total, completedTasks: completed, progressPercent };
+      })
+    );
+
+    return { cycles, taskCycleDueDatePairs };
+  },
+});
+
 export const listCycleTasks = query({
   args: {
     cycleId: v.id("cycles"),

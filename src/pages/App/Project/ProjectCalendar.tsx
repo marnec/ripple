@@ -534,16 +534,16 @@ function ProjectCalendarContent({
   projectId: Id<"projects">;
 }) {
   const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
-  const unscheduled = useQuery(api.tasks.listUnscheduled, { projectId });
-  const cycles = useQuery(api.cycles.listByProject, { projectId });
-  const taskCycleDueDatePairs = useQuery(api.cycles.listTaskCycleDueDates, { projectId });
+  const calendarData = useQuery(api.cycles.listForCalendar, { projectId });
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
   const isDark = resolvedTheme === "dark";
 
+  const cycles = calendarData?.cycles as CycleWithProgress[] | undefined;
+
   const ix = useCalendarInteractions({
     isMobile,
-    cycles: cycles as CycleWithProgress[] | undefined,
+    cycles,
   });
 
   const cycleTasks = useQuery(
@@ -553,9 +553,16 @@ function ProjectCalendarContent({
 
   const multiplier: 1 | 5 = ix.commitmentMode ? 5 : 1;
   const allTasks = (tasks ?? []) as EnrichedTask[];
-  const unscheduledTasks = (unscheduled ?? []) as EnrichedTask[];
-  const taskCycleDueDate = new Map(
-    (taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
+
+  const unscheduledTasks: EnrichedTask[] = allTasks
+    .filter((t) => !t.completed && t.plannedStartDate === undefined)
+    .sort((a, b) => {
+      const order: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+      return (order[a.priority] ?? 99) - (order[b.priority] ?? 99);
+    });
+
+  const taskCycleDueDate = new Map<string, string>(
+    (calendarData?.taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
   );
 
   const { draggedTaskId, hoveredDropDate, pendingSchedule, clearPendingSchedule } = ix.dragDrop;
@@ -605,7 +612,7 @@ function ProjectCalendarContent({
   })();
 
   const taskEvents = [...baseTaskEvents, ...pendingUnscheduledEvents];
-  const bgEvents = buildCycleBackgroundEvents((cycles ?? []) as CycleWithProgress[]);
+  const bgEvents = buildCycleBackgroundEvents(cycles ?? []);
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
 
   return (
