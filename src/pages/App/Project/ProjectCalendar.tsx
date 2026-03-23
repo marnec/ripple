@@ -159,6 +159,19 @@ const CALENDARS_CONFIG: Record<string, CalendarType> = {
 // Event builders
 // ─────────────────────────────────────────────────────────────────────────────
 
+function getTaskCalendarId(
+  task: EnrichedTask,
+  multiplier: 1 | 5,
+  taskCycleDueDate: Map<string, string>,
+): string {
+  const effectiveDueDate = resolveEffectiveDueDate(task.dueDate, taskCycleDueDate.get(task._id));
+  const conflict = !!effectiveDueDate && !!task.plannedStartDate &&
+    isDateConflict(task.plannedStartDate, task.estimate, multiplier, effectiveDueDate);
+  const hasOpenPeriod = !!task.workPeriods?.some((p) => p.completedAt === undefined);
+  if (conflict) return hasOpenPeriod ? CAL_CONFLICT : CAL_CONFLICT_INACTIVE;
+  return hasOpenPeriod ? CAL_NORMAL : CAL_NORMAL_INACTIVE;
+}
+
 function buildTaskEvents(
   tasks: EnrichedTask[],
   multiplier: 1 | 5 = 1,
@@ -169,16 +182,7 @@ function buildTaskEvents(
     .map((t) => {
       const days = estimateToDays(t.estimate, multiplier);
       const endDate = addCalendarDays(t.plannedStartDate!, days - 1);
-      const effectiveDueDate = resolveEffectiveDueDate(t.dueDate, taskCycleDueDate.get(t._id));
-      const conflict = !!effectiveDueDate && isDateConflict(t.plannedStartDate!, t.estimate, multiplier, effectiveDueDate);
-      const hasOpenPeriod = !!t.workPeriods?.some((p) => p.completedAt === undefined);
-
-      let calendarId: string;
-      if (conflict) {
-        calendarId = hasOpenPeriod ? CAL_CONFLICT : CAL_CONFLICT_INACTIVE;
-      } else {
-        calendarId = hasOpenPeriod ? CAL_NORMAL : CAL_NORMAL_INACTIVE;
-      }
+      const calendarId = getTaskCalendarId(t, multiplier, taskCycleDueDate);
 
       const meta: EventMeta = {
         statusColor: t.status ? tailwindToHex(t.status.color) : "#6b7280",
@@ -225,7 +229,7 @@ function CustomEventContent({ calendarEvent, hasStartDate }: { calendarEvent: an
       className="sx-event-content cursor-grab active:cursor-grabbing"
       style={{
         backgroundColor: meta?.hasEstimate ? `var(--sx-color-${calendarId}-container)` : undefined,
-        borderInlineStart: (meta?.hasEstimate && hasStartDate) ? `4px solid var(--sx-color-${calendarId}-main)` : undefined,
+        borderInlineStart: `4px solid var(--sx-color-${calendarId})`,
       }}
       data-no-estimate={meta?.hasEstimate ? undefined : "true"}
       draggable
@@ -410,10 +414,12 @@ function CalendarGhostOverlay({
   task,
   hoveredDropDate,
   multiplier,
+  calendarId,
 }: {
   task: EnrichedTask;
   hoveredDropDate: string;
   multiplier: 1 | 5;
+  calendarId: string;
 }) {
   const [pos, setPos] = useState<GhostPos | null>(null);
 
@@ -477,9 +483,15 @@ function CalendarGhostOverlay({
           <div
             className="sx-event-content"
             style={{
-              backgroundColor: hasEstimate ? "color-mix(in srgb, var(--color-muted-foreground) 15%, transparent)" : undefined,
-              borderInlineStart: hasEstimate ? "4px solid color-mix(in srgb, var(--color-muted-foreground) 60%, transparent)" : undefined,
-              border: !hasEstimate ? "1px dashed color-mix(in srgb, var(--color-muted-foreground) 60%, transparent)" : undefined,
+              backgroundColor: hasEstimate ? `var(--sx-color-${calendarId}-container)` : undefined,
+              borderInlineStart: `4px solid var(--sx-color-${calendarId})`,
+              ...(hasEstimate ? {} : {
+                borderTop: "1px dashed currentColor",
+                borderRight: "1px dashed currentColor",
+                borderBottom: "1px dashed currentColor",
+                borderRadius: "3px",
+                opacity: 0.75,
+              }),
             }}
           >
             <span className="sx-event-dot" style={{ backgroundColor: statusColor }} />
@@ -636,6 +648,7 @@ function ProjectCalendarContent({
               task={draggedTask}
               hoveredDropDate={hoveredDropDate}
               multiplier={multiplier}
+              calendarId={getTaskCalendarId(draggedTask, multiplier, taskCycleDueDate)}
             />
           )}
         </AnimatePresence>

@@ -122,9 +122,11 @@
   min-width: 0;
 }
 
-/* Dashed outline for tasks with no estimate */
+/* Tasks with no estimate: dimmed, dashed on three sides (left border comes from inline style) */
 .sx-event-content[data-no-estimate] {
-  border: 1px dashed currentColor;
+  border-top: 1px dashed currentColor;
+  border-right: 1px dashed currentColor;
+  border-bottom: 1px dashed currentColor;
   border-radius: 3px;
   opacity: 0.75;
 }
