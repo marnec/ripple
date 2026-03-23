@@ -270,39 +270,41 @@ const CALENDAR_CUSTOM_COMPONENTS = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Calendar header context — threads dynamic state into the schedule-x slot
+// Two contexts feed CalendarHeaderContent (the schedule-x header slot):
+//   CalendarHeaderConfigContext  — owned by ProjectCalendarContent (business state)
+//   CalendarInternalContext      — owned by CalendarRenderer (schedule-x-bound state)
+// Splitting them by ownership avoids a merged pass-through in CalendarRenderer.
 // ─────────────────────────────────────────────────────────────────────────────
 
-type CalendarHeaderContextValue = {
+type CalendarHeaderConfigValue = {
   commitmentMode: boolean;
   onCommitmentModeChange: (value: boolean) => void;
   unscheduledCount: number;
   sidebarOpen: boolean;
   onSidebarToggle: () => void;
+};
+
+const CalendarHeaderConfigContext = createContext<CalendarHeaderConfigValue | null>(null);
+
+type CalendarInternalValue = {
   calendarControls: ReturnType<typeof createCalendarControlsPlugin>;
   /** Bumped on every range update so the header re-reads the current date. */
   rangeVersion: number;
 };
 
-const CalendarHeaderContext = createContext<CalendarHeaderContextValue | null>(null);
+const CalendarInternalContext = createContext<CalendarInternalValue | null>(null);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Schedule-X headerContent slot — rendered inside the calendar by schedule-x
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CalendarHeaderContent() {
-  const ctx = useContext(CalendarHeaderContext);
-  if (!ctx) return null;
+  const config = useContext(CalendarHeaderConfigContext);
+  const internal = useContext(CalendarInternalContext);
+  if (!config || !internal) return null;
 
-  const {
-    commitmentMode,
-    onCommitmentModeChange,
-    unscheduledCount,
-    sidebarOpen,
-    onSidebarToggle,
-    calendarControls,
-    rangeVersion: _rangeVersion, // consumed only to trigger re-render on nav
-  } = ctx;
+  const { commitmentMode, onCommitmentModeChange, unscheduledCount, sidebarOpen, onSidebarToggle } = config;
+  const { calendarControls, rangeVersion: _rangeVersion } = internal; // _rangeVersion consumed to trigger re-render on nav
 
   const currentLabel = (() => {
     try {
@@ -635,6 +637,13 @@ function ProjectCalendarContent({
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
 
   return (
+    <CalendarHeaderConfigContext.Provider value={{
+      commitmentMode: ix.commitmentMode,
+      onCommitmentModeChange: ix.setCommitmentMode,
+      unscheduledCount: unscheduledTasks.length,
+      sidebarOpen: ix.sidebar.open,
+      onSidebarToggle: ix.sidebar.toggle,
+    }}>
     <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6 pb-4 gap-2">
       {/* Main area: calendar + right push sidebar (desktop only) */}
       <CalendarSidebarProvider
@@ -656,11 +665,6 @@ function ProjectCalendarContent({
             onEventClick={ix.onEventClick}
             onClickDate={ix.onClickDate}
             onClickCycle={ix.cycleSheet.onCycleClick}
-            commitmentMode={ix.commitmentMode}
-            onCommitmentModeChange={ix.setCommitmentMode}
-            unscheduledCount={unscheduledTasks.length}
-            sidebarOpen={ix.sidebar.open}
-            onSidebarToggle={ix.sidebar.toggle}
             wrapperRef={calendarWrapperRef}
           />
           {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
@@ -742,6 +746,7 @@ function ProjectCalendarContent({
         onClose={ix.cycleSheet.onClose}
       />
     </div>
+    </CalendarHeaderConfigContext.Provider>
   );
 }
 ProjectCalendarContent.whyDidYouRender = true;
@@ -963,11 +968,6 @@ function CalendarRenderer({
   onEventClick,
   onClickDate,
   onClickCycle,
-  commitmentMode,
-  onCommitmentModeChange,
-  unscheduledCount,
-  sidebarOpen,
-  onSidebarToggle,
   wrapperRef,
 }: {
   taskEvents: TaskCalendarEvent[];
@@ -977,14 +977,8 @@ function CalendarRenderer({
   onEventClick: (id: string | number) => void;
   onClickDate?: (date: string) => void;
   onClickCycle?: (name: string) => void;
-  commitmentMode: boolean;
-  onCommitmentModeChange: (value: boolean) => void;
-  unscheduledCount: number;
-  sidebarOpen: boolean;
-  onSidebarToggle: () => void;
   wrapperRef: React.RefObject<HTMLDivElement | null>;
 }) {
-
   // Stable ref so the event listener never needs to be re-registered.
   const onClickCycleRef = useRef(onClickCycle);
   useEffect(() => { onClickCycleRef.current = onClickCycle; });
@@ -1045,24 +1039,14 @@ function CalendarRenderer({
   useCalendarSync(calendarApp, taskEvents, bgEvents);
 
   return (
-    <CalendarHeaderContext.Provider
-      value={{
-        commitmentMode,
-        onCommitmentModeChange,
-        unscheduledCount,
-        sidebarOpen,
-        onSidebarToggle,
-        calendarControls,
-        rangeVersion,
-      }}
-    >
+    <CalendarInternalContext.Provider value={{ calendarControls, rangeVersion }}>
       <div style={{ height: "100%" }} ref={wrapperRef}>
         <ScheduleXCalendar
           calendarApp={calendarApp}
           customComponents={CALENDAR_CUSTOM_COMPONENTS}
         />
       </div>
-    </CalendarHeaderContext.Provider>
+    </CalendarInternalContext.Provider>
   );
 }
 CalendarRenderer.whyDidYouRender = true;
