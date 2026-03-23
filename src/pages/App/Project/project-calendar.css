@@ -106,6 +106,16 @@
   min-width: 0;
 }
 
+/* schedule-x subtracts ~9px from event width (calc(nDays*100% + nDays - 10px)).
+   Extend inner content and allow it to bleed so events fill the full cell. */
+.sx__calendar-wrapper .sx__month-grid-event {
+  overflow: visible;
+}
+.sx__calendar-wrapper .sx-event-content {
+  flex: none;
+  width: calc(100% + 10px);
+}
+
 .sx-event-dot {
   flex-shrink: 0;
   width: 7px;
