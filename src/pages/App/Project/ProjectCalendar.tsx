@@ -306,6 +306,11 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
   const meta: EventMeta = event._meta;
   const calendarId = calendarEvent.calendarId as string;
   const callbacks = useContext(CalendarTaskMenuContext);
+  const isMobile = useIsMobile();
+
+  // Controlled open — desktop only opens on mouseup after no drag.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const didDragRef = useRef(false);
 
   // Actual work-period events: read-only ghost style, no menu.
   if (meta.isActual) {
@@ -334,7 +339,10 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
       }}
       data-no-estimate={meta.hasEstimate ? undefined : "true"}
       draggable
+      onMouseDown={() => { didDragRef.current = false; }}
+      onMouseUp={() => { if (!isMobile && !didDragRef.current) setMenuOpen(true); }}
       onDragStart={(e) => {
+        didDragRef.current = true;
         e.dataTransfer.setData("task-id", String(calendarEvent.id));
         e.dataTransfer.effectAllowed = "move";
         calendarDragContext.setDragTask(String(calendarEvent.id));
@@ -362,7 +370,15 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
   if (!callbacks) return eventInner;
 
   return (
-    <ResponsiveDropdownMenu>
+    <ResponsiveDropdownMenu
+      open={menuOpen}
+      onOpenChange={(v) => {
+        // Mobile: allow normal trigger-based opens (no drag conflict).
+        // Desktop: only close here; opening is exclusively via onMouseUp above.
+        if (isMobile) { setMenuOpen(v); return; }
+        if (!v) setMenuOpen(false);
+      }}
+    >
       <ResponsiveDropdownMenuTrigger render={eventInner} />
       <ResponsiveDropdownMenuContent>
         <ResponsiveDropdownMenuItem onSelect={() => callbacks.onNavigate(meta.taskId)}>
