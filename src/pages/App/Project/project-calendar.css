@@ -8,7 +8,6 @@
    controls its own layout and spacing. */
 .sx__calendar-wrapper .sx__calendar-header {
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
 }
 
 .sx__calendar-wrapper {
