@@ -34,6 +34,7 @@ import { QueryParams } from "@shared/types/routes";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import {
   Drawer,
   DrawerContent,
@@ -132,6 +133,9 @@ type EventMeta = {
   hasActualData: boolean;
   actualHours?: number;
   plannedHours?: number;
+  /** Epoch ms — only set on isActual events, used for the hover tooltip. */
+  startMs?: number;
+  endMs?: number;
 };
 
 type CalendarTaskMenuContextValue = {
@@ -270,6 +274,8 @@ function buildWorkPeriodEvents(task: EnrichedTask): TaskCalendarEvent[] {
         hasActualData: false,
         actualHours: undefined,
         plannedHours: undefined,
+        startMs: p.startedAt,
+        endMs: p.completedAt,
       };
       return {
         id: `actual-${task._id}-${i}`,
@@ -298,6 +304,58 @@ function buildCycleBackgroundEvents(cycles: CycleWithProgress[]): BackgroundEven
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Actual event tooltip formatter
+// ─────────────────────────────────────────────────────────────────────────────
+
+function formatWorkPeriodTooltip(startMs: number, endMs: number): string {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const start = Temporal.Instant.fromEpochMilliseconds(startMs).toZonedDateTimeISO(tz);
+  const end = Temporal.Instant.fromEpochMilliseconds(endMs).toZonedDateTimeISO(tz);
+  const fmtTime = (d: Temporal.ZonedDateTime) =>
+    d.toPlainTime().toLocaleString("en-US", { hour: "numeric", minute: "2-digit" });
+  const fmtDate = (d: Temporal.ZonedDateTime) =>
+    d.toPlainDate().toLocaleString("en-US", { month: "short", day: "numeric" });
+  const sameDay = Temporal.PlainDate.compare(start.toPlainDate(), end.toPlainDate()) === 0;
+  return sameDay
+    ? `${fmtDate(start)} · ${fmtTime(start)} – ${fmtTime(end)}`
+    : `${fmtDate(start)} ${fmtTime(start)} – ${fmtDate(end)} ${fmtTime(end)}`;
+}
+
+function ActualEventContent({ meta, title }: { meta: EventMeta; title: string }) {
+  const [hovered, setHovered] = useState(false);
+
+  const inner = (
+    <div
+      className="sx-event-content"
+      style={{
+        backgroundColor: "transparent",
+        border: `1.5px dashed ${meta.statusColor}`,
+        borderInlineStart: undefined,
+        opacity: hovered ? 1 : 0.55,
+        transition: "opacity 0.12s",
+        cursor: "default",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <span className="sx-event-dot" style={{ backgroundColor: meta.statusColor }} />
+      <span className="sx-event-title">{title}</span>
+    </div>
+  );
+
+  if (meta.startMs == null || meta.endMs == null) return inner;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={inner} />
+      <TooltipContent side="top">
+        {formatWorkPeriodTooltip(meta.startMs, meta.endMs)}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Custom event content — status dot + title (draggable for rescheduling)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -312,22 +370,9 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const didDragRef = useRef(false);
 
-  // Actual work-period events: read-only ghost style, no menu.
+  // Actual work-period events: hover highlight + tooltip.
   if (meta.isActual) {
-    return (
-      <div
-        className="sx-event-content"
-        style={{
-          backgroundColor: "transparent",
-          border: `1.5px dashed ${meta.statusColor}`,
-          borderInlineStart: undefined,
-          opacity: 0.65,
-        }}
-      >
-        <span className="sx-event-dot" style={{ backgroundColor: meta.statusColor }} />
-        <span className="sx-event-title">{calendarEvent.title}</span>
-      </div>
-    );
+    return <ActualEventContent meta={meta} title={calendarEvent.title} />;
   }
 
   const eventInner = (
@@ -380,7 +425,7 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
       }}
     >
       <ResponsiveDropdownMenuTrigger render={eventInner} />
-      <ResponsiveDropdownMenuContent>
+      <ResponsiveDropdownMenuContent className="w-auto">
         <ResponsiveDropdownMenuItem onSelect={() => callbacks.onNavigate(meta.taskId)}>
           View task details
         </ResponsiveDropdownMenuItem>
