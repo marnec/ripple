@@ -820,7 +820,7 @@ function ProjectCalendarContent({
         <CalendarSidebar side="right" className="hidden md:flex">
           {/* Top section: unscheduled tasks (draggable) */}
           <CalendarSidebarHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mt-1.5">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Unscheduled
               </span>
