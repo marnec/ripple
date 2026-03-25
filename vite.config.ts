@@ -61,6 +61,7 @@ export default defineConfig({
   ],
   test: {
     setupFiles: ["./tests/setup.ts"],
+    exclude: ["**/node_modules/**", "**/dist/**", "convex-authz/**", "audit-log/**"],
   },
   css: { devSourcemap: true },
   build: { sourcemap: true },

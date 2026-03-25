@@ -17,6 +17,7 @@ export default tseslint.config(
       "vitest.workspace.ts",
       "src/components/ui/**",
       "audit-log/**",
+      "convex-authz/**",
     ],
   },
   {
