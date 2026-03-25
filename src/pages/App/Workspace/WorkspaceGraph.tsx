@@ -146,8 +146,7 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
     const connectedNodes = (graph.nodes as GraphNode[]).filter((n) => !hiddenTypes.has(n.type));
     const visibleIds = new Set(connectedNodes.map((n) => n.id));
 
-    // Count connected nodes per type, including group parents
-    // (channels referenced by message groupId, projects referenced by task groupId)
+    // Count connected nodes per type, including task group parents (projectId)
     const connectedCounts = new Map<string, number>();
     const countedIds = new Set<string>();
     for (const node of connectedNodes) {
@@ -155,14 +154,10 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
         countedIds.add(node.id);
         connectedCounts.set(node.type, (connectedCounts.get(node.type) ?? 0) + 1);
       }
-      // Group parent is implicitly connected
-      if (node.groupId && !countedIds.has(node.groupId)) {
+      // Task groupId = projectId — count the project as implicitly connected
+      if (node.type === "task" && node.groupId && !countedIds.has(node.groupId)) {
         countedIds.add(node.groupId);
-        // Infer parent type from child type
-        const parentType = node.type === "task" ? "project" : node.type === "message" ? "channel" : undefined;
-        if (parentType) {
-          connectedCounts.set(parentType, (connectedCounts.get(parentType) ?? 0) + 1);
-        }
+        connectedCounts.set("project", (connectedCounts.get("project") ?? 0) + 1);
       }
     }
 

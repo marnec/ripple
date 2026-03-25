@@ -4,6 +4,7 @@ import type { DataModel, Id } from "./_generated/dataModel.js";
 import { internalMutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { auditLog } from "./auditLog.js";
+import { extractMessageTargets } from "./utils/blocknote.js";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 
@@ -109,6 +110,10 @@ export const runAll = migrations.runner([
   internal.migrations.backfillProjectNodes,
   internal.migrations.backfillChannelNodes,
   internal.migrations.backfillTaskNodes,
+  internal.migrations.stripMessageEdges,
+  internal.migrations.stripEdgeGroupId,
+  internal.migrations.backfillChannelMentionEdges,
+  internal.migrations.backfillTaskBelongsToEdges,
 ]);
 
 /**
@@ -486,6 +491,75 @@ export const backfillTaskNodes = migrations.define({
       resourceId: task._id,
       name: task.title,
       tags: task.labels ?? [],
+    });
+  },
+});
+
+// ── Edge refactor migrations ─────────────────────────────────────────
+// Remove legacy message-source edges (replaced by channel-source edges).
+// Strip groupId from all edges (field removed from schema).
+// Backfill belongs_to edges for all existing tasks.
+
+export const stripMessageEdges = migrations.define({
+  table: "edges",
+  migrateOne: async (ctx, edge) => {
+    const legacy = edge as Record<string, unknown>;
+    if (legacy.sourceType === "message") {
+      await ctx.db.delete(edge._id);
+    }
+  },
+});
+
+export const stripEdgeGroupId = migrations.define({
+  table: "edges",
+  migrateOne: async (ctx, edge) => {
+    const legacy = edge as Record<string, unknown>;
+    if (legacy.groupId !== undefined) {
+      await ctx.db.patch(edge._id, { groupId: undefined } as never);
+    }
+  },
+});
+
+export const backfillChannelMentionEdges = migrations.define({
+  table: "messages",
+  migrateOne: async (ctx, message) => {
+    if (message.deleted) return;
+    const targets = extractMessageTargets(message.body);
+    if (targets.length === 0) return;
+    const channel = await ctx.db.get(message.channelId);
+    if (!channel) return;
+    for (const target of targets) {
+      await ctx.db.insert("edges", {
+        sourceType: "channel" as "document", // cast: generated types lag behind schema
+        sourceId: channel._id,
+        targetType: target.targetType,
+        targetId: target.targetId,
+        edgeType: "mentions",
+        workspaceId: channel.workspaceId,
+        createdAt: message._creationTime,
+      } as never);
+    }
+  },
+});
+
+export const backfillTaskBelongsToEdges = migrations.define({
+  table: "tasks",
+  migrateOne: async (ctx, task) => {
+    const existing = await ctx.db
+      .query("edges")
+      .withIndex("by_source_target", (q) =>
+        q.eq("sourceId", task._id).eq("targetId", task.projectId),
+      )
+      .first();
+    if (existing) return;
+    await ctx.db.insert("edges", {
+      sourceType: "task",
+      sourceId: task._id,
+      targetType: "project",
+      targetId: task.projectId,
+      edgeType: "belongs_to" as "embeds",
+      workspaceId: task.workspaceId,
+      createdAt: task._creationTime,
     });
   },
 });

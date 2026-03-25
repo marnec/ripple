@@ -435,10 +435,16 @@ export type DataModel = {
     document: {
       createdAt: number;
       createdBy?: Id<"users">;
-      edgeType: "embeds" | "blocks" | "relates_to" | "mentions";
+      edgeType: "embeds" | "blocks" | "relates_to" | "mentions" | "belongs_to";
       groupId?: string;
       sourceId: string;
-      sourceType: "document" | "task" | "diagram" | "spreadsheet" | "message";
+      sourceType:
+        | "document"
+        | "task"
+        | "diagram"
+        | "spreadsheet"
+        | "channel"
+        | "message";
       targetId: string;
       targetType:
         | "document"
@@ -467,7 +473,6 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_group_target: ["groupId", "targetId", "_creationTime"];
       by_source: ["sourceId", "_creationTime"];
       by_source_target: ["sourceId", "targetId", "_creationTime"];
       by_target: ["targetId", "_creationTime"];

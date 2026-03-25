@@ -522,8 +522,7 @@ describe("edges.syncMentionEdges", () => {
   });
 });
 
-describe("message edges (via messages.send/update/remove)", () => {
-  /** Helper to create a channel and return its ID. */
+describe("channel mention edges (via messages trigger)", () => {
   async function setupChannel(
     t: ReturnType<typeof createTestContext>,
     opts: { workspaceId: Id<"workspaces">; name?: string },
@@ -537,7 +536,6 @@ describe("message edges (via messages.send/update/remove)", () => {
     });
   }
 
-  /** Build a BlockNote JSON body with a user mention. */
   function bodyWithUserMention(userId: string): string {
     return JSON.stringify([{
       type: "paragraph",
@@ -545,7 +543,6 @@ describe("message edges (via messages.send/update/remove)", () => {
     }]);
   }
 
-  /** Build a BlockNote JSON body with a task mention. */
   function bodyWithTaskMention(taskId: string): string {
     return JSON.stringify([{
       type: "paragraph",
@@ -553,94 +550,57 @@ describe("message edges (via messages.send/update/remove)", () => {
     }]);
   }
 
-  it("should create edges when sending a message with mentions", async () => {
+  it("sending a message with a mention creates a channel→target edge", async () => {
     const t = createTestContext();
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await setupChannel(t, { workspaceId });
+    const mentionedUserId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Alice", email: "alice@test.com" }),
+    );
 
-    // Create a user to mention
-    const mentionedUserId = await t.run(async (ctx) => {
-      return await ctx.db.insert("users", { name: "Alice", email: "alice@test.com" });
-    });
-
-    const body = bodyWithUserMention(mentionedUserId);
     await asUser.mutation(api.messages.send, {
       isomorphicId: "test-1",
-      body,
+      body: bodyWithUserMention(mentionedUserId),
       plainText: "@Alice",
       channelId,
     });
 
-    // Check edges
-    const edges = await t.run(async (ctx) => {
-      return await ctx.db.query("edges").collect();
-    });
-
-    const mentionEdges = edges.filter((e) => e.edgeType === "mentions" && e.sourceType === "message");
+    const edges = await t.run(async (ctx) => ctx.db.query("edges").collect());
+    const mentionEdges = edges.filter((e) => e.edgeType === "mentions");
     expect(mentionEdges).toHaveLength(1);
-    expect(mentionEdges[0].targetType).toBe("user");
+    expect(mentionEdges[0].sourceType).toBe("channel");
+    expect(mentionEdges[0].sourceId).toBe(channelId);
     expect(mentionEdges[0].targetId).toBe(mentionedUserId);
-    expect(mentionEdges[0].groupId).toBe(channelId);
   });
 
-  it("should re-sync edges when message is updated", async () => {
-    const t = createTestContext();
-    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
-    const channelId = await setupChannel(t, { workspaceId });
-    const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
-    const taskId = await createTask(t, { projectId, workspaceId, statusId: todoId, userId, title: "My Task" });
-
-    // Send message with task mention
-    const body1 = bodyWithTaskMention(taskId);
-    await asUser.mutation(api.messages.send, {
-      isomorphicId: "test-2",
-      body: body1,
-      plainText: "#My Task",
-      channelId,
-    });
-
-    // Get message ID
-    const messageId = await t.run(async (ctx) => {
-      const msgs = await ctx.db.query("messages").withIndex("by_channel", (q) => q.eq("channelId", channelId)).collect();
-      return msgs[0]._id;
-    });
-
-    // Update message to remove task mention and add user mention
-    const mentionedUserId = await t.run(async (ctx) => {
-      return await ctx.db.insert("users", { name: "Bob", email: "bob@test.com" });
-    });
-    const body2 = bodyWithUserMention(mentionedUserId);
-
-    await asUser.mutation(api.messages.update, {
-      id: messageId,
-      body: body2,
-      plainText: "@Bob",
-    });
-
-    const edges = await t.run(async (ctx) => {
-      return await ctx.db.query("edges")
-        .withIndex("by_source", (q) => q.eq("sourceId", messageId))
-        .collect();
-    });
-
-    expect(edges).toHaveLength(1);
-    expect(edges[0].targetType).toBe("user");
-    expect(edges[0].targetId).toBe(mentionedUserId);
-  });
-
-  it("should remove edges when message is soft-deleted", async () => {
+  it("second message with same mention in same channel creates a second edge row", async () => {
     const t = createTestContext();
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await setupChannel(t, { workspaceId });
-
-    const mentionedUserId = await t.run(async (ctx) => {
-      return await ctx.db.insert("users", { name: "Carol", email: "carol@test.com" });
-    });
-
+    const mentionedUserId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Bob", email: "bob@test.com" }),
+    );
     const body = bodyWithUserMention(mentionedUserId);
+
+    await asUser.mutation(api.messages.send, { isomorphicId: "test-2a", body, plainText: "@Bob", channelId });
+    await asUser.mutation(api.messages.send, { isomorphicId: "test-2b", body, plainText: "@Bob", channelId });
+
+    const edges = await t.run(async (ctx) => ctx.db.query("edges").collect());
+    const mentionEdges = edges.filter((e) => e.edgeType === "mentions");
+    expect(mentionEdges).toHaveLength(2);
+  });
+
+  it("updating a message to remove a mention deletes one edge row", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId });
+    const mentionedUserId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Carol", email: "carol@test.com" }),
+    );
+
     await asUser.mutation(api.messages.send, {
       isomorphicId: "test-3",
-      body,
+      body: bodyWithUserMention(mentionedUserId),
       plainText: "@Carol",
       channelId,
     });
@@ -650,40 +610,116 @@ describe("message edges (via messages.send/update/remove)", () => {
       return msgs[0]._id;
     });
 
-    await asUser.mutation(api.messages.remove, { id: messageId });
-
-    const edges = await t.run(async (ctx) => {
-      return await ctx.db.query("edges")
-        .withIndex("by_source", (q) => q.eq("sourceId", messageId))
-        .collect();
+    // Update message to remove mention
+    await asUser.mutation(api.messages.update, {
+      id: messageId,
+      body: JSON.stringify([{ type: "paragraph", content: [] }]),
+      plainText: "",
     });
 
-    expect(edges).toHaveLength(0);
+    const edges = await t.run(async (ctx) => ctx.db.query("edges").collect());
+    expect(edges.filter((e) => e.edgeType === "mentions")).toHaveLength(0);
   });
 
-  it("should show message backlinks with channel name", async () => {
+  it("soft-deleting a message removes its edge rows", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId });
+    const mentionedUserId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Dave", email: "dave@test.com" }),
+    );
+    const body = bodyWithUserMention(mentionedUserId);
+
+    // Two messages both mentioning the same user → 2 edge rows
+    await asUser.mutation(api.messages.send, { isomorphicId: "test-4a", body, plainText: "@Dave", channelId });
+    await asUser.mutation(api.messages.send, { isomorphicId: "test-4b", body, plainText: "@Dave", channelId });
+
+    const messages = await t.run(async (ctx) =>
+      ctx.db.query("messages").withIndex("by_channel", (q) => q.eq("channelId", channelId)).collect(),
+    );
+
+    // Delete first message — one edge row removed, one survives
+    await asUser.mutation(api.messages.remove, { id: messages[0]._id });
+    const afterFirst = await t.run(async (ctx) => ctx.db.query("edges").collect());
+    expect(afterFirst.filter((e) => e.edgeType === "mentions")).toHaveLength(1);
+
+    // Delete second message — last edge row removed
+    await asUser.mutation(api.messages.remove, { id: messages[1]._id });
+    const afterSecond = await t.run(async (ctx) => ctx.db.query("edges").collect());
+    expect(afterSecond.filter((e) => e.edgeType === "mentions")).toHaveLength(0);
+  });
+
+  it("channel backlinks show the channel name as sourceName", async () => {
     const t = createTestContext();
     const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await setupChannel(t, { workspaceId, name: "engineering" });
     const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
     const taskId = await createTask(t, { projectId, workspaceId, statusId: todoId, userId, title: "My Task" });
 
-    const body = bodyWithTaskMention(taskId);
     await asUser.mutation(api.messages.send, {
-      isomorphicId: "test-4",
-      body,
+      isomorphicId: "test-5",
+      body: bodyWithTaskMention(taskId),
       plainText: "#My Task",
       channelId,
     });
 
-    const backlinks = await asUser.query(api.edges.getBacklinks, {
-      targetId: taskId,
-    });
+    const backlinks = await asUser.query(api.edges.getBacklinks, { targetId: taskId });
+    // Filter out belongs_to edges (task→project), keep only mentions
+    const mentionBacklinks = backlinks.filter((b) => b.edgeType === "mentions");
+    expect(mentionBacklinks).toHaveLength(1);
+    expect(mentionBacklinks[0].sourceType).toBe("channel");
+    expect(mentionBacklinks[0].sourceName).toBe("#engineering");
+    expect(mentionBacklinks[0].edgeType).toBe("mentions");
+  });
+});
 
-    expect(backlinks).toHaveLength(1);
-    expect(backlinks[0].sourceType).toBe("message");
-    expect(backlinks[0].sourceName).toBe("#engineering");
-    expect(backlinks[0].edgeType).toBe("mentions");
-    expect(backlinks[0].groupId).toBe(channelId);
+describe("task belongs_to edges (via trigger)", () => {
+  /** Create a task through writerWithTriggers so all triggers fire. */
+  async function createTaskWithTriggers(
+    t: ReturnType<typeof createTestContext>,
+    opts: { projectId: Id<"projects">; workspaceId: Id<"workspaces">; statusId: Id<"taskStatuses">; userId: Id<"users">; title: string },
+  ) {
+    return await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      return await db.insert("tasks", {
+        projectId: opts.projectId,
+        workspaceId: opts.workspaceId,
+        title: opts.title,
+        statusId: opts.statusId,
+        priority: "medium",
+        completed: false,
+        creatorId: opts.userId,
+      });
+    });
+  }
+
+  it("creating a task creates a belongs_to edge to its project", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
+    const taskId = await createTaskWithTriggers(t, { projectId, workspaceId, statusId: todoId, userId, title: "My Task" });
+
+    const edges = await t.run(async (ctx) =>
+      ctx.db.query("edges").withIndex("by_source", (q) => q.eq("sourceId", taskId)).collect(),
+    );
+    const belongsTo = edges.filter((e) => (e.edgeType as string) === "belongs_to");
+    expect(belongsTo).toHaveLength(1);
+    expect(belongsTo[0].sourceType).toBe("task");
+    expect(belongsTo[0].targetType).toBe("project");
+    expect(belongsTo[0].targetId).toBe(projectId);
+  });
+
+  it("deleting a task removes its belongs_to edge", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
+    const taskId = await createTaskWithTriggers(t, { projectId, workspaceId, statusId: todoId, userId, title: "Doomed Task" });
+
+    await asUser.mutation(api.tasks.remove, { taskId });
+
+    const edges = await t.run(async (ctx) =>
+      ctx.db.query("edges").withIndex("by_source", (q) => q.eq("sourceId", taskId)).collect(),
+    );
+    expect(edges.filter((e) => (e.edgeType as string) === "belongs_to")).toHaveLength(0);
   });
 });

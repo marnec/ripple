@@ -606,7 +606,6 @@ export declare const api: {
       Array<{
         _id: Id<"edges">;
         edgeType: string;
-        groupId?: string;
         projectId?: string;
         sourceId: string;
         sourceName: string;
@@ -2370,6 +2369,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillChannelMentionEdges: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillChannelNodes: FunctionReference<
       "mutation",
       "internal",
@@ -2502,6 +2513,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillTaskBelongsToEdges: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillTaskNodes: FunctionReference<
       "mutation",
       "internal",
@@ -2598,6 +2621,30 @@ export declare const internal: {
       any
     >;
     stripDocumentFields: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    stripEdgeGroupId: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    stripMessageEdges: FunctionReference<
       "mutation",
       "internal",
       {

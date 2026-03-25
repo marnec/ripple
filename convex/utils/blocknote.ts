@@ -273,3 +273,28 @@ export function extractResourceReferenceIds(documentJson: string): Array<{ id: s
     return [];
   }
 }
+
+/**
+ * Extract all reference targets from a message body (users, tasks, projects, resources).
+ * Pure function — no DB access.
+ */
+export function extractMessageTargets(body: string): Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> {
+  const targets: Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> = [];
+  const seen = new Set<string>();
+
+  const add = (targetType: typeof targets[number]["targetType"], targetId: string) => {
+    if (!seen.has(targetId)) {
+      seen.add(targetId);
+      targets.push({ targetType, targetId });
+    }
+  };
+
+  for (const userId of extractMentionedUserIds(body)) add("user", userId);
+  for (const taskId of extractTaskMentionIds(body)) add("task", taskId);
+  for (const projectId of extractProjectIds(body)) add("project", projectId);
+  for (const ref of extractResourceReferenceIds(body)) {
+    add(ref.type as "document" | "diagram" | "spreadsheet", ref.id);
+  }
+
+  return targets;
+}

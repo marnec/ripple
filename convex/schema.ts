@@ -337,7 +337,8 @@ export default defineSchema({
       v.literal("task"),
       v.literal("diagram"),
       v.literal("spreadsheet"),
-      v.literal("message"),
+      v.literal("channel"),
+      v.literal("message"), // TODO: remove after stripMessageEdges migration runs
     ),
     sourceId: v.string(),
     targetType: v.union(
@@ -355,17 +356,17 @@ export default defineSchema({
       v.literal("blocks"),
       v.literal("relates_to"),
       v.literal("mentions"),
+      v.literal("belongs_to"),
     ),
     workspaceId: v.id("workspaces"),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
-    groupId: v.optional(v.string()), // generic grouping (e.g. channelId for message edges)
+    groupId: v.optional(v.string()), // TODO: remove after stripEdgeGroupId migration runs
   })
     .index("by_target", ["targetId"])
     .index("by_source", ["sourceId"])
     .index("by_source_target", ["sourceId", "targetId"])
     .index("by_workspace_target", ["workspaceId", "targetId"])
-    .index("by_group_target", ["groupId", "targetId"])
     .index("by_workspace", ["workspaceId"]),
 
   nodes: defineTable({

@@ -5,12 +5,6 @@ import { GenericQueryCtx } from "convex/server";
 import type { DataModel } from "./_generated/dataModel";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { logTaskActivity } from "./auditLog";
-import {
-  extractMentionedUserIds,
-  extractTaskMentionIds,
-  extractProjectIds,
-  extractResourceReferenceIds,
-} from "./utils/blocknote";
 
 // ── Validators ──────────────────────────────────────────────────────
 
@@ -22,7 +16,6 @@ const backlinkValidator = v.object({
   edgeType: v.string(),
   workspaceId: v.string(),
   projectId: v.optional(v.string()),
-  groupId: v.optional(v.string()),
 });
 
 const enrichedDepTaskValidator = v.object({
@@ -55,7 +48,6 @@ export async function getEnrichedBacklinks(
   edgeType: string;
   workspaceId: string;
   projectId?: string;
-  groupId?: string;
 }>> {
   const edges = await ctx.db
     .query("edges")
@@ -64,30 +56,24 @@ export async function getEnrichedBacklinks(
 
   return Promise.all(
     edges.map(async (edge) => {
-      let sourceName = "Unknown";
+      // Look up name via nodes table (all resource types are indexed there)
+      const node = await ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", edge.sourceId))
+        .first();
+      let sourceName = node?.name;
+      // Fallback for channels: look up directly if node not yet indexed
+      if (!sourceName && edge.sourceType === "channel") {
+        const channel = await ctx.db.get(edge.sourceId as Id<"channels">);
+        sourceName = channel?.name ? `#${channel.name}` : undefined;
+      }
+      sourceName ??= `Deleted ${edge.sourceType}`;
+
+      // Tasks need projectId for backlink display navigation
       let projectId: string | undefined;
-
-      if (edge.sourceType === "message") {
-        const message = await ctx.db.get(edge.sourceId as Id<"messages">);
-        if (message) {
-          const channel = await ctx.db.get(message.channelId);
-          sourceName = channel?.name ? `#${channel.name}` : "Deleted channel";
-        } else {
-          sourceName = "Deleted message";
-        }
-      } else {
-        // All resource types (document, task, diagram, spreadsheet, project, channel) are in nodes table
-        const node = await ctx.db
-          .query("nodes")
-          .withIndex("by_resource", (q) => q.eq("resourceId", edge.sourceId))
-          .first();
-        sourceName = node?.name ?? `Deleted ${edge.sourceType}`;
-
-        // Tasks still need projectId for backlink display
-        if (edge.sourceType === "task") {
-          const task = await ctx.db.get(edge.sourceId as Id<"tasks">);
-          projectId = task?.projectId;
-        }
+      if (edge.sourceType === "task") {
+        const task = await ctx.db.get(edge.sourceId as Id<"tasks">);
+        projectId = task?.projectId;
       }
 
       return {
@@ -98,7 +84,6 @@ export async function getEnrichedBacklinks(
         edgeType: edge.edgeType as string,
         workspaceId: edge.workspaceId as string,
         projectId,
-        groupId: edge.groupId,
       };
     }),
   );
@@ -157,13 +142,6 @@ export const syncEdges = mutation({
       }
     }
 
-    // Resolve source groupId once (projectId for tasks)
-    let groupId: string | undefined;
-    if (sourceType === "task") {
-      const task = await ctx.db.get(sourceId as Id<"tasks">);
-      groupId = task?.projectId;
-    }
-
     // Insert added
     for (const ref of references) {
       if (!existingByTarget.has(ref.targetId)) {
@@ -176,7 +154,6 @@ export const syncEdges = mutation({
           workspaceId,
           createdBy: userId,
           createdAt: Date.now(),
-          groupId,
         });
       }
     }
@@ -229,13 +206,6 @@ export const syncMentionEdges = mutation({
       }
     }
 
-    // Resolve source groupId once (projectId for tasks)
-    let groupId: string | undefined;
-    if (sourceType === "task") {
-      const task = await ctx.db.get(sourceId as Id<"tasks">);
-      groupId = task?.projectId;
-    }
-
     // Insert added
     for (const mentionedUserId of mentionedUserIds) {
       if (!existingByTarget.has(mentionedUserId)) {
@@ -248,7 +218,6 @@ export const syncMentionEdges = mutation({
           workspaceId,
           createdBy: userId,
           createdAt: Date.now(),
-          groupId,
         });
       }
     }
@@ -323,7 +292,6 @@ export const createEdge = mutation({
       workspaceId: task.workspaceId,
       createdBy: userId,
       createdAt: Date.now(),
-      groupId: task.projectId,
     });
 
     // Log activity
@@ -381,33 +349,6 @@ export const removeEdge = mutation({
     return null;
   },
 });
-
-// ── Message edges ───────────────────────────────────────────────────
-
-/**
- * Extract all reference targets from a message body.
- * Pure function — no DB access.
- */
-export function extractMessageTargets(body: string): Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> {
-  const targets: Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> = [];
-  const seen = new Set<string>();
-
-  const add = (targetType: typeof targets[number]["targetType"], targetId: string) => {
-    if (!seen.has(targetId)) {
-      seen.add(targetId);
-      targets.push({ targetType, targetId });
-    }
-  };
-
-  for (const userId of extractMentionedUserIds(body)) add("user", userId);
-  for (const taskId of extractTaskMentionIds(body)) add("task", taskId);
-  for (const projectId of extractProjectIds(body)) add("project", projectId);
-  for (const ref of extractResourceReferenceIds(body)) {
-    add(ref.type as "document" | "diagram" | "spreadsheet", ref.id);
-  }
-
-  return targets;
-}
 
 // ── Cascade cleanup ─────────────────────────────────────────────────
 
@@ -620,27 +561,11 @@ export const getWorkspaceGraph = query({
       ctx.db.query("edges").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
     ]);
 
-    // Build groupId map from edges (task sources have projectId denormalized as groupId)
+    // Build task groupIds from belongs_to edges (task → project containment)
     const nodeGroupIds = new Map<string, string>();
     for (const edge of edgeRows) {
-      if (edge.groupId && !nodeGroupIds.has(edge.sourceId)) {
-        nodeGroupIds.set(edge.sourceId, edge.groupId);
-      }
-    }
-
-    // For task nodes without a groupId from edges, do parallel lookups
-    const taskNodesNeedingGroupId = nodeRows.filter(
-      (n) => n.resourceType === "task" && !nodeGroupIds.has(n.resourceId),
-    );
-    if (taskNodesNeedingGroupId.length > 0) {
-      const resolved = await Promise.all(
-        taskNodesNeedingGroupId.map(async (n) => {
-          const task = await ctx.db.get(n.resourceId as Id<"tasks">);
-          return [n.resourceId, task?.projectId] as const;
-        }),
-      );
-      for (const [id, groupId] of resolved) {
-        if (groupId) nodeGroupIds.set(id, groupId);
+      if ((edge.edgeType as string) === "belongs_to") {
+        nodeGroupIds.set(edge.sourceId, edge.targetId);
       }
     }
 
@@ -651,43 +576,30 @@ export const getWorkspaceGraph = query({
       groupId: nodeGroupIds.get(n.resourceId),
     }));
 
-    // Also include message and user nodes referenced in edges (not in nodes table)
-    const extraNodeIds = new Map<string, string>(); // id → type
+    // Collect user nodes referenced in edges (not in nodes table)
+    const userNodeIds = new Set<string>();
     for (const edge of edgeRows) {
-      if (edge.sourceType === "message") extraNodeIds.set(edge.sourceId, "message");
-      if (edge.targetType === "user") extraNodeIds.set(edge.targetId, "user");
+      if (edge.targetType === "user") userNodeIds.add(edge.targetId);
     }
-
-    // Resolve groupIds for message nodes (channelId)
-    const messageIds = [...extraNodeIds.entries()]
-      .filter(([, type]) => type === "message")
-      .map(([id]) => id);
-    if (messageIds.length > 0) {
-      const resolved = await Promise.all(
-        messageIds.map(async (id) => {
-          const message = await ctx.db.get(id as Id<"messages">);
-          return [id, message?.channelId] as const;
-        }),
-      );
-      for (const [id, groupId] of resolved) {
-        nodes.push({ id, type: "message", groupId: groupId as string | undefined });
-      }
-    }
-
-    for (const [id, type] of extraNodeIds) {
-      if (type !== "message") {
-        nodes.push({ id, type });
-      }
+    for (const id of userNodeIds) {
+      nodes.push({ id, type: "user" });
     }
 
     const validNodeIds = new Set(nodes.map((n) => n.id));
-    const links = edgeRows
-      .filter((e) => validNodeIds.has(e.sourceId) && validNodeIds.has(e.targetId))
-      .map((e) => ({
-        source: e.sourceId,
-        target: e.targetId,
-        edgeType: e.edgeType as string,
-      }));
+
+    // belongs_to edges are structural (task→project grouping), not semantic links to display.
+    // Deduplicate by (sourceId, targetId) since multiple messages in the same channel can
+    // each insert their own edge row for the same channel→target pair.
+    const seenLinks = new Set<string>();
+    const links: Array<{ source: string; target: string; edgeType: string }> = [];
+    for (const e of edgeRows) {
+      if ((e.edgeType as string) === "belongs_to") continue;
+      if (!validNodeIds.has(e.sourceId) || !validNodeIds.has(e.targetId)) continue;
+      const key = `${e.sourceId}:${e.targetId}`;
+      if (seenLinks.has(key)) continue;
+      seenLinks.add(key);
+      links.push({ source: e.sourceId, target: e.targetId, edgeType: e.edgeType as string });
+    }
 
     return { nodes, links };
   },
