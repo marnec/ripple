@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { api } from "../../../../convex/_generated/api";
@@ -10,6 +10,7 @@ import { getNodeColor, getNodeSize } from "./graphConstants";
 type GraphNode = NodeObject & {
   id: string;
   type: string;
+  name?: string;
   groupId?: string;
   isolated?: boolean;
 };
@@ -61,24 +62,6 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
   }, [highlightedType]);
   const nodesRef = useRef<GraphNode[]>([]);
 
-  // ── Lazy label loading with 200ms debounce ──────────────────────────
-  const labelCacheRef = useRef(new Map<string, string>());
-  const [labelQuery, setLabelQuery] = useState<{ id: string; type: string } | null>(null);
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const labelResult = useQuery(
-    api.edges.getNodeLabel,
-    labelQuery ? { id: labelQuery.id, type: labelQuery.type } : "skip",
-  );
-
-  // Cache the label result when it arrives
-  useEffect(() => {
-    if (labelResult && labelQuery) {
-      labelCacheRef.current.set(labelQuery.id, labelResult);
-    }
-  }, [labelResult, labelQuery]);
-
-
   // Clamp node positions on every tick
   const handleEngineTick = () => {
     if (width === 0 || height === 0) return;
@@ -108,21 +91,6 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
     hoveredNodeRef.current = node?.id ?? null;
     if (wrapperRef.current) {
       wrapperRef.current.style.cursor = node && !node.isolated ? "pointer" : "default";
-    }
-
-    // Clear pending timer
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-
-    // Start 200ms debounce for label fetch
-    if (node && !node.isolated && !labelCacheRef.current.has(node.id)) {
-      const nodeId = node.id;
-      const nodeType = node.type;
-      hoverTimerRef.current = setTimeout(() => {
-        setLabelQuery({ id: nodeId, type: nodeType });
-      }, 200);
     }
   };
 
@@ -154,15 +122,13 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      // Show label: only on hover for all nodes, or when zoomed in / type-highlighted for connected nodes with cached labels
+      // Show label: always on hover; also when zoomed in or type-highlighted for connected nodes
       const zoom = ctx.getTransform().a;
       const showLabel = node.isolated ? isHovered : (zoom > 3 || isHighlighted);
       if (showLabel) {
-        const cachedLabel = node.isolated
-          ? `isolated ${node.type}`
-          : labelCacheRef.current.get(node.id);
-        if (cachedLabel) {
-          const label = cachedLabel.length > 20 ? cachedLabel.slice(0, 18) + "…" : cachedLabel;
+        const rawLabel = node.isolated ? `isolated ${node.type}` : node.name;
+        if (rawLabel) {
+          const label = rawLabel.length > 20 ? rawLabel.slice(0, 18) + "…" : rawLabel;
           ctx.font = `${isHighlighted ? "bold " : ""}3px sans-serif`;
           ctx.textAlign = "center";
           ctx.textBaseline = "top";
