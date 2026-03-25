@@ -1,8 +1,9 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { paginationOptsValidator } from "convex/server";
+import { GenericQueryCtx, paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import type { DataModel } from "./_generated/dataModel";
 
 const resourceTypeValidator = v.union(
   v.literal("document"),
@@ -14,14 +15,15 @@ const resourceTypeValidator = v.union(
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project";
 
 async function resolveResource(
-  ctx: { db: { get: (id: Id<"documents"> | Id<"diagrams"> | Id<"spreadsheets"> | Id<"projects">) => Promise<{ name: string } | null> } },
+  ctx: GenericQueryCtx<DataModel>,
   resourceId: string,
 ): Promise<{ name: string } | null> {
-  // Cast is safe — resourceId is always a valid ID from the favorites table
-  type AnyResourceId = Id<"documents"> | Id<"diagrams"> | Id<"spreadsheets"> | Id<"projects">;
-  const doc = await ctx.db.get(resourceId as AnyResourceId);
-  if (!doc) return null;
-  return { name: doc.name };
+  const node = await ctx.db
+    .query("nodes")
+    .withIndex("by_resource", (q) => q.eq("resourceId", resourceId))
+    .first();
+  if (!node) return null;
+  return { name: node.name };
 }
 
 export const toggle = mutation({

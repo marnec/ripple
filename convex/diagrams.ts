@@ -119,7 +119,8 @@ export const updateTags = mutation({
       .first();
     if (!membership) throw new ConvexError("Not a member of this workspace");
 
-    await ctx.db.patch(id, { tags });
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.patch(id, { tags });
     return null;
   },
 });
@@ -234,7 +235,8 @@ export const rename = mutation({
       action: "renamed", oldValue: diagram.name, newValue: name, resourceName: name, scope: diagram.workspaceId,
     });
 
-    await ctx.db.patch(id, { name });
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.patch(id, { name });
     return null;
   },
 });

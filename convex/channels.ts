@@ -164,7 +164,8 @@ export const update = mutation({
           action: "renamed", oldValue: channel.name, newValue: name, resourceName: name, scope: channel.workspaceId,
         });
       }
-      await ctx.db.patch(id, updates);
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.patch(id, updates);
     }
 
     return null;

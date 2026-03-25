@@ -365,7 +365,31 @@ export default defineSchema({
     .index("by_source", ["sourceId"])
     .index("by_source_target", ["sourceId", "targetId"])
     .index("by_workspace_target", ["workspaceId", "targetId"])
-    .index("by_group_target", ["groupId", "targetId"]),
+    .index("by_group_target", ["groupId", "targetId"])
+    .index("by_workspace", ["workspaceId"]),
+
+  nodes: defineTable({
+    workspaceId: v.id("workspaces"),
+    resourceType: v.union(
+      v.literal("document"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+      v.literal("project"),
+      v.literal("channel"),
+      v.literal("task"),
+    ),
+    resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
+    name: v.string(),       // tasks map title→name
+    tags: v.array(v.string()), // tasks map labels→tags; channels always []
+    visibility: v.optional(v.union(v.literal("workspace"), v.literal("restricted"))),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_type", ["workspaceId", "resourceType"])
+    .index("by_resource", ["resourceId"])
+    .searchIndex("by_name", {
+      searchField: "name",
+      filterFields: ["workspaceId", "resourceType"],
+    }),
 
   appVersion: defineTable({
     deployedAt: v.number(),

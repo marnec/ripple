@@ -11,6 +11,7 @@
     "convex/schema.ts",
     "convex/_generated/**/*.ts",
     "convex/signaling.ts",
-    "convex/utils/blocknote.ts"
+    "convex/utils/blocknote.ts",
+    "convex/workspaceAggregates.ts"
   ]
 }

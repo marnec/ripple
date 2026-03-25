@@ -639,7 +639,12 @@ export declare const api: {
       { workspaceId: Id<"workspaces"> },
       {
         links: Array<{ edgeType: string; source: string; target: string }>;
-        nodes: Array<{ groupId?: string; id: string; type: string }>;
+        nodes: Array<{
+          groupId?: string;
+          id: string;
+          name?: string;
+          type: string;
+        }>;
       }
     >;
     listByTask: FunctionReference<
@@ -1002,6 +1007,40 @@ export declare const api: {
       "public",
       { body: string; id: Id<"messages">; plainText: string },
       null
+    >;
+  };
+  nodes: {
+    listByWorkspace: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      Array<{
+        name: string;
+        resourceId: string;
+        resourceType: string;
+        tags: Array<string>;
+      }>
+    >;
+    search: FunctionReference<
+      "query",
+      "public",
+      {
+        resourceType?:
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "project"
+          | "channel"
+          | "task";
+        searchText: string;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{
+        name: string;
+        resourceId: string;
+        resourceType: string;
+        tags: Array<string>;
+      }>
     >;
   };
   notificationPreferences: {
@@ -2331,6 +2370,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillChannelNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillDiagramAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -2343,7 +2394,31 @@ export declare const internal: {
       },
       any
     >;
+    backfillDiagramNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillDocumentAggregates: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    backfillDocumentNodes: FunctionReference<
       "mutation",
       "internal",
       {
@@ -2379,6 +2454,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillProjectNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillSpreadsheetAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -2391,7 +2478,31 @@ export declare const internal: {
       },
       any
     >;
+    backfillSpreadsheetNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillTaskAggregates: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    backfillTaskNodes: FunctionReference<
       "mutation",
       "internal",
       {

@@ -5,6 +5,8 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import type { Id } from "../../convex/_generated/dataModel";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { triggers } from "../../convex/workspaceAggregates";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -282,8 +284,9 @@ describe("edges.getBacklinks", () => {
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
 
     const { documentId, diagramId } = await t.run(async (ctx) => {
-      const docId = await ctx.db.insert("documents", { workspaceId, name: "My Doc" });
-      const diaId = await ctx.db.insert("diagrams", { workspaceId, name: "My Diagram" });
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const docId = await db.insert("documents", { workspaceId, name: "My Doc" });
+      const diaId = await db.insert("diagrams", { workspaceId, name: "My Diagram" });
       return { documentId: docId, diagramId: diaId };
     });
 
@@ -494,7 +497,8 @@ describe("edges.syncMentionEdges", () => {
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
 
     const { documentId, mentionedUserId } = await t.run(async (ctx) => {
-      const docId = await ctx.db.insert("documents", { workspaceId, name: "My Doc" });
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const docId = await db.insert("documents", { workspaceId, name: "My Doc" });
       const uId = await ctx.db.insert("users", { name: "Mentioned", email: "m@test.com" });
       return { documentId: docId, mentionedUserId: uId };
     });

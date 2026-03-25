@@ -281,7 +281,8 @@ export const update = mutation({
           action: "renamed", oldValue: project.name, newValue: name, resourceName: name, scope: project.workspaceId,
         });
       }
-      await ctx.db.patch(id, patch);
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.patch(id, patch);
     }
 
     return null;
@@ -317,6 +318,8 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+
     // Cascade delete: tasks, taskComments, and taskStatuses
     // 1. Delete all taskComments for tasks in this project
     const tasks = await ctx.db
@@ -334,7 +337,7 @@ export const remove = mutation({
       })
     );
 
-    // 2. Clean up edges, Yjs snapshots, and delete tasks
+    // 2. Clean up edges, Yjs snapshots, nodes, and delete tasks
     await Promise.all(
       tasks.map(async (task) => {
         // Delete all edges (embeds + dependencies, both directions)
@@ -351,7 +354,7 @@ export const remove = mutation({
         if (task.yjsSnapshotId) {
           await ctx.storage.delete(task.yjsSnapshotId);
         }
-        await ctx.db.delete(task._id);
+        await db.delete(task._id);
       })
     );
 
@@ -384,7 +387,6 @@ export const remove = mutation({
     await Promise.all(projNotifPrefs.map((p) => ctx.db.delete(p._id)));
 
     // Delete the project
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.delete(id);
 
     return null;

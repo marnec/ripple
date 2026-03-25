@@ -38,37 +38,33 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
   // Recent items from localStorage (shown when search is empty)
   const recents = useLocalRecents(hasSearch ? undefined : workspaceId, 8);
 
-  // Search queries (fired when search is non-empty)
-  const channels = useQuery(
-    api.channels.search,
-    hasSearch ? { workspaceId, searchText: search } : "skip",
-  );
-  const documents = useQuery(
-    api.documents.search,
-    hasSearch ? { workspaceId, searchText: search } : "skip",
-  );
-  const diagrams = useQuery(
-    api.diagrams.search,
-    hasSearch ? { workspaceId, searchText: search } : "skip",
-  );
-  const spreadsheets = useQuery(
-    api.spreadsheets.search,
-    hasSearch ? { workspaceId, searchText: search } : "skip",
-  );
-  const projects = useQuery(
-    api.projects.search,
+  // Single cross-resource search via nodes table
+  const nodeResults = useQuery(
+    api.nodes.search,
     hasSearch ? { workspaceId, searchText: search } : "skip",
   );
 
+  const GROUP_LABELS: Record<string, string> = {
+    channel: "Channels",
+    document: "Documents",
+    diagram: "Diagrams",
+    spreadsheet: "Spreadsheets",
+    project: "Projects",
+  };
+
   const searchGroups = (() => {
-    if (!hasSearch) return [];
-    return [
-      { type: "channel" as const, label: "Channels", items: channels },
-      { type: "document" as const, label: "Documents", items: documents },
-      { type: "diagram" as const, label: "Diagrams", items: diagrams },
-      { type: "spreadsheet" as const, label: "Spreadsheets", items: spreadsheets },
-      { type: "project" as const, label: "Projects", items: projects },
-    ].filter((g) => g.items && g.items.length > 0);
+    if (!hasSearch || !nodeResults) return [];
+    // Group by resourceType, exclude tasks (not navigable from command palette)
+    const byType = new Map<string, typeof nodeResults>();
+    for (const node of nodeResults) {
+      if (node.resourceType === "task") continue;
+      const group = byType.get(node.resourceType) ?? [];
+      group.push(node);
+      byType.set(node.resourceType, group);
+    }
+    return [...byType.entries()]
+      .map(([type, items]) => ({ type, label: GROUP_LABELS[type] ?? type, items }))
+      .filter((g) => g.items.length > 0);
   })();
 
   const handleSelect = (resourceType: string, resourceId: string) => {
@@ -112,18 +108,18 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
         {/* Search results */}
         {searchGroups.map((group) => (
           <CommandGroup key={group.type} heading={group.label}>
-            {group.items!.map((item) => {
+            {group.items.map((item) => {
               const Icon = RESOURCE_TYPE_ICONS[group.type];
               return (
                 <CommandItem
-                  key={item._id}
+                  key={item.resourceId}
                   value={`${item.name} ${group.type}`}
-                  onSelect={() => handleSelect(group.type, item._id)}
+                  onSelect={() => handleSelect(group.type, item.resourceId)}
                 >
                   {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
                   <span className="truncate">{item.name}</span>
                   <span className="ml-auto text-xs text-muted-foreground">
-                    {RESOURCE_TYPE_LABELS[group.type]}
+                    {GROUP_LABELS[group.type] ?? group.type}
                   </span>
                 </CommandItem>
               );

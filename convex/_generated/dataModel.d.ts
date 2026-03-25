@@ -471,6 +471,7 @@ export type DataModel = {
       by_source: ["sourceId", "_creationTime"];
       by_source_target: ["sourceId", "targetId", "_creationTime"];
       by_target: ["targetId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_target: ["workspaceId", "targetId", "_creationTime"];
     };
     searchIndexes: {};
@@ -597,6 +598,47 @@ export type DataModel = {
       by_text: {
         searchField: "plainText";
         filterFields: "channelId";
+      };
+    };
+    vectorIndexes: {};
+  };
+  nodes: {
+    document: {
+      name: string;
+      resourceId: string;
+      resourceType:
+        | "document"
+        | "diagram"
+        | "spreadsheet"
+        | "project"
+        | "channel"
+        | "task";
+      tags: Array<string>;
+      visibility?: "workspace" | "restricted";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"nodes">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "name"
+      | "resourceId"
+      | "resourceType"
+      | "tags"
+      | "visibility"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_resource: ["resourceId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_type: ["workspaceId", "resourceType", "_creationTime"];
+    };
+    searchIndexes: {
+      by_name: {
+        searchField: "name";
+        filterFields: "resourceType" | "workspaceId";
       };
     };
     vectorIndexes: {};

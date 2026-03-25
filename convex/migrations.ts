@@ -103,6 +103,12 @@ export const runAll = migrations.runner([
   internal.migrations.backfillMemberAggregates,
   internal.migrations.backfillTaskAggregates,
   internal.migrations.stripTaskStartDate,
+  internal.migrations.backfillDocumentNodes,
+  internal.migrations.backfillDiagramNodes,
+  internal.migrations.backfillSpreadsheetNodes,
+  internal.migrations.backfillProjectNodes,
+  internal.migrations.backfillChannelNodes,
+  internal.migrations.backfillTaskNodes,
 ]);
 
 /**
@@ -371,5 +377,115 @@ export const stripSpreadsheetFields = migrations.define({
         yjsSnapshotId: doc.yjsSnapshotId,
       });
     }
+  },
+});
+
+// ── Nodes backfill ───────────────────────────────────────────────────
+
+export const backfillDocumentNodes = migrations.define({
+  table: "documents",
+  migrateOne: async (ctx, doc) => {
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", doc._id))
+      .first();
+    if (existing) return;
+    await ctx.db.insert("nodes", {
+      workspaceId: doc.workspaceId,
+      resourceType: "document",
+      resourceId: doc._id,
+      name: doc.name,
+      tags: doc.tags ?? [],
+    });
+  },
+});
+
+export const backfillDiagramNodes = migrations.define({
+  table: "diagrams",
+  migrateOne: async (ctx, doc) => {
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", doc._id))
+      .first();
+    if (existing) return;
+    await ctx.db.insert("nodes", {
+      workspaceId: doc.workspaceId,
+      resourceType: "diagram",
+      resourceId: doc._id,
+      name: doc.name,
+      tags: doc.tags ?? [],
+    });
+  },
+});
+
+export const backfillSpreadsheetNodes = migrations.define({
+  table: "spreadsheets",
+  migrateOne: async (ctx, doc) => {
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", doc._id))
+      .first();
+    if (existing) return;
+    await ctx.db.insert("nodes", {
+      workspaceId: doc.workspaceId,
+      resourceType: "spreadsheet",
+      resourceId: doc._id,
+      name: doc.name,
+      tags: doc.tags ?? [],
+    });
+  },
+});
+
+export const backfillProjectNodes = migrations.define({
+  table: "projects",
+  migrateOne: async (ctx, doc) => {
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", doc._id))
+      .first();
+    if (existing) return;
+    await ctx.db.insert("nodes", {
+      workspaceId: doc.workspaceId,
+      resourceType: "project",
+      resourceId: doc._id,
+      name: doc.name,
+      tags: doc.tags ?? [],
+    });
+  },
+});
+
+export const backfillChannelNodes = migrations.define({
+  table: "channels",
+  migrateOne: async (ctx, channel) => {
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", channel._id))
+      .first();
+    if (existing) return;
+    await ctx.db.insert("nodes", {
+      workspaceId: channel.workspaceId,
+      resourceType: "channel",
+      resourceId: channel._id,
+      name: channel.name,
+      tags: [],
+    });
+  },
+});
+
+export const backfillTaskNodes = migrations.define({
+  table: "tasks",
+  migrateOne: async (ctx, task) => {
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", task._id))
+      .first();
+    if (existing) return;
+    await ctx.db.insert("nodes", {
+      workspaceId: task.workspaceId,
+      resourceType: "task",
+      resourceId: task._id,
+      name: task.title,
+      tags: task.labels ?? [],
+    });
   },
 });

@@ -593,7 +593,8 @@ export const update = mutation({
     }
 
     if (Object.keys(patch).length > 0) {
-      await ctx.db.patch(taskId, patch);
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.patch(taskId, patch);
     }
 
     // Log activity for each changed field
@@ -955,7 +956,6 @@ export const remove = mutation({
       [...outgoingEdges, ...incomingEdges].map((e) => ctx.db.delete(e._id))
     );
 
-    // Delete the task document
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.delete(taskId);
     return null;

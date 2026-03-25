@@ -66,20 +66,8 @@ export async function getEnrichedBacklinks(
     edges.map(async (edge) => {
       let sourceName = "Unknown";
       let projectId: string | undefined;
-      if (edge.sourceType === "document") {
-        const doc = await ctx.db.get(edge.sourceId as Id<"documents">);
-        sourceName = doc?.name ?? "Deleted document";
-      } else if (edge.sourceType === "task") {
-        const task = await ctx.db.get(edge.sourceId as Id<"tasks">);
-        sourceName = task?.title ?? "Deleted task";
-        projectId = task?.projectId;
-      } else if (edge.sourceType === "diagram") {
-        const diagram = await ctx.db.get(edge.sourceId as Id<"diagrams">);
-        sourceName = diagram?.name ?? "Deleted diagram";
-      } else if (edge.sourceType === "spreadsheet") {
-        const spreadsheet = await ctx.db.get(edge.sourceId as Id<"spreadsheets">);
-        sourceName = spreadsheet?.name ?? "Deleted spreadsheet";
-      } else if (edge.sourceType === "message") {
+
+      if (edge.sourceType === "message") {
         const message = await ctx.db.get(edge.sourceId as Id<"messages">);
         if (message) {
           const channel = await ctx.db.get(message.channelId);
@@ -87,7 +75,21 @@ export async function getEnrichedBacklinks(
         } else {
           sourceName = "Deleted message";
         }
+      } else {
+        // All resource types (document, task, diagram, spreadsheet, project, channel) are in nodes table
+        const node = await ctx.db
+          .query("nodes")
+          .withIndex("by_resource", (q) => q.eq("resourceId", edge.sourceId))
+          .first();
+        sourceName = node?.name ?? `Deleted ${edge.sourceType}`;
+
+        // Tasks still need projectId for backlink display
+        if (edge.sourceType === "task") {
+          const task = await ctx.db.get(edge.sourceId as Id<"tasks">);
+          projectId = task?.projectId;
+        }
       }
+
       return {
         _id: edge._id,
         sourceType: edge.sourceType as string,
@@ -569,6 +571,7 @@ import {
 const graphNodeValidator = v.object({
   id: v.string(),
   type: v.string(),
+  name: v.optional(v.string()),
   groupId: v.optional(v.string()),
 });
 
@@ -588,8 +591,9 @@ const graphCountsValidator = v.object({
 });
 
 /**
- * Get the workspace knowledge graph: edges + connected nodes.
- * No name resolution — labels are lazy-loaded via getNodeLabel on hover.
+ * Get the workspace knowledge graph: all nodes + edges.
+ * Nodes are fetched from the nodes table (includes isolated nodes with no edges).
+ * Names are included eagerly — getNodeLabel is only needed for user/message types.
  * Counts are fetched separately via getWorkspaceCounts to avoid coupling
  * graph reactivity to every resource creation/deletion in the workspace.
  */
@@ -611,40 +615,28 @@ export const getWorkspaceGraph = query({
       .first();
     if (!membership) return { nodes: [], links: [] };
 
-    const edgeRows = await ctx.db
-      .query("edges")
-      .withIndex("by_workspace_target", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
+    const [nodeRows, edgeRows] = await Promise.all([
+      ctx.db.query("nodes").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
+      ctx.db.query("edges").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
+    ]);
 
-    // Collect unique node IDs and derive groupIds from edges
-    const nodeIds = new Map<string, string>(); // id → type
-    const nodeGroupIds = new Map<string, string>(); // id → groupId (from source edges)
+    // Build groupId map from edges (task sources have projectId denormalized as groupId)
+    const nodeGroupIds = new Map<string, string>();
     for (const edge of edgeRows) {
-      nodeIds.set(edge.sourceId, edge.sourceType);
-      nodeIds.set(edge.targetId, edge.targetType);
-      // Source's groupId is denormalized on the edge
       if (edge.groupId && !nodeGroupIds.has(edge.sourceId)) {
         nodeGroupIds.set(edge.sourceId, edge.groupId);
       }
     }
 
-    // For task/message nodes that only appear as targets, do parallel lookups
-    const needsLookup: Array<[string, string]> = [];
-    for (const [id, type] of nodeIds) {
-      if ((type === "task" || type === "message") && !nodeGroupIds.has(id)) {
-        needsLookup.push([id, type]);
-      }
-    }
-
-    if (needsLookup.length > 0) {
+    // For task nodes without a groupId from edges, do parallel lookups
+    const taskNodesNeedingGroupId = nodeRows.filter(
+      (n) => n.resourceType === "task" && !nodeGroupIds.has(n.resourceId),
+    );
+    if (taskNodesNeedingGroupId.length > 0) {
       const resolved = await Promise.all(
-        needsLookup.map(async ([id, type]) => {
-          if (type === "task") {
-            const task = await ctx.db.get(id as Id<"tasks">);
-            return [id, task?.projectId] as const;
-          }
-          const message = await ctx.db.get(id as Id<"messages">);
-          return [id, message?.channelId] as const;
+        taskNodesNeedingGroupId.map(async (n) => {
+          const task = await ctx.db.get(n.resourceId as Id<"tasks">);
+          return [n.resourceId, task?.projectId] as const;
         }),
       );
       for (const [id, groupId] of resolved) {
@@ -652,9 +644,40 @@ export const getWorkspaceGraph = query({
       }
     }
 
-    const nodes: Array<{ id: string; type: string; groupId?: string }> = [];
-    for (const [id, type] of nodeIds) {
-      nodes.push({ id, type, groupId: nodeGroupIds.get(id) });
+    const nodes: Array<{ id: string; type: string; name?: string; groupId?: string }> = nodeRows.map((n) => ({
+      id: n.resourceId,
+      type: n.resourceType,
+      name: n.name,
+      groupId: nodeGroupIds.get(n.resourceId),
+    }));
+
+    // Also include message and user nodes referenced in edges (not in nodes table)
+    const extraNodeIds = new Map<string, string>(); // id → type
+    for (const edge of edgeRows) {
+      if (edge.sourceType === "message") extraNodeIds.set(edge.sourceId, "message");
+      if (edge.targetType === "user") extraNodeIds.set(edge.targetId, "user");
+    }
+
+    // Resolve groupIds for message nodes (channelId)
+    const messageIds = [...extraNodeIds.entries()]
+      .filter(([, type]) => type === "message")
+      .map(([id]) => id);
+    if (messageIds.length > 0) {
+      const resolved = await Promise.all(
+        messageIds.map(async (id) => {
+          const message = await ctx.db.get(id as Id<"messages">);
+          return [id, message?.channelId] as const;
+        }),
+      );
+      for (const [id, groupId] of resolved) {
+        nodes.push({ id, type: "message", groupId: groupId as string | undefined });
+      }
+    }
+
+    for (const [id, type] of extraNodeIds) {
+      if (type !== "message") {
+        nodes.push({ id, type });
+      }
     }
 
     const validNodeIds = new Set(nodes.map((n) => n.id));
@@ -713,7 +736,9 @@ export const getWorkspaceCounts = query({
 
 /**
  * Lazy-load a single node's display label.
- * Called on hover from the graph UI.
+ * Called on hover from the graph UI for user and message nodes.
+ * Resource nodes (document/diagram/spreadsheet/project/channel/task) resolve
+ * via the nodes table using the by_resource index.
  */
 export const getNodeLabel = query({
   args: { id: v.string(), type: v.string() },
@@ -722,43 +747,28 @@ export const getNodeLabel = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
 
-    switch (type) {
-      case "document": {
-        const doc = await ctx.db.get(id as Id<"documents">);
-        return doc?.name ?? null;
-      }
-      case "task": {
-        const task = await ctx.db.get(id as Id<"tasks">);
-        return task?.title ?? null;
-      }
-      case "diagram": {
-        const diagram = await ctx.db.get(id as Id<"diagrams">);
-        return diagram?.name ?? null;
-      }
-      case "spreadsheet": {
-        const spreadsheet = await ctx.db.get(id as Id<"spreadsheets">);
-        return spreadsheet?.name ?? null;
-      }
-      case "user": {
-        const user = await ctx.db.get(id as Id<"users">);
-        return user ? (user.name ?? user.email ?? "User") : null;
-      }
-      case "project": {
-        const project = await ctx.db.get(id as Id<"projects">);
-        return project?.name ?? null;
-      }
-      case "channel": {
-        const channel = await ctx.db.get(id as Id<"channels">);
-        return channel ? `#${channel.name}` : null;
-      }
-      case "message": {
-        const message = await ctx.db.get(id as Id<"messages">);
-        if (!message) return null;
-        const channel = await ctx.db.get(message.channelId);
-        return channel ? `#${channel.name}` : null;
-      }
-      default:
-        return null;
+    const resourceTypes = ["document", "diagram", "spreadsheet", "project", "channel", "task"];
+    if (resourceTypes.includes(type)) {
+      const node = await ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", id))
+        .first();
+      if (!node) return null;
+      return type === "channel" ? `#${node.name}` : node.name;
     }
+
+    if (type === "user") {
+      const user = await ctx.db.get(id as Id<"users">);
+      return user ? (user.name ?? user.email ?? "User") : null;
+    }
+
+    if (type === "message") {
+      const message = await ctx.db.get(id as Id<"messages">);
+      if (!message) return null;
+      const channel = await ctx.db.get(message.channelId);
+      return channel ? `#${channel.name}` : null;
+    }
+
+    return null;
   },
 });
