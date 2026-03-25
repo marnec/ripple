@@ -1,8 +1,9 @@
 import { useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { useLocalRecents } from "@/hooks/use-local-recents";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getResourceUrl } from "@/lib/resource-urls";
@@ -32,8 +33,15 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = {
 export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const hasSearch = search.trim().length > 0;
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const isDebouncing = search.trim() !== debouncedSearch.trim();
+  const hasSearch = debouncedSearch.trim().length > 0;
 
   // Recent items from localStorage (shown when search is empty)
   const recents = useLocalRecents(hasSearch ? undefined : workspaceId, 8);
@@ -41,8 +49,10 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
   // Single cross-resource search via nodes table
   const nodeResults = useQuery(
     api.nodes.search,
-    hasSearch ? { workspaceId, searchText: search } : "skip",
+    hasSearch ? { workspaceId, searchText: debouncedSearch } : "skip",
   );
+
+  const isLoading = search.trim().length > 0 && (isDebouncing || (hasSearch && nodeResults === undefined));
 
   const GROUP_LABELS: Record<string, string> = {
     channel: "Channels",
@@ -75,13 +85,20 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
 
   return (
     <CommandDialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setSearch(""); }}>
-      <CommandInput
-        placeholder="Search or jump to..."
-        value={search}
-        onValueChange={setSearch}
-      />
+      <div className="relative">
+        <CommandInput
+          placeholder="Search or jump to..."
+          value={search}
+          onValueChange={setSearch}
+        />
+        {isLoading && (
+          <div className="pointer-events-none absolute right-2 top-0 flex h-full items-center pb-0 pt-1 text-muted-foreground">
+            <RippleSpinner size={16} color="currentColor" />
+          </div>
+        )}
+      </div>
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        {!isLoading && <CommandEmpty>No results found.</CommandEmpty>}
 
         {/* Recent items when search is empty */}
         {!hasSearch && recents.length > 0 && (
