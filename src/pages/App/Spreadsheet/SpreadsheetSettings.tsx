@@ -36,7 +36,7 @@ function SpreadsheetSettingsContent({
   const updateTags = useMutation(api.spreadsheets.updateTags);
 
   // Confirmed delete hook
-  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("spreadsheet", {
+  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("spreadsheet", workspaceId, {
     onDeleted: () => void navigate(`/workspaces/${workspaceId}/spreadsheets`),
   });
 

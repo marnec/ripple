@@ -530,7 +530,7 @@ export const backfillChannelMentionEdges = migrations.define({
     if (!channel) return;
     for (const target of targets) {
       await ctx.db.insert("edges", {
-        sourceType: "channel" as "document", // cast: generated types lag behind schema
+        sourceType: "channel",
         sourceId: channel._id,
         targetType: target.targetType,
         targetId: target.targetId,
@@ -557,7 +557,7 @@ export const backfillTaskBelongsToEdges = migrations.define({
       sourceId: task._id,
       targetType: "project",
       targetId: task.projectId,
-      edgeType: "belongs_to" as "embeds",
+      edgeType: "belongs_to",
       workspaceId: task.workspaceId,
       createdAt: task._creationTime,
     });

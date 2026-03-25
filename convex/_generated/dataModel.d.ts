@@ -438,13 +438,7 @@ export type DataModel = {
       edgeType: "embeds" | "blocks" | "relates_to" | "mentions" | "belongs_to";
       groupId?: string;
       sourceId: string;
-      sourceType:
-        | "document"
-        | "task"
-        | "diagram"
-        | "spreadsheet"
-        | "channel"
-        | "message";
+      sourceType: "document" | "task" | "diagram" | "spreadsheet" | "channel";
       targetId: string;
       targetType:
         | "document"
@@ -619,7 +613,6 @@ export type DataModel = {
         | "channel"
         | "task";
       tags: Array<string>;
-      visibility?: "workspace" | "restricted";
       workspaceId: Id<"workspaces">;
       _id: Id<"nodes">;
       _creationTime: number;
@@ -631,7 +624,6 @@ export type DataModel = {
       | "resourceId"
       | "resourceType"
       | "tags"
-      | "visibility"
       | "workspaceId";
     indexes: {
       by_id: ["_id"];

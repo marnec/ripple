@@ -243,12 +243,12 @@ export function WorkspaceGraph({ workspaceId, width, height, hiddenTypes, highli
         onEngineTick={handleEngineTick}
         linkColor={(link: GraphLink) => {
           const et = typeof link.edgeType === "string" ? link.edgeType : "";
-          if (et === "contains") return isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
-          return isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+          if (et === "contains") return isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
+          return isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)";
         }}
         linkWidth={(link: GraphLink) => {
           const et = typeof link.edgeType === "string" ? link.edgeType : "";
-          return et === "contains" ? 0.3 : 0.5;
+          return et === "contains" ? 0.5 : 1;
         }}
         linkLineDash={(link: GraphLink) => {
           const et = typeof link.edgeType === "string" ? link.edgeType : "";

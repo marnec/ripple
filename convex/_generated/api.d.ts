@@ -602,7 +602,7 @@ export declare const api: {
     getBacklinks: FunctionReference<
       "query",
       "public",
-      { targetId: string; workspaceId?: Id<"workspaces"> },
+      { targetId: string; workspaceId: Id<"workspaces"> },
       Array<{
         _id: Id<"edges">;
         edgeType: string;
@@ -2315,20 +2315,6 @@ export declare const internal: {
         mentionedUserIds: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      null
-    >;
-  };
-  edges: {
-    removeAllForSource: FunctionReference<
-      "mutation",
-      "internal",
-      { sourceId: string },
-      null
-    >;
-    removeAllForTarget: FunctionReference<
-      "mutation",
-      "internal",
-      { targetId: string },
       null
     >;
   };

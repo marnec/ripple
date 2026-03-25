@@ -13,6 +13,7 @@ import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type Reference = {
   _id: string;
@@ -29,6 +30,7 @@ type DeleteWarningDialogProps = {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   resourceId: string;
+  workspaceId: Id<"workspaces">;
   resourceType: "diagram" | "document" | "spreadsheet";
   resourceName: string;
   preloadedReferences?: Reference[];
@@ -56,13 +58,14 @@ export function DeleteWarningDialog({
   onOpenChange,
   onConfirm,
   resourceId,
+  workspaceId,
   resourceType,
   resourceName,
   preloadedReferences,
 }: DeleteWarningDialogProps) {
   const queriedReferences = useQuery(
     api.edges.getBacklinks,
-    open && !preloadedReferences ? { targetId: resourceId } : "skip",
+    open && !preloadedReferences ? { targetId: resourceId, workspaceId } : "skip",
   );
 
   const references = preloadedReferences ?? queriedReferences;

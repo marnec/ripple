@@ -259,7 +259,7 @@ triggers.register("tasks", async (ctx, change) => {
       sourceId: change.id,
       targetType: "project",
       targetId: change.newDoc.projectId,
-      edgeType: "belongs_to" as "embeds", // cast: generated types lag behind schema
+      edgeType: "belongs_to",
       workspaceId: change.newDoc.workspaceId,
       createdAt: Date.now(),
     });
@@ -277,7 +277,7 @@ triggers.register("tasks", async (ctx, change) => {
       sourceId: change.id,
       targetType: "project",
       targetId: change.newDoc.projectId,
-      edgeType: "belongs_to" as "embeds",
+      edgeType: "belongs_to",
       workspaceId: change.newDoc.workspaceId,
       createdAt: Date.now(),
     });
@@ -297,7 +297,7 @@ async function insertChannelMentionEdge(
   target: { targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string },
 ) {
   await ctx.db.insert("edges", {
-    sourceType: "channel" as "document", // cast: generated types lag behind schema
+    sourceType: "channel",
     sourceId: channelId,
     targetType: target.targetType,
     targetId: target.targetId,

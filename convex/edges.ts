@@ -3,7 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { GenericQueryCtx } from "convex/server";
 import type { DataModel } from "./_generated/dataModel";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { logTaskActivity } from "./auditLog";
 
 // ── Validators ──────────────────────────────────────────────────────
@@ -40,6 +40,7 @@ const depItemValidator = v.object({
 export async function getEnrichedBacklinks(
   ctx: GenericQueryCtx<DataModel>,
   targetId: string,
+  workspaceId: Id<"workspaces">,
 ): Promise<Array<{
   _id: Id<"edges">;
   sourceType: string;
@@ -51,42 +52,61 @@ export async function getEnrichedBacklinks(
 }>> {
   const edges = await ctx.db
     .query("edges")
-    .withIndex("by_target", (q) => q.eq("targetId", targetId))
+    .withIndex("by_workspace_target", (q) =>
+      q.eq("workspaceId", workspaceId).eq("targetId", targetId),
+    )
     .collect();
 
-  return Promise.all(
-    edges.map(async (edge) => {
-      // Look up name via nodes table (all resource types are indexed there)
-      const node = await ctx.db
-        .query("nodes")
-        .withIndex("by_resource", (q) => q.eq("resourceId", edge.sourceId))
-        .first();
-      let sourceName = node?.name;
-      // Fallback for channels: look up directly if node not yet indexed
-      if (!sourceName && edge.sourceType === "channel") {
-        const channel = await ctx.db.get(edge.sourceId as Id<"channels">);
-        sourceName = channel?.name ? `#${channel.name}` : undefined;
-      }
-      sourceName ??= `Deleted ${edge.sourceType}`;
+  // Collect typed IDs for batch fetching
+  const taskIds = edges
+    .filter((e) => e.sourceType === "task")
+    .map((e) => e.sourceId as Id<"tasks">);
+  const channelIds = edges
+    .filter((e) => e.sourceType === "channel")
+    .map((e) => e.sourceId as Id<"channels">);
 
-      // Tasks need projectId for backlink display navigation
-      let projectId: string | undefined;
-      if (edge.sourceType === "task") {
-        const task = await ctx.db.get(edge.sourceId as Id<"tasks">);
-        projectId = task?.projectId;
-      }
+  // Batch-fetch in three parallel waves
+  const [nodeResults, taskResults, channelResults] = await Promise.all([
+    Promise.all(
+      edges.map((e) =>
+        ctx.db
+          .query("nodes")
+          .withIndex("by_resource", (q) => q.eq("resourceId", e.sourceId))
+          .first(),
+      ),
+    ),
+    Promise.all(taskIds.map((id) => ctx.db.get(id))),
+    Promise.all(channelIds.map((id) => ctx.db.get(id))),
+  ]);
 
-      return {
-        _id: edge._id,
-        sourceType: edge.sourceType as string,
-        sourceId: edge.sourceId,
-        sourceName,
-        edgeType: edge.edgeType as string,
-        workspaceId: edge.workspaceId as string,
-        projectId,
-      };
-    }),
-  );
+  const taskById = new Map(taskIds.map((id, i) => [id as string, taskResults[i]]));
+  const channelById = new Map(channelIds.map((id, i) => [id as string, channelResults[i]]));
+
+  // Single-pass enrich
+  return edges.map((edge, i) => {
+    const node = nodeResults[i];
+    let sourceName = node?.name;
+    if (!sourceName && edge.sourceType === "channel") {
+      const channel = channelById.get(edge.sourceId);
+      sourceName = channel?.name ? `#${channel.name}` : undefined;
+    }
+    sourceName ??= `Deleted ${edge.sourceType}`;
+
+    const projectId =
+      edge.sourceType === "task"
+        ? taskById.get(edge.sourceId)?.projectId
+        : undefined;
+
+    return {
+      _id: edge._id,
+      sourceType: edge.sourceType as string,
+      sourceId: edge.sourceId,
+      sourceName,
+      edgeType: edge.edgeType as string,
+      workspaceId: edge.workspaceId as string,
+      projectId,
+    };
+  });
 }
 
 // ── Sync (auto-tracked embeds) ──────────────────────────────────────
@@ -352,37 +372,6 @@ export const removeEdge = mutation({
 
 // ── Cascade cleanup ─────────────────────────────────────────────────
 
-/**
- * Remove all outgoing edges from a source (when a document/task is deleted).
- */
-export const removeAllForSource = internalMutation({
-  args: { sourceId: v.string() },
-  returns: v.null(),
-  handler: async (ctx, { sourceId }) => {
-    const edges = await ctx.db
-      .query("edges")
-      .withIndex("by_source", (q) => q.eq("sourceId", sourceId))
-      .collect();
-    await Promise.all(edges.map((e) => ctx.db.delete(e._id)));
-    return null;
-  },
-});
-
-/**
- * Remove all incoming edges to a target (when a diagram/spreadsheet/document is deleted).
- */
-export const removeAllForTarget = internalMutation({
-  args: { targetId: v.string() },
-  returns: v.null(),
-  handler: async (ctx, { targetId }) => {
-    const edges = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", targetId))
-      .collect();
-    await Promise.all(edges.map((e) => ctx.db.delete(e._id)));
-    return null;
-  },
-});
 
 // ── Queries ─────────────────────────────────────────────────────────
 
@@ -393,13 +382,13 @@ export const removeAllForTarget = internalMutation({
 export const getBacklinks = query({
   args: {
     targetId: v.string(),
-    workspaceId: v.optional(v.id("workspaces")),
+    workspaceId: v.id("workspaces"),
   },
   returns: v.array(backlinkValidator),
-  handler: async (ctx, { targetId }) => {
+  handler: async (ctx, { targetId, workspaceId }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    return getEnrichedBacklinks(ctx, targetId);
+    return getEnrichedBacklinks(ctx, targetId, workspaceId);
   },
 });
 
@@ -648,7 +637,7 @@ export const getWorkspaceCounts = query({
 
 /**
  * Lazy-load a single node's display label.
- * Called on hover from the graph UI for user and message nodes.
+ * Called on hover from the graph UI for user nodes.
  * Resource nodes (document/diagram/spreadsheet/project/channel/task) resolve
  * via the nodes table using the by_resource index.
  */
@@ -672,13 +661,6 @@ export const getNodeLabel = query({
     if (type === "user") {
       const user = await ctx.db.get(id as Id<"users">);
       return user ? (user.name ?? user.email ?? "User") : null;
-    }
-
-    if (type === "message") {
-      const message = await ctx.db.get(id as Id<"messages">);
-      if (!message) return null;
-      const channel = await ctx.db.get(message.channelId);
-      return channel ? `#${channel.name}` : null;
     }
 
     return null;

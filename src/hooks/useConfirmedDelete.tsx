@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 
 type DeleteResult = {
   status: "deleted" | "has_references";
@@ -83,6 +83,7 @@ async function executeForceDelete(
 
 export function useConfirmedDelete(
   resourceType: "diagram" | "spreadsheet",
+  workspaceId: Id<"workspaces">,
   options?: { onDeleted?: () => void },
 ) {
   const config = RESOURCE_CONFIGS[resourceType];
@@ -103,6 +104,7 @@ export function useConfirmedDelete(
       onOpenChange={(open) => { if (!open) setPending(null); }}
       onConfirm={() => void confirmDelete()}
       resourceId={pending.id}
+      workspaceId={workspaceId}
       resourceType={resourceType}
       resourceName={pending.name}
       preloadedReferences={pending.references}

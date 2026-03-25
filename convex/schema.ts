@@ -338,7 +338,6 @@ export default defineSchema({
       v.literal("diagram"),
       v.literal("spreadsheet"),
       v.literal("channel"),
-      v.literal("message"), // TODO: remove after stripMessageEdges migration runs
     ),
     sourceId: v.string(),
     targetType: v.union(
@@ -382,7 +381,6 @@ export default defineSchema({
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name
     tags: v.array(v.string()), // tasks map labels→tags; channels always []
-    visibility: v.optional(v.union(v.literal("workspace"), v.literal("restricted"))),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_type", ["workspaceId", "resourceType"])

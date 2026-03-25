@@ -379,7 +379,14 @@ export const remove = mutation({
       await ctx.db.delete(cycle._id);
     }
 
-    // 5. Delete project notification preferences
+    // 5. Delete edges targeting the project (e.g. channel→project mention edges)
+    const projectInEdges = await ctx.db
+      .query("edges")
+      .withIndex("by_target", (q) => q.eq("targetId", id))
+      .collect();
+    await Promise.all(projectInEdges.map((e) => ctx.db.delete(e._id)));
+
+    // 6. Delete project notification preferences
     const projNotifPrefs = await ctx.db
       .query("projectNotificationPreferences")
       .withIndex("by_project", (q) => q.eq("projectId", id))

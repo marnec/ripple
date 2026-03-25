@@ -36,7 +36,7 @@ function DiagramSettingsContent({
   const updateTags = useMutation(api.diagrams.updateTags);
 
   // Confirmed delete hook
-  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", {
+  const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", workspaceId, {
     onDeleted: () => void navigate(`/workspaces/${workspaceId}/diagrams`),
   });
 

@@ -140,6 +140,7 @@ function DocumentSettingsContent({
           onOpenChange={setDeleteDialogOpen}
           onConfirm={() => void handleDeleteDocument()}
           resourceId={documentId}
+          workspaceId={workspaceId}
           resourceType="document"
           resourceName={document.name}
         />

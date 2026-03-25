@@ -281,7 +281,7 @@ export const remove = mutation({
 
     // Check for references unless force-deleting
     if (!force) {
-      const references = await getEnrichedBacklinks(ctx, id);
+      const references = await getEnrichedBacklinks(ctx, id, diagram.workspaceId);
       if (references.length > 0) {
         return { status: "has_references" as const, references };
       }
