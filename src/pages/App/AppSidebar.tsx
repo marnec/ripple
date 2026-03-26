@@ -16,7 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import { QueryParams } from "@shared/types/routes";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { LayoutGroup, m } from "framer-motion";
 import { CheckSquare } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";

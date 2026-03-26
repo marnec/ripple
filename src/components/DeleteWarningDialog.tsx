@@ -7,7 +7,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useState } from "react";

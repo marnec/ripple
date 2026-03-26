@@ -1,7 +1,7 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
 
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { AnimatePresence, m } from "framer-motion";
 import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
 import { memo, useState } from "react";

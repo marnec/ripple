@@ -8,6 +8,7 @@ if (import.meta.env.DEV) {
 import { Temporal as _Temporal } from "temporal-polyfill";
 (globalThis as Record<string, unknown>).Temporal = _Temporal;
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexQueryCacheProvider } from "convex-helpers/react/cache/provider";
 import { ConvexReactClient } from "convex/react";
 import { LazyMotion, domMax } from "framer-motion";
 import { ThemeProvider } from "next-themes";
@@ -29,9 +30,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <PwaUpdateProvider>
           <Toaster />
           <ConvexAuthProvider client={convex}>
-            <LazyMotion features={domMax} strict>
-              <RouterProvider router={router} />
-            </LazyMotion>
+            <ConvexQueryCacheProvider>
+              <LazyMotion features={domMax} strict>
+                <RouterProvider router={router} />
+              </LazyMotion>
+            </ConvexQueryCacheProvider>
           </ConvexAuthProvider>
         </PwaUpdateProvider>
       </ThemeProvider>

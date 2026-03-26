@@ -5,7 +5,7 @@ import { Phone } from "lucide-react";
 import { Profiler, useEffect, useState } from "react";
 import { onRenderCallback } from "../lib/profiler-logger";
 import { Outlet, useLocation, useParams } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../convex/_generated/api";
 import { CommandPalette } from "./CommandPalette";
 import { useActiveCall } from "../contexts/ActiveCallContext";

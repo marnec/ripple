@@ -3,7 +3,8 @@ import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";;
 import {
   ArrowRight,
   CircleDot,

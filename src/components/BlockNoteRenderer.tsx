@@ -4,7 +4,7 @@ import { ProjectReferenceChip } from "@/pages/App/Chat/ProjectReferenceChip";
 import { ResourceReferenceChip } from "@/pages/App/Chat/ResourceReferenceChip";
 import { UserMentionRenderer } from "@/pages/App/Chat/UserMentionRenderer";
 import { useDocumentBlockPreview } from "@/hooks/use-document-block-preview";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { FileText } from "lucide-react";

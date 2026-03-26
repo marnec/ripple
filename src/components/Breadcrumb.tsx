@@ -6,7 +6,7 @@ import {
   BreadcrumbSeparator,
 } from "./ui/breadcrumb";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../convex/_generated/api";
 import React from "react";
 import { useIsMobile } from "@/hooks/use-mobile";

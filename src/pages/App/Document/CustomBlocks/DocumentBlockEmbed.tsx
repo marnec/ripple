@@ -1,7 +1,7 @@
 import { useDocumentBlockPreview } from "@/hooks/use-document-block-preview";
 import { defaultProps } from "@blocknote/core";
 import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { CircleSlash } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";

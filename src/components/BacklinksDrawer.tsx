@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { Link2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";

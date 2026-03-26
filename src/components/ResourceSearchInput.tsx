@@ -1,5 +1,5 @@
 import { buildSearchString, parseSearchInput, type ParsedSearch } from "@/lib/search-utils";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { Plus, Search, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";

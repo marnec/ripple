@@ -10,7 +10,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { QueryParams } from "@shared/types/routes";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban } from "lucide-react";
 import { useRef, useState } from "react";
 import { startViewTransition } from "@/hooks/use-view-transition";

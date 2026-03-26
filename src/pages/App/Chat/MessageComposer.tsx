@@ -17,7 +17,7 @@ import { MessageQuotePreview } from "./MessageQuotePreview";
 import { Command, CornerDownLeft, File, FolderKanban, PenTool, Phone, SendHorizonal, Table2, X } from "lucide-react";
 import { RippleSpinner } from "../../../components/RippleSpinner";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../../../convex/_generated/api";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";

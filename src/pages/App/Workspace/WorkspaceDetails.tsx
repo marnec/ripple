@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import {
   Clock,
   Eye,

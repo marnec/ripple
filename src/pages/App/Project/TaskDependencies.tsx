@@ -22,7 +22,8 @@ import {
 import { formatTaskId } from "@/lib/task-utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";;
 import { Ban, Link2, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";

@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { Star } from "lucide-react";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useNavigate } from "react-router-dom";

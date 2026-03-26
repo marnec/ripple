@@ -11,7 +11,8 @@ import {
   type ChatNotificationCategory,
 } from "@shared/notificationCategories";
 import { QueryParams } from "@shared/types/routes";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";;
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
 import { useParams } from "react-router-dom";

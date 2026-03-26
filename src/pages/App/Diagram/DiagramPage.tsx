@@ -6,7 +6,7 @@ import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { Link, useParams } from "react-router-dom";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../../../convex/_generated/api";
 import { useViewer } from "../UserContext";
 import { useState } from "react";

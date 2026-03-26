@@ -11,7 +11,7 @@ import {
 import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
 import { ScheduleXCalendar } from "@schedule-x/react";
 import { Temporal } from "temporal-polyfill";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
 import { CalendarCheck, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, ListTodo, PanelRightOpen, PanelRightClose, TrendingUp } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";

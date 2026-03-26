@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { yjsToExcalidraw } from "y-excalidraw";

@@ -1,5 +1,6 @@
 import { Layout } from "@/components/Layout";
-import { Authenticated, Unauthenticated, useQuery } from "convex/react";
+import { Authenticated, Unauthenticated } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import React, { Suspense, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useReadLocalStorage } from "usehooks-ts";
