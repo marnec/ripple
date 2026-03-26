@@ -18,6 +18,7 @@ export default tseslint.config(
       "src/components/ui/**",
       "audit-log/**",
       "convex-authz/**",
+      "convex-cascading-delete/**",
     ],
   },
   {

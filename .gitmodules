@@ -4,3 +4,6 @@
 [submodule "convex-authz"]
 	path = convex-authz
 	url = git@github.com:marnec/convex-authz.git
+[submodule "convex-cascading-delete"]
+	path = convex-cascading-delete
+	url = https://github.com/marnec/convex-cascading-delete.git
