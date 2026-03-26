@@ -223,22 +223,7 @@ export const remove = mutation({
       .withIndex("by_channel", (q) => q.eq("channelId", id))
       .collect();
 
-    // Clean up edges sourced from this channel (channel→target mention edges)
-    const channelEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_source", (q) => q.eq("sourceId", id))
-      .collect();
-    await Promise.all(channelEdges.map((e) => ctx.db.delete(e._id)));
-
-    // Clean up edges for all messages in this channel, then delete messages
-    for (const message of channelMessages) {
-      const messageEdges = await ctx.db
-        .query("edges")
-        .withIndex("by_source", (q) => q.eq("sourceId", message._id))
-        .collect();
-      await Promise.all(messageEdges.map((e) => ctx.db.delete(e._id)));
-    }
-    await Promise.all(channelMessages.map((message) => ctx.db.delete(message._id)));
+    await Promise.all(channelMessages.map((m) => ctx.db.delete(m._id)));
 
     const channelMembersStream = stream(ctx.db, schema).query("channelMembers").withIndex("by_channel", (q) => q.eq("channelId", id));
 

@@ -364,6 +364,8 @@ export default defineSchema({
   })
     .index("by_target", ["targetId"])
     .index("by_source", ["sourceId"])
+    .index("by_source_edgetype", ["sourceId", "edgeType"])
+    .index("by_target_edgetype", ["targetId", "edgeType"])
     .index("by_source_target", ["sourceId", "targetId"])
     .index("by_workspace_target", ["workspaceId", "targetId"])
     .index("by_workspace", ["workspaceId"]),

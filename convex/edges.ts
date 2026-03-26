@@ -50,12 +50,22 @@ export async function getEnrichedBacklinks(
   workspaceId: string;
   projectId?: string;
 }>> {
-  const edges = await ctx.db
+  const allEdges = await ctx.db
     .query("edges")
     .withIndex("by_workspace_target", (q) =>
       q.eq("workspaceId", workspaceId).eq("targetId", targetId),
     )
     .collect();
+
+  // Channel mention edges: one row per message, deduplicate to one entry per (sourceId, edgeType).
+  // Other edge types are already unique per (sourceId, targetId) by construction.
+  const seenSourceEdge = new Set<string>();
+  const edges = allEdges.filter((e) => {
+    const key = `${e.sourceId}:${e.edgeType}`;
+    if (seenSourceEdge.has(key)) return false;
+    seenSourceEdge.add(key);
+    return true;
+  });
 
   // Collect typed IDs for batch fetching
   const taskIds = edges
@@ -142,41 +152,35 @@ export const syncEdges = mutation({
       .first();
     if (!membership) throw new ConvexError("Access denied");
 
-    // Get existing embed edges for this source
-    const existing = await ctx.db
+    const existingEmbeds = await ctx.db
       .query("edges")
-      .withIndex("by_source", (q) => q.eq("sourceId", sourceId))
+      .withIndex("by_source_edgetype", (q) =>
+        q.eq("sourceId", sourceId).eq("edgeType", "embeds"),
+      )
       .collect();
 
-    // Only diff embed edges (not blocks/relates_to)
-    const existingEmbeds = existing.filter((e) => e.edgeType === "embeds");
-    const existingByTarget = new Map(
-      existingEmbeds.map((r) => [r.targetId, r]),
-    );
+    const existingByTarget = new Map(existingEmbeds.map((r) => [r.targetId, r]));
     const newTargetIds = new Set(references.map((r) => r.targetId));
 
-    // Delete removed
-    for (const edge of existingEmbeds) {
-      if (!newTargetIds.has(edge.targetId)) {
-        await ctx.db.delete(edge._id);
-      }
-    }
-
-    // Insert added
-    for (const ref of references) {
-      if (!existingByTarget.has(ref.targetId)) {
-        await ctx.db.insert("edges", {
-          sourceType,
-          sourceId,
-          targetType: ref.targetType,
-          targetId: ref.targetId,
-          edgeType: "embeds",
-          workspaceId,
-          createdBy: userId,
-          createdAt: Date.now(),
-        });
-      }
-    }
+    await Promise.all([
+      ...existingEmbeds
+        .filter((e) => !newTargetIds.has(e.targetId))
+        .map((e) => ctx.db.delete(e._id)),
+      ...references
+        .filter((ref) => !existingByTarget.has(ref.targetId))
+        .map((ref) =>
+          ctx.db.insert("edges", {
+            sourceType,
+            sourceId,
+            targetType: ref.targetType,
+            targetId: ref.targetId,
+            edgeType: "embeds",
+            workspaceId,
+            createdBy: userId,
+            createdAt: Date.now(),
+          }),
+        ),
+    ]);
 
     return null;
   },
@@ -207,40 +211,35 @@ export const syncMentionEdges = mutation({
       .first();
     if (!membership) throw new ConvexError("Access denied");
 
-    // Get existing mention edges for this source
-    const existing = await ctx.db
+    const existingMentions = await ctx.db
       .query("edges")
-      .withIndex("by_source", (q) => q.eq("sourceId", sourceId))
+      .withIndex("by_source_edgetype", (q) =>
+        q.eq("sourceId", sourceId).eq("edgeType", "mentions"),
+      )
       .collect();
 
-    const existingMentions = existing.filter((e) => e.edgeType === "mentions");
-    const existingByTarget = new Map(
-      existingMentions.map((e) => [e.targetId, e]),
-    );
+    const existingByTarget = new Map(existingMentions.map((e) => [e.targetId, e]));
     const newTargetIds = new Set(mentionedUserIds);
 
-    // Delete removed
-    for (const edge of existingMentions) {
-      if (!newTargetIds.has(edge.targetId)) {
-        await ctx.db.delete(edge._id);
-      }
-    }
-
-    // Insert added
-    for (const mentionedUserId of mentionedUserIds) {
-      if (!existingByTarget.has(mentionedUserId)) {
-        await ctx.db.insert("edges", {
-          sourceType,
-          sourceId,
-          targetType: "user",
-          targetId: mentionedUserId,
-          edgeType: "mentions",
-          workspaceId,
-          createdBy: userId,
-          createdAt: Date.now(),
-        });
-      }
-    }
+    await Promise.all([
+      ...existingMentions
+        .filter((e) => !newTargetIds.has(e.targetId))
+        .map((e) => ctx.db.delete(e._id)),
+      ...mentionedUserIds
+        .filter((id) => !existingByTarget.has(id))
+        .map((id) =>
+          ctx.db.insert("edges", {
+            sourceType,
+            sourceId,
+            targetType: "user",
+            targetId: id,
+            edgeType: "mentions",
+            workspaceId,
+            createdBy: userId,
+            createdAt: Date.now(),
+          }),
+        ),
+    ]);
 
     return null;
   },
@@ -419,67 +418,71 @@ export const listByTask = query({
       .first();
     if (!membership) return { blocks: [], blockedBy: [], relatesTo: [] };
 
-    // Query outgoing (sourceId = this task)
-    const outgoing = await ctx.db
-      .query("edges")
-      .withIndex("by_source", (q) => q.eq("sourceId", taskId))
-      .collect();
+    // Fetch only the relevant edge types in parallel; blocks/relates_to are exclusively task→task
+    const [outBlocks, outRelates, inBlocks, inRelates] = await Promise.all([
+      ctx.db.query("edges").withIndex("by_source_edgetype", (q) => q.eq("sourceId", taskId).eq("edgeType", "blocks")).collect(),
+      ctx.db.query("edges").withIndex("by_source_edgetype", (q) => q.eq("sourceId", taskId).eq("edgeType", "relates_to")).collect(),
+      ctx.db.query("edges").withIndex("by_target_edgetype", (q) => q.eq("targetId", taskId).eq("edgeType", "blocks")).collect(),
+      ctx.db.query("edges").withIndex("by_target_edgetype", (q) => q.eq("targetId", taskId).eq("edgeType", "relates_to")).collect(),
+    ]);
 
-    // Query incoming (targetId = this task)
-    const incoming = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", taskId))
-      .collect();
+    const outgoingDeps = [...outBlocks, ...outRelates];
+    const incomingDeps = [...inBlocks, ...inRelates];
 
-    // Filter to only task dependency edges
-    const outgoingDeps = outgoing.filter(
-      (e) => e.sourceType === "task" && e.targetType === "task" && (e.edgeType === "blocks" || e.edgeType === "relates_to"),
+    // Collect all referenced task IDs (deduplicated)
+    const referencedTaskIds = [
+      ...new Set([
+        ...outgoingDeps.map((e) => e.targetId as Id<"tasks">),
+        ...incomingDeps.map((e) => e.sourceId as Id<"tasks">),
+      ]),
+    ];
+
+    // Batch-fetch tasks, then batch-fetch their projects in parallel
+    const tasks = await Promise.all(referencedTaskIds.map((id) => ctx.db.get(id)));
+    const taskById = new Map(
+      referencedTaskIds.map((id, i) => [id as string, tasks[i]]),
     );
-    const incomingDeps = incoming.filter(
-      (e) => e.sourceType === "task" && e.targetType === "task" && (e.edgeType === "blocks" || e.edgeType === "relates_to"),
-    );
 
-    // Enrich helper
-    const enrichTask = async (id: string) => {
-      const t = await ctx.db.get(id as Id<"tasks">);
+    const projectIds = [...new Set(tasks.flatMap((t) => (t ? [t.projectId] : [])))];
+    const projects = await Promise.all(projectIds.map((id) => ctx.db.get(id)));
+    const projectById = new Map(projectIds.map((id, i) => [id as string, projects[i]]));
+
+    const enrichTask = (id: string) => {
+      const t = taskById.get(id);
       if (!t) return null;
-      const project = await ctx.db.get(t.projectId);
       return {
         _id: t._id,
         title: t.title,
         number: t.number,
-        projectKey: project?.key,
+        projectKey: projectById.get(t.projectId as string)?.key,
         completed: t.completed,
       };
     };
 
-    const blocks: Array<{ edgeId: Id<"edges">; task: NonNullable<Awaited<ReturnType<typeof enrichTask>>> }> = [];
-    const blockedBy: typeof blocks = [];
-    const relatesTo: typeof blocks = [];
+    type DepItem = { edgeId: Id<"edges">; task: NonNullable<ReturnType<typeof enrichTask>> };
+    const blocks: DepItem[] = [];
+    const blockedBy: DepItem[] = [];
+    const relatesTo: DepItem[] = [];
+    const relatesToSeen = new Set<string>();
 
     for (const edge of outgoingDeps) {
-      const enriched = await enrichTask(edge.targetId);
+      const enriched = enrichTask(edge.targetId);
       if (!enriched) continue;
-      const item = { edgeId: edge._id, task: enriched };
       if (edge.edgeType === "blocks") {
-        blocks.push(item);
+        blocks.push({ edgeId: edge._id, task: enriched });
       } else {
-        relatesTo.push(item);
+        relatesToSeen.add(edge.targetId);
+        relatesTo.push({ edgeId: edge._id, task: enriched });
       }
     }
 
     for (const edge of incomingDeps) {
-      const enriched = await enrichTask(edge.sourceId);
+      const enriched = enrichTask(edge.sourceId);
       if (!enriched) continue;
-      const item = { edgeId: edge._id, task: enriched };
       if (edge.edgeType === "blocks") {
-        blockedBy.push(item);
-      } else {
-        // Only add relates_to from incoming if not already added from outgoing
-        const alreadyAdded = relatesTo.some((r) => r.task._id === (edge.sourceId as Id<"tasks">));
-        if (!alreadyAdded) {
-          relatesTo.push(item);
-        }
+        blockedBy.push({ edgeId: edge._id, task: enriched });
+      } else if (!relatesToSeen.has(edge.sourceId)) {
+        relatesTo.push({ edgeId: edge._id, task: enriched });
       }
     }
 
@@ -553,7 +556,7 @@ export const getWorkspaceGraph = query({
     // Build task groupIds from belongs_to edges (task → project containment)
     const nodeGroupIds = new Map<string, string>();
     for (const edge of edgeRows) {
-      if ((edge.edgeType as string) === "belongs_to") {
+      if (edge.edgeType === "belongs_to") {
         nodeGroupIds.set(edge.sourceId, edge.targetId);
       }
     }
@@ -565,13 +568,16 @@ export const getWorkspaceGraph = query({
       groupId: nodeGroupIds.get(n.resourceId),
     }));
 
-    // Collect user nodes referenced in edges (not in nodes table)
-    const userNodeIds = new Set<string>();
-    for (const edge of edgeRows) {
-      if (edge.targetType === "user") userNodeIds.add(edge.targetId);
-    }
-    for (const id of userNodeIds) {
-      nodes.push({ id, type: "user" });
+    // Collect user nodes referenced in edges (not in nodes table); batch-fetch names
+    const userNodeIds = [...new Set(
+      edgeRows.filter((e) => e.targetType === "user").map((e) => e.targetId),
+    )];
+    const users = await Promise.all(
+      userNodeIds.map((id) => ctx.db.get(id as Id<"users">)),
+    );
+    for (let i = 0; i < userNodeIds.length; i++) {
+      const u = users[i];
+      nodes.push({ id: userNodeIds[i], type: "user", name: u?.name ?? u?.email ?? undefined });
     }
 
     const validNodeIds = new Set(nodes.map((n) => n.id));
@@ -582,12 +588,12 @@ export const getWorkspaceGraph = query({
     const seenLinks = new Set<string>();
     const links: Array<{ source: string; target: string; edgeType: string }> = [];
     for (const e of edgeRows) {
-      if ((e.edgeType as string) === "belongs_to") continue;
+      if (e.edgeType === "belongs_to") continue;
       if (!validNodeIds.has(e.sourceId) || !validNodeIds.has(e.targetId)) continue;
       const key = `${e.sourceId}:${e.targetId}`;
       if (seenLinks.has(key)) continue;
       seenLinks.add(key);
-      links.push({ source: e.sourceId, target: e.targetId, edgeType: e.edgeType as string });
+      links.push({ source: e.sourceId, target: e.targetId, edgeType: e.edgeType });
     }
 
     return { nodes, links };

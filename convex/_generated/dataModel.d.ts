@@ -468,8 +468,10 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_source: ["sourceId", "_creationTime"];
+      by_source_edgetype: ["sourceId", "edgeType", "_creationTime"];
       by_source_target: ["sourceId", "targetId", "_creationTime"];
       by_target: ["targetId", "_creationTime"];
+      by_target_edgetype: ["targetId", "edgeType", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_target: ["workspaceId", "targetId", "_creationTime"];
     };

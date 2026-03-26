@@ -943,19 +943,6 @@ export const remove = mutation({
       await ctx.storage.delete(task.yjsSnapshotId);
     }
 
-    // Clean up all edges (outgoing embeds + incoming references + task dependencies)
-    const outgoingEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_source", (q) => q.eq("sourceId", taskId))
-      .collect();
-    const incomingEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", taskId))
-      .collect();
-    await Promise.all(
-      [...outgoingEdges, ...incomingEdges].map((e) => ctx.db.delete(e._id))
-    );
-
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.delete(taskId);
     return null;

@@ -214,7 +214,14 @@ triggers.register("channels", async (ctx, change) => {
       .first();
     if (node) await ctx.db.patch(node._id, { name: change.newDoc.name });
   } else {
-    await deleteNodeForId(ctx, change.id);
+    const [outgoing, incoming] = await Promise.all([
+      ctx.db.query("edges").withIndex("by_source", (q) => q.eq("sourceId", change.id)).collect(),
+      ctx.db.query("edges").withIndex("by_target", (q) => q.eq("targetId", change.id)).collect(),
+    ]);
+    await Promise.all([
+      deleteNodeForId(ctx, change.id),
+      ...[...outgoing, ...incoming].map((e) => ctx.db.delete(e._id)),
+    ]);
   }
 });
 
@@ -282,7 +289,14 @@ triggers.register("tasks", async (ctx, change) => {
       createdAt: Date.now(),
     });
   } else {
-    // delete: tasks.ts remove mutation already deletes all outgoing edges via by_source
+    // Delete all edges where this task is source or target.
+    // Runs inside the same transaction as the task delete, so any deletion
+    // path (mutation, migration, direct db.delete) gets automatic cleanup.
+    const [outgoing, incoming] = await Promise.all([
+      ctx.db.query("edges").withIndex("by_source", (q) => q.eq("sourceId", change.id)).collect(),
+      ctx.db.query("edges").withIndex("by_target", (q) => q.eq("targetId", change.id)).collect(),
+    ]);
+    await Promise.all([...outgoing, ...incoming].map((e) => ctx.db.delete(e._id)));
   }
 });
 
@@ -312,11 +326,12 @@ async function deleteOneChannelMentionEdge(
   channelId: Id<"channels">,
   targetId: string,
 ) {
-  const existing = await ctx.db
+  const edges = await ctx.db
     .query("edges")
     .withIndex("by_source_target", (q) => q.eq("sourceId", channelId).eq("targetId", targetId))
-    .first();
-  if (existing) await ctx.db.delete(existing._id);
+    .collect();
+  const edge = edges.find((e) => e.edgeType === "mentions");
+  if (edge) await ctx.db.delete(edge._id);
 }
 
 // ── Messages trigger ─────────────────────────────────────────────────
@@ -333,19 +348,15 @@ triggers.register("messages", async (ctx, change) => {
   if (change.operation === "insert") {
     if (change.newDoc.deleted) return;
     const targets = extractMessageTargets(change.newDoc.body);
-    for (const t of targets) {
-      await insertChannelMentionEdge(ctx, channelId, workspaceId, t);
-    }
+    await Promise.all(targets.map((t) => insertChannelMentionEdge(ctx, channelId, workspaceId, t)));
   } else if (change.operation === "update") {
     const oldTargets = change.oldDoc.deleted ? [] : extractMessageTargets(change.oldDoc.body);
     const newTargets = change.newDoc.deleted ? [] : extractMessageTargets(change.newDoc.body);
     const oldIds = new Set(oldTargets.map((t) => t.targetId));
     const newIds = new Set(newTargets.map((t) => t.targetId));
-    for (const t of newTargets) {
-      if (!oldIds.has(t.targetId)) await insertChannelMentionEdge(ctx, channelId, workspaceId, t);
-    }
-    for (const t of oldTargets) {
-      if (!newIds.has(t.targetId)) await deleteOneChannelMentionEdge(ctx, channelId, t.targetId);
-    }
+    await Promise.all([
+      ...newTargets.filter((t) => !oldIds.has(t.targetId)).map((t) => insertChannelMentionEdge(ctx, channelId, workspaceId, t)),
+      ...oldTargets.filter((t) => !newIds.has(t.targetId)).map((t) => deleteOneChannelMentionEdge(ctx, channelId, t.targetId)),
+    ]);
   }
 });
