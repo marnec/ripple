@@ -48,7 +48,7 @@ export const timeline = query({
     if (!userId) throw new ConvexError("Not authenticated");
 
     const task = await ctx.db.get(taskId);
-    if (!task) throw new ConvexError("Task not found");
+    if (!task) return [];
 
     // Auth: workspace membership
     const membership = await ctx.db
