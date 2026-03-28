@@ -246,12 +246,12 @@ triggers.register("workspaceMembers", async (ctx, change) => {
       tags: [],
     });
   } else if (change.operation === "delete") {
-    // Find the user node for this specific workspace
-    const nodes = await ctx.db
+    const node = await ctx.db
       .query("nodes")
-      .withIndex("by_resource", (q) => q.eq("resourceId", change.oldDoc.userId))
-      .collect();
-    const node = nodes.find((n) => n.workspaceId === change.oldDoc.workspaceId);
+      .withIndex("by_resource_workspace", (q) =>
+        q.eq("resourceId", change.oldDoc.userId).eq("workspaceId", change.oldDoc.workspaceId),
+      )
+      .first();
     if (node) await ctx.db.delete(node._id);
   }
 });
@@ -286,11 +286,13 @@ async function findNodeId(ctx: TriggerCtx, resourceId: string) {
 }
 
 async function findUserNodeId(ctx: TriggerCtx, userId: string, workspaceId: Id<"workspaces">) {
-  const nodes = await ctx.db
+  const node = await ctx.db
     .query("nodes")
-    .withIndex("by_resource", (q) => q.eq("resourceId", userId))
-    .collect();
-  return nodes.find((n) => n.workspaceId === workspaceId)?._id;
+    .withIndex("by_resource_workspace", (q) =>
+      q.eq("resourceId", userId).eq("workspaceId", workspaceId),
+    )
+    .first();
+  return node?._id;
 }
 
 // ── belongs_to edge triggers ─────────────────────────────────────────

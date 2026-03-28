@@ -30,11 +30,13 @@ async function getUserNodeId(
   userId: string,
   workspaceId: Id<"workspaces">,
 ): Promise<Id<"nodes"> | undefined> {
-  const nodes = await ctx.db
+  const node = await ctx.db
     .query("nodes")
-    .withIndex("by_resource", (q) => q.eq("resourceId", userId))
-    .collect();
-  return nodes.find((n) => n.workspaceId === workspaceId)?._id;
+    .withIndex("by_resource_workspace", (q) =>
+      q.eq("resourceId", userId).eq("workspaceId", workspaceId),
+    )
+    .first();
+  return node?._id;
 }
 
 // ── Validators ──────────────────────────────────────────────────────
@@ -125,7 +127,9 @@ export async function getEnrichedBacklinks(
       _id: edge._id,
       sourceType: edge.sourceType as string,
       sourceId: edge.sourceId,
-      sourceName: node?.name ?? `Deleted ${edge.sourceType}`,
+      sourceName: node
+        ? (edge.sourceType === "channel" ? `#${node.name}` : node.name)
+        : `Deleted ${edge.sourceType}`,
       edgeType: edge.edgeType as string,
       workspaceId: edge.workspaceId as string,
       projectId:
@@ -471,14 +475,14 @@ export const listByTask = query({
       ]),
     ];
 
-    // Batch-fetch tasks, then batch-fetch their projects in parallel
-    const tasks = await Promise.all(referencedTaskIds.map((id) => ctx.db.get(id)));
+    // Batch-fetch tasks, then batch-fetch their projects
+    const tasks = await getAll(ctx.db, "tasks", referencedTaskIds);
     const taskById = new Map(
       referencedTaskIds.map((id, i) => [id as string, tasks[i]]),
     );
 
     const projectIds = [...new Set(tasks.flatMap((t) => (t ? [t.projectId] : [])))];
-    const projects = await Promise.all(projectIds.map((id) => ctx.db.get(id)));
+    const projects = await getAll(ctx.db, "projects", projectIds);
     const projectById = new Map(projectIds.map((id, i) => [id as string, projects[i]]));
 
     const enrichTask = (id: string) => {

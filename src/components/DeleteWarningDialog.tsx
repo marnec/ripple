@@ -50,6 +50,15 @@ function getSourceLink(ref: Reference): string {
   if (ref.sourceType === "task" && ref.projectId) {
     return `/workspaces/${ref.workspaceId}/projects/${ref.projectId}/tasks/${ref.sourceId}`;
   }
+  if (ref.sourceType === "diagram") {
+    return `/workspaces/${ref.workspaceId}/diagrams/${ref.sourceId}`;
+  }
+  if (ref.sourceType === "spreadsheet") {
+    return `/workspaces/${ref.workspaceId}/spreadsheets/${ref.sourceId}`;
+  }
+  if (ref.sourceType === "channel") {
+    return `/workspaces/${ref.workspaceId}/channels/${ref.sourceId}`;
+  }
   return "#";
 }
 

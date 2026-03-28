@@ -576,9 +576,11 @@ export const backfillUserNodes = migrations.define({
     // Check if a user node already exists for this (user, workspace) pair
     const existing = await ctx.db
       .query("nodes")
-      .withIndex("by_resource", (q) => q.eq("resourceId", member.userId))
-      .collect();
-    if (existing.some((n) => n.workspaceId === member.workspaceId)) return;
+      .withIndex("by_resource_workspace", (q) =>
+        q.eq("resourceId", member.userId).eq("workspaceId", member.workspaceId),
+      )
+      .first();
+    if (existing) return;
     const user = await ctx.db.get(member.userId);
     await ctx.db.insert("nodes", {
       workspaceId: member.workspaceId,

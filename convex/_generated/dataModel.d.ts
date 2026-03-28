@@ -641,6 +641,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_resource: ["resourceId", "_creationTime"];
+      by_resource_workspace: ["resourceId", "workspaceId", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_type: ["workspaceId", "resourceType", "_creationTime"];
     };

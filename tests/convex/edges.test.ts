@@ -821,7 +821,7 @@ describe("channel mention edges (via messages trigger)", () => {
     const mentionBacklinks = backlinks.filter((b) => b.edgeType === "mentions");
     expect(mentionBacklinks).toHaveLength(1);
     expect(mentionBacklinks[0].sourceType).toBe("channel");
-    expect(mentionBacklinks[0].sourceName).toBe("engineering");
+    expect(mentionBacklinks[0].sourceName).toBe("#engineering");
     expect(mentionBacklinks[0].edgeType).toBe("mentions");
   });
 });

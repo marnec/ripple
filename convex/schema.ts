@@ -396,6 +396,7 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_type", ["workspaceId", "resourceType"])
     .index("by_resource", ["resourceId"])
+    .index("by_resource_workspace", ["resourceId", "workspaceId"])
     .searchIndex("by_name", {
       searchField: "name",
       filterFields: ["workspaceId", "resourceType"],
