@@ -173,6 +173,154 @@ describe("edges.syncEdges", () => {
   });
 });
 
+describe("edge nodeIds", () => {
+  it("syncEdges populates sourceNodeId and targetNodeId", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    // Create resources with triggers so nodes exist
+    const { documentId, diagramId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const docId = await db.insert("documents", { workspaceId, name: "Doc" });
+      const diaId = await db.insert("diagrams", { workspaceId, name: "Dia" });
+      return { documentId: docId, diagramId: diaId };
+    });
+
+    await asUser.mutation(api.edges.syncEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      references: [{ targetType: "diagram", targetId: diagramId }],
+      workspaceId,
+    });
+
+    const edge = await t.run(async (ctx) => {
+      const edges = await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect();
+      return edges[0];
+    });
+
+    expect(edge.sourceNodeId).toBeDefined();
+    expect(edge.targetNodeId).toBeDefined();
+
+    // Verify they point to the correct nodes
+    const [sourceNode, targetNode] = await t.run(async (ctx) => {
+      const s = edge.sourceNodeId ? await ctx.db.get(edge.sourceNodeId) : null;
+      const tgt = edge.targetNodeId ? await ctx.db.get(edge.targetNodeId) : null;
+      return [s, tgt] as const;
+    });
+
+    expect(sourceNode?.resourceId).toBe(documentId);
+    expect(targetNode?.resourceId).toBe(diagramId);
+  });
+
+  it("createEdge populates sourceNodeId and targetNodeId for task dependencies", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { projectId, todoId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const pId = await db.insert("projects", {
+        name: "Proj", color: "bg-blue-500", workspaceId, creatorId: userId, key: "P", taskCounter: 0,
+      });
+      const sId = await ctx.db.insert("taskStatuses", {
+        projectId: pId, name: "Todo", color: "bg-gray-500", order: 0, isDefault: true, isCompleted: false,
+      });
+      return { projectId: pId, todoId: sId };
+    });
+
+    const [taskA, taskB] = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const a = await db.insert("tasks", {
+        projectId, workspaceId, title: "A", statusId: todoId, priority: "medium", completed: false, creatorId: userId,
+      });
+      const b = await db.insert("tasks", {
+        projectId, workspaceId, title: "B", statusId: todoId, priority: "medium", completed: false, creatorId: userId,
+      });
+      return [a, b] as const;
+    });
+
+    const edgeId = await asUser.mutation(api.edges.createEdge, {
+      taskId: taskA,
+      dependsOnTaskId: taskB,
+      type: "blocks",
+    });
+
+    const edge = await t.run(async (ctx) => ctx.db.get(edgeId));
+    expect(edge?.sourceNodeId).toBeDefined();
+    expect(edge?.targetNodeId).toBeDefined();
+  });
+
+  it("belongs_to trigger populates sourceNodeId and targetNodeId", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+
+    const { projectId, todoId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const pId = await db.insert("projects", {
+        name: "Proj", color: "bg-blue-500", workspaceId, creatorId: userId, key: "P", taskCounter: 0,
+      });
+      const sId = await ctx.db.insert("taskStatuses", {
+        projectId: pId, name: "Todo", color: "bg-gray-500", order: 0, isDefault: true, isCompleted: false,
+      });
+      return { projectId: pId, todoId: sId };
+    });
+
+    const taskId = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      return await db.insert("tasks", {
+        projectId, workspaceId, title: "Task", statusId: todoId, priority: "medium", completed: false, creatorId: userId,
+      });
+    });
+
+    const edge = await t.run(async (ctx) => {
+      const edges = await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", taskId))
+        .collect();
+      return edges.find((e) => (e.edgeType as string) === "belongs_to");
+    });
+
+    expect(edge?.sourceNodeId).toBeDefined();
+    expect(edge?.targetNodeId).toBeDefined();
+  });
+
+  it("syncMentionEdges populates sourceNodeId and targetNodeId for user mentions", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { documentId, mentionedUserId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const docId = await db.insert("documents", { workspaceId, name: "Doc" });
+      const uId = await ctx.db.insert("users", { name: "Alice", email: "a@test.com" });
+      // Add user as workspace member so they get a node
+      await db.insert("workspaceMembers", {
+        userId: uId, workspaceId, role: "member" as any,
+      });
+      return { documentId: docId, mentionedUserId: uId };
+    });
+
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedUserIds: [mentionedUserId],
+      workspaceId,
+    });
+
+    const edge = await t.run(async (ctx) => {
+      const edges = await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect();
+      return edges.find((e) => e.edgeType === "mentions");
+    });
+
+    expect(edge?.sourceNodeId).toBeDefined();
+    expect(edge?.targetNodeId).toBeDefined();
+  });
+});
+
 describe("edges.createEdge", () => {
   it("should create a task dependency edge", async () => {
     const t = createTestContext();
@@ -532,7 +680,8 @@ describe("channel mention edges (via messages trigger)", () => {
     opts: { workspaceId: Id<"workspaces">; name?: string },
   ) {
     return await t.run(async (ctx) => {
-      return await ctx.db.insert("channels", {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      return await db.insert("channels", {
         name: opts.name ?? "test-channel",
         workspaceId: opts.workspaceId,
         isPublic: true,
@@ -672,7 +821,7 @@ describe("channel mention edges (via messages trigger)", () => {
     const mentionBacklinks = backlinks.filter((b) => b.edgeType === "mentions");
     expect(mentionBacklinks).toHaveLength(1);
     expect(mentionBacklinks[0].sourceType).toBe("channel");
-    expect(mentionBacklinks[0].sourceName).toBe("#engineering");
+    expect(mentionBacklinks[0].sourceName).toBe("engineering");
     expect(mentionBacklinks[0].edgeType).toBe("mentions");
   });
 });
@@ -725,5 +874,104 @@ describe("task belongs_to edges (via trigger)", () => {
       ctx.db.query("edges").withIndex("by_source", (q) => q.eq("sourceId", taskId)).collect(),
     );
     expect(edges.filter((e) => (e.edgeType as string) === "belongs_to")).toHaveLength(0);
+  });
+});
+
+describe("user nodes (via workspaceMembers trigger)", () => {
+  /** Add a member with triggers so user node is created. */
+  async function addMemberWithTriggers(
+    t: ReturnType<typeof createTestContext>,
+    opts: { userId: Id<"users">; workspaceId: Id<"workspaces"> },
+  ) {
+    await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.insert("workspaceMembers", {
+        userId: opts.userId,
+        workspaceId: opts.workspaceId,
+        role: "member" as any,
+      });
+    });
+  }
+
+  it("adding a workspace member creates a user node", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+
+    const newUserId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Alice", email: "alice@test.com" }),
+    );
+    await addMemberWithTriggers(t, { userId: newUserId, workspaceId });
+
+    const userNode = await t.run(async (ctx) =>
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", newUserId))
+        .first(),
+    );
+
+    expect(userNode).not.toBeNull();
+    expect(userNode!.resourceType).toBe("user");
+    expect(userNode!.name).toBe("Alice");
+    expect(userNode!.workspaceId).toBe(workspaceId);
+  });
+
+  it("removing a workspace member deletes the user node", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+
+    const userId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Alice", email: "alice@test.com" }),
+    );
+    await addMemberWithTriggers(t, { userId, workspaceId });
+
+    // Remove the member via trigger
+    const memberId = await t.run(async (ctx) => {
+      const member = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", workspaceId).eq("userId", userId),
+        )
+        .first();
+      return member!._id;
+    });
+
+    await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.delete(memberId);
+    });
+
+    const userNode = await t.run(async (ctx) =>
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", userId))
+        .first(),
+    );
+
+    expect(userNode).toBeNull();
+  });
+
+  it("updating a user's name syncs to their user nodes", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+
+    const userId = await t.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Alice", email: "alice@test.com" }),
+    );
+    await addMemberWithTriggers(t, { userId, workspaceId });
+
+    // Rename the user via trigger
+    await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.patch(userId, { name: "Alice Updated" });
+    });
+
+    const userNode = await t.run(async (ctx) =>
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", userId))
+        .first(),
+    );
+
+    expect(userNode!.name).toBe("Alice Updated");
   });
 });

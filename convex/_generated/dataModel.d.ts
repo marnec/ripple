@@ -438,8 +438,10 @@ export type DataModel = {
       edgeType: "embeds" | "blocks" | "relates_to" | "mentions" | "belongs_to";
       groupId?: string;
       sourceId: string;
+      sourceNodeId?: Id<"nodes">;
       sourceType: "document" | "task" | "diagram" | "spreadsheet" | "channel";
       targetId: string;
+      targetNodeId?: Id<"nodes">;
       targetType:
         | "document"
         | "task"
@@ -460,8 +462,10 @@ export type DataModel = {
       | "edgeType"
       | "groupId"
       | "sourceId"
+      | "sourceNodeId"
       | "sourceType"
       | "targetId"
+      | "targetNodeId"
       | "targetType"
       | "workspaceId";
     indexes: {
@@ -615,7 +619,8 @@ export type DataModel = {
         | "spreadsheet"
         | "project"
         | "channel"
-        | "task";
+        | "task"
+        | "user";
       tags: Array<string>;
       workspaceId: Id<"workspaces">;
       _id: Id<"nodes">;

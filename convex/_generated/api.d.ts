@@ -2435,6 +2435,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillEdgeNodeIds: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillMemberAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -2520,6 +2532,18 @@ export declare const internal: {
       any
     >;
     backfillTaskNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    backfillUserNodes: FunctionReference<
       "mutation",
       "internal",
       {

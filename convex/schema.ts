@@ -359,6 +359,8 @@ export default defineSchema({
       v.literal("belongs_to"),
     ),
     workspaceId: v.id("workspaces"),
+    sourceNodeId: v.optional(v.id("nodes")),
+    targetNodeId: v.optional(v.id("nodes")),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
     groupId: v.optional(v.string()), // TODO: remove after stripEdgeGroupId migration runs
@@ -380,6 +382,7 @@ export default defineSchema({
       v.literal("project"),
       v.literal("channel"),
       v.literal("task"),
+      v.literal("user"),
     ),
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name

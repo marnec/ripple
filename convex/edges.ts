@@ -5,6 +5,37 @@ import { GenericQueryCtx } from "convex/server";
 import type { DataModel } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { logTaskActivity } from "./auditLog";
+import { getAll } from "convex-helpers/server/relationships";
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+/** Resolve a resource ID to its node _id. Returns undefined if no node found. */
+async function getNodeId(
+  ctx: GenericQueryCtx<DataModel>,
+  resourceId: string,
+): Promise<Id<"nodes"> | undefined> {
+  const node = await ctx.db
+    .query("nodes")
+    .withIndex("by_resource", (q) => q.eq("resourceId", resourceId))
+    .first();
+  return node?._id;
+}
+
+/**
+ * Resolve a user's node _id within a specific workspace.
+ * Users can have multiple nodes (one per workspace).
+ */
+async function getUserNodeId(
+  ctx: GenericQueryCtx<DataModel>,
+  userId: string,
+  workspaceId: Id<"workspaces">,
+): Promise<Id<"nodes"> | undefined> {
+  const nodes = await ctx.db
+    .query("nodes")
+    .withIndex("by_resource", (q) => q.eq("resourceId", userId))
+    .collect();
+  return nodes.find((n) => n.workspaceId === workspaceId)?._id;
+}
 
 // ── Validators ──────────────────────────────────────────────────────
 
@@ -67,18 +98,29 @@ export async function getEnrichedBacklinks(
     return true;
   });
 
-  // Resolve names from the nodes table (all source types sync to nodes)
-  const nodeResults = await Promise.all(
-    edges.map((e) =>
-      ctx.db
-        .query("nodes")
-        .withIndex("by_resource", (q) => q.eq("resourceId", e.sourceId))
-        .first(),
-    ),
-  );
+  // Resolve source nodes: use batch point reads (getAll) for edges with nodeIds,
+  // fall back to index query for pre-backfill edges without nodeIds.
+  const withNodeId = edges.filter((e) => e.sourceNodeId);
+  const withoutNodeId = edges.filter((e) => !e.sourceNodeId);
 
-  return edges.map((edge, i) => {
-    const node = nodeResults[i];
+  const [batchNodes, fallbackNodes] = await Promise.all([
+    getAll(ctx.db, withNodeId.map((e) => e.sourceNodeId as Id<"nodes">)),
+    Promise.all(
+      withoutNodeId.map((e) =>
+        ctx.db
+          .query("nodes")
+          .withIndex("by_resource", (q) => q.eq("resourceId", e.sourceId))
+          .first(),
+      ),
+    ),
+  ]);
+
+  const nodeByEdgeId = new Map<string, typeof batchNodes[number]>();
+  withNodeId.forEach((e, i) => nodeByEdgeId.set(e._id, batchNodes[i]));
+  withoutNodeId.forEach((e, i) => nodeByEdgeId.set(e._id, fallbackNodes[i]));
+
+  return edges.map((edge) => {
+    const node = nodeByEdgeId.get(edge._id);
     return {
       _id: edge._id,
       sourceType: edge.sourceType as string,
@@ -134,25 +176,30 @@ export const syncEdges = mutation({
 
     const existingByTarget = new Map(existingEmbeds.map((r) => [r.targetId, r]));
     const newTargetIds = new Set(references.map((r) => r.targetId));
+    const newRefs = references.filter((ref) => !existingByTarget.has(ref.targetId));
+
+    // Resolve node IDs for new edges
+    const sourceNodeId = newRefs.length > 0 ? await getNodeId(ctx, sourceId) : undefined;
+    const targetNodeIds = await Promise.all(newRefs.map((ref) => getNodeId(ctx, ref.targetId)));
 
     await Promise.all([
       ...existingEmbeds
         .filter((e) => !newTargetIds.has(e.targetId))
         .map((e) => ctx.db.delete(e._id)),
-      ...references
-        .filter((ref) => !existingByTarget.has(ref.targetId))
-        .map((ref) =>
-          ctx.db.insert("edges", {
-            sourceType,
-            sourceId,
-            targetType: ref.targetType,
-            targetId: ref.targetId,
-            edgeType: "embeds",
-            workspaceId,
-            createdBy: userId,
-            createdAt: Date.now(),
-          }),
-        ),
+      ...newRefs.map((ref, i) =>
+        ctx.db.insert("edges", {
+          sourceType,
+          sourceId,
+          targetType: ref.targetType,
+          targetId: ref.targetId,
+          edgeType: "embeds",
+          workspaceId,
+          sourceNodeId,
+          targetNodeId: targetNodeIds[i],
+          createdBy: userId,
+          createdAt: Date.now(),
+        }),
+      ),
     ]);
 
     return null;
@@ -193,25 +240,32 @@ export const syncMentionEdges = mutation({
 
     const existingByTarget = new Map(existingMentions.map((e) => [e.targetId, e]));
     const newTargetIds = new Set(mentionedUserIds);
+    const newMentionIds = mentionedUserIds.filter((id) => !existingByTarget.has(id));
+
+    // Resolve node IDs for new edges
+    const sourceNodeId = newMentionIds.length > 0 ? await getNodeId(ctx, sourceId) : undefined;
+    const targetNodeIds = await Promise.all(
+      newMentionIds.map((id) => getUserNodeId(ctx, id, workspaceId)),
+    );
 
     await Promise.all([
       ...existingMentions
         .filter((e) => !newTargetIds.has(e.targetId))
         .map((e) => ctx.db.delete(e._id)),
-      ...mentionedUserIds
-        .filter((id) => !existingByTarget.has(id))
-        .map((id) =>
-          ctx.db.insert("edges", {
-            sourceType,
-            sourceId,
-            targetType: "user",
-            targetId: id,
-            edgeType: "mentions",
-            workspaceId,
-            createdBy: userId,
-            createdAt: Date.now(),
-          }),
-        ),
+      ...newMentionIds.map((id, i) =>
+        ctx.db.insert("edges", {
+          sourceType,
+          sourceId,
+          targetType: "user",
+          targetId: id,
+          edgeType: "mentions",
+          workspaceId,
+          sourceNodeId,
+          targetNodeId: targetNodeIds[i],
+          createdBy: userId,
+          createdAt: Date.now(),
+        }),
+      ),
     ]);
 
     return null;
@@ -275,6 +329,11 @@ export const createEdge = mutation({
       if (reverse) throw new ConvexError("Relationship already exists");
     }
 
+    const [sourceNodeId, targetNodeId] = await Promise.all([
+      getNodeId(ctx, args.taskId),
+      getNodeId(ctx, args.dependsOnTaskId),
+    ]);
+
     const edgeId = await ctx.db.insert("edges", {
       sourceType: "task",
       sourceId: args.taskId,
@@ -282,6 +341,8 @@ export const createEdge = mutation({
       targetId: args.dependsOnTaskId,
       edgeType: args.type,
       workspaceId: task.workspaceId,
+      sourceNodeId,
+      targetNodeId,
       createdBy: userId,
       createdAt: Date.now(),
     });
@@ -499,7 +560,7 @@ const graphCountsValidator = v.object({
 /**
  * Get the workspace knowledge graph: all nodes + edges.
  * Nodes are fetched from the nodes table (includes isolated nodes with no edges).
- * Names are included eagerly — getNodeLabel is only needed for user/message types.
+ * User nodes are included via workspace membership (backfilled + trigger-created).
  * Counts are fetched separately via getWorkspaceCounts to avoid coupling
  * graph reactivity to every resource creation/deletion in the workspace.
  */
@@ -540,18 +601,6 @@ export const getWorkspaceGraph = query({
       name: n.name,
       groupId: nodeGroupIds.get(n.resourceId),
     }));
-
-    // Collect user nodes referenced in edges (not in nodes table); batch-fetch names
-    const userNodeIds = [...new Set(
-      edgeRows.filter((e) => e.targetType === "user").map((e) => e.targetId),
-    )];
-    const users = await Promise.all(
-      userNodeIds.map((id) => ctx.db.get(id as Id<"users">)),
-    );
-    for (let i = 0; i < userNodeIds.length; i++) {
-      const u = users[i];
-      nodes.push({ id: userNodeIds[i], type: "user", name: u?.name ?? u?.email ?? undefined });
-    }
 
     const validNodeIds = new Set(nodes.map((n) => n.id));
 
@@ -616,9 +665,8 @@ export const getWorkspaceCounts = query({
 
 /**
  * Lazy-load a single node's display label.
- * Called on hover from the graph UI for user nodes.
- * Resource nodes (document/diagram/spreadsheet/project/channel/task) resolve
- * via the nodes table using the by_resource index.
+ * Called on hover from the graph UI.
+ * All resource types (including users) resolve via the nodes table.
  */
 export const getNodeLabel = query({
   args: { id: v.string(), type: v.string() },
@@ -627,21 +675,11 @@ export const getNodeLabel = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
 
-    const resourceTypes = ["document", "diagram", "spreadsheet", "project", "channel", "task"];
-    if (resourceTypes.includes(type)) {
-      const node = await ctx.db
-        .query("nodes")
-        .withIndex("by_resource", (q) => q.eq("resourceId", id))
-        .first();
-      if (!node) return null;
-      return type === "channel" ? `#${node.name}` : node.name;
-    }
-
-    if (type === "user") {
-      const user = await ctx.db.get(id as Id<"users">);
-      return user ? (user.name ?? user.email ?? "User") : null;
-    }
-
-    return null;
+    const node = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", id))
+      .first();
+    if (!node) return null;
+    return type === "channel" ? `#${node.name}` : node.name;
   },
 });

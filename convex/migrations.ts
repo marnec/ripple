@@ -114,6 +114,8 @@ export const runAll = migrations.runner([
   internal.migrations.stripEdgeGroupId,
   internal.migrations.backfillChannelMentionEdges,
   internal.migrations.backfillTaskBelongsToEdges,
+  internal.migrations.backfillUserNodes,
+  internal.migrations.backfillEdgeNodeIds,
 ]);
 
 /**
@@ -562,5 +564,65 @@ export const backfillTaskBelongsToEdges = migrations.define({
       workspaceId: task.workspaceId,
       createdAt: task._creationTime,
     });
+  },
+});
+
+// ── User nodes + edge nodeId backfills ──────────────────────────────
+
+/** Create a user node for each workspace member that doesn't have one. */
+export const backfillUserNodes = migrations.define({
+  table: "workspaceMembers",
+  migrateOne: async (ctx, member) => {
+    // Check if a user node already exists for this (user, workspace) pair
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", member.userId))
+      .collect();
+    if (existing.some((n) => n.workspaceId === member.workspaceId)) return;
+    const user = await ctx.db.get(member.userId);
+    await ctx.db.insert("nodes", {
+      workspaceId: member.workspaceId,
+      resourceType: "user",
+      resourceId: member.userId,
+      name: user?.name ?? user?.email ?? "Unknown",
+      tags: [],
+    } as never);
+  },
+});
+
+/** Populate sourceNodeId and targetNodeId on existing edges. */
+export const backfillEdgeNodeIds = migrations.define({
+  table: "edges",
+  migrateOne: async (ctx, edge) => {
+    // Skip if already backfilled
+    const e = edge as Record<string, unknown>;
+    if (e.sourceNodeId && e.targetNodeId) return;
+
+    const sourceNode = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", edge.sourceId))
+      .first();
+
+    // For user targets, find the node in the correct workspace
+    let targetNode;
+    if (edge.targetType === "user") {
+      const nodes = await ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", edge.targetId))
+        .collect();
+      targetNode = nodes.find((n) => n.workspaceId === edge.workspaceId);
+    } else {
+      targetNode = await ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", edge.targetId))
+        .first();
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (sourceNode && !e.sourceNodeId) patch.sourceNodeId = sourceNode._id;
+    if (targetNode && !e.targetNodeId) patch.targetNodeId = targetNode._id;
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(edge._id, patch as never);
+    }
   },
 });

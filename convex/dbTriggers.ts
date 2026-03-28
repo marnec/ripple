@@ -232,11 +232,78 @@ triggers.register("tasks", async (ctx, change) => {
   // delete: node cleanup handled by cascade rules
 });
 
+// ── User nodes (via workspaceMembers) ──────────────────────────────
+// One user node per workspace membership. Name synced from user profile.
+
+triggers.register("workspaceMembers", async (ctx, change) => {
+  if (change.operation === "insert") {
+    const user = await ctx.db.get(change.newDoc.userId);
+    await ctx.db.insert("nodes", {
+      workspaceId: change.newDoc.workspaceId,
+      resourceType: "user",
+      resourceId: change.newDoc.userId,
+      name: user?.name ?? user?.email ?? "Unknown",
+      tags: [],
+    });
+  } else if (change.operation === "delete") {
+    // Find the user node for this specific workspace
+    const nodes = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", change.oldDoc.userId))
+      .collect();
+    const node = nodes.find((n) => n.workspaceId === change.oldDoc.workspaceId);
+    if (node) await ctx.db.delete(node._id);
+  }
+});
+
+// Sync user name changes to all user nodes across workspaces.
+triggers.register("users", async (ctx, change) => {
+  if (change.operation !== "update") return;
+  const oldName = change.oldDoc.name ?? change.oldDoc.email ?? "Unknown";
+  const newName = change.newDoc.name ?? change.newDoc.email ?? "Unknown";
+  if (oldName === newName) return;
+  const userNodes = await ctx.db
+    .query("nodes")
+    .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
+    .collect();
+  await Promise.all(
+    userNodes
+      .filter((n) => n.resourceType === "user")
+      .map((n) => ctx.db.patch(n._id, { name: newName })),
+  );
+});
+
+// ── Node ID lookup helper ───────────────────────────────────────────
+
+type TriggerCtx = Parameters<Parameters<typeof triggers.register>[1]>[0];
+
+async function findNodeId(ctx: TriggerCtx, resourceId: string) {
+  const node = await ctx.db
+    .query("nodes")
+    .withIndex("by_resource", (q) => q.eq("resourceId", resourceId))
+    .first();
+  return node?._id;
+}
+
+async function findUserNodeId(ctx: TriggerCtx, userId: string, workspaceId: Id<"workspaces">) {
+  const nodes = await ctx.db
+    .query("nodes")
+    .withIndex("by_resource", (q) => q.eq("resourceId", userId))
+    .collect();
+  return nodes.find((n) => n.workspaceId === workspaceId)?._id;
+}
+
 // ── belongs_to edge triggers ─────────────────────────────────────────
 // Keep task→project belongs_to edges in sync with the tasks table.
+// NOTE: This trigger MUST be registered after the task node trigger (line ~204)
+// so that the task node exists when we look it up here.
 
 triggers.register("tasks", async (ctx, change) => {
   if (change.operation === "insert") {
+    const [sourceNodeId, targetNodeId] = await Promise.all([
+      findNodeId(ctx, change.id),
+      findNodeId(ctx, change.newDoc.projectId),
+    ]);
     await ctx.db.insert("edges", {
       sourceType: "task",
       sourceId: change.id,
@@ -244,8 +311,10 @@ triggers.register("tasks", async (ctx, change) => {
       targetId: change.newDoc.projectId,
       edgeType: "belongs_to",
       workspaceId: change.newDoc.workspaceId,
+      sourceNodeId,
+      targetNodeId,
       createdAt: Date.now(),
-    });
+    } as never);
   } else if (change.operation === "update") {
     if (change.newDoc.projectId === change.oldDoc.projectId) return;
     const old = await ctx.db
@@ -255,6 +324,10 @@ triggers.register("tasks", async (ctx, change) => {
       )
       .first();
     if (old) await ctx.db.delete(old._id);
+    const [sourceNodeId, targetNodeId] = await Promise.all([
+      findNodeId(ctx, change.id),
+      findNodeId(ctx, change.newDoc.projectId),
+    ]);
     await ctx.db.insert("edges", {
       sourceType: "task",
       sourceId: change.id,
@@ -262,15 +335,15 @@ triggers.register("tasks", async (ctx, change) => {
       targetId: change.newDoc.projectId,
       edgeType: "belongs_to",
       workspaceId: change.newDoc.workspaceId,
+      sourceNodeId,
+      targetNodeId,
       createdAt: Date.now(),
-    });
+    } as never);
   }
   // delete: edge cleanup handled by cascade rules
 });
 
 // ── Channel mention edge helpers ────────────────────────────────────
-
-type TriggerCtx = Parameters<Parameters<typeof triggers.register>[1]>[0];
 
 async function insertChannelMentionEdge(
   ctx: TriggerCtx,
@@ -278,6 +351,12 @@ async function insertChannelMentionEdge(
   workspaceId: Id<"workspaces">,
   target: { targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string },
 ) {
+  const [sourceNodeId, targetNodeId] = await Promise.all([
+    findNodeId(ctx, channelId),
+    target.targetType === "user"
+      ? findUserNodeId(ctx, target.targetId, workspaceId)
+      : findNodeId(ctx, target.targetId),
+  ]);
   await ctx.db.insert("edges", {
     sourceType: "channel",
     sourceId: channelId,
@@ -285,6 +364,8 @@ async function insertChannelMentionEdge(
     targetId: target.targetId,
     edgeType: "mentions",
     workspaceId,
+    sourceNodeId,
+    targetNodeId,
     createdAt: Date.now(),
   } as never);
 }
