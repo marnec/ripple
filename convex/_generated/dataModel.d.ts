@@ -499,6 +499,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_resource_id: ["resourceId", "_creationTime"];
       by_user_resource: ["userId", "resourceId", "_creationTime"];
       by_workspace_user: ["workspaceId", "userId", "_creationTime"];
       by_workspace_user_type: [
@@ -822,6 +823,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_resource_id: ["resourceId", "_creationTime"];
       by_user_resource: ["userId", "resourceId", "_creationTime"];
       by_user_workspace: ["userId", "workspaceId", "_creationTime"];
       by_user_workspace_visited: [

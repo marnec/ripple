@@ -220,7 +220,8 @@ export default defineSchema({
   })
     .index("by_workspace_user", ["workspaceId", "userId"])
     .index("by_workspace_user_type", ["workspaceId", "userId", "resourceType"])
-    .index("by_user_resource", ["userId", "resourceId"]),
+    .index("by_user_resource", ["userId", "resourceId"])
+    .index("by_resource_id", ["resourceId"]),
 
 
   documentBlockRefs: defineTable({
@@ -412,5 +413,6 @@ export default defineSchema({
   })
     .index("by_user_workspace", ["userId", "workspaceId"])
     .index("by_user_workspace_visited", ["userId", "workspaceId", "visitedAt"])
-    .index("by_user_resource", ["userId", "resourceId"]),
+    .index("by_user_resource", ["userId", "resourceId"])
+    .index("by_resource_id", ["resourceId"]),
 });

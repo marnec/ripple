@@ -7,6 +7,7 @@ import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
 import { triggers } from "./workspaceAggregates";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 const projectValidator = v.object({
   _id: v.id("projects"),
@@ -318,83 +319,11 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-
-    // Cascade delete: tasks, taskComments, and taskStatuses
-    // 1. Delete all taskComments for tasks in this project
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_project", (q) => q.eq("projectId", id))
-      .collect();
-
-    await Promise.all(
-      tasks.map(async (task) => {
-        const taskComments = await ctx.db
-          .query("taskComments")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
-          .collect();
-        await Promise.all(taskComments.map((comment) => ctx.db.delete(comment._id)));
-      })
-    );
-
-    // 2. Clean up edges, Yjs snapshots, nodes, and delete tasks
-    await Promise.all(
-      tasks.map(async (task) => {
-        // Delete all edges (embeds + dependencies, both directions)
-        const outEdges = await ctx.db
-          .query("edges")
-          .withIndex("by_source", (q) => q.eq("sourceId", task._id))
-          .collect();
-        const inEdges = await ctx.db
-          .query("edges")
-          .withIndex("by_target", (q) => q.eq("targetId", task._id))
-          .collect();
-        await Promise.all([...outEdges, ...inEdges].map((e) => ctx.db.delete(e._id)));
-
-        if (task.yjsSnapshotId) {
-          await ctx.storage.delete(task.yjsSnapshotId);
-        }
-        await db.delete(task._id);
-      })
-    );
-
-    // 3. Delete all taskStatuses for the project
-    const taskStatuses = await ctx.db
-      .query("taskStatuses")
-      .withIndex("by_project", (q) => q.eq("projectId", id))
-      .collect();
-    await Promise.all(taskStatuses.map((status) => ctx.db.delete(status._id)));
-
-    // 4. Delete all cycles and their cycleTasks for this project
-    const projectCycles = await ctx.db
-      .query("cycles")
-      .withIndex("by_project", (q) => q.eq("projectId", id))
-      .collect();
-    for (const cycle of projectCycles) {
-      const cts = await ctx.db
-        .query("cycleTasks")
-        .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
-        .collect();
-      await Promise.all(cts.map((ct) => ctx.db.delete(ct._id)));
-      await ctx.db.delete(cycle._id);
-    }
-
-    // 5. Delete edges targeting the project (e.g. channel→project mention edges)
-    const projectInEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", id))
-      .collect();
-    await Promise.all(projectInEdges.map((e) => ctx.db.delete(e._id)));
-
-    // 6. Delete project notification preferences
-    const projNotifPrefs = await ctx.db
-      .query("projectNotificationPreferences")
-      .withIndex("by_project", (q) => q.eq("projectId", id))
-      .collect();
-    await Promise.all(projNotifPrefs.map((p) => ctx.db.delete(p._id)));
-
-    // Delete the project
-    await db.delete(id);
+    await cascadeDelete.deleteWithCascade(ctx, "projects", id, {
+      onComplete: logCascadeSummary({
+        userId, resourceType: "projects", resourceId: id, scope: project.workspaceId,
+      }),
+    });
 
     return null;
   },

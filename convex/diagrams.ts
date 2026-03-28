@@ -8,6 +8,7 @@ import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
 import { triggers } from "./workspaceAggregates";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -301,20 +302,11 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
-    // Clean up Yjs snapshot from storage
-    if (diagram.yjsSnapshotId) {
-      await ctx.storage.delete(diagram.yjsSnapshotId);
-    }
-
-    // Clean up incoming edges pointing to this diagram
-    const incomingEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", id))
-      .collect();
-    await Promise.all(incomingEdges.map((e) => ctx.db.delete(e._id)));
-
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.delete(id);
+    await cascadeDelete.deleteWithCascade(ctx, "diagrams", id, {
+      onComplete: logCascadeSummary({
+        userId, resourceType: "diagrams", resourceId: id, scope: diagram.workspaceId,
+      }),
+    });
     return { status: "deleted" as const };
   },
 });

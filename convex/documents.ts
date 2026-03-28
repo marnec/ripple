@@ -7,6 +7,7 @@ import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
 import { triggers } from "./workspaceAggregates";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 export const create = mutation({
   args: {
@@ -249,11 +250,6 @@ export const remove = mutation({
       throw new ConvexError("Not authorized to delete this document");
     }
 
-    // Clean up Yjs snapshot from storage
-    if (document.yjsSnapshotId) {
-      await ctx.storage.delete(document.yjsSnapshotId);
-    }
-
     await logActivity(ctx, {
       userId, resourceType: "documents", resourceId: id,
       action: "deleted", oldValue: document.name, resourceName: document.name, scope: document.workspaceId,
@@ -268,19 +264,11 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
-    // Clean up edges (both outgoing embeds and incoming references)
-    const outgoingEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_source", (q) => q.eq("sourceId", id))
-      .collect();
-    const incomingEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", id))
-      .collect();
-    await Promise.all([...outgoingEdges, ...incomingEdges].map((e) => ctx.db.delete(e._id)));
-
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.delete(id);
+    await cascadeDelete.deleteWithCascade(ctx, "documents", id, {
+      onComplete: logCascadeSummary({
+        userId, resourceType: "documents", resourceId: id, scope: document.workspaceId,
+      }),
+    });
     return null;
   },
 });

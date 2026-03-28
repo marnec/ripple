@@ -8,6 +8,7 @@ import { getUserDisplayName } from "@shared/displayName";
 import { auditLog, logTaskActivity } from "./auditLog";
 import { triggers } from "./workspaceAggregates";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 const priorityValidator = v.union(
   v.literal("urgent"),
@@ -924,27 +925,11 @@ export const remove = mutation({
       throw new ConvexError("Not a member of this workspace");
     }
 
-    // Remove task from any cycles
-    const cycleTaskRecords = await ctx.db
-      .query("cycleTasks")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect();
-    await Promise.all(cycleTaskRecords.map((ct) => ctx.db.delete(ct._id)));
-
-    // Clean up task comments
-    const taskComments = await ctx.db
-      .query("taskComments")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect();
-    await Promise.all(taskComments.map((comment) => ctx.db.delete(comment._id)));
-
-    // Clean up Yjs snapshot from storage
-    if (task.yjsSnapshotId) {
-      await ctx.storage.delete(task.yjsSnapshotId);
-    }
-
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.delete(taskId);
+    await cascadeDelete.deleteWithCascade(ctx, "tasks", taskId, {
+      onComplete: logCascadeSummary({
+        userId, resourceType: "tasks", resourceId: taskId, scope: task.workspaceId,
+      }),
+    });
     return null;
   },
 });

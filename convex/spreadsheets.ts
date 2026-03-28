@@ -8,6 +8,7 @@ import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
 import { triggers } from "./workspaceAggregates";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -301,27 +302,11 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
-    // Clean up Yjs snapshot from storage
-    if (spreadsheet.yjsSnapshotId) {
-      await ctx.storage.delete(spreadsheet.yjsSnapshotId);
-    }
-
-    // Clean up cached cell references
-    const cellRefs = await ctx.db
-      .query("spreadsheetCellRefs")
-      .withIndex("by_spreadsheet", (q) => q.eq("spreadsheetId", id))
-      .collect();
-    await Promise.all(cellRefs.map((ref) => ctx.db.delete(ref._id)));
-
-    // Clean up incoming edges pointing to this spreadsheet
-    const incomingEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", id))
-      .collect();
-    await Promise.all(incomingEdges.map((e) => ctx.db.delete(e._id)));
-
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.delete(id);
+    await cascadeDelete.deleteWithCascade(ctx, "spreadsheets", id, {
+      onComplete: logCascadeSummary({
+        userId, resourceType: "spreadsheets", resourceId: id, scope: spreadsheet.workspaceId,
+      }),
+    });
     return { status: "deleted" as const };
   },
 });

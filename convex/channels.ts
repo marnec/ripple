@@ -2,14 +2,13 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { ChannelRole } from "@shared/enums";
-import { stream } from "convex-helpers/server/stream";
 import { getAll } from "convex-helpers/server/relationships";
-import schema from "./schema";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
 import { triggers } from "./workspaceAggregates";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 export const create = mutation({
   args: {
@@ -218,29 +217,11 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
-    const channelMessages = await ctx.db
-      .query("messages")
-      .withIndex("by_channel", (q) => q.eq("channelId", id))
-      .collect();
-
-    await Promise.all(channelMessages.map((m) => ctx.db.delete(m._id)));
-
-    const channelMembersStream = stream(ctx.db, schema).query("channelMembers").withIndex("by_channel", (q) => q.eq("channelId", id));
-
-    await channelMembersStream.map(async (doc) => {
-      await ctx.db.delete(doc._id);
-      return null;
-    }).collect();
-
-    // Delete channel notification preferences
-    const chanNotifPrefs = await ctx.db
-      .query("channelNotificationPreferences")
-      .withIndex("by_channel", (q) => q.eq("channelId", id))
-      .collect();
-    await Promise.all(chanNotifPrefs.map((p) => ctx.db.delete(p._id)));
-
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.delete(id);
+    await cascadeDelete.deleteWithCascade(ctx, "channels", id, {
+      onComplete: logCascadeSummary({
+        userId, resourceType: "channels", resourceId: id, scope: channel.workspaceId,
+      }),
+    });
     return null;
   },
 });

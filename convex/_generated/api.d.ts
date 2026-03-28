@@ -2154,6 +2154,14 @@ export declare const internal: {
       } | null
     >;
   };
+  cascadeDelete: {
+    _cascadeBatchHandler: FunctionReference<
+      "mutation",
+      "internal",
+      { jobId: string; targets: Array<{ id: string; table: string }> },
+      any
+    >;
+  };
   channelNotificationPreferences: {
     getForUsersInChannel: FunctionReference<
       "query",
@@ -3405,6 +3413,45 @@ export declare const components: {
           timestamp: number;
           userAgent?: string;
         }>
+      >;
+    };
+  };
+  convexCascadingDelete: {
+    lib: {
+      createBatchJob: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          batchSize: number;
+          deleteHandleStr: string;
+          onCompleteHandleStr?: string;
+          targets: Array<{ id: string; table: string }>;
+        },
+        string
+      >;
+      getJobStatus: FunctionReference<
+        "query",
+        "internal",
+        { jobId: string },
+        {
+          completedCount: number;
+          completedSummary: string;
+          error?: string;
+          status: "pending" | "processing" | "completed" | "failed";
+          totalTargetCount: number;
+        } | null
+      >;
+      kickOffProcessing: FunctionReference<
+        "mutation",
+        "internal",
+        { jobId: string },
+        null
+      >;
+      reportBatchComplete: FunctionReference<
+        "mutation",
+        "internal",
+        { batchSummary: string; errors?: string; jobId: string },
+        null
       >;
     };
   };

@@ -1,11 +1,13 @@
 import { defineApp } from "convex/server";
 import aggregate from "@convex-dev/aggregate/convex.config";
 import auditLog from "convex-audit-log/convex.config.js";
+import cascadingDelete from "convex-cascading-delete/convex.config.js";
 import migrations from "@convex-dev/migrations/convex.config.js";
 
 const app = defineApp();
 
 app.use(auditLog);
+app.use(cascadingDelete);
 app.use(migrations);
 
 // Workspace resource count aggregates (O(log n) counts per workspace)

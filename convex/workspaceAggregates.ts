@@ -94,9 +94,8 @@ triggers.register("workspaceMembers", membersByWorkspace.trigger());
 triggers.register("tasks", tasksByWorkspace.trigger());
 
 // ── Nodes sync triggers ──────────────────────────────────────────────
-// Keep the nodes table in sync automatically. No need to call insertNode /
-// updateNodeName / deleteNode manually in resource mutations — any write
-// through writerWithTriggers fires these handlers.
+// Keep the nodes table in sync on insert/update. Delete-time cleanup of
+// nodes and edges is handled by cascade rules in cascadeDelete.ts.
 
 async function syncNode(
   ctx: Parameters<Parameters<typeof triggers.register>[1]>[0],
@@ -114,17 +113,6 @@ async function syncNode(
   if (node) await ctx.db.patch(node._id, { name: newName, tags: newTags });
 }
 
-async function deleteNodeForId(
-  ctx: Parameters<Parameters<typeof triggers.register>[1]>[0],
-  id: string,
-) {
-  const node = await ctx.db
-    .query("nodes")
-    .withIndex("by_resource", (q) => q.eq("resourceId", id))
-    .first();
-  if (node) await ctx.db.delete(node._id);
-}
-
 triggers.register("documents", async (ctx, change) => {
   if (change.operation === "insert") {
     await ctx.db.insert("nodes", {
@@ -138,9 +126,8 @@ triggers.register("documents", async (ctx, change) => {
     await syncNode(ctx, change.id,
       change.newDoc.name, change.newDoc.tags ?? [],
       change.oldDoc.name, change.oldDoc.tags ?? []);
-  } else {
-    await deleteNodeForId(ctx, change.id);
   }
+  // delete: node + edge cleanup handled by cascade rules
 });
 
 triggers.register("diagrams", async (ctx, change) => {
@@ -156,9 +143,8 @@ triggers.register("diagrams", async (ctx, change) => {
     await syncNode(ctx, change.id,
       change.newDoc.name, change.newDoc.tags ?? [],
       change.oldDoc.name, change.oldDoc.tags ?? []);
-  } else {
-    await deleteNodeForId(ctx, change.id);
   }
+  // delete: node + edge cleanup handled by cascade rules
 });
 
 triggers.register("spreadsheets", async (ctx, change) => {
@@ -174,9 +160,8 @@ triggers.register("spreadsheets", async (ctx, change) => {
     await syncNode(ctx, change.id,
       change.newDoc.name, change.newDoc.tags ?? [],
       change.oldDoc.name, change.oldDoc.tags ?? []);
-  } else {
-    await deleteNodeForId(ctx, change.id);
   }
+  // delete: node + edge cleanup handled by cascade rules
 });
 
 triggers.register("projects", async (ctx, change) => {
@@ -192,9 +177,8 @@ triggers.register("projects", async (ctx, change) => {
     await syncNode(ctx, change.id,
       change.newDoc.name, change.newDoc.tags ?? [],
       change.oldDoc.name, change.oldDoc.tags ?? []);
-  } else {
-    await deleteNodeForId(ctx, change.id);
   }
+  // delete: node + edge cleanup handled by cascade rules
 });
 
 triggers.register("channels", async (ctx, change) => {
@@ -213,16 +197,8 @@ triggers.register("channels", async (ctx, change) => {
       .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
       .first();
     if (node) await ctx.db.patch(node._id, { name: change.newDoc.name });
-  } else {
-    const [outgoing, incoming] = await Promise.all([
-      ctx.db.query("edges").withIndex("by_source", (q) => q.eq("sourceId", change.id)).collect(),
-      ctx.db.query("edges").withIndex("by_target", (q) => q.eq("targetId", change.id)).collect(),
-    ]);
-    await Promise.all([
-      deleteNodeForId(ctx, change.id),
-      ...[...outgoing, ...incoming].map((e) => ctx.db.delete(e._id)),
-    ]);
   }
+  // delete: node + edge cleanup handled by cascade rules
 });
 
 triggers.register("tasks", async (ctx, change) => {
@@ -251,9 +227,8 @@ triggers.register("tasks", async (ctx, change) => {
         tags: change.newDoc.labels ?? [],
       });
     }
-  } else {
-    await deleteNodeForId(ctx, change.id);
   }
+  // delete: node cleanup handled by cascade rules
 });
 
 // ── belongs_to edge triggers ─────────────────────────────────────────
@@ -288,16 +263,8 @@ triggers.register("tasks", async (ctx, change) => {
       workspaceId: change.newDoc.workspaceId,
       createdAt: Date.now(),
     });
-  } else {
-    // Delete all edges where this task is source or target.
-    // Runs inside the same transaction as the task delete, so any deletion
-    // path (mutation, migration, direct db.delete) gets automatic cleanup.
-    const [outgoing, incoming] = await Promise.all([
-      ctx.db.query("edges").withIndex("by_source", (q) => q.eq("sourceId", change.id)).collect(),
-      ctx.db.query("edges").withIndex("by_target", (q) => q.eq("targetId", change.id)).collect(),
-    ]);
-    await Promise.all([...outgoing, ...incoming].map((e) => ctx.db.delete(e._id)));
   }
+  // delete: edge cleanup handled by cascade rules
 });
 
 // ── Channel mention edge helpers ────────────────────────────────────

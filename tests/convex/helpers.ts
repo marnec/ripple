@@ -3,12 +3,14 @@ import schema from "../../convex/schema";
 import { WorkspaceRole } from "@shared/enums/roles";
 import auditLogComponent from "convex-audit-log/test";
 import aggregateComponent from "@convex-dev/aggregate/test";
+import cascadingDeleteComponent from "convex-cascading-delete/test";
 
 const modules = import.meta.glob("../../convex/**/*.ts");
 
 export function createTestContext() {
   const t = convexTest(schema, modules);
   auditLogComponent.register(t as any);
+  cascadingDeleteComponent.register(t as any);
   // Register workspace resource count aggregates
   aggregateComponent.register(t as any, "documentsByWorkspace");
   aggregateComponent.register(t as any, "diagramsByWorkspace");
