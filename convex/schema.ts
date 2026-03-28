@@ -384,6 +384,11 @@ export default defineSchema({
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name
     tags: v.array(v.string()), // tasks map labels→tags; channels always []
+    metadata: v.optional(
+      v.union(
+        v.object({ type: v.literal("task"), projectId: v.id("projects") }),
+      ),
+    ), // immutable, set once at node creation
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_type", ["workspaceId", "resourceType"])

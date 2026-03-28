@@ -606,6 +606,7 @@ export type DataModel = {
   };
   nodes: {
     document: {
+      metadata?: { projectId: Id<"projects">; type: "task" };
       name: string;
       resourceId: string;
       resourceType:
@@ -623,6 +624,9 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "metadata"
+      | "metadata.projectId"
+      | "metadata.type"
       | "name"
       | "resourceId"
       | "resourceType"

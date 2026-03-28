@@ -67,54 +67,27 @@ export async function getEnrichedBacklinks(
     return true;
   });
 
-  // Collect typed IDs for batch fetching
-  const taskIds = edges
-    .filter((e) => e.sourceType === "task")
-    .map((e) => e.sourceId as Id<"tasks">);
-  const channelIds = edges
-    .filter((e) => e.sourceType === "channel")
-    .map((e) => e.sourceId as Id<"channels">);
-
-  // Batch-fetch in three parallel waves
-  const [nodeResults, taskResults, channelResults] = await Promise.all([
-    Promise.all(
-      edges.map((e) =>
-        ctx.db
-          .query("nodes")
-          .withIndex("by_resource", (q) => q.eq("resourceId", e.sourceId))
-          .first(),
-      ),
+  // Resolve names from the nodes table (all source types sync to nodes)
+  const nodeResults = await Promise.all(
+    edges.map((e) =>
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", e.sourceId))
+        .first(),
     ),
-    Promise.all(taskIds.map((id) => ctx.db.get(id))),
-    Promise.all(channelIds.map((id) => ctx.db.get(id))),
-  ]);
+  );
 
-  const taskById = new Map(taskIds.map((id, i) => [id as string, taskResults[i]]));
-  const channelById = new Map(channelIds.map((id, i) => [id as string, channelResults[i]]));
-
-  // Single-pass enrich
   return edges.map((edge, i) => {
     const node = nodeResults[i];
-    let sourceName = node?.name;
-    if (!sourceName && edge.sourceType === "channel") {
-      const channel = channelById.get(edge.sourceId);
-      sourceName = channel?.name ? `#${channel.name}` : undefined;
-    }
-    sourceName ??= `Deleted ${edge.sourceType}`;
-
-    const projectId =
-      edge.sourceType === "task"
-        ? taskById.get(edge.sourceId)?.projectId
-        : undefined;
-
     return {
       _id: edge._id,
       sourceType: edge.sourceType as string,
       sourceId: edge.sourceId,
-      sourceName,
+      sourceName: node?.name ?? `Deleted ${edge.sourceType}`,
       edgeType: edge.edgeType as string,
       workspaceId: edge.workspaceId as string,
-      projectId,
+      projectId:
+        node?.metadata?.type === "task" ? node.metadata.projectId : undefined,
     };
   });
 }

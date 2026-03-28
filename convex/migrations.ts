@@ -491,6 +491,7 @@ export const backfillTaskNodes = migrations.define({
       resourceId: task._id,
       name: task.title,
       tags: task.labels ?? [],
+      metadata: { type: "task", projectId: task.projectId },
     });
   },
 });

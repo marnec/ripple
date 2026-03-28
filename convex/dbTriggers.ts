@@ -209,6 +209,7 @@ triggers.register("tasks", async (ctx, change) => {
       resourceId: change.id,
       name: change.newDoc.title,
       tags: change.newDoc.labels ?? [],
+      metadata: { type: "task", projectId: change.newDoc.projectId },
     });
   } else if (change.operation === "update") {
     // Tasks are updated frequently (status, assignee, dates…) — only sync when
