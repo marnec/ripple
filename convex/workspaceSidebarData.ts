@@ -10,7 +10,7 @@ import {
   projectsByWorkspace,
   spreadsheetsByWorkspace,
   tasksByWorkspace,
-} from "./workspaceAggregates";
+} from "./dbTriggers";
 
 export const get = query({
   args: { workspaceId: v.id("workspaces") },

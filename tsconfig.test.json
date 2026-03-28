@@ -12,7 +12,7 @@
     "convex/_generated/**/*.ts",
     "convex/signaling.ts",
     "convex/utils/blocknote.ts",
-    "convex/workspaceAggregates.ts",
+    "convex/dbTriggers.ts",
     "convex/cascadeDelete.ts",
     "convex/auditLog.ts"
   ]

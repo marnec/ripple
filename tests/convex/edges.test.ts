@@ -6,7 +6,7 @@ import {
 } from "./helpers";
 import type { Id } from "../../convex/_generated/dataModel";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { triggers } from "../../convex/workspaceAggregates";
+import { triggers } from "../../convex/dbTriggers";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());

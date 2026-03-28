@@ -499,7 +499,7 @@ import {
   projectsByWorkspace,
   channelsByWorkspace,
   tasksByWorkspace,
-} from "./workspaceAggregates";
+} from "./dbTriggers";
 
 const graphNodeValidator = v.object({
   id: v.string(),

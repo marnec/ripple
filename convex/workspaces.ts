@@ -4,7 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
-import { triggers } from "./workspaceAggregates";
+import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 export const create = mutation({

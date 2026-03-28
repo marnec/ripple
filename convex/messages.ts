@@ -9,7 +9,7 @@ import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, e
 import { getUserDisplayName } from "@shared/displayName";
 import { DatabaseReader } from "./_generated/server";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { triggers } from "./workspaceAggregates";
+import { triggers } from "./dbTriggers";
 
 const mentionedUsersValidator = v.record(v.string(), v.object({
   name: v.union(v.string(), v.null()),

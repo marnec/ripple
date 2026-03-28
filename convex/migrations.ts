@@ -309,7 +309,7 @@ import {
   channelsByWorkspace,
   membersByWorkspace,
   tasksByWorkspace,
-} from "./workspaceAggregates.js";
+} from "./dbTriggers.js";
 
 export const backfillDocumentAggregates = migrations.define({
   table: "documents",

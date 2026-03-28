@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@shared/displayName";
 import { auditLog, logTaskActivity } from "./auditLog";
-import { triggers } from "./workspaceAggregates";
+import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 

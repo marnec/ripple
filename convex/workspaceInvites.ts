@@ -5,7 +5,7 @@ import { InviteStatus } from "@shared/enums/inviteStatus";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { logActivity } from "./auditLog";
-import { triggers } from "./workspaceAggregates";
+import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 
 export const create = mutation({

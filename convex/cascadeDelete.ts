@@ -5,7 +5,7 @@ import {
   defineCascadeRules,
   makeBatchDeleteHandler,
 } from "convex-cascading-delete";
-import { triggers } from "./workspaceAggregates";
+import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id, TableNames } from "./_generated/dataModel";
