@@ -1,7 +1,8 @@
 import { isSingleCell } from "@shared/cellRef";
-import { FileText, PenTool, Table } from "lucide-react";
+import { Clock, FileText, PenTool, Search, Table } from "lucide-react";
 import { createElement } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
+import type { RecentItem } from "@/hooks/use-local-recents";
 import type { DocumentSchemaEditor } from "./schema";
 
 interface NodeResult {
@@ -27,22 +28,32 @@ interface BlockPickerDialogOpen {
 
 type BlockPickerDialogState = BlockPickerDialogOpen | null;
 
-const RESOURCE_CONFIG = {
-  diagram: { icon: PenTool, group: "Workspace diagrams" },
-  spreadsheet: { icon: Table, group: "Spreadsheets" },
-  document: { icon: FileText, group: "Documents" },
+const RESOURCE_ICON = {
+  diagram: PenTool,
+  spreadsheet: Table,
+  document: FileText,
 } as const;
 
+type EmbeddableType = keyof typeof RESOURCE_ICON;
+
+const EMBEDDABLE_TYPES = new Set<string>(Object.keys(RESOURCE_ICON));
+
+function isEmbeddable(type: string): type is EmbeddableType {
+  return EMBEDDABLE_TYPES.has(type);
+}
+
 /**
- * Builds the `#`-trigger suggestion items (diagrams + spreadsheets + documents)
- * and the CellRefDialog/BlockPickerDialog insert handlers for DocumentEditor.
+ * Builds the `#`-trigger suggestion items for DocumentEditor.
  *
- * `onSearchChange` is called on every keystroke to drive the debounced query
- * in the parent component. Results are server-filtered; the menu shows a
- * stale visual state while the debounced query catches up.
+ * - No search text → shows recent items from localStorage (zero backend queries)
+ * - With search text → shows server results from nodes.search
+ * - Empty recents → shows a placeholder prompting the user to type
  */
 export function useDocumentSuggestions({
-  nodes,
+  recents,
+  searchResults,
+  hasSearch,
+  isStale,
   editor,
   ensureCellRef,
   ensureBlockRef,
@@ -51,7 +62,10 @@ export function useDocumentSuggestions({
   onSearchChange,
   currentDocumentId,
 }: {
-  nodes: NodeResult[] | undefined;
+  recents: RecentItem[];
+  searchResults: NodeResult[] | undefined;
+  hasSearch: boolean;
+  isStale: boolean;
   editor: DocumentSchemaEditor | null;
   ensureCellRef: (args: { spreadsheetId: Id<"spreadsheets">; cellRef: string }) => Promise<null>;
   ensureBlockRef: (args: { documentId: Id<"documents">; blockId: string }) => Promise<null>;
@@ -60,50 +74,73 @@ export function useDocumentSuggestions({
   onSearchChange: (query: string) => void;
   currentDocumentId?: Id<"documents">;
 }) {
+  function makeItem(resourceType: string, resourceId: string, name: string, group: string) {
+    const icon = isEmbeddable(resourceType)
+      ? RESOURCE_ICON[resourceType]
+      : FileText;
+    return {
+      title: name,
+      onItemClick: () => {
+        if (!editor) return;
+        if (resourceType === "diagram") {
+          editor.insertBlocks(
+            [{ type: "diagram" as const, props: { diagramId: resourceId as Id<"diagrams"> } as any }],
+            editor.getTextCursorPosition().block,
+            "after",
+          );
+        } else if (resourceType === "spreadsheet") {
+          setCellRefDialog({
+            open: true,
+            spreadsheetId: resourceId as Id<"spreadsheets">,
+            spreadsheetName: name,
+          });
+        } else if (resourceType === "document") {
+          setBlockPickerDialog({
+            open: true,
+            documentId: resourceId as Id<"documents">,
+            documentName: name,
+          });
+        }
+      },
+      icon: createElement(icon, { className: "h-4 w-4" }),
+      group,
+    };
+  }
+
   const getHashItems = async (query: string) => {
     onSearchChange(query);
 
-    return (nodes ?? [])
-      .filter((node) => {
-        if (!(node.resourceType in RESOURCE_CONFIG)) return false;
-        if (node.resourceType === "document" && node.resourceId === currentDocumentId) return false;
-        return true;
-      })
-      .map((node) => {
-        const config = RESOURCE_CONFIG[node.resourceType as keyof typeof RESOURCE_CONFIG];
-        return {
-          title: node.name,
-          onItemClick: () => {
-            if (!editor) return;
-            if (node.resourceType === "diagram") {
-              editor.insertBlocks(
-                [
-                  {
-                    type: "diagram" as const,
-                    props: { diagramId: node.resourceId as Id<"diagrams"> } as any,
-                  },
-                ],
-                editor.getTextCursorPosition().block,
-                "after",
-              );
-            } else if (node.resourceType === "spreadsheet") {
-              setCellRefDialog({
-                open: true,
-                spreadsheetId: node.resourceId as Id<"spreadsheets">,
-                spreadsheetName: node.name,
-              });
-            } else if (node.resourceType === "document") {
-              setBlockPickerDialog({
-                open: true,
-                documentId: node.resourceId as Id<"documents">,
-                documentName: node.name,
-              });
-            }
-          },
-          icon: createElement(config.icon, { className: "h-4 w-4" }),
-          group: config.group,
-        };
-      });
+    if (!hasSearch && !query.trim()) {
+      // No search text — show embeddable recents
+      const recentItems = recents
+        .filter((r) => isEmbeddable(r.resourceType) && r.resourceId !== currentDocumentId)
+        .map((r) => makeItem(r.resourceType, r.resourceId, r.resourceName, "Recent"));
+
+      if (recentItems.length > 0) return recentItems;
+
+      // No recents — show placeholder
+      return [{
+        title: "Type to search resources…",
+        onItemClick: () => {},
+        icon: createElement(Search, { className: "h-4 w-4" }),
+        group: "",
+      }];
+    }
+
+    // Search mode — show server results (may be stale while debounce catches up)
+    if (isStale || !searchResults) {
+      // Still waiting for debounced results — show loading hint
+      return [{
+        title: "Searching…",
+        onItemClick: () => {},
+        icon: createElement(Clock, { className: "h-4 w-4" }),
+        group: "",
+      }];
+    }
+
+    return searchResults
+      .filter((node) => isEmbeddable(node.resourceType) && node.resourceId !== currentDocumentId)
+      .map((node) => makeItem(node.resourceType, node.resourceId, node.name, "Results"));
   };
 
   const handleCellRefInsert = (cellRef: string | null, cellRefDialog: CellRefDialogOpen) => {
@@ -115,20 +152,12 @@ export function useDocumentSuggestions({
     if (cellRef) {
       if (isSingleCell(cellRef)) {
         editor.insertInlineContent([
-          {
-            type: "spreadsheetCellRef",
-            props: { spreadsheetId, cellRef },
-          },
+          { type: "spreadsheetCellRef", props: { spreadsheetId, cellRef } },
           " ",
         ]);
       } else {
         editor.insertBlocks(
-          [
-            {
-              type: "spreadsheetRange" as const,
-              props: { spreadsheetId, cellRef } as any,
-            },
-          ],
+          [{ type: "spreadsheetRange" as const, props: { spreadsheetId, cellRef } as any }],
           editor.getTextCursorPosition().block,
           "after",
         );
@@ -136,10 +165,7 @@ export function useDocumentSuggestions({
       void ensureCellRef({ spreadsheetId, cellRef });
     } else {
       editor.insertInlineContent([
-        {
-          type: "spreadsheetLink",
-          props: { spreadsheetId },
-        },
+        { type: "spreadsheetLink", props: { spreadsheetId } },
         " ",
       ]);
     }
@@ -153,12 +179,7 @@ export function useDocumentSuggestions({
     editor.focus();
 
     editor.insertBlocks(
-      [
-        {
-          type: "documentBlockEmbed" as const,
-          props: { documentId, blockId } as any,
-        },
-      ],
+      [{ type: "documentBlockEmbed" as const, props: { documentId, blockId } as any }],
       editor.getTextCursorPosition().block,
       "after",
     );

@@ -18,6 +18,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
+import { useLocalRecents } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
@@ -63,16 +64,14 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     return () => clearTimeout(timer);
   }, [hashSearch]);
 
+  const hasHashSearch = debouncedHashSearch.trim().length > 0;
   const isHashSearchStale = hashSearch !== debouncedHashSearch;
 
-  const nodes = useQuery(
-    api.nodes.suggest,
-    document
-      ? {
-          workspaceId: document.workspaceId,
-          resourceTypes: ["diagram", "spreadsheet", "document"],
-          searchText: debouncedHashSearch || undefined,
-        }
+  const recents = useLocalRecents(hasHashSearch ? undefined : document?.workspaceId, 10);
+  const searchResults = useQuery(
+    api.nodes.search,
+    hasHashSearch && document
+      ? { workspaceId: document.workspaceId, searchText: debouncedHashSearch }
       : "skip",
   );
   const workspaceMembers = useQuery(
@@ -264,7 +263,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   // Suggestion menu items (#-trigger) and insert handlers
   const { getHashItems, handleCellRefInsert, handleBlockPickerInsert } = useDocumentSuggestions({
-    nodes,
+    recents,
+    searchResults,
+    hasSearch: hasHashSearch,
+    isStale: isHashSearchStale,
     editor,
     ensureCellRef,
     ensureBlockRef,
@@ -355,18 +357,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         <div className="px-2 sm:px-20 max-w-full">
           {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
-            <SuggestionMenuController
-              triggerCharacter={"#"}
-              getItems={getHashItems}
-              floatingUIOptions={{
-                elementProps: {
-                  style: {
-                    opacity: isHashSearchStale ? 0.5 : 1,
-                    transition: "opacity 150ms ease",
-                  },
-                },
-              }}
-            />
+            <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
             <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
           </BlockNoteView>
           {cellRefDialog && (

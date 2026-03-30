@@ -1041,30 +1041,6 @@ export declare const api: {
         tags: Array<string>;
       }>
     >;
-    suggest: FunctionReference<
-      "query",
-      "public",
-      {
-        limit?: number;
-        resourceTypes: Array<
-          | "document"
-          | "diagram"
-          | "spreadsheet"
-          | "project"
-          | "channel"
-          | "task"
-          | "user"
-        >;
-        searchText?: string;
-        workspaceId: Id<"workspaces">;
-      },
-      Array<{
-        name: string;
-        resourceId: string;
-        resourceType: string;
-        tags: Array<string>;
-      }>
-    >;
   };
   notificationPreferences: {
     get: FunctionReference<
