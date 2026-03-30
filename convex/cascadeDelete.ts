@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { components } from "./_generated/api";
 import {
@@ -119,12 +120,13 @@ const deleters: Record<string, (ctx: MutationCtx, id: string, doc: SnapshotDoc) 
   channels: (ctx, id) => deleteWithTriggers(ctx, id),
 };
 
-// ── Audit log hook ─────────────────────────────────────────────────────
-// Logs the full cascade summary to the audit log when a cascade completes.
+// ── Audit log hooks ───────────────────────────────────────────────────
+// Log cascade summary to audit log when a cascade completes.
 
 import { auditLog } from "./auditLog";
 import type { DeletionSummary } from "convex-cascading-delete";
 
+/** Inline mode: returns a closure called in the same transaction. */
 export function logCascadeSummary(opts: {
   userId: Id<"users">;
   resourceType: string;
@@ -132,17 +134,61 @@ export function logCascadeSummary(opts: {
   scope: string;
 }) {
   return async (ctx: MutationCtx, summary: DeletionSummary) => {
+    // Exclude the root table from the cascade summary — it's already
+    // logged as the explicit user action (e.g. "deleted task X").
+    const { [opts.resourceType]: _, ...cascadedOnly } = summary;
+    if (Object.keys(cascadedOnly).length === 0) return;
+
     await auditLog.log(ctx, {
       action: `${opts.resourceType}.cascade_deleted`,
       actorId: opts.userId,
       resourceType: opts.resourceType,
       resourceId: opts.resourceId,
       severity: "warning",
-      metadata: summary,
+      metadata: cascadedOnly,
       scope: opts.scope,
     });
   };
 }
+
+/**
+ * Batched mode: scheduled by the component when all batches complete.
+ * Receives { summary, status, context } where context is the JSON-serialized
+ * onCompleteContext passed at call time.
+ */
+export const _batchCascadeOnComplete = internalMutation({
+  args: {
+    summary: v.string(),
+    status: v.string(),
+    context: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { summary, status, context }) => {
+    if (!context) return null;
+
+    const { userId, resourceType, resourceId, scope } = JSON.parse(context) as {
+      userId: string;
+      resourceType: string;
+      resourceId: string;
+      scope: string;
+    };
+
+    const { [resourceType]: _, ...cascadedOnly } = JSON.parse(summary) as Record<string, number>;
+    if (Object.keys(cascadedOnly).length === 0) return null;
+
+    await auditLog.log(ctx, {
+      action: `${resourceType}.cascade_deleted`,
+      actorId: userId,
+      resourceType,
+      resourceId,
+      severity: status === "completed" ? "warning" : "error",
+      metadata: cascadedOnly,
+      scope,
+    });
+
+    return null;
+  },
+});
 
 // ── Exported instances ─────────────────────────────────────────────────
 

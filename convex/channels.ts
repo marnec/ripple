@@ -8,7 +8,7 @@ import { getUserDisplayName } from "@shared/displayName";
 import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
+import { cascadeDelete } from "./cascadeDelete";
 
 export const create = mutation({
   args: {
@@ -217,10 +217,12 @@ export const remove = mutation({
       triggeredBy: { name: getUserDisplayName(user), id: userId },
     });
 
-    await cascadeDelete.deleteWithCascade(ctx, "channels", id, {
-      onComplete: logCascadeSummary({
+    await cascadeDelete.deleteWithCascadeBatched(ctx, "channels", id, {
+      batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
+      onComplete: internal.cascadeDelete._batchCascadeOnComplete,
+      onCompleteContext: {
         userId, resourceType: "channels", resourceId: id, scope: channel.workspaceId,
-      }),
+      },
     });
     return null;
   },

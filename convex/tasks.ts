@@ -925,6 +925,11 @@ export const remove = mutation({
       throw new ConvexError("Not a member of this workspace");
     }
 
+    await logTaskActivity(ctx, {
+      taskId, userId, workspaceId: task.workspaceId,
+      taskTitle: task.title, type: "deleted",
+    });
+
     await cascadeDelete.deleteWithCascade(ctx, "tasks", taskId, {
       onComplete: logCascadeSummary({
         userId, resourceType: "tasks", resourceId: taskId, scope: task.workspaceId,

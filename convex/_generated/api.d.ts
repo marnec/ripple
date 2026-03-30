@@ -2047,6 +2047,7 @@ export declare const api: {
         action: string;
         actorImage?: string;
         actorName: string;
+        cascadeSummary?: string;
         newValue?: string;
         oldValue?: string;
         resourceName?: string;
@@ -2155,6 +2156,12 @@ export declare const internal: {
     >;
   };
   cascadeDelete: {
+    _batchCascadeOnComplete: FunctionReference<
+      "mutation",
+      "internal",
+      { context?: string; status: string; summary: string },
+      null
+    >;
     _cascadeBatchHandler: FunctionReference<
       "mutation",
       "internal",
@@ -3442,12 +3449,19 @@ export declare const components: {
   };
   convexCascadingDelete: {
     lib: {
+      cancelJob: FunctionReference<
+        "mutation",
+        "internal",
+        { jobId: string },
+        null
+      >;
       createBatchJob: FunctionReference<
         "mutation",
         "internal",
         {
           batchSize: number;
           deleteHandleStr: string;
+          onCompleteContext?: string;
           onCompleteHandleStr?: string;
           targets: Array<{ id: string; table: string }>;
         },
@@ -3461,20 +3475,25 @@ export declare const components: {
           completedCount: number;
           completedSummary: string;
           error?: string;
-          status: "pending" | "processing" | "completed" | "failed";
+          status:
+            | "pending"
+            | "processing"
+            | "completed"
+            | "failed"
+            | "cancelled";
           totalTargetCount: number;
         } | null
-      >;
-      kickOffProcessing: FunctionReference<
-        "mutation",
-        "internal",
-        { jobId: string },
-        null
       >;
       reportBatchComplete: FunctionReference<
         "mutation",
         "internal",
         { batchSummary: string; errors?: string; jobId: string },
+        null
+      >;
+      startProcessing: FunctionReference<
+        "mutation",
+        "internal",
+        { jobId: string },
         null
       >;
     };

@@ -40,6 +40,7 @@ type TimelineEntry = {
   actorImage?: string;
   oldValue?: string;
   newValue?: string;
+  cascadeSummary?: string;
 };
 
 const RESOURCE_LABEL: Record<string, string> = {
@@ -60,7 +61,8 @@ function getActionIcon(action: string) {
   const verb = action.includes(".") ? action.split(".").pop()! : action;
   switch (verb) {
     case "created": return <Plus className={iconClass} />;
-    case "deleted": return <Trash2 className={iconClass} />;
+    case "deleted":
+    case "cascade_deleted": return <Trash2 className={iconClass} />;
     case "renamed":
     case "title_change": return <Type className={iconClass} />;
     case "invited":
@@ -107,6 +109,42 @@ function getResourceIcon(resourceType: string | undefined, isDark: boolean) {
     case "projects": return <Folder className={iconClass} style={style} />;
     case "tasks": return <ListTodo className={iconClass} style={style} />;
     default: return null;
+  }
+}
+
+const CASCADE_TABLE_LABELS: Record<string, string> = {
+  messages: "message",
+  messageReactions: "reaction",
+  channelMembers: "member",
+  channelNotificationPreferences: "notification pref",
+  callSessions: "call session",
+  tasks: "task",
+  taskComments: "comment",
+  taskStatuses: "status",
+  cycleTasks: "cycle task",
+  cycles: "cycle",
+  edges: "connection",
+  nodes: "node",
+  favorites: "favorite",
+  recentActivity: "activity entry",
+  documentBlockRefs: "block ref",
+  spreadsheetCellRefs: "cell ref",
+  projectNotificationPreferences: "notification pref",
+};
+
+function formatCascadeSummary(raw?: string): string | null {
+  if (!raw) return null;
+  try {
+    const counts = JSON.parse(raw) as Record<string, number>;
+    const parts: string[] = [];
+    for (const [table, count] of Object.entries(counts)) {
+      if (count <= 0) continue;
+      const label = CASCADE_TABLE_LABELS[table] ?? table;
+      parts.push(`${count} ${label}${count !== 1 ? "s" : ""}`);
+    }
+    return parts.length > 0 ? parts.join(", ") : null;
+  } catch {
+    return null;
   }
 }
 
@@ -176,6 +214,10 @@ function formatAction(entry: TimelineEntry): React.ReactNode {
       return <>{actor} edited a comment{onResource}</>;
     case "comment_delete":
       return <>{actor} deleted a comment{onResource}</>;
+    case "cascade_deleted": {
+      const summary = formatCascadeSummary(entry.cascadeSummary);
+      return <>{actor} triggered cascade deletion{summary ? <span className="text-muted-foreground"> — {summary}</span> : null}</>;
+    }
     default:
       return <>{actor} {verb.replace(/_/g, " ")}{onResource}</>;
   }

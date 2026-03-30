@@ -23,6 +23,7 @@ const timelineItemValidator = v.object({
   actorImage: v.optional(v.string()),
   oldValue: v.optional(v.string()),
   newValue: v.optional(v.string()),
+  cascadeSummary: v.optional(v.string()), // JSON-serialized Record<tableName, count> for cascade deletes
 });
 
 export const list = query({
@@ -97,17 +98,19 @@ export const list = query({
       const actor = entry.actorId
         ? userMap.get(entry.actorId)
         : undefined;
+      const isCascade = entry.action.endsWith(".cascade_deleted");
       const meta = (entry.metadata ?? {}) as MetadataShape;
       return {
         _id: entry._id,
         timestamp: entry.timestamp,
         action: entry.action,
         resourceType: entry.resourceType,
-        resourceName: meta.resourceName,
+        resourceName: isCascade ? undefined : meta.resourceName,
         actorName: actor?.name ?? "System",
         actorImage: actor?.image,
         oldValue: meta.oldValue,
         newValue: meta.newValue,
+        cascadeSummary: isCascade ? JSON.stringify(entry.metadata) : undefined,
       };
     });
   },
