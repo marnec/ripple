@@ -4,9 +4,12 @@ import { createElement } from "react";
 import { Id } from "../../../../convex/_generated/dataModel";
 import type { DocumentSchemaEditor } from "./schema";
 
-interface Diagram { _id: Id<"diagrams">; name: string }
-interface Spreadsheet { _id: Id<"spreadsheets">; name: string }
-interface Document { _id: Id<"documents">; name: string }
+interface NodeResult {
+  resourceId: string;
+  resourceType: string;
+  name: string;
+  tags: string[];
+}
 
 interface CellRefDialogOpen {
   open: boolean;
@@ -24,84 +27,83 @@ interface BlockPickerDialogOpen {
 
 type BlockPickerDialogState = BlockPickerDialogOpen | null;
 
+const RESOURCE_CONFIG = {
+  diagram: { icon: PenTool, group: "Workspace diagrams" },
+  spreadsheet: { icon: Table, group: "Spreadsheets" },
+  document: { icon: FileText, group: "Documents" },
+} as const;
+
 /**
  * Builds the `#`-trigger suggestion items (diagrams + spreadsheets + documents)
  * and the CellRefDialog/BlockPickerDialog insert handlers for DocumentEditor.
+ *
+ * `onSearchChange` is called on every keystroke to drive the debounced query
+ * in the parent component. Results are server-filtered; the menu shows a
+ * stale visual state while the debounced query catches up.
  */
 export function useDocumentSuggestions({
-  diagrams,
-  spreadsheets,
-  documents,
+  nodes,
   editor,
   ensureCellRef,
   ensureBlockRef,
   setCellRefDialog,
   setBlockPickerDialog,
+  onSearchChange,
   currentDocumentId,
 }: {
-  diagrams: Diagram[] | undefined;
-  spreadsheets: Spreadsheet[] | undefined;
-  documents: Document[] | undefined;
+  nodes: NodeResult[] | undefined;
   editor: DocumentSchemaEditor | null;
   ensureCellRef: (args: { spreadsheetId: Id<"spreadsheets">; cellRef: string }) => Promise<null>;
   ensureBlockRef: (args: { documentId: Id<"documents">; blockId: string }) => Promise<null>;
   setCellRefDialog: (state: CellRefDialogState) => void;
   setBlockPickerDialog: (state: BlockPickerDialogState) => void;
+  onSearchChange: (query: string) => void;
   currentDocumentId?: Id<"documents">;
 }) {
-  // getHashItems is called on every keystroke — no need for referential stability
   const getHashItems = async (query: string) => {
-    const diagramItems = (diagrams ?? []).map((diagram) => ({
-      title: diagram.name,
-      onItemClick: () => {
-        if (!editor) return;
-        editor.insertBlocks(
-          [
-            {
-              type: "diagram" as const,
-              props: { diagramId: diagram._id } as any,
-            },
-          ],
-          editor.getTextCursorPosition().block,
-          "after",
-        );
-      },
-      icon: createElement(PenTool, { className: "h-4 w-4" }),
-      group: "Workspace diagrams",
-    }));
+    onSearchChange(query);
 
-    const spreadsheetItems = (spreadsheets ?? []).map((sheet) => ({
-      title: sheet.name,
-      onItemClick: () => {
-        setCellRefDialog({
-          open: true,
-          spreadsheetId: sheet._id,
-          spreadsheetName: sheet.name,
-        });
-      },
-      icon: createElement(Table, { className: "h-4 w-4" }),
-      group: "Spreadsheets",
-    }));
-
-    // Exclude the current document from the list (can't embed blocks from yourself)
-    const documentItems = (documents ?? [])
-      .filter((doc) => doc._id !== currentDocumentId)
-      .map((doc) => ({
-        title: doc.name,
-        onItemClick: () => {
-          setBlockPickerDialog({
-            open: true,
-            documentId: doc._id,
-            documentName: doc.name,
-          });
-        },
-        icon: createElement(FileText, { className: "h-4 w-4" }),
-        group: "Documents",
-      }));
-
-    return [...diagramItems, ...spreadsheetItems, ...documentItems].filter((item) =>
-      item.title.toLowerCase().includes(query.toLowerCase()),
-    );
+    return (nodes ?? [])
+      .filter((node) => {
+        if (!(node.resourceType in RESOURCE_CONFIG)) return false;
+        if (node.resourceType === "document" && node.resourceId === currentDocumentId) return false;
+        return true;
+      })
+      .map((node) => {
+        const config = RESOURCE_CONFIG[node.resourceType as keyof typeof RESOURCE_CONFIG];
+        return {
+          title: node.name,
+          onItemClick: () => {
+            if (!editor) return;
+            if (node.resourceType === "diagram") {
+              editor.insertBlocks(
+                [
+                  {
+                    type: "diagram" as const,
+                    props: { diagramId: node.resourceId as Id<"diagrams"> } as any,
+                  },
+                ],
+                editor.getTextCursorPosition().block,
+                "after",
+              );
+            } else if (node.resourceType === "spreadsheet") {
+              setCellRefDialog({
+                open: true,
+                spreadsheetId: node.resourceId as Id<"spreadsheets">,
+                spreadsheetName: node.name,
+              });
+            } else if (node.resourceType === "document") {
+              setBlockPickerDialog({
+                open: true,
+                documentId: node.resourceId as Id<"documents">,
+                documentName: node.name,
+              });
+            }
+          },
+          icon: createElement(config.icon, { className: "h-4 w-4" }),
+          group: config.group,
+        };
+      });
   };
 
   const handleCellRefInsert = (cellRef: string | null, cellRefDialog: CellRefDialogOpen) => {

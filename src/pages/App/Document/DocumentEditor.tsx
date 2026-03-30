@@ -55,17 +55,25 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const importInjectedRef = useRef(false);
   const document = useQuery(api.documents.get, { id: documentId });
   useRecordVisit(document?.workspaceId, "document", documentId, document?.name);
-  const diagrams = useQuery(
-    api.diagrams.list,
-    document ? { workspaceId: document.workspaceId } : "skip",
-  );
-  const spreadsheets = useQuery(
-    api.spreadsheets.list,
-    document ? { workspaceId: document.workspaceId } : "skip",
-  );
-  const documents = useQuery(
-    api.documents.list,
-    document ? { workspaceId: document.workspaceId } : "skip",
+  const [hashSearch, setHashSearch] = useState("");
+  const [debouncedHashSearch, setDebouncedHashSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedHashSearch(hashSearch), 200);
+    return () => clearTimeout(timer);
+  }, [hashSearch]);
+
+  const isHashSearchStale = hashSearch !== debouncedHashSearch;
+
+  const nodes = useQuery(
+    api.nodes.suggest,
+    document
+      ? {
+          workspaceId: document.workspaceId,
+          resourceTypes: ["diagram", "spreadsheet", "document"],
+          searchText: debouncedHashSearch || undefined,
+        }
+      : "skip",
   );
   const workspaceMembers = useQuery(
     api.workspaceMembers.membersByWorkspace,
@@ -256,14 +264,13 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   // Suggestion menu items (#-trigger) and insert handlers
   const { getHashItems, handleCellRefInsert, handleBlockPickerInsert } = useDocumentSuggestions({
-    diagrams,
-    spreadsheets,
-    documents,
+    nodes,
     editor,
     ensureCellRef,
     ensureBlockRef,
     setCellRefDialog,
     setBlockPickerDialog,
+    onSearchChange: setHashSearch,
     currentDocumentId: documentId,
   });
 
@@ -348,7 +355,18 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         <div className="px-2 sm:px-20 max-w-full">
           {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
-            <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
+            <SuggestionMenuController
+              triggerCharacter={"#"}
+              getItems={getHashItems}
+              floatingUIOptions={{
+                elementProps: {
+                  style: {
+                    opacity: isHashSearchStale ? 0.5 : 1,
+                    transition: "opacity 150ms ease",
+                  },
+                },
+              }}
+            />
             <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
           </BlockNoteView>
           {cellRefDialog && (
