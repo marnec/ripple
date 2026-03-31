@@ -6,6 +6,7 @@ import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
 import { logTaskActivity } from "./auditLog";
 import { requireResourceMember, requireUser } from "./authHelpers";
+import { scheduleNotification } from "./notificationPool";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -73,7 +74,7 @@ export const create = mutation({
     const user = await ctx.db.get(userId);
 
     if (filteredMentions.length > 0) {
-      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+      await scheduleNotification(ctx, internal.taskNotifications.notifyUserMentions, {
         taskId,
         mentionedUserIds: filteredMentions,
         taskTitle: task?.title ?? "a task",
@@ -87,7 +88,7 @@ export const create = mutation({
 
     // Notify assignee about new comment (if they're not the commenter and not already mentioned)
     if (task.assigneeId && task.assigneeId !== userId && !filteredMentions.includes(task.assigneeId)) {
-      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskComment, {
+      await scheduleNotification(ctx, internal.taskNotifications.notifyTaskComment, {
         taskId,
         assigneeId: task.assigneeId,
         taskTitle: task.title,
@@ -134,7 +135,7 @@ export const update = mutation({
     if (addedMentions.length > 0) {
       const task = await ctx.db.get(comment.taskId);
       const user = await ctx.db.get(userId);
-      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+      await scheduleNotification(ctx, internal.taskNotifications.notifyUserMentions, {
         taskId: comment.taskId,
         mentionedUserIds: addedMentions,
         taskTitle: task?.title ?? "a task",

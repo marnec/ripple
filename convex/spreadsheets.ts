@@ -10,6 +10,7 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { deletionResultValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
+import { scheduleNotification } from "./notificationPool";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -135,7 +136,7 @@ export const create = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
       workspaceId,
       resourceType: "spreadsheet",
       resourceName: spreadsheetName,
@@ -185,7 +186,7 @@ export const remove = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
       workspaceId: spreadsheet.workspaceId,
       resourceType: "spreadsheet",
       resourceName: spreadsheet.name,

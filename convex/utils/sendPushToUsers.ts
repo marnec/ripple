@@ -86,6 +86,8 @@ export async function sendPushToFilteredUsers(
     vapidDetails: { subject, publicKey, privateKey },
   };
 
+  const staleEndpoints: string[] = [];
+
   await Promise.allSettled(
     subscriptions.map(async (subscription: { endpoint: string; expirationTime: number | null; keys: { p256dh: string; auth: string } }) => {
       const { endpoint, expirationTime, keys } = subscription;
@@ -96,9 +98,20 @@ export async function sendPushToFilteredUsers(
         .then(() => {
           console.info(`Successfully sent ${category} notification to endpoint ID=${id}`);
         })
-        .catch((error: { message: string }) => {
-          console.error(`Failed to send ${category} notification to endpoint=${id}, err=${error.message}`);
+        .catch((error: { statusCode?: number; message: string }) => {
+          console.error(`Failed to send ${category} notification to endpoint=${id}, status=${error.statusCode}, err=${error.message}`);
+          // Stale subscription: 404 (not found), 410 (gone), or FCM 403 (invalid token)
+          if (error.statusCode === 410 || error.statusCode === 404 || error.statusCode === 403) {
+            staleEndpoints.push(endpoint);
+          }
         });
     }),
   );
+
+  // Clean up stale subscriptions from the database
+  if (staleEndpoints.length > 0) {
+    await ctx.runMutation(internal.pushSubscription.removeStaleEndpoints, {
+      endpoints: staleEndpoints,
+    });
+  }
 }

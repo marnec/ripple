@@ -10,6 +10,7 @@ import { DatabaseReader } from "./_generated/server";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
 import { requireUser, requireWorkspaceMember } from "./authHelpers";
+import { scheduleNotification } from "./notificationPool";
 
 const mentionedUsersValidator = v.record(v.string(), v.object({
   name: v.union(v.string(), v.null()),
@@ -394,7 +395,7 @@ export const send = mutation({
     const filteredMentions = mentionedUserIds.filter(id => id !== userId);
 
     if (filteredMentions.length > 0) {
-      await ctx.scheduler.runAfter(0, internal.chatNotifications.notifyMessageMentions, {
+      await scheduleNotification(ctx, internal.chatNotifications.notifyMessageMentions, {
         mentionedUserIds: filteredMentions,
         channelId,
         plainText,
@@ -405,7 +406,7 @@ export const send = mutation({
       });
     }
 
-    await ctx.scheduler.runAfter(0, internal.pushNotifications.sendPushNotification, {
+    await scheduleNotification(ctx, internal.pushNotifications.sendPushNotification, {
       channelId,
       body: plainText,
       author: {

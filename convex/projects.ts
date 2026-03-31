@@ -9,6 +9,7 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { projectValidator } from "./validators";
 import { requireWorkspaceMember, requireUser, requireCreator, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { scheduleNotification } from "./notificationPool";
 
 export const create = mutation({
   args: {
@@ -89,7 +90,7 @@ export const create = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
       workspaceId,
       resourceType: "project",
       resourceName: name,
@@ -252,7 +253,7 @@ export const remove = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await ctx.scheduler.runAfter(0, internal.resourceNotifications.notifyResourceEvent, {
+    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
       workspaceId: project.workspaceId,
       resourceType: "project",
       resourceName: project.name,

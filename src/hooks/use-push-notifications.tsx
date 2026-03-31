@@ -1,8 +1,9 @@
 import { useMutation } from "convex/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { useDeviceId } from "./use-device-id";
 import { ConvexError } from "convex/values";
+import { useUserSettings } from "./use-user-settings";
 
 interface PushSubscriptionJSON {
   endpoint: string;
@@ -127,6 +128,28 @@ export const usePushNotifications = () => {
       setIsSubscribed,
       setError,
     );
+
+  const [settings, updateSettings] = useUserSettings();
+  const syncedRef = useRef(false);
+
+  // On app load: if browser permission is granted, ensure we have a valid
+  // push subscription registered. Handles the case where site data was cleared
+  // (localStorage + push subscription gone) but browser permission persists.
+  useEffect(() => {
+    if (syncedRef.current) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") return;
+
+    syncedRef.current = true;
+
+    // Re-enable the local setting if it was cleared with site data
+    if (!settings.notificationsEnabled) {
+      updateSettings({ notificationsEnabled: true });
+    }
+
+    // Re-register subscription (creates a new one if browser sub was cleared)
+    void subscribeUser();
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const unsubscribeUser = async () => {
     const subscription = await getSubscription();

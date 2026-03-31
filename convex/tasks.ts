@@ -11,6 +11,7 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { scheduleNotification } from "./notificationPool";
 
 export const baseTaskFields = {
   _id: v.id("tasks"),
@@ -553,7 +554,7 @@ export const update = mutation({
     const assigneeChanged = assigneeId !== undefined && assigneeId !== null && assigneeId !== task.assigneeId;
     if (assigneeChanged && assigneeId !== userId) {
       currentUser = await ctx.db.get(userId);
-      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskAssignment, {
+      await scheduleNotification(ctx, internal.taskNotifications.notifyTaskAssignment, {
         taskId,
         assigneeId,
         taskTitle: title ?? task.title,
@@ -569,7 +570,7 @@ export const update = mutation({
     if (statusId !== undefined && statusId !== task.statusId && effectiveAssignee && effectiveAssignee !== userId) {
       if (!currentUser) currentUser = await ctx.db.get(userId);
       const newStatus = await ctx.db.get(statusId);
-      await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskStatusChange, {
+      await scheduleNotification(ctx, internal.taskNotifications.notifyTaskStatusChange, {
         taskId,
         assigneeId: effectiveAssignee,
         taskTitle: title ?? task.title,
@@ -619,7 +620,7 @@ export const notifyDescriptionMentions = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyUserMentions, {
+    await scheduleNotification(ctx, internal.taskNotifications.notifyUserMentions, {
       taskId,
       mentionedUserIds: filtered,
       taskTitle: task.title,
@@ -680,7 +681,7 @@ export const updatePosition = mutation({
       // Notify assignee of status change (if they didn't make the change)
       if (task.assigneeId && task.assigneeId !== userId) {
         const currentUser = await ctx.db.get(userId);
-        await ctx.scheduler.runAfter(0, internal.taskNotifications.notifyTaskStatusChange, {
+        await scheduleNotification(ctx, internal.taskNotifications.notifyTaskStatusChange, {
           taskId,
           assigneeId: task.assigneeId,
           taskTitle: task.title,

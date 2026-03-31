@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { internalQuery, mutation } from "./_generated/server";
+import { internalMutation, internalQuery, mutation } from "./_generated/server";
 import { requireUser } from "./authHelpers";
 
 export const registerSubscription = mutation({
@@ -16,12 +16,24 @@ export const registerSubscription = mutation({
   handler: async (ctx, { endpoint, expirationTime, keys, device }) => {
     const userId = await requireUser(ctx);
 
-    const subscription = await ctx.db
+    // Check if this exact endpoint is already registered
+    const byEndpoint = await ctx.db
       .query("pushSubscriptions")
       .withIndex("by_endpoint", (q) => q.eq("endpoint", endpoint))
       .first();
+    if (byEndpoint) return null;
 
-    if (subscription) return null;
+    // Upsert: replace any existing subscription for this user+device
+    // (handles stale subscriptions after site data clear)
+    const existing = await ctx.db
+      .query("pushSubscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const sub of existing) {
+      if (sub.device === device) {
+        await ctx.db.delete(sub._id);
+      }
+    }
 
     await ctx.db.insert("pushSubscriptions", { endpoint, expirationTime, keys, userId, device });
     return null;
@@ -53,6 +65,22 @@ export const unregisterSubscription = mutation({
   },
 });
 
+/** Remove stale push subscriptions by endpoint (called when web-push returns 410 Gone). */
+export const removeStaleEndpoints = internalMutation({
+  args: { endpoints: v.array(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, { endpoints }) => {
+    for (const endpoint of endpoints) {
+      const sub = await ctx.db
+        .query("pushSubscriptions")
+        .withIndex("by_endpoint", (q) => q.eq("endpoint", endpoint))
+        .first();
+      if (sub) await ctx.db.delete(sub._id);
+    }
+    return null;
+  },
+});
+
 export const usersSubscriptions = internalQuery({
   args: { usersIds: v.array(v.id("users")) },
   returns: v.array(v.object({
@@ -73,9 +101,9 @@ export const usersSubscriptions = internalQuery({
         ctx.db
           .query("pushSubscriptions")
           .withIndex("by_user", (q) => q.eq("userId", id))
-          .first(),
+          .collect(),
       ),
     );
-    return results.filter((s): s is NonNullable<typeof s> => s !== null);
+    return results.flat();
   },
 });
