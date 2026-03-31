@@ -12,7 +12,7 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 
-const baseTaskFields = {
+export const baseTaskFields = {
   _id: v.id("tasks"),
   _creationTime: v.number(),
   projectId: v.id("projects"),
@@ -36,7 +36,7 @@ const baseTaskFields = {
   estimate: v.optional(v.number()),
 };
 
-const enrichedTaskValidator = v.object({
+export const enrichedTaskValidator = v.object({
   ...baseTaskFields,
   status: v.union(taskStatusValidator, v.null()),
   assignee: v.union(userValidator, v.null()),

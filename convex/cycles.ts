@@ -4,7 +4,8 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
 import type { CycleStatus } from "@shared/types/cycles";
-import { cycleStatusValidator, priorityValidator, taskStatusValidator, userValidator } from "./validators";
+import { cycleStatusValidator, taskStatusValidator, userValidator } from "./validators";
+import { baseTaskFields } from "./tasks";
 
 const cycleWithProgressValidator = v.object({
   _id: v.id("cycles"),
@@ -23,24 +24,8 @@ const cycleWithProgressValidator = v.object({
 });
 
 const enrichedTaskValidator = v.object({
-  _id: v.id("tasks"),
-  _creationTime: v.number(),
-  projectId: v.id("projects"),
-  workspaceId: v.id("workspaces"),
-  title: v.string(),
-  statusId: v.id("taskStatuses"),
-  assigneeId: v.optional(v.id("users")),
-  priority: priorityValidator,
-  labels: v.optional(v.array(v.string())),
-  completed: v.boolean(),
-  creatorId: v.id("users"),
-  position: v.optional(v.string()),
-  yjsSnapshotId: v.optional(v.id("_storage")),
-  number: v.optional(v.number()),
-  dueDate: v.optional(v.string()),
+  ...baseTaskFields,
   startDate: v.optional(v.string()),
-  plannedStartDate: v.optional(v.string()),
-  estimate: v.optional(v.number()),
   status: v.union(taskStatusValidator, v.null()),
   assignee: v.union(userValidator, v.null()),
   projectKey: v.optional(v.string()),

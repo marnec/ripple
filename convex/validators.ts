@@ -67,6 +67,11 @@ export const browsableResourceTypeValidator = v.union(
   v.literal("project"),
 );
 
+export const deletionResultValidator = v.union(
+  v.object({ status: v.literal("deleted") }),
+  v.object({ status: v.literal("has_references"), references: v.array(referenceValidator) }),
+);
+
 export const projectValidator = v.object({
   _id: v.id("projects"),
   _creationTime: v.number(),

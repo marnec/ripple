@@ -334,6 +334,7 @@ export declare const api: {
         } | null;
         statusId: Id<"taskStatuses">;
         title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>

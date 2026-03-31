@@ -9,7 +9,7 @@ import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
-import { referenceValidator } from "./validators";
+import { deletionResultValidator } from "./validators";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -245,10 +245,7 @@ export const rename = mutation({
 
 export const remove = mutation({
   args: { id: v.id("spreadsheets"), force: v.optional(v.boolean()) },
-  returns: v.union(
-    v.object({ status: v.literal("deleted") }),
-    v.object({ status: v.literal("has_references"), references: v.array(referenceValidator) }),
-  ),
+  returns: deletionResultValidator,
   handler: async (ctx, { id, force }) => {
     const userId = await getAuthUserId(ctx);
 
