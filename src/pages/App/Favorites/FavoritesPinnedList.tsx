@@ -3,7 +3,7 @@ import { Star } from "lucide-react";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarGroup,
   SidebarGroupLabel,

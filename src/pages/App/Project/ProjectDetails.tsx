@@ -9,14 +9,14 @@ import {
 } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban } from "lucide-react";
 import { useRef, useState } from "react";
 import { startViewTransition } from "@/hooks/use-view-transition";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { KanbanBoard } from "./KanbanBoard";
 import { Tasks } from "./Tasks";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";

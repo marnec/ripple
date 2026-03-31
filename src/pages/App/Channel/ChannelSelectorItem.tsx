@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Cog, Hash, Lock, MoreHorizontal, Video } from "lucide-react";
-import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuContent,

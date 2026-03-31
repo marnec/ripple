@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type React from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   createCalendar,
@@ -18,7 +19,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "../../../../convex/_generated/api";
 import { cn } from "@/lib/utils";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useCalendarInteractions, type CycleWithProgress, desktopStrategy, mobileStrategy } from "./useCalendarInteractions";
 import {
   ResponsiveDropdownMenu,
@@ -30,7 +31,7 @@ import {
 import { useCalendarSync } from "./useCalendarSync";
 import { calendarDragContext } from "./calendarDragContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -125,7 +126,7 @@ type EnrichedTask = {
   status: { color: string; name: string } | null;
 };
 
-type EventMeta = {
+export type EventMeta = {
   statusColor: string;
   hasEstimate: boolean;
   taskId: string;
@@ -145,7 +146,7 @@ type CalendarTaskMenuContextValue = {
 
 const CalendarTaskMenuContext = createContext<CalendarTaskMenuContextValue | null>(null);
 
-type TaskCalendarEvent = CalendarEventExternal & {
+export type TaskCalendarEvent = CalendarEventExternal & {
   readonly _meta: EventMeta;
 };
 

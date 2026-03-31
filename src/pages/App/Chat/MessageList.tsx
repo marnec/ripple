@@ -1,6 +1,7 @@
-import { MessageWithAuthor } from "@shared/types/channel";
+import type { MessageWithAuthor } from "@shared/types/channel";
 import { ArrowDown } from "lucide-react";
-import React, { PropsWithChildren, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type React from "react";
+import { type PropsWithChildren, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ScrollArea } from "../../../components/ui/scroll-area";
 
 const NEAR_BOTTOM_THRESHOLD = 100;

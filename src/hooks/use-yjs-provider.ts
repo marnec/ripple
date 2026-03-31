@@ -78,7 +78,7 @@ export function useYjsProvider(opts: {
           setIsLoading(false);
           // Schedule retry with backoff
           if (recreationCountRef.current < MAX_RECREATIONS) {
-            const delay = BASE_RECREATION_DELAY * Math.pow(2, recreationCountRef.current);
+            const delay = BASE_RECREATION_DELAY * 2 ** recreationCountRef.current;
             recreationCountRef.current += 1;
             console.warn(`Token fetch failed, retrying in ${delay}ms (attempt ${recreationCountRef.current}/${MAX_RECREATIONS})`);
             setTimeout(() => {
@@ -178,7 +178,7 @@ export function useYjsProvider(opts: {
             return;
           }
 
-          const delay = BASE_RECREATION_DELAY * Math.pow(2, recreationCountRef.current);
+          const delay = BASE_RECREATION_DELAY * 2 ** recreationCountRef.current;
           recreationCountRef.current += 1;
           console.warn(`Recreating provider in ${delay}ms (attempt ${recreationCountRef.current}/${MAX_RECREATIONS})`);
           setTimeout(() => {

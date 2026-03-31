@@ -14,7 +14,7 @@ import usePushNotifications from "@/hooks/use-push-notifications";
 import { useUserSettings } from "@/hooks/use-user-settings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutGroup, m } from "framer-motion";
@@ -30,7 +30,7 @@ import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
 
-import { AllFavoriteIds } from "./Document/DocumentSelectorList";
+import type { AllFavoriteIds } from "./Document/DocumentSelectorList";
 
 export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds | null }) {
   const navigate = useNavigate();

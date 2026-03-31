@@ -1,6 +1,6 @@
 import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { Phone } from "lucide-react";
 import { Profiler, useEffect, useState } from "react";
 import { onRenderCallback } from "../lib/profiler-logger";

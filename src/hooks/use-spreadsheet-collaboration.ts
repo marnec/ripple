@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { IndexeddbPersistence } from "y-indexeddb";
-import * as Y from "yjs";
+import type * as Y from "yjs";
 import { getUserColor } from "../lib/user-colors";
 import { useYjsProvider } from "./use-yjs-provider";
 

@@ -1,12 +1,11 @@
 import { useMutation } from "convex/react";
 import { Star } from "lucide-react";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 import { useOptimisticIsFavorited } from "@/contexts/FavoritesContext";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
-
-type ResourceType = "document" | "diagram" | "spreadsheet" | "project";
+import type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
 
 type FavoriteButtonProps = {
   resourceType: ResourceType;

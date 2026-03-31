@@ -1,5 +1,5 @@
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { ResourceListPage } from "../Resources/ResourceListPage";

@@ -4,7 +4,7 @@ import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { Link, useParams } from "react-router-dom";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../../../convex/_generated/api";
@@ -22,7 +22,7 @@ import { useRecordVisit } from "@/hooks/use-record-visit";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import { getCameraFromAppState } from "@/lib/canvas-coordinates";
 import { Excalidraw } from "@excalidraw/excalidraw";
-import { Theme } from "@excalidraw/excalidraw/element/types";
+import type { Theme } from "@excalidraw/excalidraw/element/types";
 import { yjsToExcalidraw } from "y-excalidraw";
 
 function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {

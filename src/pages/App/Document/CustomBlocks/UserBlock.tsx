@@ -1,7 +1,7 @@
 import { createReactInlineContentSpec } from "@blocknote/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../../../../convex/_generated/api";
-import { Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { Avatar, AvatarFallback, AvatarImage } from "../../../../components/ui/avatar";
 import { Skeleton } from "../../../../components/ui/skeleton";
 

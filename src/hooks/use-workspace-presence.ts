@@ -191,7 +191,7 @@ export function useWorkspacePresence() {
           if (recreationCountRef.current < MAX_RECREATIONS) {
             const delay =
               BASE_RECREATION_DELAY *
-              Math.pow(2, recreationCountRef.current);
+              2 ** recreationCountRef.current;
             recreationCountRef.current += 1;
             setTimeout(() => {
               if (!cancelled) {

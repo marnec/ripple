@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import { Textarea } from "../../../components/ui/textarea";
 

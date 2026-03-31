@@ -1,11 +1,11 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { useDiagramPreview } from "@/hooks/use-diagram-preview";
 import { defaultProps } from "@blocknote/core";
-import { createReactBlockSpec, ReactCustomBlockRenderProps } from "@blocknote/react";
+import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blocknote/react";
 import { CircleSlash } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 
 const DiagramView = ({

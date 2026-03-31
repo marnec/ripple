@@ -1,5 +1,5 @@
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";

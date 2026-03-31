@@ -7,7 +7,7 @@ import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
 import { memo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarMenuAction,
   SidebarMenuButton,

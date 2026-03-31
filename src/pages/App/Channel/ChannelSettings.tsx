@@ -10,14 +10,14 @@ import {
   DEFAULT_CHANNEL_CHAT_PREFERENCES,
   type ChatNotificationCategory,
 } from "@shared/notificationCategories";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
 import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { ChannelDangerZone } from "./ChannelDangerZone";
 import { ChannelDetailsSection } from "./ChannelDetailsSection";
 import { ChannelMembersSection } from "./ChannelMembersSection";

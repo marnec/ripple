@@ -13,7 +13,7 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Task selection list (presentational)

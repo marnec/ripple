@@ -2,16 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
-
-const userValidator = v.object({
-  _id: v.id("users"),
-  _creationTime: v.number(),
-  name: v.optional(v.string()),
-  email: v.optional(v.string()),
-  emailVerificationTime: v.optional(v.number()),
-  image: v.optional(v.string()),
-  isAnonymous: v.optional(v.boolean()),
-});
+import { userValidator } from "./validators";
 
 export const viewer = query({
   args: {},

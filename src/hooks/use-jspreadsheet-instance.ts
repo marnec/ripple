@@ -2,7 +2,7 @@ import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import jspreadsheet from "jspreadsheet-ce";
 import { type RefObject, useEffect, useRef } from "react";
 import type { Awareness } from "y-protocols/awareness";
-import * as Y from "yjs";
+import type * as Y from "yjs";
 
 // jspreadsheet-ce doesn't export worksheet instance type cleanly
 type Worksheet = any;

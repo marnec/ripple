@@ -1,4 +1,4 @@
-import { MessageWithAuthor } from "@shared/types/channel";
+import type { MessageWithAuthor } from "@shared/types/channel";
 
 export type GroupPosition = "solo" | "first" | "middle" | "last";
 

@@ -12,7 +12,7 @@ import { useRecordVisit } from "@/hooks/use-record-visit";
 import { getUserColor } from "@/lib/user-colors";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { useViewer } from "../UserContext";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
@@ -22,9 +22,9 @@ import { Circle, Link2, Link2Off, Settings, WifiOff } from "lucide-react";
 import { memo, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
-import * as Y from "yjs";
+import type * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { ActiveUsers } from "../Document/ActiveUsers";
 import {
   FormulaPickerDropdown,

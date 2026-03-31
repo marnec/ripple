@@ -1,4 +1,4 @@
-import { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema } from "@blocknote/core";
+import type { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema } from "@blocknote/core";
 import { useCreateBlockNote } from "@blocknote/react";
 import { useEffect, useMemo, useState } from "react";
 import { Awareness } from "y-protocols/awareness";

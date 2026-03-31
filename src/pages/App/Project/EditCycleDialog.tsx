@@ -16,7 +16,7 @@ import { useMutation } from "convex/react";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
 
 type CycleForEdit = {

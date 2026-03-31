@@ -2,7 +2,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { X } from "lucide-react";
 import { useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Badge } from "./ui/badge";
 
 type TagInputProps = {

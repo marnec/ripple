@@ -2,7 +2,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { File } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useMentionedResources } from "./MentionedUsersContext";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 

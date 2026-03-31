@@ -1,16 +1,17 @@
 import { defaultProps } from "@blocknote/core";
 import {
   createReactBlockSpec,
-  ReactCustomBlockRenderProps,
+  type ReactCustomBlockRenderProps,
 } from "@blocknote/react";
 import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview";
 import { parseRange } from "@shared/cellRef";
 import { useQuery } from "convex-helpers/react/cache";
 import { CircleSlash } from "lucide-react";
-import React, { useRef, useState } from "react";
+import type React from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../../convex/_generated/api";
-import { Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useBlockResize } from "./useBlockResize";
 import { SpreadsheetRangeToolbar } from "./SpreadsheetRangeToolbar";
 import { SpreadsheetGrid } from "./SpreadsheetGrid";

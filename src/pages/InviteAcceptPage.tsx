@@ -5,7 +5,7 @@ import { Authenticated, Unauthenticated, useMutation } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 import { RippleSpinner } from "@/components/RippleSpinner";
 
 function AutoAcceptInvite({ inviteId }: { inviteId: string }) {

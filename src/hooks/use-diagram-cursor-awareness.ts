@@ -2,6 +2,7 @@ import type { Awareness } from "y-protocols/awareness";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
+import type { AwarenessUser } from "@/lib/awareness-types";
 
 export interface RemotePointer {
   clientId: number;
@@ -16,10 +17,7 @@ export interface RemotePointer {
 }
 
 interface AwarenessState {
-  user?: {
-    name: string;
-    color: string;
-  };
+  user?: AwarenessUser;
   pointer?: {
     x: number;
     y: number;

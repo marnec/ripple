@@ -1,5 +1,6 @@
 import type { Awareness } from "y-protocols/awareness";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { AwarenessUser } from "@/lib/awareness-types";
 
 export interface RemoteUser {
   clientId: number;
@@ -12,10 +13,7 @@ export interface RemoteUser {
 }
 
 interface AwarenessState {
-  user?: {
-    name: string;
-    color: string;
-  };
+  user?: AwarenessUser;
   cursor?: {
     anchor: number;
     head: number;

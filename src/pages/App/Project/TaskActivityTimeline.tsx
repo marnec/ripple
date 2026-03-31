@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useCreateBlockNote } from "@blocknote/react";
 import { SuggestionMenuController } from "@blocknote/react";
@@ -35,13 +35,14 @@ import "@blocknote/shadcn/style.css";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
+import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
 
 type TaskActivityTimelineProps = {
   taskId: Id<"tasks">;
   currentUserId: Id<"users">;
   workspaceId: Id<"workspaces">;
   /** Pre-fetched workspace members — avoids a duplicate query when parent already has them. */
-  members?: Array<{ _id: Id<"users">; name?: string; image?: string }>;
+  members?: WorkspaceMemberSummary[];
 };
 
 type TimelineItem = {
@@ -291,7 +292,7 @@ function CommentItem({
   item: TimelineItem;
   currentUserId: Id<"users">;
   editingCommentId: Id<"taskComments"> | null;
-  workspaceMembers: Array<{ _id: Id<"users">; name?: string; image?: string }>;
+  workspaceMembers: WorkspaceMemberSummary[];
   uploadFile?: (file: File) => Promise<string>;
   onEdit: (id: Id<"taskComments"> | null) => void;
   onDelete: (id: Id<"taskComments">) => void;
@@ -370,15 +371,6 @@ function CommentBody({ body }: { body: string }) {
 }
 
 // Edit mode for existing comment
-type EditCommentEditorProps = {
-  commentId: Id<"taskComments">;
-  initialBody: string;
-  workspaceMembers: Array<{ _id: Id<"users">; name?: string; image?: string }>;
-  uploadFile?: (file: File) => Promise<string>;
-  onSave: (id: Id<"taskComments">, body: string) => void;
-  onCancel: () => void;
-};
-
 function EditCommentEditor({
   commentId,
   initialBody,

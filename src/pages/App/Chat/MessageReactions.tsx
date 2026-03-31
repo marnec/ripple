@@ -1,20 +1,12 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { TooltipProvider } from "../../../components/ui/tooltip";
 import { MessageReactionPill } from "./MessageReactionPill";
-import { useReactions } from "./ReactionsContext";
+import { useReactions, type Reaction } from "./ReactionsContext";
 
 type Props = {
   messageId: Id<"messages">;
-};
-
-type Reaction = {
-  emoji: string;
-  emojiNative: string;
-  count: number;
-  userIds: string[];
-  currentUserReacted: boolean;
 };
 
 export function MessageReactions({ messageId }: Props) {

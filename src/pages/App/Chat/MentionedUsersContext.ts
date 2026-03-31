@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { MentionedUser, MentionedTask, MentionedProject, MentionedResource } from "@shared/types/channel";
+import type { MentionedUser, MentionedTask, MentionedProject, MentionedResource } from "@shared/types/channel";
 
 export const MentionedUsersContext = createContext<Record<string, MentionedUser>>({});
 export const MentionedTasksContext = createContext<Record<string, MentionedTask>>({});

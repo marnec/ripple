@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-type Reaction = {
+export type Reaction = {
   emoji: string;
   emojiNative: string;
   count: number;

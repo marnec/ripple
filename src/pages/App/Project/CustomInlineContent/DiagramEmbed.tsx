@@ -1,5 +1,5 @@
 import { createReactInlineContentSpec } from "@blocknote/react";
-import { Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDiagramPreview } from "@/hooks/use-diagram-preview";

@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import DOMPurify from "dompurify";
-import { HTMLAttributes } from "react";
+import type { HTMLAttributes } from "react";
 
 interface SafeHtmlProps extends HTMLAttributes<HTMLDivElement> {
   html: string;

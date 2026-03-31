@@ -9,10 +9,10 @@ import {
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog";
 import { useMutation } from "convex/react";
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 type CreateTaskDialogProps = {
   projectId: Id<"projects">;

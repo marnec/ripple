@@ -1,9 +1,10 @@
 import { useSyncExternalStore, useCallback } from "react";
+import type { BrowsableResourceType } from "@shared/types/resources";
 
-export type ResourceType = "channel" | "document" | "diagram" | "spreadsheet" | "project";
+export type { BrowsableResourceType as ResourceType } from "@shared/types/resources";
 
 export interface RecentItem {
-  resourceType: ResourceType;
+  resourceType: BrowsableResourceType;
   resourceId: string;
   resourceName: string;
   visitedAt: number;
@@ -43,7 +44,7 @@ function notify() {
 /** Record a visit — updates localStorage and notifies subscribers. */
 export function recordLocalVisit(
   workspaceId: string,
-  resourceType: ResourceType,
+  resourceType: BrowsableResourceType,
   resourceId: string,
   resourceName: string,
 ) {

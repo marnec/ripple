@@ -1,6 +1,6 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { Message } from "./Message";
 import { Button } from "../../../components/ui/button";
 import { ArrowLeftIcon, XIcon } from "lucide-react";

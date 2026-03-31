@@ -5,7 +5,7 @@ import { memo, useState } from "react";
 import { ChevronRight, Plus, Table2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarMenuAction,
   SidebarMenuButton,

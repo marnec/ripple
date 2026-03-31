@@ -12,7 +12,7 @@ import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
 import { CellRefDialog } from "../Document/CellRefDialog";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 type TaskDescriptionEditorProps = {
   editor: any;

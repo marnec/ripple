@@ -4,7 +4,7 @@ import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";

@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
+import { referenceValidator } from "./validators";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -240,16 +241,6 @@ export const rename = mutation({
     await db.patch(id, { name });
     return null;
   },
-});
-
-const referenceValidator = v.object({
-  _id: v.id("edges"),
-  sourceType: v.string(),
-  sourceId: v.string(),
-  sourceName: v.string(),
-  edgeType: v.string(),
-  workspaceId: v.string(),
-  projectId: v.optional(v.string()),
 });
 
 export const remove = mutation({

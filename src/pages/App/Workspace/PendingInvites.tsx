@@ -12,7 +12,7 @@ import { useMutation } from "convex/react";
 import { Check, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { usePendingInvites } from "@/hooks/use-pending-invites";
 
 export function PendingInvitesDialog({

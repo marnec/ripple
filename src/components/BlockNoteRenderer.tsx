@@ -6,7 +6,7 @@ import { UserMentionRenderer } from "@/pages/App/Chat/UserMentionRenderer";
 import { useDocumentBlockPreview } from "@/hooks/use-document-block-preview";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 import { FileText } from "lucide-react";
 
 // BlockNote JSON types (simplified for rendering)

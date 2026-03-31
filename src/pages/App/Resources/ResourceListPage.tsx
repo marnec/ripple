@@ -8,7 +8,7 @@ import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounc
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { SearchResults } from "./SearchResults";
 
 type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";

@@ -1,11 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { Upload } from "lucide-react";
 import { useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceListPage } from "../Resources/ResourceListPage";
 import { setPendingImportFile } from "./import-state";
 

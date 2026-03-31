@@ -20,7 +20,7 @@ import {
 import { computeHofstadterLabels } from "@/lib/calendar-utils";
 import { Clock, X } from "lucide-react";
 import { useState } from "react";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
 import { PropertyRow } from "./PropertyRow";
 

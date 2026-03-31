@@ -16,7 +16,7 @@ import { ConvexError } from "convex/values";
 import { Shield, User, UserMinus, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 interface ChannelMembersSectionProps {
   channelId: Id<"channels">;

@@ -8,7 +8,7 @@ import { useQuery } from "convex-helpers/react/cache";;
 import { CheckSquare, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),

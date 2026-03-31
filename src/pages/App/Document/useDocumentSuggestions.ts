@@ -1,7 +1,7 @@
 import { isSingleCell } from "@shared/cellRef";
 import { Clock, FileText, PenTool, Search, Table } from "lucide-react";
 import { createElement } from "react";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import type { RecentItem } from "@/hooks/use-local-recents";
 import type { DocumentSchemaEditor } from "./schema";
 

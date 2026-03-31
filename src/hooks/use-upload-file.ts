@@ -1,7 +1,7 @@
 import { useMutation } from "convex/react";
 import { useEffect, useRef } from "react";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export interface ImageUploadResult {
   /** Thumbnail URL (or original if already small) */

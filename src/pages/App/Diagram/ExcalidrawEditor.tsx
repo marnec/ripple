@@ -2,16 +2,16 @@
 
 import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
-import {
+import type {
   ExcalidrawImperativeAPI,
 } from "@excalidraw/excalidraw/types";
-import { Theme } from "@excalidraw/excalidraw/element/types";
+import type { Theme } from "@excalidraw/excalidraw/element/types";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
 import type { Awareness } from "y-protocols/awareness";
 import type YProvider from "y-partyserver/provider";
-import * as Y from "yjs";
+import type * as Y from "yjs";
 
 
 interface ExcalidrawEditorProps {

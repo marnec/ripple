@@ -2,14 +2,14 @@ import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { X } from "lucide-react";
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 
 const LazyTaskDetailSheet = React.lazy(() =>

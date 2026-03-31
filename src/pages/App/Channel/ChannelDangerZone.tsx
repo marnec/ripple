@@ -4,7 +4,7 @@ import { useMutation } from "convex/react";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { removeFromKnownChannels } from "@/hooks/use-acknowledged-channels";
 
 interface ChannelDangerZoneProps {

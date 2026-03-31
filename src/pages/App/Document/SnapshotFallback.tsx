@@ -1,7 +1,7 @@
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { Awareness } from "y-protocols/awareness";
-import * as Y from "yjs";
+import type * as Y from "yjs";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { documentSchema } from "./schema";
 

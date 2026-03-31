@@ -21,9 +21,9 @@ import type { LucideIcon } from "lucide-react";
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { WorkspaceTimeline } from "./WorkspaceTimeline";
 import { getNodeColor } from "./graphConstants";
 

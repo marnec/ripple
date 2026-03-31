@@ -8,7 +8,7 @@ import {
   Rows3,
   Trash2,
 } from "lucide-react";
-import { type RefObject } from "react";
+import type { RefObject } from "react";
 import { createPortal } from "react-dom";
 
 // ---------------------------------------------------------------------------

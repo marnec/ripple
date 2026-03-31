@@ -1,11 +1,11 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { QueryParams } from "@shared/types/routes";
+import type { QueryParams } from "@shared/types/routes";
 import { useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { consumePendingImportFile } from "./import-state";
 
 const createDocumentRef = makeFunctionReference<

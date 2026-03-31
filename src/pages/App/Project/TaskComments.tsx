@@ -10,7 +10,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { taskCommentSchema } from "./taskCommentSchema";
 
 import { RippleSpinner } from "@/components/RippleSpinner";
@@ -19,6 +19,7 @@ import "@blocknote/shadcn/style.css";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { StaticCommentBody } from "./StaticCommentBody";
+import type { EditCommentEditorProps } from "./comment-types";
 
 type TaskCommentsProps = {
   taskId: Id<"tasks">;
@@ -192,15 +193,6 @@ function CommentBody({ body }: { body: string }) {
 }
 
 // Edit mode for existing comment
-type EditCommentEditorProps = {
-  commentId: Id<"taskComments">;
-  initialBody: string;
-  workspaceMembers: Array<{ _id: Id<"users">; name?: string; image?: string }>;
-  uploadFile?: (file: File) => Promise<string>;
-  onSave: (id: Id<"taskComments">, body: string) => void;
-  onCancel: () => void;
-};
-
 function EditCommentEditor({
   commentId,
   initialBody,

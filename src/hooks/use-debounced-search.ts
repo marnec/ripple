@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { buildSearchString, parseSearchInput } from "@/lib/search-utils";
-
-type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
+import type { BrowsableResourceType as ResourceType } from "@shared/types/resources";
 export type FavoriteFilter = "all" | "favorites" | "unfavorited";
 export type ChannelVisibilityFilter = "all" | "public" | "private";
 

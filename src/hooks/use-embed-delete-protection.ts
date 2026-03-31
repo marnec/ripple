@@ -1,25 +1,6 @@
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
-
-/** Minimal editor shape required by useEmbedDeleteProtection. */
-type AnyEditor = {
-  isEditable: boolean;
-  document: unknown[];
-  domElement: HTMLElement | null | undefined;
-  onBeforeChange: (
-    callback: (context: {
-      getChanges: () => Array<{
-        block: { id: string; type: string; props: Record<string, unknown>; children?: unknown[] };
-        source: { type: string };
-        type: string;
-        prevBlock: unknown;
-      }>;
-    }) => boolean | void,
-  ) => () => void;
-  removeBlocks: (blocks: Array<{ id: string } | string>) => any;
-  insertBlocks: (...args: any[]) => any;
-  getTextCursorPosition: () => { block: { id: string } };
-};
+import type { AnyEditor } from "./editor-types";
 
 const EMBED_TYPES = new Set(["diagram", "spreadsheetRange", "documentBlockEmbed"]);
 

@@ -1,13 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CalendarApp, BackgroundEvent } from "@schedule-x/calendar";
-
-// Import TaskCalendarEvent and EventMeta via relative import from ProjectCalendar
-// Actually, we need to define these types here or re-export from a shared location.
-// Since ProjectCalendar.tsx defines them locally, we need to replicate the minimal types needed.
-
-// Minimal types needed for the hook (matches the intersection type in ProjectCalendar.tsx)
-type EventMeta = { statusColor: string; hasEstimate: boolean };
-type TaskCalendarEvent = { id: string | number; start: unknown; end: unknown; title?: string; calendarId?: string; _meta: EventMeta };
+import type { TaskCalendarEvent } from "./ProjectCalendar";
 
 function isTaskEvent(e: unknown): e is TaskCalendarEvent {
   return typeof e === "object" && e !== null && "_meta" in e && (e as any)._meta != null;

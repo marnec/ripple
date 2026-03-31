@@ -11,7 +11,7 @@ import {
   ResponsiveDropdownMenuTrigger,
 } from "../../../components/ui/responsive-dropdown-menu";
 
-import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
 
 export interface SpreadsheetSelectorItemProps {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { IndexeddbPersistence } from "y-indexeddb";
 import type { ExcalidrawBinding } from "y-excalidraw";
-import * as Y from "yjs";
+import type * as Y from "yjs";
 import { getUserColor } from "../lib/user-colors";
 import { useYjsProvider } from "./use-yjs-provider";
 

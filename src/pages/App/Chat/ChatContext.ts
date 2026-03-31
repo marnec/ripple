@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import { ConvexError } from "convex/values";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 export type EditingMessage = { body: string | null; id: Id<"messages"> | null };
 

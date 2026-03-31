@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import * as Y from "yjs";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 
 /**
  * Cold-start snapshot fallback: when the user is offline and no editor/IndexedDB

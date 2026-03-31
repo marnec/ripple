@@ -18,7 +18,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useState } from "react";
-import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { InviteUserDialog } from "./InviteUserDialog";

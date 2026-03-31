@@ -10,34 +10,7 @@ import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
-const priorityValidator = v.union(
-  v.literal("urgent"),
-  v.literal("high"),
-  v.literal("medium"),
-  v.literal("low"),
-);
-
-const taskStatusValidator = v.object({
-  _id: v.id("taskStatuses"),
-  _creationTime: v.number(),
-  projectId: v.id("projects"),
-  name: v.string(),
-  color: v.string(),
-  order: v.number(),
-  isDefault: v.boolean(),
-  isCompleted: v.boolean(),
-  setsStartDate: v.optional(v.boolean()),
-});
-
-const userValidator = v.object({
-  _id: v.id("users"),
-  _creationTime: v.number(),
-  name: v.optional(v.string()),
-  email: v.optional(v.string()),
-  emailVerificationTime: v.optional(v.number()),
-  image: v.optional(v.string()),
-  isAnonymous: v.optional(v.boolean()),
-});
+import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 
 const baseTaskFields = {
   _id: v.id("tasks"),
@@ -69,19 +42,6 @@ const enrichedTaskValidator = v.object({
   assignee: v.union(userValidator, v.null()),
   projectKey: v.optional(v.string()),
   hasBlockers: v.boolean(),
-});
-
-const projectValidator = v.object({
-  _id: v.id("projects"),
-  _creationTime: v.number(),
-  name: v.string(),
-  description: v.optional(v.string()),
-  color: v.string(),
-  workspaceId: v.id("workspaces"),
-  creatorId: v.id("users"),
-  key: v.optional(v.string()),
-  taskCounter: v.optional(v.number()),
-  tags: v.optional(v.array(v.string())),
 });
 
 export const create = mutation({

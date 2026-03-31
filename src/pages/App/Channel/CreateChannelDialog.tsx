@@ -13,7 +13,7 @@ import { useMutation } from "convex/react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import {
   ResponsiveDialog,

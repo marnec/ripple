@@ -1,7 +1,7 @@
 import { createReactInlineContentSpec } from "@blocknote/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../../../../convex/_generated/api";
-import { Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate, useParams } from "react-router-dom";
 import { ProjectColorTag } from "@/components/ProjectColorTag";

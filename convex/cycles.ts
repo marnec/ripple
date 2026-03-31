@@ -27,34 +27,7 @@ const cycleWithProgressValidator = v.object({
   progressPercent: v.number(),
 });
 
-const priorityValidator = v.union(
-  v.literal("urgent"),
-  v.literal("high"),
-  v.literal("medium"),
-  v.literal("low"),
-);
-
-const taskStatusValidator = v.object({
-  _id: v.id("taskStatuses"),
-  _creationTime: v.number(),
-  projectId: v.id("projects"),
-  name: v.string(),
-  color: v.string(),
-  order: v.number(),
-  isDefault: v.boolean(),
-  isCompleted: v.boolean(),
-  setsStartDate: v.optional(v.boolean()),
-});
-
-const userValidator = v.object({
-  _id: v.id("users"),
-  _creationTime: v.number(),
-  name: v.optional(v.string()),
-  email: v.optional(v.string()),
-  emailVerificationTime: v.optional(v.number()),
-  image: v.optional(v.string()),
-  isAnonymous: v.optional(v.boolean()),
-});
+import { priorityValidator, taskStatusValidator, userValidator } from "./validators";
 
 const enrichedTaskValidator = v.object({
   _id: v.id("tasks"),

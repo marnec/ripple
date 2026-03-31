@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@shared/displayName";
 import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip";
 
 type Props = {

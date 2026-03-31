@@ -20,10 +20,9 @@ import { Globe, Lock, Star, StarOff, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
-type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
-type FavoritableType = "document" | "diagram" | "spreadsheet" | "project";
+import type { BrowsableResourceType as ResourceType, FavoritableResourceType as FavoritableType } from "@shared/types/resources";
 
 type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; isPublic?: boolean };
 

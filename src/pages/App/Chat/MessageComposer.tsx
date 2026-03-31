@@ -21,7 +21,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../../../convex/_generated/api";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { useViewer } from "../UserContext";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@shared/displayName";
 import { useUploadFile, type ImageUploadResult } from "../../../hooks/use-upload-file";

@@ -1,8 +1,8 @@
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
 import {
   ResponsiveDialog,

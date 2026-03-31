@@ -1,5 +1,5 @@
 import { Cog, Folder, MoreHorizontal, StarOff } from "lucide-react";
-import { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuContent,

@@ -1,5 +1,6 @@
 import { isSingleCell, parseCellName, parseRange } from "@shared/cellRef";
 import type { Awareness } from "y-protocols/awareness";
+import type { AwarenessUser } from "@/lib/awareness-types";
 import * as Y from "yjs";
 
 const DEFAULT_ROWS = 100;
@@ -41,7 +42,7 @@ export interface SpreadsheetCursor {
 }
 
 interface AwarenessState {
-  user?: { name: string; color: string };
+  user?: AwarenessUser;
   cursor?: SpreadsheetCursor;
 }
 

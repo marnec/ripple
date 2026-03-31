@@ -12,7 +12,7 @@ const resourceTypeValidator = v.union(
   v.literal("project"),
 );
 
-type ResourceType = "document" | "diagram" | "spreadsheet" | "project";
+import type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
 
 async function resolveResource(
   ctx: GenericQueryCtx<DataModel>,

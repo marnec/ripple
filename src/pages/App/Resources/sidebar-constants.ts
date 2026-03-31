@@ -12,7 +12,8 @@ export const SIDEBAR_ELEMENT_FADEIN_DELAY = 25;
  */
 export const SIDEBAR_ROW_HEIGHT_REM = 1.75;
 
-export type ResourceType = "document" | "diagram" | "spreadsheet" | "project";
+import type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
+export type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
 
 /**
  * Route segments for each resource type.

@@ -106,6 +106,7 @@
     }
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.10",
     "@convex-dev/aggregate": "^0.2.1",
     "@tailwindcss/postcss": "4.2.1",
     "@testing-library/jest-dom": "^6.9.1",

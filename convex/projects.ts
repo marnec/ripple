@@ -8,19 +8,7 @@ import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
-
-const projectValidator = v.object({
-  _id: v.id("projects"),
-  _creationTime: v.number(),
-  name: v.string(),
-  description: v.optional(v.string()),
-  color: v.string(),
-  workspaceId: v.id("workspaces"),
-  creatorId: v.id("users"),
-  key: v.optional(v.string()),
-  taskCounter: v.optional(v.number()),
-  tags: v.optional(v.array(v.string())),
-});
+import { projectValidator } from "./validators";
 
 export const create = mutation({
   args: {
