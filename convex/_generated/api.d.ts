@@ -2205,19 +2205,6 @@ export declare const internal: {
       } | null
     >;
   };
-  chatNotifications: {
-    notifyMessageMentions: FunctionReference<
-      "action",
-      "internal",
-      {
-        channelId: Id<"channels">;
-        mentionedBy: { id: Id<"users">; name: string };
-        mentionedUserIds: Array<string>;
-        plainText: string;
-      },
-      null
-    >;
-  };
   collaboration: {
     checkAccess: FunctionReference<
       "query",
@@ -2287,20 +2274,6 @@ export declare const internal: {
       "action",
       "internal",
       { blockId: string; documentId: Id<"documents"> },
-      null
-    >;
-  };
-  documentNotifications: {
-    notifyDocumentMention: FunctionReference<
-      "action",
-      "internal",
-      {
-        documentId: Id<"documents">;
-        documentName: string;
-        mentionedBy: { id: Id<"users">; name: string };
-        mentionedUserIds: Array<string>;
-        workspaceId: Id<"workspaces">;
-      },
       null
     >;
   };
@@ -2735,6 +2708,23 @@ export declare const internal: {
       } | null>
     >;
   };
+  notifications: {
+    deliverPush: FunctionReference<
+      "action",
+      "internal",
+      {
+        body: string;
+        category: string;
+        recipientIds?: Array<string>;
+        resourceId?: string;
+        senderId: Id<"users">;
+        title: string;
+        url: string;
+        workspaceId?: Id<"workspaces">;
+      },
+      null
+    >;
+  };
   projectNotificationPreferences: {
     getForUsersInProject: FunctionReference<
       "query",
@@ -2759,18 +2749,6 @@ export declare const internal: {
       null
     >;
   };
-  pushNotifications: {
-    sendPushNotification: FunctionReference<
-      "action",
-      "internal",
-      {
-        author: { id: Id<"users">; name: string };
-        body: string;
-        channelId: Id<"channels">;
-      },
-      null
-    >;
-  };
   pushSubscription: {
     removeStaleEndpoints: FunctionReference<
       "mutation",
@@ -2791,26 +2769,6 @@ export declare const internal: {
         keys: { auth: string; p256dh: string };
         userId: Id<"users">;
       }>
-    >;
-  };
-  resourceNotifications: {
-    notifyResourceEvent: FunctionReference<
-      "action",
-      "internal",
-      {
-        event: "created" | "deleted";
-        resourceName: string;
-        resourceType:
-          | "document"
-          | "spreadsheet"
-          | "diagram"
-          | "project"
-          | "channel";
-        triggeredBy: { id: Id<"users">; name: string };
-        url?: string;
-        workspaceId: Id<"workspaces">;
-      },
-      null
     >;
   };
   snapshots: {
@@ -2881,54 +2839,6 @@ export declare const internal: {
         totalDeleted?: number;
         totalScanned?: number;
         workspaceCounts?: string;
-      },
-      null
-    >;
-  };
-  taskNotifications: {
-    notifyTaskAssignment: FunctionReference<
-      "action",
-      "internal",
-      {
-        assignedBy: { id: Id<"users">; name: string };
-        assigneeId: Id<"users">;
-        taskId: Id<"tasks">;
-        taskTitle: string;
-      },
-      null
-    >;
-    notifyTaskComment: FunctionReference<
-      "action",
-      "internal",
-      {
-        assigneeId: Id<"users">;
-        commentedBy: { id: Id<"users">; name: string };
-        taskId: Id<"tasks">;
-        taskTitle: string;
-      },
-      null
-    >;
-    notifyTaskStatusChange: FunctionReference<
-      "action",
-      "internal",
-      {
-        assigneeId: Id<"users">;
-        changedBy: { id: Id<"users">; name: string };
-        newStatusName: string;
-        taskId: Id<"tasks">;
-        taskTitle: string;
-      },
-      null
-    >;
-    notifyUserMentions: FunctionReference<
-      "action",
-      "internal",
-      {
-        context: "task description" | "comment";
-        mentionedBy: { id: Id<"users">; name: string };
-        mentionedUserIds: Array<string>;
-        taskId: Id<"tasks">;
-        taskTitle: string;
       },
       null
     >;

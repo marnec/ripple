@@ -2,7 +2,6 @@ import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
-import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
@@ -10,7 +9,7 @@ import { DatabaseReader } from "./_generated/server";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
 import { requireUser, requireWorkspaceMember } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 const mentionedUsersValidator = v.record(v.string(), v.object({
   name: v.union(v.string(), v.null()),
@@ -395,24 +394,27 @@ export const send = mutation({
     const filteredMentions = mentionedUserIds.filter(id => id !== userId);
 
     if (filteredMentions.length > 0) {
-      await scheduleNotification(ctx, internal.chatNotifications.notifyMessageMentions, {
-        mentionedUserIds: filteredMentions,
-        channelId,
-        plainText,
-        mentionedBy: {
-          name: getUserDisplayName(user),
-          id: userId,
-        },
+      await notify(ctx, {
+        category: "chatMention",
+        userId,
+        userName: getUserDisplayName(user),
+        recipientIds: filteredMentions,
+        resourceId: channelId,
+        title: `${getUserDisplayName(user)} mentioned you in #${channel.name}`,
+        body: plainText.length > 100 ? plainText.slice(0, 97) + "..." : plainText,
+        url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
       });
     }
 
-    await scheduleNotification(ctx, internal.pushNotifications.sendPushNotification, {
-      channelId,
+    await notify(ctx, {
+      category: "chatChannelMessage",
+      userId,
+      userName: getUserDisplayName(user),
+      workspaceId: channel.workspaceId,
+      resourceId: channelId,
+      title: getUserDisplayName(user),
       body: plainText,
-      author: {
-        name: getUserDisplayName(user),
-        id: user._id,
-      },
+      url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
     });
     return null;
   },

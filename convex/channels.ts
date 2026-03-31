@@ -9,7 +9,7 @@ import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete } from "./cascadeDelete";
 import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 export const create = mutation({
   args: {
@@ -38,12 +38,13 @@ export const create = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "channelCreated",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId,
-      resourceType: "channel",
-      resourceName: name,
-      event: "created",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} created a channel`,
+      body: name,
       url: `/workspaces/${workspaceId}/channels/${channelId}`,
     });
 
@@ -131,12 +132,14 @@ export const remove = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "channelDeleted",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId: channel.workspaceId,
-      resourceType: "channel",
-      resourceName: channel.name,
-      event: "deleted",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} deleted a channel`,
+      body: channel.name,
+      url: `/workspaces/${channel.workspaceId}`,
     });
 
     await cascadeDelete.deleteWithCascadeBatched(ctx, "channels", id, {

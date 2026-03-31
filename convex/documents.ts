@@ -3,12 +3,11 @@ import { mutation, query } from "./_generated/server";
 import { DEFAULT_DOC_NAME } from "@shared/constants";
 import { auditLog, logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
-import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { requireResourceMember, requireWorkspaceMember, checkResourceMember } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 export const create = mutation({
   args: {
@@ -40,12 +39,13 @@ export const create = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "documentCreated",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId,
-      resourceType: "document",
-      resourceName: documentName,
-      event: "created",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} created a document`,
+      body: documentName,
       url: `/workspaces/${workspaceId}/documents/${documentId}`,
     });
 
@@ -190,12 +190,14 @@ export const remove = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "documentDeleted",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId: document.workspaceId,
-      resourceType: "document",
-      resourceName: document.name,
-      event: "deleted",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} deleted a document`,
+      body: document.name,
+      url: `/workspaces/${document.workspaceId}`,
     });
 
     await cascadeDelete.deleteWithCascade(ctx, "documents", id, {
@@ -247,15 +249,14 @@ export const reportMention = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.documentNotifications.notifyDocumentMention, {
-      documentId,
-      documentName: document.name,
-      workspaceId: document.workspaceId,
-      mentionedUserIds: filteredMentions,
-      mentionedBy: {
-        name: getUserDisplayName(user),
-        id: userId,
-      },
+    await notify(ctx, {
+      category: "documentMention",
+      userId,
+      userName: getUserDisplayName(user),
+      recipientIds: filteredMentions,
+      title: `${getUserDisplayName(user)} mentioned you`,
+      body: document.name,
+      url: `/workspaces/${document.workspaceId}/documents/${documentId}`,
     });
 
     return null;

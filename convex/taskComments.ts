@@ -1,12 +1,11 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
 import { logTaskActivity } from "./auditLog";
 import { requireResourceMember, requireUser } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -74,28 +73,29 @@ export const create = mutation({
     const user = await ctx.db.get(userId);
 
     if (filteredMentions.length > 0) {
-      await scheduleNotification(ctx, internal.taskNotifications.notifyUserMentions, {
-        taskId,
-        mentionedUserIds: filteredMentions,
-        taskTitle: task?.title ?? "a task",
-        mentionedBy: {
-          name: getUserDisplayName(user),
-          id: userId,
-        },
-        context: "comment",
+      await notify(ctx, {
+        category: "taskCommentMention",
+        userId,
+        userName: getUserDisplayName(user),
+        recipientIds: filteredMentions,
+        resourceId: task.projectId,
+        title: `${getUserDisplayName(user)} mentioned you`,
+        body: `In comment for: ${task?.title ?? "a task"}`,
+        url: `/workspaces/${task?.workspaceId}/projects/${task?.projectId}?task=${taskId}`,
       });
     }
 
     // Notify assignee about new comment (if they're not the commenter and not already mentioned)
     if (task.assigneeId && task.assigneeId !== userId && !filteredMentions.includes(task.assigneeId)) {
-      await scheduleNotification(ctx, internal.taskNotifications.notifyTaskComment, {
-        taskId,
-        assigneeId: task.assigneeId,
-        taskTitle: task.title,
-        commentedBy: {
-          name: getUserDisplayName(user),
-          id: userId,
-        },
+      await notify(ctx, {
+        category: "taskComment",
+        userId,
+        userName: getUserDisplayName(user),
+        recipientIds: [task.assigneeId],
+        resourceId: task.projectId,
+        title: `${getUserDisplayName(user)} commented on your task`,
+        body: task.title,
+        url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
       });
     }
 
@@ -135,15 +135,15 @@ export const update = mutation({
     if (addedMentions.length > 0) {
       const task = await ctx.db.get(comment.taskId);
       const user = await ctx.db.get(userId);
-      await scheduleNotification(ctx, internal.taskNotifications.notifyUserMentions, {
-        taskId: comment.taskId,
-        mentionedUserIds: addedMentions,
-        taskTitle: task?.title ?? "a task",
-        mentionedBy: {
-          name: getUserDisplayName(user),
-          id: userId,
-        },
-        context: "comment",
+      await notify(ctx, {
+        category: "taskCommentMention",
+        userId,
+        userName: getUserDisplayName(user),
+        recipientIds: addedMentions,
+        resourceId: task?.projectId,
+        title: `${getUserDisplayName(user)} mentioned you`,
+        body: `In comment for: ${task?.title ?? "a task"}`,
+        url: `/workspaces/${task?.workspaceId}/projects/${task?.projectId}?task=${comment.taskId}`,
       });
     }
 

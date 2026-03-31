@@ -4,13 +4,12 @@ import { DEFAULT_DIAGRAM_NAME } from "@shared/constants";
 import { getEnrichedBacklinks } from "./edges";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
-import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { deletionResultValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -136,12 +135,13 @@ export const create = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "diagramCreated",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId,
-      resourceType: "diagram",
-      resourceName: diagramName,
-      event: "created",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} created a diagram`,
+      body: diagramName,
       url: `/workspaces/${workspaceId}/diagrams/${diagramId}`,
     });
 
@@ -186,12 +186,14 @@ export const remove = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "diagramDeleted",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId: diagram.workspaceId,
-      resourceType: "diagram",
-      resourceName: diagram.name,
-      event: "deleted",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} deleted a diagram`,
+      body: diagram.name,
+      url: `/workspaces/${diagram.workspaceId}`,
     });
 
     await cascadeDelete.deleteWithCascade(ctx, "diagrams", id, {

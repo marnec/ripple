@@ -3,13 +3,12 @@ import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
-import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { projectValidator } from "./validators";
 import { requireWorkspaceMember, requireUser, requireCreator, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 export const create = mutation({
   args: {
@@ -90,12 +89,13 @@ export const create = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "projectCreated",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId,
-      resourceType: "project",
-      resourceName: name,
-      event: "created",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} created a project`,
+      body: name,
       url: `/workspaces/${workspaceId}/projects/${projectId}`,
     });
 
@@ -253,12 +253,14 @@ export const remove = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "projectDeleted",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId: project.workspaceId,
-      resourceType: "project",
-      resourceName: project.name,
-      event: "deleted",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} deleted a project`,
+      body: project.name,
+      url: `/workspaces/${project.workspaceId}`,
     });
 
     await cascadeDelete.deleteWithCascade(ctx, "projects", id, {

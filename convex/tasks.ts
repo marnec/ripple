@@ -1,6 +1,5 @@
 import { ConvexError, v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
 
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@shared/displayName";
@@ -11,7 +10,7 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 export const baseTaskFields = {
   _id: v.id("tasks"),
@@ -147,19 +146,16 @@ export const create = mutation({
 
     // Assignment notification
     if (args.assigneeId && args.assigneeId !== userId) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.taskNotifications.notifyTaskAssignment,
-        {
-          taskId,
-          assigneeId: args.assigneeId,
-          taskTitle: args.title,
-          assignedBy: {
-            name: getUserDisplayName(user),
-            id: userId,
-          },
-        },
-      );
+      await notify(ctx, {
+        category: "taskAssigned",
+        userId,
+        userName: getUserDisplayName(user),
+        recipientIds: [args.assigneeId],
+        resourceId: args.projectId,
+        title: `${getUserDisplayName(user)} assigned you a task`,
+        body: args.title,
+        url: `/workspaces/${project.workspaceId}/projects/${args.projectId}?task=${taskId}`,
+      });
     }
 
     return taskId;
@@ -554,14 +550,15 @@ export const update = mutation({
     const assigneeChanged = assigneeId !== undefined && assigneeId !== null && assigneeId !== task.assigneeId;
     if (assigneeChanged && assigneeId !== userId) {
       currentUser = await ctx.db.get(userId);
-      await scheduleNotification(ctx, internal.taskNotifications.notifyTaskAssignment, {
-        taskId,
-        assigneeId,
-        taskTitle: title ?? task.title,
-        assignedBy: {
-          name: getUserDisplayName(currentUser),
-          id: userId,
-        },
+      await notify(ctx, {
+        category: "taskAssigned",
+        userId,
+        userName: getUserDisplayName(currentUser),
+        recipientIds: [assigneeId],
+        resourceId: task.projectId,
+        title: `${getUserDisplayName(currentUser)} assigned you a task`,
+        body: title ?? task.title,
+        url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
       });
     }
 
@@ -570,15 +567,15 @@ export const update = mutation({
     if (statusId !== undefined && statusId !== task.statusId && effectiveAssignee && effectiveAssignee !== userId) {
       if (!currentUser) currentUser = await ctx.db.get(userId);
       const newStatus = await ctx.db.get(statusId);
-      await scheduleNotification(ctx, internal.taskNotifications.notifyTaskStatusChange, {
-        taskId,
-        assigneeId: effectiveAssignee,
-        taskTitle: title ?? task.title,
-        newStatusName: newStatus?.name ?? "Unknown",
-        changedBy: {
-          name: getUserDisplayName(currentUser),
-          id: userId,
-        },
+      await notify(ctx, {
+        category: "taskStatusChange",
+        userId,
+        userName: getUserDisplayName(currentUser),
+        recipientIds: [effectiveAssignee],
+        resourceId: task.projectId,
+        title: `${getUserDisplayName(currentUser)} changed task status to ${newStatus?.name ?? "Unknown"}`,
+        body: title ?? task.title,
+        url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
       });
     }
 
@@ -620,15 +617,15 @@ export const notifyDescriptionMentions = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.taskNotifications.notifyUserMentions, {
-      taskId,
-      mentionedUserIds: filtered,
-      taskTitle: task.title,
-      mentionedBy: {
-        name: getUserDisplayName(user),
-        id: userId,
-      },
-      context: "task description",
+    await notify(ctx, {
+      category: "taskDescriptionMention",
+      userId,
+      userName: getUserDisplayName(user),
+      recipientIds: filtered,
+      resourceId: task.projectId,
+      title: `${getUserDisplayName(user)} mentioned you`,
+      body: `In task description for: ${task.title}`,
+      url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
     });
 
     return null;
@@ -681,15 +678,15 @@ export const updatePosition = mutation({
       // Notify assignee of status change (if they didn't make the change)
       if (task.assigneeId && task.assigneeId !== userId) {
         const currentUser = await ctx.db.get(userId);
-        await scheduleNotification(ctx, internal.taskNotifications.notifyTaskStatusChange, {
-          taskId,
-          assigneeId: task.assigneeId,
-          taskTitle: task.title,
-          newStatusName: newStatus.name,
-          changedBy: {
-            name: getUserDisplayName(currentUser),
-            id: userId,
-          },
+        await notify(ctx, {
+          category: "taskStatusChange",
+          userId,
+          userName: getUserDisplayName(currentUser),
+          recipientIds: [task.assigneeId],
+          resourceId: task.projectId,
+          title: `${getUserDisplayName(currentUser)} changed task status to ${newStatus.name}`,
+          body: task.title,
+          url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
         });
       }
     }

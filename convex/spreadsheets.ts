@@ -4,13 +4,12 @@ import { DEFAULT_SPREADSHEET_NAME } from "@shared/constants";
 import { getEnrichedBacklinks } from "./edges";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
-import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { deletionResultValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
-import { scheduleNotification } from "./notificationPool";
+import { notify } from "./utils/notify";
 
 const spreadsheetValidator = v.object({
   _id: v.id("spreadsheets"),
@@ -136,12 +135,13 @@ export const create = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "spreadsheetCreated",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId,
-      resourceType: "spreadsheet",
-      resourceName: spreadsheetName,
-      event: "created",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} created a spreadsheet`,
+      body: spreadsheetName,
       url: `/workspaces/${workspaceId}/spreadsheets/${spreadsheetId}`,
     });
 
@@ -186,12 +186,14 @@ export const remove = mutation({
     });
 
     const user = await ctx.db.get(userId);
-    await scheduleNotification(ctx, internal.resourceNotifications.notifyResourceEvent, {
+    await notify(ctx, {
+      category: "spreadsheetDeleted",
+      userId,
+      userName: getUserDisplayName(user),
       workspaceId: spreadsheet.workspaceId,
-      resourceType: "spreadsheet",
-      resourceName: spreadsheet.name,
-      event: "deleted",
-      triggeredBy: { name: getUserDisplayName(user), id: userId },
+      title: `${getUserDisplayName(user)} deleted a spreadsheet`,
+      body: spreadsheet.name,
+      url: `/workspaces/${spreadsheet.workspaceId}`,
     });
 
     await cascadeDelete.deleteWithCascade(ctx, "spreadsheets", id, {
