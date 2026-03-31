@@ -58,7 +58,7 @@ describe("projectNotificationPreferences", () => {
 
       await expect(
         outsider.query(api.projectNotificationPreferences.get, { projectId }),
-      ).rejects.toThrow("Not a workspace member");
+      ).rejects.toThrow("Not a member of this workspace");
     });
   });
 

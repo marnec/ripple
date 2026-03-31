@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireUser } from "./authHelpers";
 
 export const toggle = mutation({
   args: {
@@ -10,8 +10,7 @@ export const toggle = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { messageId, emoji, emojiNative }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Unauthenticated");
+    const userId = await requireUser(ctx);
 
     // Check if user already reacted with this emoji
     const existing = await ctx.db
@@ -70,8 +69,7 @@ export const listForMessages = query({
   args: { messageIds: v.array(v.id("messages")) },
   returns: v.record(v.string(), v.array(reactionGroupValidator)),
   handler: async (ctx, { messageIds }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Unauthenticated");
+    const userId = await requireUser(ctx);
 
     const results: Record<string, { emoji: string; emojiNative: string; count: number; userIds: string[]; currentUserReacted: boolean }[]> = {};
 
@@ -96,8 +94,7 @@ export const listForMessage = query({
   args: { messageId: v.id("messages") },
   returns: v.array(reactionGroupValidator),
   handler: async (ctx, { messageId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Unauthenticated");
+    const userId = await requireUser(ctx);
 
     const reactions = await ctx.db
       .query("messageReactions")

@@ -7,6 +7,7 @@ import {
   mutation,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { requireUser } from "./authHelpers";
 
 const CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
@@ -63,8 +64,7 @@ export const endSession = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { channelId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    await requireUser(ctx);
 
     const sessions = await ctx.db
       .query("callSessions")

@@ -1,13 +1,12 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireUser } from "./authHelpers";
 
 export const markRead = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { channelId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const membership = await ctx.db
       .query("channelMembers")
@@ -31,10 +30,9 @@ export const getUnreadCounts = query({
     v.object({ channelId: v.id("channels"), count: v.number() }),
   ),
   handler: async (ctx, { channelIds }) => {
-    if (channelIds.length > 50) throw new ConvexError("Too many channels");
+    if (channelIds.length > 50) throw new Error("Too many channels");
 
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     return Promise.all(
       channelIds.map(async (channelId) => {

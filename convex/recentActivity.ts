@@ -1,7 +1,7 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
+import { requireWorkspaceMember } from "./authHelpers";
 
 import { browsableResourceTypeValidator as resourceTypeValidator } from "./validators";
 
@@ -14,15 +14,7 @@ export const recordVisit = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { workspaceId, resourceType, resourceId, resourceName }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     // Upsert: check if entry exists for this user + resource
     const existing = await ctx.db
@@ -64,8 +56,7 @@ export const listRecent = query({
   },
   returns: v.array(recentActivityItemValidator),
   handler: async (ctx, { workspaceId, limit = 8 }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const top = await ctx.db
       .query("recentActivity")

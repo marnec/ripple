@@ -1,8 +1,8 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { getUserDisplayName } from "@shared/displayName";
 import { auditLog } from "./auditLog";
+import { requireWorkspaceMember } from "./authHelpers";
 
 type AuditEntry = {
   _id: string;
@@ -35,17 +35,7 @@ export const list = query({
   returns: v.array(timelineItemValidator),
   handler: async (ctx, { workspaceId, limit: rawLimit, resourceTypes }) => {
     const limit = Math.min(rawLimit ?? 20, 50);
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Verify workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    await requireWorkspaceMember(ctx, workspaceId);
 
     // Fetch recent audit entries scoped to this workspace
     // When resourceTypes is provided, the audit log over-fetches and filters server-side

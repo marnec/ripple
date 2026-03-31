@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums";
@@ -9,6 +8,7 @@ import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { projectValidator } from "./validators";
+import { requireWorkspaceMember, requireUser, requireCreator, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
 
 export const create = mutation({
   args: {
@@ -19,21 +19,7 @@ export const create = mutation({
   },
   returns: v.id("projects"),
   handler: async (ctx, { name, color, workspaceId, key: providedKey }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check if user is a workspace admin
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId)
-      )
-      .first();
-
-    if (!membership) throw new ConvexError("Not a member of this workspace");
-    if (membership.role !== WorkspaceRole.ADMIN) {
-      throw new ConvexError("Only workspace admins can create projects");
-    }
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId, { role: WorkspaceRole.ADMIN });
 
     // Use provided key or auto-generate from name
     const baseKey = (providedKey
@@ -125,8 +111,7 @@ export const search = query({
   },
   returns: v.array(projectValidator),
   handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     let results;
     if (searchText?.trim()) {
@@ -170,23 +155,9 @@ export const get = query({
   args: { id: v.id("projects") },
   returns: v.union(projectValidator, v.null()),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-
-    const project = await ctx.db.get(id);
-    if (!project) return null;
-
-    // Check user has workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-
-    if (!membership) return null;
-
-    return project;
+    const result = await checkResourceMember(ctx, "projects", id);
+    if (!result) return null;
+    return result.resource;
   },
 });
 
@@ -194,18 +165,8 @@ export const list = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(projectValidator),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    // Check workspace membership first
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId)
-      )
-      .first();
-
-    if (!membership) return [];
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
 
     // Return all projects in workspace (for admin views)
     return await ctx.db
@@ -226,16 +187,12 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, name, description, color, key, tags }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const project = await ctx.db.get(id);
     if (!project) throw new ConvexError("Project not found");
 
-    // Only creator can update project
-    if (project.creatorId !== userId) {
-      throw new ConvexError("Only project creator can update the project");
-    }
+    requireCreator(project, userId);
 
     // Build patch object with only provided fields
     const patch: { name?: string; description?: string; color?: string; key?: string; tags?: string[] } = {};
@@ -282,16 +239,12 @@ export const remove = mutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const project = await ctx.db.get(id);
     if (!project) throw new ConvexError("Project not found");
 
-    // Only creator can delete project
-    if (project.creatorId !== userId) {
-      throw new ConvexError("Only project creator can delete the project");
-    }
+    requireCreator(project, userId);
 
     await logActivity(ctx, {
       userId, resourceType: "projects", resourceId: id,

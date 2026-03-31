@@ -1,9 +1,9 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { GenericQueryCtx, paginationOptsValidator } from "convex/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import type { DataModel } from "./_generated/dataModel";
+import { requireWorkspaceMember, getUser } from "./authHelpers";
 
 import { favoritableResourceTypeValidator as resourceTypeValidator } from "./validators";
 
@@ -29,16 +29,7 @@ export const toggle = mutation({
   },
   returns: v.boolean(),
   handler: async (ctx, { workspaceId, resourceType, resourceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const existing = await ctx.db
       .query("favorites")
@@ -75,7 +66,7 @@ export const listPinned = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(enrichedFavoriteValidator),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return [];
 
     const favorites = await ctx.db
@@ -126,16 +117,7 @@ export const listByType = query({
     pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
   }),
   handler: async (ctx, { workspaceId, resourceType, paginationOpts }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const result = await ctx.db
       .query("favorites")
@@ -176,7 +158,7 @@ export const listIdsForType = query({
   },
   returns: v.array(v.string()),
   handler: async (ctx, { workspaceId, resourceType }) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return [];
 
     const favorites = await ctx.db
@@ -201,7 +183,7 @@ export const listAllIdsForWorkspace = query({
     project: v.array(v.string()),
   }),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return { document: [], diagram: [], spreadsheet: [], project: [] };
 
     const favorites = await ctx.db
@@ -228,7 +210,7 @@ export const isFavorited = query({
   args: { resourceId: v.string() },
   returns: v.boolean(),
   handler: async (ctx, { resourceId }) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return false;
 
     const existing = await ctx.db

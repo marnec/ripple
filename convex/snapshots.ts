@@ -1,7 +1,7 @@
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getUser } from "./authHelpers";
 
 /**
  * Save a Yjs snapshot to Convex file storage and link it to a resource.
@@ -134,7 +134,7 @@ export const getSnapshotUrl = query({
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, { resourceType, resourceId }) => {
     // Authentication check
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return null;
 
     // Get the resource document - cast resourceId to appropriate table type

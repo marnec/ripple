@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
+import { requireUser } from "./authHelpers";
 
 const preferencesValidator = v.object({
   _id: v.id("notificationPreferences"),
@@ -30,8 +30,7 @@ export const get = query({
   args: {},
   returns: v.union(preferencesValidator, v.null()),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     return await ctx.db
       .query("notificationPreferences")
@@ -63,8 +62,7 @@ export const save = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const existing = await ctx.db
       .query("notificationPreferences")

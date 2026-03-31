@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internalQuery, query } from "./_generated/server";
+import { requireWorkspaceMember } from "./authHelpers";
 
 const workspaceMemberValidator = v.object({
   _id: v.id("workspaceMembers"),
@@ -14,16 +14,7 @@ export const byWorkspace = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(workspaceMemberValidator),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check if user is a member of the workspace
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
-      .first();
-
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    await requireWorkspaceMember(ctx, workspaceId);
 
     return ctx.db
       .query("workspaceMembers")
@@ -44,16 +35,7 @@ export const membersByWorkspace = query({
     isAnonymous: v.optional(v.boolean()),
   })),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check if user is a member of the workspace
-    const userMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
-      .first();
-
-    if (!userMembership) throw new ConvexError("Not a member of this workspace");
+    await requireWorkspaceMember(ctx, workspaceId);
 
     const members = await ctx.db
       .query("workspaceMembers")

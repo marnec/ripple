@@ -1,8 +1,8 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { normalizeCellRef, isValidCellRef, exceedsMaxCells } from "@shared/cellRef";
+import { checkResourceMember, requireResourceMember, requireUser } from "./authHelpers";
 
 /**
  * Get cached cell values for a (spreadsheetId, cellRef) pair.
@@ -18,20 +18,8 @@ export const getCellRef = query({
     v.null(),
   ),
   handler: async (ctx, { spreadsheetId, cellRef }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-
-    const spreadsheet = await ctx.db.get(spreadsheetId);
-    if (!spreadsheet) return null;
-
-    // Check workspace membership (consistent with spreadsheets.get)
-    const workspaceMember = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", spreadsheet.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!workspaceMember) return null;
+    const auth = await checkResourceMember(ctx, "spreadsheets", spreadsheetId);
+    if (!auth) return null;
 
     const ref = await ctx.db
       .query("spreadsheetCellRefs")
@@ -53,19 +41,8 @@ export const listBySpreadsheet = query({
   args: { spreadsheetId: v.id("spreadsheets") },
   returns: v.array(v.object({ cellRef: v.string() })),
   handler: async (ctx, { spreadsheetId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const spreadsheet = await ctx.db.get(spreadsheetId);
-    if (!spreadsheet) return [];
-
-    const workspaceMember = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", spreadsheet.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!workspaceMember) return [];
+    const auth = await checkResourceMember(ctx, "spreadsheets", spreadsheetId);
+    if (!auth) return [];
 
     const refs = await ctx.db
       .query("spreadsheetCellRefs")
@@ -86,20 +63,7 @@ export const ensureCellRef = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { spreadsheetId, cellRef }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const spreadsheet = await ctx.db.get(spreadsheetId);
-    if (!spreadsheet) throw new ConvexError("Spreadsheet not found");
-
-    // Check workspace membership
-    const workspaceMember = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", spreadsheet.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!workspaceMember) throw new ConvexError("Access denied");
+    await requireResourceMember(ctx, "spreadsheets", spreadsheetId);
 
     const normalized = normalizeCellRef(cellRef);
     if (!isValidCellRef(normalized)) throw new ConvexError("Invalid cell reference");
@@ -179,8 +143,7 @@ export const removeCellRef = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { spreadsheetId, cellRef }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    await requireUser(ctx);
 
     const normalized = normalizeCellRef(cellRef);
     const existing = await ctx.db

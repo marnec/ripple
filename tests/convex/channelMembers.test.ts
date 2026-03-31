@@ -114,7 +114,7 @@ describe("channelMembers", () => {
           userId,
           channelId,
         }),
-      ).rejects.toThrow("Unauthenticated");
+      ).rejects.toThrow("Not authenticated");
     });
 
     it("rejects non-admin caller on private channel", async () => {
@@ -299,7 +299,7 @@ describe("channelMembers", () => {
           userId,
           channelId,
         }),
-      ).rejects.toThrow("Unauthenticated");
+      ).rejects.toThrow("Not authenticated");
     });
 
     it("rejects non-admin removing another user from private channel", async () => {
@@ -437,7 +437,7 @@ describe("channelMembers", () => {
           channelMemberId: memberId,
           role: ChannelRole.MEMBER,
         }),
-      ).rejects.toThrow("Unauthenticated");
+      ).rejects.toThrow("Not authenticated");
     });
 
     it("rejects non-admin caller on private channel", async () => {

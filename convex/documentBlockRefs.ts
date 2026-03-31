@@ -1,5 +1,4 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import {
   query,
   mutation,
@@ -7,6 +6,7 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { checkResourceMember, requireResourceMember, requireUser } from "./authHelpers";
 
 /**
  * Get cached block content for a document + block ID pair.
@@ -26,20 +26,8 @@ export const getBlockRef = query({
     v.null(),
   ),
   handler: async (ctx, { documentId, blockId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-
-    // Check workspace membership via document
-    const doc = await ctx.db.get(documentId);
-    if (!doc) return null;
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", doc.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) return null;
+    const auth = await checkResourceMember(ctx, "documents", documentId);
+    if (!auth) return null;
 
     const ref = await ctx.db
       .query("documentBlockRefs")
@@ -68,20 +56,7 @@ export const ensureBlockRef = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { documentId, blockId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check workspace membership
-    const doc = await ctx.db.get(documentId);
-    if (!doc) throw new ConvexError("Document not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", doc.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Access denied");
+    await requireResourceMember(ctx, "documents", documentId);
 
     // Check if already exists
     const existing = await ctx.db
@@ -119,19 +94,8 @@ export const listReferencedBlockIds = query({
   args: { documentId: v.id("documents") },
   returns: v.array(v.string()),
   handler: async (ctx, { documentId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const doc = await ctx.db.get(documentId);
-    if (!doc) return [];
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", doc.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) return [];
+    const auth = await checkResourceMember(ctx, "documents", documentId);
+    if (!auth) return [];
 
     const refs = await ctx.db
       .query("documentBlockRefs")
@@ -152,8 +116,7 @@ export const removeBlockRef = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { documentId, blockId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    await requireUser(ctx);
 
     const ref = await ctx.db
       .query("documentBlockRefs")

@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { internalQuery, mutation } from "./_generated/server";
+import { requireUser } from "./authHelpers";
 
 export const registerSubscription = mutation({
   args: {
@@ -14,9 +14,7 @@ export const registerSubscription = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { endpoint, expirationTime, keys, device }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("User not authenticated");
+    const userId = await requireUser(ctx);
 
     const subscription = await ctx.db
       .query("pushSubscriptions")
@@ -36,8 +34,7 @@ export const unregisterSubscription = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { endpoint }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("User not authenticated");
+    const userId = await requireUser(ctx);
 
     const subscription = await ctx.db
       .query("pushSubscriptions")

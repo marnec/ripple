@@ -2229,36 +2229,6 @@ export declare const internal: {
       },
       boolean
     >;
-    checkDiagramAccess: FunctionReference<
-      "query",
-      "internal",
-      { diagramId: string; userId: Id<"users"> },
-      boolean
-    >;
-    checkDocumentAccess: FunctionReference<
-      "query",
-      "internal",
-      { documentId: string; userId: Id<"users"> },
-      boolean
-    >;
-    checkSpreadsheetAccess: FunctionReference<
-      "query",
-      "internal",
-      { spreadsheetId: string; userId: Id<"users"> },
-      boolean
-    >;
-    checkTaskAccess: FunctionReference<
-      "query",
-      "internal",
-      { taskId: string; userId: Id<"users"> },
-      boolean
-    >;
-    checkWorkspaceAccess: FunctionReference<
-      "query",
-      "internal",
-      { userId: Id<"users">; workspaceId: string },
-      boolean
-    >;
     getUserInfo: FunctionReference<
       "query",
       "internal",

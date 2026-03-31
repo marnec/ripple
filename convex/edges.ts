@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { Id } from "./_generated/dataModel";
 import { GenericQueryCtx } from "convex/server";
@@ -6,6 +5,7 @@ import type { DataModel } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { logTaskActivity } from "./auditLog";
 import { getAll } from "convex-helpers/server/relationships";
+import { requireWorkspaceMember, requireResourceMember, getUser, checkWorkspaceMember } from "./authHelpers";
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -159,17 +159,7 @@ export const syncEdges = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { sourceType, sourceId, references, workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Access denied");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const existingEmbeds = await ctx.db
       .query("edges")
@@ -224,16 +214,7 @@ export const syncMentionEdges = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { sourceType, sourceId, mentionedUserIds, workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Access denied");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const existingMentions = await ctx.db
       .query("edges")
@@ -289,25 +270,13 @@ export const createEdge = mutation({
   },
   returns: v.id("edges"),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
     // Prevent self-reference
     if (args.taskId === args.dependsOnTaskId) {
       throw new ConvexError("A task cannot depend on itself");
     }
 
     // Auth: check workspace membership via source task
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new ConvexError("Task not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", task.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId, resource: task } = await requireResourceMember(ctx, "tasks", args.taskId);
 
     // Check for duplicate (same direction)
     const existingEdges = await ctx.db
@@ -373,23 +342,11 @@ export const removeEdge = mutation({
   args: { edgeId: v.id("edges") },
   returns: v.null(),
   handler: async (ctx, { edgeId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
     const edge = await ctx.db.get(edgeId);
     if (!edge) throw new ConvexError("Edge not found");
 
     // Auth via source task's workspace
-    const task = await ctx.db.get(edge.sourceId as Id<"tasks">);
-    if (!task) throw new ConvexError("Task not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", task.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId, resource: task } = await requireResourceMember(ctx, "tasks", edge.sourceId as Id<"tasks">);
 
     // Log activity before deleting
     const targetTask = await ctx.db.get(edge.targetId as Id<"tasks">);
@@ -423,7 +380,7 @@ export const getBacklinks = query({
   },
   returns: v.array(backlinkValidator),
   handler: async (ctx, { targetId, workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return [];
     return getEnrichedBacklinks(ctx, targetId, workspaceId);
   },
@@ -441,20 +398,13 @@ export const listByTask = query({
     relatesTo: v.array(depItemValidator),
   }),
   handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return { blocks: [], blockedBy: [], relatesTo: [] };
+    const empty = { blocks: [], blockedBy: [], relatesTo: [] };
 
     const task = await ctx.db.get(taskId);
-    if (!task) return { blocks: [], blockedBy: [], relatesTo: [] };
+    if (!task) return empty;
 
-    // Auth: workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", task.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) return { blocks: [], blockedBy: [], relatesTo: [] };
+    const auth = await checkWorkspaceMember(ctx, task.workspaceId);
+    if (!auth) return empty;
 
     // Fetch only the relevant edge types in parallel; blocks/relates_to are exclusively task→task
     const [outBlocks, outRelates, inBlocks, inRelates] = await Promise.all([
@@ -575,16 +525,8 @@ export const getWorkspaceGraph = query({
     links: v.array(graphLinkValidator),
   }),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return { nodes: [], links: [] };
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) return { nodes: [], links: [] };
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return { nodes: [], links: [] };
 
     const [nodeRows, edgeRows] = await Promise.all([
       ctx.db.query("nodes").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
@@ -635,17 +577,9 @@ export const getWorkspaceCounts = query({
   args: { workspaceId: v.id("workspaces") },
   returns: graphCountsValidator,
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
     const empty = { document: 0, diagram: 0, spreadsheet: 0, project: 0, channel: 0, task: 0 };
-    if (!userId) return empty;
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) return empty;
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return empty;
 
     const [docCount, diaCount, ssCount, projCount, chanCount, taskCount] = await Promise.all([
       documentsByWorkspace.count(ctx, { namespace: workspaceId }),
@@ -676,7 +610,7 @@ export const getNodeLabel = query({
   args: { id: v.string(), type: v.string() },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, { id, type }) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return null;
 
     const node = await ctx.db

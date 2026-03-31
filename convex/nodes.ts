@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { checkWorkspaceMember } from "./authHelpers";
 
 // ── Public queries ────────────────────────────────────────────────────────────
 
@@ -32,16 +32,8 @@ export const search = query({
   },
   returns: v.array(nodeResultValidator),
   handler: async (ctx, { workspaceId, searchText, resourceType }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) return [];
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
 
     const results = await ctx.db
       .query("nodes")
@@ -74,16 +66,8 @@ export const listByWorkspace = query({
     }),
   ),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) return [];
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
 
     const nodes = await ctx.db
       .query("nodes")

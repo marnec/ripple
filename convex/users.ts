@@ -1,14 +1,14 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { userValidator } from "./validators";
+import { getUser, requireUser } from "./authHelpers";
 
 export const viewer = query({
   args: {},
   returns: v.union(userValidator, v.null()),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
 
     if (!userId) return null;
 
@@ -31,8 +31,7 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { userId, name }) => {
-    const currentUserId = await getAuthUserId(ctx);
-    if (!currentUserId) throw new ConvexError("Not authenticated");
+    const currentUserId = await requireUser(ctx);
     if (currentUserId !== userId) throw new ConvexError("Not authorized to update this user");
 
     await ctx.db.patch(userId, {

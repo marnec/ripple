@@ -375,6 +375,6 @@ describe("messages.getMessageContext", () => {
       asStranger.query(api.messages.getMessageContext, {
         messageId: msg!._id,
       }),
-    ).rejects.toThrow("User not authorized");
+    ).rejects.toThrow("Not a member of this workspace");
   });
 });

@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ChannelRole } from "@shared/enums";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
@@ -6,6 +5,7 @@ import { ChannelMember } from "@shared/types/channel";
 import { getUserDisplayName } from "@shared/displayName";
 import { channelRoleSchema } from "./schema";
 import { logActivity } from "./auditLog";
+import { requireUser } from "./authHelpers";
 
 const channelMemberValidator = v.object({
   _id: v.id("channelMembers"),
@@ -20,9 +20,7 @@ export const byChannel = query({
   args: { channelId: v.id("channels") },
   returns: v.array(channelMemberValidator),
   handler: async (ctx, { channelId }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Unauthenticated");
+    await requireUser(ctx);
 
     return ctx.db
       .query("channelMembers")
@@ -43,9 +41,7 @@ export const membersByChannel = query({
     name: v.string(),
   })),
   handler: async (ctx, { channelId }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Unauthenticated");
+    await requireUser(ctx);
 
     const members = await ctx.db
       .query("channelMembers")
@@ -67,8 +63,7 @@ export const addToChannel = mutation({
   args: { userId: v.id("users"), channelId: v.id("channels") },
   returns: v.id("channelMembers"),
   handler: async (ctx, { userId, channelId }) => {
-    const callerId = await getAuthUserId(ctx);
-    if (!callerId) throw new ConvexError("Unauthenticated");
+    const callerId = await requireUser(ctx);
 
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError(`Channel ${channelId} does not exist`);
@@ -130,8 +125,7 @@ export const removeFromChannel = mutation({
   args: { userId: v.id("users"), channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { userId, channelId }) => {
-    const callerId = await getAuthUserId(ctx);
-    if (!callerId) throw new ConvexError("Unauthenticated");
+    const callerId = await requireUser(ctx);
 
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
@@ -196,8 +190,7 @@ export const changeMemberRole = mutation({
   args: { channelMemberId: v.id("channelMembers"), role: channelRoleSchema },
   returns: v.null(),
   handler: async (ctx, { channelMemberId, role }) => {
-    const callerId = await getAuthUserId(ctx);
-    if (!callerId) throw new ConvexError("Unauthenticated");
+    const callerId = await requireUser(ctx);
 
     const channelMember = await ctx.db.get(channelMemberId);
     if (!channelMember) {

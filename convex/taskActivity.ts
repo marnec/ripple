@@ -1,10 +1,10 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { getAll } from "convex-helpers/server/relationships";
 import { getUserDisplayName } from "@shared/displayName";
 import type { Id } from "./_generated/dataModel";
 import { auditLog } from "./auditLog";
+import { requireResourceMember } from "./authHelpers";
 
 type AuditEntry = {
   _id: string;
@@ -44,20 +44,7 @@ export const timeline = query({
   args: { taskId: v.id("tasks") },
   returns: v.array(timelineItemValidator),
   handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const task = await ctx.db.get(taskId);
-    if (!task) return [];
-
-    // Auth: workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    await requireResourceMember(ctx, "tasks", taskId);
 
     // Fetch activity entries from audit log component
     const auditEntries: AuditEntry[] = await auditLog.queryByResource(ctx, {

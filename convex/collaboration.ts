@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { action, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { hasResourceAccess } from "./authHelpers";
 
 // ---------------------------------------------------------------------------
 // HMAC token signing helpers
@@ -62,47 +63,13 @@ export const getCollaborationToken = action({
     }
 
     // Verify user has access to the resource
-    if (resourceType === "doc") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkDocumentAccess, {
-        userId,
-        documentId: resourceId,
-      });
-      if (!hasAccess) {
-        throw new ConvexError("You do not have access to this document");
-      }
-    } else if (resourceType === "task") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkTaskAccess, {
-        userId,
-        taskId: resourceId,
-      });
-      if (!hasAccess) {
-        throw new ConvexError("You do not have access to this task");
-      }
-    } else if (resourceType === "diagram") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkDiagramAccess, {
-        userId,
-        diagramId: resourceId,
-      });
-      if (!hasAccess) {
-        throw new ConvexError("You do not have access to this diagram");
-      }
-    } else if (resourceType === "spreadsheet") {
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkSpreadsheetAccess, {
-        userId,
-        spreadsheetId: resourceId,
-      });
-      if (!hasAccess) {
-        throw new ConvexError("You do not have access to this spreadsheet");
-      }
-    } else {
-      // presence: check workspace membership
-      const hasAccess = await ctx.runQuery(internal.collaboration.checkWorkspaceAccess, {
-        userId,
-        workspaceId: resourceId,
-      });
-      if (!hasAccess) {
-        throw new ConvexError("You do not have access to this workspace");
-      }
+    const hasAccess = await ctx.runQuery(internal.collaboration.checkAccess, {
+      userId,
+      resourceType,
+      resourceId,
+    });
+    if (!hasAccess) {
+      throw new ConvexError("You do not have access to this resource");
     }
 
     // Fetch user info to embed in the signed token
@@ -135,115 +102,6 @@ export const getCollaborationToken = action({
 // ---------------------------------------------------------------------------
 // Internal access-check queries (used by the action above and check-access endpoint)
 // ---------------------------------------------------------------------------
-
-/**
- * Internal query: Check if user has access to a workspace.
- */
-export const checkWorkspaceAccess = internalQuery({
-  args: {
-    userId: v.id("users"),
-    workspaceId: v.string(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, { userId, workspaceId }) => {
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId as any).eq("userId", userId)
-      )
-      .first();
-    return member !== null;
-  },
-});
-
-/**
- * Internal query: Check if user has access to a document.
- */
-export const checkDocumentAccess = internalQuery({
-  args: {
-    userId: v.id("users"),
-    documentId: v.string(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, { userId, documentId }) => {
-    const document = await ctx.db.get(documentId as any);
-    if (!document) return false;
-    const workspaceMember = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", (document as any).workspaceId).eq("userId", userId)
-      )
-      .first();
-    return workspaceMember !== null;
-  },
-});
-
-/**
- * Internal query: Check if user has access to a diagram.
- */
-export const checkDiagramAccess = internalQuery({
-  args: {
-    userId: v.id("users"),
-    diagramId: v.string(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, { userId, diagramId }) => {
-    // Check workspace membership (diagrams are accessible to all workspace members)
-    const diagram = await ctx.db.get(diagramId as any) as { workspaceId: any } | null;
-    if (!diagram) return false;
-    const workspaceMember = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId)
-      )
-      .first();
-    return workspaceMember !== null;
-  },
-});
-
-/**
- * Internal query: Check if user has access to a task.
- */
-export const checkTaskAccess = internalQuery({
-  args: {
-    userId: v.id("users"),
-    taskId: v.string(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, { userId, taskId }) => {
-    const task = await ctx.db.get(taskId as any) as any;
-    if (!task || !task.workspaceId) return false;
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", task.workspaceId).eq("userId", userId)
-      )
-      .first();
-    return member !== null;
-  },
-});
-
-/**
- * Internal query: Check if user has access to a spreadsheet.
- */
-export const checkSpreadsheetAccess = internalQuery({
-  args: {
-    userId: v.id("users"),
-    spreadsheetId: v.string(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, { userId, spreadsheetId }) => {
-    const spreadsheet = await ctx.db.get(spreadsheetId as any);
-    if (!spreadsheet) return false;
-    const member = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", (spreadsheet as any).workspaceId).eq("userId", userId)
-      )
-      .first();
-    return member !== null;
-  },
-});
 
 /**
  * Internal query: Get user info by ID.
@@ -284,55 +142,6 @@ export const checkAccess = internalQuery({
   },
   returns: v.boolean(),
   handler: async (ctx, { userId, resourceType, resourceId }) => {
-    if (resourceType === "doc") {
-      const document = await ctx.db.get(resourceId as any);
-      if (!document) return false;
-      const workspaceMember = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) =>
-          q.eq("workspaceId", (document as any).workspaceId).eq("userId", userId)
-        )
-        .first();
-      return workspaceMember !== null;
-    } else if (resourceType === "diagram") {
-      const diagram = await ctx.db.get(resourceId as any);
-      if (!diagram) return false;
-      const workspaceMember = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) =>
-          q.eq("workspaceId", (diagram as any).workspaceId).eq("userId", userId)
-        )
-        .first();
-      return workspaceMember !== null;
-    } else if (resourceType === "task") {
-      const task = await ctx.db.get(resourceId as any);
-      if (!task) return false;
-      const member = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) =>
-          q.eq("workspaceId", (task as any).workspaceId).eq("userId", userId)
-        )
-        .first();
-      return member !== null;
-    } else if (resourceType === "spreadsheet") {
-      const spreadsheet = await ctx.db.get(resourceId as any);
-      if (!spreadsheet) return false;
-      const member = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) =>
-          q.eq("workspaceId", (spreadsheet as any).workspaceId).eq("userId", userId)
-        )
-        .first();
-      return member !== null;
-    } else {
-      // presence: check workspace membership
-      const member = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) =>
-          q.eq("workspaceId", resourceId as any).eq("userId", userId)
-        )
-        .first();
-      return member !== null;
-    }
+    return hasResourceAccess(ctx, userId, resourceType, resourceId);
   },
 });

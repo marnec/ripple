@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { requireUser, getWorkspaceMembership } from "./authHelpers";
 
 const preferencesValidator = v.object({
   _id: v.id("channelNotificationPreferences"),
@@ -15,18 +15,12 @@ export const get = query({
   args: { channelId: v.id("channels") },
   returns: v.union(preferencesValidator, v.null()),
   handler: async (ctx, { channelId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const channel = await ctx.db.get(channelId);
     if (!channel) return null;
 
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", channel.workspaceId).eq("userId", userId)
-      )
-      .first();
+    const membership = await getWorkspaceMembership(ctx, channel.workspaceId, userId);
     if (!membership) throw new ConvexError("Not a workspace member");
 
     return await ctx.db
@@ -44,18 +38,12 @@ export const save = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { channelId, ...prefs }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
 
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", channel.workspaceId).eq("userId", userId)
-      )
-      .first();
+    const membership = await getWorkspaceMembership(ctx, channel.workspaceId, userId);
     if (!membership) throw new ConvexError("Not a workspace member");
 
     const existing = await ctx.db

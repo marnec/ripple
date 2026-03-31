@@ -71,7 +71,7 @@ describe("projects.create", () => {
         color: "bg-red-500",
         workspaceId,
       }),
-    ).rejects.toThrow("Only workspace admins can create projects");
+    ).rejects.toThrow("Insufficient permissions");
   });
 
   it("rejects unauthenticated users", async () => {

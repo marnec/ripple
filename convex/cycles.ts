@@ -1,11 +1,11 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
 import type { CycleStatus } from "@shared/types/cycles";
 import { cycleStatusValidator, taskStatusValidator, userValidator } from "./validators";
 import { baseTaskFields } from "./tasks";
+import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
 
 const cycleWithProgressValidator = v.object({
   _id: v.id("cycles"),
@@ -55,16 +55,7 @@ export const create = mutation({
   },
   returns: v.id("cycles"),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", args.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId } = await requireWorkspaceMember(ctx, args.workspaceId);
 
     const status = computeStatus(args.startDate, args.dueDate);
 
@@ -106,19 +97,7 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { cycleId, name, description, startDate, dueDate, status }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const cycle = await ctx.db.get(cycleId);
-    if (!cycle) throw new ConvexError("Cycle not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", cycle.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
     const patch: Record<string, unknown> = {};
     if (name !== undefined) patch.name = name;
@@ -156,19 +135,7 @@ export const remove = mutation({
   args: { cycleId: v.id("cycles") },
   returns: v.null(),
   handler: async (ctx, { cycleId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const cycle = await ctx.db.get(cycleId);
-    if (!cycle) throw new ConvexError("Cycle not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", cycle.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
     // Delete all cycleTasks for this cycle
     const cycleTasks = await ctx.db
@@ -191,19 +158,9 @@ export const get = query({
   args: { cycleId: v.id("cycles") },
   returns: v.union(cycleWithProgressValidator, v.null()),
   handler: async (ctx, { cycleId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-
-    const cycle = await ctx.db.get(cycleId);
-    if (!cycle) return null;
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", cycle.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) return null;
+    const result = await checkResourceMember(ctx, "cycles", cycleId);
+    if (!result) return null;
+    const cycle = result.resource;
 
     const cts = await ctx.db
       .query("cycleTasks")
@@ -222,19 +179,8 @@ export const listByProject = query({
   args: { projectId: v.id("projects") },
   returns: v.array(cycleWithProgressValidator),
   handler: async (ctx, { projectId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const project = await ctx.db.get(projectId);
-    if (!project) return [];
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) return [];
+    const result = await checkResourceMember(ctx, "projects", projectId);
+    if (!result) return [];
 
     const cycles = await ctx.db
       .query("cycles")
@@ -264,19 +210,7 @@ export const addTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { cycleId, taskId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const cycle = await ctx.db.get(cycleId);
-    if (!cycle) throw new ConvexError("Cycle not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", cycle.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
     // Idempotent: skip if already in cycle
     const existing = await ctx.db
@@ -303,19 +237,7 @@ export const removeTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { cycleId, taskId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const cycle = await ctx.db.get(cycleId);
-    if (!cycle) throw new ConvexError("Cycle not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", cycle.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    await requireResourceMember(ctx, "cycles", cycleId);
 
     const ct = await ctx.db
       .query("cycleTasks")
@@ -338,19 +260,8 @@ export const listTaskCycleDueDates = query({
   args: { projectId: v.id("projects") },
   returns: v.array(v.object({ taskId: v.id("tasks"), cycleDueDate: v.string() })),
   handler: async (ctx, { projectId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const project = await ctx.db.get(projectId);
-    if (!project) return [];
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) return [];
+    const result = await checkResourceMember(ctx, "projects", projectId);
+    if (!result) return [];
 
     const cycles = await ctx.db
       .query("cycles")
@@ -387,19 +298,8 @@ export const listForCalendar = query({
     ),
   }),
   handler: async (ctx, { projectId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return { cycles: [], taskCycleDueDatePairs: [] };
-
-    const project = await ctx.db.get(projectId);
-    if (!project) return { cycles: [], taskCycleDueDatePairs: [] };
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) return { cycles: [], taskCycleDueDatePairs: [] };
+    const result = await checkResourceMember(ctx, "projects", projectId);
+    if (!result) return { cycles: [], taskCycleDueDatePairs: [] };
 
     const rawCycles = await ctx.db
       .query("cycles")
@@ -440,19 +340,9 @@ export const listCycleTasks = query({
   },
   returns: v.array(enrichedTaskValidator),
   handler: async (ctx, { cycleId, hideCompleted }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    const cycle = await ctx.db.get(cycleId);
-    if (!cycle) return [];
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", cycle.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) return [];
+    const result = await checkResourceMember(ctx, "cycles", cycleId);
+    if (!result) return [];
+    const cycle = result.resource;
 
     const project = await ctx.db.get(cycle.projectId);
 

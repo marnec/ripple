@@ -35,7 +35,7 @@ describe("pushSubscription", () => {
           expirationTime: null,
           keys: { p256dh: "key1", auth: "auth1" },
         }),
-      ).rejects.toThrow("not authenticated");
+      ).rejects.toThrow("Not authenticated");
     });
 
     it("is idempotent for same endpoint", async () => {
@@ -91,7 +91,7 @@ describe("pushSubscription", () => {
         t.mutation(api.pushSubscription.unregisterSubscription, {
           endpoint: "https://fcm.googleapis.com/push/abc",
         }),
-      ).rejects.toThrow("not authenticated");
+      ).rejects.toThrow("Not authenticated");
     });
 
     it("rejects unregistering another user's subscription", async () => {

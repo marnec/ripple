@@ -1,13 +1,12 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { requireUser, requireWorkspaceMember } from "./authHelpers";
 
 export const generateUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    await requireUser(ctx);
 
     return await ctx.storage.generateUploadUrl();
   },
@@ -24,20 +23,7 @@ export const saveMedia = mutation({
   },
   returns: v.string(),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Validate workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", args.workspaceId).eq("userId", userId)
-      )
-      .first();
-
-    if (!membership) {
-      throw new ConvexError("Not a member of this workspace");
-    }
+    const { userId } = await requireWorkspaceMember(ctx, args.workspaceId);
 
     await ctx.db.insert("medias", {
       storageId: args.storageId,
@@ -60,8 +46,7 @@ export const getUrl = query({
   args: { storageId: v.id("_storage") },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    await requireUser(ctx);
 
     return await ctx.storage.getUrl(args.storageId);
   },

@@ -1,6 +1,5 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { DEFAULT_DOC_NAME } from "@shared/constants";
 import { auditLog, logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
@@ -8,6 +7,7 @@ import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
+import { requireResourceMember, requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 
 export const create = mutation({
   args: {
@@ -17,9 +17,7 @@ export const create = mutation({
   returns: v.id("documents"),
   handler: async (ctx, { workspaceId, name }) => {
     const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     let documentName: string;
     if (name) {
@@ -61,24 +59,7 @@ export const rename = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const document = await ctx.db.get(id);
-
-    if (!document) throw new ConvexError("Document not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!membership) {
-      throw new ConvexError("You are not a member of this workspace");
-    }
+    const { userId, resource: document } = await requireResourceMember(ctx, "documents", id);
 
     const match = await ctx.db
       .query("documents")
@@ -113,8 +94,7 @@ export const list = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(documentValidator),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    await requireWorkspaceMember(ctx, workspaceId);
 
     return ctx.db
       .query("documents")
@@ -132,8 +112,7 @@ export const search = query({
   },
   returns: v.array(documentValidator),
   handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     let results;
     if (searchText?.trim()) {
@@ -180,19 +159,7 @@ export const updateTags = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, tags }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const document = await ctx.db.get(id);
-    if (!document) throw new ConvexError("Document not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    await requireResourceMember(ctx, "documents", id);
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.patch(id, { tags });
@@ -204,26 +171,9 @@ export const get = query({
   args: { id: v.id("documents") },
   returns: v.union(documentValidator, v.null()),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const document = await ctx.db.get(id);
-
-    if (!document) return null;
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!membership) {
-      throw new ConvexError("You are not a member of this workspace");
-    }
-
-    return document;
+    const result = await checkResourceMember(ctx, "documents", id);
+    if (!result) return null;
+    return result.resource;
   },
 });
 
@@ -231,24 +181,7 @@ export const remove = mutation({
   args: { id: v.id("documents") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const document = await ctx.db.get(id);
-
-    if (!document) throw new ConvexError("Document not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!membership) {
-      throw new ConvexError("Not authorized to delete this document");
-    }
+    const { userId, resource: document } = await requireResourceMember(ctx, "documents", id);
 
     await logActivity(ctx, {
       userId, resourceType: "documents", resourceId: id,
@@ -284,20 +217,7 @@ export const reportMention = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { documentId, mentionedUserIds }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const document = await ctx.db.get(documentId);
-    if (!document) throw new ConvexError("Document not found");
-
-    // Validate workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", document.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId, resource: document } = await requireResourceMember(ctx, "documents", documentId);
 
     // Filter out self-mentions
     const filteredMentions = mentionedUserIds.filter((id) => id !== userId);

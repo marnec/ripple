@@ -1,5 +1,4 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { ChannelRole } from "@shared/enums";
 import { getAll } from "convex-helpers/server/relationships";
@@ -9,6 +8,7 @@ import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete } from "./cascadeDelete";
+import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess } from "./authHelpers";
 
 export const create = mutation({
   args: {
@@ -18,16 +18,7 @@ export const create = mutation({
   },
   returns: v.id("channels"),
   handler: async (ctx, { name, isPublic, workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check if user is a member of the workspace
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
-      .first();
-
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     const channelId = await db.insert("channels", {
@@ -69,16 +60,8 @@ export const list = query({
     isPublic: v.boolean(),
   })),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-
-    // Check if user is a member of the workspace
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
-      .first();
-
-    if (!membership) return [];
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
 
     return await ctx.db
       .query("channels")
@@ -100,20 +83,10 @@ export const get = query({
     v.null()
   ),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-
     const channel = await ctx.db.get(id);
     if (!channel) return null;
-
-    // Check workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", userId))
-      .first();
-
-    if (!membership) return null;
-
+    const auth = await checkWorkspaceMember(ctx, channel.workspaceId);
+    if (!auth) return null;
     return channel;
   },
 });
@@ -125,33 +98,7 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const channel = await ctx.db.get(id);
-    if (!channel) throw new ConvexError("Channel not found");
-
-    // For private channels, require channel admin
-    if (!channel.isPublic) {
-      const channelMembership = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel_user", (q) => q.eq("channelId", id).eq("userId", userId))
-        .first();
-
-      if (channelMembership?.role !== ChannelRole.ADMIN) {
-        throw new ConvexError("Not authorized to update this channel");
-      }
-    } else {
-      // For public channels, require workspace admin
-      const workspaceMembership = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", userId))
-        .first();
-
-      if (workspaceMembership?.role !== "admin") {
-        throw new ConvexError("Not authorized to update this channel");
-      }
-    }
+    const { userId, channel } = await requireChannelAccess(ctx, id, { role: ChannelRole.ADMIN });
 
     const updates: { name?: string } = {};
     if (name !== undefined) updates.name = name;
@@ -175,33 +122,7 @@ export const remove = mutation({
   args: { id: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const channel = await ctx.db.get(id);
-    if (!channel) throw new ConvexError("Channel not found");
-
-    // Check if user is a channel admin (for private channels) or workspace admin
-    if (!channel.isPublic) {
-      const channelMembership = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel_user", (q) => q.eq("channelId", id).eq("userId", userId))
-        .first();
-
-      if (channelMembership?.role !== ChannelRole.ADMIN) {
-        throw new ConvexError("Not authorized to delete this channel");
-      }
-    } else {
-      // For public channels, check workspace admin
-      const workspaceMembership = await ctx.db
-        .query("workspaceMembers")
-        .withIndex("by_workspace_user", (q) => q.eq("workspaceId", channel.workspaceId).eq("userId", userId))
-        .first();
-
-      if (workspaceMembership?.role !== "admin") {
-        throw new ConvexError("Not authorized to delete this channel");
-      }
-    }
+    const { userId, channel } = await requireChannelAccess(ctx, id, { role: ChannelRole.ADMIN });
 
     await logActivity(ctx, {
       userId, resourceType: "channels", resourceId: id,
@@ -236,14 +157,7 @@ export const search = query({
   },
   returns: v.array(v.object({ _id: v.id("channels"), name: v.string(), isPublic: v.boolean() })),
   handler: async (ctx, { workspaceId, searchText, isPublic }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
-      .first();
-    if (!membership) return [];
+    await requireWorkspaceMember(ctx, workspaceId);
 
     let results;
     if (searchText?.trim()) {
@@ -296,9 +210,7 @@ export const listByUserMembership = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(channelValidator),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     // Get user's private channel memberships in this workspace
     const userMemberships = await ctx.db

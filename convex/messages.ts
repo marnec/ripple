@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
@@ -10,6 +9,7 @@ import { getUserDisplayName } from "@shared/displayName";
 import { DatabaseReader } from "./_generated/server";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
+import { requireUser, requireWorkspaceMember } from "./authHelpers";
 
 const mentionedUsersValidator = v.record(v.string(), v.object({
   name: v.union(v.string(), v.null()),
@@ -324,24 +324,10 @@ export const list = query({
     pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
   }),
   handler: async (ctx, { channelId, paginationOpts }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Unauthenticated");
-
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError(`Channel not found with id="${channelId}"`);
 
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", channel.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${channel.workspaceId}"`,
-      );
+    await requireWorkspaceMember(ctx, channel.workspaceId);
 
     // Grab the most recent messages
     const messagesPage = await ctx.db
@@ -384,27 +370,13 @@ export const send = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { body, channelId, plainText, isomorphicId, replyToId }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const user: Doc<"users"> | null = await ctx.db.get(userId);
-
-    if (!user) throw new ConvexError(`No users found with id=${userId}`);
-
-    // Get channel to check workspace membership
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
 
-    // Check workspace membership
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", channel.workspaceId).eq("userId", userId),
-      )
-      .first();
+    const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
 
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    const user: Doc<"users"> | null = await ctx.db.get(userId);
+    if (!user) throw new ConvexError(`No users found with id=${userId}`);
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.insert("messages", {
@@ -449,8 +421,7 @@ export const update = mutation({
   args: { id: v.id("messages"), body: v.string(), plainText: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, body, plainText }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const message = await ctx.db.get(id);
     if (!message) throw new ConvexError("Message not found");
@@ -467,8 +438,7 @@ export const remove = mutation({
   args: { id: v.id("messages") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const message = await ctx.db.get(id);
     if (!message) throw new ConvexError("Message not found");
@@ -489,24 +459,10 @@ export const search = query({
   },
   returns: v.array(enrichedMessageValidator),
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError(`Unauthenticated`);
-
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError(`Channel not found with id="${channelId}"`);
 
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", channel.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${channel.workspaceId}"`,
-      );
+    await requireWorkspaceMember(ctx, channel.workspaceId);
 
     // Search for messages
     const searchResults = await ctx.db
@@ -548,25 +504,13 @@ export const getMessageContext = query({
     targetIndex: v.number(),
   }),
   handler: async (ctx, { messageId, contextSize = 10 }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError(`Unauthenticated`);
-
     const targetMessage = await ctx.db.get(messageId);
     if (!targetMessage) throw new ConvexError(`Message not found`);
 
     const channel = await ctx.db.get(targetMessage.channelId);
     if (!channel) throw new ConvexError(`Channel not found`);
 
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", channel.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(`User not authorized`);
+    await requireWorkspaceMember(ctx, channel.workspaceId);
 
     // Get messages before and after the target message
     const messagesBefore = await ctx.db

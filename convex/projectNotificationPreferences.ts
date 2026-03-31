@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { requireResourceMember } from "./authHelpers";
 
 const preferencesValidator = v.object({
   _id: v.id("projectNotificationPreferences"),
@@ -18,19 +18,7 @@ export const get = query({
   args: { projectId: v.id("projects") },
   returns: v.union(preferencesValidator, v.null()),
   handler: async (ctx, { projectId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const project = await ctx.db.get(projectId);
-    if (!project) return null;
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a workspace member");
+    const { userId } = await requireResourceMember(ctx, "projects", projectId);
 
     return await ctx.db
       .query("projectNotificationPreferences")
@@ -50,19 +38,7 @@ export const save = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { projectId, ...prefs }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const project = await ctx.db.get(projectId);
-    if (!project) throw new ConvexError("Project not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a workspace member");
+    const { userId } = await requireResourceMember(ctx, "projects", projectId);
 
     const existing = await ctx.db
       .query("projectNotificationPreferences")

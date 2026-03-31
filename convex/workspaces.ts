@@ -1,11 +1,11 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { requireUser, getUser, requireWorkspaceMember } from "./authHelpers";
 
 export const create = mutation({
   args: {
@@ -15,8 +15,7 @@ export const create = mutation({
   returns: v.id("workspaces"),
   handler: async (ctx, { name, description }) => {
     const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const workspaceId = await ctx.db.insert("workspaces", {
       name,
@@ -49,7 +48,7 @@ export const list = query({
     ownerId: v.id("users"),
   })),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return [];
 
     const memberships = await ctx.db
@@ -94,8 +93,7 @@ export const overview = query({
     spreadsheets: v.number(),
   }),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    await requireUser(ctx);
 
     const [members, channels, projects, documents, diagrams, spreadsheets] =
       await Promise.all([
@@ -143,21 +141,10 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, name, description }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const { userId } = await requireWorkspaceMember(ctx, id, { role: WorkspaceRole.ADMIN });
 
     const workspace = await ctx.db.get(id);
-    if (!workspace) throw new ConvexError("Workspace not found");
-
-    // Check if user is admin of workspace
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", id).eq("userId", userId))
-      .first();
-
-    if (membership?.role !== WorkspaceRole.ADMIN) {
-      throw new ConvexError("Not authorized to update this workspace");
-    }
+    if (!workspace) throw new Error("Workspace not found");
 
     if (name !== workspace.name) {
       await logActivity(ctx, {

@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { WorkspaceRole } from "@shared/enums/roles";
 import { InviteStatus } from "@shared/enums/inviteStatus";
@@ -7,6 +6,7 @@ import { mutation, query } from "./_generated/server";
 import { logActivity } from "./auditLog";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { requireWorkspaceMember, requireUser, getUser } from "./authHelpers";
 
 export const create = mutation({
   args: {
@@ -14,18 +14,7 @@ export const create = mutation({
     email: v.string(),
   },
   handler: async (ctx, { workspaceId, email }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check if user is admin of workspace
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user_and_role", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId).eq("role", WorkspaceRole.ADMIN),
-      )
-      .first();
-
-    if (!membership) throw new ConvexError("Not authorized to invite users");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId, { role: WorkspaceRole.ADMIN });
 
     // Check if invite already exists
     const existingInvite = await ctx.db
@@ -102,7 +91,7 @@ export const listByEmail = query({
     inviterName: v.string(),
   })),
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
+    const userId = await getUser(ctx);
     if (!userId) return [];
 
     const user = await ctx.db.get(userId);
@@ -139,8 +128,7 @@ export const accept = mutation({
     inviteId: v.id("workspaceInvites"),
   },
   handler: async (ctx, { inviteId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const invite = await ctx.db.get(inviteId);
     if (!invite) throw new ConvexError("Invite not found");
@@ -188,8 +176,7 @@ export const decline = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { inviteId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     const invite = await ctx.db.get(inviteId);
     if (!invite) throw new ConvexError("Invite not found");

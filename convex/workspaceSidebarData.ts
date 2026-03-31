@@ -1,7 +1,7 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { getAll } from "convex-helpers/server/relationships";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { query } from "./_generated/server";
+import { requireWorkspaceMember } from "./authHelpers";
 import {
   channelsByWorkspace,
   diagramsByWorkspace,
@@ -68,16 +68,7 @@ export const get = query({
     }),
   }),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a workspace member");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     // Fetch lists for sidebar navigation (limited — only need recent items)
     const [projects, documents, diagrams, spreadsheets, userChannelMemberships, publicChannels] =

@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -6,6 +5,7 @@ import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@shared/displayName";
 import { logTaskActivity } from "./auditLog";
+import { requireResourceMember, requireUser } from "./authHelpers";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -20,26 +20,7 @@ export const list = query({
     image: v.optional(v.string()),
   })),
   handler: async (ctx, { taskId }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Get task to check project membership
-    const task = await ctx.db.get(taskId);
-    if (!task) throw new ConvexError("Task not found");
-
-    // Check workspace membership (via project)
-    const project = await ctx.db.get(task.projectId);
-    if (!project) throw new ConvexError("Project not found");
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-
-    if (!membership) {
-      throw new ConvexError("Not a member of this workspace");
-    }
+    await requireResourceMember(ctx, "tasks", taskId);
 
     // Query comments using undeleted_by_task index
     const comments = await ctx.db
@@ -76,26 +57,7 @@ export const create = mutation({
   },
   returns: v.id("taskComments"),
   handler: async (ctx, { taskId, body }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Get task to check project membership
-    const task = await ctx.db.get(taskId);
-    if (!task) throw new ConvexError("Task not found");
-
-    // Check workspace membership (via project)
-    const project = await ctx.db.get(task.projectId);
-    if (!project) throw new ConvexError("Project not found");
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", project.workspaceId).eq("userId", userId)
-      )
-      .first();
-
-    if (!membership) {
-      throw new ConvexError("Not a member of this workspace");
-    }
+    const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
 
     // Insert comment
     const commentId = await ctx.db.insert("taskComments", {
@@ -147,8 +109,7 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, body }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     // Get comment
     const comment = await ctx.db.get(id);
@@ -193,8 +154,7 @@ export const remove = mutation({
   args: { id: v.id("taskComments") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const userId = await requireUser(ctx);
 
     // Get comment
     const comment = await ctx.db.get(id);

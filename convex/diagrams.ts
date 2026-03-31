@@ -1,5 +1,4 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { DEFAULT_DIAGRAM_NAME } from "@shared/constants";
 import { getEnrichedBacklinks } from "./edges";
@@ -10,6 +9,7 @@ import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { deletionResultValidator } from "./validators";
+import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
 
 const diagramValidator = v.object({
   _id: v.id("diagrams"),
@@ -24,22 +24,7 @@ export const list = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.array(diagramValidator),
   handler: async (ctx, { workspaceId }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${workspaceId}"`,
-      );
+    await requireWorkspaceMember(ctx, workspaceId);
 
     return ctx.db
       .query("diagrams")
@@ -58,8 +43,7 @@ export const search = query({
   },
   returns: v.array(diagramValidator),
   handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     let results;
     if (searchText?.trim()) {
@@ -107,19 +91,7 @@ export const updateTags = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, tags }) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const diagram = await ctx.db.get(id);
-    if (!diagram) throw new ConvexError("Diagram not found");
-
-    const membership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId),
-      )
-      .first();
-    if (!membership) throw new ConvexError("Not a member of this workspace");
+    await requireResourceMember(ctx, "diagrams", id);
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.patch(id, { tags });
@@ -131,25 +103,9 @@ export const get = query({
   args: { id: v.id("diagrams") },
   returns: v.union(diagramValidator, v.null()),
   handler: async (ctx, { id }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) return null;
-
-    const diagram = await ctx.db.get(id);
-
-    if (!diagram) return null;
-
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership) return null;
-
-    return diagram;
+    const result = await checkResourceMember(ctx, "diagrams", id);
+    if (!result) return null;
+    return result.resource;
   },
 });
 
@@ -160,22 +116,7 @@ export const create = mutation({
   },
   returns: v.id("diagrams"),
   handler: async (ctx, { workspaceId, name }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${workspaceId}"`,
-      );
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     // Generate a default name with timestamp if none provided
     const date = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })
@@ -211,26 +152,7 @@ export const rename = mutation({
   args: { id: v.id("diagrams"), name: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const diagram = await ctx.db.get(id);
-
-    if (!diagram) throw new ConvexError("Diagram not found");
-
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
-      );
+    const { userId, resource: diagram } = await requireResourceMember(ctx, "diagrams", id);
 
     await logActivity(ctx, {
       userId, resourceType: "diagrams", resourceId: id,
@@ -247,26 +169,7 @@ export const remove = mutation({
   args: { id: v.id("diagrams"), force: v.optional(v.boolean()) },
   returns: deletionResultValidator,
   handler: async (ctx, { id, force }) => {
-    const userId = await getAuthUserId(ctx);
-
-    if (!userId) throw new ConvexError("Not authenticated");
-
-    const diagram = await ctx.db.get(id);
-
-    if (!diagram) throw new ConvexError("Diagram not found");
-
-    // Check workspace membership
-    const workspaceMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", diagram.workspaceId).eq("userId", userId),
-      )
-      .first();
-
-    if (!workspaceMembership)
-      throw new ConvexError(
-        `User="${userId}" is not a member of workspace="${diagram.workspaceId}"`,
-      );
+    const { userId, resource: diagram } = await requireResourceMember(ctx, "diagrams", id);
 
     // Check for references unless force-deleting
     if (!force) {
