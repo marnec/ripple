@@ -5,7 +5,7 @@ import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 
 // jspreadsheet-ce doesn't export worksheet instance type cleanly
-type Worksheet = any;
+export type Worksheet = any;
 
 interface UseJSpreadsheetInstanceOptions {
   wrapperRef: RefObject<HTMLDivElement | null>;

@@ -6,6 +6,13 @@
  */
 import { v } from "convex/values";
 
+export const cycleStatusValidator = v.union(
+  v.literal("draft"),
+  v.literal("upcoming"),
+  v.literal("active"),
+  v.literal("completed"),
+);
+
 export const priorityValidator = v.union(
   v.literal("urgent"),
   v.literal("high"),
@@ -44,6 +51,21 @@ export const referenceValidator = v.object({
   workspaceId: v.string(),
   projectId: v.optional(v.string()),
 });
+
+export const favoritableResourceTypeValidator = v.union(
+  v.literal("document"),
+  v.literal("diagram"),
+  v.literal("spreadsheet"),
+  v.literal("project"),
+);
+
+export const browsableResourceTypeValidator = v.union(
+  v.literal("channel"),
+  v.literal("document"),
+  v.literal("diagram"),
+  v.literal("spreadsheet"),
+  v.literal("project"),
+);
 
 export const projectValidator = v.object({
   _id: v.id("projects"),

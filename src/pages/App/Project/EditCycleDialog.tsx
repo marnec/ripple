@@ -18,6 +18,7 @@ import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
+import type { CycleStatus } from "@shared/types/cycles";
 
 type CycleForEdit = {
   _id: Id<"cycles">;
@@ -25,7 +26,7 @@ type CycleForEdit = {
   description?: string;
   startDate?: string;
   dueDate?: string;
-  status: "draft" | "upcoming" | "active" | "completed";
+  status: CycleStatus;
 };
 
 function EditCycleForm({

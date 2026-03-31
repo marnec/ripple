@@ -3,13 +3,8 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
-
-const cycleStatusValidator = v.union(
-  v.literal("draft"),
-  v.literal("upcoming"),
-  v.literal("active"),
-  v.literal("completed"),
-);
+import type { CycleStatus } from "@shared/types/cycles";
+import { cycleStatusValidator, priorityValidator, taskStatusValidator, userValidator } from "./validators";
 
 const cycleWithProgressValidator = v.object({
   _id: v.id("cycles"),
@@ -26,8 +21,6 @@ const cycleWithProgressValidator = v.object({
   completedTasks: v.number(),
   progressPercent: v.number(),
 });
-
-import { priorityValidator, taskStatusValidator, userValidator } from "./validators";
 
 const enrichedTaskValidator = v.object({
   _id: v.id("tasks"),
@@ -58,7 +51,7 @@ const enrichedTaskValidator = v.object({
 function computeStatus(
   startDate: string | undefined,
   dueDate: string | undefined,
-): "draft" | "upcoming" | "active" | "completed" {
+): CycleStatus {
   if (!startDate && !dueDate) return "draft";
   const today = new Date().toISOString().slice(0, 10);
   if (dueDate && dueDate < today) return "completed";

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Pencil, Plus } from "lucide-react";
+import type { CycleStatus } from "@shared/types/cycles";
 import { CYCLE_STATUS_STYLES, formatDateRange, daysRemaining } from "./cycleUtils";
 
 interface CycleHeaderProps {
@@ -18,7 +19,7 @@ interface CycleHeaderProps {
 }
 
 export function CycleHeader({ cycle, onEdit, onAddTasks }: CycleHeaderProps) {
-  const cycleStatus = cycle.status as "draft" | "upcoming" | "active" | "completed";
+  const cycleStatus = cycle.status as CycleStatus;
   const styles = CYCLE_STATUS_STYLES[cycleStatus] ?? CYCLE_STATUS_STYLES.draft;
   const dateRange = formatDateRange(cycle.startDate, cycle.dueDate);
   const remaining = daysRemaining(cycle.dueDate);

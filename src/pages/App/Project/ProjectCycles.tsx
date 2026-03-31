@@ -23,6 +23,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
 import { EditCycleDialog } from "./EditCycleDialog";
 import { CYCLE_STATUS_STYLES, formatDateRange } from "./cycleUtils";
+import type { CycleStatus } from "@shared/types/cycles";
 
 type CycleDoc = {
   _id: Id<"cycles">;
@@ -30,7 +31,7 @@ type CycleDoc = {
   description?: string;
   startDate?: string;
   dueDate?: string;
-  status: "draft" | "upcoming" | "active" | "completed";
+  status: CycleStatus;
   totalTasks: number;
   completedTasks: number;
   progressPercent: number;

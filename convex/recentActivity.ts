@@ -3,13 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 
-const resourceTypeValidator = v.union(
-  v.literal("channel"),
-  v.literal("document"),
-  v.literal("diagram"),
-  v.literal("spreadsheet"),
-  v.literal("project"),
-);
+import { browsableResourceTypeValidator as resourceTypeValidator } from "./validators";
 
 export const recordVisit = mutation({
   args: {

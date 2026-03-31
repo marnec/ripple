@@ -15,8 +15,7 @@ export interface MenuState {
   ctx: ClickContext;
 }
 
-// jspreadsheet-ce doesn't export worksheet instance type cleanly
-type Worksheet = any;
+import type { Worksheet } from "./use-jspreadsheet-instance";
 
 // ---------------------------------------------------------------------------
 // Helpers

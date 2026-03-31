@@ -10,8 +10,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { SearchResults } from "./SearchResults";
-
-type ResourceType = "document" | "diagram" | "spreadsheet" | "project" | "channel";
+import type { BrowsableResourceType as ResourceType } from "@shared/types/resources";
 
 type ResourceListPageProps = {
   resourceType: ResourceType;

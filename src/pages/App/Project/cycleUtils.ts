@@ -22,9 +22,11 @@ export function daysRemaining(dueDate?: string): number | null {
   return Math.round((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+import type { CycleStatus } from "@shared/types/cycles";
+
 /** Status color classes for badges */
 export const CYCLE_STATUS_STYLES: Record<
-  "draft" | "upcoming" | "active" | "completed",
+  CycleStatus,
   { badge: string; dot: string }
 > = {
   draft: {

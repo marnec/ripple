@@ -8,12 +8,14 @@ import type { DragContext } from "./dragContext";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { CycleStatus } from "@shared/types/cycles";
+
 export type CycleWithProgress = {
   _id: string;
   name: string;
   startDate?: string;
   dueDate?: string;
-  status: "draft" | "upcoming" | "active" | "completed";
+  status: CycleStatus;
   totalTasks: number;
   completedTasks: number;
   progressPercent: number;

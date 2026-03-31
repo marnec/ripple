@@ -5,12 +5,7 @@ import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import type { DataModel } from "./_generated/dataModel";
 
-const resourceTypeValidator = v.union(
-  v.literal("document"),
-  v.literal("diagram"),
-  v.literal("spreadsheet"),
-  v.literal("project"),
-);
+import { favoritableResourceTypeValidator as resourceTypeValidator } from "./validators";
 
 import type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
 
