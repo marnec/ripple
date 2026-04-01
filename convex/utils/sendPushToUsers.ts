@@ -4,12 +4,16 @@ import * as webpush from "web-push";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { NotificationCategory } from "@shared/notificationCategories";
-import { DEFAULT_PREFERENCES, DEFAULT_PROJECT_TASK_PREFERENCES, DEFAULT_CHANNEL_CHAT_PREFERENCES, isTaskCategory, isChatCategory } from "@shared/notificationCategories";
 import type { Id } from "../_generated/dataModel";
 
 /**
- * Send push notifications to a filtered list of users, respecting their
+ * Send push notifications to a list of users, respecting their
  * notification preferences for the given category.
+ *
+ * Uses a single consolidated query (notificationDelivery.getFilteredSubscriptions)
+ * that resolves preferences AND subscriptions in one round-trip.
+ * For project/channel scoped categories, preference lookup uses a resource-level
+ * index (by_project / by_channel) — O(1) queries regardless of recipient count.
  */
 export async function sendPushToFilteredUsers(
   ctx: ActionCtx,
@@ -20,51 +24,14 @@ export async function sendPushToFilteredUsers(
 ): Promise<void> {
   if (userIds.length === 0) return;
 
-  const typedIds = userIds as Id<"users">[];
-
-  let enabledUserIds: Id<"users">[];
-
-  if (resourceId && isTaskCategory(category)) {
-    // Use per-project preferences for task categories
-    const projPrefsArray = await ctx.runQuery(
-      internal.projectNotificationPreferences.getForUsersInProject,
-      { userIds: typedIds, projectId: resourceId as Id<"projects"> },
-    );
-    enabledUserIds = typedIds.filter((_, i) => {
-      const prefs = projPrefsArray[i];
-      if (!prefs) return DEFAULT_PROJECT_TASK_PREFERENCES[category];
-      return prefs[category];
-    });
-  } else if (resourceId && isChatCategory(category)) {
-    // Use per-channel preferences for chat categories
-    const chanPrefsArray = await ctx.runQuery(
-      internal.channelNotificationPreferences.getForUsersInChannel,
-      { userIds: typedIds, channelId: resourceId as Id<"channels"> },
-    );
-    enabledUserIds = typedIds.filter((_, i) => {
-      const prefs = chanPrefsArray[i];
-      if (!prefs) return DEFAULT_CHANNEL_CHAT_PREFERENCES[category];
-      return prefs[category];
-    });
-  } else {
-    // Use global preferences
-    const prefsArray = await ctx.runQuery(
-      internal.notificationPreferences.getForUsers,
-      { userIds: typedIds },
-    );
-    enabledUserIds = typedIds.filter((_, i) => {
-      const prefs = prefsArray[i];
-      if (!prefs) return DEFAULT_PREFERENCES[category];
-      return prefs[category];
-    });
-  }
-
-  if (enabledUserIds.length === 0) return;
-
-  // Fetch push subscriptions for enabled users
+  // Single query: filter by preferences + fetch subscriptions
   const subscriptions = await ctx.runQuery(
-    internal.pushSubscription.usersSubscriptions,
-    { usersIds: enabledUserIds },
+    internal.notificationDelivery.getFilteredSubscriptions,
+    {
+      recipientIds: userIds.map(String),
+      category,
+      resourceId: resourceId as string | undefined,
+    },
   );
 
   if (subscriptions.length === 0) return;
