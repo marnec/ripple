@@ -30,9 +30,7 @@ import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
 
-import type { AllFavoriteIds } from "./Document/DocumentSelectorList";
-
-export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds | null }) {
+export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setOpen } = useSidebar();
@@ -106,10 +104,6 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
   const isMyTasksActive = location.pathname.includes("/my-tasks");
 
   const toggleChannels = () => toggle("channels");
-  const toggleProjects = () => toggle("projects");
-  const toggleDocuments = () => toggle("documents");
-  const toggleDiagrams = () => toggle("diagrams");
-  const toggleSpreadsheets = () => toggle("spreadsheets");
   const toggleRecents = () => toggle("recents");
 
   return (
@@ -155,7 +149,6 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                       onClick={handleMyTasksClick}
                       isActive={isMyTasksActive}
                       tooltip="My Tasks"
-                      className="pl-7"
                     >
                       <CheckSquare />
                       <span>My Tasks</span>
@@ -166,9 +159,6 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     projectId={projectId}
                     projects={sidebarData?.projects}
                     onProjectSelect={handleProjectSelect}
-                    allFavoriteIds={allFavoriteIds ?? undefined}
-                    isOpen={isOpen("projects")}
-                    onToggle={toggleProjects}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -187,9 +177,6 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     documentId={documentId}
                     documents={sidebarData?.documents}
                     onDocumentSelect={handleDocumentSelect}
-                    allFavoriteIds={allFavoriteIds ?? undefined}
-                    isOpen={isOpen("documents")}
-                    onToggle={toggleDocuments}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -202,9 +189,6 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     diagramId={diagramId}
                     diagrams={sidebarData?.diagrams}
                     onDiagramSelect={handleDiagramSelect}
-                    allFavoriteIds={allFavoriteIds ?? undefined}
-                    isOpen={isOpen("diagrams")}
-                    onToggle={toggleDiagrams}
                   />
                 </SidebarMenu>
               </SidebarGroup>
@@ -217,9 +201,6 @@ export function AppSidebar({ allFavoriteIds }: { allFavoriteIds?: AllFavoriteIds
                     spreadsheetId={spreadsheetId}
                     spreadsheets={sidebarData?.spreadsheets}
                     onSpreadsheetSelect={handleSpreadsheetSelect}
-                    allFavoriteIds={allFavoriteIds ?? undefined}
-                    isOpen={isOpen("spreadsheets")}
-                    onToggle={toggleSpreadsheets}
                   />
                 </SidebarMenu>
               </SidebarGroup>

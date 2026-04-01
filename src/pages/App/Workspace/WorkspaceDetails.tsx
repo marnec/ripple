@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex-helpers/react/cache";
 import {
@@ -68,7 +67,18 @@ export function WorkspaceDetails() {
   const isDark = resolvedTheme === "dark";
 
   const workspace = useQuery(api.workspaces.get, { id });
-  const overview = useWorkspaceSidebar()?.counts;
+  const graph = useQuery(api.edges.getWorkspaceGraph, { workspaceId: id });
+
+  // Derive counts from graph nodes (replaces aggregate count queries)
+  const overview = (() => {
+    if (!graph) return undefined;
+    const c: Record<string, number> = {};
+    for (const n of graph.nodes) {
+      const key = n.type === "user" ? "members" : `${n.type}s`;
+      c[key] = (c[key] ?? 0) + 1;
+    }
+    return c;
+  })();
 
   // Node type visibility for graph/activity filtering
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
@@ -129,8 +139,8 @@ export function WorkspaceDetails() {
         {/* Resource cards with integrated filter toggles */}
         <div className="grid gap-2 md:gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
           {overviewCards.map((card) => {
-            const count = overview?.[card.key as keyof typeof overview];
-            const subCount = card.subCount ? overview?.[card.subCount.key as keyof typeof overview] : undefined;
+            const count = overview ? (overview[card.key] ?? 0) : undefined;
+            const subCount = card.subCount && overview ? (overview[card.subCount.key] ?? 0) : undefined;
             const color = getNodeColor(card.filterType, isDark);
             const isHidden = hiddenTypes.has(card.filterType);
             const subFilterType = card.subCount?.filterType ?? card.subCount?.key;
@@ -289,7 +299,7 @@ export function WorkspaceDetails() {
       {effectiveTab === "graph" && !isMobile && graphWidth > 0 && graphHeight > 0 && (
         <div className="container mx-auto px-4 pb-4 overflow-hidden">
           <Suspense fallback={<div style={{ width: graphWidth, height: graphHeight }} />}>
-            <LazyWorkspaceGraph workspaceId={id} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} highlightedType={highlightedType} />
+            <LazyWorkspaceGraph workspaceId={id} graph={graph} width={graphWidth} height={graphHeight} hiddenTypes={hiddenTypes} highlightedType={highlightedType} />
           </Suspense>
         </div>
       )}

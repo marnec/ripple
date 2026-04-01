@@ -2,15 +2,6 @@ import { getAll } from "convex-helpers/server/relationships";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireWorkspaceMember } from "./authHelpers";
-import {
-  channelsByWorkspace,
-  diagramsByWorkspace,
-  documentsByWorkspace,
-  membersByWorkspace,
-  projectsByWorkspace,
-  spreadsheetsByWorkspace,
-  tasksByWorkspace,
-} from "./dbTriggers";
 
 export const get = query({
   args: { workspaceId: v.id("workspaces") },
@@ -57,15 +48,6 @@ export const get = query({
         isPublic: v.boolean(),
       }),
     ),
-    counts: v.object({
-      members: v.number(),
-      channels: v.number(),
-      projects: v.number(),
-      documents: v.number(),
-      diagrams: v.number(),
-      spreadsheets: v.number(),
-      tasks: v.number(),
-    }),
   }),
   handler: async (ctx, { workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
@@ -108,18 +90,6 @@ export const get = query({
     const allChannels = [...privateChannels, ...publicChannels]
       .sort((a, b) => b._creationTime - a._creationTime);
 
-    // O(log n) aggregate counts — no full table scans
-    const [membersCount, channelsCount, projectsCount, documentsCount, diagramsCount, spreadsheetsCount, tasksCount] =
-      await Promise.all([
-        membersByWorkspace.count(ctx, { namespace: workspaceId }),
-        channelsByWorkspace.count(ctx, { namespace: workspaceId }),
-        projectsByWorkspace.count(ctx, { namespace: workspaceId }),
-        documentsByWorkspace.count(ctx, { namespace: workspaceId }),
-        diagramsByWorkspace.count(ctx, { namespace: workspaceId }),
-        spreadsheetsByWorkspace.count(ctx, { namespace: workspaceId }),
-        tasksByWorkspace.count(ctx, { namespace: workspaceId }),
-      ]);
-
     return {
       projects: projects.map((p) => ({
         _id: p._id,
@@ -153,15 +123,6 @@ export const get = query({
         workspaceId: c.workspaceId,
         isPublic: c.isPublic,
       })),
-      counts: {
-        members: membersCount,
-        channels: channelsCount,
-        projects: projectsCount,
-        documents: documentsCount,
-        diagrams: diagramsCount,
-        spreadsheets: spreadsheetsCount,
-        tasks: tasksCount,
-      },
     };
   },
 });

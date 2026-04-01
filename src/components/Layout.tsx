@@ -5,11 +5,8 @@ import { Phone } from "lucide-react";
 import { Profiler, useEffect, useState } from "react";
 import { onRenderCallback } from "../lib/profiler-logger";
 import { Outlet, useLocation, useParams } from "react-router-dom";
-import { useQuery } from "convex-helpers/react/cache";
-import { api } from "../../convex/_generated/api";
 import { CommandPalette } from "./CommandPalette";
 import { useActiveCall } from "../contexts/ActiveCallContext";
-import { FavoritesContext } from "../contexts/FavoritesContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
 import { HeaderSlotContext, useHeaderSlotRef } from "../contexts/HeaderSlotContext";
 import { WorkspaceMembersProvider } from "../contexts/WorkspaceMembersContext";
@@ -41,7 +38,6 @@ export function Layout() {
   const { isFollowing, followColor } = useFollowMode();
   const [commandOpen, setCommandOpen] = useState(false);
   const [headerSlotCallbackRef, headerSlotNode] = useHeaderSlotRef();
-  const allFavoriteIds = useQuery(api.favorites.listAllIdsForWorkspace, workspaceId ? { workspaceId } : "skip");
 
   useEffect(() => {
     if (pathname === "/" && isMobile) setOpen(true);
@@ -59,9 +55,9 @@ export function Layout() {
   }, []);
 
   const inner = (
-    <FavoritesContext.Provider value={allFavoriteIds ?? undefined}>
+    <>
       <Profiler id="AppSidebar" onRender={onRenderCallback}>
-      <AppSidebar allFavoriteIds={allFavoriteIds} />
+      <AppSidebar />
       </Profiler>
       <SidebarInset className="min-w-0">
         <header className="flex shrink-0 sticky top-0 px-4 pt-(--safe-area-top) z-10 h-16 items-center justify-between border-b backdrop-blur bg-background/80">
@@ -113,7 +109,7 @@ export function Layout() {
           onOpenChange={setCommandOpen}
         />
       )}
-    </FavoritesContext.Provider>
+    </>
   );
 
   if (workspaceId) {

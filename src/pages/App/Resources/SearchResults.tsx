@@ -7,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useOptimisticIsFavorited } from "@/contexts/FavoritesContext";
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ChannelVisibilityFilter, FavoriteFilter } from "@/hooks/use-debounced-search";
@@ -145,10 +144,8 @@ function ResourceMobileRow({
   const Icon = RESOURCE_TYPE_ICONS[resourceType];
   const isChannel = resourceType === "channel";
   const canFavorite = showFavorites !== false && !isChannel;
-  // Safe cast: useOptimisticIsFavorited doesn't support "channel"; canFavorite
-  // guards all channel star rendering — "document" is a harmless fallback.
   const favType: FavoritableType = isChannel ? "document" : resourceType;
-  const isFavorited = useOptimisticIsFavorited(favType, resource._id) ?? false;
+  const isFavorited = useQuery(api.favorites.isFavorited, canFavorite ? { resourceId: resource._id } : "skip") ?? false;
   const toggle = useMutation(api.favorites.toggle);
   const navigate = useNavigate();
 

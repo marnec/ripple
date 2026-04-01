@@ -1,16 +1,4 @@
-/**
- * Max number of favorite slots reserved per resource group in the sidebar.
- * Empty slots are rendered as placeholders when fewer favorites exist.
- */
-export const MAX_SIDEBAR_FAVORITES = 3;
-
 export const SIDEBAR_ELEMENT_FADEIN_DELAY = 25;
-
-/**
- * Height of a single sidebar sub-item row (matches SidebarMenuSubButton h-7 = 1.75rem).
- * Used to reserve vertical space for empty favorite slots.
- */
-export const SIDEBAR_ROW_HEIGHT_REM = 1.75;
 
 import type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
 export type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
@@ -32,14 +20,4 @@ export const RESOURCE_ROUTES: Record<ResourceType, string> = {
 export function preselectSearchTab(workspaceId: string, resourceType: ResourceType) {
   const key = `ripple:search:${workspaceId}:${resourceType}`;
   localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: "all" }));
-}
-
-/**
- * Pre-set the isFavorite filter so ResourceListPage opens showing non-favorited
- * resources when navigated to from an empty favorite slot click.
- */
-export function preselectFavoriteFilter(workspaceId: string, resourceType: ResourceType) {
-  const key = `ripple:search:${workspaceId}:${resourceType}`;
-  localStorage.setItem(key, JSON.stringify({ q: "", tags: [], isFavorite: "unfavorited" }));
-  window.dispatchEvent(new CustomEvent("ripple:search-preselect", { detail: { workspaceId, resourceType } }));
 }

@@ -1,8 +1,8 @@
 import { useMutation } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { Star } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { useOptimisticIsFavorited } from "@/contexts/FavoritesContext";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 import type { FavoritableResourceType as ResourceType } from "@shared/types/resources";
@@ -22,7 +22,7 @@ export function FavoriteButton({
   variant = "ghost",
   className,
 }: FavoriteButtonProps) {
-  const isFavorited = useOptimisticIsFavorited(resourceType, resourceId) ?? false;
+  const isFavorited = useQuery(api.favorites.isFavorited, { resourceId }) ?? false;
   const toggle = useMutation(api.favorites.toggle);
 
   const handleToggle = (e: React.MouseEvent) => {

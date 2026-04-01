@@ -1,118 +1,56 @@
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-
-import { useMutation } from "convex/react";
-import { memo, useState } from "react";
-import { ChevronRight, File, Plus } from "lucide-react";
+import { memo } from "react";
+import { File, Plus } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import { useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
   useSidebar,
 } from "../../../components/ui/sidebar";
-import { DocumentSelectorItem } from "./DocumentSelectorItem";
-import { RenameDocumentDialog } from "./RenameDocumentDialog";
-import { EmptyFavoriteSlots } from "../Resources/EmptyFavoriteSlots";
-import { MAX_SIDEBAR_FAVORITES, preselectSearchTab } from "../Resources/sidebar-constants";
-
-export type AllFavoriteIds = {
-  document: string[];
-  diagram: string[];
-  spreadsheet: string[];
-  project: string[];
-};
+import { preselectSearchTab } from "../Resources/sidebar-constants";
 
 export type DocumentSelectorProps = {
   workspaceId: Id<"workspaces">;
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
   documents?: { _id: string; name: string; tags?: string[]; _creationTime: number }[];
-  allFavoriteIds: AllFavoriteIds | undefined;
-  isOpen: boolean;
-  onToggle: () => void;
 };
 
 export const DocumentSelectorList = memo(function DocumentSelectorList({
   workspaceId,
-  documentId,
   onDocumentSelect,
-  documents: documentsProp,
-  allFavoriteIds,
-  isOpen,
-  onToggle,
 }: DocumentSelectorProps) {
-  const [selectedDocForRename, setSelectedDocForRename] = useState<Id<"documents"> | null>(null);
   const navigate = useNavigate();
   const { isMobile, setOpen: setSidebarOpen } = useSidebar();
   const location = useLocation();
   const isListActive = location.pathname.endsWith("/documents");
 
-  const documents = documentsProp as unknown as Doc<"documents">[] | undefined;
   const createDocument = useMutation(api.documents.create);
-  const toggleFavorite = useMutation(api.favorites.toggle);
-
-  const favoriteSet = new Set(allFavoriteIds?.document ?? []);
-  const favoriteDocs = documents?.filter((d) => favoriteSet.has(d._id)).slice(0, MAX_SIDEBAR_FAVORITES);
-
-  const handleUnstar = (id: Id<"documents">) => {
-    void toggleFavorite({ workspaceId, resourceType: "document", resourceId: id });
-  };
-
-  const navigateToDocumentSettings = (id: Id<"documents">) => {
-    if (isMobile) setSidebarOpen(false);
-    void navigate(`/workspaces/${workspaceId}/documents/${id}/settings`);
-  };
-
-  const handleCreate = async () => {
-    const id = await createDocument({ workspaceId });
-    onDocumentSelect(id);
-  };
 
   const handleHeaderClick = () => {
     preselectSearchTab(workspaceId, "document");
     onDocumentSelect(null);
   };
 
+  const handleCreate = async () => {
+    if (isMobile) setSidebarOpen(false);
+    const id = await createDocument({ workspaceId });
+    void navigate(`/workspaces/${workspaceId}/documents/${id}`);
+  };
+
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
-        <SidebarMenuButton tooltip="Documents" onClick={handleHeaderClick} isActive={isListActive}>
-          <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-              <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
-          </CollapsibleTrigger>
-          <File className="size-4" />
-          <span className="font-medium">Documents</span>
-        </SidebarMenuButton>
-        <SidebarMenuAction showOnHover onClick={() => void handleCreate()}>
-          <Plus />
-          <span className="sr-only">New Document</span>
-        </SidebarMenuAction>
-        <CollapsibleContent>
-          <SidebarMenuSub className="gap-0.5">
-            {favoriteDocs?.map((document, idx) => (
-              <DocumentSelectorItem
-                key={document._id}
-                idx={idx}
-                document={document}
-                documentId={documentId}
-                onDocumentSelect={onDocumentSelect}
-                onRenameDocument={setSelectedDocForRename}
-                onManageDocument={navigateToDocumentSettings}
-                onUnstarDocument={handleUnstar}
-              />
-            ))}
-            <EmptyFavoriteSlots filled={favoriteDocs?.length ?? 0} workspaceId={workspaceId} resourceType="document" />
-          </SidebarMenuSub>
-        </CollapsibleContent>
-        {!!selectedDocForRename && (
-          <RenameDocumentDialog
-            documentId={selectedDocForRename}
-            open={!!selectedDocForRename}
-            onOpenChange={(e) => !e && setSelectedDocForRename(null)}
-          />
-        )}
-    </Collapsible>
+    <SidebarMenuItem>
+      <SidebarMenuButton tooltip="Documents" onClick={handleHeaderClick} isActive={isListActive}>
+        <File className="size-4" />
+        <span className="font-medium">Documents</span>
+      </SidebarMenuButton>
+      <SidebarMenuAction showOnHover onClick={() => void handleCreate()}>
+        <Plus />
+        <span className="sr-only">New Document</span>
+      </SidebarMenuAction>
+    </SidebarMenuItem>
   );
 });

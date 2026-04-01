@@ -480,15 +480,6 @@ export const listByTask = query({
 
 // ── Graph queries ───────────────────────────────────────────────────
 
-import {
-  documentsByWorkspace,
-  diagramsByWorkspace,
-  spreadsheetsByWorkspace,
-  projectsByWorkspace,
-  channelsByWorkspace,
-  tasksByWorkspace,
-} from "./dbTriggers";
-
 const graphNodeValidator = v.object({
   id: v.string(),
   type: v.string(),
@@ -502,21 +493,10 @@ const graphLinkValidator = v.object({
   edgeType: v.string(),
 });
 
-const graphCountsValidator = v.object({
-  document: v.number(),
-  diagram: v.number(),
-  spreadsheet: v.number(),
-  project: v.number(),
-  channel: v.number(),
-  task: v.number(),
-});
-
 /**
  * Get the workspace knowledge graph: all nodes + edges.
  * Nodes are fetched from the nodes table (includes isolated nodes with no edges).
  * User nodes are included via workspace membership (backfilled + trigger-created).
- * Counts are fetched separately via getWorkspaceCounts to avoid coupling
- * graph reactivity to every resource creation/deletion in the workspace.
  */
 export const getWorkspaceGraph = query({
   args: { workspaceId: v.id("workspaces") },
@@ -565,39 +545,6 @@ export const getWorkspaceGraph = query({
     }
 
     return { nodes, links };
-  },
-});
-
-/**
- * Aggregate resource counts per workspace.
- * Separated from getWorkspaceGraph so that creating/deleting any resource
- * (document, task, etc.) does NOT invalidate the graph structure subscription.
- */
-export const getWorkspaceCounts = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: graphCountsValidator,
-  handler: async (ctx, { workspaceId }) => {
-    const empty = { document: 0, diagram: 0, spreadsheet: 0, project: 0, channel: 0, task: 0 };
-    const auth = await checkWorkspaceMember(ctx, workspaceId);
-    if (!auth) return empty;
-
-    const [docCount, diaCount, ssCount, projCount, chanCount, taskCount] = await Promise.all([
-      documentsByWorkspace.count(ctx, { namespace: workspaceId }),
-      diagramsByWorkspace.count(ctx, { namespace: workspaceId }),
-      spreadsheetsByWorkspace.count(ctx, { namespace: workspaceId }),
-      projectsByWorkspace.count(ctx, { namespace: workspaceId }),
-      channelsByWorkspace.count(ctx, { namespace: workspaceId }),
-      tasksByWorkspace.count(ctx, { namespace: workspaceId }),
-    ]);
-
-    return {
-      document: docCount,
-      diagram: diaCount,
-      spreadsheet: ssCount,
-      project: projCount,
-      channel: chanCount,
-      task: taskCount,
-    };
   },
 });
 

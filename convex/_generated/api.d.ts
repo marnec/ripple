@@ -620,19 +620,6 @@ export declare const api: {
       { id: string; type: string },
       string | null
     >;
-    getWorkspaceCounts: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      {
-        channel: number;
-        diagram: number;
-        document: number;
-        project: number;
-        spreadsheet: number;
-        task: number;
-      }
-    >;
     getWorkspaceGraph: FunctionReference<
       "query",
       "public",
@@ -1997,15 +1984,6 @@ export declare const api: {
           name: string;
           workspaceId: Id<"workspaces">;
         }>;
-        counts: {
-          channels: number;
-          diagrams: number;
-          documents: number;
-          members: number;
-          projects: number;
-          spreadsheets: number;
-          tasks: number;
-        };
         diagrams: Array<{
           _creationTime: number;
           _id: Id<"diagrams">;
@@ -2648,6 +2626,18 @@ export declare const internal: {
         next?: Array<string>;
       },
       any
+    >;
+  };
+  notificationDelivery: {
+    getFilteredSubscriptions: FunctionReference<
+      "query",
+      "internal",
+      { category: string; recipientIds: Array<string>; resourceId?: string },
+      Array<{
+        endpoint: string;
+        expirationTime: number | null;
+        keys: { auth: string; p256dh: string };
+      }>
     >;
   };
   notificationPreferences: {
