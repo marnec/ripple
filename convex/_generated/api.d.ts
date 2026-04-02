@@ -2743,6 +2743,44 @@ export declare const internal: {
       null
     >;
   };
+  notificationSubscriptionJobs: {
+    channelMadePrivate: FunctionReference<
+      "mutation",
+      "internal",
+      { channelId: Id<"channels"> },
+      null
+    >;
+    channelMadePublic: FunctionReference<
+      "mutation",
+      "internal",
+      { channelId: Id<"channels">; workspaceId: Id<"workspaces"> },
+      null
+    >;
+    globalPreferencesChanged: FunctionReference<
+      "mutation",
+      "internal",
+      { newPrefs: any; oldPrefs?: any; userId: Id<"users"> },
+      null
+    >;
+    memberJoined: FunctionReference<
+      "mutation",
+      "internal",
+      { userId: Id<"users">; workspaceId: Id<"workspaces"> },
+      null
+    >;
+    memberLeft: FunctionReference<
+      "mutation",
+      "internal",
+      { userId: Id<"users">; workspaceId: Id<"workspaces"> },
+      null
+    >;
+    publicChannelCreated: FunctionReference<
+      "mutation",
+      "internal",
+      { channelId: Id<"channels">; workspaceId: Id<"workspaces"> },
+      null
+    >;
+  };
   projectNotificationPreferences: {
     getForUsersInProject: FunctionReference<
       "query",

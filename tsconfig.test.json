@@ -13,6 +13,8 @@
     "convex/signaling.ts",
     "convex/utils/blocknote.ts",
     "convex/dbTriggers.ts",
+    "convex/notificationSubscriptionSync.ts",
+    "convex/notificationSubscriptionJobs.ts",
     "convex/cascadeDelete.ts",
     "convex/auditLog.ts"
   ]

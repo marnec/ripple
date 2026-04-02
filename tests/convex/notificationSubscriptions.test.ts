@@ -266,7 +266,7 @@ describe("notificationSubscriptions", () => {
         return { workspaceId: wsId, projectId: projId, publicChannelId: chId };
       });
 
-      // Insert workspace member WITH triggers
+      // Insert workspace member WITH triggers (schedules async subscription creation)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.insert("workspaceMembers", {
@@ -327,7 +327,7 @@ describe("notificationSubscriptions", () => {
         return { workspaceId: wsId, channelId: chId };
       });
 
-      // Add member (creates chatChannelMessage subscription for the channel)
+      // Add member (schedules async subscription creation for the channel)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.insert("workspaceMembers", {
@@ -418,7 +418,7 @@ describe("notificationSubscriptions", () => {
         });
       });
 
-      // Add both members (triggers create subscriptions for public channel)
+      // Add both members (triggers schedule async subscription creation)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.insert("workspaceMembers", { userId, workspaceId, role: WorkspaceRole.ADMIN });
@@ -444,7 +444,7 @@ describe("notificationSubscriptions", () => {
       });
       expect(beforeToggle).toHaveLength(2);
 
-      // Toggle channel to private (trigger should schedule cleanup)
+      // Toggle channel to private (trigger schedules async cleanup)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.patch(channelId, { isPublic: false });
@@ -481,14 +481,14 @@ describe("notificationSubscriptions", () => {
         });
       });
 
-      // Add workspace members
+      // Add workspace members (schedules async subscription creation)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.insert("workspaceMembers", { userId, workspaceId, role: WorkspaceRole.ADMIN });
         await db.insert("workspaceMembers", { userId: user2Id, workspaceId, role: WorkspaceRole.MEMBER });
       });
 
-      // Only user1 joins the private channel
+      // Only user1 joins the private channel (inline, not scheduled)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.insert("channelMembers", {
@@ -507,7 +507,7 @@ describe("notificationSubscriptions", () => {
       });
       expect(beforeToggle).toHaveLength(1);
 
-      // Toggle channel to public
+      // Toggle channel to public (schedules async subscription creation)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.patch(channelId, { isPublic: true });

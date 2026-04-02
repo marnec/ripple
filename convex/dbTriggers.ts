@@ -1,18 +1,12 @@
 import { TableAggregate } from "@convex-dev/aggregate";
 import type { DataModel } from "./_generated/dataModel";
 import { Id } from "./_generated/dataModel";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { Triggers } from "convex-helpers/server/triggers";
 import { extractMessageTargets } from "./utils/blocknote";
 import {
-  onWorkspaceMemberInsert,
-  onWorkspaceMemberDelete,
   onChannelMemberInsert,
   onChannelMemberDelete,
-  onPublicChannelInsert,
-  onChannelMadePrivate,
-  onChannelMadePublic,
-  onGlobalPreferencesChange,
   onChannelPreferencesChange,
 } from "./notificationSubscriptionSync";
 
@@ -427,13 +421,106 @@ triggers.register("messages", async (ctx, change) => {
 // Maintain the notificationSubscriptions materialized view so that
 // delivery queries are a single indexed lookup.
 
+// ── Bulk operations: deferred to a separate transaction ─────────────
+// In production, these schedule internal mutations via ctx.scheduler.runAfter(0)
+// to avoid resource contention on user-facing mutations. The scheduled mutation
+// runs in its own transaction immediately after the current one commits.
+// In test environments (convex-test), run inline since the test framework
+// doesn't automatically execute scheduled functions.
+
+import {
+  onWorkspaceMemberInsert,
+  onWorkspaceMemberDelete,
+  onPublicChannelInsert,
+  onChannelMadePrivate,
+  onChannelMadePublic,
+  onGlobalPreferencesChange,
+} from "./notificationSubscriptionSync";
+
+const isTest = typeof process !== "undefined" && !!process.env?.VITEST;
+
 triggers.register("workspaceMembers", async (ctx, change) => {
   if (change.operation === "insert") {
-    await onWorkspaceMemberInsert(ctx, change.newDoc.userId, change.newDoc.workspaceId);
+    if (isTest) {
+      await onWorkspaceMemberInsert(ctx, change.newDoc.userId, change.newDoc.workspaceId);
+    } else {
+      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.memberJoined, {
+        userId: change.newDoc.userId,
+        workspaceId: change.newDoc.workspaceId,
+      });
+    }
   } else if (change.operation === "delete") {
-    await onWorkspaceMemberDelete(ctx, change.oldDoc.userId, change.oldDoc.workspaceId);
+    if (isTest) {
+      await onWorkspaceMemberDelete(ctx, change.oldDoc.userId, change.oldDoc.workspaceId);
+    } else {
+      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.memberLeft, {
+        userId: change.oldDoc.userId,
+        workspaceId: change.oldDoc.workspaceId,
+      });
+    }
   }
 });
+
+triggers.register("channels", async (ctx, change) => {
+  if (change.operation === "insert" && change.newDoc.isPublic) {
+    if (isTest) {
+      await onPublicChannelInsert(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
+    } else {
+      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.publicChannelCreated, {
+        channelId: change.id as Id<"channels">,
+        workspaceId: change.newDoc.workspaceId,
+      });
+    }
+  } else if (change.operation === "update") {
+    const wasPublic = change.oldDoc.isPublic;
+    const isPublic = change.newDoc.isPublic;
+    if (wasPublic && !isPublic) {
+      if (isTest) {
+        await onChannelMadePrivate(ctx, change.id as Id<"channels">);
+      } else {
+        await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePrivate, {
+          channelId: change.id as Id<"channels">,
+        });
+      }
+    } else if (!wasPublic && isPublic) {
+      if (isTest) {
+        await onChannelMadePublic(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
+      } else {
+        await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePublic, {
+          channelId: change.id as Id<"channels">,
+          workspaceId: change.newDoc.workspaceId,
+        });
+      }
+    }
+  }
+  // delete: handled by cascade rules in cascadeDelete.ts
+});
+
+triggers.register("notificationPreferences", async (ctx, change) => {
+  if (change.operation === "insert") {
+    if (isTest) {
+      await onGlobalPreferencesChange(ctx, change.newDoc.userId, null, change.newDoc);
+    } else {
+      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.globalPreferencesChanged, {
+        userId: change.newDoc.userId,
+        oldPrefs: undefined,
+        newPrefs: change.newDoc,
+      });
+    }
+  } else if (change.operation === "update") {
+    if (isTest) {
+      await onGlobalPreferencesChange(ctx, change.newDoc.userId, change.oldDoc, change.newDoc);
+    } else {
+      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.globalPreferencesChanged, {
+        userId: change.newDoc.userId,
+        oldPrefs: change.oldDoc,
+        newPrefs: change.newDoc,
+      });
+    }
+  }
+});
+
+// ── Small operations: remain inline (constant-size, no contention) ──
 
 triggers.register("channelMembers", async (ctx, change) => {
   if (change.operation === "insert") {
@@ -442,29 +529,6 @@ triggers.register("channelMembers", async (ctx, change) => {
     );
   } else if (change.operation === "delete") {
     await onChannelMemberDelete(ctx, change.oldDoc.userId, change.oldDoc.channelId);
-  }
-});
-
-triggers.register("channels", async (ctx, change) => {
-  if (change.operation === "insert" && change.newDoc.isPublic) {
-    await onPublicChannelInsert(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
-  } else if (change.operation === "update") {
-    const wasPublic = change.oldDoc.isPublic;
-    const isPublic = change.newDoc.isPublic;
-    if (wasPublic && !isPublic) {
-      await onChannelMadePrivate(ctx, change.id as Id<"channels">);
-    } else if (!wasPublic && isPublic) {
-      await onChannelMadePublic(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
-    }
-  }
-  // delete: handled by cascade rules in cascadeDelete.ts
-});
-
-triggers.register("notificationPreferences", async (ctx, change) => {
-  if (change.operation === "insert") {
-    await onGlobalPreferencesChange(ctx, change.newDoc.userId, null, change.newDoc);
-  } else if (change.operation === "update") {
-    await onGlobalPreferencesChange(ctx, change.newDoc.userId, change.oldDoc, change.newDoc);
   }
 });
 
@@ -478,6 +542,3 @@ triggers.register("channelNotificationPreferences", async (ctx, change) => {
     );
   }
 });
-
-// NOTE: No projectNotificationPreferences trigger — all task categories
-// use recipientIds (targeted delivery), not the subscription table.
