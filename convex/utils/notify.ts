@@ -28,8 +28,7 @@ type WithRecipients = BaseArgs & {
 type WithScope = BaseArgs & {
   /** Broadcast scope: the ID that subscription rows are keyed on.
    *  For workspace-scoped categories this is the workspaceId.
-   *  For channel-scoped categories this is the channelId.
-   *  For project-scoped categories this is the projectId. */
+   *  For channel-scoped categories this is the channelId. */
   scope: string;
 };
 

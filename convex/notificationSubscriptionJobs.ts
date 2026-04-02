@@ -24,6 +24,16 @@ export const memberJoined = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // Guard: if the member was removed before this scheduled mutation ran,
+    // skip creating subscriptions to avoid orphaned rows.
+    const stillMember = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("userId", args.userId),
+      )
+      .first();
+    if (!stillMember) return null;
+
     await onWorkspaceMemberInsert(ctx, args.userId, args.workspaceId);
     return null;
   },
@@ -48,6 +58,8 @@ export const publicChannelCreated = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const channel = await ctx.db.get(args.channelId);
+    if (!channel || !channel.isPublic) return null;
     await onPublicChannelInsert(ctx, args.channelId, args.workspaceId);
     return null;
   },
@@ -59,6 +71,8 @@ export const channelMadePrivate = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const channel = await ctx.db.get(args.channelId);
+    if (!channel || channel.isPublic) return null;
     await onChannelMadePrivate(ctx, args.channelId);
     return null;
   },
@@ -71,6 +85,8 @@ export const channelMadePublic = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const channel = await ctx.db.get(args.channelId);
+    if (!channel || !channel.isPublic) return null;
     await onChannelMadePublic(ctx, args.channelId, args.workspaceId);
     return null;
   },
