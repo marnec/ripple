@@ -402,6 +402,17 @@ export default defineSchema({
       filterFields: ["workspaceId", "resourceType"],
     }),
 
+  notificationSubscriptions: defineTable({
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    category: v.string(),    // NotificationCategory
+    scope: v.string(),       // workspaceId (workspace-level) or channelId/projectId (resource-scoped)
+  })
+    .index("by_scope_category", ["scope", "category"])       // delivery query
+    .index("by_user_workspace", ["userId", "workspaceId"])   // cleanup on member leave
+    .index("by_user_scope", ["userId", "scope"])             // preference updates
+    .index("by_user_scope_category", ["userId", "scope", "category"]), // upsert check
+
   appVersion: defineTable({
     deployedAt: v.number(),
   }),

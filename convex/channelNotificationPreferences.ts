@@ -1,6 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireUser, getWorkspaceMembership } from "./authHelpers";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { triggers } from "./dbTriggers";
 
 const preferencesValidator = v.object({
   _id: v.id("channelNotificationPreferences"),
@@ -51,10 +53,11 @@ export const save = mutation({
       .withIndex("by_user_channel", (q) => q.eq("userId", userId).eq("channelId", channelId))
       .unique();
 
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
     if (existing) {
-      await ctx.db.patch(existing._id, prefs);
+      await db.patch(existing._id, prefs);
     } else {
-      await ctx.db.insert("channelNotificationPreferences", { userId, channelId, ...prefs });
+      await db.insert("channelNotificationPreferences", { userId, channelId, ...prefs });
     }
 
     return null;

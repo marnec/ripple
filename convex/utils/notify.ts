@@ -15,7 +15,8 @@ type BaseArgs = {
   title: string;
   body: string;
   url: string;
-  /** Per-resource preference filtering (projectId for tasks, channelId for chat) */
+  /** Per-resource preference filtering (projectId for tasks, channelId for chat).
+   *  Used only for the explicit-recipient path. */
   resourceId?: Id<"projects"> | Id<"channels">;
 };
 
@@ -24,12 +25,15 @@ type WithRecipients = BaseArgs & {
   recipientIds: (string | Id<"users">)[];
 };
 
-type WithWorkspace = BaseArgs & {
-  /** Broadcast to all workspace members (minus sender) */
-  workspaceId: Id<"workspaces">;
+type WithScope = BaseArgs & {
+  /** Broadcast scope: the ID that subscription rows are keyed on.
+   *  For workspace-scoped categories this is the workspaceId.
+   *  For channel-scoped categories this is the channelId.
+   *  For project-scoped categories this is the projectId. */
+  scope: string;
 };
 
-type NotifyArgs = WithRecipients | WithWorkspace;
+type NotifyArgs = WithRecipients | WithScope;
 
 // ─── Public API ──────────────────────────────────────────────────────
 
@@ -39,7 +43,7 @@ type NotifyArgs = WithRecipients | WithWorkspace;
  *
  * Supports two recipient modes:
  * - `recipientIds`: explicit list (mentions, assignee). Self is NOT auto-filtered.
- * - `workspaceId`: broadcast to all workspace members, excluding `userId`.
+ * - `scope`: broadcast via materialized subscriptions, excluding `userId`.
  */
 export async function notify(
   ctx: MutationCtx,
@@ -52,7 +56,7 @@ export async function notify(
     body: args.body,
     url: args.url,
     recipientIds: "recipientIds" in args ? args.recipientIds.map(String) : undefined,
-    workspaceId: "workspaceId" in args ? args.workspaceId : undefined,
+    scope: "scope" in args ? args.scope : undefined,
     resourceId: args.resourceId as string | undefined,
   });
 }

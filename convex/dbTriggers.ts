@@ -4,6 +4,17 @@ import { Id } from "./_generated/dataModel";
 import { components } from "./_generated/api";
 import { Triggers } from "convex-helpers/server/triggers";
 import { extractMessageTargets } from "./utils/blocknote";
+import {
+  onWorkspaceMemberInsert,
+  onWorkspaceMemberDelete,
+  onChannelMemberInsert,
+  onChannelMemberDelete,
+  onPublicChannelInsert,
+  onChannelMadePrivate,
+  onChannelMadePublic,
+  onGlobalPreferencesChange,
+  onChannelPreferencesChange,
+} from "./notificationSubscriptionSync";
 
 // ── Aggregate definitions ───────────────────────────────────────────
 // Each aggregate counts documents by workspaceId using O(log n) B-tree lookups.
@@ -411,3 +422,62 @@ triggers.register("messages", async (ctx, change) => {
     ]);
   }
 });
+
+// ── Notification subscription triggers ──────────────────────────────
+// Maintain the notificationSubscriptions materialized view so that
+// delivery queries are a single indexed lookup.
+
+triggers.register("workspaceMembers", async (ctx, change) => {
+  if (change.operation === "insert") {
+    await onWorkspaceMemberInsert(ctx, change.newDoc.userId, change.newDoc.workspaceId);
+  } else if (change.operation === "delete") {
+    await onWorkspaceMemberDelete(ctx, change.oldDoc.userId, change.oldDoc.workspaceId);
+  }
+});
+
+triggers.register("channelMembers", async (ctx, change) => {
+  if (change.operation === "insert") {
+    await onChannelMemberInsert(
+      ctx, change.newDoc.userId, change.newDoc.channelId, change.newDoc.workspaceId,
+    );
+  } else if (change.operation === "delete") {
+    await onChannelMemberDelete(ctx, change.oldDoc.userId, change.oldDoc.channelId);
+  }
+});
+
+triggers.register("channels", async (ctx, change) => {
+  if (change.operation === "insert" && change.newDoc.isPublic) {
+    await onPublicChannelInsert(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
+  } else if (change.operation === "update") {
+    const wasPublic = change.oldDoc.isPublic;
+    const isPublic = change.newDoc.isPublic;
+    if (wasPublic && !isPublic) {
+      await onChannelMadePrivate(ctx, change.id as Id<"channels">);
+    } else if (!wasPublic && isPublic) {
+      await onChannelMadePublic(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
+    }
+  }
+  // delete: handled by cascade rules in cascadeDelete.ts
+});
+
+triggers.register("notificationPreferences", async (ctx, change) => {
+  if (change.operation === "insert") {
+    await onGlobalPreferencesChange(ctx, change.newDoc.userId, null, change.newDoc);
+  } else if (change.operation === "update") {
+    await onGlobalPreferencesChange(ctx, change.newDoc.userId, change.oldDoc, change.newDoc);
+  }
+});
+
+triggers.register("channelNotificationPreferences", async (ctx, change) => {
+  if (change.operation === "insert" || change.operation === "update") {
+    const doc = change.newDoc;
+    const channel = await ctx.db.get(doc.channelId);
+    if (!channel) return;
+    await onChannelPreferencesChange(
+      ctx, doc.userId, doc.channelId, channel.workspaceId, doc,
+    );
+  }
+});
+
+// NOTE: No projectNotificationPreferences trigger — all task categories
+// use recipientIds (targeted delivery), not the subscription table.

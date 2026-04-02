@@ -707,6 +707,33 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  notificationSubscriptions: {
+    document: {
+      category: string;
+      scope: string;
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"notificationSubscriptions">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "category"
+      | "scope"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_scope_category: ["scope", "category", "_creationTime"];
+      by_user_scope: ["userId", "scope", "_creationTime"];
+      by_user_scope_category: ["userId", "scope", "category", "_creationTime"];
+      by_user_workspace: ["userId", "workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   projectNotificationPreferences: {
     document: {
       projectId: Id<"projects">;

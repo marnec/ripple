@@ -5,6 +5,13 @@ import { internalMutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { auditLog } from "./auditLog.js";
 import { extractMessageTargets } from "./utils/blocknote.js";
+import {
+  BROADCAST_WORKSPACE_CATEGORIES,
+  BROADCAST_CHANNEL_CATEGORIES,
+  DEFAULT_PREFERENCES,
+  DEFAULT_CHANNEL_CHAT_PREFERENCES,
+  type NotificationCategory,
+} from "@shared/notificationCategories";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 
@@ -116,6 +123,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillTaskBelongsToEdges,
   internal.migrations.backfillUserNodes,
   internal.migrations.backfillEdgeNodeIds,
+  internal.migrations.backfillNotificationSubscriptions,
 ]);
 
 /**
@@ -589,6 +597,86 @@ export const backfillUserNodes = migrations.define({
       name: user?.name ?? user?.email ?? "Unknown",
       tags: [],
     } as never);
+  },
+});
+
+// ── Notification subscriptions backfill ─────────────────────────────
+// Populate notificationSubscriptions for all existing workspace members
+// based on their current preferences.
+
+export const backfillNotificationSubscriptions = migrations.define({
+  table: "workspaceMembers",
+  migrateOne: async (ctx, member) => {
+    const { userId, workspaceId } = member;
+
+    // Check if already backfilled (any subscription exists for this user+workspace)
+    const existing = await ctx.db
+      .query("notificationSubscriptions")
+      .withIndex("by_user_workspace", (q) =>
+        q.eq("userId", userId).eq("workspaceId", workspaceId),
+      )
+      .first();
+    if (existing) return;
+
+    // Get user's global preferences
+    const globalPrefs = await ctx.db
+      .query("notificationPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+
+    const isEnabled = (cat: NotificationCategory, defaults: Record<string, boolean>) => {
+      if (!globalPrefs) return defaults[cat] ?? true;
+      return (globalPrefs[cat as keyof typeof globalPrefs] as boolean | undefined) ?? defaults[cat] ?? true;
+    };
+
+    // Workspace-scoped broadcast categories
+    for (const cat of BROADCAST_WORKSPACE_CATEGORIES) {
+      if (isEnabled(cat, DEFAULT_PREFERENCES)) {
+        await ctx.db.insert("notificationSubscriptions", {
+          workspaceId, userId, category: cat, scope: workspaceId,
+        });
+      }
+    }
+
+    // Channel-scoped broadcast categories
+    const publicChannels = await ctx.db
+      .query("channels")
+      .withIndex("by_isPublicInWorkspace", (q) =>
+        q.eq("isPublic", true).eq("workspaceId", workspaceId),
+      )
+      .collect();
+
+    const channelMemberships = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .collect();
+
+    const allChannelIds = new Set([
+      ...publicChannels.map((c) => c._id as string),
+      ...channelMemberships.map((m) => m.channelId as string),
+    ]);
+
+    for (const channelId of allChannelIds) {
+      const channelPrefs = await ctx.db
+        .query("channelNotificationPreferences")
+        .withIndex("by_user_channel", (q) =>
+          q.eq("userId", userId).eq("channelId", channelId as Id<"channels">),
+        )
+        .unique();
+
+      for (const cat of BROADCAST_CHANNEL_CATEGORIES) {
+        const enabled = channelPrefs
+          ? channelPrefs[cat]
+          : isEnabled(cat, DEFAULT_CHANNEL_CHAT_PREFERENCES);
+        if (enabled) {
+          await ctx.db.insert("notificationSubscriptions", {
+            workspaceId, userId, category: cat, scope: channelId,
+          });
+        }
+      }
+    }
   },
 });
 

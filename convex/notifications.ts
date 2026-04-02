@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { sendPushToFilteredUsers } from "./utils/sendPushToUsers";
+import { sendPushToFilteredUsers, sendPushToUsers } from "./utils/sendPushToUsers";
 import type { NotificationCategory } from "@shared/notificationCategories";
 
 /**
@@ -21,11 +21,13 @@ export const deliverPush = internalAction({
     title: v.string(),
     body: v.string(),
     url: v.string(),
-    /** Explicit recipients (mentions, assignee). Mutually exclusive with workspaceId. */
+    /** Explicit recipients (mentions, assignee). Mutually exclusive with scope. */
     recipientIds: v.optional(v.array(v.string())),
-    /** Broadcast: fetch all workspace members, exclude sender. */
-    workspaceId: v.optional(v.id("workspaces")),
-    /** Per-resource preference scope (projectId or channelId). */
+    /** Broadcast scope: workspaceId, channelId, or projectId. The subscription
+     *  table is queried for (scope, category) to find recipients. */
+    scope: v.optional(v.string()),
+    /** Per-resource preference scope (projectId or channelId) — used only for
+     *  the explicit-recipient path where preferences are checked at delivery. */
     resourceId: v.optional(v.string()),
   },
   returns: v.null(),
@@ -33,13 +35,18 @@ export const deliverPush = internalAction({
     let recipientIds: string[];
 
     if (args.recipientIds) {
+      // Targeted notification (mentions, assignee) — small N, check prefs inline
       recipientIds = args.recipientIds;
-    } else if (args.workspaceId) {
-      const memberIds = await ctx.runQuery(
-        internal.workspaceMembers.listUserIds,
-        { workspaceId: args.workspaceId },
+    } else if (args.scope) {
+      // Broadcast — use the materialized subscription table
+      recipientIds = await ctx.runQuery(
+        internal.notificationDelivery.getSubscribedUserIds,
+        {
+          scope: args.scope,
+          category: args.category,
+          excludeUserId: args.senderId,
+        },
       );
-      recipientIds = memberIds.filter((id) => id !== args.senderId);
     } else {
       return null;
     }
@@ -52,13 +59,20 @@ export const deliverPush = internalAction({
       data: { url: args.url },
     });
 
-    await sendPushToFilteredUsers(
-      ctx,
-      recipientIds,
-      args.category as NotificationCategory,
-      notification,
-      args.resourceId as any,
-    );
+    if (args.recipientIds) {
+      // Targeted: still filter by per-user preferences
+      await sendPushToFilteredUsers(
+        ctx,
+        recipientIds,
+        args.category as NotificationCategory,
+        notification,
+        args.resourceId as any,
+      );
+    } else {
+      // Broadcast: preferences already resolved by subscription table,
+      // just fetch push endpoints and send.
+      await sendPushToUsers(ctx, recipientIds, notification);
+    }
 
     return null;
   },

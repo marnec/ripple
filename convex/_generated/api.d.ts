@@ -2388,6 +2388,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillNotificationSubscriptions: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillProjectAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -2639,6 +2651,22 @@ export declare const internal: {
         keys: { auth: string; p256dh: string };
       }>
     >;
+    getSubscribedUserIds: FunctionReference<
+      "query",
+      "internal",
+      { category: string; excludeUserId?: string; scope: string },
+      Array<string>
+    >;
+    getUserPushSubscriptions: FunctionReference<
+      "query",
+      "internal",
+      { userIds: Array<string> },
+      Array<{
+        endpoint: string;
+        expirationTime: number | null;
+        keys: { auth: string; p256dh: string };
+      }>
+    >;
   };
   notificationPreferences: {
     getForUser: FunctionReference<
@@ -2707,10 +2735,10 @@ export declare const internal: {
         category: string;
         recipientIds?: Array<string>;
         resourceId?: string;
+        scope?: string;
         senderId: Id<"users">;
         title: string;
         url: string;
-        workspaceId?: Id<"workspaces">;
       },
       null
     >;

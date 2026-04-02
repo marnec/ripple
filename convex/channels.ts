@@ -29,7 +29,7 @@ export const create = mutation({
     });
 
     if (!isPublic) {
-      await ctx.db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN, workspaceId });
+      await db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN, workspaceId });
     }
 
     await logActivity(ctx, {
@@ -42,7 +42,7 @@ export const create = mutation({
       category: "channelCreated",
       userId,
       userName: getUserDisplayName(user),
-      workspaceId,
+      scope: workspaceId,
       title: `${getUserDisplayName(user)} created a channel`,
       body: name,
       url: `/workspaces/${workspaceId}/channels/${channelId}`,
@@ -136,7 +136,7 @@ export const remove = mutation({
       category: "channelDeleted",
       userId,
       userName: getUserDisplayName(user),
-      workspaceId: channel.workspaceId,
+      scope: channel.workspaceId,
       title: `${getUserDisplayName(user)} deleted a channel`,
       body: channel.name,
       url: `/workspaces/${channel.workspaceId}`,

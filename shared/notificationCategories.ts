@@ -126,6 +126,43 @@ export const NOTIFICATION_GROUPS: NotificationGroup[] = [
   },
 ];
 
+// ── Broadcast scope classification ──────────────────────────────────
+// Only categories that use `scope` (broadcast) delivery need materialized
+// subscription rows. Categories using `recipientIds` (targeted) do NOT —
+// they resolve preferences inline at delivery time for small N.
+
+/** Workspace-scoped broadcast categories (scope = workspaceId). */
+export const BROADCAST_WORKSPACE_CATEGORIES = [
+  "documentCreated",
+  "documentDeleted",
+  "spreadsheetCreated",
+  "spreadsheetDeleted",
+  "diagramCreated",
+  "diagramDeleted",
+  "projectCreated",
+  "projectDeleted",
+  "channelCreated",
+  "channelDeleted",
+] as const;
+
+/** Channel-scoped broadcast categories (scope = channelId). */
+export const BROADCAST_CHANNEL_CATEGORIES = [
+  "chatChannelMessage",
+] as const;
+
+// NOTE: No project-scoped broadcast categories exist — all task categories
+// (taskAssigned, taskStatusChange, etc.) use recipientIds (targeted).
+
+export type ScopeType = "workspace" | "channel";
+
+export function getCategoryScope(cat: NotificationCategory): ScopeType {
+  if ((BROADCAST_CHANNEL_CATEGORIES as readonly string[]).includes(cat)) return "channel";
+  return "workspace";
+}
+
+/** Kept for backwards compatibility — union of all broadcast categories. */
+export const WORKSPACE_SCOPED_CATEGORIES = BROADCAST_WORKSPACE_CATEGORIES;
+
 export const DEFAULT_PREFERENCES: Record<NotificationCategory, boolean> = {
   chatMention: true,
   chatChannelMessage: true,

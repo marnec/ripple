@@ -6,6 +6,8 @@ import { getUserDisplayName } from "@shared/displayName";
 import { channelRoleSchema } from "./schema";
 import { logActivity } from "./auditLog";
 import { requireUser } from "./authHelpers";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { triggers } from "./dbTriggers";
 
 const channelMemberValidator = v.object({
   _id: v.id("channelMembers"),
@@ -105,7 +107,8 @@ export const addToChannel = mutation({
       throw new ConvexError(`User id=${userId} is already a member of channel id=${channelId}`);
     }
 
-    const memberId = await ctx.db.insert("channelMembers", {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const memberId = await db.insert("channelMembers", {
       userId,
       channelId,
       workspaceId: channel.workspaceId,
@@ -181,7 +184,8 @@ export const removeFromChannel = mutation({
       action: "member_removed", oldValue: userId, resourceName: channel.name, scope: channel.workspaceId,
     });
 
-    await ctx.db.delete(channelMember._id);
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(channelMember._id);
     return null;
   },
 });

@@ -10,6 +10,32 @@ import {
   isChatCategory,
 } from "@shared/notificationCategories";
 
+/**
+ * Look up users who have subscribed to a given category+scope via the
+ * materialized notificationSubscriptions table. Returns user IDs.
+ * Used for broadcast notifications (workspace/channel/project scope).
+ */
+export const getSubscribedUserIds = internalQuery({
+  args: {
+    scope: v.string(),
+    category: v.string(),
+    excludeUserId: v.optional(v.string()),
+  },
+  returns: v.array(v.string()),
+  handler: async (ctx, { scope, category, excludeUserId }) => {
+    const subscriptions = await ctx.db
+      .query("notificationSubscriptions")
+      .withIndex("by_scope_category", (q) =>
+        q.eq("scope", scope).eq("category", category),
+      )
+      .collect();
+
+    return subscriptions
+      .filter((s) => s.userId !== excludeUserId)
+      .map((s) => s.userId as string);
+  },
+});
+
 const subscriptionValidator = v.object({
   endpoint: v.string(),
   expirationTime: v.union(v.number(), v.null()),
@@ -95,6 +121,36 @@ export const getFilteredSubscriptions = internalQuery({
     const subscriptions = (
       await Promise.all(
         enabledUserIds.map((uid) =>
+          ctx.db
+            .query("pushSubscriptions")
+            .withIndex("by_user", (q) => q.eq("userId", uid))
+            .collect(),
+        ),
+      )
+    ).flat();
+
+    return subscriptions.map((s) => ({
+      endpoint: s.endpoint,
+      expirationTime: s.expirationTime,
+      keys: s.keys,
+    }));
+  },
+});
+
+/**
+ * Fetch push subscriptions for a list of user IDs without preference
+ * filtering. Used by the broadcast path where preferences are already
+ * resolved via the notificationSubscriptions table.
+ */
+export const getUserPushSubscriptions = internalQuery({
+  args: {
+    userIds: v.array(v.string()),
+  },
+  returns: v.array(subscriptionValidator),
+  handler: async (ctx, { userIds }) => {
+    const subscriptions = (
+      await Promise.all(
+        (userIds as Id<"users">[]).map((uid) =>
           ctx.db
             .query("pushSubscriptions")
             .withIndex("by_user", (q) => q.eq("userId", uid))
