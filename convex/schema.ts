@@ -339,7 +339,6 @@ export default defineSchema({
       v.literal("diagram"),
       v.literal("spreadsheet"),
       v.literal("channel"),
-      v.literal("message"), // TODO: remove after migration cleans up legacy message edges
     ),
     sourceId: v.string(),
     targetType: v.union(
