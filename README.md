@@ -1,29 +1,13 @@
 NEXT STEPS:
-- investigate rework all deletion cascade to soft-deletion with scheduled garbage collection (also investigate n+1 problem and analyze submitted component for cascading delete)
-
 - explore convex component for hirearchical tags for both direct usage (replace existing tag system) and to understand how optimized hireachical system work
-
-- [x] there is still a problem sometimes with the in-call follow action not working
-
-- [x] extend audit-log usage
 
 - [ ] link previews in chat
 
-- [x] fix acknowledged deletion
-
-- [x] restyle workspace home page, remove skeletons, add fade-in, add missing cards, evaluate if resource lists make sense or other informations are better
-
-- [x] add navigation to access settings of various things
-
 - knowledge-graph
-    - [x] add table embedding in tasks
     - [ ] explore pdf reading, annotation and embedding
-    - [x] add a obsidian style backlinks to resources (this might be harder than it seems)
 
 keyboard accessiblity
-    - [x] command palette
     - [ ] focus traps
-    - [x] chat image focus escape with "esc" key too
 
 - [ ] internationalization (i18n and localization)
 
@@ -46,7 +30,6 @@ keyboard accessiblity
 - avatars:
     - [ ] user custom avatars: look at dicebear
     - [ ] facepile not using user avatar (investigate convex cost)
-    - [x] fix workspace avatar being squashed on closed sidebar
 
 - [ ] evaluate switch to pragmatic drag and drop for total control and integration with view-transition-apis
 
