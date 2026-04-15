@@ -1,6 +1,6 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
-import { ChannelRole } from "@shared/enums";
+import { ChannelRole, ChannelType } from "@shared/enums";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@shared/displayName";
@@ -10,25 +10,35 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete } from "./cascadeDelete";
 import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess } from "./authHelpers";
 import { notify } from "./utils/notify";
+import { channelTypeSchema } from "./schema";
+import type { Doc } from "./_generated/dataModel";
+
+/** Normalize a channel doc to guarantee `type` is set, falling back from legacy `isPublic`. */
+function normalizeChannel<T extends Doc<"channels">>(channel: T): T & { type: "open" | "closed" | "dm" } {
+  if (channel.type !== undefined) return channel as T & { type: "open" | "closed" | "dm" };
+  const legacy = channel as Record<string, unknown>;
+  const isPublic = legacy.isPublic as boolean | undefined;
+  return { ...channel, type: isPublic === false ? "closed" as const : "open" as const };
+}
 
 export const create = mutation({
   args: {
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    isPublic: v.boolean()
+    type: channelTypeSchema,
   },
   returns: v.id("channels"),
-  handler: async (ctx, { name, isPublic, workspaceId }) => {
+  handler: async (ctx, { name, type, workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     const channelId = await db.insert("channels", {
       name,
       workspaceId,
-      isPublic,
+      type,
     });
 
-    if (!isPublic) {
+    if (type !== ChannelType.OPEN) {
       await db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN, workspaceId });
     }
 
@@ -59,16 +69,23 @@ export const list = query({
     _creationTime: v.number(),
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    isPublic: v.boolean(),
+    type: channelTypeSchema,
   })),
   handler: async (ctx, { workspaceId }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
 
-    return await ctx.db
+    const channels = await ctx.db
       .query("channels")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .collect();
+    return channels.map(normalizeChannel).map((c) => ({
+      _id: c._id,
+      _creationTime: c._creationTime,
+      name: c.name,
+      workspaceId: c.workspaceId,
+      type: c.type,
+    }));
   },
 });
 
@@ -80,7 +97,7 @@ export const get = query({
       _creationTime: v.number(),
       name: v.string(),
       workspaceId: v.id("workspaces"),
-      isPublic: v.boolean(),
+      type: channelTypeSchema,
     }),
     v.null()
   ),
@@ -89,7 +106,14 @@ export const get = query({
     if (!channel) return null;
     const auth = await checkWorkspaceMember(ctx, channel.workspaceId);
     if (!auth) return null;
-    return channel;
+    const n = normalizeChannel(channel);
+    return {
+      _id: n._id,
+      _creationTime: n._creationTime,
+      name: n.name,
+      workspaceId: n.workspaceId,
+      type: n.type,
+    };
   },
 });
 
@@ -100,6 +124,12 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, name }) => {
+    // Check DM guard before requiring admin role
+    const channelDoc = await ctx.db.get(id);
+    if (channelDoc?.type === "dm") {
+      throw new ConvexError("Cannot rename a DM");
+    }
+
     const { userId, channel } = await requireChannelAccess(ctx, id, { role: ChannelRole.ADMIN });
 
     const updates: { name?: string } = {};
@@ -157,10 +187,10 @@ export const search = query({
   args: {
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
-    isPublic: v.optional(v.boolean()),
+    type: v.optional(channelTypeSchema),
   },
-  returns: v.array(v.object({ _id: v.id("channels"), name: v.string(), isPublic: v.boolean() })),
-  handler: async (ctx, { workspaceId, searchText, isPublic }) => {
+  returns: v.array(v.object({ _id: v.id("channels"), name: v.string(), type: channelTypeSchema })),
+  handler: async (ctx, { workspaceId, searchText, type }) => {
     await requireWorkspaceMember(ctx, workspaceId);
 
     let results;
@@ -169,14 +199,14 @@ export const search = query({
         .query("channels")
         .withSearchIndex("by_name", (q) => {
           const base = q.search("name", searchText).eq("workspaceId", workspaceId);
-          return isPublic !== undefined ? base.eq("isPublic", isPublic) : base;
+          return type !== undefined ? base.eq("type", type) : base;
         })
         .collect();
-    } else if (isPublic !== undefined) {
+    } else if (type !== undefined) {
       results = await ctx.db
         .query("channels")
-        .withIndex("by_isPublicInWorkspace", (q) =>
-          q.eq("isPublic", isPublic).eq("workspaceId", workspaceId),
+        .withIndex("by_type_workspace", (q) =>
+          q.eq("type", type).eq("workspaceId", workspaceId),
         )
         .collect();
     } else {
@@ -186,10 +216,10 @@ export const search = query({
         .collect();
     }
 
-    return results.map((c) => ({
+    return results.map(normalizeChannel).map((c) => ({
       _id: c._id,
       name: c.name,
-      isPublic: c.isPublic,
+      type: c.type,
     }));
   },
 });
@@ -199,14 +229,23 @@ const channelValidator = v.object({
   _creationTime: v.number(),
   name: v.string(),
   workspaceId: v.id("workspaces"),
-  isPublic: v.boolean(),
+  type: channelTypeSchema,
 });
 
 export const getInternal = internalQuery({
   args: { id: v.id("channels") },
   returns: v.union(channelValidator, v.null()),
   handler: async (ctx, { id }) => {
-    return await ctx.db.get(id);
+    const channel = await ctx.db.get(id);
+    if (!channel) return null;
+    const n = normalizeChannel(channel);
+    return {
+      _id: n._id,
+      _creationTime: n._creationTime,
+      name: n.name,
+      workspaceId: n.workspaceId,
+      type: n.type,
+    };
   },
 });
 
@@ -216,24 +255,235 @@ export const listByUserMembership = query({
   handler: async (ctx, { workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    // Get user's private channel memberships in this workspace
+    // Get user's closed/dm channel memberships in this workspace
     const userMemberships = await ctx.db
       .query("channelMembers")
       .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
       .collect();
 
-    // Use getAll helper to batch fetch private channels (cleaner than N+1 pattern)
-    const privateChannelIds = userMemberships.map((m) => m.channelId);
-    const privateChannels = (await getAll(ctx.db, privateChannelIds))
+    // Use getAll helper to batch fetch closed/dm channels
+    const memberChannelIds = userMemberships.map((m) => m.channelId);
+    const memberChannels = (await getAll(ctx.db, memberChannelIds))
       .filter((c): c is NonNullable<typeof c> => c !== null);
 
-    // Get public channels in the workspace
-    const publicChannels = await ctx.db
+    // Get open channels in the workspace
+    const openChannels = await ctx.db
       .query("channels")
-      .withIndex("by_isPublicInWorkspace", (q) => q.eq("isPublic", true).eq("workspaceId", workspaceId))
+      .withIndex("by_type_workspace", (q) => q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId))
       .collect();
 
-    return [...privateChannels, ...publicChannels].sort((a, b) => b._creationTime - a._creationTime);
+    return [...memberChannels, ...openChannels]
+      .map(normalizeChannel)
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .map((c) => ({
+        _id: c._id,
+        _creationTime: c._creationTime,
+        name: c.name,
+        workspaceId: c.workspaceId,
+        type: c.type,
+      }));
+  },
+});
+
+export const createDm = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    otherUserId: v.id("users"),
+  },
+  returns: v.id("channels"),
+  handler: async (ctx, { workspaceId, otherUserId }) => {
+    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+
+    if (userId === otherUserId) {
+      throw new ConvexError("Cannot create a DM with yourself");
+    }
+
+    // Verify other user is in the workspace
+    const otherMembership = await ctx.db
+      .query("workspaceMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", otherUserId),
+      )
+      .first();
+    if (!otherMembership) {
+      throw new ConvexError("User is not a member of this workspace");
+    }
+
+    // Deduplicate: find existing DM between these two users
+    const myChannelMemberships = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", userId),
+      )
+      .collect();
+
+    for (const cm of myChannelMemberships) {
+      const channel = await ctx.db.get(cm.channelId);
+      if (channel?.type !== "dm") continue;
+
+      const otherCm = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", cm.channelId).eq("userId", otherUserId),
+        )
+        .first();
+
+      if (otherCm) return cm.channelId;
+    }
+
+    // No existing DM — create one
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const channelId = await db.insert("channels", {
+      name: "",
+      workspaceId,
+      type: ChannelType.DM,
+    });
+
+    await db.insert("channelMembers", {
+      channelId,
+      userId,
+      role: ChannelRole.MEMBER,
+      workspaceId,
+    });
+
+    await db.insert("channelMembers", {
+      channelId,
+      userId: otherUserId,
+      role: ChannelRole.MEMBER,
+      workspaceId,
+    });
+
+    return channelId;
+  },
+});
+
+export const getAccessInfo = query({
+  args: { channelId: v.id("channels") },
+  returns: v.union(
+    v.object({
+      isMember: v.literal(true),
+    }),
+    v.object({
+      isMember: v.literal(false),
+      name: v.string(),
+      type: channelTypeSchema,
+      memberCount: v.number(),
+      description: v.optional(v.string()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { channelId }) => {
+    const rawChannel = await ctx.db.get(channelId);
+    if (!rawChannel) return null;
+    const channel = normalizeChannel(rawChannel);
+
+    const auth = await checkWorkspaceMember(ctx, channel.workspaceId);
+    if (!auth) return null;
+
+    // Open channels: everyone is a member
+    if (channel.type === "open") return { isMember: true as const };
+
+    // Check explicit channel membership
+    const channelMembership = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_user", (q) =>
+        q.eq("channelId", channelId).eq("userId", auth.userId),
+      )
+      .first();
+
+    if (channelMembership) return { isMember: true as const };
+
+    // Non-member: return limited info
+    const memberCount = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+      .collect()
+      .then((m) => m.length);
+
+    return {
+      isMember: false as const,
+      name: channel.name,
+      type: channel.type,
+      memberCount,
+    };
+  },
+});
+
+export const requestJoin = mutation({
+  args: { channelId: v.id("channels") },
+  returns: v.null(),
+  handler: async (ctx, { channelId }) => {
+    const channel = await ctx.db.get(channelId);
+    if (!channel) throw new ConvexError("Channel not found");
+    if (channel.type === "open") throw new ConvexError("Channel is open — just join");
+    if (channel.type === "dm") throw new ConvexError("Cannot request to join a DM");
+
+    const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
+
+    // Check not already a member
+    const existing = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_user", (q) =>
+        q.eq("channelId", channelId).eq("userId", userId),
+      )
+      .first();
+    if (existing) throw new ConvexError("Already a member of this channel");
+
+    // Notify channel admins
+    const user = await ctx.db.get(userId);
+    const channelAdmins = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_role", (q) =>
+        q.eq("channelId", channelId).eq("role", "admin"),
+      )
+      .collect();
+
+    await notify(ctx, {
+      category: "channelCreated",
+      userId,
+      userName: getUserDisplayName(user),
+      recipientIds: channelAdmins.map((a) => a.userId),
+      title: `${getUserDisplayName(user)} wants to join #${channel.name}`,
+      body: "Go to channel settings to add them.",
+      url: `/workspaces/${channel.workspaceId}/channels/${channelId}/settings`,
+    });
+
+    return null;
+  },
+});
+
+export const findDm = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    otherUserId: v.id("users"),
+  },
+  returns: v.union(v.id("channels"), v.null()),
+  handler: async (ctx, { workspaceId, otherUserId }) => {
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return null;
+
+    const myChannelMemberships = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_workspace_user", (q) =>
+        q.eq("workspaceId", workspaceId).eq("userId", auth.userId),
+      )
+      .collect();
+
+    for (const cm of myChannelMemberships) {
+      const channel = await ctx.db.get(cm.channelId);
+      if (channel?.type !== "dm") continue;
+
+      const otherCm = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", cm.channelId).eq("userId", otherUserId),
+        )
+        .first();
+
+      if (otherCm) return cm.channelId;
+    }
+
+    return null;
   },
 });
 

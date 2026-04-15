@@ -23,7 +23,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 
 import type { BrowsableResourceType as ResourceType, FavoritableResourceType as FavoritableType } from "@shared/types/resources";
 
-type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; isPublic?: boolean };
+type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; type?: string };
 
 const SEARCH_APIS = {
   document: api.documents.search,
@@ -33,9 +33,9 @@ const SEARCH_APIS = {
   channel: api.channels.search,
 } as const;
 
-function channelVisibilityToBoolean(filter: ChannelVisibilityFilter): boolean | undefined {
-  if (filter === "public") return true;
-  if (filter === "private") return false;
+function channelVisibilityToType(filter: ChannelVisibilityFilter): "open" | "closed" | undefined {
+  if (filter === "public") return "open";
+  if (filter === "private") return "closed";
   return undefined;
 }
 
@@ -58,11 +58,12 @@ function compactDate(timestamp: number): string {
   return isThisYear(date) ? format(date, "MMM d") : format(date, "MMM d, yyyy");
 }
 
-function ChannelVisibilityBadge({ isPublic }: { isPublic: boolean }) {
+function ChannelTypeBadge({ type }: { type: string }) {
+  const isOpen = type === "open";
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-      {isPublic ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
-      <span className="hidden sm:inline">{isPublic ? "Public" : "Private"}</span>
+      {isOpen ? <Globe className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+      <span className="hidden sm:inline">{isOpen ? "Open" : type === "dm" ? "DM" : "Closed"}</span>
     </span>
   );
 }
@@ -86,11 +87,11 @@ function useResourceSearch(
   searchText?: string,
   tags?: string[],
   isFavorite?: boolean,
-  channelIsPublic?: boolean,
+  channelType?: "open" | "closed",
 ) {
   const channelResults = useQuery(
     SEARCH_APIS.channel,
-    resourceType === "channel" ? { workspaceId, searchText, isPublic: channelIsPublic } : "skip",
+    resourceType === "channel" ? { workspaceId, searchText, type: channelType } : "skip",
   );
 
   const resourceResults = useQuery(
@@ -213,8 +214,8 @@ function ResourceMobileRow({
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="flex-1 min-w-0 truncate font-medium">{resource.name}</span>
-        {isChannel && resource.isPublic !== undefined && (
-          <ChannelVisibilityBadge isPublic={resource.isPublic} />
+        {isChannel && resource.type !== undefined && (
+          <ChannelTypeBadge type={resource.type} />
         )}
         {canFavorite && (
           <Star
@@ -256,7 +257,7 @@ export function SearchResults({
     searchText,
     tags,
     isFavorite,
-    channelVisibilityToBoolean(channelVisibility ?? "all"),
+    channelVisibilityToType(channelVisibility ?? "all"),
   );
   const rendered = useAnimatedQuery(results);
   const isMobile = useIsMobile();
@@ -348,8 +349,8 @@ export function SearchResults({
             <CardTitle className="truncate text-base">
               {resource.name}
             </CardTitle>
-            {resourceType === "channel" && resource.isPublic !== undefined && (
-              <ChannelVisibilityBadge isPublic={resource.isPublic} />
+            {resourceType === "channel" && resource.type !== undefined && (
+              <ChannelTypeBadge type={resource.type} />
             )}
           </CardHeader>
           <CardContent className="pointer-events-none flex flex-1 flex-col justify-between pt-0">

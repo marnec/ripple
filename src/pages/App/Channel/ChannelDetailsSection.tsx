@@ -7,18 +7,20 @@ import { Globe, Lock } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import type { ChannelType } from "@shared/enums";
+import type { Values } from "@shared/types/object";
 
 interface ChannelDetailsSectionProps {
   channelId: Id<"channels">;
   channelName: string;
-  isPublic: boolean;
+  channelType: Values<typeof ChannelType>;
   isAdmin: boolean;
 }
 
 export function ChannelDetailsSection({
   channelId,
   channelName: serverName,
-  isPublic,
+  channelType,
   isAdmin,
 }: ChannelDetailsSectionProps) {
   const updateChannel = useMutation(api.channels.update);
@@ -58,17 +60,22 @@ export function ChannelDetailsSection({
         </div>
 
         <div>
-          <Label>Visibility</Label>
+          <Label>Type</Label>
           <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-            {isPublic ? (
+            {channelType === "open" ? (
               <>
                 <Globe className="w-4 h-4" />
-                <span>Public — visible to all workspace members</span>
+                <span>Open — any workspace member can join</span>
+              </>
+            ) : channelType === "dm" ? (
+              <>
+                <Lock className="w-4 h-4" />
+                <span>Direct message</span>
               </>
             ) : (
               <>
                 <Lock className="w-4 h-4" />
-                <span>Private — only visible to channel members</span>
+                <span>Closed — only invited members can participate</span>
               </>
             )}
           </div>

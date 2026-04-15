@@ -1,11 +1,15 @@
 import { authTables } from "@convex-dev/auth/server";
 import { InviteStatus } from "@shared/enums/inviteStatus";
-import { ChannelRole, WorkspaceRole } from "@shared/enums/roles";
+import { ChannelRole, ChannelType, WorkspaceRole } from "@shared/enums/roles";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export const channelRoleSchema = v.union(
   ...Object.values(ChannelRole).map((role) => v.literal(role)),
+);
+
+export const channelTypeSchema = v.union(
+  ...Object.values(ChannelType).map((type) => v.literal(type)),
 );
 
 // The schema is normally optional, but Convex Auth
@@ -66,11 +70,12 @@ export default defineSchema({
   channels: defineTable({
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    isPublic: v.boolean(),
+    type: v.optional(channelTypeSchema),
+    isPublic: v.optional(v.boolean()), // legacy field — migrate via migrations:migrateChannelIsPublicToType, then remove
   })
   .index("by_workspace", ["workspaceId"])
-  .index("by_isPublicInWorkspace", ["isPublic", "workspaceId"])
-  .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId", "isPublic"] }),
+  .index("by_type_workspace", ["type", "workspaceId"])
+  .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId", "type"] }),
 
 
   channelMembers: defineTable({

@@ -70,8 +70,11 @@ export const addToChannel = mutation({
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError(`Channel ${channelId} does not exist`);
 
-    // Caller must be channel admin (private) or workspace admin (public)
-    if (!channel.isPublic) {
+    // Caller must be channel admin (closed/dm) or workspace member (open)
+    if (channel.type !== "open") {
+      if (channel.type === "dm") {
+        throw new ConvexError("Cannot add members to a DM");
+      }
       const callerMembership = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", callerId))
@@ -133,10 +136,13 @@ export const removeFromChannel = mutation({
     const channel = await ctx.db.get(channelId);
     if (!channel) throw new ConvexError("Channel not found");
 
-    // Allow self-removal, otherwise require channel admin (private) or workspace admin (public)
+    // Allow self-removal, otherwise require channel admin (closed) or workspace admin (open)
     const isSelfRemoval = callerId === userId;
     if (!isSelfRemoval) {
-      if (!channel.isPublic) {
+      if (channel.type === "dm") {
+        throw new ConvexError("Cannot remove members from a DM");
+      }
+      if (channel.type !== "open") {
         const callerMembership = await ctx.db
           .query("channelMembers")
           .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", callerId))
@@ -204,8 +210,11 @@ export const changeMemberRole = mutation({
     const channel = await ctx.db.get(channelMember.channelId);
     if (!channel) throw new ConvexError("Channel not found");
 
-    // Caller must be channel admin (private) or workspace admin (public)
-    if (!channel.isPublic) {
+    // Caller must be channel admin (closed) or workspace admin (open). DMs have no role changes.
+    if (channel.type === "dm") {
+      throw new ConvexError("Cannot change roles in a DM");
+    }
+    if (channel.type !== "open") {
       const callerMembership = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel_user", (q) => q.eq("channelId", channel._id).eq("userId", callerId))

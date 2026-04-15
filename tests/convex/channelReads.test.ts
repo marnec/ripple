@@ -15,7 +15,7 @@ async function setupChannelWithMembership(
     const channelId = await ctx.db.insert("channels", {
       name: "test-channel",
       workspaceId: opts.workspaceId,
-      isPublic: false,
+      type: "closed" as const,
     });
     await ctx.db.insert("channelMembers", {
       channelId,

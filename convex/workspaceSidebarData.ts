@@ -2,6 +2,8 @@ import { getAll } from "convex-helpers/server/relationships";
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireWorkspaceMember } from "./authHelpers";
+import { channelTypeSchema } from "./schema";
+import { getUserDisplayName } from "@shared/displayName";
 
 export const get = query({
   args: { workspaceId: v.id("workspaces") },
@@ -45,7 +47,7 @@ export const get = query({
         _creationTime: v.number(),
         name: v.string(),
         workspaceId: v.id("workspaces"),
-        isPublic: v.boolean(),
+        type: channelTypeSchema,
       }),
     ),
   }),
@@ -79,15 +81,15 @@ export const get = query({
           .collect(),
         ctx.db
           .query("channels")
-          .withIndex("by_isPublicInWorkspace", (q) => q.eq("isPublic", true).eq("workspaceId", workspaceId))
+          .withIndex("by_type_workspace", (q) => q.eq("type", "open").eq("workspaceId", workspaceId))
           .collect(),
       ]);
 
-    // Resolve private channels from memberships + merge with public channels
-    const privateChannelIds = userChannelMemberships.map((m) => m.channelId);
-    const privateChannels = (await getAll(ctx.db, privateChannelIds))
+    // Resolve closed/dm channels from memberships + merge with open channels
+    const memberChannelIds = userChannelMemberships.map((m) => m.channelId);
+    const memberChannels = (await getAll(ctx.db, memberChannelIds))
       .filter((c): c is NonNullable<typeof c> => c !== null);
-    const allChannels = [...privateChannels, ...publicChannels]
+    const allChannels = [...memberChannels, ...publicChannels]
       .sort((a, b) => b._creationTime - a._creationTime);
 
     return {
@@ -116,12 +118,30 @@ export const get = query({
         name: s.name,
         tags: s.tags,
       })),
-      channels: allChannels.map((c) => ({
-        _id: c._id,
-        _creationTime: c._creationTime,
-        name: c.name,
-        workspaceId: c.workspaceId,
-        isPublic: c.isPublic,
+      channels: await Promise.all(allChannels.map(async (raw) => {
+        const legacy = raw as Record<string, unknown>;
+        const type = raw.type ?? (legacy.isPublic === false ? "closed" as const : "open" as const);
+        const c = { ...raw, type };
+        let name = c.name;
+        if (c.type === "dm" && !name) {
+          // Resolve the other participant's name for DMs
+          const dmMembers = await ctx.db
+            .query("channelMembers")
+            .withIndex("by_channel", (q) => q.eq("channelId", c._id))
+            .collect();
+          const otherMember = dmMembers.find((m) => m.userId !== userId);
+          if (otherMember) {
+            const otherUser = await ctx.db.get(otherMember.userId);
+            name = otherUser ? getUserDisplayName(otherUser) : "Unknown";
+          }
+        }
+        return {
+          _id: c._id,
+          _creationTime: c._creationTime,
+          name,
+          workspaceId: c.workspaceId,
+          type: c.type,
+        };
       })),
     };
   },

@@ -132,7 +132,7 @@ describe("notificationSubscriptions", () => {
         return await ctx.db.insert("channels", {
           name: "general",
           workspaceId,
-          isPublic: true,
+          type: "open" as const,
         });
       });
 
@@ -261,7 +261,7 @@ describe("notificationSubscriptions", () => {
           name: "Proj", color: "bg-blue-500", workspaceId: wsId, creatorId: userId,
         });
         const chId = await ctx.db.insert("channels", {
-          name: "general", workspaceId: wsId, isPublic: true,
+          name: "general", workspaceId: wsId, type: "open" as const,
         });
         return { workspaceId: wsId, projectId: projId, publicChannelId: chId };
       });
@@ -322,7 +322,7 @@ describe("notificationSubscriptions", () => {
           name: "Test WS", ownerId: userId,
         });
         const chId = await ctx.db.insert("channels", {
-          name: "general", workspaceId: wsId, isPublic: true,
+          name: "general", workspaceId: wsId, type: "open" as const,
         });
         return { workspaceId: wsId, channelId: chId };
       });
@@ -414,7 +414,7 @@ describe("notificationSubscriptions", () => {
       const channelId = await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         return await db.insert("channels", {
-          name: "general", workspaceId, isPublic: true,
+          name: "general", workspaceId, type: "open" as const,
         });
       });
 
@@ -447,7 +447,7 @@ describe("notificationSubscriptions", () => {
       // Toggle channel to private (trigger schedules async cleanup)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
-        await db.patch(channelId, { isPublic: false });
+        await db.patch(channelId, { type: "closed" as const });
       });
 
       // After toggle: only user1 (channel member) should have subscription
@@ -477,7 +477,7 @@ describe("notificationSubscriptions", () => {
       const channelId = await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         return await db.insert("channels", {
-          name: "secret", workspaceId, isPublic: false,
+          name: "secret", workspaceId, type: "closed" as const,
         });
       });
 
@@ -510,7 +510,7 @@ describe("notificationSubscriptions", () => {
       // Toggle channel to public (schedules async subscription creation)
       await t.run(async (ctx) => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
-        await db.patch(channelId, { isPublic: true });
+        await db.patch(channelId, { type: "open" as const });
       });
 
       // Both workspace members should now have subscriptions
@@ -539,7 +539,7 @@ describe("notificationSubscriptions", () => {
         return await ctx.db.insert("channels", {
           name: "test-channel",
           workspaceId,
-          isPublic: true,
+          type: "open" as const,
         });
       });
 

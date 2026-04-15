@@ -95,12 +95,12 @@ export async function onWorkspaceMemberInsert(
     .filter((cat) => isEnabled(globalPrefs, cat, DEFAULT_PREFERENCES))
     .map((cat) => insertSubscription(ctx, workspaceId, userId, cat, workspaceId));
 
-  // Channel-scoped broadcast categories (public channels only — private
+  // Channel-scoped broadcast categories (open channels only — closed/dm
   // channels are handled by the channelMembers INSERT trigger)
   const publicChannels = await ctx.db
     .query("channels")
-    .withIndex("by_isPublicInWorkspace", (q) =>
-      q.eq("isPublic", true).eq("workspaceId", workspaceId),
+    .withIndex("by_type_workspace", (q) =>
+      q.eq("type", "open").eq("workspaceId", workspaceId),
     )
     .collect();
 
@@ -237,14 +237,14 @@ export async function onGlobalPreferencesChange(
         }
       } else if (scope === "channel") {
         // Discover channels from actual membership data, not existing subs.
-        // Public channels: all workspace members are subscribed.
+        // Open channels: all workspace members are subscribed.
         const publicChannels = await ctx.db
           .query("channels")
-          .withIndex("by_isPublicInWorkspace", (q) =>
-            q.eq("isPublic", true).eq("workspaceId", wsId),
+          .withIndex("by_type_workspace", (q) =>
+            q.eq("type", "open").eq("workspaceId", wsId),
           )
           .collect();
-        // Private channels: only explicit memberships.
+        // Closed/DM channels: only explicit memberships.
         const privateMemberships = await ctx.db
           .query("channelMembers")
           .withIndex("by_workspace_user", (q) =>
@@ -283,7 +283,7 @@ export async function onGlobalPreferencesChange(
 // ── Channel Visibility Toggle ────────────────────────────────────────
 
 /**
- * When a channel changes isPublic: true → false, remove subscriptions
+ * When a channel changes type: open → closed, remove subscriptions
  * for users who are NOT explicit channel members.
  */
 export async function onChannelMadePrivate(
@@ -311,7 +311,7 @@ export async function onChannelMadePrivate(
 }
 
 /**
- * When a channel changes isPublic: false → true, create subscriptions
+ * When a channel changes type: closed → open, create subscriptions
  * for all workspace members who don't already have them.
  */
 export async function onChannelMadePublic(

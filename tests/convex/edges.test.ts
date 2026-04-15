@@ -684,7 +684,7 @@ describe("channel mention edges (via messages trigger)", () => {
       return await db.insert("channels", {
         name: opts.name ?? "test-channel",
         workspaceId: opts.workspaceId,
-        isPublic: true,
+        type: "open" as const,
       });
     });
   }

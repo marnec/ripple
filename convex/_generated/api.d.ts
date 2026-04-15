@@ -158,8 +158,24 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { isPublic: boolean; name: string; workspaceId: Id<"workspaces"> },
+      {
+        name: string;
+        type: "open" | "closed" | "dm";
+        workspaceId: Id<"workspaces">;
+      },
       Id<"channels">
+    >;
+    createDm: FunctionReference<
+      "mutation",
+      "public",
+      { otherUserId: Id<"users">; workspaceId: Id<"workspaces"> },
+      Id<"channels">
+    >;
+    findDm: FunctionReference<
+      "query",
+      "public",
+      { otherUserId: Id<"users">; workspaceId: Id<"workspaces"> },
+      Id<"channels"> | null
     >;
     get: FunctionReference<
       "query",
@@ -168,10 +184,24 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"channels">;
-        isPublic: boolean;
         name: string;
+        type: "open" | "closed" | "dm";
         workspaceId: Id<"workspaces">;
       } | null
+    >;
+    getAccessInfo: FunctionReference<
+      "query",
+      "public",
+      { channelId: Id<"channels"> },
+      | { isMember: true }
+      | {
+          description?: string;
+          isMember: false;
+          memberCount: number;
+          name: string;
+          type: "open" | "closed" | "dm";
+        }
+      | null
     >;
     list: FunctionReference<
       "query",
@@ -180,8 +210,8 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"channels">;
-        isPublic: boolean;
         name: string;
+        type: "open" | "closed" | "dm";
         workspaceId: Id<"workspaces">;
       }>
     >;
@@ -192,8 +222,8 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"channels">;
-        isPublic: boolean;
         name: string;
+        type: "open" | "closed" | "dm";
         workspaceId: Id<"workspaces">;
       }>
     >;
@@ -203,15 +233,25 @@ export declare const api: {
       { id: Id<"channels"> },
       null
     >;
+    requestJoin: FunctionReference<
+      "mutation",
+      "public",
+      { channelId: Id<"channels"> },
+      null
+    >;
     search: FunctionReference<
       "query",
       "public",
       {
-        isPublic?: boolean;
         searchText?: string;
+        type?: "open" | "closed" | "dm";
         workspaceId: Id<"workspaces">;
       },
-      Array<{ _id: Id<"channels">; isPublic: boolean; name: string }>
+      Array<{
+        _id: Id<"channels">;
+        name: string;
+        type: "open" | "closed" | "dm";
+      }>
     >;
     update: FunctionReference<
       "mutation",
@@ -1905,6 +1945,16 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
       }>
     >;
+    changeRole: FunctionReference<
+      "mutation",
+      "public",
+      {
+        role: "admin" | "member";
+        targetUserId: Id<"users">;
+        workspaceId: Id<"workspaces">;
+      },
+      null
+    >;
     membersByWorkspace: FunctionReference<
       "query",
       "public",
@@ -1918,6 +1968,26 @@ export declare const api: {
         isAnonymous?: boolean;
         name?: string;
       }>
+    >;
+    membersWithRoles: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      Array<{
+        email?: string;
+        image?: string;
+        joinedAt: number;
+        membershipId: Id<"workspaceMembers">;
+        name: string;
+        role: "admin" | "member";
+        userId: Id<"users">;
+      }>
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { targetUserId: Id<"users">; workspaceId: Id<"workspaces"> },
+      null
     >;
   };
   workspaces: {
@@ -1980,8 +2050,8 @@ export declare const api: {
         channels: Array<{
           _creationTime: number;
           _id: Id<"channels">;
-          isPublic: boolean;
           name: string;
+          type: "open" | "closed" | "dm";
           workspaceId: Id<"workspaces">;
         }>;
         diagrams: Array<{
@@ -2177,8 +2247,8 @@ export declare const internal: {
       {
         _creationTime: number;
         _id: Id<"channels">;
-        isPublic: boolean;
         name: string;
+        type: "open" | "closed" | "dm";
         workspaceId: Id<"workspaces">;
       } | null
     >;
@@ -2507,6 +2577,18 @@ export declare const internal: {
         scanned: number;
       }
     >;
+    migrateChannelIsPublicToType: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     migrateTaskStatusesToProject: FunctionReference<
       "mutation",
       "internal",
@@ -2532,6 +2614,18 @@ export declare const internal: {
       any
     >;
     runAll: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    runChannelTypeMigration: FunctionReference<
       "mutation",
       "internal",
       {

@@ -263,23 +263,30 @@ export type DataModel = {
   };
   channels: {
     document: {
-      isPublic: boolean;
+      isPublic?: boolean;
       name: string;
+      type?: "open" | "closed" | "dm";
       workspaceId: Id<"workspaces">;
       _id: Id<"channels">;
       _creationTime: number;
     };
-    fieldPaths: "_creationTime" | "_id" | "isPublic" | "name" | "workspaceId";
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "isPublic"
+      | "name"
+      | "type"
+      | "workspaceId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_isPublicInWorkspace: ["isPublic", "workspaceId", "_creationTime"];
+      by_type_workspace: ["type", "workspaceId", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {
       by_name: {
         searchField: "name";
-        filterFields: "isPublic" | "workspaceId";
+        filterFields: "type" | "workspaceId";
       };
     };
     vectorIndexes: {};

@@ -20,7 +20,7 @@ import type { Doc, Id } from "../../../../convex/_generated/dataModel";
 
 interface ChannelMembersSectionProps {
   channelId: Id<"channels">;
-  isPublic: boolean;
+  channelType: "open" | "closed" | "dm";
   isAdmin: boolean;
   currentUserId: Id<"users">;
   channelMembers: ChannelMember[];
@@ -29,7 +29,7 @@ interface ChannelMembersSectionProps {
 
 export function ChannelMembersSection({
   channelId,
-  isPublic,
+  channelType,
   isAdmin,
   currentUserId,
   channelMembers,
@@ -70,16 +70,16 @@ export function ChannelMembersSection({
     <section className="mb-8">
       <h2 className="text-lg font-semibold mb-4">Members</h2>
 
-      {!isPublic && isAdmin && availableMembers.length > 0 && (
+      {channelType === "closed" && isAdmin && availableMembers.length > 0 && (
         <AddMemberSelect
           availableMembers={availableMembers}
           onAdd={handleAdd}
         />
       )}
 
-      {isPublic && (
+      {channelType === "open" && (
         <p className="text-sm text-muted-foreground mb-4">
-          All workspace members have access to this public channel.
+          All workspace members have access to this open channel.
         </p>
       )}
 
@@ -89,13 +89,13 @@ export function ChannelMembersSection({
             key={member._id}
             member={member}
             isAdmin={isAdmin}
-            isPrivate={!isPublic}
+            isClosed={channelType === "closed"}
             currentUserId={currentUserId}
             onRoleChange={handleRoleChange}
             onRemove={handleRemove}
           />
         ))}
-        {channelMembers.length === 0 && !isPublic && (
+        {channelMembers.length === 0 && channelType !== "open" && (
           <p className="text-sm text-muted-foreground py-3">
             No members yet. Add members above to get started.
           </p>
@@ -147,14 +147,14 @@ function AddMemberSelect({
 function MemberRow({
   member,
   isAdmin,
-  isPrivate,
+  isClosed,
   currentUserId,
   onRoleChange,
   onRemove,
 }: {
   member: ChannelMember;
   isAdmin: boolean;
-  isPrivate: boolean;
+  isClosed: boolean;
   currentUserId: Id<"users">;
   onRoleChange: (id: Id<"channelMembers">, role: Values<typeof ChannelRole>) => void;
   onRemove: (userId: Id<"users">) => void;
@@ -178,7 +178,7 @@ function MemberRow({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {isAdmin && isPrivate && (
+        {isAdmin && isClosed && (
           <Select
             value={member.role}
             onValueChange={(role) => {
@@ -198,7 +198,7 @@ function MemberRow({
           </Select>
         )}
 
-        {isAdmin && isPrivate && !isSelf && (
+        {isAdmin && isClosed && !isSelf && (
           <Button
             variant="ghost"
             size="sm"

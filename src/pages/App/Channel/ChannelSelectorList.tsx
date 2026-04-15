@@ -25,7 +25,7 @@ export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
-  channels?: { _id: string; _creationTime: number; name: string; workspaceId: string; isPublic: boolean }[];
+  channels?: { _id: string; _creationTime: number; name: string; workspaceId: string; type: string }[];
   isOpen: boolean;
   onToggle: () => void;
 }

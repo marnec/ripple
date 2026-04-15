@@ -191,11 +191,35 @@ export const stripChannelRoleCount = migrations.define({
       await ctx.db.replace(channel._id, {
         name: channel.name,
         workspaceId: channel.workspaceId,
-        isPublic: channel.isPublic,
+        type: channel.type,
       });
     }
   },
 });
+
+/**
+ * Migrate channels from `isPublic: boolean` to `type: "open" | "closed" | "dm"`.
+ * isPublic: true → type: "open"
+ * isPublic: false → type: "closed"
+ */
+export const migrateChannelIsPublicToType = migrations.define({
+  table: "channels",
+  migrateOne: async (ctx, channel) => {
+    const legacy = channel as Record<string, unknown>;
+    if (channel.type !== undefined) return; // already migrated
+    const isPublic = legacy.isPublic as boolean | undefined;
+    const type = isPublic === false ? "closed" : "open";
+    await ctx.db.replace(channel._id, {
+      name: channel.name,
+      workspaceId: channel.workspaceId,
+      type,
+    });
+  },
+});
+
+export const runChannelTypeMigration = migrations.runner(
+  internal.migrations.migrateChannelIsPublicToType,
+);
 
 /**
  * Rename audit log action prefix from "task." to "tasks." for consistency
@@ -641,8 +665,8 @@ export const backfillNotificationSubscriptions = migrations.define({
     // Channel-scoped broadcast categories
     const publicChannels = await ctx.db
       .query("channels")
-      .withIndex("by_isPublicInWorkspace", (q) =>
-        q.eq("isPublic", true).eq("workspaceId", workspaceId),
+      .withIndex("by_type_workspace", (q) =>
+        q.eq("type", "open").eq("workspaceId", workspaceId),
       )
       .collect();
 

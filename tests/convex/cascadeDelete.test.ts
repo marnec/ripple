@@ -204,7 +204,7 @@ describe("cascade delete: channels.remove", () => {
     const channelId = await asUser.mutation(api.channels.create, {
       name: "cascade-channel",
       workspaceId,
-      isPublic: false,
+      type: "closed" as const,
     });
 
     // Send a message to the channel

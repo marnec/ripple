@@ -23,6 +23,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
 import { ChannelSelectorList } from "./Channel/ChannelSelectorList";
+import { DmSelectorList } from "./Channel/DmSelectorList";
 import { DiagramSelectorList } from "./Diagram/DiagramSelectorList";
 import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { ProjectSelectorList } from "./Project/ProjectSelectorList";
@@ -104,6 +105,7 @@ export function AppSidebar() {
   const isMyTasksActive = location.pathname.includes("/my-tasks");
 
   const toggleChannels = () => toggle("channels");
+  const toggleDms = () => toggle("dms");
   const toggleRecents = () => toggle("recents");
 
   return (
@@ -127,10 +129,26 @@ export function AppSidebar() {
                   <ChannelSelectorList
                     channelId={channelId}
                     workspaceId={workspaceId}
-                    channels={sidebarData?.channels}
+                    channels={sidebarData?.channels?.filter((c) => c.type !== "dm")}
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("channels")}
                     onToggle={toggleChannels}
+                  />
+                </SidebarMenu>
+              </SidebarGroup>
+            </m.div>
+
+            {/* Direct Messages */}
+            <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
+              <SidebarGroup className="py-0">
+                <SidebarMenu>
+                  <DmSelectorList
+                    channelId={channelId}
+                    workspaceId={workspaceId}
+                    channels={sidebarData?.channels?.filter((c) => c.type === "dm")}
+                    onChannelSelect={handleChannelSelect}
+                    isOpen={isOpen("dms")}
+                    onToggle={toggleDms}
                   />
                 </SidebarMenu>
               </SidebarGroup>

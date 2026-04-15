@@ -462,7 +462,7 @@ triggers.register("workspaceMembers", async (ctx, change) => {
 });
 
 triggers.register("channels", async (ctx, change) => {
-  if (change.operation === "insert" && change.newDoc.isPublic) {
+  if (change.operation === "insert" && change.newDoc.type === "open") {
     if (isTest) {
       await onPublicChannelInsert(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
     } else {
@@ -472,9 +472,9 @@ triggers.register("channels", async (ctx, change) => {
       });
     }
   } else if (change.operation === "update") {
-    const wasPublic = change.oldDoc.isPublic;
-    const isPublic = change.newDoc.isPublic;
-    if (wasPublic && !isPublic) {
+    const wasOpen = change.oldDoc.type === "open";
+    const isOpen = change.newDoc.type === "open";
+    if (wasOpen && !isOpen) {
       if (isTest) {
         await onChannelMadePrivate(ctx, change.id as Id<"channels">);
       } else {
@@ -482,7 +482,7 @@ triggers.register("channels", async (ctx, change) => {
           channelId: change.id as Id<"channels">,
         });
       }
-    } else if (!wasPublic && isPublic) {
+    } else if (!wasOpen && isOpen) {
       if (isTest) {
         await onChannelMadePublic(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
       } else {

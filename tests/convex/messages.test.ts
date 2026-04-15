@@ -26,7 +26,7 @@ async function setupChannel(
     const channelId = await ctx.db.insert("channels", {
       name,
       workspaceId,
-      isPublic: true,
+      type: "open" as const,
     });
     await ctx.db.insert("channelMembers", {
       channelId,

@@ -53,7 +53,7 @@ export function ChannelSelectorItem({
       >
           <div className="flex items-end shrink-0">
             <Hash size={14} />
-            <Lock className={cn("size-2.5", "-ml-0.5", channel.isPublic ? "invisible" : "")} />
+            <Lock className={cn("size-2.5", "-ml-0.5", channel.type === "open" ? "invisible" : "")} />
           </div>
           <span className={cn("truncate", unreadCount > 0 && "font-semibold")}>{channel.name}</span>
           {unreadCount > 0 && (

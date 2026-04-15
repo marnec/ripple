@@ -18,7 +18,7 @@ async function setupPrivateChannel(
     const channelId = await ctx.db.insert("channels", {
       name,
       workspaceId,
-      isPublic: false,
+      type: "closed" as const,
     });
     await ctx.db.insert("channelMembers", {
       channelId,
@@ -40,7 +40,7 @@ async function setupPublicChannel(
     return ctx.db.insert("channels", {
       name,
       workspaceId,
-      isPublic: true,
+      type: "open" as const,
     });
   });
 }

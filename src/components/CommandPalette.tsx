@@ -1,6 +1,8 @@
+import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { RippleSpinner } from "@/components/RippleSpinner";
@@ -28,10 +30,12 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = {
   diagram: "Diagram",
   spreadsheet: "Spreadsheet",
   project: "Project",
+  user: "Send DM",
 };
 
 export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
+  const createDm = useMutation(api.channels.createDm);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -60,6 +64,7 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
     diagram: "Diagrams",
     spreadsheet: "Spreadsheets",
     project: "Projects",
+    user: "People",
   };
 
   const searchGroups = (() => {
@@ -78,6 +83,20 @@ export function CommandPalette({ workspaceId, open, onOpenChange }: CommandPalet
   })();
 
   const handleSelect = (resourceType: string, resourceId: string) => {
+    if (resourceType === "user") {
+      createDm({ workspaceId, otherUserId: resourceId as Id<"users"> })
+        .then((channelId) => {
+          onOpenChange(false);
+          setSearch("");
+          void navigate(`/workspaces/${workspaceId}/channels/${channelId}`);
+        })
+        .catch(() => {
+          toast.error("Error starting conversation", {
+            description: "Please try again",
+          });
+        });
+      return;
+    }
     onOpenChange(false);
     setSearch("");
     void navigate(getResourceUrl(workspaceId, resourceType, resourceId));

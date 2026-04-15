@@ -58,7 +58,7 @@ function ChannelSettingsContent({
   const currentMembership = channelMembers.find(
     (m) => m.userId === currentUser._id,
   );
-  const isAdmin = channel.isPublic
+  const isAdmin = channel.type === "open"
     ? true
     : currentMembership?.role === ChannelRole.ADMIN;
 
@@ -74,7 +74,7 @@ function ChannelSettingsContent({
       <ChannelDetailsSection
         channelId={channelId}
         channelName={channel.name}
-        isPublic={channel.isPublic}
+        channelType={channel.type}
         isAdmin={isAdmin}
       />
 
@@ -82,7 +82,7 @@ function ChannelSettingsContent({
 
       <ChannelMembersSection
         channelId={channelId}
-        isPublic={channel.isPublic}
+        channelType={channel.type}
         isAdmin={isAdmin}
         currentUserId={currentUser._id}
         channelMembers={channelMembers}

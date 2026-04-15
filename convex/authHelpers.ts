@@ -144,10 +144,10 @@ export async function checkResourceMember<T extends WorkspaceResource>(
 // ─── Channel access ──────────────────────────────────────────────────
 
 /**
- * Channel access with built-in public/private branching.
+ * Channel access with open/closed/dm branching.
  * Pass `opts.role` to require admin:
- *   - Private channel: requires ChannelRole.ADMIN in channelMembers
- *   - Public channel: requires WorkspaceRole.ADMIN in workspaceMembers
+ *   - Closed/DM channel: requires ChannelRole.ADMIN in channelMembers
+ *   - Open channel: requires WorkspaceRole.ADMIN in workspaceMembers
  */
 export async function requireChannelAccess(
   ctx: Ctx,
@@ -169,7 +169,7 @@ export async function requireChannelAccess(
 
   let channelMembership: Doc<"channelMembers"> | null = null;
 
-  if (!channel.isPublic) {
+  if (channel.type !== "open") {
     channelMembership = await ctx.db
       .query("channelMembers")
       .withIndex("by_channel_user", (q) =>

@@ -19,6 +19,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { WorkspaceMembersSection } from "./WorkspaceMembersSection";
 
 export function WorkspaceSettings() {
   const { workspaceId } = useParams();
@@ -90,6 +91,10 @@ export function WorkspaceSettings() {
           )}
         </form>
       </section>
+
+      <Separator className="my-6" />
+
+      <WorkspaceMembersSection workspaceId={id} />
 
       <Separator className="my-6" />
 
