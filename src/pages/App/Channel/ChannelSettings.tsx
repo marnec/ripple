@@ -67,33 +67,41 @@ function ChannelSettingsContent({
     (m) => !channelMemberIds.has(m._id),
   );
 
+  const isDm = channel.type === "dm";
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
-      <h1 className="hidden md:block text-2xl font-bold mb-6">Channel Settings</h1>
+      <h1 className="hidden md:block text-2xl font-bold mb-6">
+        {isDm ? "Conversation Settings" : "Channel Settings"}
+      </h1>
 
-      <ChannelDetailsSection
-        channelId={channelId}
-        channelName={channel.name}
-        channelType={channel.type}
-        isAdmin={isAdmin}
-      />
+      {!isDm && (
+        <>
+          <ChannelDetailsSection
+            channelId={channelId}
+            channelName={channel.name}
+            channelType={channel.type}
+            isAdmin={isAdmin}
+          />
 
-      <Separator className="my-6" />
+          <Separator className="my-6" />
 
-      <ChannelMembersSection
-        channelId={channelId}
-        channelType={channel.type}
-        isAdmin={isAdmin}
-        currentUserId={currentUser._id}
-        channelMembers={channelMembers}
-        availableMembers={availableMembers}
-      />
+          <ChannelMembersSection
+            channelId={channelId}
+            channelType={channel.type}
+            isAdmin={isAdmin}
+            currentUserId={currentUser._id}
+            channelMembers={channelMembers}
+            availableMembers={availableMembers}
+          />
 
-      <Separator className="my-6" />
+          <Separator className="my-6" />
+        </>
+      )}
 
       <ChannelNotificationSettings channelId={channelId} />
 
-      {isAdmin && (
+      {isAdmin && !isDm && (
         <>
           <Separator className="my-6" />
           <ChannelDangerZone
