@@ -1,4 +1,7 @@
 NEXT STEPS:
+
+- denormalize channel member names
+
 - explore convex component for hirearchical tags for both direct usage (replace existing tag system) and to understand how optimized hireachical system work
 
 - [ ] link previews in chat

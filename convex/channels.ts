@@ -359,10 +359,19 @@ export const createDm = mutation({
       }
     }
 
-    // No existing DM — create one
+    // No existing DM — create one. Auto-generate a stable name from both
+    // participants' display names (sorted so both parties see the same label).
+    // This is a snapshot — if a user later changes their display name the DM
+    // label won't auto-update, but the sidebar falls back to dynamic resolution
+    // if `name` is empty (see workspaceSidebarData.ts).
+    const callerName = callerUser ? getUserDisplayName(callerUser) : "Unknown";
+    const otherName = otherUser ? getUserDisplayName(otherUser) : "Unknown";
+    const [first, second] = [callerName, otherName].sort();
+    const dmName = `${first} × ${second}`;
+
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     const channelId = await db.insert("channels", {
-      name: "",
+      name: dmName,
       workspaceId,
       type: ChannelType.DM,
     });

@@ -2926,6 +2926,25 @@ export declare const internal: {
       }>
     >;
   };
+  reconciliation: {
+    deleteOrphans: FunctionReference<
+      "mutation",
+      "internal",
+      { batchSize?: number; childTable: string; parentField: string },
+      { deleted: number; remaining: boolean; scanned: number }
+    >;
+    orphanReport: FunctionReference<
+      "query",
+      "internal",
+      {},
+      Array<{
+        orphanCount: number;
+        relationship: string;
+        scannedCount: number;
+        truncated: boolean;
+      }>
+    >;
+  };
   snapshots: {
     getSnapshot: FunctionReference<
       "query",

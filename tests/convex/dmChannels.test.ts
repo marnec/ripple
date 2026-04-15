@@ -30,7 +30,8 @@ describe("channels.createDm", () => {
 
     const channel = await t.run(async (ctx) => ctx.db.get(channelId));
     expect(channel?.type).toBe("dm");
-    expect(channel?.name).toBe("");
+    // Name is auto-set from both participants' display names, sorted alphabetically
+    expect(channel?.name).toBe("Member × Test User");
   });
 
   it("deduplicates DMs — second call returns the same channel", async () => {
