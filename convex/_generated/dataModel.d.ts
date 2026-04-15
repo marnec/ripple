@@ -209,6 +209,7 @@ export type DataModel = {
   channelMembers: {
     document: {
       channelId: Id<"channels">;
+      email?: string;
       lastReadAt?: number;
       role: "admin" | "member";
       userId: Id<"users">;
@@ -220,6 +221,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "channelId"
+      | "email"
       | "lastReadAt"
       | "role"
       | "userId"

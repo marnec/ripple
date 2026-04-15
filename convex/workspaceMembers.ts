@@ -195,7 +195,46 @@ export const remove = mutation({
         continue;
       }
 
-      if (channel.type !== "open") {
+      // DMs: preserve the channel + memberships when at least one party is
+      // still an active workspace member — this keeps history available and
+      // lets a re-added user rejoin seamlessly. If the *other* party is also
+      // gone from the workspace, the DM is abandoned and we cascade-delete
+      // it entirely (no one will ever read it again).
+      if (channel.type === "dm") {
+        const dmMembers = await ctx.db
+          .query("channelMembers")
+          .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
+          .collect();
+        const others = dmMembers.filter((m) => m.userId !== targetUserId);
+
+        let anyOtherActive = false;
+        for (const other of others) {
+          const otherWs = await ctx.db
+            .query("workspaceMembers")
+            .withIndex("by_workspace_user", (q) =>
+              q.eq("workspaceId", workspaceId).eq("userId", other.userId),
+            )
+            .first();
+          if (otherWs) {
+            anyOtherActive = true;
+            break;
+          }
+        }
+
+        if (anyOtherActive) continue;
+
+        // Abandoned DM — cascade delete entirely
+        await cascadeDelete.deleteWithCascadeBatched(ctx, "channels", cm.channelId, {
+          batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
+          onComplete: internal.cascadeDelete._batchCascadeOnComplete,
+          onCompleteContext: {
+            userId, resourceType: "channels", resourceId: cm.channelId, scope: workspaceId,
+          },
+        });
+        continue;
+      }
+
+      if (channel.type === "closed") {
         // Get all members of this channel
         const allMembers = await ctx.db
           .query("channelMembers")
@@ -229,7 +268,7 @@ export const remove = mutation({
         }
       }
 
-      // Remove the channel membership
+      // Remove the channel membership (open/closed only — DMs handled above)
       await db.delete(cm._id);
     }
 

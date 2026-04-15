@@ -14,12 +14,14 @@ export function ChatContainer() {
     channelId ? { channelId } : "skip",
   );
 
-  // channel === undefined means still loading, null means deleted/no access
-  if (channel === null) {
+  // channel === undefined means still loading, null means deleted.
+  // accessInfo === null means either not found or a DM the user isn't part of
+  // (DMs are fully private — no gate, just treat as not found).
+  if (channel === null || accessInfo === null) {
     return <ResourceDeleted resourceType="channel" />;
   }
 
-  // Non-member of a closed channel
+  // Non-member of a closed channel — show the ask-to-join gate
   if (accessInfo && !accessInfo.isMember) {
     return (
       <ClosedChannelGate

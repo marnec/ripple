@@ -84,6 +84,7 @@ export default defineSchema({
     userId: v.id("users"),
     role: channelRoleSchema,
     lastReadAt: v.optional(v.number()),
+    email: v.optional(v.string()), // denormalized from users.email — used for DM dedup when a user row is replaced
   })
     .index("by_user", ["userId"])
     .index("by_channel", ["channelId"])

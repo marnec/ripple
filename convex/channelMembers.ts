@@ -110,12 +110,15 @@ export const addToChannel = mutation({
       throw new ConvexError(`User id=${userId} is already a member of channel id=${channelId}`);
     }
 
+    const targetUser = await ctx.db.get(userId);
+
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     const memberId = await db.insert("channelMembers", {
       userId,
       channelId,
       workspaceId: channel.workspaceId,
       role: ChannelRole.MEMBER,
+      email: targetUser?.email,
     });
 
     await logActivity(ctx, {

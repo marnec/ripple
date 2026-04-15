@@ -39,7 +39,14 @@ export const create = mutation({
     });
 
     if (type !== ChannelType.OPEN) {
-      await db.insert("channelMembers", { channelId, userId, role: ChannelRole.ADMIN, workspaceId });
+      const creator = await ctx.db.get(userId);
+      await db.insert("channelMembers", {
+        channelId,
+        userId,
+        role: ChannelRole.ADMIN,
+        workspaceId,
+        email: creator?.email,
+      });
     }
 
     await logActivity(ctx, {
@@ -309,7 +316,15 @@ export const createDm = mutation({
       throw new ConvexError("User is not a member of this workspace");
     }
 
-    // Deduplicate: find existing DM between these two users
+    // Deduplicate: find existing DM between these two users. Match by userId
+    // first, then fall back to the denormalized email on channelMembers — this
+    // covers the case where the other user's row was replaced (account
+    // deletion + re-signup with the same email). On email match we patch the
+    // stale row to the current userId so subsequent lookups are fast.
+    const callerUser = await ctx.db.get(userId);
+    const otherUser = await ctx.db.get(otherUserId);
+    const otherEmail = otherUser?.email;
+
     const myChannelMemberships = await ctx.db
       .query("channelMembers")
       .withIndex("by_workspace_user", (q) =>
@@ -321,14 +336,20 @@ export const createDm = mutation({
       const channel = await ctx.db.get(cm.channelId);
       if (channel?.type !== "dm") continue;
 
-      const otherCm = await ctx.db
+      const allMembers = await ctx.db
         .query("channelMembers")
-        .withIndex("by_channel_user", (q) =>
-          q.eq("channelId", cm.channelId).eq("userId", otherUserId),
-        )
-        .first();
+        .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
+        .collect();
 
-      if (otherCm) return cm.channelId;
+      for (const m of allMembers) {
+        if (m.userId === userId) continue;
+        if (m.userId === otherUserId) return cm.channelId;
+        if (otherEmail && m.email === otherEmail) {
+          // Reinstate: point the stale membership at the current userId
+          await ctx.db.patch(m._id, { userId: otherUserId });
+          return cm.channelId;
+        }
+      }
     }
 
     // No existing DM — create one
@@ -344,6 +365,7 @@ export const createDm = mutation({
       userId,
       role: ChannelRole.MEMBER,
       workspaceId,
+      email: callerUser?.email,
     });
 
     await db.insert("channelMembers", {
@@ -351,6 +373,7 @@ export const createDm = mutation({
       userId: otherUserId,
       role: ChannelRole.MEMBER,
       workspaceId,
+      email: otherEmail,
     });
 
     return channelId;
@@ -393,7 +416,11 @@ export const getAccessInfo = query({
 
     if (channelMembership) return { isMember: true as const };
 
-    // Non-member: return limited info
+    // DMs are private — non-members should see them as not found,
+    // not as a "closed channel" with an ask-to-join flow.
+    if (channel.type === "dm") return null;
+
+    // Closed channel non-member: return limited info for the ask-to-join flow
     const memberCount = await ctx.db
       .query("channelMembers")
       .withIndex("by_channel", (q) => q.eq("channelId", channelId))
@@ -462,6 +489,9 @@ export const findDm = query({
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return null;
 
+    const otherUser = await ctx.db.get(otherUserId);
+    const otherEmail = otherUser?.email;
+
     const myChannelMemberships = await ctx.db
       .query("channelMembers")
       .withIndex("by_workspace_user", (q) =>
@@ -473,14 +503,16 @@ export const findDm = query({
       const channel = await ctx.db.get(cm.channelId);
       if (channel?.type !== "dm") continue;
 
-      const otherCm = await ctx.db
+      const allMembers = await ctx.db
         .query("channelMembers")
-        .withIndex("by_channel_user", (q) =>
-          q.eq("channelId", cm.channelId).eq("userId", otherUserId),
-        )
-        .first();
+        .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
+        .collect();
 
-      if (otherCm) return cm.channelId;
+      for (const m of allMembers) {
+        if (m.userId === auth.userId) continue;
+        if (m.userId === otherUserId) return cm.channelId;
+        if (otherEmail && m.email === otherEmail) return cm.channelId;
+      }
     }
 
     return null;
