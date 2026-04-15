@@ -201,6 +201,11 @@ export const stripChannelRoleCount = migrations.define({
  * Migrate channels from `isPublic: boolean` to `type: "open" | "closed" | "dm"`.
  * isPublic: true → type: "open"
  * isPublic: false → type: "closed"
+ *
+ * TODO(channel-type-migration): delete this migration and its runner after it
+ * has been run in prod (`npx convex run migrations:runChannelTypeMigration --prod`).
+ * See also: the optional `isPublic` field in schema.ts, `normalizeChannel` in
+ * channels.ts, and the inline fallback in workspaceSidebarData.ts.
  */
 export const migrateChannelIsPublicToType = migrations.define({
   table: "channels",

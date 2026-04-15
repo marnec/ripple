@@ -70,8 +70,12 @@ export default defineSchema({
   channels: defineTable({
     name: v.string(),
     workspaceId: v.id("workspaces"),
+    // TODO(channel-type-migration): make `type` required and remove `isPublic`
+    // after running `migrations:migrateChannelIsPublicToType` in prod. See also:
+    // `normalizeChannel` in channels.ts, the inline fallback in workspaceSidebarData.ts,
+    // and the migration itself in migrations.ts.
     type: v.optional(channelTypeSchema),
-    isPublic: v.optional(v.boolean()), // legacy field — migrate via migrations:migrateChannelIsPublicToType, then remove
+    isPublic: v.optional(v.boolean()),
   })
   .index("by_workspace", ["workspaceId"])
   .index("by_type_workspace", ["type", "workspaceId"])

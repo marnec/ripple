@@ -199,7 +199,12 @@ export declare const api: {
           isMember: false;
           memberCount: number;
           name: string;
-          type: "open" | "closed" | "dm";
+          type: "closed";
+        }
+      | {
+          isMember: false;
+          participants: Array<{ name: string; userId: Id<"users"> }>;
+          type: "dm";
         }
       | null
     >;

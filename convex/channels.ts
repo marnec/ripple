@@ -13,7 +13,14 @@ import { notify } from "./utils/notify";
 import { channelTypeSchema } from "./schema";
 import type { Doc } from "./_generated/dataModel";
 
-/** Normalize a channel doc to guarantee `type` is set, falling back from legacy `isPublic`. */
+/**
+ * Normalize a channel doc to guarantee `type` is set, falling back from legacy `isPublic`.
+ *
+ * TODO(channel-type-migration): delete this helper and all its call sites after
+ * running `migrations:migrateChannelIsPublicToType` in prod and making `type`
+ * required in schema.ts. Until then, any read of `channel.type` must funnel
+ * through this helper because prod data still has `isPublic` without `type`.
+ */
 function normalizeChannel<T extends Doc<"channels">>(channel: T): T & { type: "open" | "closed" | "dm" } {
   if (channel.type !== undefined) return channel as T & { type: "open" | "closed" | "dm" };
   const legacy = channel as Record<string, unknown>;
@@ -388,10 +395,18 @@ export const getAccessInfo = query({
     }),
     v.object({
       isMember: v.literal(false),
+      type: v.literal("closed"),
       name: v.string(),
-      type: channelTypeSchema,
       memberCount: v.number(),
       description: v.optional(v.string()),
+    }),
+    v.object({
+      isMember: v.literal(false),
+      type: v.literal("dm"),
+      participants: v.array(v.object({
+        userId: v.id("users"),
+        name: v.string(),
+      })),
     }),
     v.null(),
   ),
@@ -416,9 +431,24 @@ export const getAccessInfo = query({
 
     if (channelMembership) return { isMember: true as const };
 
-    // DMs are private — non-members should see them as not found,
-    // not as a "closed channel" with an ask-to-join flow.
-    if (channel.type === "dm") return null;
+    // DM non-member: DM existence is public, so return participant info so the
+    // frontend can show a "you're not in this conversation" gate (not a 404).
+    if (channel.type === "dm") {
+      const dmMembers = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+        .collect();
+      const participants = await Promise.all(
+        dmMembers.map(async (m) => {
+          const user = await ctx.db.get(m.userId);
+          return {
+            userId: m.userId,
+            name: user ? getUserDisplayName(user) : (m.email ?? "Unknown"),
+          };
+        }),
+      );
+      return { isMember: false as const, type: "dm" as const, participants };
+    }
 
     // Closed channel non-member: return limited info for the ask-to-join flow
     const memberCount = await ctx.db
@@ -429,8 +459,8 @@ export const getAccessInfo = query({
 
     return {
       isMember: false as const,
+      type: "closed" as const,
       name: channel.name,
-      type: channel.type,
       memberCount,
     };
   },

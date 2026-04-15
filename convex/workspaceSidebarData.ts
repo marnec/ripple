@@ -119,6 +119,9 @@ export const get = query({
         tags: s.tags,
       })),
       channels: await Promise.all(allChannels.map(async (raw) => {
+        // TODO(channel-type-migration): drop the `legacy.isPublic` fallback after
+        // running `migrations:migrateChannelIsPublicToType` in prod. Replace with
+        // `const type = raw.type;` once the schema guarantees it.
         const legacy = raw as Record<string, unknown>;
         const type = raw.type ?? (legacy.isPublic === false ? "closed" as const : "open" as const);
         const c = { ...raw, type };

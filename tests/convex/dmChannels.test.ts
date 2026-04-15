@@ -129,7 +129,7 @@ describe("channels.createDm", () => {
     ).rejects.toThrow("Cannot add members to a DM");
   });
 
-  it("getAccessInfo returns null for non-members of a DM (not a closed-gate payload)", async () => {
+  it("getAccessInfo returns DM participant info for non-members (dm existence is public)", async () => {
     const t = createTestContext();
     const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
     const { userId: member1Id } = await setupAuthenticatedUser(t, { name: "Member1", email: "m1@test.com" });
@@ -154,11 +154,16 @@ describe("channels.createDm", () => {
       otherUserId: member1Id,
     });
 
-    // Outsider should get null, not a { isMember: false, ... } payload
+    // Outsider should get { isMember: false, type: "dm", participants: [...] }
     const outsiderAccess = await asOutsider.query(api.channels.getAccessInfo, {
       channelId: dmId,
     });
-    expect(outsiderAccess).toBeNull();
+    expect(outsiderAccess).not.toBeNull();
+    expect(outsiderAccess).toMatchObject({ isMember: false, type: "dm" });
+    if (outsiderAccess && !outsiderAccess.isMember && outsiderAccess.type === "dm") {
+      const names = outsiderAccess.participants.map((p) => p.name).sort();
+      expect(names).toEqual(["Member1", "Test User"]);
+    }
 
     // Admin (a member of the DM) should get { isMember: true }
     const adminAccess = await asAdmin.query(api.channels.getAccessInfo, {

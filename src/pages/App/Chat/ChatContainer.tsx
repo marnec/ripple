@@ -5,6 +5,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import { Chat } from "./Chat";
 import { ClosedChannelGate } from "../Channel/ClosedChannelGate";
+import { DmGate } from "../Channel/DmGate";
 
 export function ChatContainer() {
   const { channelId } = useParams<QueryParams>();
@@ -14,15 +15,15 @@ export function ChatContainer() {
     channelId ? { channelId } : "skip",
   );
 
-  // channel === undefined means still loading, null means deleted.
-  // accessInfo === null means either not found or a DM the user isn't part of
-  // (DMs are fully private — no gate, just treat as not found).
+  // null means deleted or not-found. undefined means still loading.
   if (channel === null || accessInfo === null) {
     return <ResourceDeleted resourceType="channel" />;
   }
 
-  // Non-member of a closed channel — show the ask-to-join gate
   if (accessInfo && !accessInfo.isMember) {
+    if (accessInfo.type === "dm") {
+      return <DmGate participants={accessInfo.participants} />;
+    }
     return (
       <ClosedChannelGate
         channelId={channelId!}
