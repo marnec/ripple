@@ -53,6 +53,7 @@ export const create = mutation({
         role: ChannelRole.ADMIN,
         workspaceId,
         email: creator?.email,
+        name: creator ? getUserDisplayName(creator) : undefined,
       });
     }
 
@@ -382,6 +383,7 @@ export const createDm = mutation({
       role: ChannelRole.MEMBER,
       workspaceId,
       email: callerUser?.email,
+      name: callerName,
     });
 
     await db.insert("channelMembers", {
@@ -390,6 +392,7 @@ export const createDm = mutation({
       role: ChannelRole.MEMBER,
       workspaceId,
       email: otherEmail,
+      name: otherName,
     });
 
     return channelId;

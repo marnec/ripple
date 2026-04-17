@@ -227,6 +227,42 @@ export const runChannelTypeMigration = migrations.runner(
 );
 
 /**
+ * Backfill denormalized `name` and `email` on channelMembers from the users
+ * table. After this runs, readers no longer need to fall back to joining
+ * users — the fallback in `channelMembers.membersByChannel` and the legacy
+ * DM-name resolution in `workspaceSidebarData.ts` can be removed.
+ *
+ * Idempotent: skips rows that already have both fields populated.
+ *
+ * TODO(channelmember-denormalization-backfill): delete this migration and its
+ * runner after it has been run in prod (`npx convex run migrations:runBackfillChannelMemberDenormalized --prod`).
+ * See also: the fallback branches in channelMembers.ts (`membersByChannel`) and
+ * workspaceSidebarData.ts (legacy DM name resolution).
+ */
+export const backfillChannelMemberDenormalized = migrations.define({
+  table: "channelMembers",
+  migrateOne: async (ctx, member) => {
+    if (member.name !== undefined && member.email !== undefined) return;
+    const user = await ctx.db.get(member.userId);
+    if (!user) return;
+    const updates: { name?: string; email?: string } = {};
+    if (member.name === undefined) {
+      updates.name = user.name ?? user.email ?? "Unknown";
+    }
+    if (member.email === undefined) {
+      updates.email = user.email;
+    }
+    if (Object.keys(updates).length > 0) {
+      await ctx.db.patch(member._id, updates);
+    }
+  },
+});
+
+export const runBackfillChannelMemberDenormalized = migrations.runner(
+  internal.migrations.backfillChannelMemberDenormalized,
+);
+
+/**
  * Rename audit log action prefix from "task." to "tasks." for consistency
  * with the new generic logActivity convention (resourceType.action).
  *

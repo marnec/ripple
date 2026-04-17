@@ -51,11 +51,16 @@ export const membersByChannel = query({
       .collect();
 
     return Promise.all(
-      members.map((member) => {
-        return ctx.db.get(member.userId).then((user) => {
-          if (!user) return null;
-          return { ...member, name: getUserDisplayName(user) } satisfies ChannelMember;
-        });
+      members.map(async (member) => {
+        if (member.name) {
+          return { ...member, name: member.name } satisfies ChannelMember;
+        }
+        // TODO(channelmember-denormalization-backfill): drop this fallback after
+        // running `migrations:runBackfillChannelMemberDenormalized` in prod.
+        // Replace the whole block with `return { ...member, name: member.name! }`.
+        const user = await ctx.db.get(member.userId);
+        if (!user) return null;
+        return { ...member, name: getUserDisplayName(user) } satisfies ChannelMember;
       }),
     ).then((users) => users.filter((u) => u !== null));
   },
@@ -119,6 +124,7 @@ export const addToChannel = mutation({
       workspaceId: channel.workspaceId,
       role: ChannelRole.MEMBER,
       email: targetUser?.email,
+      name: targetUser ? getUserDisplayName(targetUser) : undefined,
     });
 
     await logActivity(ctx, {

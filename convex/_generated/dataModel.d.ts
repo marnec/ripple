@@ -211,6 +211,7 @@ export type DataModel = {
       channelId: Id<"channels">;
       email?: string;
       lastReadAt?: number;
+      name?: string;
       role: "admin" | "member";
       userId: Id<"users">;
       workspaceId: Id<"workspaces">;
@@ -223,6 +224,7 @@ export type DataModel = {
       | "channelId"
       | "email"
       | "lastReadAt"
+      | "name"
       | "role"
       | "userId"
       | "workspaceId";

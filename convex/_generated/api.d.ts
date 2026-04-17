@@ -2367,6 +2367,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillChannelMemberDenormalized: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillChannelMentionEdges: FunctionReference<
       "mutation",
       "internal",
@@ -2619,6 +2631,18 @@ export declare const internal: {
       any
     >;
     runAll: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    runBackfillChannelMemberDenormalized: FunctionReference<
       "mutation",
       "internal",
       {
@@ -3028,6 +3052,14 @@ export declare const internal: {
         projectId: Id<"projects">;
         workspaceId: Id<"workspaces">;
       } | null
+    >;
+  };
+  userDenormalizationSync: {
+    syncToChannelMembers: FunctionReference<
+      "mutation",
+      "internal",
+      { userId: Id<"users"> },
+      null
     >;
   };
   workspaceMembers: {

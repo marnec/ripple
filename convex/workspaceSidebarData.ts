@@ -127,15 +127,26 @@ export const get = query({
         const c = { ...raw, type };
         let name = c.name;
         if (c.type === "dm" && !name) {
-          // Resolve the other participant's name for DMs
+          // Legacy DM with empty name — resolve from channelMembers. Prefer the
+          // denormalized name on the channelMember row; fall back to the users
+          // table for rows written before denormalization landed.
+          //
+          // TODO(channelmember-denormalization-backfill): after running
+          // `migrations:runBackfillChannelMemberDenormalized` in prod, drop the
+          // `ctx.db.get(otherMember.userId)` fallback — `otherMember.name` will
+          // always be set.
           const dmMembers = await ctx.db
             .query("channelMembers")
             .withIndex("by_channel", (q) => q.eq("channelId", c._id))
             .collect();
           const otherMember = dmMembers.find((m) => m.userId !== userId);
           if (otherMember) {
-            const otherUser = await ctx.db.get(otherMember.userId);
-            name = otherUser ? getUserDisplayName(otherUser) : "Unknown";
+            if (otherMember.name) {
+              name = otherMember.name;
+            } else {
+              const otherUser = await ctx.db.get(otherMember.userId);
+              name = otherUser ? getUserDisplayName(otherUser) : "Unknown";
+            }
           }
         }
         return {

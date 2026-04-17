@@ -261,21 +261,35 @@ triggers.register("workspaceMembers", async (ctx, change) => {
   }
 });
 
-// Sync user name changes to all user nodes across workspaces.
+// Sync user name/email changes to denormalized copies across the DB.
 triggers.register("users", async (ctx, change) => {
   if (change.operation !== "update") return;
+
   const oldName = change.oldDoc.name ?? change.oldDoc.email ?? "Unknown";
   const newName = change.newDoc.name ?? change.newDoc.email ?? "Unknown";
-  if (oldName === newName) return;
-  const userNodes = await ctx.db
-    .query("nodes")
-    .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
-    .collect();
-  await Promise.all(
-    userNodes
-      .filter((n) => n.resourceType === "user")
-      .map((n) => ctx.db.patch(n._id, { name: newName })),
-  );
+  const nameChanged = oldName !== newName;
+  const emailChanged = change.oldDoc.email !== change.newDoc.email;
+
+  // User nodes — synced inline (small, bounded by workspace count)
+  if (nameChanged) {
+    const userNodes = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
+      .collect();
+    await Promise.all(
+      userNodes
+        .filter((n) => n.resourceType === "user")
+        .map((n) => ctx.db.patch(n._id, { name: newName })),
+    );
+  }
+
+  // channelMembers denormalized name/email — offloaded via scheduler so the
+  // originating mutation stays fast even if the user is in many channels.
+  if (nameChanged || emailChanged) {
+    await ctx.scheduler.runAfter(0, internal.userDenormalizationSync.syncToChannelMembers, {
+      userId: change.id,
+    });
+  }
 });
 
 // ── Node ID lookup helper ───────────────────────────────────────────
