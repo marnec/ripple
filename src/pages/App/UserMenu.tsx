@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePwaUpdate } from "@/hooks/use-pwa-update";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
@@ -46,6 +47,7 @@ import {
 export function NavUser() {
   const user = useContext(UserContext);
   const { signOut } = useAuthActions();
+  const navigate = useNavigate();
   const [showInvites, setShowInvites] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpened, setMenuOpened] = useState(false);
@@ -128,9 +130,9 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void navigate("/profile")}>
                 <BadgeCheck />
-                Account
+                Profile
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <CreditCard />

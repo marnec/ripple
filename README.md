@@ -1,5 +1,6 @@
 NEXT STEPS:
 
+- leave workspace btn in settings dialog
 
 - guests (calls)
 
