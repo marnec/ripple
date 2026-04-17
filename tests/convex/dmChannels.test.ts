@@ -1,4 +1,4 @@
-import { expect, describe, it } from "vitest";
+import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { api } from "../../convex/_generated/api";
 import {
   createTestContext,
@@ -6,6 +6,11 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import { WorkspaceRole } from "@shared/enums/roles";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
+import { triggers } from "../../convex/dbTriggers";
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 describe("channels.createDm", () => {
   it("creates a DM between two workspace members", async () => {
@@ -171,5 +176,50 @@ describe("channels.createDm", () => {
       channelId: dmId,
     });
     expect(adminAccess).toEqual({ isMember: true });
+  });
+
+  it("updates DM channel name (and its node) when a participant's display name changes", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: "Alice",
+      email: "alice@test.com",
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    const dmId = await asAdmin.mutation(api.channels.createDm, {
+      workspaceId,
+      otherUserId: memberId,
+    });
+
+    const beforeRename = await t.run(async (ctx) => ctx.db.get(dmId));
+    expect(beforeRename?.name).toBe("Alice × Test User");
+
+    // Rename Alice via writerWithTriggers so the users trigger fires and
+    // schedules the sync mutation.
+    await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.patch(memberId, { name: "Zelda" });
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const afterRename = await t.run(async (ctx) => ctx.db.get(dmId));
+    expect(afterRename?.name).toBe("Test User × Zelda");
+
+    // And the node that mirrors the DM should have been updated too
+    const dmNode = await t.run(async (ctx) =>
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", dmId))
+        .first(),
+    );
+    expect(dmNode?.name).toBe("Test User × Zelda");
   });
 });
