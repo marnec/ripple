@@ -924,6 +924,45 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  resourceShares: {
+    document: {
+      accessLevel: "view" | "edit" | "join";
+      createdAt: number;
+      createdBy: Id<"users">;
+      expiresAt?: number;
+      lastUsedAt?: number;
+      resourceId: string;
+      resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+      revokedAt?: number;
+      shareId: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"resourceShares">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "accessLevel"
+      | "createdAt"
+      | "createdBy"
+      | "expiresAt"
+      | "lastUsedAt"
+      | "resourceId"
+      | "resourceType"
+      | "revokedAt"
+      | "shareId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_resource: ["resourceType", "resourceId", "_creationTime"];
+      by_resource_id: ["resourceId", "_creationTime"];
+      by_shareId: ["shareId", "_creationTime"];
+      by_workspace_created: ["workspaceId", "createdAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   spreadsheetCellRefs: {
     document: {
       cellRef: string;

@@ -3,6 +3,10 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { WorkspaceRole, ChannelRole } from "@shared/enums";
+import type {
+  ShareAccessLevel,
+  ShareResourceType,
+} from "@shared/shareTypes";
 
 // ─── Result types ────────────────────────────────────────────────────
 
@@ -237,4 +241,38 @@ export async function hasResourceAccess(
   const workspaceId = (resource as unknown as { workspaceId: Id<"workspaces"> }).workspaceId;
   const member = await getWorkspaceMembership(ctx, workspaceId, userId);
   return member !== null;
+}
+
+// ─── Guest share-link access ────────────────────────────────────────────
+
+/**
+ * Verify that a share link is still active and matches the expected resource.
+ *
+ * Called from token-issuance actions and the partyserver periodic re-check.
+ * If `expectedAccessLevel` is provided, also enforces an exact match — use
+ * this for write-protected rooms where an `edit` guest must be distinguished
+ * from a `view` guest.
+ */
+export async function hasGuestShareAccess(
+  ctx: { db: QueryCtx["db"] },
+  shareId: string,
+  expectedResourceType: ShareResourceType,
+  expectedResourceId: string,
+  expectedAccessLevel?: ShareAccessLevel,
+): Promise<boolean> {
+  const share = await ctx.db
+    .query("resourceShares")
+    .withIndex("by_shareId", (q) => q.eq("shareId", shareId))
+    .unique();
+  if (!share) return false;
+  if (share.revokedAt !== undefined) return false;
+  if (share.expiresAt !== undefined && share.expiresAt <= Date.now()) {
+    return false;
+  }
+  if (share.resourceType !== expectedResourceType) return false;
+  if (share.resourceId !== expectedResourceId) return false;
+  if (expectedAccessLevel !== undefined && share.accessLevel !== expectedAccessLevel) {
+    return false;
+  }
+  return true;
 }

@@ -49,6 +49,15 @@ export default {
         headers.set("X-Verified-User-Id", userData.userId);
         headers.set("X-Verified-User-Name", userData.userName);
         headers.set("X-Verified-User-Image", userData.userImage ?? "");
+        if (userData.isGuest) {
+          headers.set("X-Verified-Is-Guest", "1");
+          if (userData.accessLevel) {
+            headers.set("X-Verified-Access-Level", userData.accessLevel);
+          }
+          if (userData.shareId) {
+            headers.set("X-Verified-Share-Id", userData.shareId);
+          }
+        }
         return new Request(req, { headers });
       },
     });

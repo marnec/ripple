@@ -3,7 +3,7 @@ import { internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { WorkspaceRole, ChannelRole } from "@shared/enums";
-import { requireWorkspaceMember } from "./authHelpers";
+import { checkWorkspaceMember, requireWorkspaceMember } from "./authHelpers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
 import { logActivity } from "./auditLog";
@@ -92,6 +92,19 @@ export const membersWithRoles = query({
     );
 
     return results.filter((r) => r !== null);
+  },
+});
+
+export const myRole = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.union(
+    v.literal("admin"),
+    v.literal("member"),
+    v.null(),
+  ),
+  handler: async (ctx, { workspaceId }) => {
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    return auth?.membership.role ?? null;
   },
 });
 

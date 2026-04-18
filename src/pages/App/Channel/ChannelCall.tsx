@@ -1,6 +1,7 @@
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { useParams } from "react-router-dom";
 import GroupVideoCall from "../GroupVideoCall/GroupVideoCall";
+import { ShareCallButton } from "./ShareCallButton";
 import type { QueryParams } from "@shared/types/routes";
 
 export const ChannelVideoCall = () => {
@@ -13,5 +14,12 @@ export const ChannelVideoCall = () => {
     return <SomethingWentWrong />;
   }
 
-  return <GroupVideoCall channelId={channelId} workspaceId={workspaceId} />;
+  return (
+    <div className="relative h-full w-full">
+      <div className="absolute right-4 top-4 z-10">
+        <ShareCallButton channelId={channelId} workspaceId={workspaceId} />
+      </div>
+      <GroupVideoCall channelId={channelId} workspaceId={workspaceId} />
+    </div>
+  );
 };

@@ -13,6 +13,7 @@ interface UseJSpreadsheetInstanceOptions {
   awareness: Awareness | null;
   onEditionStart: (td: HTMLTableCellElement, wrapper: HTMLElement) => void;
   onEditionEnd: () => void;
+  editable?: boolean;
 }
 
 /**
@@ -25,6 +26,7 @@ export function useJSpreadsheetInstance({
   awareness,
   onEditionStart,
   onEditionEnd,
+  editable = true,
 }: UseJSpreadsheetInstanceOptions) {
   const worksheetRef = useRef<Worksheet>(null);
   const bindingRef = useRef<SpreadsheetYjsBinding | null>(null);
@@ -41,7 +43,7 @@ export function useJSpreadsheetInstance({
     let binding: SpreadsheetYjsBinding | null = null;
 
     const instance = jspreadsheet(container, {
-      worksheets: [{ minDimensions: [30, 100] }],
+      worksheets: [{ minDimensions: [30, 100], editable }],
       tabs: false,
       toolbar: false,
       contextMenu: () => null,
@@ -113,7 +115,7 @@ export function useJSpreadsheetInstance({
     };
     // onEditionStart/onEditionEnd are stable callbacks from useFormulaPicker
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [yDoc, awareness]);
+  }, [yDoc, awareness, editable]);
 
   return { worksheetRef, bindingRef };
 }

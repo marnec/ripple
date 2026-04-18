@@ -342,6 +342,7 @@ http.route({
       const url = new URL(request.url);
       const roomId = url.searchParams.get("roomId");
       const userId = url.searchParams.get("userId");
+      const shareId = url.searchParams.get("shareId");
 
       if (!roomId || !userId) {
         return new Response(
@@ -383,6 +384,39 @@ http.route({
             headers: { "Content-Type": "application/json" },
           }
         );
+      }
+
+      // Guest connections carry a shareId and a `guest:<nanoid>` userId —
+      // re-validate against the share row rather than workspace membership.
+      if (userId.startsWith("guest:")) {
+        if (
+          resourceType !== "doc" &&
+          resourceType !== "diagram" &&
+          resourceType !== "spreadsheet"
+        ) {
+          return new Response(JSON.stringify({ hasAccess: false }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (!shareId) {
+          return new Response(JSON.stringify({ hasAccess: false }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        const hasAccess = await ctx.runQuery(
+          internal.shares.checkGuestAccess,
+          {
+            shareId,
+            resourceType,
+            resourceId,
+          },
+        );
+        return new Response(JSON.stringify({ hasAccess }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
       }
 
       // Check if user has access

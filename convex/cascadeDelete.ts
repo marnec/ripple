@@ -62,6 +62,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
+    { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
   ],
 
   messages: [
@@ -76,6 +77,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
+    { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
   ],
 
   // ── diagrams ────────────────────────────────────────────────────────
@@ -85,6 +87,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
+    { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
   ],
 
   // ── spreadsheets ────────────────────────────────────────────────────
@@ -95,6 +98,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
+    { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
   ],
 });
 

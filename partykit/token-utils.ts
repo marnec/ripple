@@ -2,18 +2,28 @@
  * HMAC-SHA256 token verification for PartyKit (Cloudflare Worker side).
  *
  * Token format: base64url(JSON payload) + "." + base64url(HMAC-SHA256 signature)
- * Payload: { sub: userId, name: userName, img: userImage, room: roomId, exp: timestampMs }
  *
- * Signing happens in convex/collaboration.ts (Convex action).
- * Verification happens here (Cloudflare Worker).
- * Both use the shared PARTYKIT_SECRET.
+ * Workspace member payload:
+ *   { sub: userId, name, img, room, exp }
+ *
+ * Guest (share link) payload:
+ *   { sub: "guest:<nanoid>", name, img: null, room, exp, isGuest: true,
+ *     accessLevel: "view"|"edit"|"join", shareId }
+ *
+ * Signing lives in `convex/tokenSigning.ts`. Both sides must keep this shape
+ * in sync or the HMAC verification still succeeds but downstream guards break.
  */
+
+import type { ShareAccessLevel } from "@shared/shareTypes";
 
 export interface VerifiedUser {
   userId: string;
   userName: string;
   userImage: string | null;
   roomId: string;
+  isGuest: boolean;
+  accessLevel: ShareAccessLevel | null;
+  shareId: string | null;
 }
 
 interface TokenPayload {
@@ -22,6 +32,9 @@ interface TokenPayload {
   img: string | null;
   room: string;
   exp: number;
+  isGuest?: boolean;
+  accessLevel?: ShareAccessLevel;
+  shareId?: string;
 }
 
 function base64urlDecode(str: string): Uint8Array {
@@ -83,6 +96,9 @@ export async function verifyToken(
       userName: payload.name,
       userImage: payload.img,
       roomId: payload.room,
+      isGuest: payload.isGuest === true,
+      accessLevel: payload.accessLevel ?? null,
+      shareId: payload.shareId ?? null,
     };
   } catch {
     return null;

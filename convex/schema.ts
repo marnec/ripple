@@ -447,6 +447,32 @@ export default defineSchema({
     deployedAt: v.number(),
   }),
 
+  resourceShares: defineTable({
+    shareId: v.string(), // URL-safe random token, ~22 chars
+    resourceType: v.union(
+      v.literal("document"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+      v.literal("channel"),
+    ),
+    resourceId: v.string(),
+    workspaceId: v.id("workspaces"),
+    accessLevel: v.union(
+      v.literal("view"),
+      v.literal("edit"),
+      v.literal("join"),
+    ),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+    lastUsedAt: v.optional(v.number()),
+  })
+    .index("by_shareId", ["shareId"])
+    .index("by_resource", ["resourceType", "resourceId"])
+    .index("by_resource_id", ["resourceId"])
+    .index("by_workspace_created", ["workspaceId", "createdAt"]),
+
   recentActivity: defineTable({
     userId: v.id("users"),
     workspaceId: v.id("workspaces"),

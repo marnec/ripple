@@ -1,7 +1,5 @@
 NEXT STEPS:
 
-- leave workspace btn in settings dialog
-
 - guests (calls)
 
 - calendar; plan calls; invite guests

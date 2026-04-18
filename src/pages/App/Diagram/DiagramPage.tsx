@@ -12,7 +12,8 @@ import { useViewer } from "../UserContext";
 import { useState } from "react";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { useTheme } from "next-themes";
-import { Settings } from "lucide-react";
+import { Settings, Share2 } from "lucide-react";
+import { ShareDialog } from "@/components/ShareDialog";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
 import { useSnapshotFallback } from "@/hooks/use-snapshot-fallback";
@@ -31,6 +32,9 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
   useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
+  const isAdmin = myRole === "admin";
   const { resolvedTheme } = useTheme();
   const isDarkTheme = resolvedTheme === "dark";
 
@@ -145,6 +149,16 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               onUserClick={handleJumpToUser}
             />
           )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShareDialogOpen(true)}
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+              title="Share"
+            >
+              <Share2 className="size-4" />
+            </button>
+          )}
           {!isMobile && (
             <Link
               to="settings"
@@ -156,6 +170,15 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           )}
         </div>
       </div>
+      {isAdmin && diagram && (
+        <ShareDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          resourceType="diagram"
+          resourceId={diagramId}
+          resourceName={diagram.name}
+        />
+      )}
       {isMobile && (
         <HeaderSlot>
           <Link

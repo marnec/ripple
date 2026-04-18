@@ -46,6 +46,7 @@ function ParticipantTile({
   }, [participant, participant.videoTrack]);
 
   const participantUserId = participant.customParticipantId;
+  const isGuestParticipant = participantUserId?.startsWith("guest:") ?? false;
   const isFollowingThis = isFollowing && followingUserId === participantUserId;
 
   return (
@@ -59,7 +60,7 @@ function ParticipantTile({
         name={participant.name || "Participant"}
         muted={!participant.audioEnabled}
       />
-      {participantUserId && !isFollowingThis && (
+      {participantUserId && !isGuestParticipant && !isFollowingThis && (
         <button
           className="absolute right-2 top-2 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
           onClick={() =>

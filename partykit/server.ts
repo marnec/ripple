@@ -4,6 +4,7 @@ import * as Y from "yjs";
 import type { ServerMessage } from "@shared/protocol";
 import { parseCellName, parseRange } from "@shared/cellRef";
 import { extractBlocksFromFragment } from "@shared/blockRef";
+import type { ShareAccessLevel } from "@shared/shareTypes";
 
 /**
  * If the raw cell value is a formula (starts with "="), return the computed
@@ -36,6 +37,9 @@ const ALARM_TYPE_PERMISSION_CHECK = "permission_check";
 interface ConnectionState {
   userId: string;
   userName: string;
+  isGuest: boolean;
+  accessLevel: ShareAccessLevel | null;
+  shareId: string | null;
 }
 
 interface Env {
@@ -207,9 +211,27 @@ export default class CollaborationServer extends YServer {
       return;
     }
 
-    console.log(`User ${userName} (${userId}) connected to room ${roomId}`);
+    const isGuest = ctx.request.headers.get("X-Verified-Is-Guest") === "1";
+    const accessLevelHeader = ctx.request.headers.get("X-Verified-Access-Level");
+    const accessLevel: ShareAccessLevel | null =
+      accessLevelHeader === "view" ||
+      accessLevelHeader === "edit" ||
+      accessLevelHeader === "join"
+        ? accessLevelHeader
+        : null;
+    const shareId = ctx.request.headers.get("X-Verified-Share-Id");
 
-    conn.setState({ userId, userName });
+    console.log(
+      `${isGuest ? "Guest" : "User"} ${userName} (${userId}) connected to room ${roomId}${isGuest ? ` [${accessLevel}]` : ""}`,
+    );
+
+    conn.setState({
+      userId,
+      userName,
+      isGuest,
+      accessLevel,
+      shareId,
+    });
 
     // Delegate to YServer for Yjs sync setup
     try {
@@ -232,6 +254,17 @@ export default class CollaborationServer extends YServer {
       await this.ctx.storage.setAlarm(Date.now() + PERMISSION_CHECK_INTERVAL);
       this.permissionCheckScheduled = true;
     }
+  }
+
+  /**
+   * y-partyserver hook: when this returns true, the Yjs sync protocol drops
+   * SyncStep2 and Update frames from the connection before they reach the
+   * shared document. This is the actual security boundary for view-only
+   * guests — `editable={false}` in the client editor is cosmetic only.
+   */
+  isReadOnly(connection: Connection): boolean {
+    const state = connection.state as ConnectionState | undefined;
+    return state?.isGuest === true && state.accessLevel === "view";
   }
 
   /**
@@ -318,6 +351,9 @@ export default class CollaborationServer extends YServer {
         const url = new URL(`${convexSiteUrl}/collaboration/check-access`);
         url.searchParams.set("roomId", roomId);
         url.searchParams.set("userId", state.userId);
+        if (state.isGuest && state.shareId) {
+          url.searchParams.set("shareId", state.shareId);
+        }
 
         const response = await fetch(url.toString(), {
           method: "GET",

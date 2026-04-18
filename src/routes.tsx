@@ -17,6 +17,8 @@ import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
 import { Workspaces } from "./pages/App/Workspace/Workspaces";
 import { InviteAcceptPage } from "./pages/InviteAcceptPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ShareEntryPage } from "./pages/Share/ShareEntryPage";
+import { GuestResourceView } from "./pages/Share/GuestResourceView";
 import { UserProfilePage } from "./pages/UserProfilePage";
 
 export const router = createBrowserRouter(
@@ -227,6 +229,14 @@ export const router = createBrowserRouter(
     {
       path: "/invite/:inviteId",
       element: <InviteAcceptPage />,
+    },
+    {
+      path: "/share/:shareId",
+      element: <ShareEntryPage />,
+    },
+    {
+      path: "/share/:shareId/view",
+      element: <GuestResourceView />,
     },
     {
       path: "/auth",

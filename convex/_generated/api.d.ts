@@ -1343,6 +1343,77 @@ export declare const api: {
       null
     >;
   };
+  shares: {
+    createShare: FunctionReference<
+      "mutation",
+      "public",
+      {
+        accessLevel: "view" | "edit" | "join";
+        expiresAt?: number;
+        resourceId: string;
+        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+      },
+      { shareId: string }
+    >;
+    getGuestCallToken: FunctionReference<
+      "action",
+      "public",
+      { guestName: string; guestSub: string; shareId: string },
+      {
+        authToken: string;
+        channelId: Id<"channels">;
+        guestSub: string;
+        meetingId: string;
+      }
+    >;
+    getGuestCollaborationToken: FunctionReference<
+      "action",
+      "public",
+      { guestName: string; guestSub: string; shareId: string },
+      { guestSub: string; roomId: string; token: string }
+    >;
+    getShareInfo: FunctionReference<
+      "query",
+      "public",
+      { shareId: string },
+      {
+        accessLevel?: "view" | "edit" | "join";
+        resourceId?: string;
+        resourceName?: string;
+        resourceType?: "document" | "diagram" | "spreadsheet" | "channel";
+        status: "active" | "expired" | "revoked" | "not_found";
+        workspaceName?: string;
+      }
+    >;
+    listSharesForResource: FunctionReference<
+      "query",
+      "public",
+      {
+        resourceId: string;
+        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+      },
+      Array<{
+        _creationTime: number;
+        _id: Id<"resourceShares">;
+        accessLevel: "view" | "edit" | "join";
+        createdAt: number;
+        createdBy: Id<"users">;
+        expiresAt?: number;
+        lastUsedAt?: number;
+        resourceId: string;
+        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+        revokedAt?: number;
+        shareId: string;
+        workspaceId: Id<"workspaces">;
+      }>
+    >;
+    revokeShare: FunctionReference<
+      "mutation",
+      "public",
+      { shareId: string },
+      null
+    >;
+  };
   snapshots: {
     getSnapshotUrl: FunctionReference<
       "query",
@@ -2031,6 +2102,12 @@ export declare const api: {
         role: "admin" | "member";
         userId: Id<"users">;
       }>
+    >;
+    myRole: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      "admin" | "member" | null
     >;
     remove: FunctionReference<
       "mutation",
@@ -3015,6 +3092,36 @@ export declare const internal: {
         scannedCount: number;
         truncated: boolean;
       }>
+    >;
+  };
+  shares: {
+    bumpLastUsed: FunctionReference<
+      "mutation",
+      "internal",
+      { shareId: string },
+      null
+    >;
+    checkGuestAccess: FunctionReference<
+      "query",
+      "internal",
+      {
+        accessLevel?: "view" | "edit" | "join";
+        resourceId: string;
+        resourceType: "doc" | "diagram" | "spreadsheet";
+        shareId: string;
+      },
+      boolean
+    >;
+    loadActiveShare: FunctionReference<
+      "query",
+      "internal",
+      { shareId: string },
+      null | {
+        accessLevel: "view" | "edit" | "join";
+        resourceId: string;
+        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+        workspaceId: Id<"workspaces">;
+      }
     >;
   };
   snapshots: {

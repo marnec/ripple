@@ -3,35 +3,7 @@ import { ConvexError, v } from "convex/values";
 import { action, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { hasResourceAccess } from "./authHelpers";
-
-// ---------------------------------------------------------------------------
-// HMAC token signing helpers
-// ---------------------------------------------------------------------------
-
-function base64urlEncode(data: Uint8Array): string {
-  let binary = "";
-  for (const byte of data) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function signToken(payload: object, secret: string): Promise<string> {
-  const payloadJson = JSON.stringify(payload);
-  const payloadB64 = base64urlEncode(new TextEncoder().encode(payloadJson));
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-
-  const signatureBytes = new Uint8Array(
-    await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payloadB64)),
-  );
-
-  return `${payloadB64}.${base64urlEncode(signatureBytes)}`;
-}
+import { signToken } from "./tokenSigning";
 
 // ---------------------------------------------------------------------------
 // Public action: Generate HMAC-signed collaboration token
