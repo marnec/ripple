@@ -14,6 +14,7 @@ import {
   hasGuestShareAccess,
 } from "./authHelpers";
 import { signToken } from "./tokenSigning";
+import { rateLimiter } from "./rateLimits";
 import { WorkspaceRole } from "@shared/enums";
 import {
   GUEST_SUB_PREFIX,
@@ -393,10 +394,22 @@ export const getGuestCollaborationToken = action({
     const name = sanitizeGuestName(guestName);
     const sub = sanitizeGuestSub(guestSub);
 
+    // Per-link limit first (cheap, keyed by shareId). Throws on bust.
+    await rateLimiter.limit(ctx, "guestShareCollabToken", {
+      key: shareId,
+      throws: true,
+    });
+
     const share = await ctx.runQuery(internal.shares.loadActiveShare, {
       shareId,
     });
     if (!share) throw new ConvexError("Share is not active");
+
+    // Per-workspace ceiling (runs after share load so we know the workspace).
+    await rateLimiter.limit(ctx, "guestShareCollabTokenWorkspace", {
+      key: share.workspaceId,
+      throws: true,
+    });
 
     const yjsType = yjsResourceTypeForShare(share.resourceType);
     if (!yjsType) {
@@ -445,6 +458,12 @@ export const getGuestCallToken = action({
     const name = sanitizeGuestName(guestName);
     const sub = sanitizeGuestSub(guestSub);
 
+    // Gate BEFORE the Cloudflare fetch — every call burns RTK quota.
+    await rateLimiter.limit(ctx, "guestShareCallToken", {
+      key: shareId,
+      throws: true,
+    });
+
     const share = await ctx.runQuery(internal.shares.loadActiveShare, {
       shareId,
     });
@@ -452,6 +471,11 @@ export const getGuestCallToken = action({
     if (share.resourceType !== "channel" || share.accessLevel !== "join") {
       throw new ConvexError("This share does not grant call access");
     }
+
+    await rateLimiter.limit(ctx, "guestShareCallTokenWorkspace", {
+      key: share.workspaceId,
+      throws: true,
+    });
 
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const appId = process.env.CLOUDFLARE_RTK_APP_ID;

@@ -3,6 +3,7 @@ import aggregate from "@convex-dev/aggregate/convex.config";
 import auditLog from "convex-audit-log/convex.config.js";
 import cascadingDelete from "convex-cascading-delete/convex.config.js";
 import migrations from "@convex-dev/migrations/convex.config.js";
+import rateLimiter from "@convex-dev/rate-limiter/convex.config.js";
 import workpool from "@convex-dev/workpool/convex.config";
 
 const app = defineApp();
@@ -10,6 +11,7 @@ const app = defineApp();
 app.use(auditLog);
 app.use(cascadingDelete);
 app.use(migrations);
+app.use(rateLimiter);
 app.use(workpool, { name: "notificationPool" });
 
 // Workspace resource count aggregates (O(log n) counts per workspace)

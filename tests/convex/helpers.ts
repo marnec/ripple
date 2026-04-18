@@ -4,6 +4,7 @@ import { WorkspaceRole } from "@shared/enums/roles";
 import auditLogComponent from "convex-audit-log/test";
 import aggregateComponent from "@convex-dev/aggregate/test";
 import cascadingDeleteComponent from "convex-cascading-delete/test";
+import rateLimiterComponent from "@convex-dev/rate-limiter/test";
 import workpoolComponent from "@convex-dev/workpool/test";
 
 const modules = import.meta.glob("../../convex/**/*.ts");
@@ -12,6 +13,7 @@ export function createTestContext() {
   const t = convexTest(schema, modules);
   auditLogComponent.register(t as any);
   cascadingDeleteComponent.register(t as any);
+  rateLimiterComponent.register(t as any);
   workpoolComponent.register(t as any, "notificationPool");
   // Register workspace resource count aggregates
   aggregateComponent.register(t as any, "documentsByWorkspace");
