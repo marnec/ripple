@@ -1,5 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { WorkspaceRole, ChannelRole } from "@shared/enums";
 import { requireWorkspaceMember } from "./authHelpers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
@@ -155,6 +157,112 @@ export const changeRole = mutation({
   },
 });
 
+async function removeMembershipCascade(
+  ctx: MutationCtx,
+  {
+    workspaceId,
+    targetUserId,
+    actingUserId,
+  }: {
+    workspaceId: Id<"workspaces">;
+    targetUserId: Id<"users">;
+    actingUserId: Id<"users">;
+  },
+) {
+  const targetMembership = await ctx.db
+    .query("workspaceMembers")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", workspaceId).eq("userId", targetUserId),
+    )
+    .unique();
+
+  if (!targetMembership) throw new ConvexError("User is not a member of this workspace");
+
+  const channelMemberships = await ctx.db
+    .query("channelMembers")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", workspaceId).eq("userId", targetUserId),
+    )
+    .collect();
+
+  const db = writerWithTriggers(ctx, ctx.db, triggers);
+
+  for (const cm of channelMemberships) {
+    const channel = await ctx.db.get(cm.channelId);
+    if (!channel) {
+      await db.delete(cm._id);
+      continue;
+    }
+
+    if (channel.type === "dm") {
+      const dmMembers = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
+        .collect();
+      const others = dmMembers.filter((m) => m.userId !== targetUserId);
+
+      let anyOtherActive = false;
+      for (const other of others) {
+        const otherWs = await ctx.db
+          .query("workspaceMembers")
+          .withIndex("by_workspace_user", (q) =>
+            q.eq("workspaceId", workspaceId).eq("userId", other.userId),
+          )
+          .first();
+        if (otherWs) {
+          anyOtherActive = true;
+          break;
+        }
+      }
+
+      if (anyOtherActive) continue;
+
+      await cascadeDelete.deleteWithCascadeBatched(ctx, "channels", cm.channelId, {
+        batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
+        onComplete: internal.cascadeDelete._batchCascadeOnComplete,
+        onCompleteContext: {
+          userId: actingUserId, resourceType: "channels", resourceId: cm.channelId, scope: workspaceId,
+        },
+      });
+      continue;
+    }
+
+    if (channel.type === "closed") {
+      const allMembers = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
+        .collect();
+
+      const otherMembers = allMembers.filter((m) => m.userId !== targetUserId);
+
+      if (otherMembers.length === 0) {
+        await cascadeDelete.deleteWithCascadeBatched(ctx, "channels", cm.channelId, {
+          batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
+          onComplete: internal.cascadeDelete._batchCascadeOnComplete,
+          onCompleteContext: {
+            userId: actingUserId, resourceType: "channels", resourceId: cm.channelId, scope: workspaceId,
+          },
+        });
+        continue;
+      }
+
+      if (cm.role === ChannelRole.ADMIN) {
+        const otherAdmins = otherMembers.filter((m) => m.role === ChannelRole.ADMIN);
+        if (otherAdmins.length === 0) {
+          const longestTenured = otherMembers.sort(
+            (a, b) => a._creationTime - b._creationTime,
+          )[0];
+          await ctx.db.patch(longestTenured._id, { role: ChannelRole.ADMIN });
+        }
+      }
+    }
+
+    await db.delete(cm._id);
+  }
+
+  await db.delete(targetMembership._id);
+}
+
 export const remove = mutation({
   args: {
     workspaceId: v.id("workspaces"),
@@ -168,112 +276,11 @@ export const remove = mutation({
       throw new ConvexError("Cannot remove yourself from the workspace");
     }
 
-    const targetMembership = await ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", targetUserId),
-      )
-      .unique();
-
-    if (!targetMembership) throw new ConvexError("User is not a member of this workspace");
-
-    // Get all channel memberships for this user in this workspace
-    const channelMemberships = await ctx.db
-      .query("channelMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", targetUserId),
-      )
-      .collect();
-
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-
-    // Handle each channel membership
-    for (const cm of channelMemberships) {
-      const channel = await ctx.db.get(cm.channelId);
-      if (!channel) {
-        await db.delete(cm._id);
-        continue;
-      }
-
-      // DMs: preserve the channel + memberships when at least one party is
-      // still an active workspace member — this keeps history available and
-      // lets a re-added user rejoin seamlessly. If the *other* party is also
-      // gone from the workspace, the DM is abandoned and we cascade-delete
-      // it entirely (no one will ever read it again).
-      if (channel.type === "dm") {
-        const dmMembers = await ctx.db
-          .query("channelMembers")
-          .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
-          .collect();
-        const others = dmMembers.filter((m) => m.userId !== targetUserId);
-
-        let anyOtherActive = false;
-        for (const other of others) {
-          const otherWs = await ctx.db
-            .query("workspaceMembers")
-            .withIndex("by_workspace_user", (q) =>
-              q.eq("workspaceId", workspaceId).eq("userId", other.userId),
-            )
-            .first();
-          if (otherWs) {
-            anyOtherActive = true;
-            break;
-          }
-        }
-
-        if (anyOtherActive) continue;
-
-        // Abandoned DM — cascade delete entirely
-        await cascadeDelete.deleteWithCascadeBatched(ctx, "channels", cm.channelId, {
-          batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
-          onComplete: internal.cascadeDelete._batchCascadeOnComplete,
-          onCompleteContext: {
-            userId, resourceType: "channels", resourceId: cm.channelId, scope: workspaceId,
-          },
-        });
-        continue;
-      }
-
-      if (channel.type === "closed") {
-        // Get all members of this channel
-        const allMembers = await ctx.db
-          .query("channelMembers")
-          .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
-          .collect();
-
-        const otherMembers = allMembers.filter((m) => m.userId !== targetUserId);
-
-        if (otherMembers.length === 0) {
-          // Sole member — delete the channel entirely
-          await cascadeDelete.deleteWithCascadeBatched(ctx, "channels", cm.channelId, {
-            batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
-            onComplete: internal.cascadeDelete._batchCascadeOnComplete,
-            onCompleteContext: {
-              userId, resourceType: "channels", resourceId: cm.channelId, scope: workspaceId,
-            },
-          });
-          continue;
-        }
-
-        if (cm.role === ChannelRole.ADMIN) {
-          // Check if there are other admins
-          const otherAdmins = otherMembers.filter((m) => m.role === ChannelRole.ADMIN);
-          if (otherAdmins.length === 0) {
-            // Promote the longest-tenured remaining member to admin
-            const longestTenured = otherMembers.sort(
-              (a, b) => a._creationTime - b._creationTime,
-            )[0];
-            await ctx.db.patch(longestTenured._id, { role: ChannelRole.ADMIN });
-          }
-        }
-      }
-
-      // Remove the channel membership (open/closed only — DMs handled above)
-      await db.delete(cm._id);
-    }
-
-    // Delete the workspace membership (triggers user node cleanup)
-    await db.delete(targetMembership._id);
+    await removeMembershipCascade(ctx, {
+      workspaceId,
+      targetUserId,
+      actingUserId: userId,
+    });
 
     await logActivity(ctx, {
       userId,
@@ -288,3 +295,55 @@ export const remove = mutation({
     return null;
   },
 });
+
+export const leave = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { workspaceId }) => {
+    const { userId, membership } = await requireWorkspaceMember(ctx, workspaceId);
+
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) throw new ConvexError("Workspace not found");
+
+    if (workspace.ownerId === userId) {
+      throw new ConvexError(
+        "Workspace owners cannot leave. Delete the workspace or transfer ownership instead.",
+      );
+    }
+
+    if (membership.role === WorkspaceRole.ADMIN) {
+      const admins = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .collect()
+        .then((members) => members.filter((m) => m.role === WorkspaceRole.ADMIN));
+
+      if (admins.length <= 1) {
+        throw new ConvexError(
+          "You are the last admin. Promote another member before leaving.",
+        );
+      }
+    }
+
+    await removeMembershipCascade(ctx, {
+      workspaceId,
+      targetUserId: userId,
+      actingUserId: userId,
+    });
+
+    await logActivity(ctx, {
+      userId,
+      resourceType: "workspaces",
+      resourceId: workspaceId,
+      action: "member_left",
+      oldValue: userId,
+      resourceName: "workspace member",
+      scope: workspaceId,
+    });
+
+    return null;
+  },
+});
+

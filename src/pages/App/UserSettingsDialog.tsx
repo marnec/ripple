@@ -12,14 +12,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useUserSettings } from "@/hooks/use-user-settings";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { Label } from "@/components/ui/label";
+import { useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Settings } from "lucide-react";
+import { toast } from "sonner";
+import { LogOut, Settings } from "lucide-react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 export function UserSettingsDialog({
   open,
@@ -34,8 +40,38 @@ export function UserSettingsDialog({
   pushRef.current = pushNotifications;
   const navigate = useNavigate();
   const { workspaceId } = useParams();
+  const leaveWorkspace = useMutation(api.workspaceMembers.leave);
 
   const [busy, setBusy] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
+  const handleLeaveWorkspace = async () => {
+    if (!workspaceId) return;
+    if (
+      !confirm(
+        "Leave this workspace? You'll lose access to its channels, documents, and tasks.",
+      )
+    ) return;
+
+    setLeaving(true);
+    try {
+      await leaveWorkspace({ workspaceId: workspaceId as Id<"workspaces"> });
+      toast.success("You left the workspace");
+      onOpenChange(false);
+      void navigate("/workspaces");
+    } catch (error) {
+      toast.error("Could not leave workspace", {
+        description:
+          error instanceof ConvexError
+            ? String(error.data)
+            : error instanceof Error
+              ? error.message
+              : "Please try again.",
+      });
+    } finally {
+      setLeaving(false);
+    }
+  };
 
   const notificationsSupported =
     typeof window !== "undefined" && "Notification" in window;
@@ -138,6 +174,30 @@ export function UserSettingsDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {workspaceId && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Workspace</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Leave this workspace and remove yourself from its channels.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleLeaveWorkspace()}
+                  disabled={leaving}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <LogOut className="size-4" />
+                  {leaving ? "Leaving..." : "Leave"}
+                </Button>
+              </div>
+            </div>
+          )}
         </ResponsiveDialogBody>
       </ResponsiveDialogContent>
     </ResponsiveDialog>

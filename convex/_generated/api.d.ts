@@ -1960,6 +1960,12 @@ export declare const api: {
       },
       null
     >;
+    leave: FunctionReference<
+      "mutation",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      null
+    >;
     membersByWorkspace: FunctionReference<
       "query",
       "public",
