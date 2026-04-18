@@ -5,11 +5,73 @@ import {
   internalMutation,
   internalQuery,
   mutation,
+  type ActionCtx,
 } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireUser } from "./authHelpers";
 
-const CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
+export const CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
+
+/**
+ * Race-safe wrapper that returns the Cloudflare meetingId for a channel.
+ *
+ * The race: two parallel callers both see `getActiveSession` return null,
+ * both POST to Cloudflare to create a meeting, both try to persist. Only
+ * one `createSession` mutation wins — the loser's CF meeting is orphaned
+ * and burns quota until CF idle-cleans it.
+ *
+ * Fix: if we lose the race (createSession returns the winner's id instead
+ * of null), DELETE our orphan on Cloudflare. Fire-and-forget; a failed
+ * cleanup logs to console but does not fail the join.
+ */
+export async function ensureMeetingForChannel(
+  ctx: ActionCtx,
+  channelId: Id<"channels">,
+  cf: { accountId: string; appId: string; apiToken: string },
+): Promise<string> {
+  const headers = {
+    Authorization: `Bearer ${cf.apiToken}`,
+    "Content-Type": "application/json",
+  };
+
+  const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
+    channelId,
+  });
+  if (session) return session.cloudflareMeetingId;
+
+  const createRes = await fetch(
+    `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ title: `Channel call ${channelId}` }),
+    },
+  );
+  if (!createRes.ok) {
+    const err = await createRes.text();
+    console.error("Cloudflare create-meeting failed:", createRes.status, err);
+    throw new Error("Could not start the call");
+  }
+  const createData = (await createRes.json()) as { data: { id: string } };
+  const ourMeetingId = createData.data.id;
+
+  const winnerMeetingId = await ctx.runMutation(
+    internal.callSessions.createSession,
+    { channelId, cloudflareMeetingId: ourMeetingId },
+  );
+
+  if (winnerMeetingId && winnerMeetingId !== ourMeetingId) {
+    // We lost the race — our CF meeting is orphaned. Clean it up so it
+    // doesn't tie up Cloudflare participant / meeting quota.
+    void fetch(
+      `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings/${ourMeetingId}`,
+      { method: "DELETE", headers },
+    ).catch((e) => console.error("Orphan meeting cleanup failed:", e));
+    return winnerMeetingId;
+  }
+  return ourMeetingId;
+}
 
 const callSessionValidator = v.object({
   _id: v.id("callSessions"),
@@ -109,46 +171,11 @@ export const joinCall = action({
       "Content-Type": "application/json",
     };
 
-    // Check for an existing active session
-    const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
-      channelId,
+    const meetingId = await ensureMeetingForChannel(ctx, channelId, {
+      accountId,
+      appId,
+      apiToken,
     });
-    let meetingId: string;
-
-    if (session) {
-      meetingId = session.cloudflareMeetingId;
-    } else {
-      // Create a new meeting
-      const createRes = await fetch(
-        `${CF_API_BASE}/${accountId}/realtime/kit/${appId}/meetings`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ title: `Channel call ${channelId}` }),
-        },
-      );
-
-      if (!createRes.ok) {
-        const err = await createRes.text();
-        throw new Error(`Failed to create Cloudflare meeting: ${err}`);
-      }
-
-      const createData = await createRes.json();
-      meetingId = (createData as { data: { id: string } }).data.id;
-
-      // Store the session — if another user raced us, use their session instead
-      const existingMeetingId = await ctx.runMutation(
-        internal.callSessions.createSession,
-        {
-          channelId,
-          cloudflareMeetingId: meetingId,
-        },
-      );
-
-      if (existingMeetingId) {
-        meetingId = existingMeetingId;
-      }
-    }
 
     // Add this user as a participant
     const participantRes = await fetch(

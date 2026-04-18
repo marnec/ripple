@@ -15,6 +15,7 @@ import {
 } from "./authHelpers";
 import { signToken } from "./tokenSigning";
 import { rateLimiter } from "./rateLimits";
+import { CF_API_BASE, ensureMeetingForChannel } from "./callSessions";
 import { WorkspaceRole } from "@shared/enums";
 import {
   GUEST_SUB_PREFIX,
@@ -60,7 +61,6 @@ const shareRowValidator = v.object({
 // Helpers
 // ---------------------------------------------------------------------------
 
-const CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
 const TOKEN_TTL_MS = 5 * 60 * 1000;
 const GUEST_NAME_MIN = 1;
 const GUEST_NAME_MAX = 40;
@@ -493,36 +493,11 @@ export const getGuestCallToken = action({
 
     const channelId = share.resourceId as Id<"channels">;
 
-    const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
-      channelId,
+    const meetingId = await ensureMeetingForChannel(ctx, channelId, {
+      accountId,
+      appId,
+      apiToken,
     });
-
-    let meetingId: string;
-    if (session) {
-      meetingId = session.cloudflareMeetingId;
-    } else {
-      const createRes = await fetch(
-        `${CF_API_BASE}/${accountId}/realtime/kit/${appId}/meetings`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ title: `Channel call ${channelId}` }),
-        },
-      );
-      if (!createRes.ok) {
-        const err = await createRes.text();
-        console.error("Cloudflare create-meeting failed:", createRes.status, err);
-        throw new ConvexError("Could not start the call");
-      }
-      const createData = (await createRes.json()) as { data: { id: string } };
-      meetingId = createData.data.id;
-
-      const existingMeetingId = await ctx.runMutation(
-        internal.callSessions.createSession,
-        { channelId, cloudflareMeetingId: meetingId },
-      );
-      if (existingMeetingId) meetingId = existingMeetingId;
-    }
 
     const fullSub = `${GUEST_SUB_PREFIX}${sub}`;
     const participantRes = await fetch(
