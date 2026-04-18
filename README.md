@@ -1,7 +1,5 @@
 NEXT STEPS:
 
-- guests (calls)
-
 - calendar; plan calls; invite guests
 
 - explore convex component for hirearchical tags for both direct usage (replace existing tag system) and to understand how optimized hireachical system work

@@ -958,7 +958,6 @@ export type DataModel = {
       by_resource: ["resourceType", "resourceId", "_creationTime"];
       by_resource_id: ["resourceId", "_creationTime"];
       by_shareId: ["shareId", "_creationTime"];
-      by_workspace_created: ["workspaceId", "createdAt", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

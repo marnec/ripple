@@ -8,11 +8,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
-import {
-  requireUser,
-  requireWorkspaceMember,
-  hasGuestShareAccess,
-} from "./authHelpers";
+import { requireUser, requireWorkspaceMember } from "./authHelpers";
 import { signToken } from "./tokenSigning";
 import { rateLimiter } from "./rateLimits";
 import { CF_API_BASE, ensureMeetingForChannel } from "./callSessions";
@@ -104,25 +100,32 @@ function isShareActive(share: Doc<"resourceShares">, now: number): boolean {
 }
 
 /**
- * Resolve the workspaceId that owns a resource — used when an admin creates
- * a share link, so we can confirm they are an admin of the owning workspace.
+ * Resolve the workspaceId that owns a resource. Dispatches on `resourceType`
+ * so the Id cast actually matches the table — avoids relying on Convex's
+ * runtime ID table check to catch a mismatched pair.
  */
 async function resolveResourceWorkspaceId(
   ctx: { db: import("./_generated/server").QueryCtx["db"] },
   resourceType: ShareResourceType,
   resourceId: string,
 ): Promise<Id<"workspaces">> {
-  if (resourceType === "channel") {
-    const channel = await ctx.db.get(resourceId as Id<"channels">);
-    if (!channel) throw new ConvexError("Channel not found");
-    return channel.workspaceId;
-  }
-  // All three share-eligible tables have `workspaceId` — one cast is enough.
-  const resource = await ctx.db.get(resourceId as Id<"documents">);
+  const resource = await (resourceType === "channel"
+    ? ctx.db.get(resourceId as Id<"channels">)
+    : resourceType === "document"
+      ? ctx.db.get(resourceId as Id<"documents">)
+      : resourceType === "diagram"
+        ? ctx.db.get(resourceId as Id<"diagrams">)
+        : ctx.db.get(resourceId as Id<"spreadsheets">));
   if (!resource) throw new ConvexError(`${resourceType} not found`);
-  return (resource as { workspaceId: Id<"workspaces"> }).workspaceId;
+  return resource.workspaceId;
 }
 
+/**
+ * Look up a share row by its public shareId. Uses `.first()` instead of
+ * `.unique()` so an astronomically-unlikely collision (two rows with the
+ * same shareId, which `createShare`'s retry loop already defends against)
+ * wouldn't poison every subsequent read with "found multiple" errors.
+ */
 async function loadShareByShareId(
   ctx: { db: import("./_generated/server").QueryCtx["db"] },
   shareId: string,
@@ -130,7 +133,7 @@ async function loadShareByShareId(
   return ctx.db
     .query("resourceShares")
     .withIndex("by_shareId", (q) => q.eq("shareId", shareId))
-    .unique();
+    .first();
 }
 
 // ---------------------------------------------------------------------------
@@ -205,12 +208,14 @@ export const listSharesForResource = query({
     await requireWorkspaceMember(ctx, workspaceId, {
       role: WorkspaceRole.ADMIN,
     });
-    return await ctx.db
+    const rows = await ctx.db
       .query("resourceShares")
       .withIndex("by_resource", (q) =>
         q.eq("resourceType", resourceType).eq("resourceId", resourceId),
       )
       .collect();
+    const now = Date.now();
+    return rows.filter((r) => isShareActive(r, now));
   },
 });
 
@@ -342,7 +347,16 @@ export const loadActiveShare = internalQuery({
   },
 });
 
-/** Periodic re-check used by partyserver for connected guests. */
+/**
+ * Periodic re-check used by partyserver for connected guests.
+ *
+ * Note: `accessLevel` is currently optional and, in practice, not passed by
+ * the partyserver check-access call. That's fine today because the share's
+ * accessLevel is IMMUTABLE after creation — so the level baked into the
+ * client's token can't drift from the DB row. If we ever add a mutation
+ * that updates accessLevel, callers MUST start passing the token's claimed
+ * level here so a downgraded share can't be exploited via an old token.
+ */
 export const checkGuestAccess = internalQuery({
   args: {
     shareId: v.string(),
@@ -356,19 +370,21 @@ export const checkGuestAccess = internalQuery({
   },
   returns: v.boolean(),
   handler: async (ctx, { shareId, resourceType, resourceId, accessLevel }) => {
-    const shareResourceType: ShareResourceType =
+    const expectedResourceType: ShareResourceType =
       resourceType === "doc"
         ? "document"
         : resourceType === "diagram"
           ? "diagram"
           : "spreadsheet";
-    return hasGuestShareAccess(
-      ctx,
-      shareId,
-      shareResourceType,
-      resourceId,
-      accessLevel,
-    );
+    const share = await loadShareByShareId(ctx, shareId);
+    if (!share) return false;
+    if (!isShareActive(share, Date.now())) return false;
+    if (share.resourceType !== expectedResourceType) return false;
+    if (share.resourceId !== resourceId) return false;
+    if (accessLevel !== undefined && share.accessLevel !== accessLevel) {
+      return false;
+    }
+    return true;
   },
 });
 

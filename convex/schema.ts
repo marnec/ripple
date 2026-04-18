@@ -470,8 +470,7 @@ export default defineSchema({
   })
     .index("by_shareId", ["shareId"])
     .index("by_resource", ["resourceType", "resourceId"])
-    .index("by_resource_id", ["resourceId"])
-    .index("by_workspace_created", ["workspaceId", "createdAt"]),
+    .index("by_resource_id", ["resourceId"]),
 
   recentActivity: defineTable({
     userId: v.id("users"),
