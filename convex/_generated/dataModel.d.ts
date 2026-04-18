@@ -206,6 +206,42 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  channelJoinRequests: {
+    document: {
+      channelId: Id<"channels">;
+      decidedAt?: number;
+      decidedBy?: Id<"users">;
+      status: "pending" | "approved" | "denied";
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"channelJoinRequests">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "channelId"
+      | "decidedAt"
+      | "decidedBy"
+      | "status"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel_status: ["channelId", "status", "_creationTime"];
+      by_channel_user_status: [
+        "channelId",
+        "userId",
+        "status",
+        "_creationTime",
+      ];
+      by_user_status: ["userId", "status", "_creationTime"];
+      by_workspace_status: ["workspaceId", "status", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   channelMembers: {
     document: {
       channelId: Id<"channels">;
@@ -668,6 +704,8 @@ export type DataModel = {
     document: {
       channelCreated: boolean;
       channelDeleted: boolean;
+      channelJoinDecision?: boolean;
+      channelJoinRequest?: boolean;
       chatChannelMessage: boolean;
       chatMention: boolean;
       diagramCreated: boolean;
@@ -693,6 +731,8 @@ export type DataModel = {
       | "_id"
       | "channelCreated"
       | "channelDeleted"
+      | "channelJoinDecision"
+      | "channelJoinRequest"
       | "chatChannelMessage"
       | "chatMention"
       | "diagramCreated"

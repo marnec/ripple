@@ -55,6 +55,8 @@ export const NOTIFICATION_CATEGORIES = [
   "projectDeleted",
   "channelCreated",
   "channelDeleted",
+  "channelJoinRequest",
+  "channelJoinDecision",
 ] as const;
 
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
@@ -78,6 +80,8 @@ export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> 
   projectDeleted: "Project deleted",
   channelCreated: "Channel created",
   channelDeleted: "Channel deleted",
+  channelJoinRequest: "Channel join requests",
+  channelJoinDecision: "Channel join decisions",
 };
 
 export type NotificationGroup = {
@@ -122,6 +126,8 @@ export const NOTIFICATION_GROUPS: NotificationGroup[] = [
       "projectDeleted",
       "channelCreated",
       "channelDeleted",
+      "channelJoinRequest",
+      "channelJoinDecision",
     ],
   },
 ];
@@ -182,4 +188,6 @@ export const DEFAULT_PREFERENCES: Record<NotificationCategory, boolean> = {
   projectDeleted: true,
   channelCreated: true,
   channelDeleted: true,
+  channelJoinRequest: true,
+  channelJoinDecision: true,
 };

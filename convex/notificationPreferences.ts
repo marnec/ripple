@@ -26,6 +26,8 @@ const preferencesValidator = v.object({
   projectDeleted: v.boolean(),
   channelCreated: v.boolean(),
   channelDeleted: v.boolean(),
+  channelJoinRequest: v.optional(v.boolean()),
+  channelJoinDecision: v.optional(v.boolean()),
 });
 
 export const get = query({
@@ -61,6 +63,8 @@ export const save = mutation({
     projectDeleted: v.boolean(),
     channelCreated: v.boolean(),
     channelDeleted: v.boolean(),
+    channelJoinRequest: v.optional(v.boolean()),
+    channelJoinDecision: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {

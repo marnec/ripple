@@ -155,6 +155,12 @@ export declare const api: {
     >;
   };
   channels: {
+    approveJoinRequest: FunctionReference<
+      "mutation",
+      "public",
+      { requestId: Id<"channelJoinRequests"> },
+      null
+    >;
     create: FunctionReference<
       "mutation",
       "public",
@@ -170,6 +176,12 @@ export declare const api: {
       "public",
       { otherUserId: Id<"users">; workspaceId: Id<"workspaces"> },
       Id<"channels">
+    >;
+    denyJoinRequest: FunctionReference<
+      "mutation",
+      "public",
+      { requestId: Id<"channelJoinRequests"> },
+      null
     >;
     findDm: FunctionReference<
       "query",
@@ -208,6 +220,12 @@ export declare const api: {
         }
       | null
     >;
+    getMyPendingRequest: FunctionReference<
+      "query",
+      "public",
+      { channelId: Id<"channels"> },
+      { _creationTime: number; _id: Id<"channelJoinRequests"> } | null
+    >;
     list: FunctionReference<
       "query",
       "public",
@@ -230,6 +248,22 @@ export declare const api: {
         name: string;
         type: "open" | "closed" | "dm";
         workspaceId: Id<"workspaces">;
+      }>
+    >;
+    listPendingRequestsForAdmin: FunctionReference<
+      "query",
+      "public",
+      {},
+      Array<{
+        _creationTime: number;
+        _id: Id<"channelJoinRequests">;
+        channelId: Id<"channels">;
+        channelName: string;
+        userEmail?: string;
+        userId: Id<"users">;
+        userName: string;
+        workspaceId: Id<"workspaces">;
+        workspaceName: string;
       }>
     >;
     remove: FunctionReference<
@@ -1085,6 +1119,8 @@ export declare const api: {
         _id: Id<"notificationPreferences">;
         channelCreated: boolean;
         channelDeleted: boolean;
+        channelJoinDecision?: boolean;
+        channelJoinRequest?: boolean;
         chatChannelMessage: boolean;
         chatMention: boolean;
         diagramCreated: boolean;
@@ -1110,6 +1146,8 @@ export declare const api: {
       {
         channelCreated: boolean;
         channelDeleted: boolean;
+        channelJoinDecision?: boolean;
+        channelJoinRequest?: boolean;
         chatChannelMessage: boolean;
         chatMention: boolean;
         diagramCreated: boolean;
@@ -2807,6 +2845,8 @@ export declare const internal: {
         _id: Id<"notificationPreferences">;
         channelCreated: boolean;
         channelDeleted: boolean;
+        channelJoinDecision?: boolean;
+        channelJoinRequest?: boolean;
         chatChannelMessage: boolean;
         chatMention: boolean;
         diagramCreated: boolean;
@@ -2835,6 +2875,8 @@ export declare const internal: {
         _id: Id<"notificationPreferences">;
         channelCreated: boolean;
         channelDeleted: boolean;
+        channelJoinDecision?: boolean;
+        channelJoinRequest?: boolean;
         chatChannelMessage: boolean;
         chatMention: boolean;
         diagramCreated: boolean;

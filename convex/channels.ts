@@ -8,7 +8,7 @@ import { internal } from "./_generated/api";
 import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete } from "./cascadeDelete";
-import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess } from "./authHelpers";
+import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess, requireUser } from "./authHelpers";
 import { notify } from "./utils/notify";
 import { channelTypeSchema } from "./schema";
 import type { Doc } from "./_generated/dataModel";
@@ -489,7 +489,6 @@ export const requestJoin = mutation({
 
     const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
 
-    // Check not already a member
     const existing = await ctx.db
       .query("channelMembers")
       .withIndex("by_channel_user", (q) =>
@@ -498,7 +497,22 @@ export const requestJoin = mutation({
       .first();
     if (existing) throw new ConvexError("Already a member of this channel");
 
-    // Notify channel admins
+    // Dedup: if a pending request already exists, no-op
+    const pending = await ctx.db
+      .query("channelJoinRequests")
+      .withIndex("by_channel_user_status", (q) =>
+        q.eq("channelId", channelId).eq("userId", userId).eq("status", "pending"),
+      )
+      .first();
+    if (pending) return null;
+
+    await ctx.db.insert("channelJoinRequests", {
+      workspaceId: channel.workspaceId,
+      channelId,
+      userId,
+      status: "pending",
+    });
+
     const user = await ctx.db.get(userId);
     const channelAdmins = await ctx.db
       .query("channelMembers")
@@ -508,13 +522,212 @@ export const requestJoin = mutation({
       .collect();
 
     await notify(ctx, {
-      category: "channelCreated",
+      category: "channelJoinRequest",
       userId,
       userName: getUserDisplayName(user),
       recipientIds: channelAdmins.map((a) => a.userId),
       title: `${getUserDisplayName(user)} wants to join #${channel.name}`,
-      body: "Go to channel settings to add them.",
-      url: `/workspaces/${channel.workspaceId}/channels/${channelId}/settings`,
+      body: "Open notifications to approve or deny.",
+      url: `/workspaces/${channel.workspaceId}`,
+    });
+
+    return null;
+  },
+});
+
+export const getMyPendingRequest = query({
+  args: { channelId: v.id("channels") },
+  returns: v.union(
+    v.object({
+      _id: v.id("channelJoinRequests"),
+      _creationTime: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { channelId }) => {
+    const channel = await ctx.db.get(channelId);
+    if (!channel) return null;
+    const auth = await checkWorkspaceMember(ctx, channel.workspaceId);
+    if (!auth) return null;
+
+    const pending = await ctx.db
+      .query("channelJoinRequests")
+      .withIndex("by_channel_user_status", (q) =>
+        q.eq("channelId", channelId).eq("userId", auth.userId).eq("status", "pending"),
+      )
+      .first();
+    if (!pending) return null;
+    return { _id: pending._id, _creationTime: pending._creationTime };
+  },
+});
+
+export const listPendingRequestsForAdmin = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("channelJoinRequests"),
+      _creationTime: v.number(),
+      channelId: v.id("channels"),
+      channelName: v.string(),
+      workspaceId: v.id("workspaces"),
+      workspaceName: v.string(),
+      userId: v.id("users"),
+      userName: v.string(),
+      userEmail: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx) => {
+    const auth = await requireUser(ctx);
+
+    const adminMemberships = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_user", (q) => q.eq("userId", auth))
+      .collect();
+    const adminChannelIds = new Set(
+      adminMemberships
+        .filter((m) => m.role === ChannelRole.ADMIN)
+        .map((m) => m.channelId),
+    );
+    if (adminChannelIds.size === 0) return [];
+
+    // Group admin channels by workspace to query once per workspace
+    const workspaceIds = new Set(
+      adminMemberships
+        .filter((m) => adminChannelIds.has(m.channelId))
+        .map((m) => m.workspaceId),
+    );
+
+    const requests: Doc<"channelJoinRequests">[] = [];
+    for (const workspaceId of workspaceIds) {
+      const rows = await ctx.db
+        .query("channelJoinRequests")
+        .withIndex("by_workspace_status", (q) =>
+          q.eq("workspaceId", workspaceId).eq("status", "pending"),
+        )
+        .collect();
+      for (const r of rows) {
+        if (adminChannelIds.has(r.channelId)) requests.push(r);
+      }
+    }
+
+    return Promise.all(
+      requests.map(async (r) => {
+        const [user, channel, workspace] = await Promise.all([
+          ctx.db.get(r.userId),
+          ctx.db.get(r.channelId),
+          ctx.db.get(r.workspaceId),
+        ]);
+        return {
+          _id: r._id,
+          _creationTime: r._creationTime,
+          channelId: r.channelId,
+          channelName: channel?.name ?? "(deleted channel)",
+          workspaceId: r.workspaceId,
+          workspaceName: workspace?.name ?? "(deleted workspace)",
+          userId: r.userId,
+          userName: user ? getUserDisplayName(user) : "(unknown user)",
+          userEmail: user?.email,
+        };
+      }),
+    );
+  },
+});
+
+export const approveJoinRequest = mutation({
+  args: { requestId: v.id("channelJoinRequests") },
+  returns: v.null(),
+  handler: async (ctx, { requestId }) => {
+    const request = await ctx.db.get(requestId);
+    if (!request) throw new ConvexError("Request not found");
+    if (request.status !== "pending") throw new ConvexError("Request already decided");
+
+    const { userId: adminId } = await requireChannelAccess(ctx, request.channelId, {
+      role: ChannelRole.ADMIN,
+    });
+
+    const alreadyMember = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_user", (q) =>
+        q.eq("channelId", request.channelId).eq("userId", request.userId),
+      )
+      .first();
+
+    const channel = await ctx.db.get(request.channelId);
+    if (!channel) throw new ConvexError("Channel not found");
+
+    if (!alreadyMember) {
+      const targetUser = await ctx.db.get(request.userId);
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.insert("channelMembers", {
+        userId: request.userId,
+        channelId: request.channelId,
+        workspaceId: request.workspaceId,
+        role: ChannelRole.MEMBER,
+        email: targetUser?.email,
+        name: targetUser ? getUserDisplayName(targetUser) : undefined,
+      });
+      await logActivity(ctx, {
+        userId: adminId,
+        resourceType: "channelMembers",
+        resourceId: request.channelId,
+        action: "member_added",
+        newValue: request.userId,
+        resourceName: channel.name,
+        scope: request.workspaceId,
+      });
+    }
+
+    await ctx.db.patch(requestId, {
+      status: "approved",
+      decidedBy: adminId,
+      decidedAt: Date.now(),
+    });
+
+    const admin = await ctx.db.get(adminId);
+    await notify(ctx, {
+      category: "channelJoinDecision",
+      userId: adminId,
+      userName: getUserDisplayName(admin),
+      recipientIds: [request.userId],
+      title: `Your request to join #${channel.name} was approved`,
+      body: `You can now access the channel.`,
+      url: `/workspaces/${request.workspaceId}/channels/${request.channelId}`,
+    });
+
+    return null;
+  },
+});
+
+export const denyJoinRequest = mutation({
+  args: { requestId: v.id("channelJoinRequests") },
+  returns: v.null(),
+  handler: async (ctx, { requestId }) => {
+    const request = await ctx.db.get(requestId);
+    if (!request) throw new ConvexError("Request not found");
+    if (request.status !== "pending") throw new ConvexError("Request already decided");
+
+    const { userId: adminId } = await requireChannelAccess(ctx, request.channelId, {
+      role: ChannelRole.ADMIN,
+    });
+
+    const channel = await ctx.db.get(request.channelId);
+    if (!channel) throw new ConvexError("Channel not found");
+
+    await ctx.db.patch(requestId, {
+      status: "denied",
+      decidedBy: adminId,
+      decidedAt: Date.now(),
+    });
+
+    const admin = await ctx.db.get(adminId);
+    await notify(ctx, {
+      category: "channelJoinDecision",
+      userId: adminId,
+      userName: getUserDisplayName(admin),
+      recipientIds: [request.userId],
+      title: `Your request to join #${channel.name} was declined`,
+      body: "Ask the channel admins for more information.",
+      url: `/workspaces/${request.workspaceId}`,
     });
 
     return null;

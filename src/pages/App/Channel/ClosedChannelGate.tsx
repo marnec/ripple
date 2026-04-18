@@ -1,8 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Lock, Users } from "lucide-react";
 import { useMutation } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { ConvexError } from "convex/values";
-import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -19,12 +19,12 @@ export function ClosedChannelGate({
   memberCount,
 }: ClosedChannelGateProps) {
   const requestJoin = useMutation(api.channels.requestJoin);
-  const [requested, setRequested] = useState(false);
+  const pendingRequest = useQuery(api.channels.getMyPendingRequest, { channelId });
+  const hasPending = pendingRequest !== undefined && pendingRequest !== null;
 
   const handleRequest = () => {
     requestJoin({ channelId })
       .then(() => {
-        setRequested(true);
         toast.success("Request sent to channel admins");
       })
       .catch((error) => {
@@ -48,10 +48,13 @@ export function ClosedChannelGate({
           <Users className="w-3.5 h-3.5" />
           <span>{memberCount} {memberCount === 1 ? "member" : "members"}</span>
         </div>
-        {requested ? (
-          <p className="text-sm text-muted-foreground">
-            Request sent. A channel admin will review it.
-          </p>
+        {hasPending ? (
+          <>
+            <Button disabled>Request pending</Button>
+            <p className="text-xs text-muted-foreground">
+              Your request is awaiting approval.
+            </p>
+          </>
         ) : (
           <Button onClick={handleRequest}>
             Ask to Join

@@ -53,6 +53,7 @@ export const cascadeRules = defineCascadeRules({
   channels: [
     { to: "messages", via: "by_channel", field: "channelId" },
     { to: "channelMembers", via: "by_channel", field: "channelId" },
+    { to: "channelJoinRequests", via: "by_channel_status", field: "channelId" },
     { to: "channelNotificationPreferences", via: "by_channel", field: "channelId" },
     { to: "notificationSubscriptions", via: "by_scope_category", field: "scope" },
     { to: "callSessions", via: "by_channel_active", field: "channelId" },

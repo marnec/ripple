@@ -29,6 +29,7 @@ import { DocumentSelectorList } from "./Document/DocumentSelectorList";
 import { ProjectSelectorList } from "./Project/ProjectSelectorList";
 import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
+import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
 
 export function AppSidebar() {
@@ -244,7 +245,12 @@ export function AppSidebar() {
         )}
       </SidebarContent>
       <SidebarFooter>
-        <NavUser />
+        <div className="flex items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <NavUser />
+          </div>
+          <NotificationDrawer />
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

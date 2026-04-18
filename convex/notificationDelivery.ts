@@ -111,7 +111,8 @@ export const getFilteredSubscriptions = internalQuery({
       enabledUserIds = userIds.filter((_, i) => {
         const prefs = prefsResults[i];
         if (!prefs) return DEFAULT_PREFERENCES[cat];
-        return prefs[cat as keyof typeof prefs];
+        const val = prefs[cat as keyof typeof prefs];
+        return val === undefined ? DEFAULT_PREFERENCES[cat] : val;
       });
     }
 

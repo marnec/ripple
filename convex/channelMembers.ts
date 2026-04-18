@@ -127,6 +127,21 @@ export const addToChannel = mutation({
       name: targetUser ? getUserDisplayName(targetUser) : undefined,
     });
 
+    // Auto-approve any pending join request for this user/channel
+    const pendingRequest = await ctx.db
+      .query("channelJoinRequests")
+      .withIndex("by_channel_user_status", (q) =>
+        q.eq("channelId", channelId).eq("userId", userId).eq("status", "pending"),
+      )
+      .first();
+    if (pendingRequest) {
+      await ctx.db.patch(pendingRequest._id, {
+        status: "approved",
+        decidedBy: callerId,
+        decidedAt: Date.now(),
+      });
+    }
+
     await logActivity(ctx, {
       userId: callerId, resourceType: "channelMembers", resourceId: channelId,
       action: "member_added", newValue: userId, resourceName: channel.name, scope: channel.workspaceId,

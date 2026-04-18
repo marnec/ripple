@@ -97,6 +97,23 @@ export default defineSchema({
     .index("by_workspace_user", ["workspaceId", "userId"])
     .index("by_channel_role", ["channelId", "role"]),
 
+  channelJoinRequests: defineTable({
+    workspaceId: v.id("workspaces"),
+    channelId: v.id("channels"),
+    userId: v.id("users"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("denied"),
+    ),
+    decidedBy: v.optional(v.id("users")),
+    decidedAt: v.optional(v.number()),
+  })
+    .index("by_channel_status", ["channelId", "status"])
+    .index("by_channel_user_status", ["channelId", "userId", "status"])
+    .index("by_workspace_status", ["workspaceId", "status"])
+    .index("by_user_status", ["userId", "status"]),
+
   documents: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
@@ -340,6 +357,8 @@ export default defineSchema({
     projectDeleted: v.boolean(),
     channelCreated: v.boolean(),
     channelDeleted: v.boolean(),
+    channelJoinRequest: v.optional(v.boolean()),
+    channelJoinDecision: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"]),
 

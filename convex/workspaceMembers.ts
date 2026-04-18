@@ -260,6 +260,17 @@ async function removeMembershipCascade(
     await db.delete(cm._id);
   }
 
+  // Delete any lingering channel join requests by this user in this workspace
+  const joinRequests = await ctx.db
+    .query("channelJoinRequests")
+    .withIndex("by_user_status", (q) => q.eq("userId", targetUserId))
+    .collect();
+  for (const req of joinRequests) {
+    if (req.workspaceId === workspaceId) {
+      await ctx.db.delete(req._id);
+    }
+  }
+
   await db.delete(targetMembership._id);
 }
 
