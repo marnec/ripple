@@ -1,5 +1,7 @@
 NEXT STEPS:
 
+- paginate resource researches
+
 - calendar; plan calls; invite guests
 
 - unify resource tags and task labels

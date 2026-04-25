@@ -1,34 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Color,
-  GLSL3,
-  Mesh,
-  OrthographicCamera,
-  PlaneGeometry,
-  Scene,
-  ShaderMaterial,
-  Vector2,
-  WebGLRenderer,
-} from "three";
 import { RippleLogo } from "@/components/RippleLogo";
 
-const vertexShader = /* glsl */ `
-#pragma vscode_glsllint_stage : vert
-#ifdef GLSLLINT
-  in vec3 position;
-  in vec2 uv;
-  uniform mat4 projectionMatrix;
-  uniform mat4 modelViewMatrix;
-#endif
-  out vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
+const vertexShaderSource = /* glsl */ `#version 300 es
+in vec2 a_position;
+out vec2 vUv;
+void main() {
+  vUv = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}
 `;
 
-const fragmentShader = /* glsl */ `
-#pragma vscode_glsllint_stage : frag
+const fragmentShaderSource = /* glsl */ `#version 300 es
   precision highp float;
   in vec2 vUv;
   out vec4 fragColor;
@@ -86,7 +68,7 @@ const fragmentShader = /* glsl */ `
     p.x *= uResolution.x / max(uResolution.y, 1.0);
     float r = length(p);
 
-    float n = (valueNoise(p * 6.0 + uTime * 0.5) - 0.5) * 0.012;
+    float n = (valueNoise(p * 6.0 + uTime * 0.15) - 0.5) * 0.012;
     float rN = r + n;
 
     float brightness = centerDisc(rN);
@@ -133,6 +115,41 @@ function parseCssColorToRgb(
   return { r: r / 255, g: g / 255, b: b / 255 };
 }
 
+function compileShader(
+  gl: WebGL2RenderingContext,
+  type: number,
+  source: string,
+): WebGLShader | null {
+  const shader = gl.createShader(type);
+  if (!shader) return null;
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    console.error("Shader compile failed:", gl.getShaderInfoLog(shader));
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+}
+
+function linkProgram(
+  gl: WebGL2RenderingContext,
+  vs: WebGLShader,
+  fs: WebGLShader,
+): WebGLProgram | null {
+  const program = gl.createProgram();
+  if (!program) return null;
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error("Program link failed:", gl.getProgramInfoLog(program));
+    gl.deleteProgram(program);
+    return null;
+  }
+  return program;
+}
+
 export function RippleLogoCanvas({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [webglSupported] = useState(detectWebGL2);
@@ -142,32 +159,53 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const renderer = new WebGLRenderer({
-      canvas,
+    const gl = canvas.getContext("webgl2", {
       alpha: true,
       antialias: false,
       premultipliedAlpha: false,
     });
+    if (!gl) return;
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0);
+    const vs = compileShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    const fs = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+    if (!vs || !fs) return;
+    const program = linkProgram(gl, vs, fs);
+    if (!program) return;
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
 
-    const scene = new Scene();
-    const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const geometry = new PlaneGeometry(2, 2);
+    // Fullscreen triangle: covers NDC -1..1 with a single triangle.
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 3, -1, -1, 3]),
+      gl.STATIC_DRAW,
+    );
 
-    const uniforms = {
-      uResolution: { value: new Vector2(1, 1) },
-      uMouseUv: { value: new Vector2(-1, -1) },
-      uHoverIntensity: { value: 0 },
-      uColor: { value: new Color(0xffffff) },
-      uTime: { value: 0 },
-    };
+    const positionLoc = gl.getAttribLocation(program, "a_position");
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.enableVertexAttribArray(positionLoc);
+    gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
 
+    const uResolutionLoc = gl.getUniformLocation(program, "uResolution");
+    const uMouseUvLoc = gl.getUniformLocation(program, "uMouseUv");
+    const uHoverLoc = gl.getUniformLocation(program, "uHoverIntensity");
+    const uColorLoc = gl.getUniformLocation(program, "uColor");
+    const uTimeLoc = gl.getUniformLocation(program, "uTime");
+
+    let colorR = 1;
+    let colorG = 1;
+    let colorB = 1;
     const readColor = () => {
       const css = getComputedStyle(canvas).color;
       const rgb = parseCssColorToRgb(css);
-      if (rgb) uniforms.uColor.value.setRGB(rgb.r, rgb.g, rgb.b);
+      if (rgb) {
+        colorR = rgb.r;
+        colorG = rgb.g;
+        colorB = rgb.b;
+      }
     };
     readColor();
 
@@ -177,32 +215,21 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
       attributeFilter: ["class", "data-theme", "style"],
     });
 
-    const material = new ShaderMaterial({
-      glslVersion: GLSL3,
-      uniforms,
-      vertexShader,
-      fragmentShader,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    });
-
-    const mesh = new Mesh(geometry, material);
-    scene.add(mesh);
+    let mouseX = -1;
+    let mouseY = -1;
+    let targetMouseX = -1;
+    let targetMouseY = -1;
+    let hover = 0;
+    let targetHover = 0;
 
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    const targetMouseUv = new Vector2(-1, -1);
-    let targetHover = 0;
-
     const onPointerMove = (e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
-      targetMouseUv.set(
-        (e.clientX - rect.left) / rect.width,
-        1 - (e.clientY - rect.top) / rect.height,
-      );
+      targetMouseX = (e.clientX - rect.left) / rect.width;
+      targetMouseY = 1 - (e.clientY - rect.top) / rect.height;
     };
     const onPointerEnter = () => {
       targetHover = 1;
@@ -217,30 +244,42 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
       canvas.addEventListener("pointerleave", onPointerLeave);
     }
 
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    let bufferW = 1;
+    let bufferH = 1;
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
-      const w = Math.max(1, rect.width);
-      const h = Math.max(1, rect.height);
-      renderer.setSize(w, h, false);
-      uniforms.uResolution.value.set(w, h);
+      bufferW = Math.max(1, Math.floor(rect.width * dpr));
+      bufferH = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width !== bufferW) canvas.width = bufferW;
+      if (canvas.height !== bufferH) canvas.height = bufferH;
+      gl.viewport(0, 0, bufferW, bufferH);
     };
     resize();
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(canvas);
 
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    gl.clearColor(0, 0, 0, 0);
+
     let rafId = 0;
     const animate = (now: number) => {
-      const m = uniforms.uMouseUv.value;
-      if (targetMouseUv.x >= 0) {
-        m.x += (targetMouseUv.x - m.x) * 0.15;
-        m.y += (targetMouseUv.y - m.y) * 0.15;
+      if (targetMouseX >= 0) {
+        mouseX += (targetMouseX - mouseX) * 0.15;
+        mouseY += (targetMouseY - mouseY) * 0.15;
       }
-      uniforms.uHoverIntensity.value +=
-        (targetHover - uniforms.uHoverIntensity.value) * 0.08;
-      uniforms.uTime.value = now * 0.001;
+      hover += (targetHover - hover) * 0.08;
 
-      renderer.render(scene, camera);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.uniform2f(uResolutionLoc, bufferW, bufferH);
+      gl.uniform2f(uMouseUvLoc, mouseX, mouseY);
+      gl.uniform1f(uHoverLoc, hover);
+      gl.uniform3f(uColorLoc, colorR, colorG, colorB);
+      gl.uniform1f(uTimeLoc, now * 0.001);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
       rafId = requestAnimationFrame(animate);
     };
     rafId = requestAnimationFrame(animate);
@@ -254,9 +293,9 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
         canvas.removeEventListener("pointerenter", onPointerEnter);
         canvas.removeEventListener("pointerleave", onPointerLeave);
       }
-      geometry.dispose();
-      material.dispose();
-      renderer.dispose();
+      gl.deleteProgram(program);
+      gl.deleteBuffer(positionBuffer);
+      gl.deleteVertexArray(vao);
     };
   }, [webglSupported]);
 
