@@ -36,6 +36,11 @@
       "sourceType": "github",
       "computedHash": "ad055544599481182d0079c4198e85da26677cb408a677be2da04915375f0427"
     },
+    "threejs-shaders": {
+      "source": "cloudai-x/threejs-skills",
+      "sourceType": "github",
+      "computedHash": "649ceb058edfb5cfd51e80fb3a6c57aca9bab4a9d3a03f6077aa9502be0c0771"
+    },
     "write-a-prd": {
       "source": "mattpocock/skills",
       "sourceType": "github",
