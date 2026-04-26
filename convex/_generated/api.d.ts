@@ -282,15 +282,29 @@ export declare const api: {
       "query",
       "public",
       {
+        paginationOpts: {
+          cursor: string | null;
+          endCursor?: string | null;
+          id?: number;
+          maximumBytesRead?: number;
+          maximumRowsRead?: number;
+          numItems: number;
+        };
         searchText?: string;
         type?: "open" | "closed" | "dm";
         workspaceId: Id<"workspaces">;
       },
-      Array<{
-        _id: Id<"channels">;
-        name: string;
-        type: "open" | "closed" | "dm";
-      }>
+      {
+        continueCursor: string;
+        isDone: boolean;
+        page: Array<{
+          _id: Id<"channels">;
+          name: string;
+          type: "open" | "closed" | "dm";
+        }>;
+        pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+        splitCursor?: string | null;
+      }
     >;
     update: FunctionReference<
       "mutation",
@@ -538,18 +552,32 @@ export declare const api: {
       "public",
       {
         isFavorite?: boolean;
+        paginationOpts: {
+          cursor: string | null;
+          endCursor?: string | null;
+          id?: number;
+          maximumBytesRead?: number;
+          maximumRowsRead?: number;
+          numItems: number;
+        };
         searchText?: string;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      Array<{
-        _creationTime: number;
-        _id: Id<"diagrams">;
-        name: string;
-        tags?: Array<string>;
-        workspaceId: Id<"workspaces">;
-        yjsSnapshotId?: Id<"_storage">;
-      }>
+      {
+        continueCursor: string;
+        isDone: boolean;
+        page: Array<{
+          _creationTime: number;
+          _id: Id<"diagrams">;
+          name: string;
+          tags?: Array<string>;
+          workspaceId: Id<"workspaces">;
+          yjsSnapshotId?: Id<"_storage">;
+        }>;
+        pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+        splitCursor?: string | null;
+      }
     >;
     updateTags: FunctionReference<
       "mutation",
@@ -648,18 +676,32 @@ export declare const api: {
       "public",
       {
         isFavorite?: boolean;
+        paginationOpts: {
+          cursor: string | null;
+          endCursor?: string | null;
+          id?: number;
+          maximumBytesRead?: number;
+          maximumRowsRead?: number;
+          numItems: number;
+        };
         searchText?: string;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      Array<{
-        _creationTime: number;
-        _id: Id<"documents">;
-        name: string;
-        tags?: Array<string>;
-        workspaceId: Id<"workspaces">;
-        yjsSnapshotId?: Id<"_storage">;
-      }>
+      {
+        continueCursor: string;
+        isDone: boolean;
+        page: Array<{
+          _creationTime: number;
+          _id: Id<"documents">;
+          name: string;
+          tags?: Array<string>;
+          workspaceId: Id<"workspaces">;
+          yjsSnapshotId?: Id<"_storage">;
+        }>;
+        pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+        splitCursor?: string | null;
+      }
     >;
     updateTags: FunctionReference<
       "mutation",
@@ -1256,22 +1298,36 @@ export declare const api: {
       "public",
       {
         isFavorite?: boolean;
+        paginationOpts: {
+          cursor: string | null;
+          endCursor?: string | null;
+          id?: number;
+          maximumBytesRead?: number;
+          maximumRowsRead?: number;
+          numItems: number;
+        };
         searchText?: string;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      Array<{
-        _creationTime: number;
-        _id: Id<"projects">;
-        color: string;
-        creatorId: Id<"users">;
-        description?: string;
-        key?: string;
-        name: string;
-        tags?: Array<string>;
-        taskCounter?: number;
-        workspaceId: Id<"workspaces">;
-      }>
+      {
+        continueCursor: string;
+        isDone: boolean;
+        page: Array<{
+          _creationTime: number;
+          _id: Id<"projects">;
+          color: string;
+          creatorId: Id<"users">;
+          description?: string;
+          key?: string;
+          name: string;
+          tags?: Array<string>;
+          taskCounter?: number;
+          workspaceId: Id<"workspaces">;
+        }>;
+        pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+        splitCursor?: string | null;
+      }
     >;
     update: FunctionReference<
       "mutation",
@@ -1513,18 +1569,32 @@ export declare const api: {
       "public",
       {
         isFavorite?: boolean;
+        paginationOpts: {
+          cursor: string | null;
+          endCursor?: string | null;
+          id?: number;
+          maximumBytesRead?: number;
+          maximumRowsRead?: number;
+          numItems: number;
+        };
         searchText?: string;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
-      Array<{
-        _creationTime: number;
-        _id: Id<"spreadsheets">;
-        name: string;
-        tags?: Array<string>;
-        workspaceId: Id<"workspaces">;
-        yjsSnapshotId?: Id<"_storage">;
-      }>
+      {
+        continueCursor: string;
+        isDone: boolean;
+        page: Array<{
+          _creationTime: number;
+          _id: Id<"spreadsheets">;
+          name: string;
+          tags?: Array<string>;
+          workspaceId: Id<"workspaces">;
+          yjsSnapshotId?: Id<"_storage">;
+        }>;
+        pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+        splitCursor?: string | null;
+      }
     >;
     updateTags: FunctionReference<
       "mutation",

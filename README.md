@@ -6,7 +6,7 @@ NEXT STEPS:
 
 - import spreadsheets from excel, csv
 
-- import 
+- import diagrams from excalidraw file
 
 - calendar; plan calls; invite guests
 

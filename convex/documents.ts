@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
 import { DEFAULT_DOC_NAME } from "@shared/constants";
 import { auditLog, logActivity } from "./auditLog";
@@ -110,28 +111,34 @@ export const search = query({
     searchText: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     isFavorite: v.optional(v.boolean()),
+    paginationOpts: paginationOptsValidator,
   },
-  returns: v.array(documentValidator),
-  handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
+  returns: v.object({
+    page: v.array(documentValidator),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+    splitCursor: v.optional(v.union(v.string(), v.null())),
+    pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
+  }),
+  handler: async (ctx, { workspaceId, searchText, tags, isFavorite, paginationOpts }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    let results;
-    if (searchText?.trim()) {
-      results = await ctx.db
-        .query("documents")
-        .withSearchIndex("by_name", (q) =>
-          q.search("name", searchText).eq("workspaceId", workspaceId),
-        )
-        .collect();
-    } else {
-      results = await ctx.db
-        .query("documents")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .collect();
-    }
+    const result = searchText?.trim()
+      ? await ctx.db
+          .query("documents")
+          .withSearchIndex("by_name", (q) =>
+            q.search("name", searchText).eq("workspaceId", workspaceId),
+          )
+          .paginate(paginationOpts)
+      : await ctx.db
+          .query("documents")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .paginate(paginationOpts);
+
+    let page = result.page;
 
     if (tags && tags.length > 0) {
-      results = results.filter(
+      page = page.filter(
         (doc) => doc.tags && tags.every((t) => doc.tags!.includes(t)),
       );
     }
@@ -144,12 +151,12 @@ export const search = query({
         )
         .collect();
       const favSet = new Set(favs.map((f) => f.resourceId));
-      results = isFavorite
-        ? results.filter((doc) => favSet.has(doc._id))
-        : results.filter((doc) => !favSet.has(doc._id));
+      page = isFavorite
+        ? page.filter((doc) => favSet.has(doc._id))
+        : page.filter((doc) => !favSet.has(doc._id));
     }
 
-    return results;
+    return { ...result, page };
   },
 });
 

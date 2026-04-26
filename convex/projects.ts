@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
 import { WorkspaceRole } from "@shared/enums";
 import { logActivity } from "./auditLog";
@@ -109,28 +110,34 @@ export const search = query({
     searchText: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     isFavorite: v.optional(v.boolean()),
+    paginationOpts: paginationOptsValidator,
   },
-  returns: v.array(projectValidator),
-  handler: async (ctx, { workspaceId, searchText, tags, isFavorite }) => {
+  returns: v.object({
+    page: v.array(projectValidator),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+    splitCursor: v.optional(v.union(v.string(), v.null())),
+    pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
+  }),
+  handler: async (ctx, { workspaceId, searchText, tags, isFavorite, paginationOpts }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    let results;
-    if (searchText?.trim()) {
-      results = await ctx.db
-        .query("projects")
-        .withSearchIndex("by_name", (q) =>
-          q.search("name", searchText).eq("workspaceId", workspaceId),
-        )
-        .collect();
-    } else {
-      results = await ctx.db
-        .query("projects")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .collect();
-    }
+    const result = searchText?.trim()
+      ? await ctx.db
+          .query("projects")
+          .withSearchIndex("by_name", (q) =>
+            q.search("name", searchText).eq("workspaceId", workspaceId),
+          )
+          .paginate(paginationOpts)
+      : await ctx.db
+          .query("projects")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .paginate(paginationOpts);
+
+    let page = result.page;
 
     if (tags && tags.length > 0) {
-      results = results.filter(
+      page = page.filter(
         (p) => p.tags && tags.every((t) => p.tags!.includes(t)),
       );
     }
@@ -143,12 +150,12 @@ export const search = query({
         )
         .collect();
       const favSet = new Set(favs.map((f) => f.resourceId));
-      results = isFavorite
-        ? results.filter((p) => favSet.has(p._id))
-        : results.filter((p) => !favSet.has(p._id));
+      page = isFavorite
+        ? page.filter((p) => favSet.has(p._id))
+        : page.filter((p) => !favSet.has(p._id));
     }
 
-    return results;
+    return { ...result, page };
   },
 });
 

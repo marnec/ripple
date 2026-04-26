@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { ChannelRole, ChannelType } from "@shared/enums";
 import { getAll } from "convex-helpers/server/relationships";
@@ -203,39 +204,46 @@ export const search = query({
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
     type: v.optional(channelTypeSchema),
+    paginationOpts: paginationOptsValidator,
   },
-  returns: v.array(v.object({ _id: v.id("channels"), name: v.string(), type: channelTypeSchema })),
-  handler: async (ctx, { workspaceId, searchText, type }) => {
+  returns: v.object({
+    page: v.array(v.object({ _id: v.id("channels"), name: v.string(), type: channelTypeSchema })),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+    splitCursor: v.optional(v.union(v.string(), v.null())),
+    pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
+  }),
+  handler: async (ctx, { workspaceId, searchText, type, paginationOpts }) => {
     await requireWorkspaceMember(ctx, workspaceId);
 
-    let results;
-    if (searchText?.trim()) {
-      results = await ctx.db
-        .query("channels")
-        .withSearchIndex("by_name", (q) => {
-          const base = q.search("name", searchText).eq("workspaceId", workspaceId);
-          return type !== undefined ? base.eq("type", type) : base;
-        })
-        .collect();
-    } else if (type !== undefined) {
-      results = await ctx.db
-        .query("channels")
-        .withIndex("by_type_workspace", (q) =>
-          q.eq("type", type).eq("workspaceId", workspaceId),
-        )
-        .collect();
-    } else {
-      results = await ctx.db
-        .query("channels")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .collect();
-    }
+    const result = searchText?.trim()
+      ? await ctx.db
+          .query("channels")
+          .withSearchIndex("by_name", (q) => {
+            const base = q.search("name", searchText).eq("workspaceId", workspaceId);
+            return type !== undefined ? base.eq("type", type) : base;
+          })
+          .paginate(paginationOpts)
+      : type !== undefined
+        ? await ctx.db
+            .query("channels")
+            .withIndex("by_type_workspace", (q) =>
+              q.eq("type", type).eq("workspaceId", workspaceId),
+            )
+            .paginate(paginationOpts)
+        : await ctx.db
+            .query("channels")
+            .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+            .paginate(paginationOpts);
 
-    return results.map(normalizeChannel).map((c) => ({
-      _id: c._id,
-      name: c.name,
-      type: c.type,
-    }));
+    return {
+      ...result,
+      page: result.page.map(normalizeChannel).map((c) => ({
+        _id: c._id,
+        name: c.name,
+        type: c.type,
+      })),
+    };
   },
 });
 

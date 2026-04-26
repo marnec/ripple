@@ -1,6 +1,7 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -12,8 +13,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { ChannelVisibilityFilter, FavoriteFilter } from "@/hooks/use-debounced-search";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { cn } from "@/lib/utils";
-import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache";;
+import { useMutation, usePaginatedQuery } from "convex/react";
+import { useQuery } from "convex-helpers/react/cache";
 import { format, isThisYear } from "date-fns";
 import { Globe, Lock, Star, StarOff, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -24,6 +25,8 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import type { BrowsableResourceType as ResourceType, FavoritableResourceType as FavoritableType } from "@shared/types/resources";
 
 type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; type?: string };
+
+const PAGE_SIZE = 20;
 
 const SEARCH_APIS = {
   document: api.documents.search,
@@ -81,6 +84,8 @@ export type SearchResultsProps = {
   subPath?: string;
 };
 
+type PaginationStatus = "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted";
+
 function useResourceSearch(
   resourceType: ResourceType,
   workspaceId: Id<"workspaces">,
@@ -88,22 +93,27 @@ function useResourceSearch(
   tags?: string[],
   isFavorite?: boolean,
   channelType?: "open" | "closed",
-) {
-  const channelResults = useQuery(
+): { results: SearchResult[]; status: PaginationStatus; loadMore: (n: number) => void } {
+  const channelPagination = usePaginatedQuery(
     SEARCH_APIS.channel,
     resourceType === "channel" ? { workspaceId, searchText, type: channelType } : "skip",
+    { initialNumItems: PAGE_SIZE },
   );
 
-  const resourceResults = useQuery(
+  const resourcePagination = usePaginatedQuery(
     resourceType !== "channel" ? SEARCH_APIS[resourceType] : SEARCH_APIS.document,
     resourceType !== "channel"
       ? { workspaceId, searchText, tags, isFavorite }
       : "skip",
+    { initialNumItems: PAGE_SIZE },
   );
 
-  return (resourceType === "channel" ? channelResults : resourceResults) as
-    | SearchResult[]
-    | undefined;
+  const active = resourceType === "channel" ? channelPagination : resourcePagination;
+  return {
+    results: active.results as SearchResult[],
+    status: active.status,
+    loadMore: active.loadMore,
+  };
 }
 
 function useIsLoadingCallback(
@@ -240,6 +250,31 @@ function ResourceMobileRow({
   );
 }
 
+// ─── Load more footer ─────────────────────────────────────────────────────────
+
+function LoadMoreFooter({
+  status,
+  onLoadMore,
+}: {
+  status: PaginationStatus;
+  onLoadMore: () => void;
+}) {
+  if (status === "Exhausted" || status === "LoadingFirstPage") return null;
+  const isLoading = status === "LoadingMore";
+  return (
+    <div className="mt-4 flex justify-center">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onLoadMore}
+        disabled={isLoading}
+      >
+        {isLoading ? "Loading…" : "Load more"}
+      </Button>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function SearchResults({
@@ -254,7 +289,7 @@ export function SearchResults({
   showFavorites,
   subPath,
 }: SearchResultsProps) {
-  const results = useResourceSearch(
+  const { results, status, loadMore } = useResourceSearch(
     resourceType,
     workspaceId,
     searchText,
@@ -262,7 +297,12 @@ export function SearchResults({
     isFavorite,
     channelVisibilityToType(channelVisibility ?? "all"),
   );
-  const rendered = useAnimatedQuery(results);
+
+  // While the query resets after a filter change (LoadingFirstPage), feed
+  // `undefined` to keep the previously-rendered page visible until the new
+  // first page arrives — preserves the smooth fade between filter changes.
+  const liveResults = status === "LoadingFirstPage" ? undefined : results;
+  const rendered = useAnimatedQuery(liveResults);
   const isMobile = useIsMobile();
 
   // Track which row has its swipe action revealed (only one at a time)
@@ -281,8 +321,9 @@ export function SearchResults({
     return () => document.removeEventListener("click", onTap);
   }, [swipeOpenId]);
 
-  // Loading = query re-subscribing (undefined) while we have stale data buffered
-  useIsLoadingCallback(results === undefined, onLoadingChange);
+  // Loading = first page hasn't resolved yet (subsequent pages have their own
+  // affordance via the Load more button).
+  useIsLoadingCallback(status === "LoadingFirstPage", onLoadingChange);
 
   // Still waiting for initial data
   if (rendered == null) return null;
@@ -299,39 +340,45 @@ export function SearchResults({
     );
   }
 
+  const handleLoadMore = () => loadMore(PAGE_SIZE);
+
   // ── Mobile: separated row items with swipe-to-reveal action ─────────────
   if (isMobile) {
     // Channels: flat grouped list (no rounded per-item, divider-separated)
     // Others:   pill cards with gap between each item
     const isChannel = resourceType === "channel";
     return (
-      <div
-        ref={listRef}
-        className={
-          isChannel
-            ? "flex flex-col overflow-hidden rounded-lg border border-border divide-y divide-border"
-            : "flex flex-col gap-1.5"
-        }
-      >
-        {rendered.map((resource) => (
-          <ResourceMobileRow
-            key={resource._id}
-            resource={resource}
-            resourceType={resourceType}
-            workspaceId={workspaceId}
-            subPath={subPath}
-            showFavorites={showFavorites}
-            isSwipeOpen={swipeOpenId === resource._id}
-            onSwipeOpenChange={(open) => setSwipeOpenId(open ? resource._id : null)}
-            onSwipeStart={closeAllSwipes}
-          />
-        ))}
-      </div>
+      <>
+        <div
+          ref={listRef}
+          className={
+            isChannel
+              ? "flex flex-col overflow-hidden rounded-lg border border-border divide-y divide-border"
+              : "flex flex-col gap-1.5"
+          }
+        >
+          {rendered.map((resource) => (
+            <ResourceMobileRow
+              key={resource._id}
+              resource={resource}
+              resourceType={resourceType}
+              workspaceId={workspaceId}
+              subPath={subPath}
+              showFavorites={showFavorites}
+              isSwipeOpen={swipeOpenId === resource._id}
+              onSwipeOpenChange={(open) => setSwipeOpenId(open ? resource._id : null)}
+              onSwipeStart={closeAllSwipes}
+            />
+          ))}
+        </div>
+        <LoadMoreFooter status={status} onLoadMore={handleLoadMore} />
+      </>
     );
   }
 
   // ── Desktop: card grid with always-visible star ───────────────────────────
   return (
+    <>
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {rendered.map((resource) => (
         <Card
@@ -388,5 +435,7 @@ export function SearchResults({
         </Card>
       ))}
     </div>
+    <LoadMoreFooter status={status} onLoadMore={handleLoadMore} />
+    </>
   );
 }
