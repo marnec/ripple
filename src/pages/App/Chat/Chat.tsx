@@ -161,7 +161,10 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           {/* Inline Search — hidden in compact variant */}
           {variant === "full" && (
             <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 border-b">
-              <div className="relative mx-auto w-full max-w-md flex items-center gap-2">
+              <div className="flex h-8 flex-1 min-w-0 items-center gap-2">
+                <h1 className="hidden sm:block text-lg font-semibold truncate">{channel?.name}</h1>
+              </div>
+              <div className="relative w-full max-w-md flex items-center gap-2">
                 <div className="relative flex-1">
                   <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -190,15 +193,17 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
                   </Button>
                 </SearchDialog>
               </div>
-              {!isMobile && (
-                <Link
-                  to="settings"
-                  className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
-                  title="Channel settings"
-                >
-                  <Settings className="size-4" />
-                </Link>
-              )}
+              <div className="flex h-8 flex-1 items-center justify-end gap-3">
+                {!isMobile && (
+                  <Link
+                    to="settings"
+                    className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+                    title="Channel settings"
+                  >
+                    <Settings className="size-4" />
+                  </Link>
+                )}
+              </div>
             </div>
           )}
           {isMobile && variant === "full" && (

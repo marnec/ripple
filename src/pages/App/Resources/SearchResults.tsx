@@ -110,7 +110,10 @@ function useIsLoadingCallback(
   isLoading: boolean,
   onLoadingChange?: (loading: boolean) => void,
 ) {
-  const prevIsLoading = useRef(isLoading);
+  // Sentinel `null` ensures the first effect run always reports state to the
+  // parent — otherwise a query that resolves synchronously on mount would
+  // leave the parent stuck on its initial `isLoading: true`.
+  const prevIsLoading = useRef<boolean | null>(null);
   useEffect(() => {
     if (prevIsLoading.current !== isLoading) {
       prevIsLoading.current = isLoading;

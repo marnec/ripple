@@ -1,8 +1,12 @@
 NEXT STEPS:
 
 - paginate resource researches
+
 - fix spinners never stopping on research pages
 
+- import spreadsheets from excel, csv
+
+- import 
 
 - calendar; plan calls; invite guests
 
