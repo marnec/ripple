@@ -1,10 +1,10 @@
 import type RTKClient from "@cloudflare/realtimekit";
-import { useRealtimeKitClient } from "@cloudflare/realtimekit-react";
-import { RtkParticipantsAudio } from "@cloudflare/realtimekit-react-ui";
 import { useAction, useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import {
   createContext,
+  lazy,
+  Suspense,
   useContext,
   useEffect,
   useRef,
@@ -12,6 +12,14 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Id } from "../../convex/_generated/dataModel";
+
+// Lazy-loaded so the ~1.48 MB realtimekit-ui bundle is fetched only when a
+// call is actually joined, not on every page load.
+const LazyRtkParticipantsAudio = lazy(() =>
+  import("@cloudflare/realtimekit-react-ui").then((m) => ({
+    default: m.RtkParticipantsAudio,
+  })),
+);
 
 const joinCallRef = makeFunctionReference<
   "action",
@@ -58,7 +66,24 @@ export function ActiveCallProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [meeting, initMeeting] = useRealtimeKitClient();
+  const [meeting, setMeeting] = useState<RTKClient | null>(null);
+  const initMeetingRunning = useRef(false);
+  const initMeeting = async (
+    options: Parameters<typeof RTKClient.init>[0],
+  ): Promise<RTKClient | undefined> => {
+    if (initMeetingRunning.current) return undefined;
+    initMeetingRunning.current = true;
+    try {
+      const { default: RTKClientCtor } = await import(
+        "@cloudflare/realtimekit"
+      );
+      const m = await RTKClientCtor.init(options);
+      setMeeting(m);
+      return m;
+    } finally {
+      initMeetingRunning.current = false;
+    }
+  };
   const [channelId, setChannelId] = useState<Id<"channels"> | null>(null);
   const [workspaceId, setWorkspaceId] = useState<Id<"workspaces"> | null>(null);
   const [status, setStatus] = useState<CallStatus>("idle");
@@ -209,7 +234,9 @@ export function ActiveCallProvider({
     >
       {/* Audio always plays regardless of which view is active */}
       {meeting && status === "joined" && (
-        <RtkParticipantsAudio meeting={meeting} />
+        <Suspense fallback={null}>
+          <LazyRtkParticipantsAudio meeting={meeting} />
+        </Suspense>
       )}
       {children}
     </ActiveCallContext.Provider>
