@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { RippleLogo } from "@/components/RippleLogo";
 
 const vertexShaderSource = /* glsl */ `#version 300 es
@@ -154,7 +154,7 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [webglSupported] = useState(detectWebGL2);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!webglSupported) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -165,6 +165,11 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
       premultipliedAlpha: false,
     });
     if (!gl) return;
+
+    // Clear to transparent before the browser's first paint to avoid a
+    // white flash from the uninitialized canvas backing store.
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     const vs = compileShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const fs = compileShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
@@ -262,9 +267,9 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
 
     gl.useProgram(program);
     gl.bindVertexArray(vao);
-    gl.clearColor(0, 0, 0, 0);
 
     let rafId = 0;
+    let firstFrame = true;
     const animate = (now: number) => {
       if (targetMouseX >= 0) {
         mouseX += (targetMouseX - mouseX) * 0.15;
@@ -280,6 +285,11 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
       gl.uniform1f(uTimeLoc, now * 0.001);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
+      if (firstFrame) {
+        firstFrame = false;
+        canvas.style.visibility = "visible";
+        canvas.style.opacity = "1";
+      }
       rafId = requestAnimationFrame(animate);
     };
     rafId = requestAnimationFrame(animate);
@@ -305,7 +315,12 @@ export function RippleLogoCanvas({ className }: { className?: string }) {
       ref={canvasRef}
       className={className}
       aria-hidden="true"
-      style={{ display: "block" }}
+      style={{
+        display: "block",
+        visibility: "hidden",
+        opacity: 0,
+        transition: "opacity 800ms ease",
+      }}
     />
   );
 }

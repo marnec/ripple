@@ -1,6 +1,8 @@
 NEXT STEPS:
 
 - paginate resource researches
+- fix spinners never stopping on research pages
+
 
 - calendar; plan calls; invite guests
 

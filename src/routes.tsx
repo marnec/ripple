@@ -1,31 +1,12 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { RouteErrorFallback } from "./components/RouteErrorFallback";
-import App from "./pages/App/App";
-import { ChannelDetails } from "./pages/App/Channel/ChannelDetails";
-import { ChatContainer } from "./pages/App/Chat/ChatContainer";
-import { Diagrams } from "./pages/App/Diagram/Diagrams";
-import { Spreadsheets } from "./pages/App/Spreadsheet/Spreadsheets";
-import { Documents } from "./pages/App/Document/Documents";
-import { ProjectLayout } from "./pages/App/Project/ProjectLayout";
-import { ProjectOverview } from "./pages/App/Project/ProjectOverview";
-import { ProjectTasksPage } from "./pages/App/Project/ProjectTasksPage";
-import { ProjectCycles } from "./pages/App/Project/ProjectCycles";
-import { CycleDetail } from "./pages/App/Project/CycleDetail";
-import { Projects } from "./pages/App/Project/Projects";
-import { MyTasks } from "./pages/App/Project/MyTasks";
-import { WorkspaceDetails } from "./pages/App/Workspace/WorkspaceDetails";
-import { Workspaces } from "./pages/App/Workspace/Workspaces";
-import { InviteAcceptPage } from "./pages/InviteAcceptPage";
-import { LoginPage } from "./pages/LoginPage";
-import { ShareEntryPage } from "./pages/Share/ShareEntryPage";
-import { GuestResourceView } from "./pages/Share/GuestResourceView";
-import { UserProfilePage } from "./pages/UserProfilePage";
 
 export const router = createBrowserRouter(
   [
     {
       path: "/",
-      element: <App />,
+      lazy: () =>
+        import("./pages/App/App").then((m) => ({ Component: m.default })),
       errorElement: <RouteErrorFallback />,
       children: [
         {
@@ -34,7 +15,10 @@ export const router = createBrowserRouter(
         },
         {
           path: "workspaces",
-          element: <Workspaces />,
+          lazy: () =>
+            import("./pages/App/Workspace/Workspaces").then((m) => ({
+              Component: m.Workspaces,
+            })),
         },
         {
           path: "workspaces/:workspaceId",
@@ -42,7 +26,10 @@ export const router = createBrowserRouter(
           children: [
             {
               index: true,
-              element: <WorkspaceDetails />,
+              lazy: () =>
+                import("./pages/App/Workspace/WorkspaceDetails").then((m) => ({
+                  Component: m.WorkspaceDetails,
+                })),
             },
             {
               path: "settings",
@@ -53,18 +40,27 @@ export const router = createBrowserRouter(
             },
             {
               path: "my-tasks",
-              element: <MyTasks />,
+              lazy: () =>
+                import("./pages/App/Project/MyTasks").then((m) => ({
+                  Component: m.MyTasks,
+                })),
             },
             {
               path: "channels",
               children: [
                 {
                   index: true,
-                  element: <ChannelDetails />,
+                  lazy: () =>
+                    import("./pages/App/Channel/ChannelDetails").then((m) => ({
+                      Component: m.ChannelDetails,
+                    })),
                 },
                 {
                   path: ":channelId",
-                  element: <ChatContainer />,
+                  lazy: () =>
+                    import("./pages/App/Chat/ChatContainer").then((m) => ({
+                      Component: m.ChatContainer,
+                    })),
                 },
                 {
                   path: ":channelId/videocall",
@@ -87,19 +83,31 @@ export const router = createBrowserRouter(
               children: [
                 {
                   index: true,
-                  element: <Projects />,
+                  lazy: () =>
+                    import("./pages/App/Project/Projects").then((m) => ({
+                      Component: m.Projects,
+                    })),
                 },
                 {
                   path: ":projectId",
-                  element: <ProjectLayout />,
+                  lazy: () =>
+                    import("./pages/App/Project/ProjectLayout").then((m) => ({
+                      Component: m.ProjectLayout,
+                    })),
                   children: [
                     {
                       index: true,
-                      element: <ProjectOverview />,
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectOverview").then(
+                          (m) => ({ Component: m.ProjectOverview }),
+                        ),
                     },
                     {
                       path: "tasks",
-                      element: <ProjectTasksPage />,
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectTasksPage").then(
+                          (m) => ({ Component: m.ProjectTasksPage }),
+                        ),
                     },
                     {
                       path: "tasks/:taskId",
@@ -110,11 +118,17 @@ export const router = createBrowserRouter(
                     },
                     {
                       path: "cycles",
-                      element: <ProjectCycles />,
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectCycles").then(
+                          (m) => ({ Component: m.ProjectCycles }),
+                        ),
                     },
                     {
                       path: "cycles/:cycleId",
-                      element: <CycleDetail />,
+                      lazy: () =>
+                        import("./pages/App/Project/CycleDetail").then(
+                          (m) => ({ Component: m.CycleDetail }),
+                        ),
                     },
                     {
                       path: "calendar",
@@ -141,7 +155,10 @@ export const router = createBrowserRouter(
               children: [
                 {
                   index: true,
-                  element: <Documents />,
+                  lazy: () =>
+                    import("./pages/App/Document/Documents").then((m) => ({
+                      Component: m.Documents,
+                    })),
                 },
                 {
                   path: "import",
@@ -173,7 +190,10 @@ export const router = createBrowserRouter(
               children: [
                 {
                   index: true,
-                  element: <Diagrams />,
+                  lazy: () =>
+                    import("./pages/App/Diagram/Diagrams").then((m) => ({
+                      Component: m.Diagrams,
+                    })),
                 },
                 {
                   path: ":diagramId",
@@ -196,7 +216,10 @@ export const router = createBrowserRouter(
               children: [
                 {
                   index: true,
-                  element: <Spreadsheets />,
+                  lazy: () =>
+                    import("./pages/App/Spreadsheet/Spreadsheets").then((m) => ({
+                      Component: m.Spreadsheets,
+                    })),
                 },
                 {
                   path: ":spreadsheetId",
@@ -222,25 +245,40 @@ export const router = createBrowserRouter(
         },
         {
           path: "profile",
-          element: <UserProfilePage />,
+          lazy: () =>
+            import("./pages/UserProfilePage").then((m) => ({
+              Component: m.UserProfilePage,
+            })),
         },
       ],
     },
     {
       path: "/invite/:inviteId",
-      element: <InviteAcceptPage />,
+      lazy: () =>
+        import("./pages/InviteAcceptPage").then((m) => ({
+          Component: m.InviteAcceptPage,
+        })),
     },
     {
       path: "/share/:shareId",
-      element: <ShareEntryPage />,
+      lazy: () =>
+        import("./pages/Share/ShareEntryPage").then((m) => ({
+          Component: m.ShareEntryPage,
+        })),
     },
     {
       path: "/share/:shareId/view",
-      element: <GuestResourceView />,
+      lazy: () =>
+        import("./pages/Share/GuestResourceView").then((m) => ({
+          Component: m.GuestResourceView,
+        })),
     },
     {
       path: "/auth",
-      element: <LoginPage />,
+      lazy: () =>
+        import("./pages/LoginPage").then((m) => ({
+          Component: m.LoginPage,
+        })),
     },
   ],
   {

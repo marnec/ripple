@@ -15,7 +15,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="relative w-full max-w-100 flex flex-col items-center">
-        <RippleLogoCanvas className="size-80 -mb-16 animate-[fade-in_1s_ease] text-white" />
+        <RippleLogoCanvas className="size-80 -mb-16 text-white" />
         <div className="w-full">{children}</div>
       </div>
     </div>
