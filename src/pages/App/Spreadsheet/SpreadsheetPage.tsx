@@ -21,7 +21,7 @@ import "jsuites/dist/jsuites.css";
 import { Circle, Link2, Link2Off, Settings, Share2, WifiOff } from "lucide-react";
 import { ShareDialog } from "@/components/ShareDialog";
 import { memo, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 import { api } from "../../../../convex/_generated/api";
@@ -71,13 +71,16 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   awareness,
   remoteUserClientIds,
   referencedCellRefs,
+  importedRows,
 }: {
   yDoc: Y.Doc;
   awareness: Awareness | null;
   remoteUserClientIds: Set<number>;
   referencedCellRefs: { cellRef: string }[];
+  importedRows: unknown[][] | null;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const importSeededRef = useRef(false);
 
   // Formula picker
   const {
@@ -97,6 +100,15 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
     onEditionStart,
     onEditionEnd,
   });
+
+  // Seed once from imported rows (e.g. .xlsx upload). Runs after the binding
+  // effect above has set bindingRef.current — effects run in declaration order.
+  useEffect(() => {
+    if (importSeededRef.current || !importedRows || !bindingRef.current) return;
+    importSeededRef.current = true;
+    bindingRef.current.seedFromImport(importedRows);
+    window.history.replaceState({}, "");
+  }, [importedRows, bindingRef]);
 
   // Context menu
   const { menu, menuRef, registerContextMenu, actions } =
@@ -158,6 +170,10 @@ function SpreadsheetEditor({
   spreadsheetId: Id<"spreadsheets">;
 }) {
   const isMobile = useIsMobile();
+  const location = useLocation();
+  const importedRows =
+    (location.state as { importedRows?: unknown[][] } | null)?.importedRows ??
+    null;
   const spreadsheet = useQuery(api.spreadsheets.get, { id: spreadsheetId });
   useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
   const viewer = useViewer();
@@ -292,7 +308,7 @@ function SpreadsheetEditor({
       />
 
       <div className="flex-1 overflow-hidden">
-        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} referencedCellRefs={referencedCellRefs} />
+        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} referencedCellRefs={referencedCellRefs} importedRows={importedRows} />
       </div>
     </div>
   );

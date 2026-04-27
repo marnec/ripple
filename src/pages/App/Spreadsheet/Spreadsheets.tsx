@@ -1,9 +1,13 @@
+import { Button } from "@/components/ui/button";
 import type { QueryParams } from "@shared/types/routes";
 import { useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
+import { Upload } from "lucide-react";
+import { useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ResourceListPage } from "../Resources/ResourceListPage";
+import { setPendingImportFile } from "./spreadsheet-import-state";
 
 const createSpreadsheetRef = makeFunctionReference<
   "mutation",
@@ -15,6 +19,7 @@ export function Spreadsheets() {
   const { workspaceId } = useParams<QueryParams>();
   const navigate = useNavigate();
   const createSpreadsheet = useMutation(createSpreadsheetRef);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!workspaceId) {
     return <div>Workspace not found</div>;
@@ -25,13 +30,40 @@ export function Spreadsheets() {
     void navigate(`/workspaces/${workspaceId}/spreadsheets/${id}`);
   };
 
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setPendingImportFile(file);
+    void navigate(`/workspaces/${workspaceId}/spreadsheets/import`);
+  };
+
   return (
-    <ResourceListPage
-      resourceType="spreadsheet"
-      title="Spreadsheets"
-      workspaceId={workspaceId}
-      onCreate={() => void handleCreate()}
-      createLabel="New spreadsheet"
-    />
+    <>
+      <ResourceListPage
+        resourceType="spreadsheet"
+        title="Spreadsheets"
+        workspaceId={workspaceId}
+        onCreate={() => void handleCreate()}
+        createLabel="New spreadsheet"
+        secondaryAction={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline">Import</span>
+          </Button>
+        }
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+    </>
   );
 }

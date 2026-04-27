@@ -6,6 +6,20 @@ import * as Y from "yjs";
 const DEFAULT_ROWS = 100;
 const DEFAULT_COLS = 30;
 
+/** Coerce a value from an imported spreadsheet (TabularJS) into a cell string.
+ *  Numbers/booleans stringify naturally; Date → ISO; objects/arrays drop. */
+function stringifyImportedCell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : value.toISOString();
+  }
+  return "";
+}
+
 /**
  * Idempotent template update for initializing empty spreadsheets.
  * Uses a fixed Yjs client ID so applying it multiple times (or from different
@@ -218,6 +232,52 @@ export class SpreadsheetYjsBinding {
       this.yData.push([rowMap]);
       this.rowIndexCache.set(rowMap, this.yData.length - 1);
     }
+  }
+
+  /**
+   * Seed an empty (or near-empty) sheet with imported cell data.
+   * Writes directly to Yjs in one transaction; the existing observers push
+   * the values into jspreadsheet and partyserver replicates to other clients.
+   */
+  seedFromImport(rows: unknown[][]) {
+    if (rows.length === 0) return;
+
+    const importColCount = rows.reduce((m, r) => Math.max(m, r.length), 0);
+    if (importColCount === 0) return;
+
+    const targetColCount = Math.max(importColCount, DEFAULT_COLS);
+
+    this.yData.doc!.transact(() => {
+      const currentColCount =
+        (this.yMeta.get("colCount") as number | undefined) ?? DEFAULT_COLS;
+      if (targetColCount > currentColCount) {
+        this.yMeta.set("colCount", targetColCount);
+        for (let r = 0; r < this.yData.length; r++) {
+          const rowMap = this.yData.get(r);
+          for (let c = currentColCount; c < targetColCount; c++) {
+            rowMap.set(String(c), "");
+          }
+        }
+      }
+
+      while (this.yData.length < rows.length) {
+        const rowMap = new Y.Map<string>();
+        for (let c = 0; c < targetColCount; c++) {
+          rowMap.set(String(c), "");
+        }
+        this.yData.push([rowMap]);
+      }
+
+      for (let r = 0; r < rows.length; r++) {
+        const rowMap = this.yData.get(r);
+        const row = rows[r];
+        for (let c = 0; c < row.length; c++) {
+          const cell = stringifyImportedCell(row[c]);
+          if (cell === "") continue;
+          rowMap.set(String(c), cell);
+        }
+      }
+    });
   }
 
   private loadGridFromYjs() {

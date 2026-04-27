@@ -222,6 +222,15 @@ export const router = createBrowserRouter(
                     })),
                 },
                 {
+                  path: "import",
+                  lazy: () =>
+                    import("./pages/App/Spreadsheet/SpreadsheetImport").then(
+                      (m) => ({
+                        Component: m.SpreadsheetImport,
+                      }),
+                    ),
+                },
+                {
                   path: ":spreadsheetId",
                   lazy: () =>
                     import("./pages/App/Spreadsheet/SpreadsheetPage").then(

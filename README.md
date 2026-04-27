@@ -2,6 +2,8 @@ NEXT STEPS:
 
 - import spreadsheets from excel, csv
 
+- show raw content of a cell in spreadsheet (for formulas)
+
 - import diagrams from excalidraw file
 
 - calendar; plan calls; invite guests
