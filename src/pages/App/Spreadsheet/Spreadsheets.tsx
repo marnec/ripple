@@ -38,6 +38,12 @@ export function Spreadsheets() {
     void navigate(`/workspaces/${workspaceId}/spreadsheets/import`);
   };
 
+  // Preload the parser so the 250KB chunk overlaps with the file-picker dialog
+  // instead of blocking after file selection.
+  const prefetchParser = () => {
+    void import("tabularjs");
+  };
+
   return (
     <>
       <ResourceListPage
@@ -51,6 +57,8 @@ export function Spreadsheets() {
             variant="outline"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
+            onMouseEnter={prefetchParser}
+            onFocus={prefetchParser}
           >
             <Upload className="h-4 w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Import</span>
