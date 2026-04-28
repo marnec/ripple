@@ -129,7 +129,7 @@ export function TaskDescriptionEditor({
       )}
       <div
         className={cn(
-          "task-description-editor border rounded-md p-4 animate-fade-in",
+          "task-description-editor border rounded-md p-2 animate-fade-in",
           className
         )}
       >

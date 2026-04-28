@@ -9,11 +9,9 @@ import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@shared/types/routes";
-import { useQuery } from "convex-helpers/react/cache";
-import { ChevronLeft, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
@@ -61,7 +59,6 @@ function TaskDetailPageContent({
     collaborationEnabled: editorDeferred,
   });
   const navigate = useNavigate();
-  const project = useQuery(api.projects.get, { id: projectId });
 
   if (
     detail.task === undefined ||
@@ -108,7 +105,7 @@ function TaskDetailPageContent({
               [ {taskCode} ]
             </span>
           )}
-          <h1 className="hidden truncate text-lg font-semibold sm:block">
+          <h1 className="truncate text-lg font-semibold">
             {detail.titleValue}
           </h1>
         </div>

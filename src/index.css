@@ -545,6 +545,13 @@ body {
   --bn-colors-editor-background: transparent !important;
 }
 
+/* Task description + comment editors: collapse BlockNote's internal padding
+   so content sits flush against the wrapper border. */
+.task-description-editor .bn-editor,
+.task-comment-editor .bn-editor {
+  padding: 0;
+}
+
 /* BlockNote suggestion menu — keyboard navigation highlight.
    The aria-selected:bg-accent Tailwind class from @blocknote/shadcn isn't
    generated (Tailwind v4 auto-detection doesn't scan node_modules classes),
