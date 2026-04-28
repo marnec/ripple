@@ -148,3 +148,26 @@ export function TagPickerButton({ workspaceId, value, onChange }: TagPickerButto
     </Popover>
   );
 }
+
+// ── Inline chip strip ────────────────────────────────────────────────
+// Renders the resource's tags as a non-wrapping horizontal strip that
+// clips on overflow. Used in resource toolbars to surface applied tags
+// next to the title.
+
+export function TagInlineStrip({ tags }: { tags: readonly string[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <div className="hidden min-w-0 flex-1 items-center gap-1 overflow-hidden whitespace-nowrap sm:flex">
+      {tags.map((tag) => (
+        <Badge
+          key={tag}
+          variant="secondary"
+          className="shrink-0 text-xs font-normal"
+        >
+          #{tag}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+

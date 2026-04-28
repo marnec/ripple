@@ -3,8 +3,11 @@ import "@blocknote/shadcn/style.css";
 import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareDialog } from "@/components/ShareDialog";
-import { TagPickerButton } from "@/components/TagPickerButton";
-import { Badge } from "@/components/ui/badge";
+import {
+  TagInlineStrip,
+  TagPickerButton,
+} from "@/components/TagPickerButton";
+import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SuggestionMenuController } from "@blocknote/react";
@@ -89,25 +92,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const syncEdges = useMutation(api.edges.syncEdges);
   const syncMentionEdges = useMutation(api.edges.syncMentionEdges);
   const updateTags = useMutation(api.documents.updateTags).withOptimisticUpdate(
-    (localStore, { id, tags }) => {
-      const doc = localStore.getQuery(api.documents.get, { id });
-      if (!doc) return;
-      localStore.setQuery(api.documents.get, { id }, { ...doc, tags });
-
-      // Patch the workspace tag dictionary so a freshly-created tag shows
-      // up immediately in the popover list and downstream autocomplete.
-      const dict = localStore.getQuery(api.tags.listWorkspaceTags, {
-        workspaceId: doc.workspaceId,
-      });
-      if (dict) {
-        const merged = Array.from(new Set([...dict, ...tags])).sort();
-        localStore.setQuery(
-          api.tags.listWorkspaceTags,
-          { workspaceId: doc.workspaceId },
-          merged,
-        );
-      }
-    },
+    tagsOptimisticUpdate(api.documents.get),
   );
 
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -340,19 +325,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             onChange={(tags) => void updateTags({ id: documentId, tags })}
           />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
-          {document.tags && document.tags.length > 0 && (
-            <div className="hidden min-w-0 flex-1 items-center gap-1 overflow-hidden whitespace-nowrap sm:flex">
-              {document.tags.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant="secondary"
-                  className="shrink-0 text-xs font-normal"
-                >
-                  #{tag}
-                </Badge>
-              ))}
-            </div>
-          )}
+          <TagInlineStrip tags={document.tags ?? []} />
           {hasReferencedBlocks && (
             <button
               type="button"

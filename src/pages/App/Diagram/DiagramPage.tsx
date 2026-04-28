@@ -1,11 +1,17 @@
 import { BacklinksDrawerTrigger } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import {
+  TagInlineStrip,
+  TagPickerButton,
+} from "@/components/TagPickerButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import { Link, useParams } from "react-router-dom";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
+import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "../../../../convex/_generated/api";
 import { useViewer } from "../UserContext";
@@ -35,6 +41,9 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
   const isAdmin = myRole === "admin";
+  const updateTags = useMutation(api.diagrams.updateTags).withOptimisticUpdate(
+    tagsOptimisticUpdate(api.diagrams.get),
+  );
   const { resolvedTheme } = useTheme();
   const isDarkTheme = resolvedTheme === "dark";
 
@@ -128,13 +137,19 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     <div className="flex h-full w-full flex-col animate-fade-in">
       {/* Header bar */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <div className="flex h-8 items-center gap-2">
+        <div className="flex h-8 min-w-0 items-center gap-4">
           <FavoriteButton
             resourceType="diagram"
             resourceId={diagramId}
             workspaceId={workspaceId}
           />
+          <TagPickerButton
+            workspaceId={workspaceId}
+            value={diagram?.tags ?? []}
+            onChange={(tags) => void updateTags({ id: diagramId, tags })}
+          />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{diagram?.name}</h1>
+          <TagInlineStrip tags={diagram?.tags ?? []} />
           <BacklinksDrawerTrigger resourceId={diagramId} workspaceId={workspaceId} />
         </div>
         <div className="flex h-8 items-center gap-3">

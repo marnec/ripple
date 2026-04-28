@@ -1,6 +1,10 @@
 
 import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import {
+  TagInlineStrip,
+  TagPickerButton,
+} from "@/components/TagPickerButton";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useFormulaPicker } from "@/hooks/use-formula-picker";
@@ -9,10 +13,12 @@ import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { getUserColor } from "@/lib/user-colors";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@shared/types/routes";
+import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useViewer } from "../UserContext";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
@@ -186,6 +192,9 @@ function SpreadsheetEditor({
     spreadsheet ? { workspaceId: spreadsheet.workspaceId } : "skip",
   );
   const isAdmin = myRole === "admin";
+  const updateTags = useMutation(api.spreadsheets.updateTags).withOptimisticUpdate(
+    tagsOptimisticUpdate(api.spreadsheets.get),
+  );
 
   // Stabilize ref identity to prevent unnecessary JSpreadsheetGrid re-renders
   const referencedCellRefs = showRefHighlights ? rawRefs ?? [] : [];
@@ -223,13 +232,19 @@ function SpreadsheetEditor({
   return (
     <div className="flex h-full w-full flex-col animate-fade-in">
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <div className="flex h-8 items-center gap-2">
+        <div className="flex h-8 min-w-0 items-center gap-4">
           <FavoriteButton
             resourceType="spreadsheet"
             resourceId={spreadsheetId}
             workspaceId={spreadsheet.workspaceId}
           />
+          <TagPickerButton
+            workspaceId={spreadsheet.workspaceId}
+            value={spreadsheet.tags ?? []}
+            onChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
+          />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{spreadsheet.name}</h1>
+          <TagInlineStrip tags={spreadsheet.tags ?? []} />
           {hasRefs && (
             <button
               type="button"
