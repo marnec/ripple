@@ -1,7 +1,6 @@
 import { ChannelVisibilityFilterButton } from "@/components/ChannelVisibilityFilterButton";
 import { FavoriteFilterButton } from "@/components/FavoriteFilterButton";
-import { ResourceSearchInput } from "@/components/ResourceSearchInput";
-import { RippleSpinner } from "@/components/RippleSpinner";
+import { ResourceSearchInput, TagFilterStrip } from "@/components/ResourceSearchInput";
 import { Button } from "@/components/ui/button";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounced-search";
@@ -57,65 +56,73 @@ export function ResourceListPage({
     setIsLoading(loading);
   };
 
+  const showFilterStrip = showFavorites || resourceType === "channel" || tags.length > 0;
+
+  const createButton = onCreate ? (
+    <Button onClick={onCreate} size="sm">
+      <Plus className="h-4 w-4 sm:mr-1.5" />
+      <span className="hidden sm:inline">{createLabel ?? `New ${resourceType}`}</span>
+    </Button>
+  ) : null;
+
   return (
-    <div className="container mx-auto p-4 animate-fade-in">
-      <div className="space-y-4">
-        <div className="hidden md:flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">{title}</h1>
-            <p className="text-sm text-muted-foreground">
-              {title} in this workspace.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {secondaryAction}
-            {onCreate && (
-              <Button onClick={onCreate} size="sm">
-                <Plus className="mr-1.5 h-4 w-4" />
-                {createLabel ?? `New ${resourceType}`}
-              </Button>
-            )}
-          </div>
+    <div className="flex h-full min-h-0 flex-col animate-fade-in">
+      {/* Shared toolbar — title left, search center, actions right */}
+      <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 border-b">
+        <div className="flex h-8 flex-1 min-w-0 items-center gap-2">
+          <h1 className="hidden sm:block text-lg font-semibold truncate">{title}</h1>
         </div>
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <ResourceSearchInput
-              key={resetKey}
-              workspaceId={wsId}
-              value={localSearchValue}
-              onChange={handleSearchChange}
-              onSubmit={handleSearchSubmit}
-              placeholder={`Search ${title.toLowerCase()}...${showFavorites ? " #tag to filter" : ""}`}
-            />
-          </div>
-          {showFavorites && (
-            <FavoriteFilterButton value={isFavorite} onToggle={handleFavoriteToggle} />
-          )}
-          {resourceType === "channel" && (
-            <ChannelVisibilityFilterButton value={channelVisibility} onToggle={handleChannelVisibilityToggle} />
-          )}
-          <div
-            className="transition-opacity duration-200"
-            style={{
-              opacity: isSearchDebouncing || isLoading ? 1 : 0,
-            }}
-          >
-            <RippleSpinner size={40} />
-          </div>
+        <div className="relative w-full max-w-md flex items-center">
+          <ResourceSearchInput
+            key={resetKey}
+            workspaceId={wsId}
+            value={localSearchValue}
+            onChange={handleSearchChange}
+            onSubmit={handleSearchSubmit}
+            placeholder={`Search ${title.toLowerCase()}...${showFavorites ? " #tag to filter" : ""}`}
+            isLoading={isSearchDebouncing || isLoading}
+          />
         </div>
-        <SearchResults
-          workspaceId={wsId}
-          resourceType={resourceType}
-          searchText={searchQuery || undefined}
-          tags={tags.length > 0 ? tags : undefined}
-          isFavorite={favoriteFilterToBoolean(isFavorite)}
-          favoriteFilter={isFavorite}
-          channelVisibility={channelVisibility}
-          onLoadingChange={handleLoadingChange}
-          showFavorites={showFavorites}
-          subPath={subPath}
-        />
+        <div className="flex h-8 flex-1 items-center justify-end gap-2">
+          {!isMobile && secondaryAction}
+          {!isMobile && createButton}
+        </div>
       </div>
+
+      {/* Content body */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="container mx-auto p-4 space-y-4">
+          {showFilterStrip && (
+            <div className="flex flex-wrap items-center gap-2">
+              {showFavorites && (
+                <FavoriteFilterButton value={isFavorite} onToggle={handleFavoriteToggle} />
+              )}
+              {resourceType === "channel" && (
+                <ChannelVisibilityFilterButton value={channelVisibility} onToggle={handleChannelVisibilityToggle} />
+              )}
+              <TagFilterStrip
+                workspaceId={wsId}
+                value={localSearchValue}
+                onChange={handleSearchChange}
+                onSubmit={handleSearchSubmit}
+              />
+            </div>
+          )}
+          <SearchResults
+            workspaceId={wsId}
+            resourceType={resourceType}
+            searchText={searchQuery || undefined}
+            tags={tags.length > 0 ? tags : undefined}
+            isFavorite={favoriteFilterToBoolean(isFavorite)}
+            favoriteFilter={isFavorite}
+            channelVisibility={channelVisibility}
+            onLoadingChange={handleLoadingChange}
+            showFavorites={showFavorites}
+            subPath={subPath}
+          />
+        </div>
+      </div>
+
       {createDialog}
       {isMobile && (onCreate || secondaryAction) && (
         <HeaderSlot>
