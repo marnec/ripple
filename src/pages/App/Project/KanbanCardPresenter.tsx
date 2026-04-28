@@ -90,29 +90,29 @@ export function KanbanCardPresenter({
           )}
         </div>
 
-        {/* Labels — fixed height, single row with fade + tooltip */}
+        {/* Tags — fixed height, single row with fade + tooltip */}
         <div className="min-h-5.5">
           {task.labels && task.labels.length > 0 ? (
             <Tooltip>
               <TooltipTrigger className="flex items-center gap-1 overflow-hidden w-full mask-[linear-gradient(to_right,black_calc(100%-20px),transparent)]">
-                {task.labels.map((label) => (
+                {task.labels.map((tag) => (
                   <Badge
-                    key={label}
+                    key={tag}
                     variant="secondary"
                     className="text-xs py-0 shrink-0"
                   >
-                    {label}
+                    {tag}
                   </Badge>
                 ))}
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-64">
                 <div className="flex flex-wrap gap-1">
-                  {task.labels.map((label) => (
+                  {task.labels.map((tag) => (
                     <span
-                      key={label}
+                      key={tag}
                       className="text-xs rounded bg-background/20 px-1.5 py-0.5"
                     >
-                      {label}
+                      {tag}
                     </span>
                   ))}
                 </div>

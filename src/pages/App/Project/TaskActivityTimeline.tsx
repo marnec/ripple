@@ -97,9 +97,9 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
       if (oldValue && !newValue) return <><span className="font-medium">{userName}</span> unassigned <span className="font-medium">{oldValue}</span></>;
       return <><span className="font-medium">{userName}</span> reassigned from <span className="font-medium">{oldValue}</span> <ArrowRight className="inline h-3 w-3 mx-0.5" /> <span className="font-medium">{newValue}</span></>;
     case "label_add":
-      return <><span className="font-medium">{userName}</span> added label <span className="font-medium">{newValue}</span></>;
+      return <><span className="font-medium">{userName}</span> added tag <span className="font-medium">{newValue}</span></>;
     case "label_remove":
-      return <><span className="font-medium">{userName}</span> removed label <span className="font-medium">{oldValue}</span></>;
+      return <><span className="font-medium">{userName}</span> removed tag <span className="font-medium">{oldValue}</span></>;
     case "title_change":
       return <><span className="font-medium">{userName}</span> renamed from &ldquo;{oldValue}&rdquo; to &ldquo;{newValue}&rdquo;</>;
     case "due_date_change":

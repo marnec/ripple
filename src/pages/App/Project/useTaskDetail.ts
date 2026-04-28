@@ -1,6 +1,7 @@
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
+import { taskLabelsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { useViewer } from "../UserContext";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../../../convex/_generated/api";
@@ -99,7 +100,9 @@ export function useTaskDetail({
   const spreadsheets = useQuery(api.spreadsheets.list, suggestionDataEnabled ? { workspaceId } : "skip");
   const currentUser = useViewer();
 
-  const updateTask = useMutation(api.tasks.update);
+  const updateTask = useMutation(api.tasks.update).withOptimisticUpdate(
+    taskLabelsOptimisticUpdate(),
+  );
   const removeTask = useMutation(api.tasks.remove);
   const syncEdges = useMutation(api.edges.syncEdges);
   const syncMentionEdges = useMutation(api.edges.syncMentionEdges);
@@ -286,19 +289,16 @@ export function useTaskDetail({
     }
   };
 
-  const handleAddLabel = (label: string) => {
-    if (taskId && task) {
-      const updatedLabels = [...(task.labels || []), label];
-      void updateTask({ taskId, labels: updatedLabels });
+  const handleSetTags = (tags: string[]) => {
+    if (taskId) {
+      void updateTask({ taskId, labels: tags });
     }
   };
 
-  const handleRemoveLabel = (labelToRemove: string) => {
+  const handleRemoveTag = (tagToRemove: string) => {
     if (taskId && task) {
-      const updatedLabels = (task.labels || []).filter(
-        (l) => l !== labelToRemove
-      );
-      void updateTask({ taskId, labels: updatedLabels });
+      const next = (task.labels || []).filter((t) => t !== tagToRemove);
+      void updateTask({ taskId, labels: next });
     }
   };
 
@@ -345,8 +345,8 @@ export function useTaskDetail({
     handleStatusChange,
     handlePriorityChange,
     handleAssigneeChange,
-    handleAddLabel,
-    handleRemoveLabel,
+    handleSetTags,
+    handleRemoveTag,
     showDeleteDialog,
     setShowDeleteDialog,
     handleDelete,

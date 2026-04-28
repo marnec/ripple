@@ -1,7 +1,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import { TagPickerButton } from "@/components/TagPickerButton";
 import {
   Select,
   SelectContent,
@@ -18,14 +24,17 @@ import {
   isOverdue,
 } from "@/lib/task-utils";
 import { computeHofstadterLabels } from "@/lib/calendar-utils";
+import { useQuery } from "convex-helpers/react/cache";
 import { Clock, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
 import { PropertyRow } from "./PropertyRow";
 
 type TaskPropertiesProps = {
   task: {
+    workspaceId: Id<"workspaces">;
     statusId: Id<"taskStatuses">;
     status: { name: string; color: string } | null;
     priority: string;
@@ -41,8 +50,8 @@ type TaskPropertiesProps = {
   onStatusChange: (statusId: Id<"taskStatuses">) => void;
   onPriorityChange: (priority: "urgent" | "high" | "medium" | "low") => void;
   onAssigneeChange: (value: string) => void;
-  onAddLabel: (label: string) => void;
-  onRemoveLabel: (label: string) => void;
+  onSetTags: (tags: string[]) => void;
+  onRemoveTag: (tag: string) => void;
   onDueDateChange: (date: string | null) => void;
   onStartDateChange: (date: string | null) => void;
   onEstimateChange: (value: number | null) => void;
@@ -55,18 +64,79 @@ export function TaskProperties({
   onStatusChange,
   onPriorityChange,
   onAssigneeChange,
-  onAddLabel,
-  onRemoveLabel,
+  onSetTags,
+  onRemoveTag,
   onDueDateChange,
   onStartDateChange,
   onEstimateChange,
 }: TaskPropertiesProps) {
-  const [newLabel, setNewLabel] = useState("");
+  const [newTag, setNewTag] = useState("");
+  const [autocompleteOpen, setAutocompleteOpen] = useState(false);
+  const [highlight, setHighlight] = useState<string>("");
 
-  const handleAddLabel = () => {
-    if (newLabel.trim()) {
-      onAddLabel(newLabel.trim());
-      setNewLabel("");
+  const allWorkspaceTags = useQuery(api.tags.listWorkspaceTags, {
+    workspaceId: task.workspaceId,
+  }) ?? [];
+
+  const normalizedQuery = newTag.trim().toLowerCase();
+  const appliedSet = new Set(task.labels ?? []);
+  const suggestions = normalizedQuery
+    ? allWorkspaceTags
+        .filter((t) => t.includes(normalizedQuery) && !appliedSet.has(t))
+        .slice(0, 6)
+    : [];
+  const showSuggestions = autocompleteOpen && suggestions.length > 0;
+
+  // Keep the highlighted suggestion valid as the query changes.
+  useEffect(() => {
+    if (suggestions.length === 0) {
+      setHighlight("");
+    } else if (!suggestions.includes(highlight)) {
+      setHighlight(suggestions[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalizedQuery, suggestions.length]);
+
+  const pickSuggestion = (tag: string) => {
+    const current = task.labels ?? [];
+    if (!current.includes(tag)) onSetTags([...current, tag]);
+    setNewTag("");
+    setAutocompleteOpen(false);
+  };
+
+  const handleAddFromInput = () => {
+    const trimmed = newTag.trim();
+    if (!trimmed) return;
+    const current = task.labels ?? [];
+    if (!current.includes(trimmed)) {
+      onSetTags([...current, trimmed]);
+    }
+    setNewTag("");
+    setAutocompleteOpen(false);
+  };
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" && suggestions.length > 0) {
+      e.preventDefault();
+      setAutocompleteOpen(true);
+      const idx = suggestions.indexOf(highlight);
+      const next = suggestions[(idx + 1) % suggestions.length];
+      setHighlight(next);
+    } else if (e.key === "ArrowUp" && suggestions.length > 0) {
+      e.preventDefault();
+      setAutocompleteOpen(true);
+      const idx = suggestions.indexOf(highlight);
+      const next = suggestions[(idx - 1 + suggestions.length) % suggestions.length];
+      setHighlight(next);
+    } else if (e.key === "Escape") {
+      setAutocompleteOpen(false);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (showSuggestions && highlight) {
+        pickSuggestion(highlight);
+      } else {
+        handleAddFromInput();
+      }
     }
   };
 
@@ -239,19 +309,25 @@ export function TaskProperties({
         </div>
       </PropertyRow>
 
-      {/* Labels */}
-      <PropertyRow label="Labels" alignTop>
+      {/* Tags */}
+      <PropertyRow label="Tags" alignTop>
         <div className="space-y-2">
-          <div className="flex flex-wrap gap-1">
-            {task.labels?.map((label) => (
+          <div className="flex flex-wrap items-center gap-1">
+            <TagPickerButton
+              workspaceId={task.workspaceId}
+              value={task.labels ?? []}
+              onChange={onSetTags}
+              triggerVariant="pill"
+            />
+            {task.labels?.map((tag) => (
               <Badge
-                key={label}
+                key={tag}
                 variant="secondary"
                 className="flex items-center gap-1"
               >
-                {label}
+                #{tag}
                 <button
-                  onClick={() => onRemoveLabel(label)}
+                  onClick={() => onRemoveTag(tag)}
                   className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
@@ -260,20 +336,52 @@ export function TaskProperties({
             ))}
           </div>
           <div className="flex gap-2">
-            <Input
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleAddLabel();
-                }
-              }}
-              placeholder="Add label..."
-              className="h-8 text-sm"
-            />
+            <div className="relative flex-1">
+              <Input
+                value={newTag}
+                onChange={(e) => {
+                  setNewTag(e.target.value);
+                  setAutocompleteOpen(true);
+                }}
+                onKeyDown={handleInputKeyDown}
+                onFocus={() => setAutocompleteOpen(true)}
+                onBlur={() => {
+                  // Defer so a click on a suggestion still registers.
+                  setTimeout(() => setAutocompleteOpen(false), 100);
+                }}
+                placeholder="Add tag…"
+                className="h-8 text-sm"
+                aria-autocomplete="list"
+                aria-expanded={showSuggestions}
+                aria-controls="tag-autocomplete-list"
+              />
+              {showSuggestions && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg bg-popover shadow-md ring-1 ring-foreground/10">
+                  <Command
+                    shouldFilter={false}
+                    value={highlight}
+                    onValueChange={setHighlight}
+                  >
+                    <CommandList id="tag-autocomplete-list" className="max-h-48">
+                      {suggestions.map((tag) => (
+                        <CommandItem
+                          key={tag}
+                          value={tag}
+                          onSelect={() => pickSuggestion(tag)}
+                          // Prevent input blur from firing before the click
+                          // registers on this item.
+                          onMouseDown={(e) => e.preventDefault()}
+                        >
+                          #{tag}
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                </div>
+              )}
+            </div>
             <Button
-              onClick={handleAddLabel}
+              onClick={handleAddFromInput}
               size="sm"
               variant="secondary"
             >

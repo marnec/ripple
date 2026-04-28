@@ -133,8 +133,8 @@ export function TaskDetailSheet({
                   onStatusChange={detail.handleStatusChange}
                   onPriorityChange={detail.handlePriorityChange}
                   onAssigneeChange={detail.handleAssigneeChange}
-                  onAddLabel={detail.handleAddLabel}
-                  onRemoveLabel={detail.handleRemoveLabel}
+                  onSetTags={detail.handleSetTags}
+                  onRemoveTag={detail.handleRemoveTag}
                   onDueDateChange={detail.handleDueDateChange}
                   onStartDateChange={detail.handlePlannedStartDateChange}
                   onEstimateChange={detail.handleEstimateChange}

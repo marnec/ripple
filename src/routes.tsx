@@ -89,6 +89,16 @@ export const router = createBrowserRouter(
                     })),
                 },
                 {
+                  // Task detail has its own toolbar (delete / tags / title /
+                  // code / back-to-project), so it lives outside ProjectLayout
+                  // to avoid showing the project's header + tabs on top.
+                  path: ":projectId/tasks/:taskId",
+                  lazy: () =>
+                    import("./pages/App/Project/TaskDetailPage").then((m) => ({
+                      Component: m.TaskDetailPage,
+                    })),
+                },
+                {
                   path: ":projectId",
                   lazy: () =>
                     import("./pages/App/Project/ProjectLayout").then((m) => ({
@@ -107,13 +117,6 @@ export const router = createBrowserRouter(
                       lazy: () =>
                         import("./pages/App/Project/ProjectTasksPage").then(
                           (m) => ({ Component: m.ProjectTasksPage }),
-                        ),
-                    },
-                    {
-                      path: "tasks/:taskId",
-                      lazy: () =>
-                        import("./pages/App/Project/TaskDetailPage").then(
-                          (m) => ({ Component: m.TaskDetailPage }),
                         ),
                     },
                     {

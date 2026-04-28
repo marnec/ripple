@@ -16,11 +16,23 @@ type TagPickerButtonProps = {
   workspaceId: Id<"workspaces">;
   value: string[];
   onChange: (tags: string[]) => void;
+  /**
+   * "icon" — ghost icon button, suited to resource toolbars (default).
+   * "pill" — outlined dashed pill labeled "Add tag", suited to inline
+   *           tag rows (e.g. task properties). Always-visible affordance
+   *           that prevents layout shift when the first tag is added.
+   */
+  triggerVariant?: "icon" | "pill";
 };
 
 const TAG_NAME_MAX_LENGTH = 100;
 
-export function TagPickerButton({ workspaceId, value, onChange }: TagPickerButtonProps) {
+export function TagPickerButton({
+  workspaceId,
+  value,
+  onChange,
+  triggerVariant = "icon",
+}: TagPickerButtonProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const allTags = useQuery(api.tags.listWorkspaceTags, { workspaceId }) ?? [];
@@ -61,23 +73,38 @@ export function TagPickerButton({ workspaceId, value, onChange }: TagPickerButto
         if (!o) setQuery("");
       }}
     >
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            title={isActive ? `Tags (${value.length})` : "Add tag"}
+      {triggerVariant === "pill" ? (
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-dashed border-input bg-transparent px-2 text-xs text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-accent hover:text-accent-foreground"
+              title="Add tag"
+            />
+          }
+        >
+          <Plus className="h-3 w-3" />
+          Add tag
+        </PopoverTrigger>
+      ) : (
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              title={isActive ? `Tags (${value.length})` : "Add tag"}
+            />
+          }
+        >
+          <TagIcon
+            className={cn(
+              "h-4 w-4",
+              isActive ? "fill-current text-foreground" : "text-muted-foreground",
+            )}
           />
-        }
-      >
-        <TagIcon
-          className={cn(
-            "h-4 w-4",
-            isActive ? "fill-current text-foreground" : "text-muted-foreground",
-          )}
-        />
-      </PopoverTrigger>
+        </PopoverTrigger>
+      )}
       <PopoverContent align="start" className="w-64 p-0">
         <div className="border-b p-2">
           <input
