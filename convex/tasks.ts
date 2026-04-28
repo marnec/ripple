@@ -10,6 +10,7 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { syncTagsForResource } from "./tagSync";
 import { notify } from "./utils/notify";
 
 export const baseTaskFields = {
@@ -137,6 +138,24 @@ export const create = mutation({
       plannedStartDate: args.plannedStartDate,
       estimate: args.estimate,
     });
+
+    // Sync initial labels to the central tag tables (ID is known only after insert).
+    if (args.labels && args.labels.length > 0) {
+      const normalized = await syncTagsForResource(ctx, {
+        workspaceId: project.workspaceId,
+        resourceType: "task",
+        resourceId: taskId,
+        nextTagNames: args.labels,
+      });
+      // Replace the as-typed labels with the normalized list, in case
+      // normalization changed anything (whitespace / casing / dedupe).
+      if (
+        normalized.length !== (args.labels?.length ?? 0) ||
+        normalized.some((t, i) => t !== args.labels?.[i])
+      ) {
+        await db.patch(taskId, { labels: normalized });
+      }
+    }
 
     // Log task creation activity
     await logTaskActivity(ctx, { taskId, userId, workspaceId: project.workspaceId, type: "created", taskTitle: args.title });
@@ -442,7 +461,14 @@ export const update = mutation({
     if (assigneeId === null) patch.assigneeId = undefined;
     else if (assigneeId !== undefined) patch.assigneeId = assigneeId;
     if (priority !== undefined) patch.priority = priority;
-    if (labels !== undefined) patch.labels = labels;
+    if (labels !== undefined) {
+      patch.labels = await syncTagsForResource(ctx, {
+        workspaceId: task.workspaceId,
+        resourceType: "task",
+        resourceId: taskId,
+        nextTagNames: labels,
+      });
+    }
     if (position !== undefined) patch.position = position;
     if (dueDate === null) patch.dueDate = undefined;
     else if (dueDate !== undefined) patch.dueDate = dueDate;
@@ -509,8 +535,9 @@ export const update = mutation({
     }
     if (labels !== undefined) {
       const oldLabels = task.labels ?? [];
-      const added = labels.filter((l) => !oldLabels.includes(l));
-      const removed = oldLabels.filter((l) => !labels.includes(l));
+      const newLabels = patch.labels ?? [];
+      const added = newLabels.filter((l: string) => !oldLabels.includes(l));
+      const removed = oldLabels.filter((l) => !newLabels.includes(l));
       for (const label of added) {
         await logTaskActivity(ctx, { taskId, userId, workspaceId: task.workspaceId, type: "label_add", newValue: label, taskTitle: task.title });
       }

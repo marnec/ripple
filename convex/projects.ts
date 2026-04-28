@@ -9,6 +9,7 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { projectValidator } from "./validators";
 import { requireWorkspaceMember, requireUser, requireCreator, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { syncTagsForResource } from "./tagSync";
 import { notify } from "./utils/notify";
 
 export const create = mutation({
@@ -207,7 +208,14 @@ export const update = mutation({
     if (name !== undefined) patch.name = name;
     if (description !== undefined) patch.description = description;
     if (color !== undefined) patch.color = color;
-    if (tags !== undefined) patch.tags = tags;
+    if (tags !== undefined) {
+      patch.tags = await syncTagsForResource(ctx, {
+        workspaceId: project.workspaceId,
+        resourceType: "project",
+        resourceId: id,
+        nextTagNames: tags,
+      });
+    }
 
     // Validate and set project key
     if (key !== undefined) {

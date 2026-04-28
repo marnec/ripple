@@ -3,6 +3,8 @@ import "@blocknote/shadcn/style.css";
 import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareDialog } from "@/components/ShareDialog";
+import { TagPickerButton } from "@/components/TagPickerButton";
+import { Badge } from "@/components/ui/badge";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SuggestionMenuController } from "@blocknote/react";
@@ -86,6 +88,27 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const removeBlockRef = useMutation(api.documentBlockRefs.removeBlockRef);
   const syncEdges = useMutation(api.edges.syncEdges);
   const syncMentionEdges = useMutation(api.edges.syncMentionEdges);
+  const updateTags = useMutation(api.documents.updateTags).withOptimisticUpdate(
+    (localStore, { id, tags }) => {
+      const doc = localStore.getQuery(api.documents.get, { id });
+      if (!doc) return;
+      localStore.setQuery(api.documents.get, { id }, { ...doc, tags });
+
+      // Patch the workspace tag dictionary so a freshly-created tag shows
+      // up immediately in the popover list and downstream autocomplete.
+      const dict = localStore.getQuery(api.tags.listWorkspaceTags, {
+        workspaceId: doc.workspaceId,
+      });
+      if (dict) {
+        const merged = Array.from(new Set([...dict, ...tags])).sort();
+        localStore.setQuery(
+          api.tags.listWorkspaceTags,
+          { workspaceId: doc.workspaceId },
+          merged,
+        );
+      }
+    },
+  );
 
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const myRole = useQuery(
@@ -305,13 +328,31 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   return (
     <div className="h-full flex-1 min-w-0 flex flex-col animate-fade-in">
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
-        <div className="flex h-8 items-center gap-2">
+        <div className="flex h-8 min-w-0 items-center gap-4">
           <FavoriteButton
             resourceType="document"
             resourceId={documentId}
             workspaceId={document.workspaceId}
           />
+          <TagPickerButton
+            workspaceId={document.workspaceId}
+            value={document.tags ?? []}
+            onChange={(tags) => void updateTags({ id: documentId, tags })}
+          />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
+          {document.tags && document.tags.length > 0 && (
+            <div className="hidden min-w-0 flex-1 items-center gap-1 overflow-hidden whitespace-nowrap sm:flex">
+              {document.tags.map((tag) => (
+                <Badge
+                  key={tag}
+                  variant="secondary"
+                  className="shrink-0 text-xs font-normal"
+                >
+                  #{tag}
+                </Badge>
+              ))}
+            </div>
+          )}
           {hasReferencedBlocks && (
             <button
               type="button"
@@ -381,7 +422,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         </HeaderSlot>
       )}
       <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
-        <div className="px-2 sm:px-20 max-w-full">
+        <div className="px-2 sm:pl-12 sm:pr-20 max-w-full">
           {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />

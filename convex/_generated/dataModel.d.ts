@@ -529,6 +529,39 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  entityTags: {
+    document: {
+      resourceId: string;
+      resourceType: "document" | "diagram" | "spreadsheet" | "project" | "task";
+      tagId: Id<"tags">;
+      tagName: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"entityTags">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "resourceId"
+      | "resourceType"
+      | "tagId"
+      | "tagName"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_resource_id: ["resourceId", "_creationTime"];
+      by_workspace_tag: ["workspaceId", "tagId", "_creationTime"];
+      by_workspace_tag_type: [
+        "workspaceId",
+        "tagId",
+        "resourceType",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   favorites: {
     document: {
       favoritedAt: number;
@@ -1008,6 +1041,28 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_yjsSnapshotId: ["yjsSnapshotId", "_creationTime"];
+    };
+    searchIndexes: {
+      by_name: {
+        searchField: "name";
+        filterFields: "workspaceId";
+      };
+    };
+    vectorIndexes: {};
+  };
+  tags: {
+    document: {
+      name: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"tags">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "name" | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_name: ["workspaceId", "name", "_creationTime"];
     };
     searchIndexes: {
       by_name: {

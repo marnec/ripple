@@ -158,6 +158,39 @@ export default defineSchema({
     .index("by_workspace_key", ["workspaceId", "key"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
+  // Centralized workspace tag dictionary. Source of truth for autocomplete,
+  // future rename/metadata. The denormalized `tags`/`labels` arrays on each
+  // resource remain as a projection for fast combined-filter search inside
+  // each resource's `.search` query.
+  // No usageCount column — entity counts (if ever needed) come from an
+  // @convex-dev/aggregate over entityTags so a high-write tag can't hot-spot.
+  tags: defineTable({
+    workspaceId: v.id("workspaces"),
+    name: v.string(), // canonical: trim().toLowerCase()
+  })
+    .index("by_workspace_name", ["workspaceId", "name"])
+    .index("by_workspace", ["workspaceId"])
+    .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
+
+  // Polymorphic join: which tags apply to which resources. `resourceId` is
+  // a typed Convex ID cast to string (mirrors the `nodes` table convention).
+  entityTags: defineTable({
+    workspaceId: v.id("workspaces"),
+    tagId: v.id("tags"),
+    tagName: v.string(), // denormalized from tags.name for cheap reads
+    resourceType: v.union(
+      v.literal("document"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+      v.literal("project"),
+      v.literal("task"),
+    ),
+    resourceId: v.string(),
+  })
+    .index("by_workspace_tag", ["workspaceId", "tagId"])
+    .index("by_resource_id", ["resourceId"]) // cascade-delete + per-resource lookup
+    .index("by_workspace_tag_type", ["workspaceId", "tagId", "resourceType"]),
+
   taskStatuses: defineTable({
     projectId: v.id("projects"),
     name: v.string(), // "To Do", "In Progress", "Done"

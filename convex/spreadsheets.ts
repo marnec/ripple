@@ -10,6 +10,7 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { deletionResultValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
+import { syncTagsForResource } from "./tagSync";
 import { notify } from "./utils/notify";
 
 const spreadsheetValidator = v.object({
@@ -98,10 +99,16 @@ export const updateTags = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, tags }) => {
-    await requireResourceMember(ctx, "spreadsheets", id);
+    const { resource } = await requireResourceMember(ctx, "spreadsheets", id);
+    const normalized = await syncTagsForResource(ctx, {
+      workspaceId: resource.workspaceId,
+      resourceType: "spreadsheet",
+      resourceId: id,
+      nextTagNames: tags,
+    });
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { tags });
+    await db.patch(id, { tags: normalized });
     return null;
   },
 });

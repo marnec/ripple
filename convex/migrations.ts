@@ -124,6 +124,11 @@ export const runAll = migrations.runner([
   internal.migrations.backfillUserNodes,
   internal.migrations.backfillEdgeNodeIds,
   internal.migrations.backfillNotificationSubscriptions,
+  internal.migrations.backfillDocumentTags,
+  internal.migrations.backfillDiagramTags,
+  internal.migrations.backfillSpreadsheetTags,
+  internal.migrations.backfillProjectTags,
+  internal.migrations.backfillTaskTags,
 ]);
 
 /**
@@ -567,6 +572,128 @@ export const backfillTaskNodes = migrations.define({
       name: task.title,
       tags: task.labels ?? [],
       metadata: { type: "task", projectId: task.projectId },
+    });
+  },
+});
+
+// ── Tag system backfill ─────────────────────────────────────────────
+// Populate the centralized `tags` dictionary + `entityTags` join from
+// each taggable resource's denormalized `tags` (or `labels`) column.
+// Idempotent — skips dictionary rows and join rows that already exist.
+
+import type { GenericMutationCtx } from "convex/server";
+
+async function backfillTagsForResourceRow(
+  ctx: GenericMutationCtx<DataModel>,
+  args: {
+    workspaceId: Id<"workspaces">;
+    resourceType: "document" | "diagram" | "spreadsheet" | "project" | "task";
+    resourceId: string;
+    rawTags: readonly string[] | undefined,
+  },
+) {
+  if (!args.rawTags || args.rawTags.length === 0) return;
+  // Dedupe, trim, lowercase to match the canonical form used by syncTagsForResource.
+  const seen = new Set<string>();
+  const tagNames: string[] = [];
+  for (const candidate of args.rawTags) {
+    const normalized = candidate.trim().toLowerCase();
+    if (normalized.length === 0 || normalized.length > 100) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    tagNames.push(normalized);
+  }
+
+  for (const name of tagNames) {
+    // Get-or-create dictionary row.
+    const tag = await ctx.db
+      .query("tags")
+      .withIndex("by_workspace_name", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("name", name),
+      )
+      .unique();
+    const tagId: Id<"tags"> = tag
+      ? tag._id
+      : await ctx.db.insert("tags", { workspaceId: args.workspaceId, name });
+
+    // Insert join only if it doesn't already exist for this (resource, tag).
+    const existingJoins = await ctx.db
+      .query("entityTags")
+      .withIndex("by_workspace_tag_type", (q) =>
+        q
+          .eq("workspaceId", args.workspaceId)
+          .eq("tagId", tagId)
+          .eq("resourceType", args.resourceType),
+      )
+      .collect();
+    if (existingJoins.some((j) => j.resourceId === args.resourceId)) continue;
+
+    await ctx.db.insert("entityTags", {
+      workspaceId: args.workspaceId,
+      tagId,
+      tagName: name,
+      resourceType: args.resourceType,
+      resourceId: args.resourceId,
+    });
+  }
+}
+
+export const backfillDocumentTags = migrations.define({
+  table: "documents",
+  migrateOne: async (ctx, doc) => {
+    await backfillTagsForResourceRow(ctx, {
+      workspaceId: doc.workspaceId,
+      resourceType: "document",
+      resourceId: doc._id,
+      rawTags: doc.tags,
+    });
+  },
+});
+
+export const backfillDiagramTags = migrations.define({
+  table: "diagrams",
+  migrateOne: async (ctx, doc) => {
+    await backfillTagsForResourceRow(ctx, {
+      workspaceId: doc.workspaceId,
+      resourceType: "diagram",
+      resourceId: doc._id,
+      rawTags: doc.tags,
+    });
+  },
+});
+
+export const backfillSpreadsheetTags = migrations.define({
+  table: "spreadsheets",
+  migrateOne: async (ctx, doc) => {
+    await backfillTagsForResourceRow(ctx, {
+      workspaceId: doc.workspaceId,
+      resourceType: "spreadsheet",
+      resourceId: doc._id,
+      rawTags: doc.tags,
+    });
+  },
+});
+
+export const backfillProjectTags = migrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    await backfillTagsForResourceRow(ctx, {
+      workspaceId: project.workspaceId,
+      resourceType: "project",
+      resourceId: project._id,
+      rawTags: project.tags,
+    });
+  },
+});
+
+export const backfillTaskTags = migrations.define({
+  table: "tasks",
+  migrateOne: async (ctx, task) => {
+    await backfillTagsForResourceRow(ctx, {
+      workspaceId: task.workspaceId,
+      resourceType: "task",
+      resourceId: task._id,
+      rawTags: task.labels,
     });
   },
 });

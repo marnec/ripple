@@ -1611,6 +1611,20 @@ export declare const api: {
       Array<string>
     >;
   };
+  tagSync: {
+    createTag: FunctionReference<
+      "mutation",
+      "public",
+      { name: string; workspaceId: Id<"workspaces"> },
+      Id<"tags">
+    >;
+    deleteTag: FunctionReference<
+      "mutation",
+      "public",
+      { tagId: Id<"tags"> },
+      null
+    >;
+  };
   taskActivity: {
     timeline: FunctionReference<
       "query",
@@ -2618,6 +2632,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillDiagramTags: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillDocumentAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -2631,6 +2657,18 @@ export declare const internal: {
       any
     >;
     backfillDocumentNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    backfillDocumentTags: FunctionReference<
       "mutation",
       "internal",
       {
@@ -2702,6 +2740,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillProjectTags: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillSpreadsheetAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -2715,6 +2765,18 @@ export declare const internal: {
       any
     >;
     backfillSpreadsheetNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    backfillSpreadsheetTags: FunctionReference<
       "mutation",
       "internal",
       {
@@ -2751,6 +2813,18 @@ export declare const internal: {
       any
     >;
     backfillTaskNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    backfillTaskTags: FunctionReference<
       "mutation",
       "internal",
       {

@@ -8,6 +8,7 @@ import { triggers } from "./dbTriggers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { requireResourceMember, requireWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { syncTagsForResource } from "./tagSync";
 import { notify } from "./utils/notify";
 
 export const create = mutation({
@@ -167,10 +168,16 @@ export const updateTags = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, tags }) => {
-    await requireResourceMember(ctx, "documents", id);
+    const { resource } = await requireResourceMember(ctx, "documents", id);
+    const normalized = await syncTagsForResource(ctx, {
+      workspaceId: resource.workspaceId,
+      resourceType: "document",
+      resourceId: id,
+      nextTagNames: tags,
+    });
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { tags });
+    await db.patch(id, { tags: normalized });
     return null;
   },
 });
