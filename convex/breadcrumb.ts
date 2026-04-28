@@ -10,11 +10,14 @@ async function resolveResourceName(
   const resource = await ctx.db.get(resourceId);
   if (!resource) return null;
 
-  // For tasks, return the project key + task number (e.g. "ENG-42")
+  // For tasks, return the code + title (e.g. "ENG-42 First task").
+  // The breadcrumb truncates on overflow, so long titles still render cleanly.
   if ("projectId" in resource && "number" in resource && resource.number != null) {
     const project = await ctx.db.get(resource.projectId);
     if (project && project.key) {
-      return `${project.key}-${resource.number}`;
+      const code = `${project.key}-${resource.number}`;
+      const title = "title" in resource ? resource.title : "";
+      return title ? `[ ${code} ] ${title}` : `[ ${code} ]`;
     }
   }
 

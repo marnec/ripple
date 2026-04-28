@@ -3,6 +3,8 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import { TagPickerButton } from "@/components/TagPickerButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getUserColor } from "@/lib/user-colors";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
 import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
@@ -59,6 +61,7 @@ function TaskDetailPageContent({
     collaborationEnabled: editorDeferred,
   });
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   if (
     detail.task === undefined ||
@@ -83,9 +86,39 @@ function TaskDetailPageContent({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Task toolbar — left: delete + tags + title + code, right: back-to-project */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
-        <div className="flex h-8 min-w-0 items-center gap-4">
+      {/* Task toolbar — desktop only. On mobile, the breadcrumb shows
+          the task code + title and the delete action moves to HeaderSlot. */}
+      {!isMobile && (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
+          <div className="flex h-8 min-w-0 items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => detail.setShowDeleteDialog(true)}
+              title="Delete task"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+            <TagPickerButton
+              workspaceId={workspaceId}
+              value={detail.task.labels ?? []}
+              onChange={detail.handleSetTags}
+            />
+            {taskCode && (
+              <span className="shrink-0 text-sm text-muted-foreground">
+                [ {taskCode} ]
+              </span>
+            )}
+            <h1 className="truncate text-lg font-semibold">
+              {detail.titleValue}
+            </h1>
+          </div>
+        </div>
+      )}
+
+      {isMobile && (
+        <HeaderSlot>
           <Button
             variant="ghost"
             size="sm"
@@ -95,22 +128,8 @@ function TaskDetailPageContent({
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
-          <TagPickerButton
-            workspaceId={workspaceId}
-            value={detail.task.labels ?? []}
-            onChange={detail.handleSetTags}
-          />
-          {taskCode && (
-            <span className="hidden shrink-0 text-sm text-muted-foreground sm:inline">
-              [ {taskCode} ]
-            </span>
-          )}
-          <h1 className="truncate text-lg font-semibold">
-            {detail.titleValue}
-          </h1>
-        </div>
-
-      </div>
+        </HeaderSlot>
+      )}
 
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl pb-6">
