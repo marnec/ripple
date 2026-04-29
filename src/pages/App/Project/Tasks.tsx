@@ -3,9 +3,9 @@ import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useMutation } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { CheckSquare, ArrowRight } from "lucide-react";
+import { CheckSquare, ArrowRight, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -16,6 +16,9 @@ const LazyTaskDetailSheet = React.lazy(() =>
 import { TaskRow } from "./TaskRow";
 import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
+import { deriveCompletedFilter, deriveCompletedSort } from "./completedTaskQuery";
+
+const COMPLETED_PAGE_SIZE = 20;
 
 type TasksProps = {
   projectId: Id<"projects">;
@@ -32,20 +35,52 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
-  const liveTasks = useQuery(api.tasks.listByProject, {
-    projectId,
-    hideCompleted: false,
-  });
+  const isCompletedView = filters.completionFilter === "completed";
+
+  // Active path: full uncompleted set, client-side filter/sort. Bounded by
+  // typical workload (~hundreds of tasks per project).
+  const activeRaw = useQuery(
+    api.tasks.listByProject,
+    isCompletedView ? "skip" : { projectId, completed: false },
+  );
+
+  // Completed path: paginated, indexed-only. Every (filter, sort) combo is
+  // a single indexed range scan — see listCompletedByProject in tasks.ts.
+  const completedPag = usePaginatedQuery(
+    api.tasks.listCompletedByProject,
+    isCompletedView
+      ? {
+          projectId,
+          filter: deriveCompletedFilter(filters),
+          sort: deriveCompletedSort(sort),
+        }
+      : "skip",
+    { initialNumItems: COMPLETED_PAGE_SIZE },
+  );
 
   // Track which row has its swipe action revealed (only one at a time)
   const [swipeOpenId, setSwipeOpenId] = useState<string | null>(null);
 
+  // While the completed query is loading its first page, `results` is `[]`.
+  // Returning `undefined` here keeps `useAnimatedQuery`'s buffer holding the
+  // previous content (the active list) visible — once the completed data
+  // arrives we get a single smooth view transition from active → completed
+  // instead of a flash through the "No tasks yet" empty state.
+  const liveTasks = isCompletedView
+    ? (completedPag.status === "LoadingFirstPage"
+        ? undefined
+        : (completedPag.results as typeof activeRaw))
+    : activeRaw;
   const allTasks = useAnimatedQuery(
     liveTasks,
     isPositionOnlyChange,
     sheetOpen,
   );
-  const tasks = useFilteredTasks(allTasks, filters, sort);
+  // useFilteredTasks applies assignee/priority/tag/sort over the active set.
+  // For the completed view the backend already returned the right rows, so
+  // we render `allTasks` directly without re-filtering client-side.
+  const filteredActive = useFilteredTasks(allTasks, filters, sort);
+  const tasks = isCompletedView ? allTasks : filteredActive;
 
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
@@ -87,6 +122,9 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
   }
 
   const totalCount = allTasks.length;
+
+  const showLoadMore = isCompletedView && completedPag.status === "CanLoadMore";
+  const loadingMore = isCompletedView && completedPag.status === "LoadingMore";
 
   return (
     <div>
@@ -153,6 +191,23 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
               </SwipeToReveal>
             );
           })}
+          {(showLoadMore || loadingMore) && (
+            <button
+              type="button"
+              onClick={() => completedPag.loadMore(COMPLETED_PAGE_SIZE)}
+              disabled={loadingMore}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-border/70 bg-transparent px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-accent/40 hover:text-foreground cursor-pointer disabled:cursor-default disabled:opacity-50"
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading…
+                </>
+              ) : (
+                "Load more completed tasks"
+              )}
+            </button>
+          )}
         </div>
       )}
 

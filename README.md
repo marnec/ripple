@@ -49,3 +49,18 @@ keyboard accessiblity
     - [ ] prompt for coordinates
     - [ ] mouse pick coords?
     - [ ] reintroduce formatting?
+
+- tag system follow-ups
+    - [ ] run `migrateTaskEntityTagsToTaskTags` on prod once it soaks, then drop the `task` literal from `entityTags.resourceType` union
+    - [ ] extend the taskTags-driven server-side tag filter to `listByWorkspace` and `listByAssignee` for cross-project tag queries
+    - [ ] cycle-scoped tag filter — `taskTags` already has room for a `[cycleId, tagId]` index when needed
+    - [ ] tagged-active server-side filter (active path currently client-side; the `by_project_tag_completed` index already supports it)
+
+- task query scaling
+    - [ ] cross-workspace overflow on `listByAssignee` for heavy users with assignments across many workspaces
+    - [ ] kanban active-backlog overflow strategy when a project's uncompleted set grows past the read cap
+    - [ ] real fix when the project list truncation banner fires regularly — archive table, per-cycle scoping, or paginated completed view
+    - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
+
+- resource list page scaling
+    - [ ] anti-favorite (`isFavorite=false`) currently post-filters the default branch — switch to indexed when it becomes a hot path

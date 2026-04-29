@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/responsive-dropdown-menu";
 import { useCalendarSync } from "./useCalendarSync";
 import { calendarDragContext } from "./calendarDragContext";
+import { useEagerProjectTasks } from "./useDualProjectTasks";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@shared/types/routes";
 import { Button } from "@/components/ui/button";
@@ -744,7 +745,7 @@ function ProjectCalendarContent({
   projectId: Id<"projects">;
 }) {
   const calendarWrapperRef = useRef<HTMLDivElement>(null);
-  const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
+  const tasks = useEagerProjectTasks(projectId);
   const calendarData = useQuery(api.cycles.listForCalendar, { projectId });
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();

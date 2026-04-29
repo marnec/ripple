@@ -172,6 +172,36 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
+  // Project-scoped task→tag join. Tasks live one level deeper than the four
+  // workspace-scoped resources (documents/diagrams/spreadsheets/projects),
+  // so they get a dedicated table whose indexes match that scope. Both the
+  // dictionary `tags` table and the polymorphic `entityTags` table are
+  // unaffected.
+  // Denormalized fields:
+  //   - `tagName`   : copied from tags.name for cheap reads (matches entityTags)
+  //   - `completed` : copied from tasks.completed so the primary access path
+  //                   ("completed tasks in project P tagged X") is a single
+  //                   indexed range scan. Kept in sync by a tasks.completed
+  //                   trigger in dbTriggers.ts.
+  taskTags: defineTable({
+    workspaceId: v.id("workspaces"),
+    projectId:   v.id("projects"),
+    taskId:      v.id("tasks"),
+    tagId:       v.id("tags"),
+    tagName:     v.string(),
+    completed:   v.boolean(),
+    // Denormalized sort fields. Optional because the source `tasks` columns
+    // are optional. Kept in sync by the tasks-table trigger in dbTriggers.ts.
+    // Names match the source columns on `tasks` so the trigger is mechanical.
+    dueDate:           v.optional(v.string()),
+    plannedStartDate:  v.optional(v.string()),
+  })
+    .index("by_project_tag_completed",                   ["projectId", "tagId", "completed"])
+    .index("by_project_tag_completed_dueDate",           ["projectId", "tagId", "completed", "dueDate"])
+    .index("by_project_tag_completed_plannedStartDate",  ["projectId", "tagId", "completed", "plannedStartDate"])
+    .index("by_workspace_tag",                           ["workspaceId", "tagId"])
+    .index("by_task",                                    ["taskId"]),
+
   // Polymorphic join: which tags apply to which resources. `resourceId` is
   // a typed Convex ID cast to string (mirrors the `nodes` table convention).
   entityTags: defineTable({
@@ -233,10 +263,19 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
+    .index("by_project_completed_dueDate", ["projectId", "completed", "dueDate"])
+    .index("by_project_completed_plannedStartDate", ["projectId", "completed", "plannedStartDate"])
+    .index("by_project_completed_assignee", ["projectId", "completed", "assigneeId"])
+    .index("by_project_completed_assignee_dueDate", ["projectId", "completed", "assigneeId", "dueDate"])
+    .index("by_project_completed_assignee_plannedStartDate", ["projectId", "completed", "assigneeId", "plannedStartDate"])
+    .index("by_project_completed_priority", ["projectId", "completed", "priority"])
+    .index("by_project_completed_priority_dueDate", ["projectId", "completed", "priority", "dueDate"])
+    .index("by_project_completed_priority_plannedStartDate", ["projectId", "completed", "priority", "plannedStartDate"])
     .index("by_assignee", ["assigneeId"])
     .index("by_assignee_completed", ["assigneeId", "completed"])
     .index("by_project_status", ["projectId", "statusId"])
     .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_completed", ["workspaceId", "completed"])
     .index("by_project_status_position", ["projectId", "statusId", "position"])
     .index("by_project_number", ["projectId", "number"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"]),

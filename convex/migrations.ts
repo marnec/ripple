@@ -872,6 +872,70 @@ export const backfillNotificationSubscriptions = migrations.define({
   },
 });
 
+/**
+ * Move task→tag joins from the polymorphic `entityTags` table to the new
+ * `taskTags` table. Walks every entityTags row; only acts on those with
+ * resourceType === "task". Looks up the task to capture projectId and
+ * completed (denormalized on taskTags), inserts the new row, then deletes
+ * the legacy one. Orphaned task entityTags (task already deleted) are
+ * dropped without re-creating.
+ *
+ * Idempotent — once an entityTags row is moved it's gone, so re-running is
+ * safe and a no-op.
+ *
+ * Direct `ctx.db` writes intentionally bypass `writerWithTriggers` —
+ * migrations sit outside the runtime invariants (uniqueness etc. is already
+ * guaranteed by the source data).
+ */
+export const migrateTaskEntityTagsToTaskTags = migrations.define({
+  table: "entityTags",
+  migrateOne: async (ctx, row) => {
+    if (row.resourceType !== "task") return;
+
+    const taskId = row.resourceId as Id<"tasks">;
+    const task = await ctx.db.get(taskId);
+    if (task) {
+      await ctx.db.insert("taskTags", {
+        workspaceId: row.workspaceId,
+        projectId: task.projectId,
+        taskId,
+        tagId: row.tagId,
+        tagName: row.tagName,
+        completed: task.completed,
+      });
+    }
+
+    await ctx.db.delete(row._id);
+  },
+});
+
+/**
+ * Backfill `dueDate` and `plannedStartDate` on existing taskTags rows that
+ * predate the denormalization. The trigger keeps these columns fresh for new
+ * writes; this migration covers rows from before the trigger existed.
+ *
+ * Idempotent — only patches rows whose denormalized columns differ from the
+ * source task. Rows already in sync are skipped.
+ */
+export const backfillTaskTagsSortFields = migrations.define({
+  table: "taskTags",
+  migrateOne: async (ctx, row) => {
+    const task = await ctx.db.get(row.taskId);
+    if (!task) {
+      // Orphaned join — cleanup is the cascade's job, not this migration's.
+      return;
+    }
+    const patch: { dueDate?: string; plannedStartDate?: string } = {};
+    if (row.dueDate !== task.dueDate) patch.dueDate = task.dueDate;
+    if (row.plannedStartDate !== task.plannedStartDate) {
+      patch.plannedStartDate = task.plannedStartDate;
+    }
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(row._id, patch);
+    }
+  },
+});
+
 /** Populate sourceNodeId and targetNodeId on existing edges. */
 export const backfillEdgeNodeIds = migrations.define({
   table: "edges",

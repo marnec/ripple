@@ -20,6 +20,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { KanbanBoard } from "./KanbanBoard";
 import { Tasks } from "./Tasks";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
+import { useEagerProjectTasks } from "./useDualProjectTasks";
 
 export function ProjectDetails() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -49,6 +50,7 @@ function ProjectDetailsContent({
     completionFilter: "uncompleted" as const,
     assigneeIds: [],
     priorities: [],
+    tags: [],
   });
   const [sort, setSort] = useState<TaskSort>(null);
   const [sortBlocked, setSortBlocked] = useState(false);
@@ -64,7 +66,7 @@ function ProjectDetailsContent({
   const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
   const project = useQuery(api.projects.get, { id: projectId });
   // Pre-fetch tasks to show a loading indicator beside the tabs
-  const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
+  const tasks = useEagerProjectTasks(projectId);
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const members = useWorkspaceMembers();
   const contentLoading = tasks === undefined || statuses === undefined;
@@ -124,6 +126,7 @@ function ProjectDetailsContent({
 
         {/* Shared toolbar — stable across views */}
         <TaskToolbar
+          workspaceId={workspaceId}
           filters={filters}
           onFiltersChange={setFiltersAnimated}
           sort={sort}

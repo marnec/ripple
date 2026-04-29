@@ -1146,6 +1146,58 @@ export type DataModel = {
       by_assignee_completed: ["assigneeId", "completed", "_creationTime"];
       by_project: ["projectId", "_creationTime"];
       by_project_completed: ["projectId", "completed", "_creationTime"];
+      by_project_completed_assignee: [
+        "projectId",
+        "completed",
+        "assigneeId",
+        "_creationTime",
+      ];
+      by_project_completed_assignee_dueDate: [
+        "projectId",
+        "completed",
+        "assigneeId",
+        "dueDate",
+        "_creationTime",
+      ];
+      by_project_completed_assignee_plannedStartDate: [
+        "projectId",
+        "completed",
+        "assigneeId",
+        "plannedStartDate",
+        "_creationTime",
+      ];
+      by_project_completed_dueDate: [
+        "projectId",
+        "completed",
+        "dueDate",
+        "_creationTime",
+      ];
+      by_project_completed_plannedStartDate: [
+        "projectId",
+        "completed",
+        "plannedStartDate",
+        "_creationTime",
+      ];
+      by_project_completed_priority: [
+        "projectId",
+        "completed",
+        "priority",
+        "_creationTime",
+      ];
+      by_project_completed_priority_dueDate: [
+        "projectId",
+        "completed",
+        "priority",
+        "dueDate",
+        "_creationTime",
+      ];
+      by_project_completed_priority_plannedStartDate: [
+        "projectId",
+        "completed",
+        "priority",
+        "plannedStartDate",
+        "_creationTime",
+      ];
       by_project_number: ["projectId", "number", "_creationTime"];
       by_project_status: ["projectId", "statusId", "_creationTime"];
       by_project_status_position: [
@@ -1155,6 +1207,7 @@ export type DataModel = {
         "_creationTime",
       ];
       by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_completed: ["workspaceId", "completed", "_creationTime"];
       by_yjsSnapshotId: ["yjsSnapshotId", "_creationTime"];
     };
     searchIndexes: {};
@@ -1188,6 +1241,59 @@ export type DataModel = {
       by_project: ["projectId", "_creationTime"];
       by_project_isDefault: ["projectId", "isDefault", "_creationTime"];
       by_project_order: ["projectId", "order", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  taskTags: {
+    document: {
+      completed: boolean;
+      dueDate?: string;
+      plannedStartDate?: string;
+      projectId: Id<"projects">;
+      tagId: Id<"tags">;
+      tagName: string;
+      taskId: Id<"tasks">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"taskTags">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "completed"
+      | "dueDate"
+      | "plannedStartDate"
+      | "projectId"
+      | "tagId"
+      | "tagName"
+      | "taskId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_project_tag_completed: [
+        "projectId",
+        "tagId",
+        "completed",
+        "_creationTime",
+      ];
+      by_project_tag_completed_dueDate: [
+        "projectId",
+        "tagId",
+        "completed",
+        "dueDate",
+        "_creationTime",
+      ];
+      by_project_tag_completed_plannedStartDate: [
+        "projectId",
+        "tagId",
+        "completed",
+        "plannedStartDate",
+        "_creationTime",
+      ];
+      by_task: ["taskId", "_creationTime"];
+      by_workspace_tag: ["workspaceId", "tagId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

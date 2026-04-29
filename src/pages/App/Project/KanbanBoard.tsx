@@ -26,6 +26,7 @@ import type { Id } from "../../../../convex/_generated/dataModel";
 import { AddColumnDialog } from "./AddColumnDialog";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { KanbanColumn } from "./KanbanColumn";
+import { KanbanCompletedOverflow } from "./KanbanCompletedOverflow";
 
 const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
@@ -34,6 +35,7 @@ import type { TaskFilters, TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
 
 const ANIMATION_DURATION_MS = 80;
+const KANBAN_COMPLETED_CAP = 20;
 
 type KanbanBoardProps = {
   projectId: Id<"projects">;
@@ -64,11 +66,22 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const [dndSuppressed, setDndSuppressed] = useState(false);
   const sheetOpen = selectedTaskId !== null;
 
-  // Always fetch all tasks — filter client-side to avoid flash on toggle
-  const liveTasks = useQuery(api.tasks.listByProject, {
+  // Active tasks: full list. Completed: capped at KANBAN_COMPLETED_CAP+1 so we
+  // can detect overflow via the +1 trick. Beyond the cap, the kanban surfaces
+  // an overflow pill that links to the list view.
+  const activeTasks = useQuery(api.tasks.listByProject, {
     projectId,
-    hideCompleted: false,
+    completed: false,
   });
+  const completedRaw = useQuery(api.tasks.listByProject, {
+    projectId,
+    completed: true,
+    limit: KANBAN_COMPLETED_CAP + 1,
+  });
+  const completedTruncated = (completedRaw?.length ?? 0) > KANBAN_COMPLETED_CAP;
+  const completedTasks = completedRaw?.slice(0, KANBAN_COMPLETED_CAP);
+  const liveTasks =
+    activeTasks && completedTasks ? [...activeTasks, ...completedTasks] : undefined;
 
   // Buffer remote updates through View Transitions so cards animate.
   // When sorting is active, absorb position-only reorders from other users
@@ -88,20 +101,25 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
 
   const updatePosition = useMutation(api.tasks.updatePosition).withOptimisticUpdate(
     (localStore, { taskId, statusId, position }) => {
-      const currentTasks = localStore.getQuery(api.tasks.listByProject, {
-        projectId,
-        hideCompleted: false,
-      });
-      if (currentTasks === undefined) return;
-
-      const updatedTasks = currentTasks.map((task) =>
-        task._id === taskId ? { ...task, statusId, position } : task
-      );
-      localStore.setQuery(
-        api.tasks.listByProject,
-        { projectId, hideCompleted: false },
-        updatedTasks
-      );
+      // Patch whichever query holds the task. Cross-completion moves (e.g.
+      // dropping into Done) settle when the server commits the completed
+      // flip; until then the task stays in its source query with the new
+      // statusId, which still groups it into the right kanban column.
+      const updateBucket = (
+        args: { projectId: Id<"projects">; completed: boolean; limit?: number },
+      ) => {
+        const current = localStore.getQuery(api.tasks.listByProject, args);
+        if (current === undefined) return;
+        localStore.setQuery(
+          api.tasks.listByProject,
+          args,
+          current.map((task) =>
+            task._id === taskId ? { ...task, statusId, position } : task,
+          ),
+        );
+      };
+      updateBucket({ projectId, completed: false });
+      updateBucket({ projectId, completed: true, limit: KANBAN_COMPLETED_CAP + 1 });
     }
   );
 
@@ -308,6 +326,14 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
               isFirst={index === 0}
               isLast={index === statuses.length - 1}
               canDelete={!status.isDefault}
+              footer={
+                completedTruncated && status.isCompleted ? (
+                  <KanbanCompletedOverflow
+                    workspaceId={workspaceId}
+                    projectId={projectId}
+                  />
+                ) : undefined
+              }
             />
           ))}
 

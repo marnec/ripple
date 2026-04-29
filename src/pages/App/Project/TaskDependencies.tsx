@@ -212,7 +212,11 @@ function AddDependencyPopover({
   onAdd: (selectedTaskId: Id<"tasks">, type: "blocks" | "is_blocked_by" | "relates_to") => Promise<void>;
 }) {
   const [depType, setDepType] = useState<"blocks" | "is_blocked_by" | "relates_to">("blocks");
-  const allTasks = useQuery(api.tasks.listByWorkspace, open ? { workspaceId, hideCompleted: false } : "skip");
+  // Dependency picker can target either active or completed tasks (e.g.
+  // "depends on a completed migration"), so fire both queries when open.
+  const activeTasks = useQuery(api.tasks.listByWorkspace, open ? { workspaceId, completed: false } : "skip");
+  const completedTasks = useQuery(api.tasks.listByWorkspace, open ? { workspaceId, completed: true } : "skip");
+  const allTasks = activeTasks && completedTasks ? [...activeTasks, ...completedTasks] : undefined;
 
   const availableTasks = (allTasks ?? []).filter(
     (t: any) => !existingTaskIds.has(t._id)

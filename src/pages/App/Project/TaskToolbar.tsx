@@ -18,26 +18,40 @@ import {
   type TaskPriority,
 } from "@/lib/task-utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useQuery } from "convex-helpers/react/cache";
 import {
   ArrowUpDown,
   ArrowDown,
   ArrowUp,
   Check,
   Filter,
+  Tag as TagIcon,
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 export type { TaskPriority } from "@/lib/task-utils";
 export type SortField = "created" | "dueDate" | "startDate";
 export type SortDirection = "asc" | "desc";
 
-export type CompletionFilter = "all" | "completed" | "uncompleted";
+// Binary view toggle. The legacy "all" mode mixed bounded (active) and
+// unbounded (completed) sets, which forced in-memory filtering on the
+// completed half — incompatible with the indexed-only completed contract.
+export type CompletionFilter = "completed" | "uncompleted";
 
+// In completed mode the toolbar enforces:
+//  - At most ONE of {assigneeIds, priorities, tags} is non-empty (mutex
+//    across filter axes).
+//  - The non-empty axis has at most ONE element (single-select).
+// This keeps every backend query on a single indexed range scan.
+// In active mode all three arrays are independently multi-select.
 export type TaskFilters = {
   completionFilter: CompletionFilter;
   assigneeIds: string[];
   priorities: TaskPriority[];
+  tags: string[];
 };
 
 export type TaskSort = {
@@ -52,6 +66,7 @@ type Member = {
 };
 
 type TaskToolbarProps = {
+  workspaceId: Id<"workspaces">;
   filters: TaskFilters;
   onFiltersChange: (filters: TaskFilters) => void;
   sort: TaskSort;
@@ -73,6 +88,7 @@ const sortOptions: { value: SortField; label: string }[] = [
 ];
 
 export function TaskToolbar({
+  workspaceId,
   filters,
   onFiltersChange,
   sort,
@@ -85,13 +101,35 @@ export function TaskToolbar({
   const [completionOpen, setCompletionOpen] = useState(false);
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [priorityOpen, setPriorityOpen] = useState(false);
+  const [tagOpen, setTagOpen] = useState(false);
+  const [tagQuery, setTagQuery] = useState("");
+  const allTags = useQuery(api.tags.listWorkspaceTags, { workspaceId }) ?? [];
+  const normalizedTagQuery = tagQuery.trim().toLowerCase();
+  const filteredTags = normalizedTagQuery
+    ? allTags.filter((t) => t.includes(normalizedTagQuery))
+    : allTags;
 
   const activeFilterCount =
     (filters.completionFilter !== "uncompleted" ? 1 : 0) +
     (filters.assigneeIds.length > 0 ? 1 : 0) +
-    (filters.priorities.length > 0 ? 1 : 0);
+    (filters.priorities.length > 0 ? 1 : 0) +
+    (filters.tags.length > 0 ? 1 : 0);
+
+  const isCompletedView = filters.completionFilter === "completed";
 
   const toggleAssignee = (id: string) => {
+    if (isCompletedView) {
+      // Single-select mutex: clear other axes and replace this one with at
+      // most one entry. The backend's indexed query path requires it.
+      const isAlreadySelected = filters.assigneeIds[0] === id && filters.assigneeIds.length === 1;
+      onFiltersChange({
+        ...filters,
+        assigneeIds: isAlreadySelected ? [] : [id],
+        priorities: [],
+        tags: [],
+      });
+      return;
+    }
     const next = filters.assigneeIds.includes(id)
       ? filters.assigneeIds.filter((a) => a !== id)
       : [...filters.assigneeIds, id];
@@ -99,18 +137,70 @@ export function TaskToolbar({
   };
 
   const togglePriority = (p: TaskPriority) => {
+    if (isCompletedView) {
+      const isAlreadySelected = filters.priorities[0] === p && filters.priorities.length === 1;
+      onFiltersChange({
+        ...filters,
+        priorities: isAlreadySelected ? [] : [p],
+        assigneeIds: [],
+        tags: [],
+      });
+      return;
+    }
     const next = filters.priorities.includes(p)
       ? filters.priorities.filter((x) => x !== p)
       : [...filters.priorities, p];
     onFiltersChange({ ...filters, priorities: next });
   };
 
-  const clearFilters = () => {
-    onFiltersChange({ ...filters, completionFilter: "uncompleted", assigneeIds: [], priorities: [] });
+  const toggleTag = (tag: string) => {
+    if (isCompletedView) {
+      const isAlreadySelected = filters.tags[0] === tag && filters.tags.length === 1;
+      onFiltersChange({
+        ...filters,
+        tags: isAlreadySelected ? [] : [tag],
+        assigneeIds: [],
+        priorities: [],
+      });
+      return;
+    }
+    const next = filters.tags.includes(tag)
+      ? filters.tags.filter((t) => t !== tag)
+      : [...filters.tags, tag];
+    onFiltersChange({ ...filters, tags: next });
   };
 
-  const completionLabels: Record<string, string> = { all: "All", completed: "Completed", uncompleted: "Uncompleted" };
+  const clearFilters = () => {
+    onFiltersChange({
+      ...filters,
+      completionFilter: "uncompleted",
+      assigneeIds: [],
+      priorities: [],
+      tags: [],
+    });
+  };
+
+  const completionLabels: Record<CompletionFilter, string> = {
+    uncompleted: "Active",
+    completed: "Completed",
+  };
   const completionActive = filters.completionFilter !== "uncompleted";
+
+  const switchCompletionMode = (next: CompletionFilter) => {
+    if (next === filters.completionFilter) return;
+    // Switching modes clears filter axes — the multi-select state from
+    // active mode wouldn't be valid under the completed-mode mutex, and the
+    // single-select state from completed mode is rarely what a user wants
+    // to inherit when going back to active.
+    onFiltersChange({
+      ...filters,
+      completionFilter: next,
+      assigneeIds: [],
+      priorities: [],
+      tags: [],
+    });
+    setCompletionOpen(false);
+  };
 
   return (
     <div className={cn("flex items-center gap-2", isMobile ? "flex-col items-stretch" : "flex-wrap")}>
@@ -133,10 +223,10 @@ export function TaskToolbar({
         </PopoverTrigger>
         <PopoverContent className="w-40 p-2" align="start">
           <div className="flex flex-col gap-0.5">
-            {(["uncompleted", "all", "completed"] as const).map((opt) => (
+            {(["uncompleted", "completed"] as const).map((opt) => (
               <button
                 key={opt}
-                onClick={() => { onFiltersChange({ ...filters, completionFilter: opt }); setCompletionOpen(false); }}
+                onClick={() => switchCompletionMode(opt)}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors",
                   filters.completionFilter === opt ? "bg-accent" : "hover:bg-accent/50"
@@ -238,6 +328,62 @@ export function TaskToolbar({
                 </button>
               );
             })}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Tag filter */}
+      <Popover open={tagOpen} onOpenChange={setTagOpen}>
+        <PopoverTrigger
+          render={<button
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 h-7 text-xs font-medium transition-colors cursor-pointer",
+              filters.tags.length > 0
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-input bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            )}
+          />}
+        >
+            <TagIcon className="w-3 h-3" />
+            Tags
+            {filters.tags.length > 0 && (
+              <span className="rounded-full bg-primary text-primary-foreground w-4 h-4 text-[10px] flex items-center justify-center">
+                {filters.tags.length}
+              </span>
+            )}
+        </PopoverTrigger>
+        <PopoverContent className="w-56 p-2" align="start">
+          {allTags.length > 0 && (
+            <input
+              type="text"
+              value={tagQuery}
+              onChange={(e) => setTagQuery(e.target.value)}
+              placeholder="Search tags..."
+              className="w-full mb-1 px-2 py-1 text-xs rounded-md border border-input bg-transparent outline-none focus:border-primary/50"
+            />
+          )}
+          <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
+            {filteredTags.map((tag) => {
+              const selected = filters.tags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors",
+                    selected ? "bg-accent" : "hover:bg-accent/50"
+                  )}
+                >
+                  <span className="truncate flex-1 text-left">{tag}</span>
+                  {selected && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                </button>
+              );
+            })}
+            {filteredTags.length === 0 && (
+              <p className="text-xs text-muted-foreground px-2 py-3 text-center">
+                {allTags.length === 0 ? "No tags in this workspace" : "No matches"}
+              </p>
+            )}
           </div>
         </PopoverContent>
       </Popover>

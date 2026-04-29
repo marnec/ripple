@@ -463,6 +463,48 @@ triggers.register("entityTags", async (ctx, change) => {
   }
 });
 
+// Uniqueness on (taskId, tagId) — one tag per task. Same shape as entityTags.
+triggers.register("taskTags", async (ctx, change) => {
+  if (change.operation !== "insert" && change.operation !== "update") return;
+  const { taskId, tagId } = change.newDoc;
+  const same = await ctx.db
+    .query("taskTags")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .collect();
+  if (same.some((tt) => tt.tagId === tagId && tt._id !== change.id)) {
+    throw new ConvexError(`Duplicate taskTag: tag is already attached to this task`);
+  }
+});
+
+// Keep denormalized columns on `taskTags` in sync with the source task.
+// Without this sync the indexed completed-tag-sorted queries would return
+// stale partitions or stale orderings.
+triggers.register("tasks", async (ctx, change) => {
+  if (change.operation !== "update") return;
+  const completedChanged = change.oldDoc.completed !== change.newDoc.completed;
+  const projectChanged = change.oldDoc.projectId !== change.newDoc.projectId;
+  const dueDateChanged = change.oldDoc.dueDate !== change.newDoc.dueDate;
+  const startDateChanged = change.oldDoc.plannedStartDate !== change.newDoc.plannedStartDate;
+  if (!completedChanged && !projectChanged && !dueDateChanged && !startDateChanged) return;
+  const joins = await ctx.db
+    .query("taskTags")
+    .withIndex("by_task", (q) => q.eq("taskId", change.id as Id<"tasks">))
+    .collect();
+  for (const join of joins) {
+    const patch: {
+      completed?: boolean;
+      projectId?: Id<"projects">;
+      dueDate?: string;
+      plannedStartDate?: string;
+    } = {};
+    if (completedChanged) patch.completed = change.newDoc.completed;
+    if (projectChanged) patch.projectId = change.newDoc.projectId;
+    if (dueDateChanged) patch.dueDate = change.newDoc.dueDate;
+    if (startDateChanged) patch.plannedStartDate = change.newDoc.plannedStartDate;
+    await ctx.db.patch(join._id, patch);
+  }
+});
+
 // ── Notification subscription triggers ──────────────────────────────
 // Maintain the notificationSubscriptions materialized view so that
 // delivery queries are a single indexed lookup.

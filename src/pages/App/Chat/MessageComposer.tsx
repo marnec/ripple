@@ -74,7 +74,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const documents = sidebarData?.documents;
   const diagrams = sidebarData?.diagrams;
   const spreadsheets = sidebarData?.spreadsheets;
-  const tasks = useQuery(api.tasks.listByWorkspace, { workspaceId, hideCompleted: true });
+  const tasks = useQuery(api.tasks.listByWorkspace, { workspaceId, completed: false });
   const workspaceMembers = useWorkspaceMembers();
   const currentUser = useViewer();
 

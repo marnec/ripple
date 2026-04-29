@@ -22,7 +22,18 @@ export function startViewTransition(callback: () => void) {
     callback();
     return;
   }
-  document.startViewTransition(() => {
+  const transition = document.startViewTransition(() => {
     flushSync(callback);
   });
+  // When a new transition supersedes an in-flight one (e.g. rapid filter
+  // changes) the browser rejects the previous transition's promises with
+  // AbortError. That's expected and not a bug — swallow it so the console
+  // doesn't fill with "Transition was skipped" rejections.
+  const swallowAbort = (err: unknown) => {
+    if (err instanceof DOMException && err.name === "AbortError") return;
+    throw err;
+  };
+  transition.ready.catch(swallowAbort);
+  transition.finished.catch(swallowAbort);
+  transition.updateCallbackDone.catch(swallowAbort);
 }

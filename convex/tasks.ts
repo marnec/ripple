@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { internalQuery, mutation, query } from "./_generated/server";
 
 import { generateKeyBetween } from "fractional-indexing";
@@ -10,7 +11,9 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
-import { syncTagsForResource } from "./tagSync";
+import { syncTaskTags, normalizeTagList } from "./tagSync";
+import { getAll } from "convex-helpers/server/relationships";
+import type { Doc } from "./_generated/dataModel";
 import { notify } from "./utils/notify";
 
 export const baseTaskFields = {
@@ -141,17 +144,20 @@ export const create = mutation({
 
     // Sync initial labels to the central tag tables (ID is known only after insert).
     if (args.labels && args.labels.length > 0) {
-      const normalized = await syncTagsForResource(ctx, {
+      const normalized = await syncTaskTags(ctx, {
         workspaceId: project.workspaceId,
-        resourceType: "task",
-        resourceId: taskId,
+        projectId: args.projectId,
+        taskId,
+        completed: status.isCompleted,
+        dueDate: args.dueDate,
+        plannedStartDate: args.plannedStartDate,
         nextTagNames: args.labels,
       });
       // Replace the as-typed labels with the normalized list, in case
       // normalization changed anything (whitespace / casing / dedupe).
       if (
         normalized.length !== (args.labels?.length ?? 0) ||
-        normalized.some((t, i) => t !== args.labels?.[i])
+        normalized.some((t: string, i: number) => t !== args.labels?.[i])
       ) {
         await db.patch(taskId, { labels: normalized });
       }
@@ -253,32 +259,73 @@ export const hasAnyTasks = query({
 export const listByProject = query({
   args: {
     projectId: v.id("projects"),
-    hideCompleted: v.optional(v.boolean()),
+    completed: v.boolean(),
+    // Optional cap on the number of returned tasks. Used by the kanban to
+    // bound the "Done" view at ~20 with a +1 trick for overflow detection.
+    limit: v.optional(v.number()),
+    // Optional server-side tag filter. When set, drives off the indexed
+    // `taskTags.by_project_tag_completed` join so a tag filter doesn't pay
+    // for transferring all completed tasks just to discard most. AND
+    // semantics across multiple tags (matches the client-side filter).
+    tagNames: v.optional(v.array(v.string())),
   },
   returns: v.array(enrichedTaskValidator),
-  handler: async (ctx, { projectId, hideCompleted }) => {
+  handler: async (ctx, { projectId, completed, limit, tagNames }) => {
     const result = await checkResourceMember(ctx, "projects", projectId);
     if (!result) return [];
     const project = result.resource;
 
-    // If hideCompleted: query by_project_completed with completed=false
-    const shouldHideCompleted = hideCompleted ?? true;
-    let tasks;
+    let tasks: Doc<"tasks">[];
 
-    if (shouldHideCompleted) {
-      tasks = await ctx.db
+    if (tagNames && tagNames.length > 0) {
+      // Tag-driven path: indexed range scan on the join, then point-read tasks.
+      const required = normalizeTagList(tagNames);
+      if (required.length === 0) return [];
+
+      const tagRows = await Promise.all(
+        required.map((name) =>
+          ctx.db
+            .query("tags")
+            .withIndex("by_workspace_name", (q) =>
+              q.eq("workspaceId", project.workspaceId).eq("name", name),
+            )
+            .unique(),
+        ),
+      );
+      // Any unresolved name → no task can match (deleted-tag race / stale UI).
+      if (tagRows.some((r) => r === null)) return [];
+      const tagIds = tagRows.map((r) => r!._id);
+
+      const driverTagId = tagIds[0];
+      const joinQuery = ctx.db
+        .query("taskTags")
+        .withIndex("by_project_tag_completed", (q) =>
+          q.eq("projectId", projectId).eq("tagId", driverTagId).eq("completed", completed),
+        )
+        .order("desc");
+      const joins = limit !== undefined
+        ? await joinQuery.take(limit)
+        : await joinQuery.collect();
+
+      const fetched = await getAll(ctx.db, joins.map((j) => j.taskId));
+      tasks = fetched.filter((t): t is NonNullable<typeof t> => t !== null);
+
+      if (tagIds.length > 1) {
+        tasks = tasks.filter(
+          (task) => task.labels !== undefined && required.every((n) => task.labels!.includes(n)),
+        );
+      }
+    } else {
+      const baseQuery = ctx.db
         .query("tasks")
         .withIndex("by_project_completed", (q) =>
-          q.eq("projectId", projectId).eq("completed", false)
+          q.eq("projectId", projectId).eq("completed", completed),
         )
-        .order("desc") // newest first
-        .collect();
-    } else {
-      tasks = await ctx.db
-        .query("tasks")
-        .withIndex("by_project", (q) => q.eq("projectId", projectId))
-        .order("desc") // newest first
-        .collect();
+        .order("desc"); // newest first
+
+      tasks = limit !== undefined
+        ? await baseQuery.take(limit)
+        : await baseQuery.collect();
     }
 
     // Enrich each task with status, assignee, project key, and blocker status
@@ -315,10 +362,206 @@ export const listByProject = query({
   },
 });
 
+// ── listCompletedByProject ───────────────────────────────────────────
+//
+// Indexed-only completed-task view. Every (driver, sort) combination is a
+// pure indexed range scan — no `.filter()`, no in-memory predicate, no
+// post-pagination drop. Multi-tag AND, multi-assignee, multi-priority and
+// arbitrary filter combinations are intentionally NOT supported on this
+// path (they would force in-memory filtering); the toolbar enforces a
+// single-select mutex on the completed view to match.
+//
+// Drivers: tag | assignee | priority | none.
+// Sorts:   created (natural index order, _creationTime desc) | dueDate desc
+//          | plannedStartDate desc.
+//
+// Tag-driven branches go through the `taskTags` join (project-scoped) with
+// dueDate / plannedStartDate denormalized so a sort axis joins the prefix.
+// The other branches go through the matching `tasks` index directly.
+
+const completedSortValidator = v.union(
+  v.literal("created"),
+  v.literal("dueDate"),
+  v.literal("plannedStartDate"),
+);
+
+const completedFilterValidator = v.union(
+  v.object({ kind: v.literal("tag"),      tagName: v.string() }),
+  v.object({ kind: v.literal("assignee"), assigneeId: v.id("users") }),
+  v.object({ kind: v.literal("priority"), priority: priorityValidator }),
+);
+
+const paginationResultShape = {
+  page: v.array(enrichedTaskValidator),
+  isDone: v.boolean(),
+  continueCursor: v.string(),
+  splitCursor: v.optional(v.union(v.string(), v.null())),
+  pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
+};
+
+function emptyCompletedPage() {
+  return {
+    page: [] as never[],
+    isDone: true,
+    continueCursor: "",
+    splitCursor: null,
+    pageStatus: null,
+  };
+}
+
+export const listCompletedByProject = query({
+  args: {
+    projectId: v.id("projects"),
+    paginationOpts: paginationOptsValidator,
+    filter: v.optional(completedFilterValidator),
+    sort: v.optional(completedSortValidator),
+  },
+  returns: v.object(paginationResultShape),
+  handler: async (ctx, { projectId, paginationOpts, filter, sort }) => {
+    const result = await checkResourceMember(ctx, "projects", projectId);
+    if (!result) return emptyCompletedPage();
+    const project = result.resource;
+    const sortKey = sort ?? "created";
+
+    // ── Tag-driven path: paginate the join table, then point-read tasks ──
+    if (filter?.kind === "tag") {
+      const tag = await ctx.db
+        .query("tags")
+        .withIndex("by_workspace_name", (q) =>
+          q.eq("workspaceId", project.workspaceId).eq("name", filter.tagName.trim().toLowerCase()),
+        )
+        .unique();
+      if (!tag) return emptyCompletedPage();
+
+      const joinPage = sortKey === "dueDate"
+        ? await ctx.db
+            .query("taskTags")
+            .withIndex("by_project_tag_completed_dueDate", (q) =>
+              q.eq("projectId", projectId).eq("tagId", tag._id).eq("completed", true),
+            )
+            .order("desc")
+            .paginate(paginationOpts)
+        : sortKey === "plannedStartDate"
+        ? await ctx.db
+            .query("taskTags")
+            .withIndex("by_project_tag_completed_plannedStartDate", (q) =>
+              q.eq("projectId", projectId).eq("tagId", tag._id).eq("completed", true),
+            )
+            .order("desc")
+            .paginate(paginationOpts)
+        : await ctx.db
+            .query("taskTags")
+            .withIndex("by_project_tag_completed", (q) =>
+              q.eq("projectId", projectId).eq("tagId", tag._id).eq("completed", true),
+            )
+            .order("desc")
+            .paginate(paginationOpts);
+
+      const fetched = await getAll(ctx.db, joinPage.page.map((j) => j.taskId));
+      const tasks = fetched.filter((t): t is NonNullable<typeof t> => t !== null);
+      const enriched = await enrichTasks(ctx, tasks, project.key);
+      return { ...joinPage, page: enriched };
+    }
+
+    // ── tasks-driven paths (assignee / priority / no filter) ──
+    const tasksPage =
+      filter?.kind === "assignee"
+        ? sortKey === "dueDate"
+          ? await ctx.db.query("tasks")
+              .withIndex("by_project_completed_assignee_dueDate", (q) =>
+                q.eq("projectId", projectId).eq("completed", true).eq("assigneeId", filter.assigneeId),
+              )
+              .order("desc")
+              .paginate(paginationOpts)
+          : sortKey === "plannedStartDate"
+          ? await ctx.db.query("tasks")
+              .withIndex("by_project_completed_assignee_plannedStartDate", (q) =>
+                q.eq("projectId", projectId).eq("completed", true).eq("assigneeId", filter.assigneeId),
+              )
+              .order("desc")
+              .paginate(paginationOpts)
+          : await ctx.db.query("tasks")
+              .withIndex("by_project_completed_assignee", (q) =>
+                q.eq("projectId", projectId).eq("completed", true).eq("assigneeId", filter.assigneeId),
+              )
+              .order("desc")
+              .paginate(paginationOpts)
+      : filter?.kind === "priority"
+        ? sortKey === "dueDate"
+          ? await ctx.db.query("tasks")
+              .withIndex("by_project_completed_priority_dueDate", (q) =>
+                q.eq("projectId", projectId).eq("completed", true).eq("priority", filter.priority),
+              )
+              .order("desc")
+              .paginate(paginationOpts)
+          : sortKey === "plannedStartDate"
+          ? await ctx.db.query("tasks")
+              .withIndex("by_project_completed_priority_plannedStartDate", (q) =>
+                q.eq("projectId", projectId).eq("completed", true).eq("priority", filter.priority),
+              )
+              .order("desc")
+              .paginate(paginationOpts)
+          : await ctx.db.query("tasks")
+              .withIndex("by_project_completed_priority", (q) =>
+                q.eq("projectId", projectId).eq("completed", true).eq("priority", filter.priority),
+              )
+              .order("desc")
+              .paginate(paginationOpts)
+      // No filter
+      : sortKey === "dueDate"
+        ? await ctx.db.query("tasks")
+            .withIndex("by_project_completed_dueDate", (q) =>
+              q.eq("projectId", projectId).eq("completed", true),
+            )
+            .order("desc")
+            .paginate(paginationOpts)
+      : sortKey === "plannedStartDate"
+        ? await ctx.db.query("tasks")
+            .withIndex("by_project_completed_plannedStartDate", (q) =>
+              q.eq("projectId", projectId).eq("completed", true),
+            )
+            .order("desc")
+            .paginate(paginationOpts)
+      : await ctx.db.query("tasks")
+            .withIndex("by_project_completed", (q) =>
+              q.eq("projectId", projectId).eq("completed", true),
+            )
+            .order("desc")
+            .paginate(paginationOpts);
+
+    const enriched = await enrichTasks(ctx, tasksPage.page, project.key);
+    return { ...tasksPage, page: enriched };
+  },
+});
+
+async function enrichTasks(
+  ctx: { db: { get: (id: any) => Promise<any>; query: (table: any) => any } },
+  tasks: Doc<"tasks">[],
+  projectKey: string | undefined,
+) {
+  return Promise.all(
+    tasks.map(async (task) => {
+      const status = await ctx.db.get(task.statusId);
+      const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
+      const blockerEdges = await ctx.db
+        .query("edges")
+        .withIndex("by_target", (q: any) => q.eq("targetId", task._id))
+        .collect();
+      return {
+        ...task,
+        status,
+        assignee,
+        projectKey,
+        hasBlockers: blockerEdges.some((e: any) => e.edgeType === "blocks"),
+      };
+    }),
+  );
+}
+
 export const listByWorkspace = query({
   args: {
     workspaceId: v.id("workspaces"),
-    hideCompleted: v.optional(v.boolean()),
+    completed: v.boolean(),
   },
   returns: v.array(v.object({
     ...baseTaskFields,
@@ -329,22 +572,16 @@ export const listByWorkspace = query({
     }), v.null()),
     projectKey: v.optional(v.string()),
   })),
-  handler: async (ctx, { workspaceId, hideCompleted }) => {
+  handler: async (ctx, { workspaceId, completed }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
 
-    // Use the existing by_workspace index
-    let tasks = await ctx.db
+    const tasks = await ctx.db
       .query("tasks")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .withIndex("by_workspace_completed", (q) =>
+        q.eq("workspaceId", workspaceId).eq("completed", completed)
+      )
       .collect();
-
-    if (hideCompleted) {
-      tasks = tasks.filter((t) => !t.completed);
-    }
-
-    // Cap at 200 for performance (used for autocomplete)
-    tasks = tasks.slice(0, 200);
 
     // Batch project lookups via cache for efficiency
     const projectCache = new Map<string, any>();
@@ -356,7 +593,6 @@ export const listByWorkspace = query({
       return projectCache.get(key);
     };
 
-    // Enrich with status and project key info
     return Promise.all(
       tasks.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
@@ -376,7 +612,7 @@ export const listByWorkspace = query({
 export const listByAssignee = query({
   args: {
     workspaceId: v.id("workspaces"),
-    hideCompleted: v.optional(v.boolean()),
+    completed: v.boolean(),
   },
   returns: v.array(v.object({
     ...baseTaskFields,
@@ -385,26 +621,15 @@ export const listByAssignee = query({
     project: v.union(projectValidator, v.null()),
     projectKey: v.optional(v.string()),
   })),
-  handler: async (ctx, { workspaceId, hideCompleted }) => {
+  handler: async (ctx, { workspaceId, completed }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    // Query tasks assigned to current user
-    const shouldHideCompleted = hideCompleted ?? true;
-    let tasks;
-
-    if (shouldHideCompleted) {
-      tasks = await ctx.db
-        .query("tasks")
-        .withIndex("by_assignee_completed", (q) =>
-          q.eq("assigneeId", userId).eq("completed", false)
-        )
-        .collect();
-    } else {
-      tasks = await ctx.db
-        .query("tasks")
-        .withIndex("by_assignee", (q) => q.eq("assigneeId", userId))
-        .collect();
-    }
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_assignee_completed", (q) =>
+        q.eq("assigneeId", userId).eq("completed", completed)
+      )
+      .collect();
 
     // Filter to only tasks in the specified workspace
     const workspaceTasks = tasks.filter((task) => task.workspaceId === workspaceId);
@@ -462,10 +687,13 @@ export const update = mutation({
     else if (assigneeId !== undefined) patch.assigneeId = assigneeId;
     if (priority !== undefined) patch.priority = priority;
     if (labels !== undefined) {
-      patch.labels = await syncTagsForResource(ctx, {
+      patch.labels = await syncTaskTags(ctx, {
         workspaceId: task.workspaceId,
-        resourceType: "task",
-        resourceId: taskId,
+        projectId: task.projectId,
+        taskId,
+        completed: task.completed,
+        dueDate: task.dueDate,
+        plannedStartDate: task.plannedStartDate,
         nextTagNames: labels,
       });
     }

@@ -20,6 +20,7 @@ const LazyTaskDetailSheet = React.lazy(() =>
 import { TaskRow } from "./TaskRow";
 import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
 import { useFilteredTasks } from "./useTaskFilters";
+import { useDualAssigneeTasks } from "./useDualAssigneeTasks";
 
 type MyTask = {
   _id: string;
@@ -146,6 +147,7 @@ export function MyTasks() {
     completionFilter: "uncompleted",
     assigneeIds: [],
     priorities: [],
+    tags: [],
   });
   const [sort, setSort] = useState<TaskSort>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -156,9 +158,9 @@ export function MyTasks() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
-  const tasks = useQuery(
-    api.tasks.listByAssignee,
-    workspaceId ? { workspaceId: workspaceId as Id<"workspaces">, hideCompleted: false } : "skip"
+  const tasks = useDualAssigneeTasks(
+    workspaceId ? (workspaceId as Id<"workspaces">) : undefined,
+    filters.completionFilter,
   );
 
   // Close swipe when tapping anywhere outside the task list
@@ -242,6 +244,7 @@ export function MyTasks() {
       {/* Toolbar */}
       <div className="mb-4">
         <TaskToolbar
+          workspaceId={workspaceId as Id<"workspaces">}
           filters={filters}
           onFiltersChange={setFiltersAnimated}
           sort={sort}

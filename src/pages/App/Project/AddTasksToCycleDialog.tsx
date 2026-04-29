@@ -112,7 +112,9 @@ export function AddTasksToCycleDialog({
   open,
   onOpenChange,
 }: AddTasksToCycleDialogProps) {
-  const allTasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
+  // Cycle planning is forward-looking — only offer active tasks. Completed
+  // tasks aren't candidates for new cycles.
+  const allTasks = useQuery(api.tasks.listByProject, { projectId, completed: false });
   const addTask = useMutation(api.cycles.addTask);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());

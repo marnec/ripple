@@ -9,6 +9,9 @@ import { WorkspaceRole } from "@shared/enums/roles";
 
 const TAG_NAME_MAX_LENGTH = 100;
 
+// `entityTags.resourceType` keeps the "task" literal in its union for the
+// duration of the taskTags migration window. After the migration soaks in
+// prod we can drop "task" from `entityTags`'s schema in a follow-up PR.
 export const resourceTypeSchema = v.union(
   v.literal("document"),
   v.literal("diagram"),
@@ -23,6 +26,14 @@ export type TaggableResourceType =
   | "spreadsheet"
   | "project"
   | "task";
+
+/** Resources that flow through `syncTagsForResource` (excludes tasks, which
+ *  are project-scoped and use `syncTaskTags` against the `taskTags` table). */
+export type ListableResourceType =
+  | "document"
+  | "diagram"
+  | "spreadsheet"
+  | "project";
 
 /** Trim, lowercase, drop empties / over-length, dedupe. */
 export function normalizeTagList(raw: readonly string[]): string[] {
@@ -41,18 +52,20 @@ export function normalizeTagList(raw: readonly string[]): string[] {
 
 /**
  * Reconcile the central `tags` + `entityTags` tables with `nextTagNames` for
- * one resource. The caller still owns patching the resource's denormalized
- * column (`tags` for four tables, `labels` for tasks) — this lets the caller
- * batch the patch with other field updates and fire `writerWithTriggers` once.
+ * one workspace-scoped resource. The caller still owns patching the
+ * resource's denormalized `tags` column — this lets the caller batch the
+ * patch with other field updates and fire `writerWithTriggers` once.
  *
- * Returns the canonical (normalized + deduped) tag list, which the caller
- * should use as the value for the denormalized column.
+ * Tasks use `syncTaskTags` instead — they're project-scoped and live in the
+ * `taskTags` table, which has tighter indexes for project-bounded queries.
+ *
+ * Returns the canonical (normalized + deduped) tag list.
  */
 export async function syncTagsForResource(
   ctx: MutationCtx,
   args: {
     workspaceId: Id<"workspaces">;
-    resourceType: TaggableResourceType;
+    resourceType: ListableResourceType;
     resourceId: string;
     nextTagNames: readonly string[];
   },
@@ -72,13 +85,11 @@ export async function syncTagsForResource(
   const desired = new Set(normalized);
   const existingNames = new Set(existing.map((et) => et.tagName));
 
-  // Remove tags no longer present.
   for (const et of existing) {
     if (desired.has(et.tagName)) continue;
     await db.delete(et._id);
   }
 
-  // Add new tags. Ensure the dictionary row exists, then insert the join.
   for (const name of normalized) {
     if (existingNames.has(name)) continue;
     const tagId = await ensureTagDictionaryRow(ctx, args.workspaceId, name);
@@ -88,6 +99,63 @@ export async function syncTagsForResource(
       tagName: name,
       resourceType: args.resourceType,
       resourceId: args.resourceId,
+    });
+  }
+
+  return normalized;
+}
+
+/**
+ * Reconcile the central `tags` + `taskTags` tables with `nextTagNames` for a
+ * single task. Returns the canonical (normalized + deduped) tag list, which
+ * the caller patches into `tasks.labels`.
+ *
+ * `completed` is denormalized onto `taskTags` to keep the primary access
+ * pattern ("completed tasks in project P tagged X") on a single indexed
+ * range scan. Subsequent flips of the task's completion status are
+ * propagated by a tasks-table trigger in dbTriggers.ts — callers don't need
+ * to re-call this function on status changes.
+ */
+export async function syncTaskTags(
+  ctx: MutationCtx,
+  args: {
+    workspaceId: Id<"workspaces">;
+    projectId: Id<"projects">;
+    taskId: Id<"tasks">;
+    completed: boolean;
+    dueDate?: string;
+    plannedStartDate?: string;
+    nextTagNames: readonly string[];
+  },
+): Promise<string[]> {
+  const db = writerWithTriggers(ctx, ctx.db, triggers);
+  const normalized = normalizeTagList(args.nextTagNames);
+
+  const existing = await ctx.db
+    .query("taskTags")
+    .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+    .collect();
+
+  const desired = new Set(normalized);
+  const existingNames = new Set(existing.map((tt) => tt.tagName));
+
+  for (const tt of existing) {
+    if (desired.has(tt.tagName)) continue;
+    await db.delete(tt._id);
+  }
+
+  for (const name of normalized) {
+    if (existingNames.has(name)) continue;
+    const tagId = await ensureTagDictionaryRow(ctx, args.workspaceId, name);
+    await db.insert("taskTags", {
+      workspaceId: args.workspaceId,
+      projectId: args.projectId,
+      taskId: args.taskId,
+      tagId,
+      tagName: name,
+      completed: args.completed,
+      dueDate: args.dueDate,
+      plannedStartDate: args.plannedStartDate,
     });
   }
 
@@ -113,11 +181,6 @@ async function ensureTagDictionaryRow(
 
 // ── Public mutations ──────────────────────────────────────────────────
 
-/**
- * Explicitly create a tag in the workspace dictionary without attaching it
- * to any resource. Allows curating a vocabulary independent of usage.
- * Idempotent: returns the existing tagId if present.
- */
 export const createTag = mutation({
   args: {
     workspaceId: v.id("workspaces"),
@@ -147,8 +210,9 @@ export const createTag = mutation({
 
 /**
  * Delete a tag from the workspace dictionary AND every resource that uses it.
- * Workspace-admin only. Walks `entityTags` and patches each affected
- * resource's denormalized column to remove the tag string.
+ * Workspace-admin only. Walks both `entityTags` and `taskTags`, patches each
+ * affected resource's denormalized array, then deletes the join + dictionary
+ * rows.
  */
 export const deleteTag = mutation({
   args: { tagId: v.id("tags") },
@@ -160,16 +224,27 @@ export const deleteTag = mutation({
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
 
-    // Remove from every resource's denormalized column, then delete joins.
-    const joins = await ctx.db
+    // Strip from non-task resources via entityTags.
+    const entityJoins = await ctx.db
       .query("entityTags")
       .withIndex("by_workspace_tag", (q) =>
         q.eq("workspaceId", tag.workspaceId).eq("tagId", tagId),
       )
       .collect();
-
-    for (const join of joins) {
+    for (const join of entityJoins) {
       await stripTagFromResource(ctx, join.resourceType, join.resourceId, tag.name);
+      await db.delete(join._id);
+    }
+
+    // Strip from tasks via taskTags.
+    const taskJoins = await ctx.db
+      .query("taskTags")
+      .withIndex("by_workspace_tag", (q) =>
+        q.eq("workspaceId", tag.workspaceId).eq("tagId", tagId),
+      )
+      .collect();
+    for (const join of taskJoins) {
+      await stripTagFromTask(ctx, join.taskId, tag.name);
       await db.delete(join._id);
     }
 
@@ -218,12 +293,22 @@ async function stripTagFromResource(
       return;
     }
     case "task": {
-      const id = resourceId as Id<"tasks">;
-      const doc = await ctx.db.get(id);
-      if (!doc) return;
-      const next = (doc.labels ?? []).filter((t) => t !== tagName);
-      await ctx.db.patch(id, { labels: next });
+      // Legacy entityTags rows for tasks still exist before migration runs.
+      // After the migration, this branch becomes dead code and the union
+      // literal can be dropped.
+      await stripTagFromTask(ctx, resourceId as Id<"tasks">, tagName);
       return;
     }
   }
+}
+
+async function stripTagFromTask(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+  tagName: string,
+): Promise<void> {
+  const task = await ctx.db.get(taskId);
+  if (!task) return;
+  const next = (task.labels ?? []).filter((t) => t !== tagName);
+  await ctx.db.patch(taskId, { labels: next });
 }

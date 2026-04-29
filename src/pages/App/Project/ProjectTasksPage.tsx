@@ -15,13 +15,13 @@ import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { startViewTransition } from "@/hooks/use-view-transition";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { KanbanBoard } from "./KanbanBoard";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { Tasks } from "./Tasks";
-import { TaskToolbar, type TaskFilters, type TaskSort } from "./TaskToolbar";
+import { TaskToolbar, type TaskFilters, type TaskSort, type CompletionFilter } from "./TaskToolbar";
 
 export function ProjectTasksPage() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -46,16 +46,30 @@ function ProjectTasksContent({
   projectId: Id<"projects">;
 }) {
   const isMobile = useIsMobile();
-  const [view, setView] = useState<"list" | "board">(isMobile ? "list" : "board");
+  const location = useLocation();
+  const rawInitial = (location.state as { initialCompletionFilter?: "uncompleted" | "completed" | "all" } | null)
+    ?.initialCompletionFilter;
+  // The legacy "all" mode no longer exists — coerce any stale link/state to
+  // "completed" since that's the more useful landing for someone clicking
+  // through from a completed-task affordance (e.g. the kanban overflow pill).
+  const initialCompletionFilter: CompletionFilter =
+    rawInitial === "completed" || rawInitial === "all" ? "completed" : "uncompleted";
+
+  // The kanban overflow pill navigates here with state.initialCompletionFilter
+  // set to "completed", so users land on the list view with the right filter.
+  const [view, setView] = useState<"list" | "board">(
+    isMobile || initialCompletionFilter !== "uncompleted" ? "list" : "board",
+  );
 
   // Force list view on mobile — kanban doesn't work on small screens
   const effectiveView = isMobile ? "list" : view;
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const [filters, setFilters] = useState<TaskFilters>({
-    completionFilter: "uncompleted" as const,
+    completionFilter: initialCompletionFilter,
     assigneeIds: [],
     priorities: [],
+    tags: [],
   });
   const [sort, setSort] = useState<TaskSort>(null);
   const [sortBlocked, setSortBlocked] = useState(false);
@@ -70,8 +84,10 @@ function ProjectTasksContent({
   const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
   const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
 
-  // Pre-fetch tasks to show a loading indicator beside the tabs
-  const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
+  // Pre-fetch active tasks to gate the page-level loading indicator. The
+  // active query is what the default list view needs; kanban / completed
+  // views fire their own queries and have their own ready gates.
+  const tasks = useQuery(api.tasks.listByProject, { projectId, completed: false });
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const members = useWorkspaceMembers();
   const contentLoading = tasks === undefined || statuses === undefined;
@@ -121,6 +137,7 @@ function ProjectTasksContent({
 
         {/* Shared toolbar — stable across views */}
         <TaskToolbar
+          workspaceId={workspaceId}
           filters={filters}
           onFiltersChange={setFiltersAnimated}
           sort={sort}

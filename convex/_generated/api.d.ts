@@ -1765,7 +1765,7 @@ export declare const api: {
     listByAssignee: FunctionReference<
       "query",
       "public",
-      { hideCompleted?: boolean; workspaceId: Id<"workspaces"> },
+      { completed: boolean; workspaceId: Id<"workspaces"> },
       Array<{
         _creationTime: number;
         _id: Id<"tasks">;
@@ -1823,7 +1823,12 @@ export declare const api: {
     listByProject: FunctionReference<
       "query",
       "public",
-      { hideCompleted?: boolean; projectId: Id<"projects"> },
+      {
+        completed: boolean;
+        limit?: number;
+        projectId: Id<"projects">;
+        tagNames?: Array<string>;
+      },
       Array<{
         _creationTime: number;
         _id: Id<"tasks">;
@@ -1870,7 +1875,7 @@ export declare const api: {
     listByWorkspace: FunctionReference<
       "query",
       "public",
-      { hideCompleted?: boolean; workspaceId: Id<"workspaces"> },
+      { completed: boolean; workspaceId: Id<"workspaces"> },
       Array<{
         _creationTime: number;
         _id: Id<"tasks">;
@@ -1893,6 +1898,77 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>
+    >;
+    listCompletedByProject: FunctionReference<
+      "query",
+      "public",
+      {
+        filter?:
+          | { kind: "tag"; tagName: string }
+          | { assigneeId: Id<"users">; kind: "assignee" }
+          | {
+              kind: "priority";
+              priority: "urgent" | "high" | "medium" | "low";
+            };
+        paginationOpts: {
+          cursor: string | null;
+          endCursor?: string | null;
+          id?: number;
+          maximumBytesRead?: number;
+          maximumRowsRead?: number;
+          numItems: number;
+        };
+        projectId: Id<"projects">;
+        sort?: "created" | "dueDate" | "plannedStartDate";
+      },
+      {
+        continueCursor: string;
+        isDone: boolean;
+        page: Array<{
+          _creationTime: number;
+          _id: Id<"tasks">;
+          assignee: {
+            _creationTime: number;
+            _id: Id<"users">;
+            email?: string;
+            emailVerificationTime?: number;
+            image?: string;
+            isAnonymous?: boolean;
+            name?: string;
+          } | null;
+          assigneeId?: Id<"users">;
+          completed: boolean;
+          creatorId: Id<"users">;
+          dueDate?: string;
+          estimate?: number;
+          hasBlockers: boolean;
+          labels?: Array<string>;
+          number?: number;
+          plannedStartDate?: string;
+          position?: string;
+          priority: "urgent" | "high" | "medium" | "low";
+          projectId: Id<"projects">;
+          projectKey?: string;
+          status: {
+            _creationTime: number;
+            _id: Id<"taskStatuses">;
+            color: string;
+            isCompleted: boolean;
+            isDefault: boolean;
+            name: string;
+            order: number;
+            projectId: Id<"projects">;
+            setsStartDate?: boolean;
+          } | null;
+          statusId: Id<"taskStatuses">;
+          title: string;
+          workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
+          workspaceId: Id<"workspaces">;
+          yjsSnapshotId?: Id<"_storage">;
+        }>;
+        pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+        splitCursor?: string | null;
+      }
     >;
     listUnscheduled: FunctionReference<
       "query",
@@ -2836,6 +2912,18 @@ export declare const internal: {
       },
       any
     >;
+    backfillTaskTagsSortFields: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
     backfillUserNodes: FunctionReference<
       "mutation",
       "internal",
@@ -2860,6 +2948,18 @@ export declare const internal: {
       }
     >;
     migrateChannelIsPublicToType: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    migrateTaskEntityTagsToTaskTags: FunctionReference<
       "mutation",
       "internal",
       {

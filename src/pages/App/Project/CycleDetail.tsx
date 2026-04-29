@@ -55,6 +55,7 @@ function CycleDetailContent({
     completionFilter: "uncompleted" as const,
     assigneeIds: [],
     priorities: [],
+    tags: [],
   });
   const [sort, setSort] = useState<TaskSort>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -101,6 +102,7 @@ function CycleDetailContent({
       {/* Task toolbar */}
       <div className="px-4 md:px-8 py-2 border-b">
         <TaskToolbar
+          workspaceId={workspaceId}
           filters={filters}
           onFiltersChange={setFilters}
           sort={sort}

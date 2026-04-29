@@ -21,7 +21,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { KanbanCard } from "./KanbanCard";
@@ -58,6 +58,9 @@ type KanbanColumnProps = {
   isFirst: boolean;
   isLast: boolean;
   canDelete: boolean;
+  /** Optional content rendered at the bottom of the task list. Used for the
+   *  per-column completed-overflow pill on the kanban. */
+  footer?: ReactNode;
 };
 
 export function KanbanColumn({
@@ -71,6 +74,7 @@ export function KanbanColumn({
   isFirst,
   isLast,
   canDelete,
+  footer,
 }: KanbanColumnProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -224,6 +228,7 @@ export function KanbanColumn({
             ))
           )}
         </SortableContext>
+        {footer}
       </div>
     </div>
 

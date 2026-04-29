@@ -5,6 +5,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { formatDateRange, daysRemaining } from "./cycleUtils";
+import { useEagerProjectTasks } from "./useDualProjectTasks";
 
 export function ProjectOverview() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -30,7 +31,7 @@ function ProjectOverviewContent({
 }) {
   const navigate = useNavigate();
   const project = useQuery(api.projects.get, { id: projectId });
-  const tasks = useQuery(api.tasks.listByProject, { projectId, hideCompleted: false });
+  const tasks = useEagerProjectTasks(projectId);
   const cycles = useQuery(api.cycles.listByProject, { projectId });
 
   const openTasks = tasks?.filter((t) => !t.completed).length ?? 0;
