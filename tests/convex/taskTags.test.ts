@@ -264,3 +264,79 @@ describe("migrateTaskEntityTagsToTaskTags (logic check)", () => {
     expect(afterTaskRows).toHaveLength(0);
   });
 });
+
+describe("backfillTaskTagsAssigneeId (logic check)", () => {
+  it("populates assigneeId on existing taskTags rows from the source task", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProject(t, { workspaceId, userId });
+
+    // Create a task with an assignee, but insert a legacy taskTags row that
+    // predates the assigneeId denormalization (no assigneeId field).
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "x", assigneeId: userId,
+    });
+    const tagId = await asUser.mutation(api.tagSync.createTag, {
+      workspaceId, name: "legacy",
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("taskTags", {
+        workspaceId, projectId, taskId, tagId,
+        tagName: "legacy", completed: false,
+        // assigneeId intentionally omitted to model a pre-migration row.
+      });
+    });
+
+    expect((await listTaskTags(t, taskId))[0].assigneeId).toBeUndefined();
+
+    // Inline run of migrateOne's body — same shape as the migration's logic.
+    await t.run(async (ctx) => {
+      const rows = await ctx.db.query("taskTags").collect();
+      for (const row of rows) {
+        const task = await ctx.db.get(row.taskId);
+        if (!task) continue;
+        if (row.assigneeId !== task.assigneeId) {
+          await ctx.db.patch(row._id, { assigneeId: task.assigneeId });
+        }
+      }
+    });
+
+    const after = await listTaskTags(t, taskId);
+    expect(after[0].assigneeId).toBe(userId);
+  });
+
+  it("clears assigneeId when the source task has no assignee", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProject(t, { workspaceId, userId });
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "x",
+    });
+    const tagId = await asUser.mutation(api.tagSync.createTag, {
+      workspaceId, name: "stale",
+    });
+    // Stale taskTags row with an assigneeId that no longer matches the task.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("taskTags", {
+        workspaceId, projectId, taskId, tagId,
+        tagName: "stale", completed: false,
+        assigneeId: userId,
+      });
+    });
+
+    await t.run(async (ctx) => {
+      const rows = await ctx.db.query("taskTags").collect();
+      for (const row of rows) {
+        const task = await ctx.db.get(row.taskId);
+        if (!task) continue;
+        if (row.assigneeId !== task.assigneeId) {
+          await ctx.db.patch(row._id, { assigneeId: task.assigneeId });
+        }
+      }
+    });
+
+    const after = await listTaskTags(t, taskId);
+    expect(after[0].assigneeId).toBeUndefined();
+  });
+});
