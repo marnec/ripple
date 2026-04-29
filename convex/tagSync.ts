@@ -1,8 +1,10 @@
 import { ConvexError, v } from "convex/values";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { mutation } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireWorkspaceMember } from "./authHelpers";
+import { triggers } from "./dbTriggers";
 import { WorkspaceRole } from "@shared/enums/roles";
 
 const TAG_NAME_MAX_LENGTH = 100;
@@ -55,6 +57,7 @@ export async function syncTagsForResource(
     nextTagNames: readonly string[];
   },
 ): Promise<string[]> {
+  const db = writerWithTriggers(ctx, ctx.db, triggers);
   const normalized = normalizeTagList(args.nextTagNames);
 
   // Read existing entityTags rows for this resource. The single-field
@@ -72,14 +75,14 @@ export async function syncTagsForResource(
   // Remove tags no longer present.
   for (const et of existing) {
     if (desired.has(et.tagName)) continue;
-    await ctx.db.delete(et._id);
+    await db.delete(et._id);
   }
 
   // Add new tags. Ensure the dictionary row exists, then insert the join.
   for (const name of normalized) {
     if (existingNames.has(name)) continue;
     const tagId = await ensureTagDictionaryRow(ctx, args.workspaceId, name);
-    await ctx.db.insert("entityTags", {
+    await db.insert("entityTags", {
       workspaceId: args.workspaceId,
       tagId,
       tagName: name,
@@ -104,7 +107,8 @@ async function ensureTagDictionaryRow(
     )
     .unique();
   if (existing) return existing._id;
-  return ctx.db.insert("tags", { workspaceId, name });
+  const db = writerWithTriggers(ctx, ctx.db, triggers);
+  return db.insert("tags", { workspaceId, name });
 }
 
 // ── Public mutations ──────────────────────────────────────────────────
@@ -136,7 +140,8 @@ export const createTag = mutation({
       )
       .unique();
     if (existing) return existing._id;
-    return ctx.db.insert("tags", { workspaceId, name: normalized });
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    return db.insert("tags", { workspaceId, name: normalized });
   },
 });
 
@@ -153,6 +158,8 @@ export const deleteTag = mutation({
     if (!tag) throw new ConvexError("Tag not found");
     await requireWorkspaceMember(ctx, tag.workspaceId, { role: WorkspaceRole.ADMIN });
 
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+
     // Remove from every resource's denormalized column, then delete joins.
     const joins = await ctx.db
       .query("entityTags")
@@ -163,10 +170,10 @@ export const deleteTag = mutation({
 
     for (const join of joins) {
       await stripTagFromResource(ctx, join.resourceType, join.resourceId, tag.name);
-      await ctx.db.delete(join._id);
+      await db.delete(join._id);
     }
 
-    await ctx.db.delete(tagId);
+    await db.delete(tagId);
     return null;
   },
 });

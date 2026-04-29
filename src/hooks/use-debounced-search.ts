@@ -75,7 +75,13 @@ export function useDebouncedSearch(
     const parsed = parseSearchInput(value);
     setSearchQuery(parsed.searchText);
     setTags(parsed.tags);
-    persistState(parsed.searchText, parsed.tags, isFavorite);
+    // Backend uses precedence (search > tags > favorites). When search or tags
+    // become active, clear `isFavorite` so the UI doesn't show a stale chip
+    // that the server silently ignores.
+    const nextFav: FavoriteFilter =
+      parsed.searchText || parsed.tags.length > 0 ? "all" : isFavorite;
+    if (nextFav !== isFavorite) setIsFavorite(nextFav);
+    persistState(parsed.searchText, parsed.tags, nextFav);
   };
 
   const handleSearchChange = (value: string) => {
@@ -101,7 +107,21 @@ export function useDebouncedSearch(
     const idx = cycle.indexOf(isFavorite);
     const next = cycle[(idx + 1) % cycle.length];
     setIsFavorite(next);
-    persistState(searchQuery, tags, next);
+    // Mutex with search/tags: activating a favorite filter clears them so the
+    // UI matches the backend's precedence order.
+    if (next !== "all") {
+      setSearchQuery("");
+      setTags([]);
+      setLocalSearchValue("");
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      setIsSearchDebouncing(false);
+      persistState("", [], next);
+    } else {
+      persistState(searchQuery, tags, next);
+    }
   };
 
   const handleChannelVisibilityToggle = () => {

@@ -11,6 +11,7 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { deletionResultValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
 import { syncTagsForResource } from "./tagSync";
+import { searchResourcesByTag, searchResourcesByFavorite } from "./resourceSearch";
 import { notify } from "./utils/notify";
 
 const spreadsheetValidator = v.object({
@@ -54,28 +55,40 @@ export const search = query({
   handler: async (ctx, { workspaceId, searchText, tags, isFavorite, paginationOpts }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    const result = searchText?.trim()
-      ? await ctx.db
-          .query("spreadsheets")
-          .withSearchIndex("by_name", (q) =>
-            q.search("name", searchText).eq("workspaceId", workspaceId),
-          )
-          .paginate(paginationOpts)
-      : await ctx.db
-          .query("spreadsheets")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .order("desc")
-          .paginate(paginationOpts);
-
-    let page = result.page;
-
-    if (tags && tags.length > 0) {
-      page = page.filter(
-        (doc) => doc.tags && tags.every((t) => doc.tags!.includes(t)),
-      );
+    if (searchText?.trim()) {
+      return await ctx.db
+        .query("spreadsheets")
+        .withSearchIndex("by_name", (q) =>
+          q.search("name", searchText).eq("workspaceId", workspaceId),
+        )
+        .paginate(paginationOpts);
     }
 
-    if (isFavorite !== undefined) {
+    if (tags && tags.length > 0) {
+      return await searchResourcesByTag(ctx, {
+        workspaceId,
+        resourceType: "spreadsheet",
+        tags,
+        paginationOpts,
+      });
+    }
+
+    if (isFavorite === true) {
+      return await searchResourcesByFavorite(ctx, {
+        workspaceId,
+        userId,
+        resourceType: "spreadsheet",
+        paginationOpts,
+      });
+    }
+
+    const result = await ctx.db
+      .query("spreadsheets")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .order("desc")
+      .paginate(paginationOpts);
+
+    if (isFavorite === false) {
       const favs = await ctx.db
         .query("favorites")
         .withIndex("by_workspace_user_type", (q) =>
@@ -83,12 +96,10 @@ export const search = query({
         )
         .collect();
       const favSet = new Set(favs.map((f) => f.resourceId));
-      page = isFavorite
-        ? page.filter((doc) => favSet.has(doc._id))
-        : page.filter((doc) => !favSet.has(doc._id));
+      return { ...result, page: result.page.filter((doc) => !favSet.has(doc._id)) };
     }
 
-    return { ...result, page };
+    return result;
   },
 });
 

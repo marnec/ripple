@@ -1,6 +1,8 @@
 NEXT STEPS:
 
-- import spreadsheets from excel, csv
+- filter tasks by tag
+
+- remove tag project association
 
 - show raw content of a cell in spreadsheet (for formulas)
 

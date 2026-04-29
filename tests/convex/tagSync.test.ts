@@ -1,5 +1,7 @@
 import { expect, describe, it } from "vitest";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { api } from "../../convex/_generated/api";
+import { triggers } from "../../convex/dbTriggers";
 import {
   createTestContext,
   setupAuthenticatedUser,
@@ -303,6 +305,99 @@ describe("deleteTag", () => {
     await expect(
       member.mutation(api.tagSync.deleteTag, { tagId: tags[0]._id }),
     ).rejects.toThrow();
+  });
+});
+
+// ── Uniqueness invariants enforced by triggers ───────────────────────
+// These exercise the dbTriggers guards directly: a write through
+// writerWithTriggers that would create a duplicate must abort the tx.
+
+describe("tags table uniqueness trigger", () => {
+  it("rejects a second `tags` row with the same (workspaceId, name)", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+
+    await expect(
+      t.run(async (ctx) => {
+        const db = writerWithTriggers(ctx, ctx.db, triggers);
+        await db.insert("tags", { workspaceId, name: "design" });
+        await db.insert("tags", { workspaceId, name: "design" });
+      }),
+    ).rejects.toThrow(/Duplicate tag/);
+  });
+
+  it("allows the same name in a different workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId: wsA, userId } = await setupWorkspaceWithAdmin(t, "A");
+    const wsB = await t.run(async (ctx) => {
+      const id = await ctx.db.insert("workspaces", { name: "B", ownerId: userId });
+      await ctx.db.insert("workspaceMembers", { userId, workspaceId: id, role: WorkspaceRole.ADMIN });
+      return id;
+    });
+
+    await expect(
+      t.run(async (ctx) => {
+        const db = writerWithTriggers(ctx, ctx.db, triggers);
+        await db.insert("tags", { workspaceId: wsA, name: "design" });
+        await db.insert("tags", { workspaceId: wsB, name: "design" });
+      }),
+    ).resolves.not.toThrow();
+  });
+
+  it("rejects an update that collides with a sibling tag's name", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+
+    const designId = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      await db.insert("tags", { workspaceId, name: "ops" });
+      return await db.insert("tags", { workspaceId, name: "design" });
+    });
+
+    await expect(
+      t.run(async (ctx) => {
+        const db = writerWithTriggers(ctx, ctx.db, triggers);
+        await db.patch(designId, { name: "ops" });
+      }),
+    ).rejects.toThrow(/Duplicate tag/);
+  });
+});
+
+describe("entityTags uniqueness trigger", () => {
+  it("rejects a second `entityTags` row for the same (resourceId, tagId)", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const documentId = await asUser.mutation(api.documents.create, { workspaceId });
+    await asUser.mutation(api.documents.updateTags, { id: documentId, tags: ["design"] });
+    const tags = await listTags(t, workspaceId);
+    const tagId = tags[0]._id;
+
+    await expect(
+      t.run(async (ctx) => {
+        const db = writerWithTriggers(ctx, ctx.db, triggers);
+        await db.insert("entityTags", {
+          workspaceId,
+          tagId,
+          tagName: "design",
+          resourceType: "document",
+          resourceId: documentId,
+        });
+      }),
+    ).rejects.toThrow(/Duplicate entityTag/);
+  });
+
+  it("allows the same tag attached to two different resources", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const docA = await asUser.mutation(api.documents.create, { workspaceId });
+    const docB = await asUser.mutation(api.documents.create, { workspaceId });
+
+    await asUser.mutation(api.documents.updateTags, { id: docA, tags: ["design"] });
+    await expect(
+      asUser.mutation(api.documents.updateTags, { id: docB, tags: ["design"] }),
+    ).resolves.not.toThrow();
   });
 });
 

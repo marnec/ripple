@@ -1,4 +1,5 @@
 import { TableAggregate } from "@convex-dev/aggregate";
+import { ConvexError } from "convex/values";
 import type { DataModel } from "./_generated/dataModel";
 import { Id } from "./_generated/dataModel";
 import { components, internal } from "./_generated/api";
@@ -428,6 +429,37 @@ triggers.register("messages", async (ctx, change) => {
       ...newTargets.filter((t) => !oldIds.has(t.targetId)).map((t) => insertChannelMentionEdge(ctx, channelId, workspaceId, t)),
       ...oldTargets.filter((t) => !newIds.has(t.targetId)).map((t) => deleteOneChannelMentionEdge(ctx, channelId, t.targetId)),
     ]);
+  }
+});
+
+// ── Tag uniqueness invariants ───────────────────────────────────────
+// Convex has no DB-level unique constraints, so we enforce them in-trigger:
+// throwing aborts the transaction and rolls back the offending write.
+// Only fires for writes routed through writerWithTriggers (tagSync.ts).
+
+triggers.register("tags", async (ctx, change) => {
+  if (change.operation !== "insert" && change.operation !== "update") return;
+  const { workspaceId, name } = change.newDoc;
+  const same = await ctx.db
+    .query("tags")
+    .withIndex("by_workspace_name", (q) =>
+      q.eq("workspaceId", workspaceId).eq("name", name),
+    )
+    .collect();
+  if (same.some((t) => t._id !== change.id)) {
+    throw new ConvexError(`Duplicate tag: "${name}" already exists in this workspace`);
+  }
+});
+
+triggers.register("entityTags", async (ctx, change) => {
+  if (change.operation !== "insert" && change.operation !== "update") return;
+  const { resourceId, tagId } = change.newDoc;
+  const same = await ctx.db
+    .query("entityTags")
+    .withIndex("by_resource_id", (q) => q.eq("resourceId", resourceId))
+    .collect();
+  if (same.some((et) => et.tagId === tagId && et._id !== change.id)) {
+    throw new ConvexError(`Duplicate entityTag: tag is already attached to this resource`);
   }
 });
 
