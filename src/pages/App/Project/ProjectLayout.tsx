@@ -4,6 +4,7 @@ import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@shared/types/routes";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex-helpers/react/cache";
 import { CalendarDays, LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
 import { useParams, NavLink, Outlet } from "react-router-dom";
@@ -42,6 +43,7 @@ function ProjectLayoutContent({
   projectId: Id<"projects">;
 }) {
   const project = useQuery(api.projects.get, { id: projectId });
+  const isMobile = useIsMobile();
   useRecordVisit(workspaceId, "project", projectId, project?.name);
 
   if (project === null) {
@@ -49,6 +51,10 @@ function ProjectLayoutContent({
   }
 
   const isLoading = project === undefined;
+  // On mobile the project name + color move to the app header (via the
+  // breadcrumb slot) and the Overview tab is dropped, so the sub-header
+  // only carries the favorite button + the remaining nav tabs.
+  const visibleTabs = isMobile ? tabs.filter((t) => t.to !== ".") : tabs;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -60,7 +66,7 @@ function ProjectLayoutContent({
             resourceId={projectId}
             workspaceId={workspaceId}
           />
-          {!isLoading && (
+          {!isMobile && !isLoading && (
             <div className="flex items-center gap-2 min-w-0 animate-fade-in">
               <ProjectColorTag color={project.color} />
               <h1 className="text-lg font-semibold truncate">{project.name}</h1>
@@ -69,7 +75,7 @@ function ProjectLayoutContent({
         </div>
 
         <div className="inline-flex h-8 items-center justify-center rounded-lg bg-muted p-1 shrink-0">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <NavLink
               key={tab.to}
               to={tab.to}
