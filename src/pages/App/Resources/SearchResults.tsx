@@ -49,8 +49,6 @@ function getEmptyMessage(resourceType: ResourceType, favoriteFilter?: FavoriteFi
   switch (favoriteFilter) {
     case "favorites":
       return `No favorite ${resourceType}s yet. Star a ${resourceType} to see it here.`;
-    case "unfavorited":
-      return `All ${resourceType}s are already favorited!`;
     default:
       return "No results found.";
   }

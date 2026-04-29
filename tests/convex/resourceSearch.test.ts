@@ -260,26 +260,6 @@ describe("documents.search — favorites branch", () => {
     expect(new Set(all.map((d) => d._id))).toEqual(new Set(favIds));
   });
 
-  it("isFavorite=false post-filters the default branch (anti-favorite)", async () => {
-    const t = createTestContext();
-    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
-
-    const favId = await asUser.mutation(api.documents.create, { workspaceId, name: "fav" });
-    await asUser.mutation(api.favorites.toggle, {
-      workspaceId,
-      resourceType: "document",
-      resourceId: favId,
-    });
-    const otherId = await asUser.mutation(api.documents.create, { workspaceId, name: "other" });
-
-    const result = await asUser.query(api.documents.search, {
-      workspaceId,
-      isFavorite: false,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-
-    expect(result.page.map((d) => d._id)).toEqual([otherId]);
-  });
 });
 
 // ── Default branch unchanged: no filters → paginated workspace list ──

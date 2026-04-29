@@ -90,10 +90,6 @@ export async function searchResourcesByTag<T extends ListableResourceType>(
 /**
  * Indexed lookup for the user's favorited resources of a given type. Drives
  * pagination off `favorites.by_workspace_user_type` so pages are dense.
- *
- * Anti-favorite (`isFavorite === false`) is intentionally NOT handled here —
- * scanning the resource table and excluding the favorite set is the cheaper
- * approach for that case. Callers should fall through to the default branch.
  */
 export async function searchResourcesByFavorite<T extends ListableResourceType>(
   ctx: QueryCtx,

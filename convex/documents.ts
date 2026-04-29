@@ -125,9 +125,8 @@ export const search = query({
   handler: async (ctx, { workspaceId, searchText, tags, isFavorite, paginationOpts }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    // Precedence: text search > tag filter > favorites-on > default (with
-    // anti-favorite post-filter). Each branch returns a complete
-    // PaginationResult; they do not compose.
+    // Precedence: text search > tag filter > favorites-on > default. Each
+    // branch returns a complete PaginationResult; they do not compose.
     if (searchText?.trim()) {
       return await ctx.db
         .query("documents")
@@ -155,23 +154,10 @@ export const search = query({
       });
     }
 
-    const result = await ctx.db
+    return await ctx.db
       .query("documents")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .paginate(paginationOpts);
-
-    if (isFavorite === false) {
-      const favs = await ctx.db
-        .query("favorites")
-        .withIndex("by_workspace_user_type", (q) =>
-          q.eq("workspaceId", workspaceId).eq("userId", userId).eq("resourceType", "document"),
-        )
-        .collect();
-      const favSet = new Set(favs.map((f) => f.resourceId));
-      return { ...result, page: result.page.filter((doc) => !favSet.has(doc._id)) };
-    }
-
-    return result;
   },
 });
 

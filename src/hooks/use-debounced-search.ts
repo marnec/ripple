@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { buildSearchString, parseSearchInput } from "@/lib/search-utils";
 import type { BrowsableResourceType as ResourceType } from "@shared/types/resources";
-export type FavoriteFilter = "all" | "favorites" | "unfavorited";
+export type FavoriteFilter = "all" | "favorites";
 export type ChannelVisibilityFilter = "all" | "public" | "private";
 
 /** Convert a FavoriteFilter to the boolean | undefined expected by Convex search queries. */
 export function favoriteFilterToBoolean(filter: FavoriteFilter): boolean | undefined {
-  if (filter === "favorites") return true;
-  if (filter === "unfavorited") return false;
-  return undefined;
+  return filter === "favorites" ? true : undefined;
 }
 
 function getStorageKey(workspaceId: string, resourceType: ResourceType) {
@@ -20,10 +18,9 @@ function readSearchState(workspaceId: string, resourceType: ResourceType) {
     const raw = localStorage.getItem(getStorageKey(workspaceId, resourceType));
     if (!raw) return { q: "", tags: [] as string[], isFavorite: "all" as FavoriteFilter, channelVisibility: "all" as ChannelVisibilityFilter };
     const parsed = JSON.parse(raw) as { q?: string; tags?: string[]; isFavorite?: boolean | FavoriteFilter; channelVisibility?: ChannelVisibilityFilter };
-    // Migrate old boolean values
-    let fav: FavoriteFilter = "all";
-    if (parsed.isFavorite === true || parsed.isFavorite === "favorites") fav = "favorites";
-    else if (parsed.isFavorite === "unfavorited") fav = "unfavorited";
+    // Migrate old boolean values; legacy "unfavorited" string falls through to "all".
+    const fav: FavoriteFilter =
+      parsed.isFavorite === true || parsed.isFavorite === "favorites" ? "favorites" : "all";
     const vis: ChannelVisibilityFilter =
       parsed.channelVisibility === "public" || parsed.channelVisibility === "private"
         ? parsed.channelVisibility
@@ -103,9 +100,7 @@ export function useDebouncedSearch(
   };
 
   const handleFavoriteToggle = () => {
-    const cycle: FavoriteFilter[] = ["all", "favorites", "unfavorited"];
-    const idx = cycle.indexOf(isFavorite);
-    const next = cycle[(idx + 1) % cycle.length];
+    const next: FavoriteFilter = isFavorite === "all" ? "favorites" : "all";
     setIsFavorite(next);
     // Mutex with search/tags: activating a favorite filter clears them so the
     // UI matches the backend's precedence order.

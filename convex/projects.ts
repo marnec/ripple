@@ -151,23 +151,10 @@ export const search = query({
       });
     }
 
-    const result = await ctx.db
+    return await ctx.db
       .query("projects")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .paginate(paginationOpts);
-
-    if (isFavorite === false) {
-      const favs = await ctx.db
-        .query("favorites")
-        .withIndex("by_workspace_user_type", (q) =>
-          q.eq("workspaceId", workspaceId).eq("userId", userId).eq("resourceType", "project"),
-        )
-        .collect();
-      const favSet = new Set(favs.map((f) => f.resourceId));
-      return { ...result, page: result.page.filter((p) => !favSet.has(p._id)) };
-    }
-
-    return result;
   },
 });
 

@@ -82,24 +82,11 @@ export const search = query({
       });
     }
 
-    const result = await ctx.db
+    return await ctx.db
       .query("spreadsheets")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .order("desc")
       .paginate(paginationOpts);
-
-    if (isFavorite === false) {
-      const favs = await ctx.db
-        .query("favorites")
-        .withIndex("by_workspace_user_type", (q) =>
-          q.eq("workspaceId", workspaceId).eq("userId", userId).eq("resourceType", "spreadsheet"),
-        )
-        .collect();
-      const favSet = new Set(favs.map((f) => f.resourceId));
-      return { ...result, page: result.page.filter((doc) => !favSet.has(doc._id)) };
-    }
-
-    return result;
   },
 });
 

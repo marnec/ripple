@@ -55,8 +55,6 @@
 
   --color-favorite: hsl(var(--favorite));
   --color-favorite-foreground: hsl(var(--favorite-foreground));
-  --color-unfavorited: hsl(var(--unfavorited));
-  --color-unfavorited-foreground: hsl(var(--unfavorited-foreground));
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -197,8 +195,6 @@
 
   --favorite: 45 93% 47%;
   --favorite-foreground: 38 92% 40%;
-  --unfavorited: 217 91% 60%;
-  --unfavorited-foreground: 217 71% 45%;
   --sidebar: oklch(0.985 0 0);
 }
 
@@ -251,8 +247,6 @@
 
   --favorite: 45 93% 47%;
   --favorite-foreground: 45 80% 70%;
-  --unfavorited: 217 91% 60%;
-  --unfavorited-foreground: 217 80% 70%;
   --sidebar: oklch(0.205 0 0);
 }
 
