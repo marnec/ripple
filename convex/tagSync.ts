@@ -125,6 +125,7 @@ export async function syncTaskTags(
     completed: boolean;
     dueDate?: string;
     plannedStartDate?: string;
+    assigneeId?: Id<"users">;
     nextTagNames: readonly string[];
   },
 ): Promise<string[]> {
@@ -156,6 +157,7 @@ export async function syncTaskTags(
       completed: args.completed,
       dueDate: args.dueDate,
       plannedStartDate: args.plannedStartDate,
+      assigneeId: args.assigneeId,
     });
   }
 

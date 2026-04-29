@@ -151,6 +151,7 @@ export const create = mutation({
         completed: status.isCompleted,
         dueDate: args.dueDate,
         plannedStartDate: args.plannedStartDate,
+        assigneeId: args.assigneeId,
         nextTagNames: args.labels,
       });
       // Replace the as-typed labels with the normalized list, in case
@@ -562,6 +563,10 @@ export const listByWorkspace = query({
   args: {
     workspaceId: v.id("workspaces"),
     completed: v.boolean(),
+    // Optional server-side tag filter. Drives off `taskTags.by_workspace_tag_completed`
+    // so a tag filter doesn't pay for transferring every workspace task just to
+    // discard most. AND semantics across multiple tags.
+    tagNames: v.optional(v.array(v.string())),
   },
   returns: v.array(v.object({
     ...baseTaskFields,
@@ -572,25 +577,62 @@ export const listByWorkspace = query({
     }), v.null()),
     projectKey: v.optional(v.string()),
   })),
-  handler: async (ctx, { workspaceId, completed }) => {
+  handler: async (ctx, { workspaceId, completed, tagNames }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
 
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_workspace_completed", (q) =>
-        q.eq("workspaceId", workspaceId).eq("completed", completed)
-      )
-      .collect();
+    let tasks: Doc<"tasks">[];
+
+    if (tagNames && tagNames.length > 0) {
+      const required = normalizeTagList(tagNames);
+      if (required.length === 0) return [];
+
+      const tagRows = await Promise.all(
+        required.map((name) =>
+          ctx.db
+            .query("tags")
+            .withIndex("by_workspace_name", (q) =>
+              q.eq("workspaceId", workspaceId).eq("name", name),
+            )
+            .unique(),
+        ),
+      );
+      if (tagRows.some((r) => r === null)) return [];
+      const tagIds = tagRows.map((r) => r!._id);
+
+      const driverTagId = tagIds[0];
+      const joins = await ctx.db
+        .query("taskTags")
+        .withIndex("by_workspace_tag_completed", (q) =>
+          q.eq("workspaceId", workspaceId).eq("tagId", driverTagId).eq("completed", completed),
+        )
+        .collect();
+
+      const fetched = await getAll(ctx.db, joins.map((j) => j.taskId));
+      tasks = fetched.filter((t): t is NonNullable<typeof t> => t !== null);
+
+      if (tagIds.length > 1) {
+        tasks = tasks.filter(
+          (task) => task.labels !== undefined && required.every((n) => task.labels!.includes(n)),
+        );
+      }
+    } else {
+      tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_workspace_completed", (q) =>
+          q.eq("workspaceId", workspaceId).eq("completed", completed)
+        )
+        .collect();
+    }
 
     // Batch project lookups via cache for efficiency
-    const projectCache = new Map<string, any>();
-    const getProject = async (projectId: any) => {
+    const projectCache = new Map<string, Doc<"projects"> | null>();
+    const getProject = async (projectId: Doc<"tasks">["projectId"]) => {
       const key = projectId.toString();
       if (!projectCache.has(key)) {
         projectCache.set(key, await ctx.db.get(projectId));
       }
-      return projectCache.get(key);
+      return projectCache.get(key) ?? null;
     };
 
     return Promise.all(
@@ -613,6 +655,11 @@ export const listByAssignee = query({
   args: {
     workspaceId: v.id("workspaces"),
     completed: v.boolean(),
+    // Optional server-side tag filter. Drives off
+    // `taskTags.by_workspace_assignee_tag_completed` so a tag filter avoids
+    // collecting every assigned task just to drop most. AND semantics across
+    // multiple tags.
+    tagNames: v.optional(v.array(v.string())),
   },
   returns: v.array(v.object({
     ...baseTaskFields,
@@ -621,18 +668,59 @@ export const listByAssignee = query({
     project: v.union(projectValidator, v.null()),
     projectKey: v.optional(v.string()),
   })),
-  handler: async (ctx, { workspaceId, completed }) => {
+  handler: async (ctx, { workspaceId, completed, tagNames }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_assignee_completed", (q) =>
-        q.eq("assigneeId", userId).eq("completed", completed)
-      )
-      .collect();
+    let workspaceTasks: Doc<"tasks">[];
 
-    // Filter to only tasks in the specified workspace
-    const workspaceTasks = tasks.filter((task) => task.workspaceId === workspaceId);
+    if (tagNames && tagNames.length > 0) {
+      const required = normalizeTagList(tagNames);
+      if (required.length === 0) return [];
+
+      const tagRows = await Promise.all(
+        required.map((name) =>
+          ctx.db
+            .query("tags")
+            .withIndex("by_workspace_name", (q) =>
+              q.eq("workspaceId", workspaceId).eq("name", name),
+            )
+            .unique(),
+        ),
+      );
+      if (tagRows.some((r) => r === null)) return [];
+      const tagIds = tagRows.map((r) => r!._id);
+
+      const driverTagId = tagIds[0];
+      const joins = await ctx.db
+        .query("taskTags")
+        .withIndex("by_workspace_assignee_tag_completed", (q) =>
+          q
+            .eq("workspaceId", workspaceId)
+            .eq("assigneeId", userId)
+            .eq("tagId", driverTagId)
+            .eq("completed", completed),
+        )
+        .collect();
+
+      const fetched = await getAll(ctx.db, joins.map((j) => j.taskId));
+      workspaceTasks = fetched.filter((t): t is NonNullable<typeof t> => t !== null);
+
+      if (tagIds.length > 1) {
+        workspaceTasks = workspaceTasks.filter(
+          (task) => task.labels !== undefined && required.every((n) => task.labels!.includes(n)),
+        );
+      }
+    } else {
+      const tasks = await ctx.db
+        .query("tasks")
+        .withIndex("by_assignee_completed", (q) =>
+          q.eq("assigneeId", userId).eq("completed", completed)
+        )
+        .collect();
+
+      // Filter to only tasks in the specified workspace
+      workspaceTasks = tasks.filter((task) => task.workspaceId === workspaceId);
+    }
 
     // Enrich with status, assignee, and project data
     const enrichedTasks = await Promise.all(
@@ -694,6 +782,9 @@ export const update = mutation({
         completed: task.completed,
         dueDate: task.dueDate,
         plannedStartDate: task.plannedStartDate,
+        // Use the incoming assigneeId override when present so the new
+        // taskTags rows agree with the post-patch task row.
+        assigneeId: assigneeId === null ? undefined : assigneeId ?? task.assigneeId,
         nextTagNames: labels,
       });
     }

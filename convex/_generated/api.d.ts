@@ -1765,7 +1765,11 @@ export declare const api: {
     listByAssignee: FunctionReference<
       "query",
       "public",
-      { completed: boolean; workspaceId: Id<"workspaces"> },
+      {
+        completed: boolean;
+        tagNames?: Array<string>;
+        workspaceId: Id<"workspaces">;
+      },
       Array<{
         _creationTime: number;
         _id: Id<"tasks">;
@@ -1875,7 +1879,11 @@ export declare const api: {
     listByWorkspace: FunctionReference<
       "query",
       "public",
-      { completed: boolean; workspaceId: Id<"workspaces"> },
+      {
+        completed: boolean;
+        tagNames?: Array<string>;
+        workspaceId: Id<"workspaces">;
+      },
       Array<{
         _creationTime: number;
         _id: Id<"tasks">;
@@ -2901,6 +2909,18 @@ export declare const internal: {
       any
     >;
     backfillTaskTags: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    backfillTaskTagsAssigneeId: FunctionReference<
       "mutation",
       "internal",
       {

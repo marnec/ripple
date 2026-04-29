@@ -1247,6 +1247,7 @@ export type DataModel = {
   };
   taskTags: {
     document: {
+      assigneeId?: Id<"users">;
       completed: boolean;
       dueDate?: string;
       plannedStartDate?: string;
@@ -1261,6 +1262,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "assigneeId"
       | "completed"
       | "dueDate"
       | "plannedStartDate"
@@ -1293,7 +1295,20 @@ export type DataModel = {
         "_creationTime",
       ];
       by_task: ["taskId", "_creationTime"];
+      by_workspace_assignee_tag_completed: [
+        "workspaceId",
+        "assigneeId",
+        "tagId",
+        "completed",
+        "_creationTime",
+      ];
       by_workspace_tag: ["workspaceId", "tagId", "_creationTime"];
+      by_workspace_tag_completed: [
+        "workspaceId",
+        "tagId",
+        "completed",
+        "_creationTime",
+      ];
     };
     searchIndexes: {};
     vectorIndexes: {};

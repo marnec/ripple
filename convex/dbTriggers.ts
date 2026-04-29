@@ -485,7 +485,8 @@ triggers.register("tasks", async (ctx, change) => {
   const projectChanged = change.oldDoc.projectId !== change.newDoc.projectId;
   const dueDateChanged = change.oldDoc.dueDate !== change.newDoc.dueDate;
   const startDateChanged = change.oldDoc.plannedStartDate !== change.newDoc.plannedStartDate;
-  if (!completedChanged && !projectChanged && !dueDateChanged && !startDateChanged) return;
+  const assigneeChanged = change.oldDoc.assigneeId !== change.newDoc.assigneeId;
+  if (!completedChanged && !projectChanged && !dueDateChanged && !startDateChanged && !assigneeChanged) return;
   const joins = await ctx.db
     .query("taskTags")
     .withIndex("by_task", (q) => q.eq("taskId", change.id as Id<"tasks">))
@@ -496,11 +497,13 @@ triggers.register("tasks", async (ctx, change) => {
       projectId?: Id<"projects">;
       dueDate?: string;
       plannedStartDate?: string;
+      assigneeId?: Id<"users">;
     } = {};
     if (completedChanged) patch.completed = change.newDoc.completed;
     if (projectChanged) patch.projectId = change.newDoc.projectId;
     if (dueDateChanged) patch.dueDate = change.newDoc.dueDate;
     if (startDateChanged) patch.plannedStartDate = change.newDoc.plannedStartDate;
+    if (assigneeChanged) patch.assigneeId = change.newDoc.assigneeId;
     await ctx.db.patch(join._id, patch);
   }
 });

@@ -936,6 +936,28 @@ export const backfillTaskTagsSortFields = migrations.define({
   },
 });
 
+/**
+ * Backfill `assigneeId` on existing taskTags rows that predate the
+ * denormalization. The trigger keeps the column fresh for new writes; this
+ * migration covers rows from before the trigger existed.
+ *
+ * Idempotent — only patches rows whose denormalized assigneeId differs from
+ * the source task. Rows already in sync are skipped.
+ */
+export const backfillTaskTagsAssigneeId = migrations.define({
+  table: "taskTags",
+  migrateOne: async (ctx, row) => {
+    const task = await ctx.db.get(row.taskId);
+    if (!task) {
+      // Orphaned join — cleanup is the cascade's job, not this migration's.
+      return;
+    }
+    if (row.assigneeId !== task.assigneeId) {
+      await ctx.db.patch(row._id, { assigneeId: task.assigneeId });
+    }
+  },
+});
+
 /** Populate sourceNodeId and targetNodeId on existing edges. */
 export const backfillEdgeNodeIds = migrations.define({
   table: "edges",

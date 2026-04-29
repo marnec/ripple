@@ -190,16 +190,21 @@ export default defineSchema({
     tagId:       v.id("tags"),
     tagName:     v.string(),
     completed:   v.boolean(),
-    // Denormalized sort fields. Optional because the source `tasks` columns
-    // are optional. Kept in sync by the tasks-table trigger in dbTriggers.ts.
-    // Names match the source columns on `tasks` so the trigger is mechanical.
+    // Denormalized sort/filter fields. Optional because the source `tasks`
+    // columns are optional. Kept in sync by the tasks-table trigger in
+    // dbTriggers.ts. Names match the source columns on `tasks` so the trigger
+    // is mechanical. `assigneeId` powers the workspace-wide tag+assignee join
+    // used by `listByAssignee`.
     dueDate:           v.optional(v.string()),
     plannedStartDate:  v.optional(v.string()),
+    assigneeId:        v.optional(v.id("users")),
   })
     .index("by_project_tag_completed",                   ["projectId", "tagId", "completed"])
     .index("by_project_tag_completed_dueDate",           ["projectId", "tagId", "completed", "dueDate"])
     .index("by_project_tag_completed_plannedStartDate",  ["projectId", "tagId", "completed", "plannedStartDate"])
     .index("by_workspace_tag",                           ["workspaceId", "tagId"])
+    .index("by_workspace_tag_completed",                 ["workspaceId", "tagId", "completed"])
+    .index("by_workspace_assignee_tag_completed",        ["workspaceId", "assigneeId", "tagId", "completed"])
     .index("by_task",                                    ["taskId"]),
 
   // Polymorphic join: which tags apply to which resources. `resourceId` is

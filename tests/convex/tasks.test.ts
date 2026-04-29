@@ -6,6 +6,7 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import type { Id } from "../../convex/_generated/dataModel";
+import { WorkspaceRole } from "@shared/enums/roles";
 
 // Use fake timers so audit log component's scheduled aggregate updates
 // don't fire uncontrollably and corrupt convex-test state.
@@ -803,5 +804,175 @@ describe("listByProject — tagNames filter", () => {
       projectId: pA, completed: false, tagNames: ["shared"],
     });
     expect(result.map((t) => t._id)).toEqual([a]);
+  });
+});
+
+// ── listByWorkspace server-side tag filter (taskTags-driven) ─────────
+
+describe("listByWorkspace — tagNames filter", () => {
+  it("returns workspace tasks tagged with the given name across projects", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId: pA } = await setupProjectWithStatuses(t, { workspaceId, userId, name: "A" });
+    const { projectId: pB } = await setupProjectWithStatuses(t, { workspaceId, userId, name: "B" });
+
+    const a = await asUser.mutation(api.tasks.create, {
+      projectId: pA, workspaceId, title: "a", labels: ["bug"],
+    });
+    const b = await asUser.mutation(api.tasks.create, {
+      projectId: pB, workspaceId, title: "b", labels: ["bug"],
+    });
+    await asUser.mutation(api.tasks.create, {
+      projectId: pA, workspaceId, title: "untagged",
+    });
+
+    const result = await asUser.query(api.tasks.listByWorkspace, {
+      workspaceId, completed: false, tagNames: ["bug"],
+    });
+    expect(result.map((task) => task._id).sort()).toEqual([a, b].sort());
+  });
+
+  it("partitions on completion within the tag-driven path", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, doneId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const active = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "active", labels: ["bug"],
+    });
+    const done = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "done", labels: ["bug"],
+    });
+    await asUser.mutation(api.tasks.update, { taskId: done, statusId: doneId });
+
+    const activeTagged = await asUser.query(api.tasks.listByWorkspace, {
+      workspaceId, completed: false, tagNames: ["bug"],
+    });
+    const doneTagged = await asUser.query(api.tasks.listByWorkspace, {
+      workspaceId, completed: true, tagNames: ["bug"],
+    });
+    expect(activeTagged.map((task) => task._id)).toEqual([active]);
+    expect(doneTagged.map((task) => task._id)).toEqual([done]);
+  });
+
+  it("preserves AND semantics across multiple tags", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const both = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "both", labels: ["bug", "frontend"],
+    });
+    await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "only-bug", labels: ["bug"],
+    });
+
+    const result = await asUser.query(api.tasks.listByWorkspace, {
+      workspaceId, completed: false, tagNames: ["bug", "frontend"],
+    });
+    expect(result.map((task) => task._id)).toEqual([both]);
+  });
+
+  it("returns empty when a tag name does not exist", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "x", labels: ["bug"],
+    });
+
+    const result = await asUser.query(api.tasks.listByWorkspace, {
+      workspaceId, completed: false, tagNames: ["nonexistent"],
+    });
+    expect(result).toEqual([]);
+  });
+});
+
+// ── listByAssignee server-side tag filter (taskTags-driven) ──────────
+
+describe("listByAssignee — tagNames filter", () => {
+  it("returns only the caller's tagged tasks within the workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const { userId: otherId } = await setupAuthenticatedUser(t, { email: "other@example.com" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: otherId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    const mine = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "mine", labels: ["bug"], assigneeId: userId,
+    });
+    await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "theirs", labels: ["bug"], assigneeId: otherId,
+    });
+    await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "untagged-mine", assigneeId: userId,
+    });
+
+    const result = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: false, tagNames: ["bug"],
+    });
+    expect(result.map((task) => task._id)).toEqual([mine]);
+  });
+
+  it("reflects assignee changes via the tasks→taskTags trigger", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const { userId: otherId } = await setupAuthenticatedUser(t, { email: "other@example.com" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceMembers", {
+        userId: otherId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "transfer", labels: ["bug"], assigneeId: otherId,
+    });
+
+    const beforeReassign = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: false, tagNames: ["bug"],
+    });
+    expect(beforeReassign).toEqual([]);
+
+    await asUser.mutation(api.tasks.update, { taskId, assigneeId: userId });
+
+    const afterReassign = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: false, tagNames: ["bug"],
+    });
+    expect(afterReassign.map((task) => task._id)).toEqual([taskId]);
+  });
+
+  it("partitions on completion within the tag-driven path", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, doneId } = await setupProjectWithStatuses(t, { workspaceId, userId });
+
+    const active = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "active", labels: ["bug"], assigneeId: userId,
+    });
+    const done = await asUser.mutation(api.tasks.create, {
+      projectId, workspaceId, title: "done", labels: ["bug"], assigneeId: userId,
+    });
+    await asUser.mutation(api.tasks.update, { taskId: done, statusId: doneId });
+
+    const activeTagged = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: false, tagNames: ["bug"],
+    });
+    const doneTagged = await asUser.query(api.tasks.listByAssignee, {
+      workspaceId, completed: true, tagNames: ["bug"],
+    });
+    expect(activeTagged.map((task) => task._id)).toEqual([active]);
+    expect(doneTagged.map((task) => task._id)).toEqual([done]);
   });
 });
