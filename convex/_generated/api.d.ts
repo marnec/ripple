@@ -102,6 +102,8 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"channelMembers">;
         channelId: Id<"channels">;
+        email?: string;
+        lastReadAt?: number;
         name: string;
         role: "admin" | "member";
         userId: Id<"users">;

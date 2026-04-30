@@ -134,7 +134,7 @@ function ProjectSettingsContent({
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-4">Details</h2>
         <div className="space-y-4">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="project-name">Project Name</Label>
             <Input
               id="project-name"
@@ -144,7 +144,7 @@ function ProjectSettingsContent({
               disabled={!isCreator}
             />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="project-key">Project Key</Label>
             <Input
               id="project-key"
@@ -155,15 +155,15 @@ function ProjectSettingsContent({
               maxLength={5}
               className="font-mono uppercase"
             />
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground">
               {projectHasTasks
                 ? "The project key cannot be changed once tasks have been created."
                 : `2-5 character identifier used in task IDs (e.g., ${displayKey || "ENG"}-1). Cannot be changed once tasks exist.`}
             </p>
           </div>
-          <div>
+          <div className="space-y-2">
             <Label>Color</Label>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap gap-2">
               {PROJECT_COLORS.map((color) => (
                 <button
                   key={color.class}

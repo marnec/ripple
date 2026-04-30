@@ -94,7 +94,7 @@ function DocumentSettingsContent({
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-4">Details</h2>
         <div className="space-y-4">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="document-name">Document Name</Label>
             <Input
               id="document-name"

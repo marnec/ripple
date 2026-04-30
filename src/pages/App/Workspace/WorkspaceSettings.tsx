@@ -66,7 +66,7 @@ export function WorkspaceSettings() {
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-4">Details</h2>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="workspace-name">Workspace Name</Label>
             <Input
               id="workspace-name"
@@ -76,7 +76,7 @@ export function WorkspaceSettings() {
               required
             />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="workspace-description">Description</Label>
             <Textarea
               id="workspace-description"

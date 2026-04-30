@@ -1,8 +1,10 @@
 NEXT STEPS:
 
-- remove tag project association
+- leave channel logic
 
-- show raw content of a cell in spreadsheet (for formulas)
+- what happens to tasks when a column (status is deleted)?
+
+- remove tag project association
 
 - calendar; plan calls; invite guests
 

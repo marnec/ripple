@@ -41,6 +41,8 @@ export const membersByChannel = query({
     userId: v.id("users"),
     role: v.union(v.literal("admin"), v.literal("member")),
     name: v.string(),
+    email: v.optional(v.string()),
+    lastReadAt: v.optional(v.number()),
   })),
   handler: async (ctx, { channelId }) => {
     await requireUser(ctx);

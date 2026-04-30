@@ -48,7 +48,7 @@ export function ChannelDetailsSection({
     <section className="mb-8">
       <h2 className="text-lg font-semibold mb-4">Details</h2>
       <div className="space-y-4">
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="channel-name">Channel Name</Label>
           <Input
             id="channel-name"
@@ -59,9 +59,9 @@ export function ChannelDetailsSection({
           />
         </div>
 
-        <div>
+        <div className="space-y-2">
           <Label>Type</Label>
-          <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {channelType === "open" ? (
               <>
                 <Globe className="w-4 h-4" />
