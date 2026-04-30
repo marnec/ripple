@@ -110,6 +110,29 @@ export function ExcalidrawEditor({
     };
   }, [excalidrawAPI, provider, yElements, yAssets, awareness]);
 
+  // Fit the diagram into view once on open. yElements may be empty at mount
+  // if the user is opening a diagram cold (no IndexedDB cache) — in that case
+  // wait for the first provider-sync update.
+  const fittedOnOpenRef = useRef(false);
+  useEffect(() => {
+    if (!excalidrawAPI || fittedOnOpenRef.current) return;
+
+    const fit = () => {
+      if (fittedOnOpenRef.current || yElements.length === 0) return;
+      fittedOnOpenRef.current = true;
+      requestAnimationFrame(() => {
+        excalidrawAPI.scrollToContent(undefined, { fitToContent: true });
+      });
+    };
+
+    fit();
+    if (fittedOnOpenRef.current) return;
+
+    const observer = () => fit();
+    yElements.observe(observer);
+    return () => yElements.unobserve(observer);
+  }, [excalidrawAPI, yElements]);
+
   // Broadcast pointer position to other users via awareness
   // (The binding exposes onPointerUpdate but doesn't auto-connect it)
   const handlePointerUpdate = (payload: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "down" | "up" }) => {
