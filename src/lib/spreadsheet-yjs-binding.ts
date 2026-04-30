@@ -138,6 +138,9 @@ export class SpreadsheetYjsBinding {
   /** Pending deferred formula refresh timer */
   private formulaRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** External listeners (formula bar) notified on any yData change. */
+  private subscribers = new Set<() => void>();
+
   constructor(
     worksheet: any,
     yDoc: Y.Doc,
@@ -564,6 +567,7 @@ export class SpreadsheetYjsBinding {
   // ---------------------------------------------------------------------------
 
   private handleDataChange(events: Y.YEvent<any>[], tx: Y.Transaction) {
+    this.notifySubscribers();
     if (tx.local) return;
     this.isApplyingRemote = true;
     try {
@@ -719,6 +723,61 @@ export class SpreadsheetYjsBinding {
   setActiveClients(ids: Set<number>) {
     this.activeClientIds = ids;
     this.renderRemoteCursors();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public cell read/write API (formula bar)
+  // ---------------------------------------------------------------------------
+
+  /** Read the raw stored value of a cell (formula text, not the computed value). */
+  getRawCellValue(row: number, col: number): string {
+    if (row < 0 || col < 0) return "";
+    if (row >= this.yData.length) return "";
+    const rowMap = this.yData.get(row);
+    return rowMap?.get(String(col)) ?? "";
+  }
+
+  /** Write a raw value to a cell from outside jspreadsheet (e.g. formula bar).
+   *  Mirrors the local-edit path used by `onafterchanges`, plus pushes the
+   *  value into the visible grid (otherwise only remote peers would see it). */
+  setRawCellValue(row: number, col: number, value: string) {
+    if (row < 0 || col < 0) return;
+    this.isApplyingRemote = true;
+    try {
+      this.yData.doc!.transact(() => {
+        this.ensureRows(row);
+        const rowMap = this.yData.get(row);
+        rowMap?.set(String(col), value);
+      });
+      try {
+        this.worksheet.setValueFromCoords(col, row, value);
+      } catch { /* */ }
+    } finally {
+      this.isApplyingRemote = false;
+    }
+    this.updateFormulaCellTracking(row, col, value);
+    this.scheduleFormulaRefresh();
+  }
+
+  /** Convert (row, col) to "A1"-style cell name. Reuses the internal helper. */
+  cellNameAt(row: number, col: number): string {
+    return this.getCellName(col, row);
+  }
+
+  /** Subscribe to data changes (local or remote). Returns an unsubscribe fn. */
+  subscribe(listener: () => void): () => void {
+    this.subscribers.add(listener);
+    return () => {
+      this.subscribers.delete(listener);
+    };
+  }
+
+  private notifySubscribers() {
+    for (const listener of this.subscribers) {
+      try {
+        listener();
+      } catch { /* */ }
+    }
   }
 
   /** Update the set of cell refs referenced by documents. Triggers re-render of highlights. */
@@ -1181,5 +1240,7 @@ export class SpreadsheetYjsBinding {
       this.styleElement.remove();
       this.styleElement = null;
     }
+
+    this.subscribers.clear();
   }
 }

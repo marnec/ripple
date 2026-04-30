@@ -13,6 +13,7 @@ interface UseJSpreadsheetInstanceOptions {
   awareness: Awareness | null;
   onEditionStart: (td: HTMLTableCellElement, wrapper: HTMLElement) => void;
   onEditionEnd: () => void;
+  onSelectionChange?: (sel: { x1: number; y1: number; x2: number; y2: number } | null) => void;
   editable?: boolean;
 }
 
@@ -26,10 +27,15 @@ export function useJSpreadsheetInstance({
   awareness,
   onEditionStart,
   onEditionEnd,
+  onSelectionChange,
   editable = true,
 }: UseJSpreadsheetInstanceOptions) {
   const worksheetRef = useRef<Worksheet>(null);
   const bindingRef = useRef<SpreadsheetYjsBinding | null>(null);
+  // Latest onSelectionChange callback — kept in a ref so the main effect
+  // doesn't re-run when the parent passes a fresh function each render.
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -79,6 +85,7 @@ export function useJSpreadsheetInstance({
       },
       onselection(instance: any, x1: any, y1: any, x2: any, y2: any) {
         binding?.onselection(instance, x1, y1, x2, y2);
+        onSelectionChangeRef.current?.({ x1, y1, x2, y2 });
       },
       oneditionstart(_instance: any, td: HTMLTableCellElement) {
         onEditionStart(td, wrapper);

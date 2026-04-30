@@ -37,7 +37,9 @@ import { ActiveUsers } from "../Document/ActiveUsers";
 import {
   FormulaPickerDropdown,
 } from "./FormulaPickerDropdown";
+import { FormulaBar } from "./FormulaBar";
 import { SpreadsheetContextMenu } from "./SpreadsheetContextMenu";
+import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 
 // ---------------------------------------------------------------------------
 // Connection Status Badge
@@ -79,12 +81,18 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   remoteUserClientIds,
   referencedCellRefs,
   importedRows,
+  onSelectionChange,
+  onEditingChange,
+  onBindingReady,
 }: {
   yDoc: Y.Doc;
   awareness: Awareness | null;
   remoteUserClientIds: Set<number>;
   referencedCellRefs: { cellRef: string }[];
   importedRows: unknown[][] | null;
+  onSelectionChange: (sel: { row: number; col: number } | null) => void;
+  onEditingChange: (editing: boolean) => void;
+  onBindingReady: (binding: SpreadsheetYjsBinding | null) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const importSeededRef = useRef(false);
@@ -94,10 +102,20 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
     formulaPicker,
     formulaPickerHandleRef,
     insertFormula,
-    onEditionStart,
-    onEditionEnd,
+    onEditionStart: pickerOnEditionStart,
+    onEditionEnd: pickerOnEditionEnd,
     registerKeyboardInterception,
   } = useFormulaPicker();
+
+  // Compose formula-picker handlers with isEditing tracking for FormulaBar.
+  const onEditionStart = (td: HTMLTableCellElement, wrapper: HTMLElement) => {
+    onEditingChange(true);
+    pickerOnEditionStart(td, wrapper);
+  };
+  const onEditionEnd = () => {
+    onEditingChange(false);
+    pickerOnEditionEnd();
+  };
 
   // jspreadsheet + Yjs binding
   const { worksheetRef, bindingRef } = useJSpreadsheetInstance({
@@ -106,7 +124,18 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
     awareness,
     onEditionStart,
     onEditionEnd,
+    onSelectionChange: (sel) => {
+      onSelectionChange(sel ? { row: sel.y1, col: sel.x1 } : null);
+    },
   });
+
+  // Hand the binding instance up to the page so the FormulaBar can read/write.
+  // Deps mirror the binding-creation effect inside useJSpreadsheetInstance so
+  // we re-emit when the underlying binding is recreated.
+  useEffect(() => {
+    onBindingReady(bindingRef.current);
+    return () => onBindingReady(null);
+  }, [bindingRef, onBindingReady, yDoc, awareness]);
 
   // Seed once from imported rows (e.g. .xlsx upload). Runs after the binding
   // effect above has set bindingRef.current — effects run in declaration order.
@@ -188,6 +217,9 @@ function SpreadsheetEditor({
   const [showRefHighlights, setShowRefHighlights] = useState(false);
   const [backlinksOpen, setBacklinksOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [selection, setSelection] = useState<{ row: number; col: number } | null>(null);
+  const [isCellEditing, setIsCellEditing] = useState(false);
+  const [binding, setBinding] = useState<SpreadsheetYjsBinding | null>(null);
   const myRole = useQuery(
     api.workspaceMembers.myRole,
     spreadsheet ? { workspaceId: spreadsheet.workspaceId } : "skip",
@@ -263,6 +295,7 @@ function SpreadsheetEditor({
             </button>
           )}
         </div>
+        <FormulaBar binding={binding} selection={selection} isEditing={isCellEditing} />
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
           {isConnected && (
@@ -326,7 +359,16 @@ function SpreadsheetEditor({
       />
 
       <div className="flex-1 overflow-hidden">
-        <JSpreadsheetGrid yDoc={yDoc} awareness={awareness} remoteUserClientIds={remoteUserClientIds} referencedCellRefs={referencedCellRefs} importedRows={importedRows} />
+        <JSpreadsheetGrid
+          yDoc={yDoc}
+          awareness={awareness}
+          remoteUserClientIds={remoteUserClientIds}
+          referencedCellRefs={referencedCellRefs}
+          importedRows={importedRows}
+          onSelectionChange={setSelection}
+          onEditingChange={setIsCellEditing}
+          onBindingReady={setBinding}
+        />
       </div>
     </div>
   );
