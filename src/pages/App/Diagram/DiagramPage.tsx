@@ -9,7 +9,7 @@ import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { ExcalidrawEditor } from "./ExcalidrawEditor";
 import { useMutation } from "convex/react";
@@ -33,9 +33,18 @@ import { Excalidraw } from "@excalidraw/excalidraw";
 import type { Theme } from "@excalidraw/excalidraw/element/types";
 import { yjsToExcalidraw } from "y-excalidraw";
 
+type ImportedScene = {
+  elements: readonly unknown[];
+  files: Record<string, unknown>;
+};
+
 function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagrams">; workspaceId: Id<"workspaces"> }) {
   const isMobile = useIsMobile();
   const viewer = useViewer();
+  const location = useLocation();
+  const importedScene =
+    (location.state as { importedScene?: ImportedScene } | null)
+      ?.importedScene ?? null;
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
   useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
@@ -218,6 +227,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
             awareness={awareness}
             provider={provider}
             onExcalidrawAPI={setExcalidrawAPI}
+            importedScene={importedScene}
           />
         )}
       </div>

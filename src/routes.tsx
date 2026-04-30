@@ -199,6 +199,13 @@ export const router = createBrowserRouter(
                     })),
                 },
                 {
+                  path: "import",
+                  lazy: () =>
+                    import("./pages/App/Diagram/DiagramImport").then((m) => ({
+                      Component: m.DiagramImport,
+                    })),
+                },
+                {
                   path: ":diagramId",
                   lazy: () =>
                     import("./pages/App/Diagram/DiagramPage").then((m) => ({

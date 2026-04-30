@@ -6,13 +6,19 @@ import type {
   ExcalidrawImperativeAPI,
 } from "@excalidraw/excalidraw/types";
 import type { Theme } from "@excalidraw/excalidraw/element/types";
+import { generateNKeysBetween } from "fractional-indexing";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
 import type { Awareness } from "y-protocols/awareness";
 import type YProvider from "y-partyserver/provider";
-import type * as Y from "yjs";
+import * as Y from "yjs";
 
+
+interface ImportedScene {
+  elements: readonly unknown[];
+  files: Record<string, unknown>;
+}
 
 interface ExcalidrawEditorProps {
   yElements: Y.Array<Y.Map<any>>;
@@ -21,6 +27,7 @@ interface ExcalidrawEditorProps {
   provider: YProvider | null;
   onExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void;
   viewModeEnabled?: boolean;
+  importedScene?: ImportedScene | null;
 }
 
 export function ExcalidrawEditor({
@@ -30,10 +37,51 @@ export function ExcalidrawEditor({
   provider,
   onExcalidrawAPI,
   viewModeEnabled,
+  importedScene,
 }: ExcalidrawEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI>();
   const { resolvedTheme } = useTheme();
   const bindingRef = useRef<ExcalidrawBinding | null>(null);
+
+  // Seed an imported .excalidraw upload synchronously during first render,
+  // BEFORE Excalidraw mounts. Excalidraw's internal initializeScene runs more
+  // than once and resets the scene from initialData each time
+  // (excalidraw/excalidraw#7585), so anything injected via updateScene after
+  // mount gets wiped. Putting elements into yElements before render means
+  // initialData={ elements: yjsToExcalidraw(yElements) } already contains the
+  // imported scene, and every initializeScene re-run lands on it.
+  // useState's lazy initializer is the standard one-shot pre-render hook.
+  useState(() => {
+    if (
+      !importedScene ||
+      yElements.length !== 0 ||
+      importedScene.elements.length === 0
+    ) {
+      return null;
+    }
+    const positions = generateNKeysBetween(
+      null,
+      null,
+      importedScene.elements.length,
+    );
+    const doc = yElements.doc;
+    const seed = () => {
+      importedScene.elements.forEach((el, i) => {
+        yElements.push([
+          new Y.Map<unknown>(
+            Object.entries({ pos: positions[i], el }),
+          ) as Y.Map<any>,
+        ]);
+      });
+      for (const [fileId, file] of Object.entries(importedScene.files)) {
+        yAssets.set(fileId, file);
+      }
+    };
+    if (doc) doc.transact(seed);
+    else seed();
+    window.history.replaceState({}, "");
+    return null;
+  });
 
   // Notify parent directly in callback (event handler, not effect)
   const handleExcalidrawAPI = (api: ExcalidrawImperativeAPI) => {
@@ -107,6 +155,7 @@ export function ExcalidrawEditor({
       >
         <MainMenu>
           <MainMenu.DefaultItems.SaveAsImage />
+          <MainMenu.DefaultItems.SaveToActiveFile />
         </MainMenu>
       </Excalidraw>
     </div>
