@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@shared/types/routes";
@@ -86,6 +87,7 @@ function DocumentSettingsContent({
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
+      <MobileHeaderTitle name={document.name} />
       <h1 className="hidden md:block text-2xl font-bold mb-6">Document Settings</h1>
 
       {/* Details Section */}

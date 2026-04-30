@@ -11,7 +11,6 @@ import { api } from "../../convex/_generated/api";
 import React from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
-import { ProjectColorTag } from "./ProjectColorTag";
 
 interface BreadcrumbItemData {
   href: string;
@@ -100,31 +99,12 @@ export function DynamicBreadcrumb() {
   const isLoading = unresolvedIds.length > 0 && !serverNamesMap;
 
   if (isMobile) {
-    const lastItem = items.length > 0 ? items[items.length - 1] : null;
-    if (!lastItem) return null;
-    // For subpages of a resource (e.g. /projects/:id/tasks), surface the
-    // parent resource as the title so projects feel uniform with other
-    // resources whose URL ends in the resource ID.
-    let titleItem = lastItem;
-    if (!lastItem.resourceId && items.length >= 2) {
-      const parent = items[items.length - 2];
-      if (parent.resourceId && parent.category !== "workspaces") {
-        titleItem = parent;
-      }
-    }
-    const displayName = titleItem.resourceId
-      ? (namesMap[titleItem.resourceId] ?? (isLoading ? "..." : titleItem.label))
-      : titleItem.label;
-    const projectColor =
-      titleItem.category === "projects" && titleItem.resourceId && sidebarData
-        ? sidebarData.projects.find((p) => p._id === titleItem.resourceId)?.color
-        : undefined;
-    return (
-      <div className="flex items-center gap-2 min-w-0">
-        {projectColor && <ProjectColorTag color={projectColor} />}
-        <span className="text-base font-semibold truncate">{displayName}</span>
-      </div>
-    );
+    const currentItem = items.length > 0 ? items[items.length - 1] : null;
+    if (!currentItem) return null;
+    const displayName = currentItem.resourceId
+      ? (namesMap[currentItem.resourceId] ?? (isLoading ? "..." : currentItem.label))
+      : currentItem.label;
+    return <span className="text-base font-semibold truncate">{displayName}</span>;
   }
 
   return (

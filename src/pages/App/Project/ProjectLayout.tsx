@@ -5,6 +5,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@shared/types/routes";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { CalendarDays, LayoutDashboard, ListTodo, RefreshCw, Settings } from "lucide-react";
 import { useParams, NavLink, Outlet } from "react-router-dom";
@@ -95,6 +96,12 @@ function ProjectLayoutContent({
           ))}
         </div>
       </div>
+
+      <MobileHeaderTitle
+        name={project?.name}
+        accent={project ? <ProjectColorTag color={project.color} /> : undefined}
+      />
+
 
       {/* Page content */}
       <div className="flex-1 flex flex-col min-h-0">

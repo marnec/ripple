@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -77,6 +78,7 @@ function SpreadsheetSettingsContent({
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
+      <MobileHeaderTitle name={spreadsheet.name} />
       <h1 className="hidden md:block text-2xl font-bold mb-6">Spreadsheet Settings</h1>
 
       {/* Details Section */}

@@ -3,12 +3,13 @@ import "@blocknote/shadcn/style.css";
 import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ShareDialog } from "@/components/ShareDialog";
+import { Button } from "@/components/ui/button";
 import {
   TagInlineStrip,
   TagPickerButton,
 } from "@/components/TagPickerButton";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
-import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
@@ -385,15 +386,17 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       )}
       {isMobile && (
         <HeaderSlot>
-          <Link
-            to="settings"
-            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title="Document settings"
+          <Button
+            variant="ghost"
+            size="icon"
+            render={<Link to="settings" />}
+            aria-label="Document settings"
           >
             <Settings className="size-4" />
-          </Link>
+          </Button>
         </HeaderSlot>
       )}
+      <MobileHeaderTitle name={document.name} />
       <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
         <div className="px-2 sm:pl-12 sm:pr-20 max-w-full">
           {referencedBlockStyles && <style>{referencedBlockStyles}</style>}

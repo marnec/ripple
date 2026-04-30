@@ -1,4 +1,5 @@
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
+import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -93,6 +94,7 @@ function CycleDetailContent({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <MobileHeaderTitle name={cycle.name} />
       <CycleHeader
         cycle={cycle as { name: string; status: string; totalTasks: number; completedTasks: number; progressPercent: number; startDate?: string; dueDate?: string }}
         onEdit={() => setShowEditDialog(true)}

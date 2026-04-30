@@ -306,13 +306,14 @@ export function WorkspaceDetails() {
 
       {isMobile && (
         <HeaderSlot>
-          <Link
-            to="settings"
-            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title="Workspace settings"
+          <Button
+            variant="ghost"
+            size="icon"
+            render={<Link to="settings" />}
+            aria-label="Workspace settings"
           >
             <Settings className="size-4" />
-          </Link>
+          </Button>
         </HeaderSlot>
       )}
     </div>

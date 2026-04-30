@@ -5,7 +5,8 @@ import {
   TagInlineStrip,
   TagPickerButton,
 } from "@/components/TagPickerButton";
-import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { Button } from "@/components/ui/button";
+import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useCursorAwareness } from "@/hooks/use-cursor-awareness";
 import { useFormulaPicker } from "@/hooks/use-formula-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -306,15 +307,17 @@ function SpreadsheetEditor({
       )}
       {isMobile && (
         <HeaderSlot>
-          <Link
-            to="settings"
-            className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title="Spreadsheet settings"
+          <Button
+            variant="ghost"
+            size="icon"
+            render={<Link to="settings" />}
+            aria-label="Spreadsheet settings"
           >
             <Settings className="size-4" />
-          </Link>
+          </Button>
         </HeaderSlot>
       )}
+      <MobileHeaderTitle name={spreadsheet.name} />
       <BacklinksDrawer
         resourceId={spreadsheetId}
         workspaceId={spreadsheet.workspaceId}

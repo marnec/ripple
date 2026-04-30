@@ -1,5 +1,5 @@
 "use client";
-import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Message } from "@/pages/App/Chat/Message";
 import { MessageList } from "@/pages/App/Chat/MessageList";
@@ -208,15 +208,17 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
           )}
           {isMobile && variant === "full" && (
             <HeaderSlot>
-              <Link
-                to="settings"
-                className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                title="Channel settings"
+              <Button
+                variant="ghost"
+                size="icon"
+                render={<Link to="settings" />}
+                aria-label="Channel settings"
               >
                 <Settings className="size-4" />
-              </Link>
+              </Button>
             </HeaderSlot>
           )}
+          {variant === "full" && <MobileHeaderTitle name={channel?.name} />}
 
           <div className="min-h-0 flex-1">
             <ReactionsContext.Provider value={reactionsMap ?? {}}>

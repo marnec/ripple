@@ -3,7 +3,7 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import { TagPickerButton } from "@/components/TagPickerButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { HeaderSlot } from "@/contexts/HeaderSlotContext";
+import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getUserColor } from "@/lib/user-colors";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
@@ -121,15 +121,15 @@ function TaskDetailPageContent({
         <HeaderSlot>
           <Button
             variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
+            size="icon"
             onClick={() => detail.setShowDeleteDialog(true)}
-            title="Delete task"
+            aria-label="Delete task"
           >
-            <Trash2 className="h-4 w-4 text-destructive" />
+            <Trash2 className="size-4 text-destructive" />
           </Button>
         </HeaderSlot>
       )}
+      <MobileHeaderTitle name={detail.titleValue} />
 
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl pb-6">

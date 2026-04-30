@@ -8,7 +8,12 @@ import { Outlet, useLocation, useParams } from "react-router-dom";
 import { CommandPalette } from "./CommandPalette";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
-import { HeaderSlotContext, useHeaderSlotRef } from "../contexts/HeaderSlotContext";
+import {
+  HeaderSlotContext,
+  HeaderTitleSlotContext,
+  useHeaderSlotRef,
+  useHeaderTitleSlotRef,
+} from "../contexts/HeaderSlotContext";
 import { WorkspaceMembersProvider } from "../contexts/WorkspaceMembersContext";
 import { WorkspaceSidebarProvider } from "../contexts/WorkspaceSidebarContext";
 import { DynamicBreadcrumb } from "./Breadcrumb";
@@ -38,6 +43,7 @@ export function Layout() {
   const { isFollowing, followColor } = useFollowMode();
   const [commandOpen, setCommandOpen] = useState(false);
   const [headerSlotCallbackRef, headerSlotNode] = useHeaderSlotRef();
+  const [headerTitleSlotCallbackRef, headerTitleSlotNode] = useHeaderTitleSlotRef();
 
   useEffect(() => {
     if (pathname === "/" && isMobile) setOpen(true);
@@ -64,8 +70,14 @@ export function Layout() {
           {isMobile ? (
             <>
               <SidebarTrigger className="-ml-1 shrink-0" />
-              <div className="flex-1 min-w-0 flex justify-center px-2">
-                <DynamicBreadcrumb />
+              <div className="flex-1 min-w-0 flex items-center justify-start px-2">
+                <div
+                  ref={headerTitleSlotCallbackRef}
+                  className="peer flex items-center gap-2 min-w-0 empty:hidden"
+                />
+                <div className="hidden peer-empty:flex items-center gap-2 min-w-0">
+                  <DynamicBreadcrumb />
+                </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <div ref={headerSlotCallbackRef} className="flex items-center gap-2" />
@@ -96,9 +108,11 @@ export function Layout() {
             />
           )}
           <HeaderSlotContext value={headerSlotNode}>
-            <Profiler id="PageContent" onRender={onRenderCallback}>
-            <Outlet />
-            </Profiler>
+            <HeaderTitleSlotContext value={headerTitleSlotNode}>
+              <Profiler id="PageContent" onRender={onRenderCallback}>
+              <Outlet />
+              </Profiler>
+            </HeaderTitleSlotContext>
           </HeaderSlotContext>
         </div>
       </SidebarInset>

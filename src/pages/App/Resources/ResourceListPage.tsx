@@ -129,8 +129,8 @@ export function ResourceListPage({
           <div className="flex items-center gap-1">
             {secondaryAction}
             {onCreate && (
-              <Button onClick={onCreate} size="sm" variant="ghost" className="h-7 w-7 p-0">
-                <Plus className="h-4 w-4" />
+              <Button onClick={onCreate} variant="ghost" size="icon" aria-label="Create new">
+                <Plus className="size-4" />
               </Button>
             )}
           </div>

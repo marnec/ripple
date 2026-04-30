@@ -1,6 +1,7 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { ChannelRole } from "@shared/enums";
@@ -71,6 +72,7 @@ function ChannelSettingsContent({
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
+      <MobileHeaderTitle name={channel.name} />
       <h1 className="hidden md:block text-2xl font-bold mb-6">
         {isDm ? "Conversation Settings" : "Channel Settings"}
       </h1>
