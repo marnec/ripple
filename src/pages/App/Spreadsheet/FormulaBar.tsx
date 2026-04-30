@@ -36,13 +36,16 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
   const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
   const [pickerDismissed, setPickerDismissed] = useState(false);
 
-  // Same trigger condition as in-cell editor (use-formula-picker.ts):
-  // value starts with "=" and contains no "(".
+  // Show the picker only while the user is typing what looks like a function
+  // name: starts with `=` and the rest is letters only (or empty). Anything
+  // else — digits, operators, `(`, cell refs — is a real formula expression
+  // and the picker (and its Enter/Tab interception) must step aside so
+  // commit can fire on Enter. e.g. `=1+2` → picker hidden → Enter commits.
   const pickerShouldShow =
     isFocused &&
     !pickerDismissed &&
     draft.startsWith("=") &&
-    !draft.includes("(");
+    /^[a-zA-Z]*$/.test(draft.slice(1));
   const pickerQuery = pickerShouldShow ? draft.substring(1) : "";
 
   const inputValue = isFocused ? draft : value;
