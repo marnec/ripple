@@ -102,7 +102,26 @@ export function useJSpreadsheetInstance({
     binding = new SpreadsheetYjsBinding(worksheet, yDoc, awareness);
     bindingRef.current = binding;
 
+    // Route Ctrl/Cmd+Z and Ctrl/Cmd+Y / Ctrl+Shift+Z to the Yjs UndoManager
+    // owned by the binding. jspreadsheet's internal history is disabled
+    // (worksheet.ignoreHistory = true) inside the binding constructor;
+    // capturing here ensures its now-no-op handler also never fires.
+    const onKeyDown = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const k = e.key.toLowerCase();
+      const isUndo = k === "z" && !e.shiftKey;
+      const isRedo = (k === "z" && e.shiftKey) || k === "y";
+      if (!isUndo && !isRedo) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (isUndo) bindingRef.current?.undo();
+      else bindingRef.current?.redo();
+    };
+    wrapper.addEventListener("keydown", onKeyDown, true);
+
     return () => {
+      wrapper.removeEventListener("keydown", onKeyDown, true);
       // Destroy binding before jspreadsheet
       if (bindingRef.current) {
         bindingRef.current.destroy();

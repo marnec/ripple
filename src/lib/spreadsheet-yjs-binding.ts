@@ -141,6 +141,16 @@ export class SpreadsheetYjsBinding {
   /** External listeners (formula bar) notified on any yData change. */
   private subscribers = new Set<() => void>();
 
+  /** Origin tag stamped on all transactions originating from this client's
+   *  user-driven edits (in-cell + formula bar). Y.UndoManager uses this as
+   *  the only tracked origin, so remote edits and observer-driven replays
+   *  are excluded from the undo stack. */
+  private localWriteOrigin = Symbol("ripple-spreadsheet-local-write");
+
+  /** Yjs-native undo/redo. Replaces jspreadsheet's internal history so the
+   *  grid and the Yjs doc never diverge on Ctrl+Z. */
+  private undoManager!: Y.UndoManager;
+
   constructor(
     worksheet: any,
     yDoc: Y.Doc,
@@ -182,6 +192,25 @@ export class SpreadsheetYjsBinding {
     this.yColWidths.observe(this.colWidthsObserver);
     this.yRowHeights.observe(this.rowHeightsObserver);
     this.yMerges.observe(this.mergesObserver);
+
+    // Replace jspreadsheet's internal history with a Yjs-native one. The
+    // built-in history is incompatible with our binding: (a) its replay path
+    // sets `ignoreEvents=true`, so undos never propagate back into Yjs;
+    // (b) it would record other users' edits we replay via setValueFromCoords
+    // and let the local user "undo" them. yFormulaValues is excluded — it's
+    // computed cache, not user content.
+    this.worksheet.ignoreHistory = true;
+    this.undoManager = new Y.UndoManager(
+      [
+        this.yData,
+        this.yStyles,
+        this.yColWidths,
+        this.yRowHeights,
+        this.yMerges,
+        this.yMeta,
+      ],
+      { trackedOrigins: new Set([this.localWriteOrigin]) },
+    );
 
     this.injectStyles();
 
@@ -362,7 +391,7 @@ export class SpreadsheetYjsBinding {
         const rowMap = this.yData.get(row);
         rowMap?.set(String(col), String(c.value ?? ""));
       }
-    });
+    }, this.localWriteOrigin);
 
     // Track formula cells and refresh computed display values.
     // Any change may cascade to dependent formula cells, so always refresh.
@@ -394,7 +423,7 @@ export class SpreadsheetYjsBinding {
         }
         this.yData.insert(insertAt, [rowMap]);
       }
-    });
+    }, this.localWriteOrigin);
   }
 
   /** v5: ondeleterow(instance, removedRows: number[]) */
@@ -413,7 +442,7 @@ export class SpreadsheetYjsBinding {
           this.yData.delete(rowIdx, 1);
         }
       }
-    });
+    }, this.localWriteOrigin);
   }
 
   /** v5: oninsertcolumn(instance, columns: { column: number; options: any; data?: any[] }[]) */
@@ -441,7 +470,7 @@ export class SpreadsheetYjsBinding {
         }
       }
       this.yMeta.set("colCount", currentColCount + numCols);
-    });
+    }, this.localWriteOrigin);
   }
 
   /** v5: ondeletecolumn(instance, removedColumns: number[]) */
@@ -469,7 +498,7 @@ export class SpreadsheetYjsBinding {
         }
       }
       this.yMeta.set("colCount", currentColCount - numCols);
-    });
+    }, this.localWriteOrigin);
   }
 
   /** v5: onchangestyle(instance, changes: Record<string, string>) */
@@ -490,7 +519,7 @@ export class SpreadsheetYjsBinding {
           this.yStyles.delete(styleKey);
         }
       }
-    });
+    }, this.localWriteOrigin);
   }
 
   /** v5: onresizecolumn(instance, colIndex, newWidth, oldWidth) */
@@ -506,9 +535,14 @@ export class SpreadsheetYjsBinding {
         for (let i = 0; i < colIndex.length; i++) {
           this.yColWidths.set(String(colIndex[i]), widths[i]);
         }
-      });
+      }, this.localWriteOrigin);
     } else {
-      this.yColWidths.set(String(colIndex), newWidth as number);
+      // Wrap the single-set in a transaction so it's tagged with our origin
+      // and tracked by Y.UndoManager (a bare .set() outside a transact uses
+      // the doc's default origin and would be untracked).
+      this.yData.doc!.transact(() => {
+        this.yColWidths.set(String(colIndex), newWidth as number);
+      }, this.localWriteOrigin);
     }
   }
 
@@ -519,7 +553,9 @@ export class SpreadsheetYjsBinding {
     newHeight: number,
   ) {
     if (this.isApplyingRemote) return;
-    this.yRowHeights.set(String(rowIndex), newHeight);
+    this.yData.doc!.transact(() => {
+      this.yRowHeights.set(String(rowIndex), newHeight);
+    }, this.localWriteOrigin);
   }
 
   /** v5: onmerge(instance, merges: Record<string, [number, number]>) */
@@ -537,7 +573,7 @@ export class SpreadsheetYjsBinding {
           this.yMerges.set(cellName, `${colspan},${rowspan}`);
         }
       }
-    });
+    }, this.localWriteOrigin);
   }
 
   /** v5: onselection(instance, x1, y1, x2, y2, origin)
@@ -568,7 +604,9 @@ export class SpreadsheetYjsBinding {
 
   private handleDataChange(events: Y.YEvent<any>[], tx: Y.Transaction) {
     this.notifySubscribers();
-    if (tx.local) return;
+    // Skip the "user just typed in the cell" echo: the value is already in
+    // jspreadsheet. Apply for: remote peer edits, undo/redo replays.
+    if (tx.local && tx.origin === this.localWriteOrigin) return;
     this.isApplyingRemote = true;
     try {
       for (const event of events) {
@@ -640,7 +678,7 @@ export class SpreadsheetYjsBinding {
   }
 
   private handleStylesChange(event: Y.YMapEvent<string>) {
-    if (event.transaction.local) return;
+    if (event.transaction.local && event.transaction.origin === this.localWriteOrigin) return;
     this.isApplyingRemote = true;
     try {
       event.changes.keys.forEach((change, key) => {
@@ -661,7 +699,7 @@ export class SpreadsheetYjsBinding {
   }
 
   private handleColWidthsChange(event: Y.YMapEvent<number>) {
-    if (event.transaction.local) return;
+    if (event.transaction.local && event.transaction.origin === this.localWriteOrigin) return;
     this.isApplyingRemote = true;
     try {
       event.changes.keys.forEach((change, key) => {
@@ -678,7 +716,7 @@ export class SpreadsheetYjsBinding {
   }
 
   private handleRowHeightsChange(event: Y.YMapEvent<number>) {
-    if (event.transaction.local) return;
+    if (event.transaction.local && event.transaction.origin === this.localWriteOrigin) return;
     this.isApplyingRemote = true;
     try {
       event.changes.keys.forEach((change, key) => {
@@ -695,7 +733,7 @@ export class SpreadsheetYjsBinding {
   }
 
   private handleMergesChange(event: Y.YMapEvent<string>) {
-    if (event.transaction.local) return;
+    if (event.transaction.local && event.transaction.origin === this.localWriteOrigin) return;
     this.isApplyingRemote = true;
     try {
       event.changes.keys.forEach((change, cellName) => {
@@ -748,7 +786,7 @@ export class SpreadsheetYjsBinding {
         this.ensureRows(row);
         const rowMap = this.yData.get(row);
         rowMap?.set(String(col), value);
-      });
+      }, this.localWriteOrigin);
       try {
         this.worksheet.setValueFromCoords(col, row, value);
       } catch { /* */ }
@@ -762,6 +800,18 @@ export class SpreadsheetYjsBinding {
   /** Convert (row, col) to "A1"-style cell name. Reuses the internal helper. */
   cellNameAt(row: number, col: number): string {
     return this.getCellName(col, row);
+  }
+
+  /** Yjs-native undo. Reverts the most recent local-write transaction
+   *  (in-cell edit, formula-bar edit, structural change, etc.). The reverted
+   *  state is then pushed back into jspreadsheet via the existing observer. */
+  undo() {
+    this.undoManager.undo();
+  }
+
+  /** Yjs-native redo. Mirror of `undo`. */
+  redo() {
+    this.undoManager.redo();
   }
 
   /** Subscribe to data changes (local or remote). Returns an unsubscribe fn. */
@@ -1242,5 +1292,6 @@ export class SpreadsheetYjsBinding {
     }
 
     this.subscribers.clear();
+    this.undoManager.destroy();
   }
 }

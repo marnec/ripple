@@ -25,6 +25,10 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
   const [draft, setDraft] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const skipNextCommitRef = useRef(false);
+  // The cell being edited is locked at focus time. Subsequent selection
+  // changes (clicking another cell while the bar is focused) must NOT
+  // redirect the commit to a different cell.
+  const editingTargetRef = useRef<{ row: number; col: number } | null>(null);
 
   // Formula picker state
   const inputRef = useRef<HTMLInputElement>(null);
@@ -53,9 +57,14 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
   };
 
   const commit = () => {
-    if (!binding || !selection) return;
-    if (draft === value) return;
-    binding.setRawCellValue(selection.row, selection.col, draft);
+    const target = editingTargetRef.current;
+    if (!binding || !target) return;
+    // Compare against the locked target's *own* current value, not `value`,
+    // which now reflects whatever cell is currently selected — they differ if
+    // the user changed selection while focused on the bar.
+    const current = binding.getRawCellValue(target.row, target.col);
+    if (draft === current) return;
+    binding.setRawCellValue(target.row, target.col, draft);
   };
 
   const insertFormula = (name: string) => {
@@ -90,7 +99,10 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
           recomputePickerPos();
         }}
         onFocus={() => {
-          setDraft(value);
+          // Lock the commit target now. If selection is null (no cell), the
+          // ref stays null and commit() will be a no-op — no accidental write.
+          editingTargetRef.current = selection;
+          setDraft(selection ? value : "");
           setIsFocused(true);
           setPickerDismissed(false);
           recomputePickerPos();
@@ -102,6 +114,7 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
             commit();
           }
           setIsFocused(false);
+          editingTargetRef.current = null;
         }}
         onKeyDown={(e) => {
           // When the picker is open, intercept navigation/commit keys.
