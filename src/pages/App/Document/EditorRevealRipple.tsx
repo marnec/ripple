@@ -13,6 +13,7 @@ const WAVE_COUNT = 2;                 // number of concentric ripples per click
 const WAVE_GAP_SEC = 0.14;            // delay between successive waves
 const SINGLE_WAVE_LIFETIME_SEC = 0.9; // how long each individual wave lives
 const FADE_OUT_TAIL_SEC = 0.35;       // global fade applied at the very end
+const MAX_CONCURRENT_RIPPLES = 8;     // simultaneous click ripples on screen
 const TOTAL_LIFETIME_SEC =
   SINGLE_WAVE_LIFETIME_SEC + (WAVE_COUNT - 1) * WAVE_GAP_SEC + FADE_OUT_TAIL_SEC;
 
@@ -24,10 +25,12 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
   uniform vec2  uResolution;
   uniform float uTime;
   uniform vec4  uEditorRect;     // (left, top, right, bottom) in device pixels, top-left origin
-  uniform vec2  uRipplePos;      // device pixels, top-left origin
-  uniform float uRippleStart;    // seconds
   uniform vec3  uColor;
+  uniform int   uActiveRipples;
+  uniform vec2  uRipplePositions[${MAX_CONCURRENT_RIPPLES}]; // device pixels, top-left origin
+  uniform float uRippleStarts[${MAX_CONCURRENT_RIPPLES}];    // seconds
 
+  const int   MAX_RIPPLES    = ${MAX_CONCURRENT_RIPPLES};
   const int   WAVE_COUNT     = ${WAVE_COUNT};
   const float WAVE_GAP       = ${WAVE_GAP_SEC};
   const float LIFETIME       = ${SINGLE_WAVE_LIFETIME_SEC};
@@ -68,29 +71,7 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
   void main() {
     vec2 px = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y);
 
-    float age = uTime - uRippleStart;
-    float totalLife = LIFETIME + float(WAVE_COUNT - 1) * WAVE_GAP + FADE_OUT_TAIL;
-    if (age < 0.0 || age > totalLife) { fragColor = vec4(0.0); return; }
-    float lifeFade = 1.0 - smoothstep(totalLife - FADE_OUT_TAIL, totalLife, age);
-
-    // Noise-perturbed distance from origin — gives the wavefront an organic wobble.
-    float d = distance(px, uRipplePos);
-    float n = (valueNoise(px * 0.012 + uTime * 0.5) - 0.5) * 6.0;
-    float dN = d + n;
-
-    // Sum brightness contributions from every active wave.
-    float ringBrightness = 0.0;
-    for (int i = 0; i < WAVE_COUNT; i++) {
-      float waveAge = age - float(i) * WAVE_GAP;
-      if (waveAge < 0.0 || waveAge > LIFETIME) continue;
-      float waveR = waveAge * SPEED;
-      float band  = 1.0 - smoothstep(0.0, RING_WIDTH, abs(dN - waveR));
-      float fade  = 1.0 - waveAge / LIFETIME;
-      ringBrightness += band * fade;
-    }
-    ringBrightness = min(ringBrightness * RING_INTENSITY, 1.0);
-
-    // Editor rectangle SDF (distance to perimeter).
+    // Editor rectangle SDF (distance to perimeter) — computed once, reused per ripple.
     vec2  center  = 0.5 * (uEditorRect.xy + uEditorRect.zw);
     vec2  halfExt = 0.5 * (uEditorRect.zw - uEditorRect.xy);
     vec2  q       = abs(px - center) - halfExt;
@@ -99,14 +80,41 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     float perim   = abs(outside + inside);
     float edgeMask = 1.0 - smoothstep(0.0, EDGE_BAND, perim);
 
-    // Edge flash tied to the first wave's wavefront — subtle reveal.
-    float impactAge = age - dN / SPEED;
-    float edgeFlash = edgeMask
-      * smoothstep(0.0, 0.04, impactAge)
-      * (1.0 - smoothstep(0.0, FLASH_DUR, impactAge))
-      * EDGE_INTENSITY;
+    float totalLife = LIFETIME + float(WAVE_COUNT - 1) * WAVE_GAP + FADE_OUT_TAIL;
+    float brightness = 0.0;
 
-    float brightness = max(ringBrightness, edgeFlash) * lifeFade;
+    for (int r = 0; r < MAX_RIPPLES; r++) {
+      if (r >= uActiveRipples) break;
+
+      float age = uTime - uRippleStarts[r];
+      if (age < 0.0 || age > totalLife) continue;
+      float lifeFade = 1.0 - smoothstep(totalLife - FADE_OUT_TAIL, totalLife, age);
+
+      vec2  pos = uRipplePositions[r];
+      float d   = distance(px, pos);
+      // Per-ripple noise offset so concurrent ripples don't share the same wobble pattern.
+      float n   = (valueNoise(px * 0.012 + uTime * 0.5 + float(r) * 13.7) - 0.5) * 6.0;
+      float dN  = d + n;
+
+      float ringBrightness = 0.0;
+      for (int i = 0; i < WAVE_COUNT; i++) {
+        float waveAge = age - float(i) * WAVE_GAP;
+        if (waveAge < 0.0 || waveAge > LIFETIME) continue;
+        float waveR = waveAge * SPEED;
+        float band  = 1.0 - smoothstep(0.0, RING_WIDTH, abs(dN - waveR));
+        float fade  = 1.0 - waveAge / LIFETIME;
+        ringBrightness += band * fade;
+      }
+      ringBrightness = min(ringBrightness * RING_INTENSITY, 1.0);
+
+      float impactAge = age - dN / SPEED;
+      float edgeFlash = edgeMask
+        * smoothstep(0.0, 0.04, impactAge)
+        * (1.0 - smoothstep(0.0, FLASH_DUR, impactAge))
+        * EDGE_INTENSITY;
+
+      brightness += max(ringBrightness, edgeFlash) * lifeFade;
+    }
 
     // Bayer-8 ordered dither for the stippled look (matches RippleLogoCanvas).
     int ix = int(mod(gl_FragCoord.x, 8.0));
@@ -171,12 +179,16 @@ export function EditorRevealRipple({
     gl.enableVertexAttribArray(positionLoc);
     gl.vertexAttribPointer(positionLoc, 2, gl.FLOAT, false, 0, 0);
 
-    const uResolutionLoc  = gl.getUniformLocation(program, "uResolution");
-    const uTimeLoc        = gl.getUniformLocation(program, "uTime");
-    const uEditorRectLoc  = gl.getUniformLocation(program, "uEditorRect");
-    const uRipplePosLoc   = gl.getUniformLocation(program, "uRipplePos");
-    const uRippleStartLoc = gl.getUniformLocation(program, "uRippleStart");
-    const uColorLoc       = gl.getUniformLocation(program, "uColor");
+    const uResolutionLoc        = gl.getUniformLocation(program, "uResolution");
+    const uTimeLoc              = gl.getUniformLocation(program, "uTime");
+    const uEditorRectLoc        = gl.getUniformLocation(program, "uEditorRect");
+    const uColorLoc             = gl.getUniformLocation(program, "uColor");
+    const uActiveRipplesLoc     = gl.getUniformLocation(program, "uActiveRipples");
+    const uRipplePositionsLoc   = gl.getUniformLocation(program, "uRipplePositions");
+    const uRippleStartsLoc      = gl.getUniformLocation(program, "uRippleStarts");
+
+    const ripplePositionsBuf = new Float32Array(MAX_CONCURRENT_RIPPLES * 2);
+    const rippleStartsBuf    = new Float32Array(MAX_CONCURRENT_RIPPLES);
 
     let colorR = 1;
     let colorG = 1;
@@ -218,18 +230,13 @@ export function EditorRevealRipple({
     gl.useProgram(program);
     gl.bindVertexArray(vao);
 
-    let ripple: RippleState | null = null;
+    let ripples: RippleState[] = [];
     let rafId = 0;
 
     const draw = (now: number) => {
       const tSec = now * 0.001;
-      if (!ripple) {
-        rafId = 0;
-        return;
-      }
-      const age = tSec - ripple.startedAt;
-      if (age > TOTAL_LIFETIME_SEC) {
-        ripple = null;
+      ripples = ripples.filter((r) => tSec - r.startedAt < TOTAL_LIFETIME_SEC);
+      if (ripples.length === 0) {
         gl.clear(gl.COLOR_BUFFER_BIT);
         rafId = 0;
         return;
@@ -249,13 +256,20 @@ export function EditorRevealRipple({
         bottom = (r.bottom - canvasRect.top)  * dpr;
       }
 
+      for (let i = 0; i < ripples.length; i++) {
+        ripplePositionsBuf[i * 2]     = ripples[i].x;
+        ripplePositionsBuf[i * 2 + 1] = ripples[i].y;
+        rippleStartsBuf[i]            = ripples[i].startedAt;
+      }
+
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform2f(uResolutionLoc, bufferW, bufferH);
       gl.uniform1f(uTimeLoc, tSec);
       gl.uniform4f(uEditorRectLoc, left, top, right, bottom);
-      gl.uniform2f(uRipplePosLoc, ripple.x, ripple.y);
-      gl.uniform1f(uRippleStartLoc, ripple.startedAt);
       gl.uniform3f(uColorLoc, colorR, colorG, colorB);
+      gl.uniform1i(uActiveRipplesLoc, ripples.length);
+      gl.uniform2fv(uRipplePositionsLoc, ripplePositionsBuf);
+      gl.uniform1fv(uRippleStartsLoc, rippleStartsBuf);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       rafId = requestAnimationFrame(draw);
@@ -265,11 +279,12 @@ export function EditorRevealRipple({
       const target = e.target as Element | null;
       if (target && target.closest(targetSelector)) return;
       const canvasRect = canvas.getBoundingClientRect();
-      ripple = {
+      ripples.push({
         x: (e.clientX - canvasRect.left) * dpr,
         y: (e.clientY - canvasRect.top) * dpr,
         startedAt: performance.now() * 0.001,
-      };
+      });
+      if (ripples.length > MAX_CONCURRENT_RIPPLES) ripples.shift();
       if (rafId === 0) rafId = requestAnimationFrame(draw);
     };
 
