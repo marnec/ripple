@@ -1,0 +1,37 @@
+/*
+ * DocumentSpotlightFrame — cursor-tracked radial mask that subtly reveals
+ * the editor's left/right column borders as the user moves their pointer
+ * across the page. CSS variables (--mx, --my, --editor-left, --editor-width)
+ * are written by the component's onMouseMove handler.
+ */
+.document-spotlight-frame {
+  position: relative;
+}
+
+.document-spotlight-frame::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--editor-left, 0);
+  width: var(--editor-width, 100%);
+  pointer-events: none;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity 0.2s;
+  -webkit-mask-image: radial-gradient(
+    circle 140px at var(--mx, -500px) var(--my, -500px),
+    black,
+    transparent
+  );
+  mask-image: radial-gradient(
+    circle 140px at var(--mx, -500px) var(--my, -500px),
+    black,
+    transparent
+  );
+}
+
+.document-spotlight-frame:hover::after {
+  opacity: 1;
+}

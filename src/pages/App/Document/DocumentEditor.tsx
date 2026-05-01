@@ -41,7 +41,9 @@ import { ActiveUsers } from "./ActiveUsers";
 import { BlockPickerDialog } from "./BlockPickerDialog";
 import { CellRefDialog } from "./CellRefDialog";
 import { ConnectionStatus } from "./ConnectionStatus";
+import { DocumentSpotlightFrame } from "./DocumentSpotlightFrame";
 import { EditorRevealRipple } from "./EditorRevealRipple";
+import { ReferencedBlocksHighlight } from "./ReferencedBlocksHighlight";
 import { documentSchema as schema } from "./schema";
 import { SnapshotFallback } from "./SnapshotFallback";
 import { useDocumentSuggestions } from "./useDocumentSuggestions";
@@ -218,24 +220,15 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const { referencedBlockIds, hasReferencedBlocks } = useReferencedBlocks(documentId);
   const [showReferencedBlocks, setShowReferencedBlocks] = useState(false);
   const [backlinksOpen, setBacklinksOpen] = useState(false);
-  // stylesActive keeps the <style> tag in the DOM during the exit transition
-  const [stylesActive, setStylesActive] = useState(false);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleToggleReferences = () => {
     if (showReferencedBlocks) {
       setShowReferencedBlocks(false);
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = setTimeout(() => setStylesActive(false), 220);
     } else {
-      clearTimeout(hideTimerRef.current);
-      setStylesActive(true);
       setShowReferencedBlocks(true);
       setBacklinksOpen(true);
     }
   };
-
-  useEffect(() => () => clearTimeout(hideTimerRef.current), []);
 
   // Protect referenced blocks from accidental deletion
   const onReferencedBlocksDeleted = (blockIds: string[]) => {
@@ -244,32 +237,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     }
   };
   useReferencedBlockDeleteProtection(editor, referencedBlockIds, onReferencedBlocksDeleted);
-
-  // Build dynamic CSS rules targeting referenced blocks by their stable data-id
-  // (ProseMirror preserves data-id but wipes custom attributes on re-render)
-  // stylesActive keeps the <style> in the DOM during exit so the transition can play out.
-  const referencedBlockStyles = (() => {
-    if (!stylesActive || referencedBlockIds.size === 0) return null;
-    const rules = [...referencedBlockIds]
-      .map((id) => `.bn-block-outer[data-id="${id}"] > .bn-block`)
-      .join(",\n");
-    if (showReferencedBlocks) {
-      return `${rules} {
-  border-left: 2px solid hsl(45 90% 50% / 0.5);
-  background-color: hsl(45 90% 50% / 0.06);
-  padding-left: 6px;
-  border-radius: 0 4px 4px 0;
-  transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
-}`;
-    }
-    // Exit state: zeroed-out values so the transition animates to nothing
-    return `${rules} {
-  border-left: 2px solid transparent;
-  background-color: transparent;
-  padding-left: 0;
-  transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
-}`;
-  })();
 
   // Cold-start snapshot fallback: offline + no editor from IndexedDB
   const { isColdStart, snapshotDoc } = useSnapshotFallback({
@@ -401,41 +368,11 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       <div className="flex-1 flex flex-col min-h-0 relative">
         <EditorRevealRipple />
         <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
-        <div
-          className="px-2 sm:px-14 max-w-full relative"
-          id="document-container"
-          onMouseMove={(e) => {
-            const container = e.currentTarget;
-            const editorEl = container.querySelector(".bn-editor");
-            const containerRect = container.getBoundingClientRect();
-            const editorRect = (editorEl ?? container).getBoundingClientRect();
-            container.style.setProperty("--editor-left", `${editorRect.left - containerRect.left}px`);
-            container.style.setProperty("--editor-width", `${editorRect.width}px`);
-            container.style.setProperty("--mx", `${e.clientX - editorRect.left}px`);
-            container.style.setProperty("--my", `${e.clientY - editorRect.top}px`);
-          }}
-        >
-          <style>{`
-            #document-container::after {
-              content: "";
-              position: absolute;
-              top: 0;
-              bottom: 0;
-              left: var(--editor-left, 0);
-              width: var(--editor-width, 100%);
-              pointer-events: none;
-              border-left: 1px solid var(--border);
-              border-right: 1px solid var(--border);
-              opacity: 0;
-              transition: opacity 0.2s;
-              -webkit-mask-image: radial-gradient(circle 140px at var(--mx, -500px) var(--my, -500px), black, transparent);
-              mask-image: radial-gradient(circle 140px at var(--mx, -500px) var(--my, -500px), black, transparent);
-            }
-            #document-container:hover::after {
-              opacity: 1;
-            }
-          `}</style>
-          {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
+        <DocumentSpotlightFrame>
+          <ReferencedBlocksHighlight
+            blockIds={referencedBlockIds}
+            active={showReferencedBlocks}
+          />
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
             <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
@@ -475,7 +412,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               onOpenChange={setBacklinksOpen}
             />
           )}
-        </div>
+        </DocumentSpotlightFrame>
         </div>
       </div>
     </div>
