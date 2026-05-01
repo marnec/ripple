@@ -8,6 +8,13 @@ import {
   parseCssColorToRgb,
 } from "@/lib/webgl-utils";
 
+// Tunable knobs — change these to taste.
+const WAVE_COUNT = 2;                 // number of concentric ripples per click
+const WAVE_GAP_SEC = 0.14;            // delay between successive waves
+const SINGLE_WAVE_LIFETIME_SEC = 0.9; // how long each individual wave lives
+const TOTAL_LIFETIME_SEC =
+  SINGLE_WAVE_LIFETIME_SEC + (WAVE_COUNT - 1) * WAVE_GAP_SEC;
+
 const fragmentShaderSource = /* glsl */ `#version 300 es
   precision highp float;
   in vec2 vUv;
@@ -20,24 +27,67 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
   uniform float uRippleStart;    // seconds
   uniform vec3  uColor;
 
-  const float SPEED      = 1800.0;  // device px / sec
-  const float LIFETIME   = 0.9;     // seconds
-  const float RING_WIDTH = 14.0;    // device px
-  const float EDGE_BAND  = 4.0;     // device px (~2px CSS at dpr=2)
-  const float FLASH_DUR  = 0.35;    // seconds
+  const int   WAVE_COUNT     = ${WAVE_COUNT};
+  const float WAVE_GAP       = ${WAVE_GAP_SEC};
+  const float LIFETIME       = ${SINGLE_WAVE_LIFETIME_SEC};
+  const float SPEED          = 1200.0;   // device px / sec
+  const float RING_WIDTH     = 2.0;     // device px
+  const float EDGE_BAND      = 2.0;      // device px (~2px CSS at dpr=2)
+  const float FLASH_DUR      = 0.45;     // seconds
+  const float RING_INTENSITY = 0.25;
+  const float EDGE_INTENSITY = 0.25;
+
+  const float bayer8[64] = float[64](
+     0.0, 32.0,  8.0, 40.0,  2.0, 34.0, 10.0, 42.0,
+    48.0, 16.0, 56.0, 24.0, 50.0, 18.0, 58.0, 26.0,
+    12.0, 44.0,  4.0, 36.0, 14.0, 46.0,  6.0, 38.0,
+    60.0, 28.0, 52.0, 20.0, 62.0, 30.0, 54.0, 22.0,
+     3.0, 35.0, 11.0, 43.0,  1.0, 33.0,  9.0, 41.0,
+    51.0, 19.0, 59.0, 27.0, 49.0, 17.0, 57.0, 25.0,
+    15.0, 47.0,  7.0, 39.0, 13.0, 45.0,  5.0, 37.0,
+    63.0, 31.0, 55.0, 23.0, 61.0, 29.0, 53.0, 21.0
+  );
+
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
+  float valueNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+      u.y
+    );
+  }
 
   void main() {
     vec2 px = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y);
 
     float age = uTime - uRippleStart;
-    if (age < 0.0 || age > LIFETIME) { fragColor = vec4(0.0); return; }
+    float totalLife = LIFETIME + float(WAVE_COUNT - 1) * WAVE_GAP;
+    if (age < 0.0 || age > totalLife) { fragColor = vec4(0.0); return; }
 
-    float lifeFade  = 1.0 - smoothstep(LIFETIME * 0.6, LIFETIME, age);
-    float wavefront = age * SPEED;
-    float d         = distance(px, uRipplePos);
+    // Noise-perturbed distance from origin — gives the wavefront an organic wobble.
+    float d = distance(px, uRipplePos);
+    float n = (valueNoise(px * 0.012 + uTime * 0.5) - 0.5) * 6.0;
+    float dN = d + n;
 
-    float ring = (1.0 - smoothstep(0.0, RING_WIDTH, abs(d - wavefront))) * 0.35 * lifeFade;
+    // Sum brightness contributions from every active wave.
+    float ringBrightness = 0.0;
+    for (int i = 0; i < WAVE_COUNT; i++) {
+      float waveAge = age - float(i) * WAVE_GAP;
+      if (waveAge < 0.0 || waveAge > LIFETIME) continue;
+      float waveR = waveAge * SPEED;
+      float band  = 1.0 - smoothstep(0.0, RING_WIDTH, abs(dN - waveR));
+      float fade  = 1.0 - waveAge / LIFETIME;
+      ringBrightness += band * fade;
+    }
+    ringBrightness = min(ringBrightness * RING_INTENSITY, 1.0);
 
+    // Editor rectangle SDF (distance to perimeter).
     vec2  center  = 0.5 * (uEditorRect.xy + uEditorRect.zw);
     vec2  halfExt = 0.5 * (uEditorRect.zw - uEditorRect.xy);
     vec2  q       = abs(px - center) - halfExt;
@@ -46,13 +96,22 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     float perim   = abs(outside + inside);
     float edgeMask = 1.0 - smoothstep(0.0, EDGE_BAND, perim);
 
-    float impactAge = age - d / SPEED;
+    // Edge flash tied to the first wave's wavefront — subtle reveal.
+    float impactAge = age - dN / SPEED;
     float edgeFlash = edgeMask
       * smoothstep(0.0, 0.04, impactAge)
-      * (1.0 - smoothstep(0.0, FLASH_DUR, impactAge));
+      * (1.0 - smoothstep(0.0, FLASH_DUR, impactAge))
+      * EDGE_INTENSITY;
 
-    float brightness = max(ring, edgeFlash * 1.2) * lifeFade;
-    fragColor = vec4(uColor, brightness);
+    float brightness = max(ringBrightness, edgeFlash);
+
+    // Bayer-8 ordered dither for the stippled look (matches RippleLogoCanvas).
+    int ix = int(mod(gl_FragCoord.x, 8.0));
+    int iy = int(mod(gl_FragCoord.y, 8.0));
+    float threshold = (bayer8[iy * 8 + ix] + 0.5) / 64.0;
+    float mask = step(threshold, brightness);
+
+    fragColor = vec4(uColor, mask);
   }
 `;
 
@@ -61,8 +120,6 @@ interface RippleState {
   y: number;
   startedAt: number;
 }
-
-const LIFETIME_SEC = 0.9;
 
 export function EditorRevealRipple({
   targetSelector = ".bn-editor",
@@ -168,7 +225,7 @@ export function EditorRevealRipple({
         return;
       }
       const age = tSec - ripple.startedAt;
-      if (age > LIFETIME_SEC) {
+      if (age > TOTAL_LIFETIME_SEC) {
         ripple = null;
         gl.clear(gl.COLOR_BUFFER_BIT);
         rafId = 0;
