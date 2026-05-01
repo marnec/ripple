@@ -7,12 +7,11 @@ type AsUser = Awaited<ReturnType<typeof setupWorkspaceWithAdmin>>["asUser"];
 
 // Per-resource-type config so the parametrized cases stay readable.
 type ResourceCfg = {
-  resourceType: "document" | "diagram" | "spreadsheet" | "project";
+  resourceType: "document" | "diagram" | "spreadsheet";
   searchApi:
     | typeof api.documents.search
     | typeof api.diagrams.search
-    | typeof api.spreadsheets.search
-    | typeof api.projects.search;
+    | typeof api.spreadsheets.search;
   create: (asUser: AsUser, workspaceId: Id<"workspaces">, name: string) => Promise<string>;
   setTags: (asUser: AsUser, id: string, tags: string[]) => Promise<unknown>;
 };
@@ -41,14 +40,6 @@ const RESOURCE_CFGS: ResourceCfg[] = [
       asUser.mutation(api.spreadsheets.create, { workspaceId, name }),
     setTags: (asUser, id, tags) =>
       asUser.mutation(api.spreadsheets.updateTags, { id: id as Id<"spreadsheets">, tags }),
-  },
-  {
-    resourceType: "project",
-    searchApi: api.projects.search,
-    create: (asUser, workspaceId, name) =>
-      asUser.mutation(api.projects.create, { workspaceId, name, color: "bg-blue-500" }),
-    setTags: (asUser, id, tags) =>
-      asUser.mutation(api.projects.update, { id: id as Id<"projects">, tags }),
   },
 ];
 

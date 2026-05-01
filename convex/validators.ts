@@ -82,5 +82,4 @@ export const projectValidator = v.object({
   creatorId: v.id("users"),
   key: v.optional(v.string()),
   taskCounter: v.optional(v.number()),
-  tags: v.optional(v.array(v.string())),
 });

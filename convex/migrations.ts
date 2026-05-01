@@ -127,8 +127,9 @@ export const runAll = migrations.runner([
   internal.migrations.backfillDocumentTags,
   internal.migrations.backfillDiagramTags,
   internal.migrations.backfillSpreadsheetTags,
-  internal.migrations.backfillProjectTags,
   internal.migrations.backfillTaskTags,
+  internal.migrations.cleanupProjectTagsField,
+  internal.migrations.cleanupProjectEntityTags,
 ]);
 
 /**
@@ -534,7 +535,7 @@ export const backfillProjectNodes = migrations.define({
       resourceType: "project",
       resourceId: doc._id,
       name: doc.name,
-      tags: doc.tags ?? [],
+      tags: [],
     });
   },
 });
@@ -587,7 +588,7 @@ async function backfillTagsForResourceRow(
   ctx: GenericMutationCtx<DataModel>,
   args: {
     workspaceId: Id<"workspaces">;
-    resourceType: "document" | "diagram" | "spreadsheet" | "project" | "task";
+    resourceType: "document" | "diagram" | "spreadsheet" | "task";
     resourceId: string;
     rawTags: readonly string[] | undefined,
   },
@@ -674,18 +675,6 @@ export const backfillSpreadsheetTags = migrations.define({
   },
 });
 
-export const backfillProjectTags = migrations.define({
-  table: "projects",
-  migrateOne: async (ctx, project) => {
-    await backfillTagsForResourceRow(ctx, {
-      workspaceId: project.workspaceId,
-      resourceType: "project",
-      resourceId: project._id,
-      rawTags: project.tags,
-    });
-  },
-});
-
 export const backfillTaskTags = migrations.define({
   table: "tasks",
   migrateOne: async (ctx, task) => {
@@ -695,6 +684,29 @@ export const backfillTaskTags = migrations.define({
       resourceId: task._id,
       rawTags: task.labels,
     });
+  },
+});
+
+// ── Project tag-association cleanup ─────────────────────────────────
+// One-shot cleanup after dropping the project↔tag association. Run via
+// `runAll` (or directly) to (a) strip any lingering `tags` field from
+// project rows and (b) delete entityTags rows that referenced a project.
+// Both are idempotent.
+
+export const cleanupProjectTagsField = migrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    const legacy = project as Record<string, unknown>;
+    if (legacy.tags === undefined) return;
+    await ctx.db.patch(project._id, { tags: undefined } as never);
+  },
+});
+
+export const cleanupProjectEntityTags = migrations.define({
+  table: "entityTags",
+  migrateOne: async (ctx, row) => {
+    if (row.resourceType !== "project") return;
+    await ctx.db.delete(row._id);
   },
 });
 

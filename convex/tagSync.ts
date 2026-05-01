@@ -9,9 +9,10 @@ import { WorkspaceRole } from "@shared/enums/roles";
 
 const TAG_NAME_MAX_LENGTH = 100;
 
-// `entityTags.resourceType` keeps the "task" literal in its union for the
-// duration of the taskTags migration window. After the migration soaks in
-// prod we can drop "task" from `entityTags`'s schema in a follow-up PR.
+// `entityTags.resourceType` keeps the "task" and "project" literals in its
+// union for the duration of the taskTags migration / project-tag-removal
+// window. After the cleanup migrations soak in prod we can drop them from
+// `entityTags`'s schema in a follow-up PR.
 export const resourceTypeSchema = v.union(
   v.literal("document"),
   v.literal("diagram"),
@@ -28,12 +29,12 @@ export type TaggableResourceType =
   | "task";
 
 /** Resources that flow through `syncTagsForResource` (excludes tasks, which
- *  are project-scoped and use `syncTaskTags` against the `taskTags` table). */
+ *  are project-scoped and use `syncTaskTags` against the `taskTags` table,
+ *  and projects, whose tag association was removed). */
 export type ListableResourceType =
   | "document"
   | "diagram"
-  | "spreadsheet"
-  | "project";
+  | "spreadsheet";
 
 /** Trim, lowercase, drop empties / over-length, dedupe. */
 export function normalizeTagList(raw: readonly string[]): string[] {
@@ -287,11 +288,10 @@ async function stripTagFromResource(
       return;
     }
     case "project": {
-      const id = resourceId as Id<"projects">;
-      const doc = await ctx.db.get(id);
-      if (!doc) return;
-      const next = (doc.tags ?? []).filter((t) => t !== tagName);
-      await ctx.db.patch(id, { tags: next });
+      // Projects no longer carry a tags field — entityTags rows for projects
+      // are residual from before the association was removed and are deleted
+      // by `cleanupProjectEntityTags` in migrations.ts. Until that migration
+      // runs in prod, deleteTag may still encounter them; nothing to patch.
       return;
     }
     case "task": {

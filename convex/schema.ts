@@ -152,7 +152,6 @@ export default defineSchema({
     creatorId: v.id("users"), // the user who created the project (the admin)
     key: v.optional(v.string()), // 2-5 char uppercase identifier (e.g., "ENG")
     taskCounter: v.optional(v.number()), // auto-increment counter for task numbers
-    tags: v.optional(v.array(v.string())),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_key", ["workspaceId", "key"])

@@ -1267,7 +1267,6 @@ export declare const api: {
         description?: string;
         key?: string;
         name: string;
-        tags?: Array<string>;
         taskCounter?: number;
         workspaceId: Id<"workspaces">;
       } | null
@@ -1284,7 +1283,6 @@ export declare const api: {
         description?: string;
         key?: string;
         name: string;
-        tags?: Array<string>;
         taskCounter?: number;
         workspaceId: Id<"workspaces">;
       }>
@@ -1309,7 +1307,6 @@ export declare const api: {
           numItems: number;
         };
         searchText?: string;
-        tags?: Array<string>;
         workspaceId: Id<"workspaces">;
       },
       {
@@ -1323,7 +1320,6 @@ export declare const api: {
           description?: string;
           key?: string;
           name: string;
-          tags?: Array<string>;
           taskCounter?: number;
           workspaceId: Id<"workspaces">;
         }>;
@@ -1340,7 +1336,6 @@ export declare const api: {
         id: Id<"projects">;
         key?: string;
         name?: string;
-        tags?: Array<string>;
       },
       null
     >;
@@ -1802,7 +1797,6 @@ export declare const api: {
           description?: string;
           key?: string;
           name: string;
-          tags?: Array<string>;
           taskCounter?: number;
           workspaceId: Id<"workspaces">;
         } | null;
@@ -2826,18 +2820,6 @@ export declare const internal: {
       },
       any
     >;
-    backfillProjectTags: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        batchSize?: number;
-        cursor?: string | null;
-        dryRun?: boolean;
-        fn?: string;
-        next?: Array<string>;
-      },
-      any
-    >;
     backfillSpreadsheetAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -2947,6 +2929,30 @@ export declare const internal: {
       any
     >;
     backfillUserNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    cleanupProjectEntityTags: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+      },
+      any
+    >;
+    cleanupProjectTagsField: FunctionReference<
       "mutation",
       "internal",
       {

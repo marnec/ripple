@@ -177,12 +177,15 @@ triggers.register("projects", async (ctx, change) => {
       resourceType: "project",
       resourceId: change.id,
       name: change.newDoc.name,
-      tags: change.newDoc.tags ?? [],
+      tags: [],
     });
   } else if (change.operation === "update") {
-    await syncNode(ctx, change.id,
-      change.newDoc.name, change.newDoc.tags ?? [],
-      change.oldDoc.name, change.oldDoc.tags ?? []);
+    if (change.newDoc.name === change.oldDoc.name) return;
+    const node = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
+      .first();
+    if (node) await ctx.db.patch(node._id, { name: change.newDoc.name });
   }
   // delete: node + edge cleanup handled by cascade rules
 });

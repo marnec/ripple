@@ -4,8 +4,6 @@ NEXT STEPS:
 
 - what happens to tasks when a column (status is deleted)?
 
-- remove tag project association
-
 - calendar; plan calls; invite guests
 
 - [ ] link previews in chat

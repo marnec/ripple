@@ -9,8 +9,7 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { projectValidator } from "./validators";
 import { requireWorkspaceMember, requireUser, requireCreator, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
-import { syncTagsForResource } from "./tagSync";
-import { searchResourcesByTag, searchResourcesByFavorite } from "./resourceSearch";
+import { searchResourcesByFavorite } from "./resourceSearch";
 import { notify } from "./utils/notify";
 
 export const create = mutation({
@@ -110,7 +109,6 @@ export const search = query({
   args: {
     workspaceId: v.id("workspaces"),
     searchText: v.optional(v.string()),
-    tags: v.optional(v.array(v.string())),
     isFavorite: v.optional(v.boolean()),
     paginationOpts: paginationOptsValidator,
   },
@@ -121,7 +119,7 @@ export const search = query({
     splitCursor: v.optional(v.union(v.string(), v.null())),
     pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
   }),
-  handler: async (ctx, { workspaceId, searchText, tags, isFavorite, paginationOpts }) => {
+  handler: async (ctx, { workspaceId, searchText, isFavorite, paginationOpts }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     if (searchText?.trim()) {
@@ -131,15 +129,6 @@ export const search = query({
           q.search("name", searchText).eq("workspaceId", workspaceId),
         )
         .paginate(paginationOpts);
-    }
-
-    if (tags && tags.length > 0) {
-      return await searchResourcesByTag(ctx, {
-        workspaceId,
-        resourceType: "project",
-        tags,
-        paginationOpts,
-      });
     }
 
     if (isFavorite === true) {
@@ -190,10 +179,9 @@ export const update = mutation({
     description: v.optional(v.string()),
     color: v.optional(v.string()),
     key: v.optional(v.string()),
-    tags: v.optional(v.array(v.string())),
   },
   returns: v.null(),
-  handler: async (ctx, { id, name, description, color, key, tags }) => {
+  handler: async (ctx, { id, name, description, color, key }) => {
     const userId = await requireUser(ctx);
 
     const project = await ctx.db.get(id);
@@ -202,18 +190,10 @@ export const update = mutation({
     requireCreator(project, userId);
 
     // Build patch object with only provided fields
-    const patch: { name?: string; description?: string; color?: string; key?: string; tags?: string[] } = {};
+    const patch: { name?: string; description?: string; color?: string; key?: string } = {};
     if (name !== undefined) patch.name = name;
     if (description !== undefined) patch.description = description;
     if (color !== undefined) patch.color = color;
-    if (tags !== undefined) {
-      patch.tags = await syncTagsForResource(ctx, {
-        workspaceId: project.workspaceId,
-        resourceType: "project",
-        resourceId: id,
-        nextTagNames: tags,
-      });
-    }
 
     // Validate and set project key
     if (key !== undefined) {
