@@ -14,6 +14,7 @@ const WAVE_GAP_SEC = 0.14;            // delay between successive waves
 const SINGLE_WAVE_LIFETIME_SEC = 0.9; // how long each individual wave lives
 const FADE_OUT_TAIL_SEC = 0.35;       // global fade applied at the very end
 const MAX_CONCURRENT_RIPPLES = 8;     // simultaneous click ripples on screen
+const OPACITY = 0.8;                  // 0..1 — overall alpha of the effect
 const TOTAL_LIFETIME_SEC =
   SINGLE_WAVE_LIFETIME_SEC + (WAVE_COUNT - 1) * WAVE_GAP_SEC + FADE_OUT_TAIL_SEC;
 
@@ -35,11 +36,12 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
   const float WAVE_GAP       = ${WAVE_GAP_SEC};
   const float LIFETIME       = ${SINGLE_WAVE_LIFETIME_SEC};
   const float FADE_OUT_TAIL  = ${FADE_OUT_TAIL_SEC};
-  const float SPEED          = 1000.0;   // device px / sec
-  const float RING_WIDTH     = 2.0;     // device px
+  const float OPACITY        = ${OPACITY};
+  const float SPEED          = 800.0;   // device px / sec
+  const float RING_WIDTH     = 4.0;     // device px
   const float EDGE_BAND      = 2.0;      // device px (~2px CSS at dpr=2)
   const float FLASH_DUR      = 0.45;     // seconds
-  const float RING_INTENSITY = 0.1;
+  const float RING_INTENSITY = 0.2;
   const float EDGE_INTENSITY = 0.2;
 
   const float bayer8[64] = float[64](
@@ -122,7 +124,7 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     float threshold = (bayer8[iy * 8 + ix] + 0.5) / 64.0;
     float mask = step(threshold, brightness);
 
-    fragColor = vec4(uColor, mask);
+    fragColor = vec4(uColor, mask * OPACITY);
   }
 `;
 
