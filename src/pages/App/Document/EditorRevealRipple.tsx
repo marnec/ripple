@@ -12,8 +12,9 @@ import {
 const WAVE_COUNT = 2;                 // number of concentric ripples per click
 const WAVE_GAP_SEC = 0.14;            // delay between successive waves
 const SINGLE_WAVE_LIFETIME_SEC = 0.9; // how long each individual wave lives
+const FADE_OUT_TAIL_SEC = 0.35;       // global fade applied at the very end
 const TOTAL_LIFETIME_SEC =
-  SINGLE_WAVE_LIFETIME_SEC + (WAVE_COUNT - 1) * WAVE_GAP_SEC;
+  SINGLE_WAVE_LIFETIME_SEC + (WAVE_COUNT - 1) * WAVE_GAP_SEC + FADE_OUT_TAIL_SEC;
 
 const fragmentShaderSource = /* glsl */ `#version 300 es
   precision highp float;
@@ -30,12 +31,13 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
   const int   WAVE_COUNT     = ${WAVE_COUNT};
   const float WAVE_GAP       = ${WAVE_GAP_SEC};
   const float LIFETIME       = ${SINGLE_WAVE_LIFETIME_SEC};
-  const float SPEED          = 1200.0;   // device px / sec
+  const float FADE_OUT_TAIL  = ${FADE_OUT_TAIL_SEC};
+  const float SPEED          = 1000.0;   // device px / sec
   const float RING_WIDTH     = 2.0;     // device px
   const float EDGE_BAND      = 2.0;      // device px (~2px CSS at dpr=2)
   const float FLASH_DUR      = 0.45;     // seconds
-  const float RING_INTENSITY = 0.25;
-  const float EDGE_INTENSITY = 0.25;
+  const float RING_INTENSITY = 0.1;
+  const float EDGE_INTENSITY = 0.2;
 
   const float bayer8[64] = float[64](
      0.0, 32.0,  8.0, 40.0,  2.0, 34.0, 10.0, 42.0,
@@ -67,8 +69,9 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     vec2 px = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y);
 
     float age = uTime - uRippleStart;
-    float totalLife = LIFETIME + float(WAVE_COUNT - 1) * WAVE_GAP;
+    float totalLife = LIFETIME + float(WAVE_COUNT - 1) * WAVE_GAP + FADE_OUT_TAIL;
     if (age < 0.0 || age > totalLife) { fragColor = vec4(0.0); return; }
+    float lifeFade = 1.0 - smoothstep(totalLife - FADE_OUT_TAIL, totalLife, age);
 
     // Noise-perturbed distance from origin — gives the wavefront an organic wobble.
     float d = distance(px, uRipplePos);
@@ -103,7 +106,7 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
       * (1.0 - smoothstep(0.0, FLASH_DUR, impactAge))
       * EDGE_INTENSITY;
 
-    float brightness = max(ringBrightness, edgeFlash);
+    float brightness = max(ringBrightness, edgeFlash) * lifeFade;
 
     // Bayer-8 ordered dither for the stippled look (matches RippleLogoCanvas).
     int ix = int(mod(gl_FragCoord.x, 8.0));
