@@ -2,13 +2,14 @@ import { ChannelVisibilityFilterButton } from "@/components/ChannelVisibilityFil
 import { FavoriteFilterButton } from "@/components/FavoriteFilterButton";
 import { ResourceSearchInput, TagFilterStrip } from "@/components/ResourceSearchInput";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Plus } from "lucide-react";
+import { Filter, LayoutGrid, LayoutList, Plus } from "lucide-react";
 import { useState } from "react";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { SearchResults } from "./SearchResults";
+import { SearchResults, type ResourceView } from "./SearchResults";
 import type { BrowsableResourceType as ResourceType } from "@shared/types/resources";
 
 type ResourceListPageProps = {
@@ -37,6 +38,7 @@ export function ResourceListPage({
   const wsId = workspaceId as Id<"workspaces">;
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(true);
+  const [view, setView] = useState<ResourceView>("cards");
 
   const {
     localSearchValue,
@@ -56,7 +58,13 @@ export function ResourceListPage({
     setIsLoading(loading);
   };
 
-  const showFilterStrip = showFavorites || resourceType === "channel" || tags.length > 0;
+  const handleViewChange = (next: ResourceView) => {
+    setView(next);
+  };
+
+  // Switcher is desktop-only and always visible there, so the strip always renders on desktop.
+  const showFilterStrip =
+    !isMobile || showFavorites || resourceType === "channel" || tags.length > 0;
 
   const createButton = onCreate ? (
     <Button onClick={onCreate} size="sm">
@@ -94,18 +102,38 @@ export function ResourceListPage({
         <div className="container mx-auto p-4 space-y-4">
           {showFilterStrip && (
             <div className="flex flex-wrap items-center gap-2">
+              {!isMobile && (
+                <Tabs value={view} onValueChange={(v) => handleViewChange(v as ResourceView)}>
+                  <TabsList className="h-10">
+                    <TabsTrigger value="cards" className="flex items-center gap-2">
+                      <LayoutGrid className="h-4 w-4" />
+                      Cards
+                    </TabsTrigger>
+                    <TabsTrigger value="list" className="flex items-center gap-2">
+                      <LayoutList className="h-4 w-4" />
+                      List
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              )}
+              <Filter className="ml-3 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               {showFavorites && (
                 <FavoriteFilterButton value={isFavorite} onToggle={handleFavoriteToggle} />
               )}
               {resourceType === "channel" && (
-                <ChannelVisibilityFilterButton value={channelVisibility} onToggle={handleChannelVisibilityToggle} />
+                <ChannelVisibilityFilterButton
+                  value={channelVisibility}
+                  onToggle={handleChannelVisibilityToggle}
+                />
               )}
-              <TagFilterStrip
-                workspaceId={wsId}
-                value={localSearchValue}
-                onChange={handleSearchChange}
-                onSubmit={handleSearchSubmit}
-              />
+              {resourceType !== "project" && (
+                <TagFilterStrip
+                  workspaceId={wsId}
+                  value={localSearchValue}
+                  onChange={handleSearchChange}
+                  onSubmit={handleSearchSubmit}
+                />
+              )}
             </div>
           )}
           <SearchResults
@@ -119,6 +147,7 @@ export function ResourceListPage({
             onLoadingChange={handleLoadingChange}
             showFavorites={showFavorites}
             subPath={subPath}
+            view={view}
           />
         </div>
       </div>

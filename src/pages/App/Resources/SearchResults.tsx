@@ -69,6 +69,8 @@ function ChannelTypeBadge({ type }: { type: string }) {
   );
 }
 
+export type ResourceView = "cards" | "list";
+
 export type SearchResultsProps = {
   workspaceId: Id<"workspaces">;
   resourceType: ResourceType;
@@ -80,6 +82,8 @@ export type SearchResultsProps = {
   onLoadingChange?: (loading: boolean) => void;
   showFavorites?: boolean;
   subPath?: string;
+  /** Desktop layout. Mobile is always list. */
+  view?: ResourceView;
 };
 
 type PaginationStatus = "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted";
@@ -130,34 +134,41 @@ function useIsLoadingCallback(
   }, [isLoading, onLoadingChange]);
 }
 
-// ─── Mobile list row ─────────────────────────────────────────────────────────
+// ─── List row (mobile + desktop list view) ───────────────────────────────────
 
-type ResourceMobileRowProps = {
+type ResourceListRowProps = {
   resource: SearchResult;
   resourceType: ResourceType;
   workspaceId: Id<"workspaces">;
   subPath?: string;
   showFavorites?: boolean;
+  swipeEnabled: boolean;
   isSwipeOpen: boolean;
   onSwipeOpenChange: (open: boolean) => void;
   onSwipeStart: () => void;
 };
 
-function ResourceMobileRow({
+function ResourceListRow({
   resource,
   resourceType,
   workspaceId,
   subPath,
   showFavorites,
+  swipeEnabled,
   isSwipeOpen,
   onSwipeOpenChange,
   onSwipeStart,
-}: ResourceMobileRowProps) {
+}: ResourceListRowProps) {
   const Icon = RESOURCE_TYPE_ICONS[resourceType];
   const isChannel = resourceType === "channel";
   const canFavorite = showFavorites !== false && !isChannel;
   const favType: FavoritableType = isChannel ? "document" : resourceType;
-  const isFavorited = useQuery(api.favorites.isFavorited, canFavorite ? { resourceId: resource._id } : "skip") ?? false;
+  // Only the mobile/swipe path needs the favorite state locally — desktop
+  // delegates to <FavoriteButton/>, which has its own subscription.
+  const isFavorited = useQuery(
+    api.favorites.isFavorited,
+    canFavorite && swipeEnabled ? { resourceId: resource._id } : "skip",
+  ) ?? false;
   const toggle = useMutation(api.favorites.toggle);
   const navigate = useNavigate();
 
@@ -174,6 +185,58 @@ function ResourceMobileRow({
     void navigate(`${resource._id}/videocall`);
   };
 
+  const to = subPath ? `${resource._id}/${subPath}` : `${resource._id}`;
+  const transitionStyle = !isChannel
+    ? ({
+        viewTransitionName: `--resource-${resource._id}`,
+        viewTransitionClass: "resource-card",
+      } as React.CSSProperties)
+    : undefined;
+
+  // Desktop list: overlay-link pattern so the FavoriteButton can sit inside
+  // a clickable row without nesting a <button> inside an <a>.
+  if (!swipeEnabled) {
+    return (
+      <div
+        className={cn(
+          "relative flex items-center gap-2.5 px-3 h-12 bg-card hover:bg-accent transition-colors text-sm",
+          isChannel ? "rounded-none" : "rounded-lg border border-border",
+        )}
+        style={transitionStyle}
+      >
+        <Link
+          to={to}
+          className="absolute inset-0 z-0 rounded-[inherit]"
+          aria-label={resource.name}
+        />
+        <Icon className="pointer-events-none h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="pointer-events-none flex-1 min-w-0 truncate font-medium">
+          {resource.name}
+        </span>
+        {isChannel && resource.type !== undefined && (
+          <span className="pointer-events-none">
+            <ChannelTypeBadge type={resource.type} />
+          </span>
+        )}
+        {canFavorite && (
+          <div className="relative z-10">
+            <FavoriteButton
+              resourceType={favType}
+              resourceId={resource._id}
+              workspaceId={workspaceId}
+            />
+          </div>
+        )}
+        {resource._creationTime != null && (
+          <span className="pointer-events-none text-xs text-muted-foreground shrink-0">
+            {compactDate(resource._creationTime)}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // Mobile list: SwipeToReveal action + Link-wrapped row.
   return (
     <SwipeToReveal
       enabled
@@ -181,14 +244,7 @@ function ResourceMobileRow({
       onOpenChange={onSwipeOpenChange}
       onSwipeStart={onSwipeStart}
       className={isChannel ? "rounded-none" : undefined}
-      style={
-        !isChannel
-          ? ({
-              viewTransitionName: `--resource-${resource._id}`,
-              viewTransitionClass: "resource-card",
-            } as React.CSSProperties)
-          : undefined
-      }
+      style={transitionStyle}
       action={
         isChannel ? (
           <button
@@ -218,9 +274,8 @@ function ResourceMobileRow({
         )
       }
     >
-      {/* Fixed-height row: icon | name | [visibility or star] | date */}
       <Link
-        to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`}
+        to={to}
         className="flex w-full items-center gap-2.5 px-3 py-2.5 bg-card hover:bg-accent transition-colors text-sm h-14"
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -286,6 +341,7 @@ export function SearchResults({
   onLoadingChange,
   showFavorites,
   subPath,
+  view = "cards",
 }: SearchResultsProps) {
   const { results, status, loadMore } = useResourceSearch(
     resourceType,
@@ -340,10 +396,11 @@ export function SearchResults({
 
   const handleLoadMore = () => loadMore(PAGE_SIZE);
 
-  // ── Mobile: separated row items with swipe-to-reveal action ─────────────
-  if (isMobile) {
-    // Channels: flat grouped list (no rounded per-item, divider-separated)
-    // Others:   pill cards with gap between each item
+  // ── List view (mobile always; desktop when view="list") ─────────────────
+  // Channels: flat grouped list (no rounded per-item, divider-separated)
+  // Others:   pill cards with gap between each item
+  const isListView = isMobile || view === "list";
+  if (isListView) {
     const isChannel = resourceType === "channel";
     return (
       <>
@@ -356,13 +413,14 @@ export function SearchResults({
           }
         >
           {rendered.map((resource) => (
-            <ResourceMobileRow
+            <ResourceListRow
               key={resource._id}
               resource={resource}
               resourceType={resourceType}
               workspaceId={workspaceId}
               subPath={subPath}
               showFavorites={showFavorites}
+              swipeEnabled={isMobile}
               isSwipeOpen={swipeOpenId === resource._id}
               onSwipeOpenChange={(open) => setSwipeOpenId(open ? resource._id : null)}
               onSwipeStart={closeAllSwipes}

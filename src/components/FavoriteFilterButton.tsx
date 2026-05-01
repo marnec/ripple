@@ -30,7 +30,7 @@ export function FavoriteFilterButton({ value, onToggle }: FavoriteFilterButtonPr
     <button
       type="button"
       onClick={onToggle}
-      className={`flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-2 text-sm transition-colors sm:px-3 ${config.className}`}
+      className={`flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-sm transition-colors sm:px-3 ${config.className}`}
     >
       <Star className={`h-4 w-4 ${config.filled ? "fill-current" : ""}`} />
       <span className="hidden sm:inline">{config.label}</span>

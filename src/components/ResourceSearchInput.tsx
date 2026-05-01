@@ -173,7 +173,7 @@ export function TagFilterStrip({ workspaceId, value, onChange, onSubmit }: TagFi
           render={
             <button
               type="button"
-              className={`flex h-10 shrink-0 items-center gap-1.5 rounded-md border px-2 text-sm transition-colors sm:px-3 ${buttonClass}`}
+              className={`flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-sm transition-colors sm:px-3 ${buttonClass}`}
             />
           }
         >
