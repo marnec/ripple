@@ -41,6 +41,7 @@ import { ActiveUsers } from "./ActiveUsers";
 import { BlockPickerDialog } from "./BlockPickerDialog";
 import { CellRefDialog } from "./CellRefDialog";
 import { ConnectionStatus } from "./ConnectionStatus";
+import { EditorRevealRipple } from "./EditorRevealRipple";
 import { documentSchema as schema } from "./schema";
 import { SnapshotFallback } from "./SnapshotFallback";
 import { useDocumentSuggestions } from "./useDocumentSuggestions";
@@ -397,13 +398,15 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         </HeaderSlot>
       )}
       <MobileHeaderTitle name={document.name} />
-      <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
+      <div className="flex-1 flex flex-col min-h-0 relative">
+        <EditorRevealRipple />
+        <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
         <div
           className="px-2 sm:px-14 max-w-full relative"
           id="document-container"
           onMouseMove={(e) => {
             const container = e.currentTarget;
-            const editorEl = container.querySelector(".bn-editor") as HTMLElement | null;
+            const editorEl = container.querySelector(".bn-editor");
             const containerRect = container.getBoundingClientRect();
             const editorRect = (editorEl ?? container).getBoundingClientRect();
             container.style.setProperty("--editor-left", `${editorRect.left - containerRect.left}px`);
@@ -472,6 +475,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               onOpenChange={setBacklinksOpen}
             />
           )}
+        </div>
         </div>
       </div>
     </div>
