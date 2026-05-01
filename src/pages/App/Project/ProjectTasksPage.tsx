@@ -101,9 +101,9 @@ function ProjectTasksContent({
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6">
+    <div className="flex-1 flex flex-col min-h-0 p-4">
       <Tabs value={effectiveView} onValueChange={(v) => setView(v as "list" | "board")} className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-start justify-between mb-2">
           <div className="flex items-center gap-3">
             {!isMobile && (
               <TabsList>
@@ -121,7 +121,7 @@ function ProjectTasksContent({
           </div>
           {!isMobile && (
             <Button size="sm" onClick={() => setDialogOpen(true)}>
-              <Plus className="h-4 w-4" />
+              <Plus  />
               New task
             </Button>
           )}

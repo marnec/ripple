@@ -853,7 +853,7 @@ function ProjectCalendarContent({
       sidebarOpen: ix.sidebar.open,
       onSidebarToggle: ix.sidebar.toggle,
     }}>
-    <div className="flex-1 flex flex-col min-h-0 px-3 pt-3 md:px-6 md:pt-6 pb-4 gap-2">
+    <div className="flex-1 flex flex-col min-h-0 p-4 gap-2">
       {/* Main area: calendar + right push sidebar (desktop only) */}
       <CalendarSidebarProvider
         open={ix.sidebar.open}

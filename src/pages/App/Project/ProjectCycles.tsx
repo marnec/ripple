@@ -77,7 +77,7 @@ function ProjectCyclesContent({
   const isEmpty = cycles !== undefined && cycles.length === 0;
 
   return (
-    <div className="container mx-auto px-4 pt-6 md:px-8 md:pt-8 ">
+    <div className="container mx-auto p-4">
       <div className="flex items-center justify-end mb-6">
         
         <Button size="sm" onClick={() => setShowCreateDialog(true)}>
