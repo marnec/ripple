@@ -856,6 +856,7 @@ export type DataModel = {
       description?: string;
       key?: string;
       name: string;
+      tags?: Array<string>;
       taskCounter?: number;
       workspaceId: Id<"workspaces">;
       _id: Id<"projects">;
@@ -869,6 +870,7 @@ export type DataModel = {
       | "description"
       | "key"
       | "name"
+      | "tags"
       | "taskCounter"
       | "workspaceId";
     indexes: {
