@@ -12,6 +12,7 @@ export function RippleSpinner({ size = 48, color = "#f5f5f4" }: { size?: number;
       height={size}
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
+      style={{ display: "block" }}
     >
       <style>{`
         @keyframes ripple {

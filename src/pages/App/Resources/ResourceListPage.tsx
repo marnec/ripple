@@ -137,7 +137,7 @@ export function ResourceListPage({
                 )}
               </div>
               {(isSearchDebouncing || isLoading) && (
-                <div className="flex h-10 shrink-0 items-center">
+                <div className="flex h-8 shrink-0 items-center">
                   <RippleSpinner size={32} />
                 </div>
               )}
