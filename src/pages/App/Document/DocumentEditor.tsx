@@ -398,7 +398,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       )}
       <MobileHeaderTitle name={document.name} />
       <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
-        <div className="px-2 sm:pl-12 sm:pr-20 max-w-full">
+        <div className="px-2 sm:pl-14 sm:pr-20 max-w-full" id="document-container">
           {referencedBlockStyles && <style>{referencedBlockStyles}</style>}
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
