@@ -113,7 +113,10 @@ export function ExcalidrawEditor({
   // Fit the diagram into view once on open. yElements may be empty at mount
   // if the user is opening a diagram cold (no IndexedDB cache) — in that case
   // wait for the first provider-sync update.
+  // The canvas stays hidden (opacity-0) until the fit lands so the user
+  // doesn't see a flash of default zoom/scroll before the fit applies.
   const fittedOnOpenRef = useRef(false);
+  const [isReady, setIsReady] = useState(false);
   useEffect(() => {
     if (!excalidrawAPI || fittedOnOpenRef.current) return;
 
@@ -122,11 +125,17 @@ export function ExcalidrawEditor({
       fittedOnOpenRef.current = true;
       requestAnimationFrame(() => {
         excalidrawAPI.scrollToContent(undefined, { fitToContent: true });
+        requestAnimationFrame(() => setIsReady(true));
       });
     };
 
     fit();
     if (fittedOnOpenRef.current) return;
+
+    // Empty at mount — reveal immediately so the user can interact with the
+    // blank canvas. If content later arrives via collab, the observer below
+    // will still fit it.
+    setIsReady(true);
 
     const observer = () => fit();
     yElements.observe(observer);
@@ -142,7 +151,11 @@ export function ExcalidrawEditor({
   };
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    <div
+      className={`relative h-full w-full overflow-hidden transition-opacity duration-200 ${
+        isReady ? "opacity-100" : "opacity-0"
+      }`}
+    >
       <style>{`
         .excalidraw .App-toolbar__extra-tools-trigger { display: none !important; }
         .excalidraw .ToolIcon__LaserPointer { display: none !important; }
