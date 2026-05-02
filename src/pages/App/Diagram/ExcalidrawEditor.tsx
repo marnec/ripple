@@ -116,7 +116,10 @@ export function ExcalidrawEditor({
   // The canvas stays hidden (opacity-0) until the fit lands so the user
   // doesn't see a flash of default zoom/scroll before the fit applies.
   const fittedOnOpenRef = useRef(false);
-  const [isReady, setIsReady] = useState(false);
+  // Empty at mount → reveal immediately so the user can interact with the
+  // blank canvas; if content arrives later via collab, the observer below
+  // will fit it. Non-empty at mount → start hidden, the rAF in fit() reveals.
+  const [isReady, setIsReady] = useState(() => yElements.length === 0);
   useEffect(() => {
     if (!excalidrawAPI || fittedOnOpenRef.current) return;
 
@@ -131,11 +134,6 @@ export function ExcalidrawEditor({
 
     fit();
     if (fittedOnOpenRef.current) return;
-
-    // Empty at mount — reveal immediately so the user can interact with the
-    // blank canvas. If content later arrives via collab, the observer below
-    // will still fit it.
-    setIsReady(true);
 
     const observer = () => fit();
     yElements.observe(observer);

@@ -29,7 +29,7 @@ const TOTAL_LIFETIME_SEC =
 //                the shortest path that stays outside the rect (routed via 1
 //                or 2 corners when the straight line is blocked). Single ring
 //                everywhere, no corner-stacking.
-const COLLISION_MODE: "huygens" | "geodesic" = "geodesic";
+const COLLISION_MODE = "geodesic" as "huygens" | "geodesic";
 
 const fragmentShaderSource = /* glsl */ `#version 300 es
   precision highp float;
