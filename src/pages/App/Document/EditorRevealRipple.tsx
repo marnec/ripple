@@ -18,8 +18,24 @@ const OPACITY = 0.8;                  // 0..1 — overall alpha of the effect
 const TOTAL_LIFETIME_SEC =
   SINGLE_WAVE_LIFETIME_SEC + (WAVE_COUNT - 1) * WAVE_GAP_SEC + FADE_OUT_TAIL_SEC;
 
+// Diffraction model — how the wavefront wraps around the editor rect's corners
+// so it can crash on edges that aren't directly visible from the click.
+//   "huygens"  — each rect corner re-emits a secondary wave when the primary
+//                front reaches it (chained around the perimeter for corners
+//                occluded from the click). On the click's shadow side, every
+//                corner that can see the pixel contributes — multiple corners
+//                can stack, producing visible interference at their overlap.
+//   "geodesic" — one wavefront, but the distance from click to each pixel is
+//                the shortest path that stays outside the rect (routed via 1
+//                or 2 corners when the straight line is blocked). Single ring
+//                everywhere, no corner-stacking.
+const COLLISION_MODE: "huygens" | "geodesic" = "geodesic";
+
 const fragmentShaderSource = /* glsl */ `#version 300 es
   precision highp float;
+
+  ${COLLISION_MODE === "huygens" ? "#define MODE_HUYGENS" : "#define MODE_GEODESIC"}
+
   in vec2 vUv;
   out vec4 fragColor;
 
@@ -48,9 +64,9 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
   // wave deforms and intensifies at impact, then dies as the front passes.
   const float COLLAPSE_REACH     = 40.0;    // device px — radius of the wall's influence
   const float COLLAPSE_PULL      = 00.0;    // device px — how much iso-distance contours bend toward the wall
-  const float COLLAPSE_CHAOS     = 40.0;    // device px — high-frequency front breakup near the wall
+  const float COLLAPSE_CHAOS     = 20.0;    // device px — high-frequency front breakup near the wall
   const float COLLAPSE_WIDEN     = 10.0;     // multiplier on RING_WIDTH at the wall (smear)
-  const float COLLAPSE_BRIGHT    = 1.6;     // brightness multiplier at the wall (compression)
+  const float COLLAPSE_BRIGHT    = 1.0;     // brightness multiplier at the wall (compression)
 
   const float bayer8[64] = float[64](
      0.0, 32.0,  8.0, 40.0,  2.0, 34.0, 10.0, 42.0,
@@ -62,6 +78,18 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     15.0, 47.0,  7.0, 39.0, 13.0, 45.0,  5.0, 37.0,
     63.0, 31.0, 55.0, 23.0, 61.0, 29.0, 53.0, 21.0
   );
+
+  // Corner index → device-pixel position. Order is fixed so the relaxation
+  // loops below can hard-code the rect's edge graph (TL↔TR, TR↔BR, BR↔BL,
+  // BL↔TL) without re-running the slab test on segments that lie exactly
+  // on the boundary.
+  //   0 = top-left, 1 = top-right, 2 = bottom-left, 3 = bottom-right
+  vec2 cornerAt(vec4 rect, int i) {
+    if (i == 0) return rect.xy;
+    if (i == 1) return vec2(rect.z, rect.y);
+    if (i == 2) return vec2(rect.x, rect.w);
+    return rect.zw;
+  }
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -78,14 +106,14 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     );
   }
 
-  // Concentric ring brightness as if the wave radiated from \`source\`, deformed
-  // by proximity to the editor wall (\`sdf\` is the unsigned distance from this
-  // pixel to the rect, 0 at the boundary). The wall's pull bends the iso-d
-  // contours inward so the front stretches into the wall, the band swells and
-  // gets noisier as coherence breaks down, and the compressed energy reads
-  // as a brightness peak right at impact — no reflection, just collapse.
-  float ringAt(vec2 px, vec2 source, float age, float seed, float sdf) {
-    float dGeo = distance(px, source);
+  // Concentric ring brightness for a wave whose front sits at radius
+  // \`age * SPEED\` from its source, evaluated at this pixel. Caller passes
+  // the source-to-pixel distance directly — straight-line for the click's
+  // primary wave, or a routed-around-corner distance for diffraction. The
+  // wall-collapse terms (chaos, widen, bright) key on the pixel's own SDF
+  // to the rect, so a corner-emitted wave still visibly crashes when its
+  // ring reaches a wall.
+  float ringAtDist(float dGeo, vec2 px, float age, float seed, float sdf) {
     float wallProx = exp(-sdf / COLLAPSE_REACH);
 
     // Pull the wavefront toward the wall: pixels near the wall appear closer
@@ -114,12 +142,21 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     return min(b * intensity, 1.0);
   }
 
-  // True if the segment from s to p crosses the AABB's interior. Slab test
-  // with safe inverses so axis-aligned segments don't blow up. Used to occlude
-  // the direct wave: pixels that sit behind the editor (relative to the click)
-  // contribute nothing — without this, the original ring keeps expanding in the
-  // math and re-emerges wherever the canvas extends past the editor.
+  // True if the segment from s to p crosses the AABB's strict interior.
+  // Slab test with safe inverses so axis-aligned segments don't blow up.
+  // The early-return guards segments where both endpoints lie on the same
+  // rect edge (e.g. corner-to-corner along a side): the slab test would
+  // otherwise mark them as "entering," which would prevent the corner-graph
+  // relaxation in MODE_HUYGENS / MODE_GEODESIC from propagating the wave
+  // along the rect's own perimeter.
   bool segmentEntersRect(vec2 s, vec2 p, vec4 rect) {
+    if ((s.x == rect.x && p.x == rect.x) ||
+        (s.x == rect.z && p.x == rect.z) ||
+        (s.y == rect.y && p.y == rect.y) ||
+        (s.y == rect.w && p.y == rect.w)) {
+      return false;
+    }
+
     vec2 d    = p - s;
     vec2 sgn  = mix(vec2(-1.0), vec2(1.0), step(vec2(0.0), d));
     vec2 invD = sgn / max(abs(d), vec2(1e-6));
@@ -134,11 +171,48 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
     return (tEnter < tExit) && (tExit > 1e-3) && (tEnter < 1.0 - 1e-3);
   }
 
+#ifdef MODE_GEODESIC
+  // Shortest path length from src to px that does not cross the rect's
+  // interior. Direct if line of sight is clear; otherwise routes via 1 or
+  // 2 of the rect's corners. The relaxation runs over the rect's 4-cycle
+  // edge graph — two iterations are enough to reach any corner from any
+  // other, three is defensive.
+  float geodesicDist(vec2 src, vec2 px, vec4 rect) {
+    if (!segmentEntersRect(src, px, rect)) {
+      return distance(src, px);
+    }
+    float w = rect.z - rect.x;
+    float h = rect.w - rect.y;
+    float d[4];
+    for (int i = 0; i < 4; i++) {
+      vec2 c = cornerAt(rect, i);
+      d[i] = segmentEntersRect(src, c, rect) ? 1e9 : distance(src, c);
+    }
+    for (int it = 0; it < 3; it++) {
+      d[1] = min(d[1], d[0] + w);  // TL → TR
+      d[0] = min(d[0], d[1] + w);  // TR → TL
+      d[3] = min(d[3], d[1] + h);  // TR → BR
+      d[1] = min(d[1], d[3] + h);  // BR → TR
+      d[2] = min(d[2], d[3] + w);  // BR → BL
+      d[3] = min(d[3], d[2] + w);  // BL → BR
+      d[0] = min(d[0], d[2] + h);  // BL → TL
+      d[2] = min(d[2], d[0] + h);  // TL → BL
+    }
+    float best = 1e9;
+    for (int i = 0; i < 4; i++) {
+      vec2 c = cornerAt(rect, i);
+      if (segmentEntersRect(c, px, rect)) continue;
+      best = min(best, d[i] + distance(c, px));
+    }
+    return best;
+  }
+#endif
+
   void main() {
     vec2 px = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y);
 
     // Editor SDF: the inside-shadow gate and the per-pixel \`sdf\` driving
-    // every collapse term inside ringAt.
+    // every collapse term inside ringAtDist.
     vec2 center  = 0.5 * (uEditorRect.xy + uEditorRect.zw);
     vec2 halfExt = 0.5 * (uEditorRect.zw - uEditorRect.xy);
     vec2 q       = abs(px - center) - halfExt;
@@ -159,11 +233,59 @@ const fragmentShaderSource = /* glsl */ `#version 300 es
         vec2  pos  = uRipplePositions[r];
         float seed = float(r) * 13.7;
 
-        // Skip pixels behind the editor so the original wave can't ghost
-        // through the rect and reappear on the far side.
-        if (segmentEntersRect(pos, px, uEditorRect)) continue;
+#ifdef MODE_HUYGENS
+        // Time at which the primary front first reaches each rect corner.
+        // Initialize from direct line of sight; corners occluded from the
+        // click stay at +inf until the relaxation pulls them in via an
+        // adjacent corner along the rect's perimeter — that's how the
+        // diffracted wave can wrap all the way to the far side of the rect.
+        float w = uEditorRect.z - uEditorRect.x;
+        float h = uEditorRect.w - uEditorRect.y;
+        float t[4];
+        for (int i = 0; i < 4; i++) {
+          vec2 c = cornerAt(uEditorRect, i);
+          t[i] = segmentEntersRect(pos, c, uEditorRect)
+            ? 1e9
+            : distance(pos, c) / SPEED;
+        }
+        for (int it = 0; it < 3; it++) {
+          t[1] = min(t[1], t[0] + w / SPEED);
+          t[0] = min(t[0], t[1] + w / SPEED);
+          t[3] = min(t[3], t[1] + h / SPEED);
+          t[1] = min(t[1], t[3] + h / SPEED);
+          t[2] = min(t[2], t[3] + w / SPEED);
+          t[3] = min(t[3], t[2] + w / SPEED);
+          t[0] = min(t[0], t[2] + h / SPEED);
+          t[2] = min(t[2], t[0] + h / SPEED);
+        }
 
-        brightness += ringAt(px, pos, age, seed, sdf) * lifeFade;
+        // Click visible → primary wave only (avoids double-imaging the ring
+        // on the lit side). Click occluded → every corner that can see this
+        // pixel re-emits its own ring as a Huygens secondary, with an age
+        // offset by when the primary first reached that corner.
+        bool clickVisible = !segmentEntersRect(pos, px, uEditorRect);
+        if (clickVisible) {
+          brightness += ringAtDist(distance(pos, px), px, age, seed, sdf) * lifeFade;
+        } else {
+          for (int c = 0; c < 4; c++) {
+            if (t[c] >= 1e8) continue;
+            vec2 corner = cornerAt(uEditorRect, c);
+            if (segmentEntersRect(corner, px, uEditorRect)) continue;
+            float cornerAge = age - t[c];
+            if (cornerAge < 0.0) continue;
+            float cornerSeed = seed + float(c + 1) * 7.3;
+            brightness += ringAtDist(distance(corner, px), px, cornerAge, cornerSeed, sdf) * lifeFade;
+          }
+        }
+#else
+        // MODE_GEODESIC: one wavefront, but its distance metric routes
+        // around the rect via 1 or 2 corners when the straight line of
+        // sight is blocked. Single ring everywhere.
+        float dGeo = geodesicDist(pos, px, uEditorRect);
+        if (dGeo < 1e8) {
+          brightness += ringAtDist(dGeo, px, age, seed, sdf) * lifeFade;
+        }
+#endif
       }
     }
 
