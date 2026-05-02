@@ -140,6 +140,12 @@ export default class PresenceServer extends Server {
     }
   }
 
+  onError(_conn: Connection, error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("Network connection lost")) return;
+    console.error(`Presence connection error in workspace ${this.name}:`, error);
+  }
+
   onClose(conn: Connection, _code: number, _reason: string, _wasClean: boolean) {
     const state = conn.state as ConnectionState | undefined;
     if (!state?.userId) return;

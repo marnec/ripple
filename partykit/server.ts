@@ -291,6 +291,18 @@ export default class CollaborationServer extends YServer {
   }
 
   /**
+   * Connection-level error handler. Required by partyserver ≥0.5 to silence its
+   * default "implement onError" complaint. "Network connection lost" with
+   * `retryable: true` is the expected outcome of an abrupt tab close — onClose
+   * will fire next and handle cleanup. Surface anything else.
+   */
+  onError(_conn: Connection, error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("Network connection lost")) return;
+    console.error(`Connection error in room ${this.name}:`, error);
+  }
+
+  /**
    * Handle alarms for disconnect save and permission checks.
    * YServer handles periodic saves via its debounced callback — we only use
    * alarms for disconnect debounce and permission re-validation.
