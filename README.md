@@ -45,8 +45,6 @@ keyboard accessiblity
     - [ ] reintroduce formatting?
 
 - tag system follow-ups
-    - [ ] run `migrateTaskEntityTagsToTaskTags` on prod once it soaks, then drop the `task` literal from `entityTags.resourceType` union
-    - [ ] run `backfillTaskTagsAssigneeId` on prod after the schema deploy soaks so existing taskTags rows pick up the denormalized `assigneeId`
     - [ ] cycle-scoped tag filter — `taskTags` already has room for a `[cycleId, tagId]` index when needed
 
 - task query scaling

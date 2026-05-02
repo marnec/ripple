@@ -14,21 +14,6 @@ import { notify } from "./utils/notify";
 import { channelTypeSchema } from "./schema";
 import type { Doc } from "./_generated/dataModel";
 
-/**
- * Normalize a channel doc to guarantee `type` is set, falling back from legacy `isPublic`.
- *
- * TODO(channel-type-migration): delete this helper and all its call sites after
- * running `migrations:migrateChannelIsPublicToType` in prod and making `type`
- * required in schema.ts. Until then, any read of `channel.type` must funnel
- * through this helper because prod data still has `isPublic` without `type`.
- */
-function normalizeChannel<T extends Doc<"channels">>(channel: T): T & { type: "open" | "closed" | "dm" } {
-  if (channel.type !== undefined) return channel as T & { type: "open" | "closed" | "dm" };
-  const legacy = channel as Record<string, unknown>;
-  const isPublic = legacy.isPublic as boolean | undefined;
-  return { ...channel, type: isPublic === false ? "closed" as const : "open" as const };
-}
-
 export const create = mutation({
   args: {
     name: v.string(),
@@ -95,7 +80,7 @@ export const list = query({
       .query("channels")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .collect();
-    return channels.map(normalizeChannel).map((c) => ({
+    return channels.map((c) => ({
       _id: c._id,
       _creationTime: c._creationTime,
       name: c.name,
@@ -122,13 +107,12 @@ export const get = query({
     if (!channel) return null;
     const auth = await checkWorkspaceMember(ctx, channel.workspaceId);
     if (!auth) return null;
-    const n = normalizeChannel(channel);
     return {
-      _id: n._id,
-      _creationTime: n._creationTime,
-      name: n.name,
-      workspaceId: n.workspaceId,
-      type: n.type,
+      _id: channel._id,
+      _creationTime: channel._creationTime,
+      name: channel.name,
+      workspaceId: channel.workspaceId,
+      type: channel.type,
     };
   },
 });
@@ -238,7 +222,7 @@ export const search = query({
 
     return {
       ...result,
-      page: result.page.map(normalizeChannel).map((c) => ({
+      page: result.page.map((c) => ({
         _id: c._id,
         name: c.name,
         type: c.type,
@@ -261,13 +245,12 @@ export const getInternal = internalQuery({
   handler: async (ctx, { id }) => {
     const channel = await ctx.db.get(id);
     if (!channel) return null;
-    const n = normalizeChannel(channel);
     return {
-      _id: n._id,
-      _creationTime: n._creationTime,
-      name: n.name,
-      workspaceId: n.workspaceId,
-      type: n.type,
+      _id: channel._id,
+      _creationTime: channel._creationTime,
+      name: channel.name,
+      workspaceId: channel.workspaceId,
+      type: channel.type,
     };
   },
 });
@@ -296,7 +279,6 @@ export const listByUserMembership = query({
       .collect();
 
     return [...memberChannels, ...openChannels]
-      .map(normalizeChannel)
       .sort((a, b) => b._creationTime - a._creationTime)
       .map((c) => ({
         _id: c._id,
@@ -431,9 +413,8 @@ export const getAccessInfo = query({
     v.null(),
   ),
   handler: async (ctx, { channelId }) => {
-    const rawChannel = await ctx.db.get(channelId);
-    if (!rawChannel) return null;
-    const channel = normalizeChannel(rawChannel);
+    const channel = await ctx.db.get(channelId);
+    if (!channel) return null;
 
     const auth = await checkWorkspaceMember(ctx, channel.workspaceId);
     if (!auth) return null;

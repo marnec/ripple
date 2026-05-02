@@ -207,64 +207,6 @@ describe("deleteTag spans entityTags + taskTags", () => {
   });
 });
 
-// ── migration ────────────────────────────────────────────────────────
-
-// The @convex-dev/migrations runner is out-of-process, so testing the
-// migration here means re-running migrateOne's body inline against a
-// crafted pre-migration fixture. Validates the schema/cascade contract,
-// not the runner itself.
-describe("migrateTaskEntityTagsToTaskTags (logic check)", () => {
-  it("moves task entityTags rows to taskTags, leaves non-task rows alone", async () => {
-    const t = createTestContext();
-    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
-    const { projectId } = await setupProject(t, { workspaceId, userId });
-
-    // Pre-migration fixture: a task with a legacy entityTags row.
-    const taskId = await asUser.mutation(api.tasks.create, {
-      projectId, workspaceId, title: "x",
-    });
-    const tagId = await asUser.mutation(api.tagSync.createTag, {
-      workspaceId, name: "legacy",
-    });
-    await t.run(async (ctx) => {
-      await ctx.db.insert("entityTags", {
-        workspaceId, tagId, tagName: "legacy",
-        resourceType: "task", resourceId: taskId,
-      });
-    });
-    // A non-task entityTags row that must remain after migration.
-    const docId = await asUser.mutation(api.documents.create, { workspaceId });
-    await asUser.mutation(api.documents.updateTags, { id: docId, tags: ["docs"] });
-
-    // Simulate migrateOne over every row.
-    await t.run(async (ctx) => {
-      const rows = await ctx.db.query("entityTags").collect();
-      for (const row of rows) {
-        if (row.resourceType !== "task") continue;
-        const task = await ctx.db.get(row.resourceId as Id<"tasks">);
-        if (task) {
-          await ctx.db.insert("taskTags", {
-            workspaceId: row.workspaceId,
-            projectId: task.projectId,
-            taskId: task._id,
-            tagId: row.tagId,
-            tagName: row.tagName,
-            completed: task.completed,
-          });
-        }
-        await ctx.db.delete(row._id);
-      }
-    });
-
-    expect((await listTaskTags(t, taskId)).map((j) => j.tagName)).toEqual(["legacy"]);
-    expect((await listEntityTagsForResource(t, docId)).map((r) => r.tagName)).toEqual(["docs"]);
-    const afterTaskRows = await t.run(async (ctx) =>
-      ctx.db.query("entityTags").withIndex("by_resource_id", (q) => q.eq("resourceId", taskId)).collect(),
-    );
-    expect(afterTaskRows).toHaveLength(0);
-  });
-});
-
 describe("backfillTaskTagsAssigneeId (logic check)", () => {
   it("populates assigneeId on existing taskTags rows from the source task", async () => {
     const t = createTestContext();

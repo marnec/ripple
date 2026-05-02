@@ -70,12 +70,7 @@ export default defineSchema({
   channels: defineTable({
     name: v.string(),
     workspaceId: v.id("workspaces"),
-    // TODO(channel-type-migration): make `type` required and remove `isPublic`
-    // after running `migrations:migrateChannelIsPublicToType` in prod. See also:
-    // `normalizeChannel` in channels.ts, the inline fallback in workspaceSidebarData.ts,
-    // and the migration itself in migrations.ts.
-    type: v.optional(channelTypeSchema),
-    isPublic: v.optional(v.boolean()),
+    type: channelTypeSchema,
   })
   .index("by_workspace", ["workspaceId"])
   .index("by_type_workspace", ["type", "workspaceId"])
@@ -218,7 +213,6 @@ export default defineSchema({
       v.literal("diagram"),
       v.literal("spreadsheet"),
       v.literal("project"),
-      v.literal("task"),
     ),
     resourceId: v.string(),
   })
@@ -470,7 +464,6 @@ export default defineSchema({
     targetNodeId: v.optional(v.id("nodes")),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
-    groupId: v.optional(v.string()), // TODO: remove after stripEdgeGroupId migration runs
   })
     .index("by_target", ["targetId"])
     .index("by_source", ["sourceId"])

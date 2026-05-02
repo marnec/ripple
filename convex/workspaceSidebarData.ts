@@ -3,7 +3,6 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireWorkspaceMember } from "./authHelpers";
 import { channelTypeSchema } from "./schema";
-import { getUserDisplayName } from "@shared/displayName";
 
 export const get = query({
   args: { workspaceId: v.id("workspaces") },
@@ -118,35 +117,16 @@ export const get = query({
         name: s.name,
         tags: s.tags,
       })),
-      channels: await Promise.all(allChannels.map(async (raw) => {
-        // TODO(channel-type-migration): drop the `legacy.isPublic` fallback after
-        // running `migrations:migrateChannelIsPublicToType` in prod. Replace with
-        // `const type = raw.type;` once the schema guarantees it.
-        const legacy = raw as Record<string, unknown>;
-        const type = raw.type ?? (legacy.isPublic === false ? "closed" as const : "open" as const);
-        const c = { ...raw, type };
+      channels: await Promise.all(allChannels.map(async (c) => {
         let name = c.name;
         if (c.type === "dm" && !name) {
-          // Legacy DM with empty name — resolve from channelMembers. Prefer the
-          // denormalized name on the channelMember row; fall back to the users
-          // table for rows written before denormalization landed.
-          //
-          // TODO(channelmember-denormalization-backfill): after running
-          // `migrations:runBackfillChannelMemberDenormalized` in prod, drop the
-          // `ctx.db.get(otherMember.userId)` fallback — `otherMember.name` will
-          // always be set.
           const dmMembers = await ctx.db
             .query("channelMembers")
             .withIndex("by_channel", (q) => q.eq("channelId", c._id))
             .collect();
           const otherMember = dmMembers.find((m) => m.userId !== userId);
-          if (otherMember) {
-            if (otherMember.name) {
-              name = otherMember.name;
-            } else {
-              const otherUser = await ctx.db.get(otherMember.userId);
-              name = otherUser ? getUserDisplayName(otherUser) : "Unknown";
-            }
+          if (otherMember?.name) {
+            name = otherMember.name;
           }
         }
         return {

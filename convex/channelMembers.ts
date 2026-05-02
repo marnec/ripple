@@ -52,19 +52,10 @@ export const membersByChannel = query({
       .withIndex("by_channel", (q) => q.eq("channelId", channelId))
       .collect();
 
-    return Promise.all(
-      members.map(async (member) => {
-        if (member.name) {
-          return { ...member, name: member.name } satisfies ChannelMember;
-        }
-        // TODO(channelmember-denormalization-backfill): drop this fallback after
-        // running `migrations:runBackfillChannelMemberDenormalized` in prod.
-        // Replace the whole block with `return { ...member, name: member.name! }`.
-        const user = await ctx.db.get(member.userId);
-        if (!user) return null;
-        return { ...member, name: getUserDisplayName(user) } satisfies ChannelMember;
-      }),
-    ).then((users) => users.filter((u) => u !== null));
+    return members.map((member) => ({
+      ...member,
+      name: member.name ?? member.email ?? "Unknown",
+    } satisfies ChannelMember));
   },
 });
 

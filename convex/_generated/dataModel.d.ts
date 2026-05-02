@@ -303,20 +303,13 @@ export type DataModel = {
   };
   channels: {
     document: {
-      isPublic?: boolean;
       name: string;
-      type?: "open" | "closed" | "dm";
+      type: "open" | "closed" | "dm";
       workspaceId: Id<"workspaces">;
       _id: Id<"channels">;
       _creationTime: number;
     };
-    fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "isPublic"
-      | "name"
-      | "type"
-      | "workspaceId";
+    fieldPaths: "_creationTime" | "_id" | "name" | "type" | "workspaceId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -483,7 +476,6 @@ export type DataModel = {
       createdAt: number;
       createdBy?: Id<"users">;
       edgeType: "embeds" | "blocks" | "relates_to" | "mentions" | "belongs_to";
-      groupId?: string;
       sourceId: string;
       sourceNodeId?: Id<"nodes">;
       sourceType: "document" | "task" | "diagram" | "spreadsheet" | "channel";
@@ -507,7 +499,6 @@ export type DataModel = {
       | "createdAt"
       | "createdBy"
       | "edgeType"
-      | "groupId"
       | "sourceId"
       | "sourceNodeId"
       | "sourceType"
@@ -532,7 +523,7 @@ export type DataModel = {
   entityTags: {
     document: {
       resourceId: string;
-      resourceType: "document" | "diagram" | "spreadsheet" | "project" | "task";
+      resourceType: "document" | "diagram" | "spreadsheet" | "project";
       tagId: Id<"tags">;
       tagName: string;
       workspaceId: Id<"workspaces">;
