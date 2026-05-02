@@ -91,7 +91,7 @@
     "uuid4": "2.0.3",
     "vaul": "1.1.2",
     "web-push": "3.6.7",
-    "zod": "^3.25.76",
+    "zod": "4.4.2",
     "partyserver": "0.5.5",
     "partysocket": "1.1.18",
     "y-excalidraw": "2.0.12",
