@@ -96,8 +96,8 @@
     "partysocket": "1.1.18",
     "y-excalidraw": "2.0.12",
     "y-indexeddb": "9.0.12",
-    "y-partyserver": "2.1.3",
-    "yjs": "13.6.29"
+    "y-partyserver": "2.2.0",
+    "yjs": "13.6.30"
   },
   "overrides": {
     "y-excalidraw": {

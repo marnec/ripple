@@ -98,14 +98,23 @@ export function useYjsProvider(opts: {
         // (auth_error handler + status:disconnected can both trigger it)
         let recreationTriggered = false;
 
-        // Create provider with pre-fetched token (static params).
-        // Use static params (pre-fetched token) rather than async params function.
-        // Tokens are reusable for 5 minutes, so auto-reconnect works with the same
-        // token. For expiration beyond 5min, auth_error → triggerRecreation handles
-        // it by creating a fresh provider with a new token.
+        // First params() call returns the pre-fetched token (no redundant fetch).
+        // y-partyserver ≥2.1.4 re-evaluates params() on every reconnect, so
+        // subsequent calls fetch a fresh token — covering the >5min token-expiry
+        // window automatically. auth_error → triggerRecreation still handles
+        // permanent rejections (revoked access, room mismatch).
+        let pendingToken: string | null = initialToken;
         const newProvider = new YProvider(host, roomId, yDoc, {
           connect: true,
-          params: { token: initialToken },
+          params: async () => {
+            if (pendingToken) {
+              const token = pendingToken;
+              pendingToken = null;
+              return { token };
+            }
+            const { token } = await getTokenRef.current({ resourceType, resourceId });
+            return { token };
+          },
         });
 
         if (cancelled) {

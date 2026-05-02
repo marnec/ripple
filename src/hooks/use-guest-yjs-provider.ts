@@ -90,9 +90,24 @@ export function useGuestYjsProvider(opts: {
       const host = import.meta.env.VITE_PARTYKIT_HOST || "localhost:1999";
       let recreationTriggered = false;
 
+      // First params() call returns the pre-fetched token; reconnects re-fetch
+      // a fresh one. Requires y-partyserver ≥2.1.4.
+      let pendingToken: string | null = initialToken;
       const newProvider = new YProvider(host, roomId, yDoc, {
         connect: true,
-        params: { token: initialToken },
+        params: async () => {
+          if (pendingToken) {
+            const token = pendingToken;
+            pendingToken = null;
+            return { token };
+          }
+          const { token } = await getGuestTokenRef.current({
+            shareId,
+            guestSub,
+            guestName,
+          });
+          return { token };
+        },
       });
 
       if (cancelled) {
