@@ -2649,6 +2649,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2661,6 +2663,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2673,6 +2677,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2685,6 +2691,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2697,6 +2705,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2709,6 +2719,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2721,6 +2733,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2733,6 +2747,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2745,6 +2761,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2757,6 +2775,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2769,6 +2789,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2781,6 +2803,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2793,6 +2817,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2805,6 +2831,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2817,6 +2845,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2829,6 +2859,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2841,6 +2873,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2853,6 +2887,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2865,6 +2901,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2877,6 +2915,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2889,6 +2929,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2901,6 +2943,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2913,6 +2957,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2925,6 +2971,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2937,6 +2985,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2949,6 +2999,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2972,6 +3024,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2984,6 +3038,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -2996,6 +3052,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3008,6 +3066,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3020,6 +3080,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3032,6 +3094,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3044,6 +3108,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3056,6 +3122,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3068,6 +3136,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3080,6 +3150,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3092,6 +3164,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3104,6 +3178,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3116,6 +3192,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -3128,6 +3206,8 @@ export declare const internal: {
         dryRun?: boolean;
         fn?: string;
         next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
       },
       any
     >;
@@ -4064,6 +4144,7 @@ export declare const components: {
           name: string;
           next?: Array<{ fnHandle: string; name: string }>;
           oneBatchOnly?: boolean;
+          reset?: boolean;
         },
         {
           batchSize?: number;
