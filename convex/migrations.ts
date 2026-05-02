@@ -129,8 +129,6 @@ export const runAll = migrations.runner([
   internal.migrations.backfillDocumentTags,
   internal.migrations.backfillDiagramTags,
   internal.migrations.backfillSpreadsheetTags,
-  internal.migrations.backfillTaskTags,
-  internal.migrations.migrateTaskEntityTagsToTaskTags,
   internal.migrations.backfillTaskTagsSortFields,
   internal.migrations.backfillTaskTagsAssigneeId,
   internal.migrations.cleanupProjectTagsField,
@@ -593,7 +591,7 @@ async function backfillTagsForResourceRow(
   ctx: GenericMutationCtx<DataModel>,
   args: {
     workspaceId: Id<"workspaces">;
-    resourceType: "document" | "diagram" | "spreadsheet" | "task";
+    resourceType: "document" | "diagram" | "spreadsheet";
     resourceId: string;
     rawTags: readonly string[] | undefined,
   },
@@ -676,18 +674,6 @@ export const backfillSpreadsheetTags = migrations.define({
       resourceType: "spreadsheet",
       resourceId: doc._id,
       rawTags: doc.tags,
-    });
-  },
-});
-
-export const backfillTaskTags = migrations.define({
-  table: "tasks",
-  migrateOne: async (ctx, task) => {
-    await backfillTagsForResourceRow(ctx, {
-      workspaceId: task.workspaceId,
-      resourceType: "task",
-      resourceId: task._id,
-      rawTags: task.labels,
     });
   },
 });
@@ -886,43 +872,6 @@ export const backfillNotificationSubscriptions = migrations.define({
         }
       }
     }
-  },
-});
-
-/**
- * Move task→tag joins from the polymorphic `entityTags` table to the new
- * `taskTags` table. Walks every entityTags row; only acts on those with
- * resourceType === "task". Looks up the task to capture projectId and
- * completed (denormalized on taskTags), inserts the new row, then deletes
- * the legacy one. Orphaned task entityTags (task already deleted) are
- * dropped without re-creating.
- *
- * Idempotent — once an entityTags row is moved it's gone, so re-running is
- * safe and a no-op.
- *
- * Direct `ctx.db` writes intentionally bypass `writerWithTriggers` —
- * migrations sit outside the runtime invariants (uniqueness etc. is already
- * guaranteed by the source data).
- */
-export const migrateTaskEntityTagsToTaskTags = migrations.define({
-  table: "entityTags",
-  migrateOne: async (ctx, row) => {
-    if (row.resourceType !== "task") return;
-
-    const taskId = row.resourceId as Id<"tasks">;
-    const task = await ctx.db.get(taskId);
-    if (task) {
-      await ctx.db.insert("taskTags", {
-        workspaceId: row.workspaceId,
-        projectId: task.projectId,
-        taskId,
-        tagId: row.tagId,
-        tagName: row.tagName,
-        completed: task.completed,
-      });
-    }
-
-    await ctx.db.delete(row._id);
   },
 });
 

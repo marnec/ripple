@@ -1,9 +1,9 @@
-.bn-shadcn .bn-suggestion-menu {
+.bn-suggestion-menu {
   height: fit-content;
   max-height: inherit;
 }
 
-.bn-shadcn .bn-grid-suggestion-menu {
+.bn-grid-suggestion-menu {
   max-height: inherit;
 }
 

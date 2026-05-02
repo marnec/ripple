@@ -2892,18 +2892,6 @@ export declare const internal: {
       },
       any
     >;
-    backfillTaskTags: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        batchSize?: number;
-        cursor?: string | null;
-        dryRun?: boolean;
-        fn?: string;
-        next?: Array<string>;
-      },
-      any
-    >;
     backfillTaskTagsAssigneeId: FunctionReference<
       "mutation",
       "internal",
@@ -2976,18 +2964,6 @@ export declare const internal: {
       }
     >;
     migrateChannelIsPublicToType: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        batchSize?: number;
-        cursor?: string | null;
-        dryRun?: boolean;
-        fn?: string;
-        next?: Array<string>;
-      },
-      any
-    >;
-    migrateTaskEntityTagsToTaskTags: FunctionReference<
       "mutation",
       "internal",
       {
