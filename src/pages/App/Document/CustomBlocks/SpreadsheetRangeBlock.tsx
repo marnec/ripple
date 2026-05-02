@@ -1,4 +1,4 @@
-import { defaultProps } from "@blocknote/core";
+import { defaultProps, type BlockConfig } from "@blocknote/core";
 import {
   createReactBlockSpec,
   type ReactCustomBlockRenderProps,
@@ -30,9 +30,7 @@ const spreadsheetRangePropSchema = {
 } as const;
 
 type SpreadsheetRangeProps = ReactCustomBlockRenderProps<
-  "spreadsheetRange",
-  typeof spreadsheetRangePropSchema,
-  "none"
+  BlockConfig<"spreadsheetRange", typeof spreadsheetRangePropSchema, "none">
 >;
 
 // ---------------------------------------------------------------------------

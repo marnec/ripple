@@ -35,7 +35,7 @@ export function useYjsProvider(opts: {
   const [provider, setProvider] = useState<YProvider | null>(null);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const providerRef = useRef<YProvider | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnectedRef = useRef(false);
   const recreationCountRef = useRef(0);
   const lastConnectTimeRef = useRef(0);

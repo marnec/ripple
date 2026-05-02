@@ -39,7 +39,7 @@ export function useGuestYjsProvider(opts: {
   const [provider, setProvider] = useState<YProvider | null>(null);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const providerRef = useRef<YProvider | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recreationCountRef = useRef(0);
 
   const yDoc = useMemo(() => new Y.Doc(), []);

@@ -1,6 +1,6 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { useDiagramPreview } from "@/hooks/use-diagram-preview";
-import { defaultProps } from "@blocknote/core";
+import { defaultProps, type BlockConfig } from "@blocknote/core";
 import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blocknote/react";
 import { CircleSlash } from "lucide-react";
 import { useRef, useState } from "react";
@@ -82,7 +82,9 @@ const diagramPropSchema = {
   },
 } as const;
 
-type DiagramBlockProps = ReactCustomBlockRenderProps<"diagram", typeof diagramPropSchema, "none">;
+type DiagramBlockProps = ReactCustomBlockRenderProps<
+  BlockConfig<"diagram", typeof diagramPropSchema, "none">
+>;
 
 const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   const { diagramId } = block.props;

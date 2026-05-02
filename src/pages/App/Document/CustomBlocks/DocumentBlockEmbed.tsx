@@ -1,5 +1,5 @@
 import { useDocumentBlockPreview } from "@/hooks/use-document-block-preview";
-import { defaultProps } from "@blocknote/core";
+import { defaultProps, type BlockConfig } from "@blocknote/core";
 import { createReactBlockSpec, type ReactCustomBlockRenderProps } from "@blocknote/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { CircleSlash } from "lucide-react";
@@ -96,9 +96,7 @@ const documentBlockEmbedPropSchema = {
 } as const;
 
 type DocumentBlockEmbedProps = ReactCustomBlockRenderProps<
-  "documentBlockEmbed",
-  typeof documentBlockEmbedPropSchema,
-  "none"
+  BlockConfig<"documentBlockEmbed", typeof documentBlockEmbedPropSchema, "none">
 >;
 
 const DocumentBlockEmbedRenderer = ({ block }: DocumentBlockEmbedProps) => {
