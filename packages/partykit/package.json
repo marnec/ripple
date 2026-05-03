@@ -10,6 +10,7 @@
     "./presence-server": "./src/presence-server.ts"
   },
   "dependencies": {
+    "@ripple/shared": "workspace:^",
     "partyserver": "0.5.5",
     "y-partyserver": "2.2.0",
     "yjs": "13.6.30"
