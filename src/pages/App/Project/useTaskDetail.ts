@@ -249,13 +249,16 @@ export function useTaskDetail({
     return () => { unsubscribe(); };
   }, [editor, taskId, workspaceId, notifyMentions, syncMentionEdges]);
 
-  // Sync title when task loads
-  useEffect(() => {
+  // Sync title when task loads — render-time derived state from server.
+  const [prevServerTitle, setPrevServerTitle] = useState<string | undefined>(
+    task?.title,
+  );
+  if (task?.title !== prevServerTitle) {
+    setPrevServerTitle(task?.title);
     if (task?.title && task.title !== titleValue) {
       setTitleValue(task.title);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task?.title]);
+  }
 
   const handleTitleBlur = () => {
     if (taskId && titleValue.trim() && titleValue !== task?.title) {

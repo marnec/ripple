@@ -20,7 +20,7 @@ import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { Label } from "@/components/ui/label";
 import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { LogOut, Settings } from "lucide-react";
@@ -36,8 +36,6 @@ export function UserSettingsDialog({
 }) {
   const [settings, updateSettings] = useUserSettings();
   const pushNotifications = usePushNotifications();
-  const pushRef = useRef(pushNotifications);
-  pushRef.current = pushNotifications;
   const navigate = useNavigate();
   const { workspaceId } = useParams();
   const leaveWorkspace = useMutation(api.workspaceMembers.leave);
@@ -82,9 +80,9 @@ export function UserSettingsDialog({
     try {
       updateSettings({ notificationsEnabled: enabled });
       if (enabled) {
-        await pushRef.current.subscribeUser();
+        await pushNotifications.subscribeUser();
       } else {
-        await pushRef.current.unsubscribeUser();
+        await pushNotifications.unsubscribeUser();
       }
     } finally {
       setBusy(false);

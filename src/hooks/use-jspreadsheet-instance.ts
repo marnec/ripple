@@ -1,6 +1,6 @@
 import { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import jspreadsheet from "jspreadsheet-ce";
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useEffect, useEffectEvent, useRef } from "react";
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 
@@ -32,10 +32,13 @@ export function useJSpreadsheetInstance({
 }: UseJSpreadsheetInstanceOptions) {
   const worksheetRef = useRef<Worksheet>(null);
   const bindingRef = useRef<SpreadsheetYjsBinding | null>(null);
-  // Latest onSelectionChange callback — kept in a ref so the main effect
-  // doesn't re-run when the parent passes a fresh function each render.
-  const onSelectionChangeRef = useRef(onSelectionChange);
-  onSelectionChangeRef.current = onSelectionChange;
+  // useEffectEvent captures the latest callback without forcing the main
+  // effect to re-run when the parent passes a fresh function each render.
+  const emitSelectionChange = useEffectEvent(
+    (sel: { x1: number; y1: number; x2: number; y2: number } | null) => {
+      onSelectionChange?.(sel);
+    },
+  );
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -85,7 +88,7 @@ export function useJSpreadsheetInstance({
       },
       onselection(instance: any, x1: any, y1: any, x2: any, y2: any) {
         binding?.onselection(instance, x1, y1, x2, y2);
-        onSelectionChangeRef.current?.({ x1, y1, x2, y2 });
+        emitSelectionChange({ x1, y1, x2, y2 });
       },
       // jspreadsheet fires onblur when the worksheet loses focus (user clicks
       // outside the grid — sidebar, page background, etc.). Mirror that into
@@ -94,7 +97,7 @@ export function useJSpreadsheetInstance({
       // onFocus, but onFocus reads `selection` from its closure (pre-clear),
       // so the lock target is captured correctly.
       onblur() {
-        onSelectionChangeRef.current?.(null);
+        emitSelectionChange(null);
       },
       oneditionstart(_instance: any, td: HTMLTableCellElement) {
         onEditionStart(td, wrapper);

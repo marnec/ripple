@@ -6,7 +6,7 @@ export type AnyEditor = {
   onBeforeChange: (
     callback: (context: {
       getChanges: () => Array<{
-        block: { id: string; type: string; props: Record<string, unknown>; children?: unknown[] };
+        block: { id: string; type: string; props: Record<string, unknown>; content?: unknown; children?: unknown[] };
         source: { type: string };
         type: string;
         prevBlock: unknown;

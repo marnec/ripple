@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 
 /** Minimal editor shape required by useEditorTracking. */
 type TrackableEditor = {
@@ -28,13 +28,19 @@ export function useEditorTracking(
   const prevRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keep callbacks in refs so effect deps stay stable
-  const onRemovedRef = useRef(options?.onRemoved);
-  onRemovedRef.current = options?.onRemoved;
-  const onChangedRef = useRef(options?.onChanged);
-  onChangedRef.current = options?.onChanged;
-  const syncOnMountRef = useRef(options?.syncOnMount);
-  syncOnMountRef.current = options?.syncOnMount;
+  // useEffectEvent captures the latest option values without forcing
+  // them into the effect's dependency array.
+  const handleRemoved = useEffectEvent((removed: Set<string>) => {
+    options?.onRemoved?.(removed);
+  });
+  const handleChanged = useEffectEvent(
+    (current: Set<string>, previous: Set<string>) => {
+      options?.onChanged?.(current, previous);
+    },
+  );
+  const hasOnRemoved = useEffectEvent(() => options?.onRemoved != null);
+  const hasOnChanged = useEffectEvent(() => options?.onChanged != null);
+  const getSyncOnMount = useEffectEvent(() => options?.syncOnMount ?? false);
 
   const debounceMs = options?.debounceMs ?? 2000;
 
@@ -45,8 +51,8 @@ export function useEditorTracking(
     prevRef.current = initial;
 
     // Optionally sync on mount (e.g. embed tracking needs to register pre-existing refs)
-    if (syncOnMountRef.current && initial.size > 0) {
-      onChangedRef.current?.(initial, new Set());
+    if (getSyncOnMount() && initial.size > 0) {
+      handleChanged(initial, new Set());
     }
 
     const unsubscribe = editor.onChange(() => {
@@ -56,20 +62,20 @@ export function useEditorTracking(
         const prev = prevRef.current;
 
         // Removals
-        if (onRemovedRef.current) {
+        if (hasOnRemoved()) {
           const removed = new Set<string>();
           for (const key of prev) {
             if (!current.has(key)) removed.add(key);
           }
-          if (removed.size > 0) onRemovedRef.current(removed);
+          if (removed.size > 0) handleRemoved(removed);
         }
 
         // Full-set change
-        if (onChangedRef.current) {
+        if (hasOnChanged()) {
           const changed =
             current.size !== prev.size ||
             [...current].some((k) => !prev.has(k));
-          if (changed) onChangedRef.current(current, prev);
+          if (changed) handleChanged(current, prev);
         }
 
         prevRef.current = current;

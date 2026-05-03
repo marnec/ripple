@@ -12,6 +12,7 @@ export function useCalendarSync(
   bgEvents: BackgroundEvent[],
 ): void {
   const bgEventsKeyRef = useRef("");
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => {
     if (!calendarApp) return;
     const key = bgEvents.map((e) => `${String(e.start)}:${String(e.end)}`).join("|");

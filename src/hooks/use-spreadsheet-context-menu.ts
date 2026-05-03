@@ -124,6 +124,9 @@ export function useSpreadsheetContextMenu(
 
   const act = (fn: (w: Worksheet, ctx: ClickContext) => void) => {
     return () => {
+      // Ref read happens at click time, not during render — the closure
+      // returned here is only invoked from menu-item click handlers.
+      // eslint-disable-next-line react-hooks/refs
       const w = worksheetRef.current;
       if (!w || !menu) return;
       fn(w, menu.ctx);

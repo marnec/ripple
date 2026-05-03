@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import type { QueryParams } from "@shared/types/routes";
 import { useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import type { Id } from "../../../../convex/_generated/dataModel";
@@ -29,8 +29,12 @@ export function SpreadsheetImport() {
   const [status, setStatus] = useState<Status>("parsing");
   const [statusMessage, setStatusMessage] = useState("Reading file…");
   const [sheets, setSheets] = useState<ParsedWorksheet[]>([]);
+  // File and fileName are seeded synchronously once workspaceId is known.
+  // `pendingFile === undefined` means we haven't tried to consume yet.
+  const [pendingFile, setPendingFile] = useState<File | null | undefined>(
+    undefined,
+  );
   const [fileName, setFileName] = useState("");
-  const startedRef = useRef(false);
 
   const cancel = () => {
     void navigate(`/workspaces/${workspaceId ?? ""}/spreadsheets`, {
@@ -64,17 +68,23 @@ export function SpreadsheetImport() {
     }
   };
 
-  useEffect(() => {
-    if (startedRef.current || !workspaceId) return;
-    startedRef.current = true;
+  // Synchronously consume the pending file the first time we have a
+  // workspaceId. Render-time setState avoids the eslint set-state-in-effect
+  // rule and keeps fileName in sync with the file we'll parse.
+  if (workspaceId && pendingFile === undefined) {
+    const f = consumePendingImportFile();
+    setPendingFile(f);
+    if (f) setFileName(f.name);
+  }
 
-    const file = consumePendingImportFile();
-    if (!file) {
+  useEffect(() => {
+    if (pendingFile === undefined) return; // not consumed yet
+    if (pendingFile === null) {
       cancel();
       return;
     }
-    setFileName(file.name);
 
+    const file = pendingFile;
     void (async () => {
       try {
         setStatusMessage("Parsing spreadsheet…");
@@ -105,7 +115,7 @@ export function SpreadsheetImport() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId]);
+  }, [pendingFile]);
 
   if (status === "picking") {
     return (

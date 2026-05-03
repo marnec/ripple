@@ -26,7 +26,7 @@ import {
 import { computeHofstadterLabels } from "@/lib/calendar-utils";
 import { useQuery } from "convex-helpers/react/cache";
 import { Clock, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { DatePickerField } from "./DatePickerField";
@@ -88,14 +88,17 @@ export function TaskProperties({
   const showSuggestions = autocompleteOpen && suggestions.length > 0;
 
   // Keep the highlighted suggestion valid as the query changes.
-  useEffect(() => {
+  // Tracking the query in state lets us update derived `highlight` at
+  // render time — avoiding a useEffect for derived state.
+  const [prevQuery, setPrevQuery] = useState(normalizedQuery);
+  if (prevQuery !== normalizedQuery) {
+    setPrevQuery(normalizedQuery);
     if (suggestions.length === 0) {
-      setHighlight("");
+      if (highlight !== "") setHighlight("");
     } else if (!suggestions.includes(highlight)) {
       setHighlight(suggestions[0]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedQuery, suggestions.length]);
+  }
 
   const pickSuggestion = (tag: string) => {
     const current = task.labels ?? [];

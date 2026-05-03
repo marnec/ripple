@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import type { AnyEditor } from "./editor-types";
 
 const TOAST_DURATION = 5000;
@@ -15,10 +15,12 @@ export function useReferencedBlockDeleteProtection(
   onBlocksDeleted?: (blockIds: string[]) => void,
 ): void {
   const programmaticRef = useRef<Set<string>>(new Set());
-  const referencedRef = useRef(referencedBlockIds);
-  referencedRef.current = referencedBlockIds;
-  const onBlocksDeletedRef = useRef(onBlocksDeleted);
-  onBlocksDeletedRef.current = onBlocksDeleted;
+  const isReferenced = useEffectEvent((id: string) =>
+    referencedBlockIds.has(id),
+  );
+  const handleBlocksDeleted = useEffectEvent((ids: string[]) => {
+    onBlocksDeleted?.(ids);
+  });
 
   useEffect(() => {
     if (!editor || !editor.isEditable) return;
@@ -30,7 +32,7 @@ export function useReferencedBlockDeleteProtection(
         (c) =>
           c.type === "delete" &&
           c.source.type === "local" &&
-          referencedRef.current.has(c.block.id) &&
+          isReferenced(c.block.id) &&
           !programmaticRef.current.has(c.block.id),
       );
 
@@ -39,11 +41,20 @@ export function useReferencedBlockDeleteProtection(
       for (const del of refDeletions) {
         const blockId = del.block.id;
 
-        // Capture block data for undo
+        // Capture block data for undo. Preserve `id` so other docs'
+        // documentBlockEmbeds still resolve after restore. Deep-clone
+        // `content` and `children` because BlockNote/ProseMirror can
+        // empty live references once the underlying node is removed.
         const blockData = {
+          id: blockId,
           type: del.block.type,
           props: { ...del.block.props },
-          children: del.block.children,
+          content: del.block.content
+            ? (JSON.parse(JSON.stringify(del.block.content)) as unknown)
+            : undefined,
+          children: del.block.children
+            ? (JSON.parse(JSON.stringify(del.block.children)) as unknown[])
+            : undefined,
         };
 
         // Programmatically remove (bypasses this hook on re-entry)
@@ -58,7 +69,7 @@ export function useReferencedBlockDeleteProtection(
 
         // Schedule cleanup after undo window expires
         const cleanupTimer = setTimeout(() => {
-          onBlocksDeletedRef.current?.([blockId]);
+          handleBlocksDeleted([blockId]);
         }, TOAST_DURATION + 200);
 
         toast.error("Referenced block removed", {

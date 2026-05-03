@@ -67,6 +67,7 @@ export function ShareDialog({
 
   const activeShares = useMemo(() => {
     if (!shares) return [];
+    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     return shares.filter(
       (s) =>

@@ -73,6 +73,12 @@ export function useAnimatedQuery<T>(
     /* eslint-enable react-hooks/refs */
   }
 
+  // Initial data load: rendered was initialized to a null liveData; sync
+  // synchronously without animation as soon as real data arrives.
+  if (!Object.is(liveData, rendered) && liveData != null && rendered == null) {
+    setRendered(liveData);
+  }
+
   // ── Effect: animated & absorbed paths ─────────────────────────────
   useEffect(() => {
     // Already in sync
@@ -81,11 +87,8 @@ export function useAnimatedQuery<T>(
       return;
     }
 
-    // Don't animate the initial data load
-    if (rendered == null) {
-      setRendered(liveData);
-      return;
-    }
+    // Initial data load handled at render-time above
+    if (rendered == null) return;
 
     // Buffer old data while query is loading (e.g. Convex re-subscribing
     // after search param change). Keep showing stale results so persisting

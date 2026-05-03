@@ -116,27 +116,40 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   const editor = useCreateBlockNote(editorConfig);
 
-  // Restore editor content when editing an existing message
-  useEffect(() => {
-    if (!editor?._tiptapEditor?.isInitialized) return;
-    editor._tiptapEditor.commands.clearContent();
+  // Reset image state synchronously when the edit target changes — keeps
+  // image fields in lockstep with `editingMessage` without an effect.
+  const [prevEditingId, setPrevEditingId] = useState(editingMessage.id);
+  if (prevEditingId !== editingMessage.id) {
+    setPrevEditingId(editingMessage.id);
     setImagePreview(null);
     setImageUrls(null);
     setIsUploadingImage(false);
-
     if (editingMessage.id && editingMessage.body) {
-      const blocks: any[] = JSON.parse(editingMessage.body);
-      const imageBlock = blocks.find((b: any) => b.type === "image");
-      if (imageBlock?.props?.url) {
-        const url = imageBlock.props.url as string;
-        const fullUrl = (imageBlock.props.fullUrl as string) || url;
-        setImagePreview(url);
-        setImageUrls({ url, fullUrl });
-      }
-      const textBlocks = blocks.filter((b: any) => b.type !== "image");
-      if (textBlocks.length > 0) {
-        editor.replaceBlocks(editor.document, textBlocks);
-      }
+      try {
+        const blocks: any[] = JSON.parse(editingMessage.body);
+        const imageBlock = blocks.find((b: any) => b.type === "image");
+        if (imageBlock?.props?.url) {
+          const url = imageBlock.props.url as string;
+          const fullUrl = (imageBlock.props.fullUrl as string) || url;
+          setImagePreview(url);
+          setImageUrls({ url, fullUrl });
+        }
+      } catch { /* malformed body — leave image state cleared */ }
+    }
+  }
+
+  // Editor content manipulation must run after editor init — stays in effect.
+  useEffect(() => {
+    if (!editor?._tiptapEditor?.isInitialized) return;
+    editor._tiptapEditor.commands.clearContent();
+    if (editingMessage.id && editingMessage.body) {
+      try {
+        const blocks: any[] = JSON.parse(editingMessage.body);
+        const textBlocks = blocks.filter((b: any) => b.type !== "image");
+        if (textBlocks.length > 0) {
+          editor.replaceBlocks(editor.document, textBlocks);
+        }
+      } catch { /* malformed body — leave editor cleared */ }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);

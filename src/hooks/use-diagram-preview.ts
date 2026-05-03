@@ -53,9 +53,9 @@ export function useDiagramPreview(
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
+  const cacheKey = `${diagramId}-${resolvedTheme}`;
   const [localSvg, setLocalSvg] = useState<string | null>(() => {
     // Check cache on initial render
-    const cacheKey = `${diagramId}-${resolvedTheme}`;
     const cached = svgCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return cached.svg;
@@ -64,6 +64,20 @@ export function useDiagramPreview(
   });
   const [isLocalLoading, setIsLocalLoading] = useState(true);
   const [refreshCounter, setRefreshCounter] = useState(0);
+
+  // Hydrate from the module cache synchronously when the cache key changes
+  // (e.g. theme switch or diagramId change). Render-time setState avoids
+  // a wasted no-op effect cycle.
+  const [prevCacheKey, setPrevCacheKey] = useState(cacheKey);
+  if (prevCacheKey !== cacheKey) {
+    setPrevCacheKey(cacheKey);
+    const cached = svgCache.get(cacheKey);
+    // eslint-disable-next-line react-hooks/purity
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      setLocalSvg(cached.svg);
+      setIsLocalLoading(false);
+    }
+  }
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSnapshotUrlRef = useRef<string | null>(null);
@@ -83,14 +97,7 @@ export function useDiagramPreview(
   useEffect(() => {
     let cancelled = false;
     const currentTheme = resolvedTheme ?? "light";
-    const cacheKey = `${diagramId}-${currentTheme}`;
-
-    // Check cache first
-    const cached = svgCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      setLocalSvg(cached.svg);
-      setIsLocalLoading(false);
-    }
+    const effectCacheKey = `${diagramId}-${currentTheme}`;
 
     // Helper: generate SVG from current Yjs state
     const generateSvg = async () => {
@@ -121,7 +128,7 @@ export function useDiagramPreview(
         if (!cancelled) {
           const svgHtml = svg.outerHTML;
           setLocalSvg(svgHtml);
-          svgCache.set(cacheKey, {
+          svgCache.set(effectCacheKey, {
             svg: svgHtml,
             theme: currentTheme,
             timestamp: Date.now(),
