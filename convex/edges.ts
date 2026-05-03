@@ -125,13 +125,13 @@ export async function getEnrichedBacklinks(
     const node = nodeByEdgeId.get(edge._id);
     return {
       _id: edge._id,
-      sourceType: edge.sourceType as string,
+      sourceType: edge.sourceType,
       sourceId: edge.sourceId,
       sourceName: node
         ? (edge.sourceType === "channel" ? `#${node.name}` : node.name)
         : `Deleted ${edge.sourceType}`,
-      edgeType: edge.edgeType as string,
-      workspaceId: edge.workspaceId as string,
+      edgeType: edge.edgeType,
+      workspaceId: edge.workspaceId,
       projectId:
         node?.metadata?.type === "task" ? node.metadata.projectId : undefined,
     };
@@ -442,7 +442,7 @@ export const listByTask = query({
         _id: t._id,
         title: t.title,
         number: t.number,
-        projectKey: projectById.get(t.projectId as string)?.key,
+        projectKey: projectById.get(t.projectId)?.key,
         completed: t.completed,
       };
     };

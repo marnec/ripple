@@ -52,11 +52,7 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
 
   const [addOpen, setAddOpen] = useState(false);
 
-  const { blocks, blockedBy, relatesTo } = (deps ?? { blocks: [], blockedBy: [], relatesTo: [] }) as {
-    blocks: DependencyItem[];
-    blockedBy: DependencyItem[];
-    relatesTo: DependencyItem[];
-  };
+  const { blocks, blockedBy, relatesTo } = (deps ?? { blocks: [], blockedBy: [], relatesTo: [] });
 
   const totalCount = blocks.length + blockedBy.length + relatesTo.length;
   const hasDeps = totalCount > 0;

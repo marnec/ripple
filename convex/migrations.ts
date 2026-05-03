@@ -353,7 +353,7 @@ export const backfillAuditScope = internalMutation({
           if (id) {
             const doc = await ctx.db.get(id);
             if (doc) {
-              workspaceId = doc.workspaceId as string;
+              workspaceId = doc.workspaceId;
             }
           }
         }
@@ -449,7 +449,7 @@ export const stripTaskStartDate = migrations.define({
   migrateOne: async (ctx, task) => {
     const legacy = task as Record<string, unknown>;
     if (legacy.startDate !== undefined) {
-      await ctx.db.patch(task._id, { startDate: undefined } as any);
+      await ctx.db.patch(task._id, { startDate: undefined });
     }
   },
 });

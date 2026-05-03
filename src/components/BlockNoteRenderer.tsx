@@ -290,7 +290,7 @@ function DocumentBlockEmbedRenderer({ props }: { props?: Record<string, unknown>
     documentId ? { id: documentId as Id<"documents"> } : "skip",
   );
   const { textContent, blockType } = useDocumentBlockPreview(
-    (documentId ?? "") as Id<"documents">,
+    (documentId ?? ""),
     blockId ?? "",
   );
 

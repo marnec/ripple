@@ -11,7 +11,7 @@ export const ProjectReference = createReactInlineContentSpec(
     type: "projectReference",
     propSchema: {
       projectId: {
-        default: "" as unknown as string,
+        default: "",
       },
     },
     content: "none",

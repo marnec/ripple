@@ -56,6 +56,6 @@ export async function notify(
     url: args.url,
     recipientIds: "recipientIds" in args ? args.recipientIds.map(String) : undefined,
     scope: "scope" in args ? args.scope : undefined,
-    resourceId: args.resourceId as string | undefined,
+    resourceId: args.resourceId,
   });
 }

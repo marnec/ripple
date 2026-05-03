@@ -8,7 +8,7 @@ export const TaskMention = createReactInlineContentSpec(
     type: "taskMention",
     propSchema: {
       taskId: {
-        default: "" as unknown as string,
+        default: "",
       },
       taskTitle: {
         default: "",

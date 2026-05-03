@@ -96,7 +96,7 @@ function CycleDetailContent({
     <div className="flex-1 flex flex-col min-h-0">
       <MobileHeaderTitle name={cycle.name} />
       <CycleHeader
-        cycle={cycle as { name: string; status: string; totalTasks: number; completedTasks: number; progressPercent: number; startDate?: string; dueDate?: string }}
+        cycle={cycle}
         onEdit={() => setShowEditDialog(true)}
         onAddTasks={() => setShowAddDialog(true)}
       />
@@ -136,7 +136,7 @@ function CycleDetailContent({
                     onClick={() =>
                       void removeTask({
                         cycleId,
-                        taskId: task._id as Id<"tasks">,
+                        taskId: task._id,
                       })
                     }
                     className="flex items-center justify-center w-full bg-destructive text-destructive-foreground"
@@ -154,7 +154,7 @@ function CycleDetailContent({
                       statuses={statuses ?? undefined}
                       onStatusChange={(statusId) => {
                         void updateTask({
-                          taskId: task._id as Id<"tasks">,
+                          taskId: task._id,
                           statusId: statusId as Id<"taskStatuses">,
                         });
                       }}
@@ -164,7 +164,7 @@ function CycleDetailContent({
                             `/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`
                           );
                         } else {
-                          setSelectedTaskId(task._id as Id<"tasks">);
+                          setSelectedTaskId(task._id);
                         }
                       }}
                     />
@@ -175,7 +175,7 @@ function CycleDetailContent({
                       onClick={() =>
                         void removeTask({
                           cycleId,
-                          taskId: task._id as Id<"tasks">,
+                          taskId: task._id,
                         })
                       }
                       className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 p-1 rounded hover:bg-accent"
@@ -206,7 +206,7 @@ function CycleDetailContent({
       <AddTasksToCycleDialog
         cycleId={cycleId}
         projectId={projectId}
-        existingTaskIds={new Set(cycleTasks?.map((t) => t._id as string) ?? [])}
+        existingTaskIds={new Set(cycleTasks?.map((t) => t._id) ?? [])}
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
       />

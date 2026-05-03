@@ -42,7 +42,7 @@ export function useCalendarSync(
     }
     for (const [id, event] of newMap) {
       if (!existingMap.has(id)) {
-        calendarApp.events.add(event as any);
+        calendarApp.events.add(event);
       } else {
         const prev = existingMap.get(id)!;
         const prevMeta = isTaskEvent(prev) ? prev._meta : undefined;
@@ -55,7 +55,7 @@ export function useCalendarSync(
           prevMeta?.statusColor !== newMeta.statusColor ||
           prevMeta?.hasEstimate !== newMeta.hasEstimate
         ) {
-          calendarApp.events.update(event as any);
+          calendarApp.events.update(event);
         }
       }
     }

@@ -9,10 +9,10 @@ export const ResourceReference = createReactInlineContentSpec(
     type: "resourceReference",
     propSchema: {
       resourceId: {
-        default: "" as unknown as string,
+        default: "",
       },
       resourceType: {
-        default: "" as unknown as string,
+        default: "",
       },
       resourceName: {
         default: "",

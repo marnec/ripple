@@ -54,7 +54,7 @@ export async function sendPushToFilteredUsers(
     {
       recipientIds: userIds.map(String),
       category,
-      resourceId: resourceId as string | undefined,
+      resourceId: resourceId,
     },
   );
 

@@ -492,7 +492,7 @@ triggers.register("tasks", async (ctx, change) => {
   if (!completedChanged && !projectChanged && !dueDateChanged && !startDateChanged && !assigneeChanged) return;
   const joins = await ctx.db
     .query("taskTags")
-    .withIndex("by_task", (q) => q.eq("taskId", change.id as Id<"tasks">))
+    .withIndex("by_task", (q) => q.eq("taskId", change.id))
     .collect();
   for (const join of joins) {
     const patch: {
@@ -558,10 +558,10 @@ triggers.register("workspaceMembers", async (ctx, change) => {
 triggers.register("channels", async (ctx, change) => {
   if (change.operation === "insert" && change.newDoc.type === "open") {
     if (isTest) {
-      await onPublicChannelInsert(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
+      await onPublicChannelInsert(ctx, change.id, change.newDoc.workspaceId);
     } else {
       await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.publicChannelCreated, {
-        channelId: change.id as Id<"channels">,
+        channelId: change.id,
         workspaceId: change.newDoc.workspaceId,
       });
     }
@@ -570,18 +570,18 @@ triggers.register("channels", async (ctx, change) => {
     const isOpen = change.newDoc.type === "open";
     if (wasOpen && !isOpen) {
       if (isTest) {
-        await onChannelMadePrivate(ctx, change.id as Id<"channels">);
+        await onChannelMadePrivate(ctx, change.id);
       } else {
         await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePrivate, {
-          channelId: change.id as Id<"channels">,
+          channelId: change.id,
         });
       }
     } else if (!wasOpen && isOpen) {
       if (isTest) {
-        await onChannelMadePublic(ctx, change.id as Id<"channels">, change.newDoc.workspaceId);
+        await onChannelMadePublic(ctx, change.id, change.newDoc.workspaceId);
       } else {
         await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePublic, {
-          channelId: change.id as Id<"channels">,
+          channelId: change.id,
           workspaceId: change.newDoc.workspaceId,
         });
       }

@@ -122,7 +122,7 @@ export const usePushNotifications = () => {
 
   const subscribeUser = () =>
     doSubscribeUser(
-      registerSubscription as (args: PushSubscriptionJSON & { device: string }) => Promise<unknown>,
+      registerSubscription,
       deviceId,
       setPermission,
       setIsSubscribed,

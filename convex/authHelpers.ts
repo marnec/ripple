@@ -36,12 +36,12 @@ export async function getWorkspaceMembership(
 
 /** Returns userId or null. Thin wrapper so callers import one module. */
 export async function getUser(ctx: Ctx): Promise<Id<"users"> | null> {
-  return await getAuthUserId(ctx as QueryCtx);
+  return await getAuthUserId(ctx);
 }
 
 /** Authenticate + require login. Throws ConvexError if not logged in. */
 export async function requireUser(ctx: Ctx): Promise<Id<"users">> {
-  const userId = await getAuthUserId(ctx as QueryCtx);
+  const userId = await getAuthUserId(ctx);
   if (!userId) throw new ConvexError("Not authenticated");
   return userId;
 }
@@ -116,7 +116,7 @@ export async function requireResourceMember<T extends WorkspaceResource>(
     throw new ConvexError("Insufficient permissions");
   }
 
-  return { userId, resource: resource as Doc<T>, membership };
+  return { userId, resource: resource, membership };
 }
 
 /**
@@ -138,7 +138,7 @@ export async function checkResourceMember<T extends WorkspaceResource>(
   const membership = await getWorkspaceMembership(ctx, workspaceId, userId);
   if (!membership) return null;
 
-  return { userId, resource: resource as Doc<T>, membership };
+  return { userId, resource: resource, membership };
 }
 
 // ─── Channel access ──────────────────────────────────────────────────

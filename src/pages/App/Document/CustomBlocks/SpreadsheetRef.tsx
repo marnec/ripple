@@ -21,7 +21,7 @@ export const SpreadsheetLink = createReactInlineContentSpec(
   {
     type: "spreadsheetLink",
     propSchema: {
-      spreadsheetId: { default: "" as unknown as string },
+      spreadsheetId: { default: "" },
     },
     content: "none",
   } as const,
@@ -91,7 +91,7 @@ export const SpreadsheetCellRef = createReactInlineContentSpec(
   {
     type: "spreadsheetCellRef",
     propSchema: {
-      spreadsheetId: { default: "" as unknown as string },
+      spreadsheetId: { default: "" },
       cellRef: { default: "" },
     },
     content: "none",

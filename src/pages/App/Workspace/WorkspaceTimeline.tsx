@@ -286,7 +286,7 @@ export function WorkspaceTimeline({ workspaceId, hiddenTypes }: { workspaceId: I
   const queryResult = useQuery(
     api.workspaceTimeline.list,
     isVisible ? { workspaceId, limit: MAX_FETCH, resourceTypes } : "skip",
-  ) as TimelineEntry[] | undefined;
+  );
 
   // Keep showing previous entries while new query loads (prevents flash)
   // Keep previous results visible while new query loads (prevents flash).

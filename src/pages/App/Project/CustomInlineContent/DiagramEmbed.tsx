@@ -9,7 +9,7 @@ export const DiagramEmbed = createReactInlineContentSpec(
     type: "diagramEmbed",
     propSchema: {
       diagramId: {
-        default: "" as unknown as string,
+        default: "",
       },
     },
     content: "none",

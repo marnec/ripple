@@ -108,7 +108,7 @@ async function enrichWithMentionedTasks<T extends { body: string }>(
   if (taskIds.length > 0) {
     const tasks = await getAll(ctx.db, taskIds as Id<"tasks">[]);
     tasks.forEach((t, i) => {
-      taskMap.set(taskIds[i], t ? { title: t.title, projectId: t.projectId as string, statusId: t.statusId as string } : null);
+      taskMap.set(taskIds[i], t ? { title: t.title, projectId: t.projectId, statusId: t.statusId } : null);
     });
   }
 

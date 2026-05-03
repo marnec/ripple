@@ -105,7 +105,7 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
       const nextStatus = statuses[(idx + 1) % statuses.length];
       void updateTask({
         taskId: taskId as Id<"tasks">,
-        statusId: nextStatus._id as Id<"taskStatuses">,
+        statusId: nextStatus._id,
       });
       setSwipeOpenId(null);
     };
@@ -151,7 +151,7 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
                 style={isMobile ? {
                   viewTransitionName: `--task-${task._id}`,
                   viewTransitionClass: "task-card",
-                } as React.CSSProperties : undefined}
+                } : undefined}
                 action={
                   nextStatus ? (
                     <button
@@ -178,13 +178,13 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
                   hideStatusMenu={isMobile}
                   flush={isMobile}
                   onStatusChange={(statusId) => {
-                    void updateTask({ taskId: task._id as Id<"tasks">, statusId: statusId as Id<"taskStatuses"> });
+                    void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
                   }}
                   onClick={() => {
                     if (isMobile) {
                       void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
                     } else {
-                      setSelectedTaskId(task._id as Id<"tasks">);
+                      setSelectedTaskId(task._id);
                     }
                   }}
                 />

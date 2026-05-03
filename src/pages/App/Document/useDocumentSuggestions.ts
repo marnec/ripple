@@ -84,7 +84,7 @@ export function useDocumentSuggestions({
         if (!editor) return;
         if (resourceType === "diagram") {
           editor.insertBlocks(
-            [{ type: "diagram" as const, props: { diagramId: resourceId as Id<"diagrams"> } as any }],
+            [{ type: "diagram" as const, props: { diagramId: resourceId } }],
             editor.getTextCursorPosition().block,
             "after",
           );
@@ -157,7 +157,7 @@ export function useDocumentSuggestions({
         ]);
       } else {
         editor.insertBlocks(
-          [{ type: "spreadsheetRange" as const, props: { spreadsheetId, cellRef } as any }],
+          [{ type: "spreadsheetRange" as const, props: { spreadsheetId, cellRef } }],
           editor.getTextCursorPosition().block,
           "after",
         );
@@ -179,7 +179,7 @@ export function useDocumentSuggestions({
     editor.focus();
 
     editor.insertBlocks(
-      [{ type: "documentBlockEmbed" as const, props: { documentId, blockId } as any }],
+      [{ type: "documentBlockEmbed" as const, props: { documentId, blockId } }],
       editor.getTextCursorPosition().block,
       "after",
     );

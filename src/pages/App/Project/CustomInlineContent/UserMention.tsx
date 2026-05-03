@@ -10,7 +10,7 @@ export const UserMention = createReactInlineContentSpec(
     type: "userMention",
     propSchema: {
       userId: {
-        default: "" as unknown as string,
+        default: "",
       },
     },
     content: "none",

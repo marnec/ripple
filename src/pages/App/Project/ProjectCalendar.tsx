@@ -250,7 +250,7 @@ function buildTaskEvents(
         end: Temporal.PlainDate.from(endDate),
         calendarId,
         _meta: meta,
-      } as TaskCalendarEvent;
+      };
     });
 }
 
@@ -286,7 +286,7 @@ function buildWorkPeriodEvents(task: EnrichedTask): TaskCalendarEvent[] {
         end: Temporal.PlainDate.from(endDate),
         calendarId: CAL_ACTUAL,
         _meta: meta,
-      } as TaskCalendarEvent;
+      };
     });
 }
 
@@ -943,7 +943,7 @@ function ProjectCalendarContent({
 
       <CycleDetailSheet
         cycle={ix.cycleSheet.cycle}
-        tasks={cycleTasks as EnrichedTask[] | undefined}
+        tasks={cycleTasks}
         onClose={ix.cycleSheet.onClose}
       />
     </div>

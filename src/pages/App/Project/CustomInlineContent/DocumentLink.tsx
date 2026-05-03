@@ -11,7 +11,7 @@ export const DocumentLink = createReactInlineContentSpec(
     type: "documentLink",
     propSchema: {
       documentId: {
-        default: "" as unknown as string,
+        default: "",
       },
     },
     content: "none",

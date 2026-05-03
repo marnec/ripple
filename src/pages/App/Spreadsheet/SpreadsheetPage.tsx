@@ -241,7 +241,7 @@ function SpreadsheetEditor({
     isOffline,
     isLoading: collabLoading,
   } = useSpreadsheetCollaboration({
-    spreadsheetId: spreadsheetId as string,
+    spreadsheetId: spreadsheetId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "unknown",
   });

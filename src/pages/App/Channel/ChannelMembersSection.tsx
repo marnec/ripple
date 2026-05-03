@@ -182,7 +182,7 @@ function MemberRow({
           <Select
             value={member.role}
             onValueChange={(role) => {
-              if (role !== null) onRoleChange(member._id, role as Values<typeof ChannelRole>);
+              if (role !== null) onRoleChange(member._id, role);
             }}
           >
             <SelectTrigger className="w-27.5">

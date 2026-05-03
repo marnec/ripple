@@ -42,7 +42,7 @@ export function Chat({ channelId, variant = "full" }: { channelId: Id<"channels"
   }, [channelId, markRead]);
 
   // Record visit for recents
-  useRecordVisit(workspaceId as Id<"workspaces"> | undefined, "channel", channelId, channel?.name);
+  useRecordVisit(workspaceId, "channel", channelId, channel?.name);
 
   const userSentMessageRef = useRef(false);
   const [editingMessage, setEditingMessage] = useState<EditingMessage>({ id: null, body: null });

@@ -112,7 +112,7 @@ function useResourceSearch(
 
   const active = resourceType === "channel" ? channelPagination : resourcePagination;
   return {
-    results: active.results as SearchResult[],
+    results: active.results,
     status: active.status,
     loadMore: active.loadMore,
   };
@@ -443,7 +443,7 @@ export function SearchResults({
           style={{
             viewTransitionName: `--resource-${resource._id}`,
             viewTransitionClass: "resource-card",
-          } as React.CSSProperties}
+          }}
         >
           <Link
             to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`}

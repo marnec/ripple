@@ -13,16 +13,16 @@ export function createTestContext() {
   const t = convexTest(schema, modules);
   auditLogComponent.register(t as any);
   cascadingDeleteComponent.register(t as any);
-  rateLimiterComponent.register(t as any);
-  workpoolComponent.register(t as any, "notificationPool");
+  rateLimiterComponent.register(t);
+  workpoolComponent.register(t, "notificationPool");
   // Register workspace resource count aggregates
-  aggregateComponent.register(t as any, "documentsByWorkspace");
-  aggregateComponent.register(t as any, "diagramsByWorkspace");
-  aggregateComponent.register(t as any, "spreadsheetsByWorkspace");
-  aggregateComponent.register(t as any, "projectsByWorkspace");
-  aggregateComponent.register(t as any, "channelsByWorkspace");
-  aggregateComponent.register(t as any, "membersByWorkspace");
-  aggregateComponent.register(t as any, "tasksByWorkspace");
+  aggregateComponent.register(t, "documentsByWorkspace");
+  aggregateComponent.register(t, "diagramsByWorkspace");
+  aggregateComponent.register(t, "spreadsheetsByWorkspace");
+  aggregateComponent.register(t, "projectsByWorkspace");
+  aggregateComponent.register(t, "channelsByWorkspace");
+  aggregateComponent.register(t, "membersByWorkspace");
+  aggregateComponent.register(t, "tasksByWorkspace");
   return t;
 }
 

@@ -71,7 +71,7 @@ function ProjectGroupTasks({
       if (!statuses || statuses.length === 0) return;
       const idx = statuses.findIndex((s) => s._id === currentStatusId);
       const nextStatus = statuses[(idx + 1) % statuses.length];
-      void updateTask({ taskId: taskId as Id<"tasks">, statusId: nextStatus._id as Id<"taskStatuses"> });
+      void updateTask({ taskId: taskId as Id<"tasks">, statusId: nextStatus._id });
       setSwipeOpenId(null);
     };
 
@@ -91,7 +91,7 @@ function ProjectGroupTasks({
             style={{
               viewTransitionName: `--task-${task._id}`,
               viewTransitionClass: "task-card",
-            } as React.CSSProperties}
+            }}
           >
             <SwipeToReveal
               enabled={isMobile}
@@ -272,7 +272,7 @@ export function MyTasks() {
                 style={{
                   viewTransitionName: `--project-group-${group.projectId}`,
                   viewTransitionClass: "task-card",
-                } as React.CSSProperties}
+                }}
               >
                 <Collapsible
                   open={isOpen}
