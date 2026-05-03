@@ -151,3 +151,17 @@ npm run test:watch
  - Users should not be flooded with information, by default only essential information is visible
  - If the user desires more information it should be available and intuitively toggled / retrieved
  - **No skeleton loaders** — never use skeleton/pulse placeholders. Prefer empty reserved space (matching final dimensions) with a fade-in when content arrives. Loading spinners are acceptable only for full-page or full-section blocking loads.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->

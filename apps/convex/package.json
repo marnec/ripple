@@ -1,0 +1,53 @@
+{
+  "name": "@ripple/convex",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./_generated/api": {
+      "types": "./convex/_generated/api.d.ts",
+      "default": "./convex/_generated/api.js"
+    },
+    "./_generated/dataModel": {
+      "types": "./convex/_generated/dataModel.d.ts",
+      "default": "./convex/_generated/dataModel.js"
+    },
+    "./_generated/server": {
+      "types": "./convex/_generated/server.d.ts",
+      "default": "./convex/_generated/server.js"
+    }
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy && convex run migrations:runAll --prod && convex run version:set --prod",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@auth/core": "0.37.0",
+    "@convex-dev/aggregate": "0.2.1",
+    "@convex-dev/auth": "0.0.92",
+    "@convex-dev/migrations": "0.3.4",
+    "@convex-dev/rate-limiter": "0.3.2",
+    "@convex-dev/workpool": "0.4.6",
+    "@ripple/shared": "workspace:*",
+    "convex": "1.37.0",
+    "convex-audit-log": "workspace:*",
+    "convex-cascading-delete": "workspace:*",
+    "convex-helpers": "0.1.115",
+    "fractional-indexing": "3.2.0",
+    "oslo": "1.2.1",
+    "resend": "6.12.2",
+    "web-push": "3.6.7",
+    "yjs": "13.6.30",
+    "zod": "4.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/web-push": "3.6.4",
+    "convex-test": "0.0.51",
+    "typescript": "6.0.3",
+    "vitest": "4.1.5"
+  }
+}

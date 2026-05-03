@@ -18,40 +18,46 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          submodules: true
+          version: 10.0.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '22.22.2'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Set Convex environment variables
+        working-directory: apps/convex
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: |
-          npx convex env set AUTH_RESEND_KEY "${{ secrets.AUTH_RESEND_KEY }}"
-          npx convex env set SITE_URL "${{ secrets.SITE_URL }}"
-          npx convex env set VAPID_SUBJECT "${{ secrets.VAPID_SUBJECT }}"
-          npx convex env set VAPID_PUBLIC_KEY "${{ secrets.VAPID_PUBLIC_KEY }}"
-          npx convex env set VAPID_PRIVATE_KEY "${{ secrets.VAPID_PRIVATE_KEY }}"
-          npx convex env set CLOUDFLARE_ACCOUNT_ID "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
-          npx convex env set CLOUDFLARE_RTK_APP_ID "${{ secrets.CLOUDFLARE_RTK_APP_ID }}"
-          npx convex env set PARTYKIT_SECRET "${{ secrets.PARTYKIT_SECRET }}"
+          pnpm exec convex env set AUTH_RESEND_KEY "${{ secrets.AUTH_RESEND_KEY }}"
+          pnpm exec convex env set SITE_URL "${{ secrets.SITE_URL }}"
+          pnpm exec convex env set VAPID_SUBJECT "${{ secrets.VAPID_SUBJECT }}"
+          pnpm exec convex env set VAPID_PUBLIC_KEY "${{ secrets.VAPID_PUBLIC_KEY }}"
+          pnpm exec convex env set VAPID_PRIVATE_KEY "${{ secrets.VAPID_PRIVATE_KEY }}"
+          pnpm exec convex env set CLOUDFLARE_ACCOUNT_ID "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}"
+          pnpm exec convex env set CLOUDFLARE_RTK_APP_ID "${{ secrets.CLOUDFLARE_RTK_APP_ID }}"
+          pnpm exec convex env set PARTYKIT_SECRET "${{ secrets.PARTYKIT_SECRET }}"
 
       - name: Deploy Convex backend
+        working-directory: apps/convex
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: npx convex deploy
+        run: pnpm exec convex deploy
 
       - name: Run migrations
+        working-directory: apps/convex
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: npx convex run migrations:runAll
+        run: pnpm exec convex run migrations:runAll
 
       - name: Health check Convex
         run: |
@@ -65,38 +71,43 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          submodules: true
+          version: 10.0.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '22.22.2'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build frontend
         env:
           VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
           VITE_CONVEX_SITE_URL: ${{ secrets.VITE_CONVEX_SITE_URL }}
           VITE_PARTYKIT_HOST: ${{ secrets.VITE_PARTYKIT_HOST }}
-        run: npm run build
+        run: pnpm --filter @ripple/web build
 
       - name: Set wrangler secrets
+        working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          echo "${{ secrets.CONVEX_SITE_URL }}" | npx wrangler secret put CONVEX_SITE_URL
-          echo "${{ secrets.PARTYKIT_SECRET }}" | npx wrangler secret put PARTYKIT_SECRET
+          echo "${{ secrets.CONVEX_SITE_URL }}" | pnpm exec wrangler secret put CONVEX_SITE_URL
+          echo "${{ secrets.PARTYKIT_SECRET }}" | pnpm exec wrangler secret put PARTYKIT_SECRET
 
       - name: Deploy to Cloudflare Workers (frontend + collaboration DOs)
+        working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy
+        run: pnpm exec wrangler deploy
 
       - name: Health check frontend
         run: |

@@ -1,0 +1,17 @@
+{
+  "name": "@ripple/partykit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/worker.ts",
+  "exports": {
+    "./worker": "./src/worker.ts",
+    "./server": "./src/server.ts",
+    "./presence-server": "./src/presence-server.ts"
+  },
+  "dependencies": {
+    "partyserver": "0.5.5",
+    "y-partyserver": "2.2.0",
+    "yjs": "13.6.30"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "composite": true,
+    "types": ["vitest/importMeta", "node"]
+  },
+  "include": [
+    "src",
+    "../../packages/shared/src"
+  ]
+}

@@ -1,6 +1,0 @@
-[submodule "audit-log"]
-	path = audit-log
-	url = https://github.com/marnec/audit-log.git
-[submodule "convex-cascading-delete"]
-	path = convex-cascading-delete
-	url = https://github.com/marnec/convex-cascading-delete.git

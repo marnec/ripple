@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "ripple",
+  "main": "../../packages/partykit/src/worker.ts",
+  "account_id": "ad8bc0499d2dec399dbc9d6f964b3da6",
+  "compatibility_date": "2026-02-07",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "Main", "class_name": "Main" },
+      { "name": "Presence", "class_name": "Presence" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_classes": ["Main", "Presence"] }
+  ],
+  "routes": [
+    {
+      "pattern": "ripple.conduits.space",
+      "custom_domain": true
+    }
+  ]
+}

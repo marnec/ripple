@@ -1,0 +1,23 @@
+{
+  "name": "@ripple/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts",
+    "./*.ts": "./src/*.ts",
+    "./protocol": "./src/protocol/index.ts",
+    "./enums": "./src/enums/index.ts"
+  },
+  "peerDependencies": {
+    "@ripple/convex": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@ripple/convex": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "zod": "4.4.2"
+  }
+}

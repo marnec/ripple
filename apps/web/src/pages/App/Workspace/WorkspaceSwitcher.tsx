@@ -1,0 +1,148 @@
+"use client";
+
+import { ChevronsUpDown, Plus, UserPlus } from "lucide-react";
+
+import {
+  ResponsiveDropdownMenu as DropdownMenu,
+  ResponsiveDropdownMenuContent as DropdownMenuContent,
+  ResponsiveDropdownMenuGroup as DropdownMenuGroup,
+  ResponsiveDropdownMenuItem as DropdownMenuItem,
+  ResponsiveDropdownMenuLabel as DropdownMenuLabel,
+  ResponsiveDropdownMenuSeparator as DropdownMenuSeparator,
+  ResponsiveDropdownMenuShortcut as DropdownMenuShortcut,
+  ResponsiveDropdownMenuTrigger as DropdownMenuTrigger,
+} from "@/components/ui/responsive-dropdown-menu";
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
+import { useState } from "react";
+import type { Doc, Id } from "@convex/_generated/dataModel";
+import { cn } from "@/lib/utils";
+import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { InviteUserDialog } from "./InviteUserDialog";
+
+function WorkspaceAvatar({ name, size = "md" }: { name: string; size?: "sm" | "md" }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground font-semibold",
+        size === "md" ? "size-8 text-sm" : "size-6 text-xs",
+      )}
+    >
+      {name.slice(0, size === "md" ? 2 : 1).toUpperCase()}
+    </div>
+  );
+}
+
+export interface WorkspaceSwitcherProps {
+  workspaces: Doc<"workspaces">[];
+  activeWorkspace: Doc<"workspaces"> | undefined;
+  handleWorkspaceSelect: (id: Id<"workspaces">) => void;
+}
+
+export function WorkspaceSwitcher({
+  workspaces,
+  activeWorkspace,
+  handleWorkspaceSelect,
+}: WorkspaceSwitcherProps) {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu direction="top">
+          <DropdownMenuTrigger
+            render={<SidebarMenuButton
+              size="lg"
+              className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
+            />}
+          >
+              {activeWorkspace ? (
+                <>
+                  <WorkspaceAvatar name={activeWorkspace.name} />
+                  <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate font-semibold">
+                      {activeWorkspace.name}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">Workspace</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-row gap-4 items-center">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-sky-500"></span>
+                  </span>
+                  <div>Select a workspace</div>
+                </div>
+              )}
+              <ChevronsUpDown className="ml-auto group-data-[collapsible=icon]:hidden" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            align="start"
+            side="right"
+            sideOffset={4}
+          >
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Workspaces
+              </DropdownMenuLabel>
+              {workspaces.map((workspace, index) => (
+                <DropdownMenuItem
+                  key={workspace._id}
+                  onSelect={() => handleWorkspaceSelect(workspace._id)}
+                  className="gap-2 p-2"
+                >
+                  <WorkspaceAvatar name={workspace.name} size="sm" />
+                  {workspace.name}
+                  <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              className="gap-2 p-2"
+              onSelect={() => setShowInviteDialog(true)}
+              disabled={!activeWorkspace}
+            >
+              <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+                <UserPlus className="size-4" />
+              </div>
+              <div className="font-medium text-muted-foreground">
+                Invite a user
+              </div>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              className="gap-2 p-2"
+              onSelect={() => setShowCreateDialog(true)}
+            >
+              <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+                <Plus className="size-4" />
+              </div>
+              <div className="font-medium text-muted-foreground">
+                Create a workspace
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+      <CreateWorkspaceDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      />
+      {activeWorkspace && (
+        <InviteUserDialog
+          workspaceId={activeWorkspace._id}
+          open={showInviteDialog}
+          onOpenChange={setShowInviteDialog}
+        />
+      )}
+    </SidebarMenu>
+  );
+}

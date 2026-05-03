@@ -1,0 +1,15 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "ripple-dev",
+  "main": "../../packages/partykit/src/worker.ts",
+  "compatibility_date": "2026-02-07",
+  "durable_objects": {
+    "bindings": [
+      { "name": "Main", "class_name": "Main" },
+      { "name": "Presence", "class_name": "Presence" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Main", "Presence"] }
+  ]
+}

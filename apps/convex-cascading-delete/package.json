@@ -1,0 +1,69 @@
+{
+  "name": "convex-cascading-delete",
+  "description": "A Convex component for managing cascading deletes across related documents with atomic and batched deletion modes.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akshatsinha0/convex-cascading-delete.git"
+  },
+  "homepage": "https://github.com/akshatsinha0/convex-cascading-delete#readme",
+  "bugs": {
+    "url": "https://github.com/akshatsinha0/convex-cascading-delete/issues"
+  },
+  "version": "0.1.1",
+  "license": "Apache-2.0",
+  "keywords": [
+    "convex",
+    "component"
+  ],
+  "type": "module",
+  "scripts": {
+    "codegen": "convex codegen --component-dir ./src/component",
+    "test": "vitest run"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/client/index.ts",
+    "./react": "./src/react/index.ts",
+    "./test": "./src/test.ts",
+    "./_generated/component.js": "./src/component/_generated/component.ts",
+    "./_generated/component": "./src/component/_generated/component.ts",
+    "./convex.config.js": "./src/component/convex.config.ts",
+    "./convex.config": "./src/component/convex.config.ts"
+  },
+  "peerDependencies": {
+    "convex": "^1.32.0",
+    "react": "^18.3.1 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@convex-dev/eslint-plugin": "^1.1.1",
+    "@edge-runtime/vm": "^5.0.0",
+    "@eslint/eslintrc": "^3.3.3",
+    "@eslint/js": "9.39.2",
+    "@types/node": "^24.10.11",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.3",
+    "chokidar-cli": "3.0.0",
+    "convex": "1.37.0",
+    "convex-test": "0.0.41",
+    "cpy-cli": "^6.0.0",
+    "eslint": "9.39.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.0",
+    "globals": "^17.3.0",
+    "npm-run-all2": "8.0.4",
+    "path-exists-cli": "2.0.0",
+    "pkg-pr-new": "^0.0.63",
+    "prettier": "3.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.54.0",
+    "vite": "7.3.1",
+    "vitest": "4.0.18"
+  },
+  "dependencies": {
+    "@convex-dev/workflow": "^0.3.8"
+  }
+}
