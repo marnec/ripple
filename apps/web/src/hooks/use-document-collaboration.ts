@@ -109,6 +109,36 @@ export function useDocumentCollaboration<
     [provider, localAwareness, userName, userColor, schema, uploadFile]
   );
 
+  // Workaround for BlockNote #2244 / y-prosemirror #102: when ProseMirror
+  // reconfigures plugins (StrictMode double-mount, extension changes, editor
+  // recreation), yUndoPlugin's view destroy() calls undoManager.destroy() —
+  // unbinding the afterTransaction handler, clearing observers, removing the
+  // UM from its own trackedOrigins. Plugin state still references the same
+  // (now zombie) UM. Rebind on every TipTap transaction to keep it healthy.
+  useEffect(() => {
+    if (!editor) return;
+    const tiptap = (editor as unknown as { _tiptapEditor?: { view?: { state: { plugins: Array<{ spec: { key?: { key?: string } }; getState: (s: unknown) => unknown }> } }; on: (event: string, handler: () => void) => void; off: (event: string, handler: () => void) => void } })._tiptapEditor;
+    if (!tiptap) return;
+
+    const ensureBound = () => {
+      const view = tiptap.view;
+      if (!view) return;
+      const yUndo = view.state.plugins.find((p) => p.spec.key?.key?.startsWith("y-undo$"));
+      if (!yUndo) return;
+      const um = (yUndo.getState(view.state) as { undoManager?: { afterTransactionHandler?: (tr: unknown) => void; trackedOrigins: Set<unknown>; doc: { off: (e: string, h: unknown) => void; on: (e: string, h: unknown) => void } } } | null)?.undoManager;
+      if (!um?.afterTransactionHandler) return;
+      um.doc.off("afterTransaction", um.afterTransactionHandler);
+      um.doc.on("afterTransaction", um.afterTransactionHandler);
+      um.trackedOrigins.add(um);
+    };
+
+    ensureBound();
+    tiptap.on("transaction", ensureBound);
+    return () => {
+      tiptap.off("transaction", ensureBound);
+    };
+  }, [editor, yDoc]);
+
   // Loading completes when EITHER provider syncs OR IndexedDB syncs
   const isLoading = providerLoading && !indexedDbSynced;
 
