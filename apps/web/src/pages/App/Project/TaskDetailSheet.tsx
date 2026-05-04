@@ -71,7 +71,11 @@ export function TaskDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full scrollbar-stable" style={{ maxWidth: "44rem" }}>
+        <SheetContent
+          className="w-full scrollbar-stable outline-none"
+          style={{ maxWidth: "44rem" }}
+          finalFocus={false}
+        >
           <SheetTitle className="sr-only">Task Details</SheetTitle>
           {!isLoaded || !task ? (
             <div className="flex items-center justify-center py-12">

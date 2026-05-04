@@ -3,8 +3,6 @@ NEXT STEPS:
 Priorities:
 - DOC: Ctrl+Z does not trigger undo in the document editor (BlockNote + Yjs collaboration); investigate Y.UndoManager trackedOrigins / y-prosemirror keymap wiring
 - Investigate what happens to referenced cells when inserting or removing rows or columns  
-- When adding a new task in the kanban, sometimes a task card can acquire focus showing an ugly focus rectangle border around it. Same thing might happen when closing a task details sheet.
-- there is no way to cancel message editing and it's unclear when editing vs when composing
 
 
 - leave channel logic

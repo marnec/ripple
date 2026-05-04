@@ -56,6 +56,7 @@ export function KanbanCard({ task, onClick }: KanbanCardProps) {
       style={style}
       {...attributes}
       {...listeners}
+      className="outline-none"
     >
       <KanbanCardPresenter task={task} onClick={onClick} />
     </div>
