@@ -5,31 +5,44 @@ import { normalizeCellRef, isValidCellRef, exceedsMaxCells } from "@ripple/share
 import { checkResourceMember, requireResourceMember, requireUser } from "./authHelpers";
 
 /**
- * Get cached cell values for a (spreadsheetId, cellRef) pair.
- * Access check: workspace membership (same model as spreadsheets.get).
+ * Get cached cell values for a (spreadsheetId, stableRef) pair.
+ * The cache row's `cellRef` field carries the live A1 (updated by partykit
+ * on every push) for tooltip display.
  */
 export const getCellRef = query({
   args: {
     spreadsheetId: v.id("spreadsheets"),
-    cellRef: v.string(),
+    stableRef: v.string(),
   },
   returns: v.union(
-    v.object({ values: v.array(v.array(v.string())), updatedAt: v.number() }),
+    v.object({
+      values: v.array(v.array(v.string())),
+      updatedAt: v.number(),
+      cellRef: v.string(),
+      stableRef: v.string(),
+      orphan: v.optional(v.boolean()),
+    }),
     v.null(),
   ),
-  handler: async (ctx, { spreadsheetId, cellRef }) => {
+  handler: async (ctx, { spreadsheetId, stableRef }) => {
     const auth = await checkResourceMember(ctx, "spreadsheets", spreadsheetId);
     if (!auth) return null;
 
     const ref = await ctx.db
       .query("spreadsheetCellRefs")
-      .withIndex("by_spreadsheet_cellRef", (q) =>
-        q.eq("spreadsheetId", spreadsheetId).eq("cellRef", normalizeCellRef(cellRef)),
+      .withIndex("by_spreadsheet_stableRef", (q) =>
+        q.eq("spreadsheetId", spreadsheetId).eq("stableRef", stableRef),
       )
       .unique();
 
     if (!ref) return null;
-    return { values: JSON.parse(ref.values) as string[][], updatedAt: ref.updatedAt };
+    return {
+      values: JSON.parse(ref.values) as string[][],
+      updatedAt: ref.updatedAt,
+      cellRef: ref.cellRef,
+      stableRef: ref.stableRef,
+      orphan: ref.orphan,
+    };
   },
 });
 
@@ -39,7 +52,13 @@ export const getCellRef = query({
  */
 export const listBySpreadsheet = query({
   args: { spreadsheetId: v.id("spreadsheets") },
-  returns: v.array(v.object({ cellRef: v.string() })),
+  returns: v.array(
+    v.object({
+      cellRef: v.string(),
+      stableRef: v.string(),
+      orphan: v.optional(v.boolean()),
+    }),
+  ),
   handler: async (ctx, { spreadsheetId }) => {
     const auth = await checkResourceMember(ctx, "spreadsheets", spreadsheetId);
     if (!auth) return [];
@@ -48,21 +67,26 @@ export const listBySpreadsheet = query({
       .query("spreadsheetCellRefs")
       .withIndex("by_spreadsheet", (q) => q.eq("spreadsheetId", spreadsheetId))
       .collect();
-    return refs.map((r) => ({ cellRef: r.cellRef }));
+    return refs.map((r) => ({
+      cellRef: r.cellRef,
+      stableRef: r.stableRef,
+      orphan: r.orphan,
+    }));
   },
 });
 
 /**
  * Create a placeholder cache entry when a user inserts a cell reference.
- * If the entry already exists, this is a no-op.
+ * Dedupes by stableRef. Schedules `populateFromSnapshot` to fill `values`.
  */
 export const ensureCellRef = mutation({
   args: {
     spreadsheetId: v.id("spreadsheets"),
     cellRef: v.string(),
+    stableRef: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, { spreadsheetId, cellRef }) => {
+  handler: async (ctx, { spreadsheetId, cellRef, stableRef }) => {
     await requireResourceMember(ctx, "spreadsheets", spreadsheetId);
 
     const normalized = normalizeCellRef(cellRef);
@@ -71,8 +95,8 @@ export const ensureCellRef = mutation({
 
     const existing = await ctx.db
       .query("spreadsheetCellRefs")
-      .withIndex("by_spreadsheet_cellRef", (q) =>
-        q.eq("spreadsheetId", spreadsheetId).eq("cellRef", normalized),
+      .withIndex("by_spreadsheet_stableRef", (q) =>
+        q.eq("spreadsheetId", spreadsheetId).eq("stableRef", stableRef),
       )
       .unique();
 
@@ -80,13 +104,13 @@ export const ensureCellRef = mutation({
       await ctx.db.insert("spreadsheetCellRefs", {
         spreadsheetId,
         cellRef: normalized,
+        stableRef,
         values: JSON.stringify([[""]]),
         updatedAt: Date.now(),
       });
-      // Schedule snapshot read to populate actual values immediately
       await ctx.scheduler.runAfter(0, internal.spreadsheetCellRefsNode.populateFromSnapshot, {
         spreadsheetId,
-        cellRef: normalized,
+        stableRef,
       });
     }
 
@@ -95,61 +119,70 @@ export const ensureCellRef = mutation({
 });
 
 /**
- * Batch upsert cell values from PartyKit.
- * Dirty-checks: only patches if values string actually differs.
+ * Batch upsert cell values from PartyKit. Each update carries the row's
+ * stableRef + the live A1 derived from it. `cellRef` on the cache row is
+ * updated in place to track the live A1 for tooltip display.
  */
 export const upsertCellValues = internalMutation({
   args: {
     spreadsheetId: v.id("spreadsheets"),
     updates: v.array(
       v.object({
-        cellRef: v.string(),
+        stableRef: v.string(),
+        liveCellRef: v.optional(v.string()),
         values: v.string(),
+        orphan: v.optional(v.boolean()),
       }),
     ),
   },
   returns: v.null(),
   handler: async (ctx, { spreadsheetId, updates }) => {
-    for (const { cellRef, values } of updates) {
-      const normalized = normalizeCellRef(cellRef);
+    for (const { stableRef, liveCellRef, values, orphan } of updates) {
       const existing = await ctx.db
         .query("spreadsheetCellRefs")
-        .withIndex("by_spreadsheet_cellRef", (q) =>
-          q.eq("spreadsheetId", spreadsheetId).eq("cellRef", normalized),
+        .withIndex("by_spreadsheet_stableRef", (q) =>
+          q.eq("spreadsheetId", spreadsheetId).eq("stableRef", stableRef),
         )
         .unique();
 
       if (existing) {
-        // Dirty check: only update if values actually changed
-        if (existing.values !== values) {
-          await ctx.db.patch(existing._id, { values, updatedAt: Date.now() });
+        const nextCellRef = liveCellRef ?? existing.cellRef;
+        const valuesChanged = existing.values !== values;
+        const cellRefChanged = existing.cellRef !== nextCellRef;
+        const orphanChanged = (existing.orphan ?? false) !== (orphan ?? false);
+        if (valuesChanged || cellRefChanged || orphanChanged) {
+          await ctx.db.patch(existing._id, {
+            values,
+            cellRef: nextCellRef,
+            orphan,
+            updatedAt: Date.now(),
+          });
         }
       }
       // Don't create new entries from PartyKit -- only update existing ones
-      // created by ensureCellRef. This prevents unbounded growth.
+      // created by ensureCellRef. Prevents unbounded growth.
     }
     return null;
   },
 });
 
 /**
- * Remove a cached cell ref entry.
- * Called when the inline content is deleted from a document.
+ * Remove a cached cell ref entry. Called when the inline content / block is
+ * deleted from a document.
  */
 export const removeCellRef = mutation({
   args: {
     spreadsheetId: v.id("spreadsheets"),
-    cellRef: v.string(),
+    stableRef: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, { spreadsheetId, cellRef }) => {
+  handler: async (ctx, { spreadsheetId, stableRef }) => {
     await requireUser(ctx);
 
-    const normalized = normalizeCellRef(cellRef);
     const existing = await ctx.db
       .query("spreadsheetCellRefs")
-      .withIndex("by_spreadsheet_cellRef", (q) =>
-        q.eq("spreadsheetId", spreadsheetId).eq("cellRef", normalized),
+      .withIndex("by_spreadsheet_stableRef", (q) =>
+        q.eq("spreadsheetId", spreadsheetId).eq("stableRef", stableRef),
       )
       .unique();
 
@@ -167,13 +200,18 @@ export const removeCellRef = mutation({
  */
 export const getReferencedCellRefs = internalQuery({
   args: { spreadsheetId: v.id("spreadsheets") },
-  returns: v.array(v.object({ cellRef: v.string() })),
+  returns: v.array(
+    v.object({
+      cellRef: v.string(),
+      stableRef: v.string(),
+    }),
+  ),
   handler: async (ctx, { spreadsheetId }) => {
     const refs = await ctx.db
       .query("spreadsheetCellRefs")
       .withIndex("by_spreadsheet", (q) => q.eq("spreadsheetId", spreadsheetId))
       .collect();
-    return refs.map((r) => ({ cellRef: r.cellRef }));
+    return refs.map((r) => ({ cellRef: r.cellRef, stableRef: r.stableRef }));
   },
 });
 

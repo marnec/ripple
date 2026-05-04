@@ -1482,26 +1482,40 @@ export declare const api: {
     ensureCellRef: FunctionReference<
       "mutation",
       "public",
-      { cellRef: string; spreadsheetId: Id<"spreadsheets"> },
+      { cellRef: string; spreadsheetId: Id<"spreadsheets">; stableRef: string },
       null
     >;
     getCellRef: FunctionReference<
       "query",
       "public",
-      { cellRef: string; spreadsheetId: Id<"spreadsheets"> },
-      { updatedAt: number; values: Array<Array<string>> } | null
+      { spreadsheetId: Id<"spreadsheets">; stableRef: string },
+      {
+        cellRef: string;
+        orphan?: boolean;
+        stableRef: string;
+        updatedAt: number;
+        values: Array<Array<string>>;
+      } | null
     >;
     listBySpreadsheet: FunctionReference<
       "query",
       "public",
       { spreadsheetId: Id<"spreadsheets"> },
-      Array<{ cellRef: string }>
+      Array<{ cellRef: string; orphan?: boolean; stableRef: string }>
     >;
     removeCellRef: FunctionReference<
       "mutation",
       "public",
-      { cellRef: string; spreadsheetId: Id<"spreadsheets"> },
+      { spreadsheetId: Id<"spreadsheets">; stableRef: string },
       null
+    >;
+  };
+  spreadsheetCellRefsNode: {
+    prepareStableRef: FunctionReference<
+      "action",
+      "public",
+      { cellRef: string; spreadsheetId: Id<"spreadsheets"> },
+      string
     >;
   };
   spreadsheets: {
@@ -3478,7 +3492,7 @@ export declare const internal: {
       "query",
       "internal",
       { spreadsheetId: Id<"spreadsheets"> },
-      Array<{ cellRef: string }>
+      Array<{ cellRef: string; stableRef: string }>
     >;
     getSpreadsheetInternal: FunctionReference<
       "query",
@@ -3498,7 +3512,12 @@ export declare const internal: {
       "internal",
       {
         spreadsheetId: Id<"spreadsheets">;
-        updates: Array<{ cellRef: string; values: string }>;
+        updates: Array<{
+          liveCellRef?: string;
+          orphan?: boolean;
+          stableRef: string;
+          values: string;
+        }>;
       },
       null
     >;
@@ -3507,7 +3526,7 @@ export declare const internal: {
     populateFromSnapshot: FunctionReference<
       "action",
       "internal",
-      { cellRef: string; spreadsheetId: Id<"spreadsheets"> },
+      { spreadsheetId: Id<"spreadsheets">; stableRef: string },
       null
     >;
   };

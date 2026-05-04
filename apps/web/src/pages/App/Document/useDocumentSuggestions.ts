@@ -1,6 +1,8 @@
 import { isSingleCell } from "@ripple/shared/cellRef";
+import { useAction } from "convex/react";
 import { Clock, FileText, PenTool, Search, Table } from "lucide-react";
 import { createElement } from "react";
+import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { RecentItem } from "@/hooks/use-local-recents";
 import type { DocumentSchemaEditor } from "./schema";
@@ -67,13 +69,14 @@ export function useDocumentSuggestions({
   hasSearch: boolean;
   isStale: boolean;
   editor: DocumentSchemaEditor | null;
-  ensureCellRef: (args: { spreadsheetId: Id<"spreadsheets">; cellRef: string }) => Promise<null>;
+  ensureCellRef: (args: { spreadsheetId: Id<"spreadsheets">; cellRef: string; stableRef: string }) => Promise<null>;
   ensureBlockRef: (args: { documentId: Id<"documents">; blockId: string }) => Promise<null>;
   setCellRefDialog: (state: CellRefDialogState) => void;
   setBlockPickerDialog: (state: BlockPickerDialogState) => void;
   onSearchChange: (query: string) => void;
   currentDocumentId?: Id<"documents">;
 }) {
+  const prepareStableRef = useAction(api.spreadsheetCellRefsNode.prepareStableRef);
   function makeItem(resourceType: string, resourceId: string, name: string, group: string) {
     const icon = isEmbeddable(resourceType)
       ? RESOURCE_ICON[resourceType]
@@ -150,19 +153,31 @@ export function useDocumentSuggestions({
     editor.focus();
 
     if (cellRef) {
-      if (isSingleCell(cellRef)) {
-        editor.insertInlineContent([
-          { type: "spreadsheetCellRef", props: { spreadsheetId, cellRef } },
-          " ",
-        ]);
-      } else {
-        editor.insertBlocks(
-          [{ type: "spreadsheetRange" as const, props: { spreadsheetId, cellRef } }],
-          editor.getTextCursorPosition().block,
-          "after",
-        );
-      }
-      void ensureCellRef({ spreadsheetId, cellRef });
+      // Resolve the cell's stable identity against the spreadsheet's current
+      // rowOrder/colOrder before inserting. Throws if the snapshot is missing
+      // order arrays (only possible for sheets that pre-date Phase B).
+      void prepareStableRef({ spreadsheetId, cellRef }).then((stableRef) => {
+        if (!editor) return;
+        if (isSingleCell(cellRef)) {
+          editor.insertInlineContent([
+            {
+              type: "spreadsheetCellRef",
+              props: { spreadsheetId, cellRef, stableRef },
+            },
+            " ",
+          ]);
+        } else {
+          editor.insertBlocks(
+            [{
+              type: "spreadsheetRange" as const,
+              props: { spreadsheetId, cellRef, stableRef },
+            }],
+            editor.getTextCursorPosition().block,
+            "after",
+          );
+        }
+        void ensureCellRef({ spreadsheetId, cellRef, stableRef });
+      });
     } else {
       editor.insertInlineContent([
         { type: "spreadsheetLink", props: { spreadsheetId } },

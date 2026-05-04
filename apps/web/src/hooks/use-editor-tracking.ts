@@ -207,21 +207,33 @@ export function extractMentions(blocks: unknown[]): Set<string> {
   return refs;
 }
 
-/** Collect cell ref keys from a list of inline nodes. */
+/** Collect cell ref keys from a list of inline nodes.
+ *  Key shape: `<spreadsheetId>|<stableRef>`. Refs without a stableRef
+ *  (which shouldn't exist post-Phase-B) are skipped — their cache row
+ *  can't be cleaned up via this path. */
 function collectInlineCellRefs(nodes: InlineNode[], refs: Set<string>) {
   for (const ic of nodes) {
-    if (ic.type === "spreadsheetCellRef" && ic.props) {
-      refs.add(`${ic.props.spreadsheetId}|${ic.props.cellRef}`);
+    if (
+      ic.type === "spreadsheetCellRef" &&
+      ic.props?.spreadsheetId &&
+      ic.props?.stableRef
+    ) {
+      refs.add(`${ic.props.spreadsheetId}|${ic.props.stableRef}`);
     }
   }
 }
 
-/** Extract all spreadsheetCellRef keys from the editor document tree. */
+/** Extract all spreadsheetCellRef keys (`<spreadsheetId>|<stableRef>`) from
+ *  the editor document tree. */
 export function extractCellRefs(blocks: unknown[]): Set<string> {
   const refs = new Set<string>();
   for (const block of blocks as EditorBlock[]) {
-    if (block.type === "spreadsheetRange" && block.props?.spreadsheetId && block.props?.cellRef) {
-      refs.add(`${block.props.spreadsheetId}|${block.props.cellRef}`);
+    if (
+      block.type === "spreadsheetRange" &&
+      block.props?.spreadsheetId &&
+      block.props?.stableRef
+    ) {
+      refs.add(`${block.props.spreadsheetId}|${block.props.stableRef}`);
     }
     if (Array.isArray(block.content)) {
       collectInlineCellRefs(block.content, refs);

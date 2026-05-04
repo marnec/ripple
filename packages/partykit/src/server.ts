@@ -3,6 +3,7 @@ import type { Connection, ConnectionContext } from "partyserver";
 import * as Y from "yjs";
 import type { ServerMessage } from "@ripple/shared/protocol";
 import { parseCellName, parseRange } from "@ripple/shared/cellRef";
+import { parseStableRef, resolveStableRef } from "@ripple/shared/stableRef";
 import { extractBlocksFromFragment } from "@ripple/shared/blockRef";
 import type { ShareAccessLevel } from "@ripple/shared/shareTypes";
 
@@ -59,8 +60,9 @@ export default class CollaborationServer extends YServer {
   // Cell reference observer state (spreadsheet rooms only)
   private cellRefObserver: ((events: Y.YEvent<any>[], tx: Y.Transaction) => void) | null = null;
   private formulaValuesObserver: ((event: Y.YMapEvent<string>) => void) | null = null;
+  private orderObserver: ((event: Y.YArrayEvent<string>) => void) | null = null;
   private cellRefPushTimeout: ReturnType<typeof setTimeout> | null = null;
-  private trackedCellRefs: Array<{ cellRef: string }> | null = null;
+  private trackedCellRefs: Array<{ cellRef: string; stableRef: string }> | null = null;
   private trackedCellRefsLastFetch = 0;
 
   // Document block reference observer state (doc rooms only)
@@ -399,24 +401,26 @@ export default class CollaborationServer extends YServer {
 
     const yData = this.document.getArray("data");
 
-    this.cellRefObserver = () => {
+    const schedulePush = () => {
       if (this.cellRefPushTimeout) clearTimeout(this.cellRefPushTimeout);
       this.cellRefPushTimeout = setTimeout(() => {
         void this.pushCellRefUpdates(roomId);
       }, CELL_REF_DEBOUNCE);
     };
 
+    this.cellRefObserver = () => schedulePush();
     yData.observeDeep(this.cellRefObserver);
 
     // Also observe formulaValues changes
     const yFormulaValues = this.document.getMap<string>("formulaValues");
-    this.formulaValuesObserver = () => {
-      if (this.cellRefPushTimeout) clearTimeout(this.cellRefPushTimeout);
-      this.cellRefPushTimeout = setTimeout(() => {
-        void this.pushCellRefUpdates(roomId);
-      }, CELL_REF_DEBOUNCE);
-    };
+    this.formulaValuesObserver = () => schedulePush();
     yFormulaValues.observe(this.formulaValuesObserver);
+
+    // Observe rowOrder/colOrder so structural changes (insert/delete row/col)
+    // re-resolve stableRef → currentA1 and update cache rows accordingly.
+    this.orderObserver = () => schedulePush();
+    this.document.getArray<string>("rowOrder").observe(this.orderObserver);
+    this.document.getArray<string>("colOrder").observe(this.orderObserver);
 
     console.log(`Cell ref observer attached for room ${roomId}`);
   }
@@ -440,7 +444,8 @@ export default class CollaborationServer extends YServer {
           { headers: { Authorization: `Bearer ${secret}` } },
         );
         if (response.ok) {
-          const refs: Array<{ cellRef: string }> = await response.json();
+          const refs: Array<{ cellRef: string; stableRef: string }> =
+            await response.json();
           this.trackedCellRefs = refs;
           this.trackedCellRefsLastFetch = Date.now();
         }
@@ -455,13 +460,38 @@ export default class CollaborationServer extends YServer {
     // Extract current values from Yjs
     const yData = this.document.getArray<Y.Map<string>>("data");
     const yFormulaValues = this.document.getMap<string>("formulaValues");
+    const rowOrder = this.document.getArray<string>("rowOrder").toArray();
+    const colOrder = this.document.getArray<string>("colOrder").toArray();
 
-    const updates: Array<{ cellRef: string; values: string }> = [];
+    const updates: Array<{
+      stableRef: string;
+      liveCellRef?: string;
+      values: string;
+      orphan?: boolean;
+    }> = [];
 
-    for (const { cellRef } of this.trackedCellRefs) {
-      const values = this.extractCellValues(yData, cellRef, yFormulaValues);
+    for (const tracked of this.trackedCellRefs) {
+      const stable = parseStableRef(tracked.stableRef);
+      if (!stable) continue;
+
+      const result = resolveStableRef(stable, rowOrder, colOrder);
+      if (!result.ok) {
+        updates.push({
+          stableRef: tracked.stableRef,
+          values: JSON.stringify([[""]]),
+          orphan: true,
+        });
+        continue;
+      }
+
+      const values = this.extractCellValues(yData, result.a1, yFormulaValues);
       if (values) {
-        updates.push({ cellRef, values: JSON.stringify(values) });
+        updates.push({
+          stableRef: tracked.stableRef,
+          liveCellRef: result.a1,
+          values: JSON.stringify(values),
+          orphan: false,
+        });
       }
     }
 
@@ -633,6 +663,11 @@ export default class CollaborationServer extends YServer {
     if (this.formulaValuesObserver) {
       this.document.getMap<string>("formulaValues").unobserve(this.formulaValuesObserver);
       this.formulaValuesObserver = null;
+    }
+    if (this.orderObserver) {
+      this.document.getArray<string>("rowOrder").unobserve(this.orderObserver);
+      this.document.getArray<string>("colOrder").unobserve(this.orderObserver);
+      this.orderObserver = null;
     }
     if (this.cellRefPushTimeout) {
       clearTimeout(this.cellRefPushTimeout);

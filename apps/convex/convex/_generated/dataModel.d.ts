@@ -989,7 +989,9 @@ export type DataModel = {
   spreadsheetCellRefs: {
     document: {
       cellRef: string;
+      orphan?: boolean;
       spreadsheetId: Id<"spreadsheets">;
+      stableRef: string;
       updatedAt: number;
       values: string;
       _id: Id<"spreadsheetCellRefs">;
@@ -999,14 +1001,16 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "cellRef"
+      | "orphan"
       | "spreadsheetId"
+      | "stableRef"
       | "updatedAt"
       | "values";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_spreadsheet: ["spreadsheetId", "_creationTime"];
-      by_spreadsheet_cellRef: ["spreadsheetId", "cellRef", "_creationTime"];
+      by_spreadsheet_stableRef: ["spreadsheetId", "stableRef", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

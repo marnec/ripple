@@ -147,13 +147,14 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     mentionType: "mention",
   });
 
-  // Track cell ref removals and clean up orphaned cache entries
+  // Track cell ref removals and clean up orphaned cache entries.
+  // Keys come in as `<spreadsheetId>|<stableRef>`.
   const onCellRefsRemoved = (removed: Set<string>) => {
     for (const key of removed) {
       const sep = key.indexOf("|");
       const spreadsheetId = key.slice(0, sep) as Id<"spreadsheets">;
-      const cellRef = key.slice(sep + 1);
-      void removeCellRef({ spreadsheetId, cellRef });
+      const stableRef = key.slice(sep + 1);
+      void removeCellRef({ spreadsheetId, stableRef });
     }
   };
   useEditorTracking(editor, extractCellRefs, { onRemoved: onCellRefsRemoved });

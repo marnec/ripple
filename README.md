@@ -3,11 +3,14 @@ NEXT STEPS:
 Priorities:
 - Investigate what happens to referenced cells when inserting or removing rows or columns  
 
-- diagram embeds container is sometime incorrectly sized
-
-- leave channel logic
-
 - what happens to tasks when a column (status is deleted)?
+
+- improve awareness of embeedded document blocks when editing a doc
+
+New Features:
+- leave channel logic (only for private?)
+
+- consider favorite for channels too
 
 - add ability to download docs, diagrams and spreadsheets in various formats, context menu from share btn
 

@@ -1,6 +1,7 @@
 import { isSingleCell, parseCellName, parseRange } from "@ripple/shared/cellRef";
 import type { Awareness } from "y-protocols/awareness";
 import type { AwarenessUser } from "@/lib/awareness-types";
+import { shiftFormula, type ShiftOp } from "@/lib/formulaShift";
 import * as Y from "yjs";
 
 const DEFAULT_ROWS = 100;
@@ -24,12 +25,19 @@ function stringifyImportedCell(value: unknown): string {
  * Idempotent template update for initializing empty spreadsheets.
  * Uses a fixed Yjs client ID so applying it multiple times (or from different
  * clients) is a no-op — prevents Y.Array row accumulation from concurrent init.
+ *
+ * Seeds `rowOrder` and `colOrder` with deterministic IDs (`r0..rN`, `c0..cN`)
+ * so concurrent bootstrap from multiple clients produces identical arrays.
+ * IDs only need to be unique within a single sheet, so per-index numbering
+ * is sufficient for the bootstrap range.
  */
 const EMPTY_SPREADSHEET_UPDATE: Uint8Array = (() => {
   const doc = new Y.Doc();
   doc.clientID = 1; // Fixed ID → applying this update is always idempotent
   const data = doc.getArray<Y.Map<string>>("data");
   const meta = doc.getMap<any>("meta");
+  const rowOrder = doc.getArray<string>("rowOrder");
+  const colOrder = doc.getArray<string>("colOrder");
   doc.transact(() => {
     meta.set("colCount", DEFAULT_COLS);
     for (let r = 0; r < DEFAULT_ROWS; r++) {
@@ -39,11 +47,22 @@ const EMPTY_SPREADSHEET_UPDATE: Uint8Array = (() => {
       }
       data.push([rowMap]);
     }
+    for (let r = 0; r < DEFAULT_ROWS; r++) rowOrder.push([`r${r}`]);
+    for (let c = 0; c < DEFAULT_COLS; c++) colOrder.push([`c${c}`]);
   });
   const update = Y.encodeStateAsUpdate(doc);
   doc.destroy();
   return update;
 })();
+
+/**
+ * Generate a fresh stable row/col ID for runtime mutations (post-bootstrap).
+ * Format: `<prefix><random36><timestamp36>` — collision-free vs bootstrap IDs
+ * which use the simpler `<prefix><integer>` form.
+ */
+function makeStableId(prefix: "r" | "c"): string {
+  return `${prefix}${Math.random().toString(36).slice(2, 11)}${Date.now().toString(36)}`;
+}
 
 /**
  * Spreadsheet cursor/selection state shared via Yjs Awareness.
@@ -88,6 +107,8 @@ export class SpreadsheetYjsBinding {
   private yMerges: Y.Map<string>;
   private yMeta: Y.Map<any>;
   private yFormulaValues: Y.Map<string>;
+  private yRowOrder: Y.Array<string>;
+  private yColOrder: Y.Array<string>;
   private awareness: Awareness | null;
 
   /** Guard flag to prevent feedback loops */
@@ -166,6 +187,8 @@ export class SpreadsheetYjsBinding {
     this.yMerges = yDoc.getMap<string>("merges");
     this.yMeta = yDoc.getMap<any>("meta");
     this.yFormulaValues = yDoc.getMap<string>("formulaValues");
+    this.yRowOrder = yDoc.getArray<string>("rowOrder");
+    this.yColOrder = yDoc.getArray<string>("colOrder");
 
     // Idempotent init: applying the same fixed-clientID update is a no-op if
     // already present, so concurrent clients can't duplicate rows.
@@ -208,6 +231,8 @@ export class SpreadsheetYjsBinding {
         this.yRowHeights,
         this.yMerges,
         this.yMeta,
+        this.yRowOrder,
+        this.yColOrder,
       ],
       { trackedOrigins: new Set([this.localWriteOrigin]) },
     );
@@ -251,6 +276,15 @@ export class SpreadsheetYjsBinding {
         this.yData.delete(keepRows, this.yData.length - keepRows);
       });
     }
+  }
+
+  /** Public snapshot of the current row/col order arrays. */
+  getRowOrder(): string[] {
+    return this.yRowOrder.toArray();
+  }
+
+  getColOrder(): string[] {
+    return this.yColOrder.toArray();
   }
 
   /** Lazily grow yData to include the given row index (for edits beyond current range). */
@@ -326,6 +360,24 @@ export class SpreadsheetYjsBinding {
         }
         data.push(row);
       }
+
+      // Grow the worksheet to match yMeta dimensions before setData. jspreadsheet
+      // pre-allocates column/row configs at instantiation (`minDimensions`); if
+      // the persisted sheet has more columns or rows than that initial size,
+      // setData would index past the end of `columns[]`/`rows[]` and crash inside
+      // createCell with "Cannot read properties of undefined (reading 'style')".
+      try {
+        const currentCols = this.worksheet.options?.columns?.length ?? DEFAULT_COLS;
+        if (colCount > currentCols) {
+          this.worksheet.insertColumn(colCount - currentCols, currentCols - 1, false);
+        }
+      } catch { /* */ }
+      try {
+        const currentRows = this.worksheet.rows?.length ?? DEFAULT_ROWS;
+        if (data.length > currentRows) {
+          this.worksheet.insertRow(data.length - currentRows, currentRows - 1, false);
+        }
+      } catch { /* */ }
 
       this.worksheet.setData(data);
 
@@ -409,21 +461,27 @@ export class SpreadsheetYjsBinding {
     if (this.isApplyingRemote) return;
     if (!rows || rows.length === 0) return;
     const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
+    const sorted = [...rows].sort((a, b) => a.row - b.row);
+    const insertAt = sorted[0].row;
 
     this.yData.doc!.transact(() => {
       // Rows are sorted by index; insert from lowest to highest
-      const sorted = [...rows].sort((a, b) => a.row - b.row);
       for (let i = 0; i < sorted.length; i++) {
-        const insertAt = sorted[i].row + i;
+        const at = sorted[i].row + i;
         // Grow yData if the insert position is beyond current length
-        this.ensureRows(insertAt > 0 ? insertAt - 1 : 0);
+        this.ensureRows(at > 0 ? at - 1 : 0);
         const rowMap = new Y.Map<string>();
         for (let c = 0; c < colCount; c++) {
           rowMap.set(String(c), "");
         }
-        this.yData.insert(insertAt, [rowMap]);
+        this.yData.insert(at, [rowMap]);
+        if (at <= this.yRowOrder.length) {
+          this.yRowOrder.insert(at, [makeStableId("r")]);
+        }
       }
     }, this.localWriteOrigin);
+
+    this.shiftFormulaRefs({ type: "insertRow", index: insertAt, count: sorted.length });
   }
 
   /** v5: ondeleterow(instance, removedRows: number[]) */
@@ -433,16 +491,23 @@ export class SpreadsheetYjsBinding {
   ) {
     if (this.isApplyingRemote) return;
     if (!removedRows || removedRows.length === 0) return;
+    const ascending = [...removedRows].sort((a, b) => a - b);
+    const deleteAt = ascending[0];
 
     this.yData.doc!.transact(() => {
       // Delete from highest index first to preserve lower indices
-      const sorted = [...removedRows].sort((a, b) => b - a);
-      for (const rowIdx of sorted) {
+      const descending = [...removedRows].sort((a, b) => b - a);
+      for (const rowIdx of descending) {
         if (rowIdx < this.yData.length) {
           this.yData.delete(rowIdx, 1);
         }
+        if (rowIdx < this.yRowOrder.length) {
+          this.yRowOrder.delete(rowIdx, 1);
+        }
       }
     }, this.localWriteOrigin);
+
+    this.shiftFormulaRefs({ type: "deleteRow", index: deleteAt, count: ascending.length });
   }
 
   /** v5: oninsertcolumn(instance, columns: { column: number; options: any; data?: any[] }[]) */
@@ -470,7 +535,14 @@ export class SpreadsheetYjsBinding {
         }
       }
       this.yMeta.set("colCount", currentColCount + numCols);
+      if (insertAt <= this.yColOrder.length) {
+        const ids: string[] = [];
+        for (let i = 0; i < numCols; i++) ids.push(makeStableId("c"));
+        this.yColOrder.insert(insertAt, ids);
+      }
     }, this.localWriteOrigin);
+
+    this.shiftFormulaRefs({ type: "insertCol", index: insertAt, count: numCols });
   }
 
   /** v5: ondeletecolumn(instance, removedColumns: number[]) */
@@ -498,7 +570,55 @@ export class SpreadsheetYjsBinding {
         }
       }
       this.yMeta.set("colCount", currentColCount - numCols);
+      if (deleteAt < this.yColOrder.length) {
+        const removable = Math.min(numCols, this.yColOrder.length - deleteAt);
+        if (removable > 0) this.yColOrder.delete(deleteAt, removable);
+      }
     }, this.localWriteOrigin);
+
+    this.shiftFormulaRefs({ type: "deleteCol", index: deleteAt, count: numCols });
+  }
+
+  /**
+   * Rewrite A1 references inside formula text after a structural change.
+   * Walks the post-shift grid, runs `shiftFormula` on every `=`-prefixed cell,
+   * and writes back to both yData and the jspreadsheet worksheet so display
+   * values recompute on the next refresh tick.
+   */
+  private shiftFormulaRefs(op: ShiftOp) {
+    const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
+    const rewrites: Array<{ r: number; c: number; value: string }> = [];
+
+    this.yData.doc!.transact(() => {
+      for (let r = 0; r < this.yData.length; r++) {
+        const rowMap = this.yData.get(r);
+        for (let c = 0; c < colCount; c++) {
+          const value = rowMap.get(String(c)) ?? "";
+          if (!value.startsWith("=")) continue;
+          const next = shiftFormula(value, op);
+          if (next !== value) {
+            rowMap.set(String(c), next);
+            rewrites.push({ r, c, value: next });
+          }
+        }
+      }
+    }, this.localWriteOrigin);
+
+    if (rewrites.length === 0) return;
+
+    // Sync the worksheet so jspreadsheet evaluates the rewritten formulas.
+    // Suppress the onafterchanges echo via isApplyingRemote.
+    this.isApplyingRemote = true;
+    try {
+      for (const { r, c, value } of rewrites) {
+        try { this.worksheet.setValueFromCoords(c, r, value); } catch { /* */ }
+      }
+    } finally {
+      this.isApplyingRemote = false;
+    }
+
+    this.rebuildFormulaCellTracking();
+    this.scheduleFormulaRefresh();
   }
 
   /** v5: onchangestyle(instance, changes: Record<string, string>) */

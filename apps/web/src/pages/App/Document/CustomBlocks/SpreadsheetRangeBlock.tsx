@@ -4,9 +4,11 @@ import {
   type ReactCustomBlockRenderProps,
 } from "@blocknote/react";
 import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview";
+import { Button } from "@/components/ui/button";
+import { RepointCellRefDialog } from "@/pages/App/Document/RepointCellRefDialog";
 import { parseRange } from "@ripple/shared/cellRef";
 import { useQuery } from "convex-helpers/react/cache";
-import { CircleSlash } from "lucide-react";
+import { AlertCircle, CircleSlash } from "lucide-react";
 import type React from "react";
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -25,6 +27,7 @@ const spreadsheetRangePropSchema = {
   textAlignment: defaultProps.textAlignment,
   spreadsheetId: { default: "" as unknown as string },
   cellRef: { default: "" },
+  stableRef: { default: "" },
   width: { default: 512 },
   showHeaders: { default: true as unknown as boolean },
 } as const;
@@ -57,17 +60,17 @@ const ResizableSpreadsheetRange = ({
   block,
   editor,
 }: SpreadsheetRangeProps) => {
-  const { spreadsheetId, cellRef, showHeaders } = block.props;
+  const { spreadsheetId, cellRef, stableRef, showHeaders } = block.props;
 
   // --- Data fetching ---
   const spreadsheet = useQuery(
     api.spreadsheets.get,
     spreadsheetId ? { id: spreadsheetId as Id<"spreadsheets"> } : "skip",
   );
-  const { values: localValues, isLoading: localLoading } =
+  const { values: localValues, isLoading: localLoading, orphan, liveCellRef } =
     useSpreadsheetCellPreview(
       spreadsheetId as Id<"spreadsheets">,
-      cellRef,
+      stableRef ?? "",
     );
 
   const navigate = useNavigate();
@@ -82,12 +85,19 @@ const ResizableSpreadsheetRange = ({
   });
 
   const [hovered, setHovered] = useState(false);
+  const [repointOpen, setRepointOpen] = useState(false);
 
   // --- Derived data ---
-  const range = parseRange(cellRef);
-  const colCount = range ? range.endCol - range.startCol + 1 : 0;
-  const rowCount = range ? range.endRow - range.startRow + 1 : 0;
+  // Grid renders the LIVE range so insertions inside the range surface as a
+  // hole at the right column and the headers track shifts. The label tracks
+  // the same live range — the grid and the caption stay in agreement.
+  const liveRange = liveCellRef ? parseRange(liveCellRef) : null;
+  const originalRange = parseRange(cellRef);
+  const renderRange = liveRange ?? originalRange;
+  const colCount = renderRange ? renderRange.endCol - renderRange.startCol + 1 : 0;
+  const rowCount = renderRange ? renderRange.endRow - renderRange.startRow + 1 : 0;
   const values: string[][] = localValues ?? [];
+  const captionCellRef = liveCellRef ?? cellRef;
 
   // --- Actions ---
   const toggleHeaders = () => {
@@ -97,13 +107,13 @@ const ResizableSpreadsheetRange = ({
   };
 
   const cloneAsTable = () => {
-    if (!range) return;
+    if (!renderRange) return;
     const content = buildTableContent({
       values,
       rowCount,
       colCount,
-      startCol: range.startCol,
-      startRow: range.startRow,
+      startCol: renderRange.startCol,
+      startRow: renderRange.startRow,
       showHeaders,
     });
     // Defer to macrotask to avoid synchronous update loop inside BlockNote's table plugin
@@ -153,6 +163,46 @@ const ResizableSpreadsheetRange = ({
     );
   }
 
+  if (orphan) {
+    return (
+      <>
+        <div className="w-full flex flex-col items-center justify-center p-3 border border-amber-500 rounded-lg text-center bg-amber-50 dark:bg-amber-950/40 gap-2 py-4 animate-fade-in">
+          <AlertCircle className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+          <p className="text-amber-900 dark:text-amber-200 text-sm">
+            #REF! — the row or column for this range was deleted in {spreadsheet?.name ?? "the spreadsheet"}.
+          </p>
+          {editor.isEditable && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRepointOpen(true)}
+            >
+              Repoint range
+            </Button>
+          )}
+        </div>
+        {repointOpen && (
+          <RepointCellRefDialog
+            open={repointOpen}
+            onOpenChange={setRepointOpen}
+            spreadsheetId={spreadsheetId as Id<"spreadsheets">}
+            spreadsheetName={spreadsheet?.name ?? ""}
+            mode="range"
+            initialCellRef={cellRef}
+            onRepoint={(nextCellRef, nextStableRef) => {
+              editor.updateBlock(block, {
+                props: {
+                  cellRef: nextCellRef,
+                  stableRef: nextStableRef ?? "",
+                },
+              });
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   const isLoading =
     spreadsheet === undefined || (localLoading && !localValues);
 
@@ -167,15 +217,15 @@ const ResizableSpreadsheetRange = ({
           values={[]}
           colCount={colCount}
           rowCount={rowCount}
-          startCol={range?.startCol ?? 0}
-          startRow={range?.startRow ?? 0}
+          startCol={renderRange?.startCol ?? 0}
+          startRow={renderRange?.startRow ?? 0}
           showHeaders={showHeaders}
         />
       </div>
     );
   }
 
-  const caption = `${spreadsheet.name} \u203A ${cellRef}`;
+  const caption = `${spreadsheet.name} \u203A ${captionCellRef}`;
   const editable = editor.isEditable;
 
   return (
@@ -228,8 +278,8 @@ const ResizableSpreadsheetRange = ({
         values={values}
         colCount={colCount}
         rowCount={rowCount}
-        startCol={range?.startCol ?? 0}
-        startRow={range?.startRow ?? 0}
+        startCol={renderRange?.startCol ?? 0}
+        startRow={renderRange?.startRow ?? 0}
         showHeaders={showHeaders}
       />
 

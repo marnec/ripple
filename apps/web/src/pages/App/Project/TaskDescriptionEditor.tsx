@@ -5,7 +5,7 @@ import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { FileText, PenTool, Table } from "lucide-react";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
@@ -36,6 +36,7 @@ export function TaskDescriptionEditor({
   const { resolvedTheme } = useTheme();
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
+  const prepareStableRef = useAction(api.spreadsheetCellRefsNode.prepareStableRef);
 
   const [blockPickerDialog, setBlockPickerDialog] = useState<{
     open: boolean;
@@ -83,27 +84,30 @@ export function TaskDescriptionEditor({
       editor.focus();
 
       if (cellRef) {
-        if (isSingleCell(cellRef)) {
-          editor.insertInlineContent([
-            {
-              type: "spreadsheetCellRef",
-              props: { spreadsheetId, cellRef },
-            },
-            " ",
-          ]);
-        } else {
-          editor.insertBlocks(
-            [
+        void prepareStableRef({ spreadsheetId, cellRef }).then((stableRef) => {
+          if (!editor) return;
+          if (isSingleCell(cellRef)) {
+            editor.insertInlineContent([
               {
-                type: "spreadsheetRange" as const,
-                props: { spreadsheetId, cellRef } as any,
+                type: "spreadsheetCellRef",
+                props: { spreadsheetId, cellRef, stableRef },
               },
-            ],
-            editor.getTextCursorPosition().block,
-            "after",
-          );
-        }
-        void ensureCellRef({ spreadsheetId, cellRef });
+              " ",
+            ]);
+          } else {
+            editor.insertBlocks(
+              [
+                {
+                  type: "spreadsheetRange" as const,
+                  props: { spreadsheetId, cellRef, stableRef } as any,
+                },
+              ],
+              editor.getTextCursorPosition().block,
+              "after",
+            );
+          }
+          void ensureCellRef({ spreadsheetId, cellRef, stableRef });
+        });
       } else {
         editor.insertInlineContent([
           {

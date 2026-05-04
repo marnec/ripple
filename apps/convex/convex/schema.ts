@@ -298,12 +298,14 @@ export default defineSchema({
 
   spreadsheetCellRefs: defineTable({
     spreadsheetId: v.id("spreadsheets"),
-    cellRef: v.string(),       // "A1" or "A1:C3" (normalized uppercase)
-    values: v.string(),        // JSON-serialized string[][] (e.g., [["42"]] or [["a","b"],["c","d"]])
+    cellRef: v.string(),       // Live A1 — updated in place on every server push.
+    stableRef: v.string(),     // JSON-encoded StableRef tracking the logical cell.
+    orphan: v.optional(v.boolean()),   // True when stableRef can no longer resolve.
+    values: v.string(),        // JSON-serialized string[][] (e.g., [["42"]] or [["a","b"],["c","d"]]).
     updatedAt: v.number(),
   })
     .index("by_spreadsheet", ["spreadsheetId"])
-    .index("by_spreadsheet_cellRef", ["spreadsheetId", "cellRef"]),
+    .index("by_spreadsheet_stableRef", ["spreadsheetId", "stableRef"]),
 
   favorites: defineTable({
     userId: v.id("users"),

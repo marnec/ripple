@@ -490,7 +490,12 @@ http.route({
 
       const body = (await request.json()) as {
         spreadsheetId: string;
-        updates: Array<{ cellRef: string; values: string }>;
+        updates: Array<{
+          stableRef: string;
+          liveCellRef?: string;
+          values: string;
+          orphan?: boolean;
+        }>;
       };
 
       if (!body.spreadsheetId || !Array.isArray(body.updates)) {
