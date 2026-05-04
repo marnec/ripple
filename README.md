@@ -1,7 +1,6 @@
 NEXT STEPS:
 
 Priorities:
-- DOC: Ctrl+Z does not trigger undo in the document editor (BlockNote + Yjs collaboration); investigate Y.UndoManager trackedOrigins / y-prosemirror keymap wiring
 - Investigate what happens to referenced cells when inserting or removing rows or columns  
 
 - diagram embeds container is sometime incorrectly sized
@@ -9,6 +8,8 @@ Priorities:
 - leave channel logic
 
 - what happens to tasks when a column (status is deleted)?
+
+- add ability to download docs, diagrams and spreadsheets in various formats, context menu from share btn
 
 - calendar; plan calls; invite guests
 

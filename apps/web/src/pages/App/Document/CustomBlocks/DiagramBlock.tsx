@@ -91,19 +91,15 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
 
-  const [aspectRatio, setAspectRatio] = useState<number | null>(
-    block.props.aspectRatio || null,
-  );
   const [showHandles, setShowHandles] = useState(false);
 
   const handleAspectRatioChange = (ratio: number) => {
-      setAspectRatio(ratio);
-      if (ratio !== block.props.aspectRatio) {
-        editor.updateBlock(block, {
-          props: { aspectRatio: ratio },
-        });
-      }
-    };
+    if (ratio !== block.props.aspectRatio) {
+      editor.updateBlock(block, {
+        props: { aspectRatio: ratio },
+      });
+    }
+  };
 
   const resizeHandleMouseDownHandler = (
     event: React.MouseEvent,
@@ -116,7 +112,6 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
     const initialWidth = wrapper.clientWidth;
     const initialClientX = event.clientX;
     const alignment = block.props.textAlignment;
-    const currentAspectRatio = aspectRatio;
 
     const onMouseMove = (e: MouseEvent) => {
       const xDiff = e.clientX - initialClientX;
@@ -134,9 +129,6 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
         editorWidth || Number.MAX_VALUE,
       );
       wrapper.style.width = `${finalWidth}px`;
-      if (currentAspectRatio) {
-        wrapper.style.height = `${finalWidth * currentAspectRatio}px`;
-      }
     };
 
     const onMouseUp = () => {
@@ -181,17 +173,12 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
       style={{
         width: block.props.width,
         maxWidth: "100%",
-        height:
-          aspectRatio && block.props.width
-            ? `${block.props.width * aspectRatio}px`
-            : "auto",
       }}
       onMouseEnter={() => editor.isEditable && setShowHandles(true)}
       onMouseLeave={(event) => {
+        const related = event.relatedTarget as HTMLElement | null;
         if (
-          (event.relatedTarget as HTMLElement)?.classList.contains(
-            "bn-resize-handle",
-          ) ||
+          related?.classList?.contains("bn-resize-handle") ||
           isResizingRef.current
         ) {
           return;
