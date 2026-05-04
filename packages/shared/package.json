@@ -6,6 +6,7 @@
   "exports": {
     "./*": "./src/*.ts",
     "./*.ts": "./src/*.ts",
+    "./constants": "./src/constants.ts",
     "./protocol": "./src/protocol/index.ts",
     "./enums": "./src/enums/index.ts"
   },

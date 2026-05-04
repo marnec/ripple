@@ -1,6 +1,7 @@
 NEXT STEPS:
 
-New Features:
+- confirmation dialog when adding or deleting a col or row that will affect some referenced cells or ranges
+
 - named share links
 
 - leave channel logic (only for private?)

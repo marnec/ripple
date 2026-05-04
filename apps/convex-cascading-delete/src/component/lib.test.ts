@@ -13,11 +13,21 @@ in a realistic execution environment.
 
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import schema from "./schema.js";
 import { api, internal } from "./_generated/api.js";
 
 const modules = import.meta.glob("./**/*.ts");
+
+// Tests pass fake handle strings (e.g. "handle:dispatch") to ctx.scheduler.runAfter.
+// convex-test fires those via setTimeout(0); if they're allowed to fire AFTER the
+// next test's convexTest() replaces the global, their bookkeeping patches hit a
+// stale DatabaseFake whose transaction was never opened, surfacing as
+// "Write outside of transaction" unhandled rejections. Yielding here lets the
+// queued setTimeouts complete against the current test's still-active global.
+afterEach(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 20));
+});
 
 
 describe("createBatchJob", () => {
