@@ -1,10 +1,5 @@
 NEXT STEPS:
 
-Priorities:
-- what happens to tasks when a column (status is deleted)?
-
-- improve awareness of embeedded document blocks when editing a doc
-
 New Features:
 - named share links
 
@@ -15,6 +10,11 @@ New Features:
 - add ability to download docs, diagrams and spreadsheets in various formats, context menu from share btn
 
 - calendar; plan calls; invite guests
+
+- external ticketing system: 
+    - connected to project
+    - connected somehow to tasks
+    - external ticketer can be given access to specific resources in workspaces through links (attach to ticket??)
 
 - [ ] link previews in chat
 

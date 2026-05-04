@@ -1,14 +1,14 @@
 /**
- * Renders a <style> tag that highlights blocks referenced by embeds elsewhere.
+ * Renders a <style> tag that marks blocks referenced by embeds elsewhere.
  * Rules are generated dynamically from `blockIds` because ProseMirror preserves
  * `data-id` on re-render but wipes custom attributes — selecting via attribute
  * is the only stable hook.
  *
- * Both states (active + exit) declare the same `transition` property, so
- * swapping the rendered rule when `active` flips animates smoothly without
- * any timer-based mount lifecycle. The exit rule's values match the editor's
- * neutral defaults (transparent border, no padding offset), so the initial
- * render is also visually flat.
+ * Two visual modes:
+ * - resting (`active=false`): a small ↗ marker always sits trailing the
+ *   referenced block. Subtle, non-blocking awareness while editing.
+ * - active (`active=true`): louder amber border + bg tint + padding shift,
+ *   shown on every referenced block when the user toggles the References panel.
  */
 export function ReferencedBlocksHighlight({
   blockIds,
@@ -19,11 +19,23 @@ export function ReferencedBlocksHighlight({
 }) {
   if (blockIds.size === 0) return null;
 
-  const selector = [...blockIds]
+  const ids = [...blockIds];
+  const activeSelector = ids
     .map((id) => `.bn-block-outer[data-id="${id}"] > .bn-block`)
     .join(",\n");
 
-  return <style>{active ? activeRule(selector) : exitRule(selector)}</style>;
+  if (active) {
+    return <style>{activeRule(activeSelector)}</style>;
+  }
+
+  const markerSelector = ids
+    .map(
+      (id) =>
+        `.bn-block-outer[data-id="${id}"] > .bn-block > .bn-block-content::after`,
+    )
+    .join(",\n");
+
+  return <style>{markerRule(markerSelector)}</style>;
 }
 
 function activeRule(selector: string) {
@@ -36,11 +48,16 @@ function activeRule(selector: string) {
 }`;
 }
 
-function exitRule(selector: string) {
+function markerRule(selector: string) {
   return `${selector} {
-  border-left: 2px solid transparent;
-  background-color: transparent;
-  padding-left: 0;
-  transition: border-color 0.2s, background-color 0.2s, padding-left 0.2s;
+  content: '↗';
+  align-self: flex-start;
+  margin-left: 0.5em;
+  margin-top: 0.15em;
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1;
+  color: hsl(45 90% 50% / 0.5);
+  pointer-events: none;
 }`;
 }
