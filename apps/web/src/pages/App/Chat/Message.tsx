@@ -26,6 +26,7 @@ import { hasImageBlocks } from "./messageUtils";
 import type { GroupPosition, MessageGroupInfo } from "./messageGrouping";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 import { Avatar, AvatarFallback, AvatarImage } from "../../../components/ui/avatar";
+import { isMessageEditable } from "@shared/constants";
 
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
 
@@ -283,10 +284,12 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
 
           {userIsAuthor && (
             <>
-              <ContextMenuItem onClick={handleEdit}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </ContextMenuItem>
+              {isMessageEditable(_creationTime) && (
+                <ContextMenuItem onClick={handleEdit}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </ContextMenuItem>
+              )}
               <ContextMenuItem onClick={handleDelete}>
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete

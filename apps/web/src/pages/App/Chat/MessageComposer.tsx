@@ -14,7 +14,8 @@ import { ResourceReference } from "./CustomInlineContent/ResourceReference";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { Command, CornerDownLeft, File, FolderKanban, PenTool, Phone, SendHorizonal, Table2, X } from "lucide-react";
+import { EditingBanner } from "./EditingBanner";
+import { Check, Command, CornerDownLeft, File, FolderKanban, PenTool, Phone, SendHorizonal, Table2, X } from "lucide-react";
 import { RippleSpinner } from "../../../components/RippleSpinner";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
@@ -67,7 +68,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 }: MessageComposerProps) => {
   const { resolvedTheme } = useTheme();
   const navigate = useNavigate();
-  const { editingMessage, replyingTo, setReplyingTo } = useChatContext();
+  const { editingMessage, setEditingMessage, replyingTo, setReplyingTo } = useChatContext();
+  const isEditing = !!editingMessage.id;
 
   const sidebarData = useWorkspaceSidebar();
   const projects = sidebarData?.projects;
@@ -150,6 +152,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           editor.replaceBlocks(editor.document, textBlocks);
         }
       } catch { /* malformed body — leave editor cleared */ }
+      editor.focus();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);
@@ -274,6 +277,27 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     clearImage();
   };
 
+  const cancelEdit = () => {
+    setEditingMessage({ id: null, body: null });
+    if (editor) editorClear(editor);
+    clearImage();
+  };
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // Let an open BlockNote suggestion menu (`@`/`#`) consume Escape first.
+      if (document.querySelector(".bn-suggestion-menu, .bn-grid-suggestion-menu")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      cancelEdit();
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]);
+
   useEditorChange(() => {
     setIsEmpty(isEditorEmpty(editor));
   }, editor);
@@ -295,6 +319,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           </Button>
         )}
       </div>
+      {isEditing && <EditingBanner onCancel={cancelEdit} />}
       {replyingTo && (
         <MessageQuotePreview
           message={{
@@ -327,7 +352,12 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         <BlockNoteView
           id="message-composer"
           editor={editor}
-          className="w-full grow min-w-0 box-border border rounded-md px-2 transition-shadow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1"
+          className={cn(
+            "w-full grow min-w-0 box-border border rounded-md px-2 transition-shadow focus-within:ring-2 focus-within:ring-offset-1",
+            isEditing
+              ? "border-amber-500/50 focus-within:ring-amber-500"
+              : "focus-within:ring-ring",
+          )}
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
           emojiPicker={false}
@@ -344,9 +374,17 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
         </BlockNoteView>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <Button disabled={!canSend} onClick={sendMessage} size="icon" className="sm:w-18 sm:gap-1.5 sm:px-3 transition-transform active:scale-95">
-            <SendHorizonal className="h-4 w-4" />
-            <span className="hidden sm:inline text-sm">Send</span>
+          <Button
+            disabled={!canSend}
+            onClick={sendMessage}
+            size="icon"
+            className={cn(
+              "sm:w-18 sm:gap-1.5 sm:px-3 transition-transform active:scale-95",
+              isEditing && "bg-amber-600 hover:bg-amber-600/90 dark:bg-amber-500 dark:hover:bg-amber-500/90",
+            )}
+          >
+            {isEditing ? <Check className="h-4 w-4" /> : <SendHorizonal className="h-4 w-4" />}
+            <span className="hidden sm:inline text-sm">{isEditing ? "Save" : "Send"}</span>
           </Button>
           <div className="hidden sm:flex items-center gap-0.5">
             <Kbd>{isMac ? <Command /> : "Ctrl"}</Kbd>

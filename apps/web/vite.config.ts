@@ -69,7 +69,10 @@ export default defineConfig({
   },
   css: { devSourcemap: true },
   build: { sourcemap: true },
-  optimizeDeps: { esbuildOptions: { sourcemap: true } },
+  optimizeDeps: {
+    esbuildOptions: { sourcemap: true },
+    exclude: ["@ripple/shared"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

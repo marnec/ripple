@@ -5,6 +5,7 @@ import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
+import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
@@ -428,6 +429,7 @@ export const update = mutation({
     const message = await ctx.db.get(id);
     if (!message) throw new ConvexError("Message not found");
     if (message.userId !== userId) throw new ConvexError("Not authorized to update this message");
+    if (!isMessageEditable(message._creationTime)) throw new ConvexError("Edit window has expired");
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.patch(id, { body, plainText });
