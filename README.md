@@ -1,6 +1,10 @@
 NEXT STEPS:
 
-- confirmation dialog when adding or deleting a col or row that will affect some referenced cells or ranges
+- spreadsheet qol
+    - confirmation dialog when adding or deleting a col or row that will affect some referenced cells or ranges
+    - improve formula picker to trigger for nested functions
+    - option to visually select cells / ranges when embedding
+    - visual cue and mouse pick coords in formula editing
 
 - named share links
 
@@ -47,13 +51,7 @@ keyboard accessiblity
     - [ ] user custom avatars: look at dicebear
     - [ ] facepile not using user avatar (investigate convex cost)
 
-- [ ] evaluate switch to pragmatic drag and drop for total control and integration with view-transition-apis
 
-- spreadsheet qol
-    - [ ] improve formula picker to trigger for nested functions
-    - [ ] prompt for coordinates
-    - [ ] mouse pick coords?
-    - [ ] reintroduce formatting?
 
 - tag system follow-ups
     - [ ] cycle-scoped tag filter — `taskTags` already has room for a `[cycleId, tagId]` index when needed
