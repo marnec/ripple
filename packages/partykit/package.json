@@ -9,10 +9,16 @@
     "./server": "./src/server.ts",
     "./presence-server": "./src/presence-server.ts"
   },
+  "scripts": {
+    "dev": "wrangler dev --port 1999"
+  },
   "dependencies": {
     "@ripple/shared": "workspace:^",
     "partyserver": "0.5.5",
     "y-partyserver": "2.2.0",
     "yjs": "13.6.30"
+  },
+  "devDependencies": {
+    "wrangler": "4.87.0"
   }
 }

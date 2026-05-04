@@ -11,7 +11,7 @@
     "dev": "turbo run dev --parallel",
     "dev:frontend": "pnpm --filter @ripple/web dev",
     "dev:backend": "pnpm --filter @ripple/convex dev",
-    "dev:partykit": "pnpm --filter @ripple/web dev:partykit",
+    "dev:partykit": "pnpm --filter @ripple/partykit dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",

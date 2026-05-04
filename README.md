@@ -4,6 +4,7 @@ Priorities:
 - DOC: Ctrl+Z does not trigger undo in the document editor (BlockNote + Yjs collaboration); investigate Y.UndoManager trackedOrigins / y-prosemirror keymap wiring
 - Investigate what happens to referenced cells when inserting or removing rows or columns  
 
+- diagram embeds container is sometime incorrectly sized
 
 - leave channel logic
 

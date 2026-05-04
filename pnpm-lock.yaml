@@ -606,6 +606,10 @@ importers:
       yjs:
         specifier: 13.6.30
         version: 13.6.30
+    devDependencies:
+      wrangler:
+        specifier: 4.87.0
+        version: 4.87.0(@cloudflare/workers-types@4.20260503.1)
 
   packages/shared:
     dependencies:

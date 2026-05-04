@@ -5,7 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite --open",
-    "dev:partykit": "wrangler dev --config wrangler-partykit.jsonc --port 1999",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b && eslint . --report-unused-disable-directives --max-warnings 0",
