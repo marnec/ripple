@@ -11,14 +11,14 @@ import type { Id } from "@convex/_generated/dataModel";
 const DiagramView = ({
   diagramId,
   onAspectRatioChange,
+  onNavigate,
 }: {
   diagramId: Id<"diagrams">;
   onAspectRatioChange?: (ratio: number) => void;
+  onNavigate: () => void;
 }) => {
   const { svgHtml, isLoading, diagram } =
     useDiagramPreview(diagramId);
-  const navigate = useNavigate();
-  const { workspaceId } = useParams<{ workspaceId: string }>();
 
   const svgContainerRef = (node: HTMLDivElement | null) => {
       if (!node || !onAspectRatioChange) return;
@@ -29,12 +29,6 @@ const DiagramView = ({
         onAspectRatioChange(height / width);
       }
     };
-
-  const handleClick = () => {
-    if (diagram && workspaceId) {
-      void navigate(`/workspaces/${workspaceId}/diagrams/${diagramId}`);
-    }
-  };
 
   if (!isLoading && diagram === null) {
     return (
@@ -48,15 +42,30 @@ const DiagramView = ({
   }
 
   return (
-    <div className="relative w-full min-h-40 h-full" onClick={handleClick} role="button" tabIndex={0} onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick(); } }}>
+    <div className="relative w-full min-h-40 h-full">
       {svgHtml ? (
-        <div className="animate-fade-in cursor-pointer">
+        <div className="animate-fade-in">
           <div className="w-full text-xs text-right text-muted-foreground rounded-tr rounded-bl min-h-lh">
-            {diagram?.name}
+            {diagram ? (
+              <span
+                className="cursor-pointer hover:underline"
+                onClick={onNavigate}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onNavigate();
+                  }
+                }}
+              >
+                {diagram.name}
+              </span>
+            ) : null}
           </div>
           <div
             ref={svgContainerRef}
-            className="w-full hover:opacity-90 transition-opacity [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
+            className="w-full [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
             dangerouslySetInnerHTML={{ __html: svgHtml }}
           />
         </div>
@@ -90,8 +99,16 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
   const { diagramId } = block.props;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
+  const navigate = useNavigate();
+  const { workspaceId } = useParams<{ workspaceId: string }>();
 
   const [showHandles, setShowHandles] = useState(false);
+
+  const handleNavigate = () => {
+    if (diagramId && workspaceId) {
+      void navigate(`/workspaces/${workspaceId}/diagrams/${diagramId}`);
+    }
+  };
 
   const handleAspectRatioChange = (ratio: number) => {
     if (ratio !== block.props.aspectRatio) {
@@ -189,8 +206,23 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
         <DiagramView
           diagramId={diagramId as Id<"diagrams">}
           onAspectRatioChange={handleAspectRatioChange}
+          onNavigate={handleNavigate}
         />
       </div>
+      {!editor.isEditable && (
+        <div
+          className="absolute inset-0 cursor-pointer"
+          onClick={handleNavigate}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleNavigate();
+            }
+          }}
+        />
+      )}
       {showHandles && (
         <>
           <div

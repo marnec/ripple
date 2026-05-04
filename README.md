@@ -1,8 +1,6 @@
 NEXT STEPS:
 
 Priorities:
-- Investigate what happens to referenced cells when inserting or removing rows or columns  
-
 - what happens to tasks when a column (status is deleted)?
 
 - improve awareness of embeedded document blocks when editing a doc
