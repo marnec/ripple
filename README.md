@@ -6,6 +6,8 @@ Priorities:
 - improve awareness of embeedded document blocks when editing a doc
 
 New Features:
+- named share links
+
 - leave channel logic (only for private?)
 
 - consider favorite for channels too

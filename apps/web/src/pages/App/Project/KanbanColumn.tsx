@@ -16,6 +16,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { cn } from "@/lib/utils";
@@ -54,7 +61,9 @@ type KanbanColumnProps = {
   onTaskClick: (taskId: string) => void;
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
-  onDelete?: () => void;
+  onDelete?: (reassignToStatusId: Id<"taskStatuses">) => void;
+  /** Other statuses in the same project — candidates for task reassignment when this column is deleted. */
+  reassignTargets: Array<{ _id: Id<"taskStatuses">; name: string; isDefault: boolean }>;
   isFirst: boolean;
   isLast: boolean;
   canDelete: boolean;
@@ -71,6 +80,7 @@ export function KanbanColumn({
   onMoveLeft,
   onMoveRight,
   onDelete,
+  reassignTargets,
   isFirst,
   isLast,
   canDelete,
@@ -79,6 +89,16 @@ export function KanbanColumn({
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const defaultTargetId =
+    reassignTargets.find((s) => s.isDefault)?._id ?? reassignTargets[0]?._id;
+  const [reassignTargetId, setReassignTargetId] = useState<
+    Id<"taskStatuses"> | undefined
+  >(defaultTargetId);
+  const hasTasks = (totalCount ?? tasks.length) > 0;
+  const openDeleteDialog = () => {
+    setReassignTargetId(defaultTargetId);
+    setShowDeleteDialog(true);
+  };
 
   const updateStatus = useMutation(api.taskStatuses.update);
 
@@ -113,8 +133,9 @@ export function KanbanColumn({
   };
 
   const handleDeleteConfirm = () => {
+    if (!reassignTargetId) return;
     setShowDeleteDialog(false);
-    onDelete?.();
+    onDelete?.(reassignTargetId);
   };
 
   return (
@@ -193,7 +214,7 @@ export function KanbanColumn({
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => setShowDeleteDialog(true)}
+                onClick={openDeleteDialog}
                 disabled={!canDelete}
                 className={canDelete ? "text-destructive" : ""}
               >
@@ -238,9 +259,35 @@ export function KanbanColumn({
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>Delete Column</ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
-              Delete &quot;{status.name}&quot; column? Tasks in this column will be moved to the default status. This cannot be undone.
+              Delete &quot;{status.name}&quot; column? {hasTasks
+                ? "Tasks in this column will be moved to the status you choose below. This cannot be undone."
+                : "This cannot be undone."}
             </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
+          {hasTasks && reassignTargets.length > 0 && (
+            <div className="space-y-2 px-4 sm:px-0">
+              <label className="text-sm font-medium">Reassign tasks to</label>
+              <Select
+                value={reassignTargetId}
+                onValueChange={(value) => {
+                  if (value) setReassignTargetId(value);
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {reassignTargets.find((s) => s._id === reassignTargetId)?.name}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {reassignTargets.map((s) => (
+                    <SelectItem key={s._id} value={s._id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <ResponsiveDialogFooter>
             <Button
               variant="outline"
@@ -248,7 +295,11 @@ export function KanbanColumn({
             >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={hasTasks && !reassignTargetId}
+            >
               Delete
             </Button>
           </ResponsiveDialogFooter>

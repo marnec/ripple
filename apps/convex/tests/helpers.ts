@@ -15,6 +15,7 @@ export function createTestContext() {
   cascadingDeleteComponent.register(t as any);
   rateLimiterComponent.register(t);
   workpoolComponent.register(t, "notificationPool");
+  workpoolComponent.register(t, "taskReassignPool");
   // Register workspace resource count aggregates
   aggregateComponent.register(t, "documentsByWorkspace");
   aggregateComponent.register(t, "diagramsByWorkspace");

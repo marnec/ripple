@@ -1,7 +1,9 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalAction, internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { taskStatusValidator } from "./validators";
 import { requireWorkspaceMember } from "./authHelpers";
+import { scheduleTaskReassign } from "./taskReassignPool";
 
 export const listByProject = query({
   args: { projectId: v.id("projects") },
@@ -11,13 +13,12 @@ export const listByProject = query({
     if (!project) throw new ConvexError("Project not found");
     await requireWorkspaceMember(ctx, project.workspaceId);
 
-    // Query with by_project_order index, sorted by order
     const statuses = await ctx.db
       .query("taskStatuses")
       .withIndex("by_project_order", (q) => q.eq("projectId", projectId))
       .collect();
 
-    return statuses;
+    return statuses.filter((s) => s.pendingDeletion !== true);
   },
 });
 
@@ -131,9 +132,12 @@ export const reorderColumns = mutation({
 });
 
 export const remove = mutation({
-  args: { statusId: v.id("taskStatuses") },
+  args: {
+    statusId: v.id("taskStatuses"),
+    reassignToStatusId: v.id("taskStatuses"),
+  },
   returns: v.null(),
-  handler: async (ctx, { statusId }) => {
+  handler: async (ctx, { statusId, reassignToStatusId }) => {
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
 
@@ -141,40 +145,96 @@ export const remove = mutation({
     if (!project) throw new ConvexError("Project not found");
     await requireWorkspaceMember(ctx, project.workspaceId);
 
-    // Cannot remove if it's the default status
     if (status.isDefault) {
       throw new ConvexError("Cannot remove the default status");
     }
-
-    // Find the default status for this project
-    const defaultStatus = await ctx.db
-      .query("taskStatuses")
-      .withIndex("by_project_isDefault", (q) =>
-        q.eq("projectId", status.projectId).eq("isDefault", true)
-      )
-      .first();
-
-    if (!defaultStatus) {
-      throw new ConvexError("No default status found for project");
+    if (status.pendingDeletion) {
+      throw new ConvexError("Status deletion already in progress");
+    }
+    if (reassignToStatusId === statusId) {
+      throw new ConvexError("Cannot reassign tasks to the status being deleted");
     }
 
-    // Cascade: move all tasks using this status to the default status
-    const tasksToMove = await ctx.db
+    const target = await ctx.db.get(reassignToStatusId);
+    if (!target) throw new ConvexError("Target status not found");
+    if (target.projectId !== status.projectId) {
+      throw new ConvexError("Target status belongs to a different project");
+    }
+    if (target.pendingDeletion) {
+      throw new ConvexError("Target status is being deleted");
+    }
+
+    await ctx.db.patch(statusId, { pendingDeletion: true });
+
+    await scheduleTaskReassign(ctx, internal.taskStatuses.reassignTasksAndDelete, {
+      statusId,
+      reassignToStatusId,
+    });
+
+    return null;
+  },
+});
+
+const REASSIGN_BATCH_SIZE = 100;
+
+export const fetchTasksForStatusBatch = internalMutation({
+  args: {
+    statusId: v.id("taskStatuses"),
+    reassignToStatusId: v.id("taskStatuses"),
+    limit: v.number(),
+  },
+  returns: v.number(),
+  handler: async (ctx, { statusId, reassignToStatusId, limit }) => {
+    const status = await ctx.db.get(statusId);
+    if (!status) return 0;
+
+    const tasks = await ctx.db
       .query("tasks")
       .withIndex("by_project_status", (q) =>
         q.eq("projectId", status.projectId).eq("statusId", statusId)
       )
-      .collect();
+      .take(limit);
 
-    // Move tasks to default status (preserve completed field - don't change it)
     await Promise.all(
-      tasksToMove.map((task) =>
-        ctx.db.patch(task._id, { statusId: defaultStatus._id })
+      tasks.map((task) =>
+        ctx.db.patch(task._id, { statusId: reassignToStatusId })
       )
     );
 
-    // Delete the status
+    return tasks.length;
+  },
+});
+
+export const finalizeStatusDelete = internalMutation({
+  args: { statusId: v.id("taskStatuses") },
+  returns: v.null(),
+  handler: async (ctx, { statusId }) => {
+    const status = await ctx.db.get(statusId);
+    if (!status) return null;
     await ctx.db.delete(statusId);
+    return null;
+  },
+});
+
+export const reassignTasksAndDelete = internalAction({
+  args: {
+    statusId: v.id("taskStatuses"),
+    reassignToStatusId: v.id("taskStatuses"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { statusId, reassignToStatusId }) => {
+    // Drain in batches to keep individual mutations small. Each batch
+    // patches `statusId`, so the next take() returns the next chunk and
+    // the loop terminates when zero rows are left.
+    while (true) {
+      const moved: number = await ctx.runMutation(
+        internal.taskStatuses.fetchTasksForStatusBatch,
+        { statusId, reassignToStatusId, limit: REASSIGN_BATCH_SIZE },
+      );
+      if (moved === 0) break;
+    }
+
+    await ctx.runMutation(internal.taskStatuses.finalizeStatusDelete, { statusId });
     return null;
   },
 });

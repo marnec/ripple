@@ -228,6 +228,7 @@ export default defineSchema({
     isDefault: v.boolean(), // marks the default status for new tasks (only one per project)
     isCompleted: v.boolean(), // when true, tasks with this status are considered completed
     setsStartDate: v.optional(v.boolean()), // when true, auto-sets startDate on tasks entering this status
+    pendingDeletion: v.optional(v.boolean()), // true while bulk task reassignment drains via workpool
   })
     .index("by_project", ["projectId"])
     .index("by_project_order", ["projectId", "order"])

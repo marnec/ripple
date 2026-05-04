@@ -13,6 +13,7 @@ app.use(cascadingDelete);
 app.use(migrations);
 app.use(rateLimiter);
 app.use(workpool, { name: "notificationPool" });
+app.use(workpool, { name: "taskReassignPool" });
 
 // Workspace resource count aggregates (O(log n) counts per workspace)
 app.use(aggregate, { name: "documentsByWorkspace" });

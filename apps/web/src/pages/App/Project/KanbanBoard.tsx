@@ -286,9 +286,14 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     void reorderColumns({ statusIds: reordered.map((s) => s._id) });
   };
 
-  // Column delete handler
-  const handleDeleteColumn = (statusId: Id<"taskStatuses">) => {
-    void removeStatus({ statusId });
+  // Column delete handler — caller picks the target status that orphaned tasks
+  // should be reassigned to. The mutation enqueues a workpool action that
+  // drains the column in batches and finally deletes the row.
+  const handleDeleteColumn = (
+    statusId: Id<"taskStatuses">,
+    reassignToStatusId: Id<"taskStatuses">,
+  ) => {
+    void removeStatus({ statusId, reassignToStatusId });
   };
 
   if (tasks === undefined || statuses === undefined) {
@@ -322,7 +327,12 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
               }}
               onMoveLeft={() => handleMoveColumn(status._id, "left")}
               onMoveRight={() => handleMoveColumn(status._id, "right")}
-              onDelete={() => handleDeleteColumn(status._id)}
+              onDelete={(reassignToStatusId) =>
+                handleDeleteColumn(status._id, reassignToStatusId)
+              }
+              reassignTargets={statuses
+                .filter((s) => s._id !== status._id)
+                .map((s) => ({ _id: s._id, name: s.name, isDefault: s.isDefault }))}
               isFirst={index === 0}
               isLast={index === statuses.length - 1}
               canDelete={!status.isDefault}

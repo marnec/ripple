@@ -30,6 +30,7 @@ export const taskStatusValidator = v.object({
   isDefault: v.boolean(),
   isCompleted: v.boolean(),
   setsStartDate: v.optional(v.boolean()),
+  pendingDeletion: v.optional(v.boolean()),
 });
 
 export const userValidator = v.object({

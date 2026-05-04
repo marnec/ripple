@@ -1215,6 +1215,7 @@ export type DataModel = {
       isDefault: boolean;
       name: string;
       order: number;
+      pendingDeletion?: boolean;
       projectId: Id<"projects">;
       setsStartDate?: boolean;
       _id: Id<"taskStatuses">;
@@ -1228,6 +1229,7 @@ export type DataModel = {
       | "isDefault"
       | "name"
       | "order"
+      | "pendingDeletion"
       | "projectId"
       | "setsStartDate";
     indexes: {

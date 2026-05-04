@@ -424,6 +424,7 @@ export declare const api: {
           isDefault: boolean;
           name: string;
           order: number;
+          pendingDeletion?: boolean;
           projectId: Id<"projects">;
           setsStartDate?: boolean;
         } | null;
@@ -1757,6 +1758,7 @@ export declare const api: {
           isDefault: boolean;
           name: string;
           order: number;
+          pendingDeletion?: boolean;
           projectId: Id<"projects">;
           setsStartDate?: boolean;
         } | null;
@@ -1824,6 +1826,7 @@ export declare const api: {
           isDefault: boolean;
           name: string;
           order: number;
+          pendingDeletion?: boolean;
           projectId: Id<"projects">;
           setsStartDate?: boolean;
         } | null;
@@ -1876,6 +1879,7 @@ export declare const api: {
           isDefault: boolean;
           name: string;
           order: number;
+          pendingDeletion?: boolean;
           projectId: Id<"projects">;
           setsStartDate?: boolean;
         } | null;
@@ -1975,6 +1979,7 @@ export declare const api: {
             isDefault: boolean;
             name: string;
             order: number;
+            pendingDeletion?: boolean;
             projectId: Id<"projects">;
             setsStartDate?: boolean;
           } | null;
@@ -2025,6 +2030,7 @@ export declare const api: {
           isDefault: boolean;
           name: string;
           order: number;
+          pendingDeletion?: boolean;
           projectId: Id<"projects">;
           setsStartDate?: boolean;
         } | null;
@@ -2096,6 +2102,7 @@ export declare const api: {
         isDefault: boolean;
         name: string;
         order: number;
+        pendingDeletion?: boolean;
         projectId: Id<"projects">;
         setsStartDate?: boolean;
       }>
@@ -2103,7 +2110,7 @@ export declare const api: {
     remove: FunctionReference<
       "mutation",
       "public",
-      { statusId: Id<"taskStatuses"> },
+      { reassignToStatusId: Id<"taskStatuses">; statusId: Id<"taskStatuses"> },
       null
     >;
     reorderColumns: FunctionReference<
@@ -3556,6 +3563,30 @@ export declare const internal: {
       } | null
     >;
   };
+  taskStatuses: {
+    fetchTasksForStatusBatch: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        limit: number;
+        reassignToStatusId: Id<"taskStatuses">;
+        statusId: Id<"taskStatuses">;
+      },
+      number
+    >;
+    finalizeStatusDelete: FunctionReference<
+      "mutation",
+      "internal",
+      { statusId: Id<"taskStatuses"> },
+      null
+    >;
+    reassignTasksAndDelete: FunctionReference<
+      "action",
+      "internal",
+      { reassignToStatusId: Id<"taskStatuses">; statusId: Id<"taskStatuses"> },
+      null
+    >;
+  };
   userDenormalizationSync: {
     syncToChannelMembers: FunctionReference<
       "mutation",
@@ -3580,6 +3611,7 @@ export declare const components: {
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
   notificationPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"notificationPool">;
+  taskReassignPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskReassignPool">;
   documentsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"documentsByWorkspace">;
   diagramsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"diagramsByWorkspace">;
   spreadsheetsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"spreadsheetsByWorkspace">;
