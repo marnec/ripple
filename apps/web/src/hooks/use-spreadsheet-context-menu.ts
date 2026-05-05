@@ -1,3 +1,4 @@
+import { shiftFormula, type ShiftOp } from "@/lib/formulaShift";
 import { type RefObject, useEffect, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
@@ -62,13 +63,43 @@ function resolveClickContext(
 // Hook
 // ---------------------------------------------------------------------------
 
+export interface ExternalRef {
+  cellRef: string;
+  orphan?: boolean;
+}
+
+export interface AffectedExternalRef {
+  before: string;
+  after: string; // "#REF!" if the op breaks it
+}
+
+export interface PendingShift {
+  op: ShiftOp;
+  affected: AffectedExternalRef[];
+  apply: () => void;
+}
+
+/**
+ * Determine whether a structural op shifts or breaks an external A1 ref.
+ * Reuses `shiftFormula` by wrapping the ref in `=` so single cells and
+ * ranges are handled uniformly. Returns null when unaffected.
+ */
+function shiftExternalRef(cellRef: string, op: ShiftOp): string | null {
+  const before = `=${cellRef}`;
+  const after = shiftFormula(before, op);
+  if (after === before) return null;
+  return after.slice(1);
+}
+
 /**
  * Manages the spreadsheet context menu: positioning, dismiss, and row/column actions.
  */
 export function useSpreadsheetContextMenu(
   worksheetRef: RefObject<Worksheet>,
+  externalRefs: ReadonlyArray<ExternalRef>,
 ) {
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [pending, setPending] = useState<PendingShift | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // --- Close menu on click-away / Escape ---
@@ -122,46 +153,85 @@ export function useSpreadsheetContextMenu(
 
   // --- Action helpers ---
 
-  const act = (fn: (w: Worksheet, ctx: ClickContext) => void) => {
+  const act = (
+    plan: (ctx: ClickContext) => { op: ShiftOp; apply: (w: Worksheet) => void },
+  ) => {
     return () => {
       // Ref read happens at click time, not during render — the closure
       // returned here is only invoked from menu-item click handlers.
       // eslint-disable-next-line react-hooks/refs
       const w = worksheetRef.current;
       if (!w || !menu) return;
-      fn(w, menu.ctx);
+      const { op, apply } = plan(menu.ctx);
       setMenu(null);
+      const affected: AffectedExternalRef[] = [];
+      for (const r of externalRefs) {
+        if (r.orphan) continue;
+        const after = shiftExternalRef(r.cellRef, op);
+        if (after !== null) affected.push({ before: r.cellRef, after });
+      }
+      if (affected.length === 0) {
+        apply(w);
+        return;
+      }
+      setPending({
+        op,
+        affected,
+        apply: () => {
+          apply(w);
+          setPending(null);
+        },
+      });
     };
   };
 
   const actions = {
-    insertRowAbove: act((w, ctx) => {
+    insertRowAbove: act((ctx) => {
       const row = ctx.type === "col-header" ? 0 : ctx.row;
-      w.insertRow(1, row, true);
+      return {
+        op: { type: "insertRow", index: row, count: 1 },
+        apply: (w) => w.insertRow(1, row, true),
+      };
     }),
-    insertRowBelow: act((w, ctx) => {
+    insertRowBelow: act((ctx) => {
       const row = ctx.type === "col-header" ? 0 : ctx.row;
-      w.insertRow(1, row, false);
+      return {
+        op: { type: "insertRow", index: row + 1, count: 1 },
+        apply: (w) => w.insertRow(1, row, false),
+      };
     }),
-    deleteRow: act((w, ctx) => {
+    deleteRow: act((ctx) => {
       const row = ctx.type === "col-header" ? 0 : ctx.row;
-      w.deleteRow(row, 1);
+      return {
+        op: { type: "deleteRow", index: row, count: 1 },
+        apply: (w) => w.deleteRow(row, 1),
+      };
     }),
-    insertColLeft: act((w, ctx) => {
+    insertColLeft: act((ctx) => {
       const col = ctx.type === "row-header" ? 0 : ctx.col;
-      w.insertColumn(1, col, true);
+      return {
+        op: { type: "insertCol", index: col, count: 1 },
+        apply: (w) => w.insertColumn(1, col, true),
+      };
     }),
-    insertColRight: act((w, ctx) => {
+    insertColRight: act((ctx) => {
       const col = ctx.type === "row-header" ? 0 : ctx.col;
-      w.insertColumn(1, col, false);
+      return {
+        op: { type: "insertCol", index: col + 1, count: 1 },
+        apply: (w) => w.insertColumn(1, col, false),
+      };
     }),
-    deleteCol: act((w, ctx) => {
+    deleteCol: act((ctx) => {
       const col = ctx.type === "row-header" ? 0 : ctx.col;
-      w.deleteColumn(col, 1);
+      return {
+        op: { type: "deleteCol", index: col, count: 1 },
+        apply: (w) => w.deleteColumn(col, 1),
+      };
     }),
   };
 
   const dismiss = () => setMenu(null);
+  const cancelPending = () => setPending(null);
 
-  return { menu, menuRef, registerContextMenu, actions, dismiss };
+  return { menu, menuRef, registerContextMenu, actions, dismiss, pending, cancelPending };
 }

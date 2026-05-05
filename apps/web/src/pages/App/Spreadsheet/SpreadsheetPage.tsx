@@ -38,6 +38,7 @@ import {
   FormulaPickerDropdown,
 } from "./FormulaPickerDropdown";
 import { FormulaBar } from "./FormulaBar";
+import { ConfirmRefShiftDialog } from "./ConfirmRefShiftDialog";
 import { SpreadsheetContextMenu } from "./SpreadsheetContextMenu";
 import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 
@@ -80,6 +81,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   awareness,
   remoteUserClientIds,
   referencedCellRefs,
+  externalRefs,
   importedRows,
   onSelectionChange,
   onEditingChange,
@@ -89,6 +91,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   awareness: Awareness | null;
   remoteUserClientIds: Set<number>;
   referencedCellRefs: { cellRef: string }[];
+  externalRefs: ReadonlyArray<{ cellRef: string; orphan?: boolean }>;
   importedRows: unknown[][] | null;
   onSelectionChange: (sel: { row: number; col: number } | null) => void;
   onEditingChange: (editing: boolean) => void;
@@ -147,8 +150,8 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   }, [importedRows, bindingRef]);
 
   // Context menu
-  const { menu, menuRef, registerContextMenu, actions } =
-    useSpreadsheetContextMenu(worksheetRef);
+  const { menu, menuRef, registerContextMenu, actions, pending, cancelPending } =
+    useSpreadsheetContextMenu(worksheetRef, externalRefs);
 
   // Register context menu listener on the wrapper
   useEffect(() => {
@@ -182,6 +185,14 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
           menu={menu}
           menuRef={menuRef}
           actions={actions}
+        />
+      )}
+      {pending && (
+        <ConfirmRefShiftDialog
+          op={pending.op}
+          affected={pending.affected}
+          onConfirm={pending.apply}
+          onCancel={cancelPending}
         />
       )}
       <FormulaPickerDropdown
@@ -364,6 +375,7 @@ function SpreadsheetEditor({
           awareness={awareness}
           remoteUserClientIds={remoteUserClientIds}
           referencedCellRefs={referencedCellRefs}
+          externalRefs={rawRefs ?? []}
           importedRows={importedRows}
           onSelectionChange={setSelection}
           onEditingChange={setIsCellEditing}
