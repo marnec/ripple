@@ -11,13 +11,13 @@ import {
   ResponsiveDropdownMenuSeparator,
   ResponsiveDropdownMenuTrigger,
 } from "@/components/ui/responsive-dropdown-menu";
-import {
-  buildExportContext,
-  exportDocumentDocx,
-  exportDocumentHTML,
-  exportDocumentMarkdown,
-} from "@/lib/exporters/document";
 import type { Id } from "@convex/_generated/dataModel";
+
+type DocumentExporters = typeof import("@/lib/exporters/document");
+// Single dynamic import shared across the three format buttons. Keeps the
+// `@/lib/exporters/document` module (and its block-walker) out of the
+// DocumentEditor route chunk until the user opens the menu and exports.
+const loadExporters = (): Promise<DocumentExporters> => import("@/lib/exporters/document");
 
 interface DocumentActionsMenuProps {
   documentId: Id<"documents">;
@@ -76,8 +76,9 @@ export function DocumentActionsMenu({
           )}
           <ResponsiveDropdownMenuItem
             onSelect={guard(async () => {
-              const ctx = await buildExportContext(convex, editor!.document as any[], { isDark: false });
-              exportDocumentMarkdown(editor!, documentName, ctx);
+              const m = await loadExporters();
+              const ctx = await m.buildExportContext(convex, editor!.document as any[], { isDark: false });
+              m.exportDocumentMarkdown(editor!, documentName, ctx);
             }, "Failed to export Markdown.")}
           >
             <FileText className="text-muted-foreground" />
@@ -85,8 +86,9 @@ export function DocumentActionsMenu({
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuItem
             onSelect={guard(async () => {
-              const ctx = await buildExportContext(convex, editor!.document as any[], { isDark: false });
-              exportDocumentHTML(editor!, documentName, ctx);
+              const m = await loadExporters();
+              const ctx = await m.buildExportContext(convex, editor!.document as any[], { isDark: false });
+              m.exportDocumentHTML(editor!, documentName, ctx);
             }, "Failed to export HTML.")}
           >
             <Code2 className="text-muted-foreground" />
@@ -94,8 +96,9 @@ export function DocumentActionsMenu({
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuItem
             onSelect={guard(async () => {
-              const ctx = await buildExportContext(convex, editor!.document as any[], { isDark: false });
-              await exportDocumentDocx(editor!, documentName, ctx);
+              const m = await loadExporters();
+              const ctx = await m.buildExportContext(convex, editor!.document as any[], { isDark: false });
+              await m.exportDocumentDocx(editor!, documentName, ctx);
             }, "Failed to export DOCX.")}
           >
             <FileType2 className="text-muted-foreground" />

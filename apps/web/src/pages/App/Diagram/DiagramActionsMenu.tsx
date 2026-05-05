@@ -10,12 +10,9 @@ import {
   ResponsiveDropdownMenuSeparator,
   ResponsiveDropdownMenuTrigger,
 } from "@/components/ui/responsive-dropdown-menu";
-import {
-  exportDiagramJson,
-  exportDiagramPng,
-  exportDiagramSvg,
-} from "@/lib/exporters/diagram";
 import type { Id } from "@convex/_generated/dataModel";
+
+const loadExporters = () => import("@/lib/exporters/diagram");
 
 interface DiagramActionsMenuProps {
   diagramId: Id<"diagrams">;
@@ -72,19 +69,28 @@ export function DiagramActionsMenu({
             </>
           )}
           <ResponsiveDropdownMenuItem
-            onSelect={guard((api) => exportDiagramPng(api, diagramName), "Failed to export PNG.")}
+            onSelect={guard(async (api) => {
+              const m = await loadExporters();
+              await m.exportDiagramPng(api, diagramName);
+            }, "Failed to export PNG.")}
           >
             <FileImage className="text-muted-foreground" />
             <span>Download as PNG</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuItem
-            onSelect={guard((api) => exportDiagramSvg(api, diagramName), "Failed to export SVG.")}
+            onSelect={guard(async (api) => {
+              const m = await loadExporters();
+              await m.exportDiagramSvg(api, diagramName);
+            }, "Failed to export SVG.")}
           >
             <FileCode2 className="text-muted-foreground" />
             <span>Download as SVG</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuItem
-            onSelect={guard((api) => exportDiagramJson(api, diagramName), "Failed to export Excalidraw scene.")}
+            onSelect={guard(async (api) => {
+              const m = await loadExporters();
+              m.exportDiagramJson(api, diagramName);
+            }, "Failed to export Excalidraw scene.")}
           >
             <FileJson className="text-muted-foreground" />
             <span>Download as Excalidraw</span>

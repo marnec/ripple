@@ -9,12 +9,10 @@ import {
   ResponsiveDropdownMenuSeparator,
   ResponsiveDropdownMenuTrigger,
 } from "@/components/ui/responsive-dropdown-menu";
-import {
-  exportSpreadsheetCsv,
-  exportSpreadsheetXlsx,
-} from "@/lib/exporters/spreadsheet";
 import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import type { Id } from "@convex/_generated/dataModel";
+
+const loadExporters = () => import("@/lib/exporters/spreadsheet");
 
 interface SpreadsheetActionsMenuProps {
   spreadsheetId: Id<"spreadsheets">;
@@ -71,13 +69,19 @@ export function SpreadsheetActionsMenu({
             </>
           )}
           <ResponsiveDropdownMenuItem
-            onSelect={guard((b) => exportSpreadsheetCsv(b, spreadsheetName), "Failed to export CSV.")}
+            onSelect={guard(async (b) => {
+              const m = await loadExporters();
+              m.exportSpreadsheetCsv(b, spreadsheetName);
+            }, "Failed to export CSV.")}
           >
             <FileType2 className="text-muted-foreground" />
             <span>Download as CSV</span>
           </ResponsiveDropdownMenuItem>
           <ResponsiveDropdownMenuItem
-            onSelect={guard((b) => exportSpreadsheetXlsx(b, spreadsheetName), "Failed to export XLSX.")}
+            onSelect={guard(async (b) => {
+              const m = await loadExporters();
+              await m.exportSpreadsheetXlsx(b, spreadsheetName);
+            }, "Failed to export XLSX.")}
           >
             <FileSpreadsheet className="text-muted-foreground" />
             <span>Download as XLSX</span>
