@@ -372,6 +372,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               onOpenChange={(open) => {
                 if (!open) setCellRefDialog(null);
               }}
+              spreadsheetId={cellRefDialog.spreadsheetId}
               spreadsheetName={cellRefDialog.spreadsheetName}
               onInsert={(cellRef) => {
                 if (!cellRefDialog) return;

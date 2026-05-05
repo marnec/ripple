@@ -249,6 +249,7 @@ export function TaskDescriptionEditor({
           onOpenChange={(open) => {
             if (!open) setCellRefDialog(null);
           }}
+          spreadsheetId={cellRefDialog.spreadsheetId}
           spreadsheetName={cellRefDialog.spreadsheetName}
           onInsert={handleCellRefInsert}
         />
