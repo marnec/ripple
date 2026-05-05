@@ -1,7 +1,6 @@
 NEXT STEPS:
 
 - spreadsheet qol
-    - confirmation dialog when adding or deleting a col or row that will affect some referenced cells or ranges
     - improve formula picker to trigger for nested functions
     - option to visually select cells / ranges when embedding
     - visual cue and mouse pick coords in formula editing

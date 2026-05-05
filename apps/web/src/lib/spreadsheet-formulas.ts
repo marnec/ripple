@@ -141,3 +141,46 @@ export function filterFormulas(query: string): FormulaDefinition[] {
     ? starts
     : SPREADSHEET_FORMULAS.filter((f) => f.name.includes(q));
 }
+
+export interface FormulaPickerContext {
+  /** Partial function-name characters typed at the cursor (may be empty). */
+  query: string;
+  /** Index in the value where `query` starts — also where insertion replaces from. */
+  partialStart: number;
+}
+
+// Characters that mark the start of a function-name position in a formula.
+// Includes operators so `=A1+SU` and `=(SU` work, plus `(` and `,` for nested
+// calls like `=SUM(A1, AV` or `=IF(SU`.
+const FORMULA_NAME_BOUNDARY = new Set([
+  "=", "(", ",", "+", "-", "*", "/", "^", "&", "<", ">",
+]);
+
+/**
+ * Detect whether the cursor sits at a function-name position so the picker
+ * can be triggered. Supports top-level (`=AV`), nested (`=SUM(A1, AV`), and
+ * inside arithmetic expressions (`=A1+SU`). Returns null otherwise.
+ *
+ * Empty-query trigger is allowed only right after `=` so we don't intercept
+ * Enter when the user is mid-expression (e.g. `=SUM(` should commit on Enter,
+ * not insert the first formula in the list).
+ */
+export function getFormulaPickerContext(
+  value: string,
+  cursor: number,
+): FormulaPickerContext | null {
+  if (!value.startsWith("=")) return null;
+  const before = value.substring(0, cursor);
+  const match = before.match(/[A-Za-z][A-Za-z0-9_.]*$/);
+  const query = match?.[0] ?? "";
+  const partialStart = before.length - query.length;
+
+  // Walk back over whitespace to find the actual boundary character.
+  let boundaryIdx = partialStart - 1;
+  while (boundaryIdx >= 0 && before[boundaryIdx] === " ") boundaryIdx--;
+  const boundaryChar = boundaryIdx >= 0 ? before[boundaryIdx] : "";
+  if (!FORMULA_NAME_BOUNDARY.has(boundaryChar)) return null;
+
+  if (query.length === 0 && boundaryChar !== "=") return null;
+  return { query, partialStart };
+}

@@ -1,3 +1,7 @@
+import {
+  filterFormulas,
+  getFormulaPickerContext,
+} from "@/lib/spreadsheet-formulas";
 import type { FormulaPickerHandle } from "@/pages/App/Spreadsheet/FormulaPickerDropdown";
 import { useRef, useState } from "react";
 
@@ -32,21 +36,18 @@ export function useFormulaPicker() {
 
       const onInput = () => {
         const value = editorEl.value;
-        if (value.startsWith("=") && value.length >= 1) {
-          const query = value.substring(1);
-          if (!query.includes("(")) {
-            const rect = td.getBoundingClientRect();
-            setFormulaPicker({
-              visible: true,
-              position: { x: rect.left, y: rect.bottom + 2 },
-              query,
-            });
-          } else {
-            setFormulaPicker(null);
-          }
-        } else {
+        const cursor = editorEl.selectionStart ?? value.length;
+        const ctx = getFormulaPickerContext(value, cursor);
+        if (!ctx || filterFormulas(ctx.query).length === 0) {
           setFormulaPicker(null);
+          return;
         }
+        const rect = td.getBoundingClientRect();
+        setFormulaPicker({
+          visible: true,
+          position: { x: rect.left, y: rect.bottom + 2 },
+          query: ctx.query,
+        });
       };
 
       editorEl.addEventListener("input", onInput);
@@ -86,9 +87,16 @@ export function useFormulaPicker() {
   const insertFormula = (formulaName: string) => {
     const el = editorInputRef.current;
     if (!el) return;
-    el.value = `=${formulaName}(`;
-    el.selectionStart = el.value.length;
-    el.selectionEnd = el.value.length;
+    const value = el.value;
+    const cursor = el.selectionStart ?? value.length;
+    const ctx = getFormulaPickerContext(value, cursor);
+    if (!ctx) return;
+    const newBefore =
+      value.substring(0, ctx.partialStart) + formulaName + "(";
+    el.value = newBefore + value.substring(cursor);
+    const newCursor = newBefore.length;
+    el.selectionStart = newCursor;
+    el.selectionEnd = newCursor;
     el.dispatchEvent(new Event("input", { bubbles: true }));
     el.focus();
     setFormulaPicker(null);

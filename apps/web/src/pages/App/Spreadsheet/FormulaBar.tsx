@@ -1,4 +1,8 @@
 import { Input } from "@/components/ui/input";
+import {
+  filterFormulas,
+  getFormulaPickerContext,
+} from "@/lib/spreadsheet-formulas";
 import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import { useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -35,18 +39,18 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
   const pickerHandleRef = useRef<FormulaPickerHandle>(null);
   const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
   const [pickerDismissed, setPickerDismissed] = useState(false);
+  const [cursor, setCursor] = useState(0);
 
-  // Show the picker only while the user is typing what looks like a function
-  // name: starts with `=` and the rest is letters only (or empty). Anything
-  // else — digits, operators, `(`, cell refs — is a real formula expression
-  // and the picker (and its Enter/Tab interception) must step aside so
-  // commit can fire on Enter. e.g. `=1+2` → picker hidden → Enter commits.
+  // Picker visibility is driven by cursor context so it also fires inside
+  // nested calls (`=SUM(A1, AV`) and after operators (`=A1+SU`) — not just
+  // at the top level. When no context is detected (e.g. `=1+2`, after `)`),
+  // the picker steps aside so Enter commits.
+  const pickerCtx = isFocused && !pickerDismissed
+    ? getFormulaPickerContext(draft, cursor)
+    : null;
   const pickerShouldShow =
-    isFocused &&
-    !pickerDismissed &&
-    draft.startsWith("=") &&
-    /^[a-zA-Z]*$/.test(draft.slice(1));
-  const pickerQuery = pickerShouldShow ? draft.substring(1) : "";
+    pickerCtx !== null && filterFormulas(pickerCtx.query).length > 0;
+  const pickerQuery = pickerCtx?.query ?? "";
 
   const inputValue = isFocused ? draft : value;
   const cellLabel = binding && selection ? binding.cellNameAt(selection.row, selection.col) : "";
@@ -71,14 +75,19 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
   };
 
   const insertFormula = (name: string) => {
-    const next = `=${name}(`;
+    const el = inputRef.current;
+    if (!el) return;
+    const ctx = getFormulaPickerContext(draft, cursor);
+    if (!ctx) return;
+    const newBefore = draft.substring(0, ctx.partialStart) + name + "(";
+    const next = newBefore + draft.substring(cursor);
+    const newCursor = newBefore.length;
     setDraft(next);
+    setCursor(newCursor);
     setPickerDismissed(true);
     requestAnimationFrame(() => {
-      const el = inputRef.current;
-      if (!el) return;
       el.focus();
-      el.setSelectionRange(next.length, next.length);
+      el.setSelectionRange(newCursor, newCursor);
     });
   };
 
@@ -98,14 +107,21 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
         placeholder={selection ? "" : "Select a cell"}
         onChange={(e) => {
           setDraft(e.target.value);
+          setCursor(e.target.selectionStart ?? e.target.value.length);
           setPickerDismissed(false);
           recomputePickerPos();
+        }}
+        onSelect={(e) => {
+          const el = e.currentTarget;
+          setCursor(el.selectionStart ?? el.value.length);
         }}
         onFocus={() => {
           // Lock the commit target now. If selection is null (no cell), the
           // ref stays null and commit() will be a no-op — no accidental write.
           editingTargetRef.current = selection;
-          setDraft(selection ? value : "");
+          const initial = selection ? value : "";
+          setDraft(initial);
+          setCursor(initial.length);
           setIsFocused(true);
           setPickerDismissed(false);
           recomputePickerPos();
