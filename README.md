@@ -2,7 +2,6 @@ NEXT STEPS:
 
 - spreadsheet qol
     - option to visually select cells / ranges when embedding
-    - visual cue and mouse pick coords in formula editing
 
 - named share links
 - calendar; plan calls; invite guests

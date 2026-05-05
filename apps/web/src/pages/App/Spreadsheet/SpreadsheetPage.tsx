@@ -26,9 +26,9 @@ import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
 import { Circle, Link2, Link2Off, Settings, WifiOff } from "lucide-react";
-import { extractCellRefs } from "@/lib/spreadsheet-formula-refs";
+import { useSelectionFormulaHighlights } from "@/hooks/use-selection-formula-highlights";
 import { SpreadsheetActionsMenu } from "./SpreadsheetActionsMenu";
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
@@ -272,32 +272,11 @@ function SpreadsheetEditor({
   // Stabilize ref identity to prevent unnecessary JSpreadsheetGrid re-renders
   const referencedCellRefs = showRefHighlights ? rawRefs ?? [] : [];
 
-  // Live raw value of the currently selected cell. Re-renders on local +
-  // remote yData changes, so the highlight follows formula edits made
-  // elsewhere (other clients, undo) while the cell is selected.
-  const selectedCellValue = useSyncExternalStore(
-    (l) => binding?.subscribe(l) ?? (() => {}),
-    () =>
-      binding && selection
-        ? binding.getRawCellValue(selection.row, selection.col)
-        : "",
-  );
-
-  // Highlight referenced cells when a formula cell is merely selected (not
-  // edited). Yields control while the FormulaBar is focused or the in-cell
-  // editor is active — those owners drive their own highlights from the
-  // live draft value rather than the committed cell content.
-  useEffect(() => {
-    if (!binding) return;
-    if (formulaBarFocused || isCellEditing) return;
-    if (selectedCellValue.startsWith("=")) {
-      binding.setFormulaEditHighlights(
-        extractCellRefs(selectedCellValue).map((m) => m.ref),
-      );
-    } else {
-      binding.clearFormulaEditHighlights();
-    }
-  }, [binding, selectedCellValue, formulaBarFocused, isCellEditing]);
+  useSelectionFormulaHighlights({
+    binding,
+    selection,
+    suppressed: formulaBarFocused || isCellEditing,
+  });
 
   const hasRefs = (rawRefs?.length ?? 0) > 0;
 

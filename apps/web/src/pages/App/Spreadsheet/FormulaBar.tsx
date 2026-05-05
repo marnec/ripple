@@ -1,8 +1,6 @@
 import { Input } from "@/components/ui/input";
-import {
-  extractCellRefs,
-  getRefInsertContext,
-} from "@/lib/spreadsheet-formula-refs";
+import { useCellPicker } from "@/hooks/use-cell-picker";
+import { extractCellRefs } from "@/lib/spreadsheet-formula-refs";
 import {
   filterFormulas,
   getFormulaPickerContext,
@@ -14,9 +12,11 @@ import {
   type FormulaPickerHandle,
 } from "./FormulaPickerDropdown";
 
+type CellCoord = { row: number; col: number };
+
 interface FormulaBarProps {
   binding: SpreadsheetYjsBinding | null;
-  selection: { row: number; col: number } | null;
+  selection: CellCoord | null;
   isEditing: boolean;
   /** Notify the page when the bar is in formula-pickup mode so the grid can
    *  suppress the focus-shift on cell mousedown. */
@@ -26,7 +26,13 @@ interface FormulaBarProps {
   onFocusChange?: (focused: boolean) => void;
 }
 
-export function FormulaBar({ binding, selection, isEditing, onPickingChange, onFocusChange }: FormulaBarProps) {
+export function FormulaBar({
+  binding,
+  selection,
+  isEditing,
+  onPickingChange,
+  onFocusChange,
+}: FormulaBarProps) {
   // Live raw value from Yjs (re-renders on local + remote yData changes).
   const value = useSyncExternalStore(
     (listener) => binding?.subscribe(listener) ?? (() => {}),
@@ -34,31 +40,21 @@ export function FormulaBar({ binding, selection, isEditing, onPickingChange, onF
       binding && selection ? binding.getRawCellValue(selection.row, selection.col) : "",
   );
 
-  // While focused, the input shows the user's draft; otherwise it mirrors the
-  // store. This avoids any setState-in-effect dance — derived render output.
   const [draft, setDraft] = useState("");
+  const [cursor, setCursor] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
-  const skipNextCommitRef = useRef(false);
   // The cell being edited is locked at focus time. Subsequent selection
   // changes (clicking another cell while the bar is focused) must NOT
-  // redirect the commit to a different cell.
-  const editingTargetRef = useRef<{ row: number; col: number } | null>(null);
-  // Mirror of editingTargetRef for rendering — the displayed cell label must
-  // stay on the cell being edited even after a mouse-pick moves `selection`.
-  const [editingTarget, setEditingTarget] = useState<{ row: number; col: number } | null>(null);
+  // redirect the commit to a different cell. Mirrored in state for rendering
+  // (label) and tracked in a ref for use inside the blur closure.
+  const [editingTarget, setEditingTarget] = useState<CellCoord | null>(null);
+  const editingTargetRef = useRef<CellCoord | null>(null);
+  const skipNextCommitRef = useRef(false);
 
-  // Formula picker state
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerHandleRef = useRef<FormulaPickerHandle>(null);
   const [pickerPos, setPickerPos] = useState({ x: 0, y: 0 });
   const [pickerDismissed, setPickerDismissed] = useState(false);
-  const [cursor, setCursor] = useState(0);
-
-  // Click-to-pick state. `pickingSpan` is the [start, end] substring in the
-  // draft that was last filled by a cell click — subsequent selection changes
-  // (drag) replace this span instead of appending. Cleared on any keystroke.
-  const pickingSpanRef = useRef<{ start: number; end: number } | null>(null);
-  const lastSelectionRef = useRef<{ row: number; col: number } | null>(null);
 
   // Picker visibility is driven by cursor context so it also fires inside
   // nested calls (`=SUM(A1, AV`) and after operators (`=A1+SU`) — not just
@@ -79,6 +75,22 @@ export function FormulaBar({ binding, selection, isEditing, onPickingChange, onF
   const disabled = !binding || !selection || isEditing;
   const isPicking = isFocused && draft.startsWith("=");
 
+  const handleCellPick = (next: { draft: string; cursor: number }) => {
+    setDraft(next.draft);
+    setCursor(next.cursor);
+  };
+
+  const { resetSpan, resetSelectionMemory } = useCellPicker({
+    binding,
+    selection,
+    editingTarget,
+    draft,
+    cursor,
+    enabled: isPicking,
+    inputRef,
+    onPick: handleCellPick,
+  });
+
   // Notify the page so it can intercept grid mousedown to keep the input focused.
   useEffect(() => {
     onPickingChange?.(isPicking);
@@ -97,54 +109,11 @@ export function FormulaBar({ binding, selection, isEditing, onPickingChange, onF
       binding.clearFormulaEditHighlights();
       return;
     }
-    const refs = extractCellRefs(draft).map((m) => m.ref);
-    binding.setFormulaEditHighlights(refs);
+    binding.setFormulaEditHighlights(extractCellRefs(draft).map((m) => m.ref));
     return () => {
       binding.clearFormulaEditHighlights();
     };
   }, [binding, draft, isFocused]);
-
-  // Click-to-pick: when focused with a formula draft, treat selection changes
-  // as cell picks and insert/replace the ref text at the cursor.
-  useEffect(() => {
-    if (!isPicking || !binding || !selection) {
-      lastSelectionRef.current = selection;
-      return;
-    }
-    const prev = lastSelectionRef.current;
-    lastSelectionRef.current = selection;
-
-    // Skip the initial selection captured at focus time (no actual click yet).
-    if (prev === null) return;
-    if (prev.row === selection.row && prev.col === selection.col) return;
-
-    // Don't pick the cell currently being edited.
-    const target = editingTargetRef.current;
-    if (target && selection.row === target.row && selection.col === target.col) {
-      return;
-    }
-
-    const refName = binding.cellNameAt(selection.row, selection.col);
-    const span = pickingSpanRef.current
-      ?? getRefInsertContext(draft, cursor)
-      ?? { start: cursor, end: cursor };
-
-    const before = draft.substring(0, span.start);
-    const after = draft.substring(span.end);
-    const next = before + refName + after;
-    const newCursor = span.start + refName.length;
-
-    setDraft(next);
-    setCursor(newCursor);
-    pickingSpanRef.current = { start: span.start, end: newCursor };
-
-    requestAnimationFrame(() => {
-      const el = inputRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(newCursor, newCursor);
-    });
-  }, [selection, isPicking, binding, draft, cursor]);
 
   const recomputePickerPos = () => {
     const el = inputRef.current;
@@ -181,6 +150,86 @@ export function FormulaBar({ binding, selection, isEditing, onPickingChange, onF
     });
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDraft(e.target.value);
+    setCursor(e.target.selectionStart ?? e.target.value.length);
+    setPickerDismissed(false);
+    // User typed — abandon the in-progress click-pick span so the next click
+    // starts a fresh insertion at the new cursor position.
+    resetSpan();
+    recomputePickerPos();
+  };
+
+  const handleSelect = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const el = e.currentTarget;
+    setCursor(el.selectionStart ?? el.value.length);
+  };
+
+  const handleFocus = () => {
+    // Lock the commit target now. If selection is null (no cell), the
+    // ref stays null and commit() will be a no-op — no accidental write.
+    editingTargetRef.current = selection;
+    setEditingTarget(selection);
+    const initial = selection ? value : "";
+    setDraft(initial);
+    setCursor(initial.length);
+    setIsFocused(true);
+    setPickerDismissed(false);
+    resetSpan();
+    resetSelectionMemory();
+    recomputePickerPos();
+  };
+
+  const handleBlur = () => {
+    if (skipNextCommitRef.current) {
+      skipNextCommitRef.current = false;
+    } else {
+      commit();
+    }
+    setIsFocused(false);
+    editingTargetRef.current = null;
+    setEditingTarget(null);
+    resetSpan();
+    resetSelectionMemory();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // Suppress jspreadsheet's keyboard handlers while the bar is focused.
+    // After a mouse-pick the picked cell becomes jspreadsheet's selection,
+    // so Backspace/Delete would otherwise clear that cell's content while
+    // the user thinks they're editing the formula text.
+    e.stopPropagation();
+
+    if (pickerShouldShow) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        pickerHandleRef.current?.handleKey(e.key);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const selected = pickerHandleRef.current?.handleKey("Enter");
+        if (selected) insertFormula(selected);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPickerDismissed(true);
+        return;
+      }
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+      skipNextCommitRef.current = true;
+      e.currentTarget.blur();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      skipNextCommitRef.current = true;
+      e.currentTarget.blur();
+    }
+  };
+
   return (
     <div className="hidden md:flex flex-1 min-w-0 items-center gap-2 px-4">
       <span
@@ -196,81 +245,11 @@ export function FormulaBar({ binding, selection, isEditing, onPickingChange, onF
         value={inputValue}
         disabled={disabled}
         placeholder={selection ? "" : "Select a cell"}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          setCursor(e.target.selectionStart ?? e.target.value.length);
-          setPickerDismissed(false);
-          // User typed — abandon the in-progress click-pick span so the next
-          // click starts a fresh insertion at the new cursor position.
-          pickingSpanRef.current = null;
-          recomputePickerPos();
-        }}
-        onSelect={(e) => {
-          const el = e.currentTarget;
-          setCursor(el.selectionStart ?? el.value.length);
-        }}
-        onFocus={() => {
-          // Lock the commit target now. If selection is null (no cell), the
-          // ref stays null and commit() will be a no-op — no accidental write.
-          editingTargetRef.current = selection;
-          setEditingTarget(selection);
-          const initial = selection ? value : "";
-          setDraft(initial);
-          setCursor(initial.length);
-          setIsFocused(true);
-          setPickerDismissed(false);
-          pickingSpanRef.current = null;
-          lastSelectionRef.current = null;
-          recomputePickerPos();
-        }}
-        onBlur={() => {
-          if (skipNextCommitRef.current) {
-            skipNextCommitRef.current = false;
-          } else {
-            commit();
-          }
-          setIsFocused(false);
-          editingTargetRef.current = null;
-          setEditingTarget(null);
-          pickingSpanRef.current = null;
-          lastSelectionRef.current = null;
-        }}
-        onKeyDown={(e) => {
-          // Suppress jspreadsheet's keyboard handlers while the bar is focused.
-          // After a mouse-pick the picked cell becomes jspreadsheet's selection,
-          // so Backspace/Delete would otherwise clear that cell's content while
-          // the user thinks they're editing the formula text.
-          e.stopPropagation();
-          // When the picker is open, intercept navigation/commit keys.
-          if (pickerShouldShow) {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              e.preventDefault();
-              pickerHandleRef.current?.handleKey(e.key);
-              return;
-            }
-            if (e.key === "Enter" || e.key === "Tab") {
-              e.preventDefault();
-              const selected = pickerHandleRef.current?.handleKey("Enter");
-              if (selected) insertFormula(selected);
-              return;
-            }
-            if (e.key === "Escape") {
-              e.preventDefault();
-              setPickerDismissed(true);
-              return;
-            }
-          }
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit();
-            skipNextCommitRef.current = true;
-            e.currentTarget.blur();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            skipNextCommitRef.current = true;
-            e.currentTarget.blur();
-          }
-        }}
+        onChange={handleChange}
+        onSelect={handleSelect}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         className="font-mono text-sm"
         aria-label="Cell raw content"
       />
