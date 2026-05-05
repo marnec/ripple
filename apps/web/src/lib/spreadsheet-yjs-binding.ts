@@ -934,6 +934,12 @@ export class SpreadsheetYjsBinding {
     this.undoManager.redo();
   }
 
+  /** Underlying jspreadsheet worksheet instance. Exposed for export utilities
+   *  (CSV/XLSX) that need to call `getData()` / `download()` directly. */
+  getWorksheet(): any {
+    return this.worksheet;
+  }
+
   /** Subscribe to data changes (local or remote). Returns an unsubscribe fn. */
   subscribe(listener: () => void): () => void {
     this.subscribers.add(listener);

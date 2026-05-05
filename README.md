@@ -12,6 +12,8 @@ NEXT STEPS:
 - leave channel logic (only for private?)
 - consider favorite for channels too
 
+- import tasks from csv
+
 - external ticketing system: 
     - connected to project
     - connected somehow to tasks

@@ -25,8 +25,8 @@ import { useViewer } from "../UserContext";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
-import { Circle, Link2, Link2Off, Settings, Share2, WifiOff } from "lucide-react";
-import { ShareDialog } from "@/components/ShareDialog";
+import { Circle, Link2, Link2Off, Settings, WifiOff } from "lucide-react";
+import { SpreadsheetActionsMenu } from "./SpreadsheetActionsMenu";
 import { memo, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import type { Awareness } from "y-protocols/awareness";
@@ -227,7 +227,6 @@ function SpreadsheetEditor({
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
   const [showRefHighlights, setShowRefHighlights] = useState(false);
   const [backlinksOpen, setBacklinksOpen] = useState(false);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selection, setSelection] = useState<{ row: number; col: number } | null>(null);
   const [isCellEditing, setIsCellEditing] = useState(false);
   const [binding, setBinding] = useState<SpreadsheetYjsBinding | null>(null);
@@ -319,16 +318,12 @@ function SpreadsheetEditor({
               }
             />
           )}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setShareDialogOpen(true)}
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Share"
-            >
-              <Share2 className="size-4" />
-            </button>
-          )}
+          <SpreadsheetActionsMenu
+            spreadsheetId={spreadsheetId}
+            spreadsheetName={spreadsheet.name}
+            isAdmin={isAdmin}
+            binding={binding}
+          />
           {!isMobile && (
             <Link
               to="settings"
@@ -340,15 +335,6 @@ function SpreadsheetEditor({
           )}
         </div>
       </div>
-      {isAdmin && (
-        <ShareDialog
-          open={shareDialogOpen}
-          onOpenChange={setShareDialogOpen}
-          resourceType="spreadsheet"
-          resourceId={spreadsheetId}
-          resourceName={spreadsheet.name}
-        />
-      )}
       {isMobile && (
         <HeaderSlot>
           <Button

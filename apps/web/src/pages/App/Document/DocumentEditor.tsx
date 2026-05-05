@@ -2,7 +2,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { BacklinksDrawer } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
-import { ShareDialog } from "@/components/ShareDialog";
+import { DocumentActionsMenu } from "./DocumentActionsMenu";
 import { Button } from "@/components/ui/button";
 import {
   TagInlineStrip,
@@ -18,7 +18,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@ripple/shared/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { Link2, Link2Off, Settings, Share2 } from "lucide-react";
+import { Link2, Link2Off, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -99,7 +99,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     tagsOptimisticUpdate(api.documents.get),
   );
 
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const myRole = useQuery(
     api.workspaceMembers.myRole,
     document ? { workspaceId: document.workspaceId } : "skip",
@@ -323,15 +322,13 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }
             />
           )}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setShareDialogOpen(true)}
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title="Share"
-            >
-              <Share2 className="size-4" />
-            </button>
+          {document && (
+            <DocumentActionsMenu
+              documentId={documentId}
+              documentName={document.name}
+              isAdmin={isAdmin}
+              editor={editor}
+            />
           )}
           {!isMobile && (
             <Link
@@ -344,15 +341,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           )}
         </div>
       </div>
-      {isAdmin && document && (
-        <ShareDialog
-          open={shareDialogOpen}
-          onOpenChange={setShareDialogOpen}
-          resourceType="document"
-          resourceId={documentId}
-          resourceName={document.name}
-        />
-      )}
       {isMobile && (
         <HeaderSlot>
           <Button
