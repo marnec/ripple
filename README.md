@@ -1,19 +1,16 @@
 NEXT STEPS:
 
 - spreadsheet qol
-    - improve formula picker to trigger for nested functions
     - option to visually select cells / ranges when embedding
     - visual cue and mouse pick coords in formula editing
 
-- named share links
-
-- leave channel logic (only for private?)
-
-- consider favorite for channels too
-
 - add ability to download docs, diagrams and spreadsheets in various formats, context menu from share btn
 
+- named share links
 - calendar; plan calls; invite guests
+
+- leave channel logic (only for private?)
+- consider favorite for channels too
 
 - external ticketing system: 
     - connected to project

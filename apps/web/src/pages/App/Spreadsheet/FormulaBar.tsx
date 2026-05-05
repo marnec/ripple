@@ -102,6 +102,7 @@ export function FormulaBar({ binding, selection, isEditing }: FormulaBarProps) {
       <Input
         ref={inputRef}
         type="text"
+        data-formula-bar=""
         value={inputValue}
         disabled={disabled}
         placeholder={selection ? "" : "Select a cell"}

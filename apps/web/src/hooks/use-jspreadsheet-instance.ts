@@ -92,12 +92,16 @@ export function useJSpreadsheetInstance({
       },
       // jspreadsheet fires onblur when the worksheet loses focus (user clicks
       // outside the grid — sidebar, page background, etc.). Mirror that into
-      // React so the formula bar's coord/state clears. Order is safe: when
-      // the user clicks INTO the formula bar, onblur fires before the bar's
-      // onFocus, but onFocus reads `selection` from its closure (pre-clear),
-      // so the lock target is captured correctly.
+      // React so the formula bar's coord/state clears. Defer one frame so the
+      // browser's focus event lands first: if focus moved into the formula
+      // bar, keep the selection so the bar stays enabled and locks onto the
+      // active cell. Clearing synchronously would disable the bar mid-click
+      // and prevent the user from ever focusing it.
       onblur() {
-        emitSelectionChange(null);
+        requestAnimationFrame(() => {
+          if (document.activeElement?.matches("[data-formula-bar]")) return;
+          emitSelectionChange(null);
+        });
       },
       oneditionstart(_instance: any, td: HTMLTableCellElement) {
         onEditionStart(td, wrapper);
