@@ -19,14 +19,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
-import { Check, Copy, Trash2 } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { Check, Copy, Pencil, Trash2 } from "lucide-react";
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type {
   ShareAccessLevel,
   ShareResourceType,
 } from "@ripple/shared/shareTypes";
+
+/** Mirror of `SHARE_NAME_MAX` in convex/shares.ts. Keep in sync. */
+const SHARE_NAME_MAX = 60;
 
 interface ShareDialogProps {
   open: boolean;
@@ -60,9 +68,11 @@ export function ShareDialog({
   );
   const createShare = useMutation(api.shares.createShare);
   const revokeShare = useMutation(api.shares.revokeShare);
+  const renameShare = useMutation(api.shares.renameShare);
 
   const [accessLevel, setAccessLevel] = useState<ShareAccessLevel>(defaultLevel);
   const [expiryDate, setExpiryDate] = useState("");
+  const [labelDraft, setLabelDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const activeShares = useMemo(() => {
@@ -88,11 +98,13 @@ export function ShareDialog({
           expiresAt = parsed;
         }
       }
+      const trimmedLabel = labelDraft.trim();
       const { shareId } = await createShare({
         resourceType,
         resourceId,
         accessLevel,
         expiresAt,
+        name: trimmedLabel.length > 0 ? trimmedLabel : undefined,
       });
       const url = `${window.location.origin}/share/${shareId}`;
       await copyToClipboard(url);
@@ -100,6 +112,7 @@ export function ShareDialog({
         description: "Link copied to clipboard.",
       });
       setExpiryDate("");
+      setLabelDraft("");
     } catch (err) {
       toast.error("Could not create share link", {
         description: err instanceof Error ? err.message : "Unknown error",
@@ -120,6 +133,17 @@ export function ShareDialog({
     }
   };
 
+  const handleRename = async (shareId: string, name: string | undefined) => {
+    try {
+      await renameShare({ shareId, name });
+    } catch (err) {
+      toast.error("Could not rename link", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+      throw err;
+    }
+  };
+
   return (
     <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent className="sm:max-w-lg">
@@ -133,6 +157,18 @@ export function ShareDialog({
         </ResponsiveDialogHeader>
         <ResponsiveDialogBody className="space-y-6">
           <form className="space-y-3" onSubmit={(e) => void handleCreate(e)}>
+            <div className="space-y-1.5">
+              <Label htmlFor="shareLabel">Label (optional)</Label>
+              <Input
+                id="shareLabel"
+                type="text"
+                placeholder='e.g. "Acme Corp review"'
+                value={labelDraft}
+                onChange={(e) => setLabelDraft(e.target.value)}
+                maxLength={SHARE_NAME_MAX}
+                autoComplete="off"
+              />
+            </div>
             <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
               {!isChannel && (
                 <div className="space-y-1.5">
@@ -183,9 +219,12 @@ export function ShareDialog({
                   <ShareRow
                     key={s._id}
                     shareId={s.shareId}
+                    name={s.name}
                     accessLevel={s.accessLevel}
                     expiresAt={s.expiresAt}
+                    lastUsedAt={s.lastUsedAt}
                     onRevoke={() => void handleRevoke(s.shareId)}
+                    onRename={(name) => handleRename(s.shareId, name)}
                   />
                 ))}
               </ul>
@@ -204,17 +243,24 @@ export function ShareDialog({
 
 function ShareRow({
   shareId,
+  name,
   accessLevel,
   expiresAt,
+  lastUsedAt,
   onRevoke,
+  onRename,
 }: {
   shareId: string;
+  name: string | undefined;
   accessLevel: ShareAccessLevel;
   expiresAt: number | undefined;
+  lastUsedAt: number | undefined;
   onRevoke: () => void;
+  onRename: (name: string | undefined) => Promise<void>;
 }) {
   const [copied, setCopied] = useState(false);
   const url = `${window.location.origin}/share/${shareId}`;
+
   const handleCopy = async () => {
     await copyToClipboard(url);
     setCopied(true);
@@ -222,15 +268,19 @@ function ShareRow({
   };
 
   return (
-    <li className="flex min-w-0 items-center gap-2 px-3 py-2 text-sm">
+    <li className="group flex min-w-0 items-center gap-2 px-3 py-2 text-sm">
       <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="truncate font-mono text-xs" title={url}>
-          {url}
-        </div>
-        <div className="mt-0.5 flex gap-2 text-xs text-muted-foreground">
+        <InlineNameEdit
+          name={name}
+          onSave={onRename}
+        />
+        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           <span>{accessLevelLabel(accessLevel)}</span>
           {expiresAt !== undefined && (
             <span>· expires {new Date(expiresAt).toLocaleDateString()}</span>
+          )}
+          {lastUsedAt !== undefined && (
+            <span>· last used {new Date(lastUsedAt).toLocaleDateString()}</span>
           )}
         </div>
       </div>
@@ -240,7 +290,7 @@ function ShareRow({
         size="icon"
         className="h-8 w-8 shrink-0"
         onClick={() => void handleCopy()}
-        title="Copy link"
+        title={url}
       >
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
       </Button>
@@ -255,6 +305,93 @@ function ShareRow({
         <Trash2 className="h-4 w-4" />
       </Button>
     </li>
+  );
+}
+
+/**
+ * Click-to-rename label for a share link. Click anywhere on the text or the
+ * pencil icon to swap to an input; Enter or blur saves, Esc cancels. The
+ * draft is local state so an in-flight remote update won't overwrite what the
+ * user is typing.
+ */
+function InlineNameEdit({
+  name,
+  onSave,
+}: {
+  name: string | undefined;
+  onSave: (name: string | undefined) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = () => {
+    setDraft(name ?? "");
+    setEditing(true);
+  };
+
+  const commit = async () => {
+    if (saving) return;
+    const trimmed = draft.trim();
+    const next = trimmed.length > 0 ? trimmed : undefined;
+    if (next === name) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(next);
+      setEditing(false);
+    } catch {
+      // Toast is shown by caller; stay in edit mode so the user can retry.
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancel = () => {
+    setEditing(false);
+    setDraft("");
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void commit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancel();
+    }
+  };
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void commit()}
+        onKeyDown={onKeyDown}
+        maxLength={SHARE_NAME_MAX}
+        disabled={saving}
+        placeholder='e.g. "Acme Corp review"'
+        className="h-7 px-1.5 py-0 text-sm"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={startEdit}
+      className="-ml-1 flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      title={name ? "Rename link" : "Add a label"}
+    >
+      <span className={name ? "truncate" : "truncate italic text-muted-foreground"}>
+        {name ?? "Untitled link"}
+      </span>
+      <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+    </button>
   );
 }
 

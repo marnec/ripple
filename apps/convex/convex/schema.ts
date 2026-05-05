@@ -540,6 +540,9 @@ export default defineSchema({
     expiresAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
     lastUsedAt: v.optional(v.number()),
+    // Admin-only audit label ("Acme Corp review", "Q3 vendor", …). Never
+    // exposed to guests via getShareInfo — purely for owner-side tracking.
+    name: v.optional(v.string()),
   })
     .index("by_shareId", ["shareId"])
     .index("by_resource", ["resourceType", "resourceId"])

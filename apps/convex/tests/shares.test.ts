@@ -110,6 +110,150 @@ describe("shares", () => {
         }),
       ).rejects.toThrow(/future/i);
     });
+
+    it("stores a label when provided and trims whitespace", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const documentId = await createDocument(t, workspaceId);
+
+      const { shareId } = await asUser.mutation(api.shares.createShare, {
+        resourceType: "document",
+        resourceId: documentId,
+        accessLevel: "view",
+        name: "  Acme Corp review  ",
+      });
+
+      const rows = await asUser.query(api.shares.listSharesForResource, {
+        resourceType: "document",
+        resourceId: documentId,
+      });
+      const row = rows.find((r) => r.shareId === shareId);
+      expect(row?.name).toBe("Acme Corp review");
+    });
+
+    it("treats whitespace-only label as no label", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const documentId = await createDocument(t, workspaceId);
+
+      const { shareId } = await asUser.mutation(api.shares.createShare, {
+        resourceType: "document",
+        resourceId: documentId,
+        accessLevel: "view",
+        name: "   ",
+      });
+
+      const rows = await asUser.query(api.shares.listSharesForResource, {
+        resourceType: "document",
+        resourceId: documentId,
+      });
+      const row = rows.find((r) => r.shareId === shareId);
+      expect(row?.name).toBeUndefined();
+    });
+
+    it("rejects a label longer than 60 characters", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const documentId = await createDocument(t, workspaceId);
+
+      await expect(
+        asUser.mutation(api.shares.createShare, {
+          resourceType: "document",
+          resourceId: documentId,
+          accessLevel: "view",
+          name: "x".repeat(61),
+        }),
+      ).rejects.toThrow(/60 characters/i);
+    });
+  });
+
+  describe("renameShare", () => {
+    it("admin can set, change, and clear the label", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const documentId = await createDocument(t, workspaceId);
+      const { shareId } = await asUser.mutation(api.shares.createShare, {
+        resourceType: "document",
+        resourceId: documentId,
+        accessLevel: "view",
+      });
+
+      const readName = async () => {
+        const rows = await asUser.query(api.shares.listSharesForResource, {
+          resourceType: "document",
+          resourceId: documentId,
+        });
+        return rows.find((r) => r.shareId === shareId)?.name;
+      };
+
+      await asUser.mutation(api.shares.renameShare, {
+        shareId,
+        name: "First label",
+      });
+      expect(await readName()).toBe("First label");
+
+      await asUser.mutation(api.shares.renameShare, {
+        shareId,
+        name: "Updated label",
+      });
+      expect(await readName()).toBe("Updated label");
+
+      // Empty/whitespace clears the label.
+      await asUser.mutation(api.shares.renameShare, {
+        shareId,
+        name: "  ",
+      });
+      expect(await readName()).toBeUndefined();
+    });
+
+    it("non-admin member cannot rename", async () => {
+      const { workspaceId, asUser: asAdmin } = await setupWorkspaceWithAdmin(t);
+      const documentId = await createDocument(t, workspaceId);
+      const { shareId } = await asAdmin.mutation(api.shares.createShare, {
+        resourceType: "document",
+        resourceId: documentId,
+        accessLevel: "view",
+      });
+
+      const { userId: memberId, asUser: asMember } =
+        await setupAuthenticatedUser(t, { email: "rename@test.com" });
+      await addWorkspaceMember(
+        t,
+        workspaceId,
+        memberId,
+        WorkspaceRole.MEMBER,
+      );
+
+      await expect(
+        asMember.mutation(api.shares.renameShare, {
+          shareId,
+          name: "Sneaky",
+        }),
+      ).rejects.toThrow(/permission/i);
+    });
+
+    it("rejects renaming an unknown share", async () => {
+      const { asUser } = await setupWorkspaceWithAdmin(t);
+      await expect(
+        asUser.mutation(api.shares.renameShare, {
+          shareId: "does-not-exist",
+          name: "x",
+        }),
+      ).rejects.toThrow(/not found/i);
+    });
+
+    it("rejects a label longer than 60 characters", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const documentId = await createDocument(t, workspaceId);
+      const { shareId } = await asUser.mutation(api.shares.createShare, {
+        resourceType: "document",
+        resourceId: documentId,
+        accessLevel: "view",
+      });
+
+      await expect(
+        asUser.mutation(api.shares.renameShare, {
+          shareId,
+          name: "x".repeat(61),
+        }),
+      ).rejects.toThrow(/60 characters/i);
+    });
   });
 
   describe("getShareInfo (public)", () => {
@@ -134,6 +278,22 @@ describe("shares", () => {
       expect(info.status).toBe("active");
       expect(info.resourceName).toBe("Hello");
       expect(info.accessLevel).toBe("edit");
+    });
+
+    it("does NOT leak the admin-supplied label to guests", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const documentId = await createDocument(t, workspaceId, "Hello");
+      const { shareId } = await asUser.mutation(api.shares.createShare, {
+        resourceType: "document",
+        resourceId: documentId,
+        accessLevel: "view",
+        name: "Internal: Sarah from Acme",
+      });
+
+      const info = await t.query(api.shares.getShareInfo, { shareId });
+      // The label is admin-only audit metadata. Guarding via runtime check
+      // to catch any future schema/validator drift that might add it.
+      expect((info as { name?: string }).name).toBeUndefined();
     });
 
     it("returns revoked after revokeShare", async () => {

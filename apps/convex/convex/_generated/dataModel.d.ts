@@ -955,6 +955,7 @@ export type DataModel = {
       createdBy: Id<"users">;
       expiresAt?: number;
       lastUsedAt?: number;
+      name?: string;
       resourceId: string;
       resourceType: "document" | "diagram" | "spreadsheet" | "channel";
       revokedAt?: number;
@@ -971,6 +972,7 @@ export type DataModel = {
       | "createdBy"
       | "expiresAt"
       | "lastUsedAt"
+      | "name"
       | "resourceId"
       | "resourceType"
       | "revokedAt"

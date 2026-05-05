@@ -51,6 +51,7 @@ const shareRowValidator = v.object({
   expiresAt: v.optional(v.number()),
   revokedAt: v.optional(v.number()),
   lastUsedAt: v.optional(v.number()),
+  name: v.optional(v.string()),
 });
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,7 @@ const TOKEN_TTL_MS = 5 * 60 * 1000;
 const GUEST_NAME_MIN = 1;
 const GUEST_NAME_MAX = 40;
 const GUEST_SUB_MAX = 64;
+const SHARE_NAME_MAX = 60;
 
 /** 16 random bytes → 22-char base64url identifier. Collision risk ≈ nil. */
 function generateShareId(): string {
@@ -78,6 +80,22 @@ function sanitizeGuestName(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.length < GUEST_NAME_MIN || trimmed.length > GUEST_NAME_MAX) {
     throw new ConvexError("Guest name must be 1-40 characters");
+  }
+  return trimmed;
+}
+
+/**
+ * Trim and length-check an optional admin-supplied share label. Empty/
+ * whitespace-only input collapses to `undefined` so the field is cleared
+ * rather than stored as "". Throws on overflow — the UI also caps input
+ * length, so a thrown error here implies a bypassed client-side guard.
+ */
+function sanitizeShareName(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length > SHARE_NAME_MAX) {
+    throw new ConvexError(`Label must be ${SHARE_NAME_MAX} characters or fewer`);
   }
   return trimmed;
 }
@@ -146,9 +164,13 @@ export const createShare = mutation({
     resourceId: v.string(),
     accessLevel: shareAccessLevelValidator,
     expiresAt: v.optional(v.number()),
+    name: v.optional(v.string()),
   },
   returns: v.object({ shareId: v.string() }),
-  handler: async (ctx, { resourceType, resourceId, accessLevel, expiresAt }) => {
+  handler: async (
+    ctx,
+    { resourceType, resourceId, accessLevel, expiresAt, name },
+  ) => {
     if (!isValidAccessLevelForResource(resourceType, accessLevel)) {
       throw new ConvexError(
         `Access level "${accessLevel}" is not valid for a ${resourceType} share`,
@@ -170,6 +192,8 @@ export const createShare = mutation({
       throw new ConvexError("Expiry must be in the future");
     }
 
+    const cleanName = sanitizeShareName(name);
+
     const userId = await requireUser(ctx);
 
     // Retry on the astronomically unlikely shareId collision.
@@ -186,10 +210,38 @@ export const createShare = mutation({
         createdBy: userId,
         createdAt: now,
         expiresAt,
+        name: cleanName,
       });
       return { shareId };
     }
     throw new ConvexError("Failed to allocate share id");
+  },
+});
+
+/**
+ * Rename a share link. Pass `name: undefined` or an empty/whitespace string
+ * to clear the label. Admin-only — the access level and expiry are NOT
+ * editable post-creation, but the label is purely audit metadata so it's
+ * safe to mutate without affecting any token already in flight.
+ */
+export const renameShare = mutation({
+  args: {
+    shareId: v.string(),
+    name: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { shareId, name }) => {
+    const share = await loadShareByShareId(ctx, shareId);
+    if (!share) throw new ConvexError("Share not found");
+
+    await requireWorkspaceMember(ctx, share.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    const cleanName = sanitizeShareName(name);
+    // Convex `patch` with `undefined` clears the optional field.
+    await ctx.db.patch(share._id, { name: cleanName });
+    return null;
   },
 });
 

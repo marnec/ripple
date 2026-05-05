@@ -1404,6 +1404,7 @@ export declare const api: {
       {
         accessLevel: "view" | "edit" | "join";
         expiresAt?: number;
+        name?: string;
         resourceId: string;
         resourceType: "document" | "diagram" | "spreadsheet" | "channel";
       },
@@ -1454,12 +1455,19 @@ export declare const api: {
         createdBy: Id<"users">;
         expiresAt?: number;
         lastUsedAt?: number;
+        name?: string;
         resourceId: string;
         resourceType: "document" | "diagram" | "spreadsheet" | "channel";
         revokedAt?: number;
         shareId: string;
         workspaceId: Id<"workspaces">;
       }>
+    >;
+    renameShare: FunctionReference<
+      "mutation",
+      "public",
+      { name?: string; shareId: string },
+      null
     >;
     revokeShare: FunctionReference<
       "mutation",

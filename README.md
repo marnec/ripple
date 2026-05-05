@@ -1,9 +1,4 @@
 NEXT STEPS:
-
-- spreadsheet qol
-    - option to visually select cells / ranges when embedding
-
-- named share links
 - calendar; plan calls; invite guests
 
 - leave channel logic (only for private?)
