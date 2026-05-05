@@ -1,11 +1,24 @@
-import { isSingleCell, parseCellName, parseRange } from "@ripple/shared/cellRef";
 import type { Awareness } from "y-protocols/awareness";
-import type { AwarenessUser } from "@/lib/awareness-types";
-import { shiftFormula, type ShiftOp } from "@/lib/formulaShift";
+import { type ShiftOp } from "@/lib/formulaShift";
+import { planFormulaShift } from "@/lib/planFormulaShift";
+import { SpreadsheetFormulaTracker } from "@/lib/spreadsheet-formula-tracker";
+import { SpreadsheetOverlayManager } from "@/lib/spreadsheet-overlay-manager";
+import { SpreadsheetRemoteCursors } from "@/lib/spreadsheet-remote-cursors";
+import { ensureSpreadsheetStyles } from "@/lib/spreadsheet-table-viewport";
 import * as Y from "yjs";
 
 const DEFAULT_ROWS = 100;
 const DEFAULT_COLS = 30;
+
+/** Safe `String(v)` for jspreadsheet-supplied cell values, which are typed as
+ *  `unknown` in our wrapper but in practice always primitives. Returns "" for
+ *  anything non-stringifiable rather than the `[object Object]` default. */
+function stringifyCellValue(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  return "";
+}
 
 /** Coerce a value from an imported spreadsheet (TabularJS) into a cell string.
  *  Numbers/booleans stringify naturally; Date → ISO; objects/arrays drop. */
@@ -22,20 +35,18 @@ function stringifyImportedCell(value: unknown): string {
 }
 
 /**
- * Idempotent template update for initializing empty spreadsheets.
- * Uses a fixed Yjs client ID so applying it multiple times (or from different
- * clients) is a no-op — prevents Y.Array row accumulation from concurrent init.
+ * Idempotent template update for initializing empty spreadsheets. Uses a fixed
+ * Yjs client ID so applying it multiple times (or from different clients) is
+ * a no-op — prevents Y.Array row accumulation from concurrent init.
  *
  * Seeds `rowOrder` and `colOrder` with deterministic IDs (`r0..rN`, `c0..cN`)
  * so concurrent bootstrap from multiple clients produces identical arrays.
- * IDs only need to be unique within a single sheet, so per-index numbering
- * is sufficient for the bootstrap range.
  */
 const EMPTY_SPREADSHEET_UPDATE: Uint8Array = (() => {
   const doc = new Y.Doc();
   doc.clientID = 1; // Fixed ID → applying this update is always idempotent
   const data = doc.getArray<Y.Map<string>>("data");
-  const meta = doc.getMap<any>("meta");
+  const meta = doc.getMap<unknown>("meta");
   const rowOrder = doc.getArray<string>("rowOrder");
   const colOrder = doc.getArray<string>("colOrder");
   doc.transact(() => {
@@ -65,103 +76,54 @@ function makeStableId(prefix: "r" | "c"): string {
 }
 
 /**
- * Spreadsheet cursor/selection state shared via Yjs Awareness.
- */
-export interface SpreadsheetCursor {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
-
-interface AwarenessState {
-  user?: AwarenessUser;
-  cursor?: SpreadsheetCursor;
-}
-
-interface RemoteCursorOverlay {
-  cells: HTMLElement[];
-  label: HTMLElement | null;
-  labelHost: HTMLElement | null;
-  labelTimer: ReturnType<typeof setTimeout> | null;
-}
-
-/**
  * Two-way binding between a jspreadsheet-ce v5 worksheet and a Yjs document.
  *
  * Yjs document structure:
- *   "data"       → Y.Array<Y.Map<string>>    (rows of cells, Y.Map keys are col indices)
- *   "styles"     → Y.Map<string>             ("row,col" → CSS style)
- *   "colWidths"  → Y.Map<number>             (col index → width px)
- *   "rowHeights" → Y.Map<number>             (row index → height px)
- *   "merges"     → Y.Map<string>             (cellName → "colspan,rowspan")
- *   "meta"           → Y.Map<any>                ("colCount" → number)
- *   "formulaValues"  → Y.Map<string>             ("row,col" → computed display value)
+ *   "data"          → Y.Array<Y.Map<string>>    (rows of cells, Y.Map keys are col indices)
+ *   "styles"        → Y.Map<string>             ("row,col" → CSS style)
+ *   "colWidths"     → Y.Map<number>             (col index → width px)
+ *   "rowHeights"    → Y.Map<number>             (row index → height px)
+ *   "merges"        → Y.Map<string>             (cellName → "colspan,rowspan")
+ *   "meta"          → Y.Map<unknown>            ("colCount" → number)
+ *   "formulaValues" → Y.Map<string>             ("row,col" → computed display value)
+ *
+ * The class is a thin coordinator. Subsystems own their state:
+ *   - `SpreadsheetOverlayManager`   → ref + edit highlights
+ *   - `SpreadsheetRemoteCursors`    → awareness-driven peer cursors
+ *   - `SpreadsheetFormulaTracker`   → formula cell set + computed value cache
+ *
+ * The binding itself owns: data observers, undo manager, origin tagging,
+ * subscriber fan-out for `useSyncExternalStore`, and structural-change wiring
+ * (insert/delete row/col with formula ref shifting).
  */
 export class SpreadsheetYjsBinding {
+  // jspreadsheet-ce doesn't export worksheet instance type cleanly.
   private worksheet: any;
   private yData: Y.Array<Y.Map<string>>;
   private yStyles: Y.Map<string>;
   private yColWidths: Y.Map<number>;
   private yRowHeights: Y.Map<number>;
   private yMerges: Y.Map<string>;
-  private yMeta: Y.Map<any>;
+  private yMeta: Y.Map<unknown>;
   private yFormulaValues: Y.Map<string>;
   private yRowOrder: Y.Array<string>;
   private yColOrder: Y.Array<string>;
-  private awareness: Awareness | null;
 
-  /** Guard flag to prevent feedback loops */
+  /** Guard flag to prevent feedback loops between Yjs observers and jspreadsheet edits. */
   private isApplyingRemote = false;
 
-  private dataObserver: (events: Y.YEvent<any>[], tx: Y.Transaction) => void;
+  private dataObserver: (events: Y.YEvent<Y.AbstractType<unknown>>[], tx: Y.Transaction) => void;
   private stylesObserver: (event: Y.YMapEvent<string>) => void;
   private colWidthsObserver: (event: Y.YMapEvent<number>) => void;
   private rowHeightsObserver: (event: Y.YMapEvent<number>) => void;
   private mergesObserver: (event: Y.YMapEvent<string>) => void;
-  private awarenessHandler: ((change: { added: number[]; updated: number[]; removed: number[] }) => void) | null = null;
-
-  private remoteCursors = new Map<number, RemoteCursorOverlay>();
-  private styleElement: HTMLStyleElement | null = null;
 
   /** Throttle: pending selection for rAF-based awareness broadcast */
-  private pendingSelection: SpreadsheetCursor | null = null;
+  private pendingSelection: { x1: number; y1: number; x2: number; y2: number } | null = null;
   private selectionRafId: number | null = null;
-
-  /** Throttle: pending rAF id for cursor rendering */
-  private cursorRafId: number | null = null;
 
   /** Cache: Y.Map → row index for fast lookups in applyCellChanges */
   private rowIndexCache = new WeakMap<Y.Map<string>, number>();
-
-  /** Cache: last rendered cursor state per remote client (for dirty-checking) */
-  private lastCursorState = new Map<number, string>();
-
-  /** Set of remote client IDs considered "active" by the facepile.
-   *  When set, cursors for clients not in this set are removed. */
-  private activeClientIds: Set<number> | null = null;
-
-  /** Currently highlighted cells (for efficient cleanup) */
-  private highlightedCells: HTMLElement[] = [];
-
-  /** Currently highlighted indicator cells (top-right cells with corner triangle) */
-  private indicatorCells: HTMLElement[] = [];
-
-  /** Timer for delayed removal of exit-animation classes */
-  private highlightExitTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** Stored cell refs from the server */
-  private referencedCellRefs: { cellRef: string }[] = [];
-
-  /** Cells highlighted by the live formula edit overlay (separate from
-   *  `highlightedCells` which serves the persistent reference toggle). */
-  private editHighlightedCells: HTMLElement[] = [];
-
-  /** Set of "row,col" keys for cells containing formulas */
-  private formulaCells = new Set<string>();
-
-  /** Pending deferred formula refresh timer */
-  private formulaRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** External listeners (formula bar) notified on any yData change. */
   private subscribers = new Set<() => void>();
@@ -176,6 +138,13 @@ export class SpreadsheetYjsBinding {
    *  grid and the Yjs doc never diverge on Ctrl+Z. */
   private undoManager!: Y.UndoManager;
 
+  // Subsystems
+  private overlays: SpreadsheetOverlayManager;
+  private cursors: SpreadsheetRemoteCursors | null;
+  private formulaTracker: SpreadsheetFormulaTracker;
+
+  private awareness: Awareness | null;
+
   constructor(
     worksheet: any,
     yDoc: Y.Doc,
@@ -189,25 +158,33 @@ export class SpreadsheetYjsBinding {
     this.yColWidths = yDoc.getMap<number>("colWidths");
     this.yRowHeights = yDoc.getMap<number>("rowHeights");
     this.yMerges = yDoc.getMap<string>("merges");
-    this.yMeta = yDoc.getMap<any>("meta");
+    this.yMeta = yDoc.getMap<unknown>("meta");
     this.yFormulaValues = yDoc.getMap<string>("formulaValues");
     this.yRowOrder = yDoc.getArray<string>("rowOrder");
     this.yColOrder = yDoc.getArray<string>("colOrder");
 
-    // Idempotent init: applying the same fixed-clientID update is a no-op if
-    // already present, so concurrent clients can't duplicate rows.
+    // Idempotent init — concurrent clients can't duplicate rows.
     if (this.yData.length === 0) {
       Y.applyUpdate(yDoc, EMPTY_SPREADSHEET_UPDATE);
     }
 
     // Compact rows accumulated by the previous (non-idempotent) init bug.
-    if (this.yData.length > DEFAULT_ROWS) {
-      this.compactRows();
-    }
+    if (this.yData.length > DEFAULT_ROWS) this.compactRows();
+
+    ensureSpreadsheetStyles();
+
+    this.overlays = new SpreadsheetOverlayManager(worksheet);
+    this.cursors = awareness ? new SpreadsheetRemoteCursors(worksheet, awareness) : null;
+    this.formulaTracker = new SpreadsheetFormulaTracker({
+      yData: this.yData,
+      yMeta: this.yMeta,
+      yFormulaValues: this.yFormulaValues,
+      worksheet,
+      defaultColCount: DEFAULT_COLS,
+    });
 
     this.loadGridFromYjs();
 
-    // Set up Yjs → jspreadsheet observers
     this.dataObserver = this.handleDataChange.bind(this);
     this.stylesObserver = this.handleStylesChange.bind(this);
     this.colWidthsObserver = this.handleColWidthsChange.bind(this);
@@ -240,14 +217,6 @@ export class SpreadsheetYjsBinding {
       ],
       { trackedOrigins: new Set([this.localWriteOrigin]) },
     );
-
-    this.injectStyles();
-
-    if (this.awareness) {
-      this.awarenessHandler = this.handleAwarenessChange.bind(this);
-      this.awareness.on("change", this.awarenessHandler);
-      this.renderRemoteCursors();
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -263,15 +232,9 @@ export class SpreadsheetYjsBinding {
       const rowMap = this.yData.get(r);
       let hasContent = false;
       for (let c = 0; c < colCount; c++) {
-        if (rowMap.get(String(c))) {
-          hasContent = true;
-          break;
-        }
+        if (rowMap.get(String(c))) { hasContent = true; break; }
       }
-      if (hasContent) {
-        lastNonEmpty = r;
-        break;
-      }
+      if (hasContent) { lastNonEmpty = r; break; }
     }
 
     const keepRows = lastNonEmpty + 1;
@@ -283,31 +246,24 @@ export class SpreadsheetYjsBinding {
   }
 
   /** Public snapshot of the current row/col order arrays. */
-  getRowOrder(): string[] {
-    return this.yRowOrder.toArray();
-  }
+  getRowOrder(): string[] { return this.yRowOrder.toArray(); }
+  getColOrder(): string[] { return this.yColOrder.toArray(); }
 
-  getColOrder(): string[] {
-    return this.yColOrder.toArray();
-  }
-
-  /** Lazily grow yData to include the given row index (for edits beyond current range). */
+  /** Lazily grow yData to include the given row index. */
   private ensureRows(upToIndex: number) {
     const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
     while (this.yData.length <= upToIndex) {
       const rowMap = new Y.Map<string>();
-      for (let c = 0; c < colCount; c++) {
-        rowMap.set(String(c), "");
-      }
+      for (let c = 0; c < colCount; c++) rowMap.set(String(c), "");
       this.yData.push([rowMap]);
       this.rowIndexCache.set(rowMap, this.yData.length - 1);
     }
   }
 
   /**
-   * Seed an empty (or near-empty) sheet with imported cell data.
-   * Writes directly to Yjs in one transaction; the existing observers push
-   * the values into jspreadsheet and partyserver replicates to other clients.
+   * Seed an empty (or near-empty) sheet with imported cell data. Writes
+   * directly to Yjs in one transaction; existing observers push the values
+   * into jspreadsheet and partyserver replicates to other clients.
    */
   seedFromImport(rows: unknown[][]) {
     if (rows.length === 0) return;
@@ -324,17 +280,13 @@ export class SpreadsheetYjsBinding {
         this.yMeta.set("colCount", targetColCount);
         for (let r = 0; r < this.yData.length; r++) {
           const rowMap = this.yData.get(r);
-          for (let c = currentColCount; c < targetColCount; c++) {
-            rowMap.set(String(c), "");
-          }
+          for (let c = currentColCount; c < targetColCount; c++) rowMap.set(String(c), "");
         }
       }
 
       while (this.yData.length < rows.length) {
         const rowMap = new Y.Map<string>();
-        for (let c = 0; c < targetColCount; c++) {
-          rowMap.set(String(c), "");
-        }
+        for (let c = 0; c < targetColCount; c++) rowMap.set(String(c), "");
         this.yData.push([rowMap]);
       }
 
@@ -359,17 +311,15 @@ export class SpreadsheetYjsBinding {
         const rowMap = this.yData.get(r);
         this.rowIndexCache.set(rowMap, r);
         const row: string[] = [];
-        for (let c = 0; c < colCount; c++) {
-          row.push(rowMap.get(String(c)) ?? "");
-        }
+        for (let c = 0; c < colCount; c++) row.push(rowMap.get(String(c)) ?? "");
         data.push(row);
       }
 
-      // Grow the worksheet to match yMeta dimensions before setData. jspreadsheet
-      // pre-allocates column/row configs at instantiation (`minDimensions`); if
-      // the persisted sheet has more columns or rows than that initial size,
-      // setData would index past the end of `columns[]`/`rows[]` and crash inside
-      // createCell with "Cannot read properties of undefined (reading 'style')".
+      // Grow the worksheet to match yMeta dimensions before setData.
+      // jspreadsheet pre-allocates column/row configs at instantiation; if the
+      // persisted sheet has more columns or rows, setData would index past
+      // the end and crash inside createCell with "Cannot read properties of
+      // undefined (reading 'style')".
       try {
         const currentCols = this.worksheet.options?.columns?.length ?? DEFAULT_COLS;
         if (colCount > currentCols) {
@@ -384,16 +334,7 @@ export class SpreadsheetYjsBinding {
       } catch { /* */ }
 
       this.worksheet.setData(data);
-
-      // Build initial formula cell tracking set
-      this.formulaCells.clear();
-      for (let r = 0; r < data.length; r++) {
-        for (let c = 0; c < data[r].length; c++) {
-          if (data[r][c].startsWith("=")) {
-            this.formulaCells.add(`${r},${c}`);
-          }
-        }
-      }
+      this.formulaTracker.seedFromSnapshot(data);
 
       this.yColWidths.forEach((width: number, col: string) => {
         try { this.worksheet.setWidth(Number(col), width); } catch { /* */ }
@@ -403,7 +344,7 @@ export class SpreadsheetYjsBinding {
       });
       this.yStyles.forEach((style: string, key: string) => {
         const [row, col] = key.split(",").map(Number);
-        try { this.worksheet.setStyle(this.getCellName(col, row), style); } catch { /* */ }
+        try { this.worksheet.setStyle(this.cellNameAt(row, col), style); } catch { /* */ }
       });
       this.yMerges.forEach((value: string, cellName: string) => {
         const [colspan, rowspan] = value.split(",").map(Number);
@@ -413,12 +354,8 @@ export class SpreadsheetYjsBinding {
       this.isApplyingRemote = false;
     }
 
-    // Capture formula display values after jspreadsheet finishes evaluation
-    if (this.formulaCells.size > 0) {
-      this.scheduleFormulaRefresh();
-    }
-
-    this.renderCellRefHighlights();
+    if (!this.formulaTracker.isEmpty) this.formulaTracker.scheduleRefresh();
+    this.overlays.refreshReferencedCells();
   }
 
   // ---------------------------------------------------------------------------
@@ -433,8 +370,8 @@ export class SpreadsheetYjsBinding {
 
   /** v5: onafterchanges(instance, changes: CellChange[]) */
   onafterchanges(
-    _instance: any,
-    changes: Array<{ x: string; y: string; value: any }>,
+    _instance: unknown,
+    changes: Array<{ x: string; y: string; value: unknown }>,
   ) {
     if (this.isApplyingRemote) return;
     if (!changes || changes.length === 0) return;
@@ -445,22 +382,20 @@ export class SpreadsheetYjsBinding {
         const row = Number(c.y);
         const col = Number(c.x);
         const rowMap = this.yData.get(row);
-        rowMap?.set(String(col), String(c.value ?? ""));
+        rowMap?.set(String(col), stringifyCellValue(c.value));
       }
     }, this.localWriteOrigin);
 
-    // Track formula cells and refresh computed display values.
-    // Any change may cascade to dependent formula cells, so always refresh.
     for (const c of changes) {
-      this.updateFormulaCellTracking(Number(c.y), Number(c.x), String(c.value ?? ""));
+      this.formulaTracker.noteCellChange(Number(c.y), Number(c.x), stringifyCellValue(c.value));
     }
-    this.scheduleFormulaRefresh();
+    this.formulaTracker.scheduleRefresh();
   }
 
   /** v5: oninsertrow(instance, rows: { row: number; data: CellValue[] }[]) */
   oninsertrow(
-    _instance: any,
-    rows: Array<{ row: number; data: any[] }>,
+    _instance: unknown,
+    rows: Array<{ row: number; data: unknown[] }>,
   ) {
     if (this.isApplyingRemote) return;
     if (!rows || rows.length === 0) return;
@@ -469,15 +404,11 @@ export class SpreadsheetYjsBinding {
     const insertAt = sorted[0].row;
 
     this.yData.doc!.transact(() => {
-      // Rows are sorted by index; insert from lowest to highest
       for (let i = 0; i < sorted.length; i++) {
         const at = sorted[i].row + i;
-        // Grow yData if the insert position is beyond current length
         this.ensureRows(at > 0 ? at - 1 : 0);
         const rowMap = new Y.Map<string>();
-        for (let c = 0; c < colCount; c++) {
-          rowMap.set(String(c), "");
-        }
+        for (let c = 0; c < colCount; c++) rowMap.set(String(c), "");
         this.yData.insert(at, [rowMap]);
         if (at <= this.yRowOrder.length) {
           this.yRowOrder.insert(at, [makeStableId("r")]);
@@ -489,25 +420,17 @@ export class SpreadsheetYjsBinding {
   }
 
   /** v5: ondeleterow(instance, removedRows: number[]) */
-  ondeleterow(
-    _instance: any,
-    removedRows: number[],
-  ) {
+  ondeleterow(_instance: unknown, removedRows: number[]) {
     if (this.isApplyingRemote) return;
     if (!removedRows || removedRows.length === 0) return;
     const ascending = [...removedRows].sort((a, b) => a - b);
     const deleteAt = ascending[0];
 
     this.yData.doc!.transact(() => {
-      // Delete from highest index first to preserve lower indices
       const descending = [...removedRows].sort((a, b) => b - a);
       for (const rowIdx of descending) {
-        if (rowIdx < this.yData.length) {
-          this.yData.delete(rowIdx, 1);
-        }
-        if (rowIdx < this.yRowOrder.length) {
-          this.yRowOrder.delete(rowIdx, 1);
-        }
+        if (rowIdx < this.yData.length) this.yData.delete(rowIdx, 1);
+        if (rowIdx < this.yRowOrder.length) this.yRowOrder.delete(rowIdx, 1);
       }
     }, this.localWriteOrigin);
 
@@ -516,8 +439,8 @@ export class SpreadsheetYjsBinding {
 
   /** v5: oninsertcolumn(instance, columns: { column: number; options: any; data?: any[] }[]) */
   oninsertcolumn(
-    _instance: any,
-    columns: Array<{ column: number; options: any; data?: any[] }>,
+    _instance: unknown,
+    columns: Array<{ column: number; options: unknown; data?: unknown[] }>,
   ) {
     if (this.isApplyingRemote) return;
     if (!columns || columns.length === 0) return;
@@ -528,15 +451,11 @@ export class SpreadsheetYjsBinding {
     this.yData.doc!.transact(() => {
       for (let r = 0; r < this.yData.length; r++) {
         const rowMap = this.yData.get(r);
-        // Shift existing columns right
         for (let c = currentColCount - 1; c >= insertAt; c--) {
           const val = rowMap.get(String(c)) ?? "";
           rowMap.set(String(c + numCols), val);
         }
-        // Set new columns to empty
-        for (let i = 0; i < numCols; i++) {
-          rowMap.set(String(insertAt + i), "");
-        }
+        for (let i = 0; i < numCols; i++) rowMap.set(String(insertAt + i), "");
       }
       this.yMeta.set("colCount", currentColCount + numCols);
       if (insertAt <= this.yColOrder.length) {
@@ -550,10 +469,7 @@ export class SpreadsheetYjsBinding {
   }
 
   /** v5: ondeletecolumn(instance, removedColumns: number[]) */
-  ondeletecolumn(
-    _instance: any,
-    removedColumns: number[],
-  ) {
+  ondeletecolumn(_instance: unknown, removedColumns: number[]) {
     if (this.isApplyingRemote) return;
     if (!removedColumns || removedColumns.length === 0) return;
     const currentColCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
@@ -563,12 +479,10 @@ export class SpreadsheetYjsBinding {
     this.yData.doc!.transact(() => {
       for (let r = 0; r < this.yData.length; r++) {
         const rowMap = this.yData.get(r);
-        // Shift columns left
         for (let c = deleteAt; c < currentColCount - numCols; c++) {
           const val = rowMap.get(String(c + numCols)) ?? "";
           rowMap.set(String(c), val);
         }
-        // Remove trailing columns
         for (let c = currentColCount - numCols; c < currentColCount; c++) {
           rowMap.delete(String(c));
         }
@@ -585,70 +499,63 @@ export class SpreadsheetYjsBinding {
 
   /**
    * Rewrite A1 references inside formula text after a structural change.
-   * Walks the post-shift grid, runs `shiftFormula` on every `=`-prefixed cell,
-   * and writes back to both yData and the jspreadsheet worksheet so display
-   * values recompute on the next refresh tick.
+   * Snapshots the post-shift grid, runs the pure planner, applies the
+   * resulting rewrites to Yjs and the worksheet so display values recompute
+   * on the next refresh tick.
    */
   private shiftFormulaRefs(op: ShiftOp) {
     const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
-    const rewrites: Array<{ r: number; c: number; value: string }> = [];
+
+    const snapshot: string[][] = [];
+    for (let r = 0; r < this.yData.length; r++) {
+      const rowMap = this.yData.get(r);
+      const row: string[] = [];
+      for (let c = 0; c < colCount; c++) row.push(rowMap.get(String(c)) ?? "");
+      snapshot.push(row);
+    }
+
+    const rewrites = planFormulaShift(snapshot, op);
+    if (rewrites.length === 0) return;
 
     this.yData.doc!.transact(() => {
-      for (let r = 0; r < this.yData.length; r++) {
-        const rowMap = this.yData.get(r);
-        for (let c = 0; c < colCount; c++) {
-          const value = rowMap.get(String(c)) ?? "";
-          if (!value.startsWith("=")) continue;
-          const next = shiftFormula(value, op);
-          if (next !== value) {
-            rowMap.set(String(c), next);
-            rewrites.push({ r, c, value: next });
-          }
-        }
+      for (const { row, col, next } of rewrites) {
+        this.yData.get(row).set(String(col), next);
       }
     }, this.localWriteOrigin);
-
-    if (rewrites.length === 0) return;
 
     // Sync the worksheet so jspreadsheet evaluates the rewritten formulas.
     // Suppress the onafterchanges echo via isApplyingRemote.
     this.isApplyingRemote = true;
     try {
-      for (const { r, c, value } of rewrites) {
-        try { this.worksheet.setValueFromCoords(c, r, value); } catch { /* */ }
+      for (const { row, col, next } of rewrites) {
+        try { this.worksheet.setValueFromCoords(col, row, next); } catch { /* */ }
       }
     } finally {
       this.isApplyingRemote = false;
     }
 
-    this.rebuildFormulaCellTracking();
-    this.scheduleFormulaRefresh();
+    this.formulaTracker.rebuild();
+    this.formulaTracker.scheduleRefresh();
   }
 
   /** v5: onchangestyle(instance, changes: Record<string, string>) */
-  onchangestyle(
-    _instance: any,
-    changes: Record<string, string>,
-  ) {
+  onchangestyle(_instance: unknown, changes: Record<string, string>) {
     if (this.isApplyingRemote) return;
     if (!changes) return;
     this.yData.doc!.transact(() => {
       for (const [cellName, style] of Object.entries(changes)) {
-        const coords = this.parseCellName(cellName);
+        const coords = parseCellNameInternal(cellName);
         if (!coords) continue;
         const styleKey = `${coords.row},${coords.col}`;
-        if (style) {
-          this.yStyles.set(styleKey, style);
-        } else {
-          this.yStyles.delete(styleKey);
-        }
+        if (style) this.yStyles.set(styleKey, style);
+        else this.yStyles.delete(styleKey);
       }
     }, this.localWriteOrigin);
   }
 
   /** v5: onresizecolumn(instance, colIndex, newWidth, oldWidth) */
   onresizecolumn(
-    _instance: any,
+    _instance: unknown,
     colIndex: number | number[],
     newWidth: number | number[],
   ) {
@@ -662,8 +569,7 @@ export class SpreadsheetYjsBinding {
       }, this.localWriteOrigin);
     } else {
       // Wrap the single-set in a transaction so it's tagged with our origin
-      // and tracked by Y.UndoManager (a bare .set() outside a transact uses
-      // the doc's default origin and would be untracked).
+      // and tracked by Y.UndoManager.
       this.yData.doc!.transact(() => {
         this.yColWidths.set(String(colIndex), newWidth as number);
       }, this.localWriteOrigin);
@@ -671,11 +577,7 @@ export class SpreadsheetYjsBinding {
   }
 
   /** v5: onresizerow(instance, rowIndex, newHeight, oldHeight) */
-  onresizerow(
-    _instance: any,
-    rowIndex: number,
-    newHeight: number,
-  ) {
+  onresizerow(_instance: unknown, rowIndex: number, newHeight: number) {
     if (this.isApplyingRemote) return;
     this.yData.doc!.transact(() => {
       this.yRowHeights.set(String(rowIndex), newHeight);
@@ -683,19 +585,13 @@ export class SpreadsheetYjsBinding {
   }
 
   /** v5: onmerge(instance, merges: Record<string, [number, number]>) */
-  onmerge(
-    _instance: any,
-    merges: Record<string, [number, number]>,
-  ) {
+  onmerge(_instance: unknown, merges: Record<string, [number, number]>) {
     if (this.isApplyingRemote) return;
     if (!merges) return;
     this.yData.doc!.transact(() => {
       for (const [cellName, [colspan, rowspan]] of Object.entries(merges)) {
-        if (colspan <= 1 && rowspan <= 1) {
-          this.yMerges.delete(cellName);
-        } else {
-          this.yMerges.set(cellName, `${colspan},${rowspan}`);
-        }
+        if (colspan <= 1 && rowspan <= 1) this.yMerges.delete(cellName);
+        else this.yMerges.set(cellName, `${colspan},${rowspan}`);
       }
     }, this.localWriteOrigin);
   }
@@ -703,7 +599,7 @@ export class SpreadsheetYjsBinding {
   /** v5: onselection(instance, x1, y1, x2, y2, origin)
    *  Throttled via rAF to avoid flooding awareness during drag-select. */
   onselection(
-    _instance: any,
+    _instance: unknown,
     x1: number,
     y1: number,
     x2: number,
@@ -726,7 +622,7 @@ export class SpreadsheetYjsBinding {
   // Yjs → jspreadsheet  (remote changes — observers)
   // ---------------------------------------------------------------------------
 
-  private handleDataChange(events: Y.YEvent<any>[], tx: Y.Transaction) {
+  private handleDataChange(events: Y.YEvent<Y.AbstractType<unknown>>[], tx: Y.Transaction) {
     this.notifySubscribers();
     // Skip the "user just typed in the cell" echo: the value is already in
     // jspreadsheet. Apply for: remote peer edits, undo/redo replays.
@@ -743,8 +639,8 @@ export class SpreadsheetYjsBinding {
     } finally {
       this.isApplyingRemote = false;
     }
-    // Remote data changes may trigger formula recalculation in jspreadsheet
-    this.scheduleFormulaRefresh();
+    // Remote data changes may trigger formula recalculation in jspreadsheet.
+    this.formulaTracker.scheduleRefresh();
   }
 
   private applyRowChanges(event: Y.YArrayEvent<Y.Map<string>>) {
@@ -761,23 +657,18 @@ export class SpreadsheetYjsBinding {
             const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
             for (let c = 0; c < colCount; c++) {
               const val = rowMap.get(String(c)) ?? "";
-              if (val) {
-                this.worksheet.setValueFromCoords(c, index + i, val);
-              }
+              if (val) this.worksheet.setValueFromCoords(c, index + i, val);
             }
           } catch { /* */ }
         }
         index += rows.length;
       } else if (delta.delete) {
-        try {
-          this.worksheet.deleteRow(index, delta.delete);
-        } catch { /* */ }
+        try { this.worksheet.deleteRow(index, delta.delete); } catch { /* */ }
       }
     }
-    // Rebuild row index cache and formula tracking after structural changes
     this.rebuildRowIndexCache();
-    this.rebuildFormulaCellTracking();
-    this.renderCellRefHighlights();
+    this.formulaTracker.rebuild();
+    this.overlays.refreshReferencedCells();
   }
 
   private rebuildRowIndexCache() {
@@ -796,7 +687,7 @@ export class SpreadsheetYjsBinding {
         const col = Number(key);
         const value = rowMap.get(key) ?? "";
         try { this.worksheet.setValueFromCoords(col, rowIndex, value); } catch { /* */ }
-        this.updateFormulaCellTracking(rowIndex, col, value);
+        this.formulaTracker.noteCellChange(rowIndex, col, value);
       }
     });
   }
@@ -807,7 +698,7 @@ export class SpreadsheetYjsBinding {
     try {
       event.changes.keys.forEach((change, key) => {
         const [row, col] = key.split(",").map(Number);
-        const cellName = this.getCellName(col, row);
+        const cellName = this.cellNameAt(row, col);
         if (change.action === "add" || change.action === "update") {
           const style = this.yStyles.get(key);
           if (style) {
@@ -877,18 +768,32 @@ export class SpreadsheetYjsBinding {
   }
 
   // ---------------------------------------------------------------------------
-  // Remote cursor awareness
+  // Public API — overlays + cursors (delegated to subsystems)
   // ---------------------------------------------------------------------------
 
-  /** Update the set of active remote client IDs (mirrors the facepile).
-   *  Cursors for clients not in this set will be removed. */
+  /** Set the persistent reference highlights (Link2 toggle on the page header). */
+  setReferencedCells(refs: { cellRef: string }[]) {
+    this.overlays.setReferencedCells(refs);
+  }
+
+  /** Set the transient marching-ants highlights for refs in a formula being edited. */
+  setFormulaEditHighlights(refs: string[]) {
+    this.overlays.setFormulaEditHighlights(refs);
+  }
+
+  /** Clear the marching-ants highlights. Re-renders the persistent overlay. */
+  clearFormulaEditHighlights(options?: { rerenderRefs?: boolean }) {
+    this.overlays.clearFormulaEditHighlights(options);
+  }
+
+  /** Update the active remote client set (mirrors the facepile). Cursors for
+   *  clients not in this set are removed. */
   setActiveClients(ids: Set<number>) {
-    this.activeClientIds = ids;
-    this.renderRemoteCursors();
+    this.cursors?.setActiveClients(ids);
   }
 
   // ---------------------------------------------------------------------------
-  // Public cell read/write API (formula bar)
+  // Public API — cell read/write (formula bar)
   // ---------------------------------------------------------------------------
 
   /** Read the raw stored value of a cell (formula text, not the computed value). */
@@ -911,577 +816,16 @@ export class SpreadsheetYjsBinding {
         const rowMap = this.yData.get(row);
         rowMap?.set(String(col), value);
       }, this.localWriteOrigin);
-      try {
-        this.worksheet.setValueFromCoords(col, row, value);
-      } catch { /* */ }
+      try { this.worksheet.setValueFromCoords(col, row, value); } catch { /* */ }
     } finally {
       this.isApplyingRemote = false;
     }
-    this.updateFormulaCellTracking(row, col, value);
-    this.scheduleFormulaRefresh();
+    this.formulaTracker.noteCellChange(row, col, value);
+    this.formulaTracker.scheduleRefresh();
   }
 
-  /** Convert (row, col) to "A1"-style cell name. Reuses the internal helper. */
+  /** Convert (row, col) to "A1"-style cell name. */
   cellNameAt(row: number, col: number): string {
-    return this.getCellName(col, row);
-  }
-
-  /** Yjs-native undo. Reverts the most recent local-write transaction
-   *  (in-cell edit, formula-bar edit, structural change, etc.). The reverted
-   *  state is then pushed back into jspreadsheet via the existing observer. */
-  undo() {
-    this.undoManager.undo();
-  }
-
-  /** Yjs-native redo. Mirror of `undo`. */
-  redo() {
-    this.undoManager.redo();
-  }
-
-  /** Underlying jspreadsheet worksheet instance. Exposed for export utilities
-   *  (CSV/XLSX) that need to call `getData()` / `download()` directly. */
-  getWorksheet(): any {
-    return this.worksheet;
-  }
-
-  /** Subscribe to data changes (local or remote). Returns an unsubscribe fn. */
-  subscribe(listener: () => void): () => void {
-    this.subscribers.add(listener);
-    return () => {
-      this.subscribers.delete(listener);
-    };
-  }
-
-  private notifySubscribers() {
-    for (const listener of this.subscribers) {
-      try {
-        listener();
-      } catch { /* */ }
-    }
-  }
-
-  /** Color palette for live formula-edit highlights — one color per ref index. */
-  private static readonly EDIT_HIGHLIGHT_COLORS = [
-    "#3b82f6", // blue
-    "#ec4899", // pink
-    "#10b981", // green
-    "#a855f7", // purple
-    "#f97316", // orange
-    "#06b6d4", // cyan
-  ];
-
-  /**
-   * Render marching-ants borders around the cells/ranges referenced by a
-   * formula being edited. One distinct color per ref index. Each cell on a
-   * range edge paints up to four animated dashed sides (top/bottom/left/right)
-   * via layered background-image gradients — cells fully interior to a range
-   * paint nothing. Pass an empty array to clear.
-   *
-   * Edit highlights take visual priority over the persistent
-   * `setReferencedCells` overlay; the persistent overlay is re-rendered
-   * automatically when edit highlights clear.
-   */
-  setFormulaEditHighlights(refs: string[]) {
-    this.clearFormulaEditHighlights({ rerenderRefs: false });
-    const table = this.getWorksheetTable();
-    if (!table) return;
-
-    if (refs.length === 0) {
-      this.renderCellRefHighlights();
-      return;
-    }
-
-    // Suppress the persistent ref overlay while edit highlights are active.
-    // Both write to the cell's inline style; leaving them stacked would create
-    // conflicting borders.
-    this.clearCellRefHighlights();
-
-    const colors = SpreadsheetYjsBinding.EDIT_HIGHLIGHT_COLORS;
-    // Track which edges + color each cell needs. Last-ref-wins on color when
-    // ranges overlap, which is rare and acceptable for v1.
-    type CellEdges = { color: string; top: boolean; bot: boolean; lef: boolean; rig: boolean };
-    const cellEdges = new Map<HTMLElement, CellEdges>();
-    const setEdge = (td: HTMLElement, color: string, side: "top" | "bot" | "lef" | "rig") => {
-      let edges = cellEdges.get(td);
-      if (!edges) {
-        edges = { color, top: false, bot: false, lef: false, rig: false };
-        cellEdges.set(td, edges);
-      }
-      edges.color = color;
-      edges[side] = true;
-    };
-
-    refs.forEach((ref, idx) => {
-      const color = colors[idx % colors.length];
-      if (isSingleCell(ref)) {
-        const c = parseCellName(ref);
-        if (!c) return;
-        const td = this.getCellElement(table, c.row, c.col);
-        if (!td) return;
-        setEdge(td, color, "top");
-        setEdge(td, color, "bot");
-        setEdge(td, color, "lef");
-        setEdge(td, color, "rig");
-      } else {
-        const r = parseRange(ref);
-        if (!r) return;
-        for (let row = r.startRow; row <= r.endRow; row++) {
-          for (let col = r.startCol; col <= r.endCol; col++) {
-            const td = this.getCellElement(table, row, col);
-            if (!td) continue;
-            if (row === r.startRow) setEdge(td, color, "top");
-            if (row === r.endRow) setEdge(td, color, "bot");
-            if (col === r.startCol) setEdge(td, color, "lef");
-            if (col === r.endCol) setEdge(td, color, "rig");
-          }
-        }
-      }
-    });
-
-    for (const [td, edges] of cellEdges) {
-      td.classList.add("jss-formula-edit-highlight");
-      td.style.setProperty("--fe-top-c", edges.top ? edges.color : "transparent");
-      td.style.setProperty("--fe-bot-c", edges.bot ? edges.color : "transparent");
-      td.style.setProperty("--fe-lef-c", edges.lef ? edges.color : "transparent");
-      td.style.setProperty("--fe-rig-c", edges.rig ? edges.color : "transparent");
-      this.editHighlightedCells.push(td);
-    }
-  }
-
-  /** Clear edit highlights. Re-renders the persistent ref overlay by default. */
-  clearFormulaEditHighlights(options?: { rerenderRefs?: boolean }) {
-    for (const td of this.editHighlightedCells) {
-      td.classList.remove("jss-formula-edit-highlight");
-      td.style.removeProperty("--fe-top-c");
-      td.style.removeProperty("--fe-bot-c");
-      td.style.removeProperty("--fe-lef-c");
-      td.style.removeProperty("--fe-rig-c");
-    }
-    this.editHighlightedCells = [];
-    if (options?.rerenderRefs !== false && this.referencedCellRefs.length > 0) {
-      this.renderCellRefHighlights();
-    }
-  }
-
-  /** Update the set of cell refs referenced by documents. Triggers re-render of highlights. */
-  setReferencedCells(refs: { cellRef: string }[]) {
-    const wasHighlighted = this.referencedCellRefs.length > 0;
-    this.referencedCellRefs = refs;
-    if (refs.length === 0 && wasHighlighted) {
-      this.clearCellRefHighlights(true);
-    } else {
-      this.renderCellRefHighlights();
-    }
-  }
-
-  private renderCellRefHighlights() {
-    const table = this.getWorksheetTable();
-    if (!table) return;
-
-    this.clearCellRefHighlights();
-
-    const borderColor = "#f59e0b";
-
-    // Accumulate shadows per cell across all refs so overlapping refs merge
-    // rather than overwrite each other.
-    const cellShadows = new Map<HTMLElement, Set<string>>();
-    const addShadow = (td: HTMLElement, shadow: string) => {
-      let set = cellShadows.get(td);
-      if (!set) { set = new Set(); cellShadows.set(td, set); }
-      set.add(shadow);
-    };
-
-    const topShadow = `inset 0 1.5px 0 0 ${borderColor}`;
-    const bottomShadow = `inset 0 -1.5px 0 0 ${borderColor}`;
-    const leftShadow = `inset 1.5px 0 0 0 ${borderColor}`;
-    const rightShadow = `inset -1.5px 0 0 0 ${borderColor}`;
-
-    for (const { cellRef } of this.referencedCellRefs) {
-      if (isSingleCell(cellRef)) {
-        const coords = parseCellName(cellRef);
-        if (!coords) continue;
-
-        const td = this.getCellElement(table, coords.row, coords.col);
-        if (td) {
-          td.classList.add("jss-cell-ref-highlight", "jss-cell-ref-indicator");
-          addShadow(td, topShadow);
-          addShadow(td, bottomShadow);
-          addShadow(td, leftShadow);
-          addShadow(td, rightShadow);
-          this.highlightedCells.push(td);
-          this.indicatorCells.push(td);
-        }
-      } else {
-        const range = parseRange(cellRef);
-        if (!range) continue;
-
-        for (let r = range.startRow; r <= range.endRow; r++) {
-          for (let c = range.startCol; c <= range.endCol; c++) {
-            const td = this.getCellElement(table, r, c);
-            if (td) {
-              td.classList.add("jss-cell-ref-highlight");
-              // Outer-edge borders only (same technique as remote cursors)
-              if (r === range.startRow) addShadow(td, topShadow);
-              if (r === range.endRow) addShadow(td, bottomShadow);
-              if (c === range.startCol) addShadow(td, leftShadow);
-              if (c === range.endCol) addShadow(td, rightShadow);
-              this.highlightedCells.push(td);
-            }
-          }
-        }
-
-        // Indicator on top-right cell (avoids collision with cursor labels on top-left)
-        const topRightTd = this.getCellElement(table, range.startRow, range.endCol);
-        if (topRightTd) {
-          topRightTd.classList.add("jss-cell-ref-indicator");
-          this.indicatorCells.push(topRightTd);
-        }
-      }
-    }
-
-    // Apply accumulated shadows in one pass
-    for (const [td, shadows] of cellShadows) {
-      td.style.boxShadow = [...shadows].join(", ");
-    }
-  }
-
-  private clearCellRefHighlights(animated = false) {
-    if (this.highlightExitTimer !== null) {
-      clearTimeout(this.highlightExitTimer);
-      this.highlightExitTimer = null;
-      // Clean up any lingering exit classes from a previous animation
-      for (const cell of this.highlightedCells) {
-        cell.classList.remove("jss-cell-ref-exiting");
-      }
-    }
-
-    if (animated && this.highlightedCells.length > 0) {
-      const exitingCells = [...this.highlightedCells];
-      for (const cell of exitingCells) {
-        cell.classList.remove("jss-cell-ref-highlight");
-        cell.classList.add("jss-cell-ref-exiting");
-        cell.style.boxShadow = "";
-      }
-      for (const cell of this.indicatorCells) {
-        cell.classList.remove("jss-cell-ref-indicator");
-      }
-      this.highlightedCells = [];
-      this.indicatorCells = [];
-      this.highlightExitTimer = setTimeout(() => {
-        for (const cell of exitingCells) {
-          cell.classList.remove("jss-cell-ref-exiting");
-        }
-        this.highlightExitTimer = null;
-      }, 220);
-      return;
-    }
-
-    for (const cell of this.highlightedCells) {
-      cell.classList.remove("jss-cell-ref-highlight", "jss-cell-ref-exiting");
-      cell.style.boxShadow = "";
-    }
-    for (const cell of this.indicatorCells) {
-      cell.classList.remove("jss-cell-ref-indicator");
-    }
-    this.highlightedCells = [];
-    this.indicatorCells = [];
-  }
-
-  private injectStyles() {
-    this.styleElement = document.createElement("style");
-    this.styleElement.textContent = `
-      .jss-remote-cursor-label {
-        position: absolute;
-        top: -18px;
-        left: -1px;
-        font-size: 11px;
-        line-height: 16px;
-        padding: 0 4px;
-        border-radius: 3px 3px 3px 0;
-        color: #fff;
-        white-space: nowrap;
-        pointer-events: none;
-        z-index: 10;
-        font-family: system-ui, sans-serif;
-        opacity: 1;
-        transition: opacity 0.3s ease;
-      }
-      .jss-remote-cursor-label.jss-label-hidden {
-        opacity: 0;
-      }
-      .jss-cell-ref-highlight {
-        background-color: rgba(251, 191, 36, 0.12) !important;
-        transition: background-color 0.2s ease, box-shadow 0.2s ease;
-      }
-      .jss-cell-ref-exiting {
-        background-color: transparent !important;
-        transition: background-color 0.2s ease, box-shadow 0.2s ease;
-      }
-      .jss-cell-ref-indicator {
-        position: relative !important;
-        overflow: visible !important;
-      }
-      .jss-cell-ref-indicator::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        right: 0;
-        width: 0;
-        height: 0;
-        border-style: solid;
-        border-width: 0 6px 6px 0;
-        border-color: transparent #f59e0b transparent transparent;
-        pointer-events: none;
-      }
-      .jss-formula-edit-highlight {
-        background-image:
-          linear-gradient(90deg, var(--fe-top-c, transparent) 50%, transparent 50%),
-          linear-gradient(90deg, var(--fe-bot-c, transparent) 50%, transparent 50%),
-          linear-gradient(0deg, var(--fe-lef-c, transparent) 50%, transparent 50%),
-          linear-gradient(0deg, var(--fe-rig-c, transparent) 50%, transparent 50%);
-        background-size: 6px 1.5px, 6px 1.5px, 1.5px 6px, 1.5px 6px;
-        background-position: 0 0, 0 100%, 0 0, 100% 0;
-        background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
-        animation: jss-fe-march 0.5s linear infinite;
-      }
-      @keyframes jss-fe-march {
-        to {
-          background-position: 6px 0, -6px 100%, 0 -6px, 100% 6px;
-        }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .jss-formula-edit-highlight {
-          animation: none;
-        }
-      }
-    `;
-    document.head.appendChild(this.styleElement);
-  }
-
-  private handleAwarenessChange() {
-    // Coalesce rapid awareness updates into a single render pass
-    if (this.cursorRafId === null) {
-      this.cursorRafId = requestAnimationFrame(() => {
-        this.cursorRafId = null;
-        this.renderRemoteCursors();
-      });
-    }
-  }
-
-  private renderRemoteCursors() {
-    if (!this.awareness) return;
-
-    const table = this.getWorksheetTable();
-    if (!table) return;
-
-    const states = this.awareness.getStates();
-    const localClientId = this.awareness.clientID;
-    const activeClientIds = new Set<number>();
-
-    states.forEach((state: AwarenessState, clientId: number) => {
-      if (clientId === localClientId) return;
-      if (!state.user || !state.cursor) return;
-      // Skip clients that are no longer shown in the facepile (stale)
-      if (this.activeClientIds && !this.activeClientIds.has(clientId)) return;
-
-      activeClientIds.add(clientId);
-      const { cursor, user } = state;
-
-      // Dirty check: skip full teardown/rebuild if cursor hasn't moved
-      const stateKey = `${cursor.x1},${cursor.y1},${cursor.x2},${cursor.y2},${user.color}`;
-      if (this.lastCursorState.get(clientId) === stateKey && this.remoteCursors.has(clientId)) {
-        return;
-      }
-      this.lastCursorState.set(clientId, stateKey);
-
-      this.clearRemoteCursor(clientId);
-
-      const overlay: RemoteCursorOverlay = { cells: [], label: null, labelHost: null, labelTimer: null };
-      const minRow = Math.min(cursor.y1, cursor.y2);
-      const maxRow = Math.max(cursor.y1, cursor.y2);
-      const minCol = Math.min(cursor.x1, cursor.x2);
-      const maxCol = Math.max(cursor.x1, cursor.x2);
-
-      for (let r = minRow; r <= maxRow; r++) {
-        for (let c = minCol; c <= maxCol; c++) {
-          const td = this.getCellElement(table, r, c);
-          if (td) {
-            // Only draw borders on outer edges of selection
-            const shadows: string[] = [];
-            if (r === minRow) shadows.push(`inset 0 2px 0 0 ${user.color}`);
-            if (r === maxRow) shadows.push(`inset 0 -2px 0 0 ${user.color}`);
-            if (c === minCol) shadows.push(`inset 2px 0 0 0 ${user.color}`);
-            if (c === maxCol) shadows.push(`inset -2px 0 0 0 ${user.color}`);
-            td.style.boxShadow = shadows.join(", ");
-            td.style.backgroundColor = this.hexToRgba(user.color, 0.08);
-            overlay.cells.push(td);
-          }
-        }
-      }
-
-      const topLeftTd = this.getCellElement(table, minRow, minCol);
-      if (topLeftTd) {
-        const label = document.createElement("div");
-        label.className = "jss-remote-cursor-label";
-        label.style.backgroundColor = user.color;
-        label.textContent = user.name;
-        topLeftTd.style.position = "relative";
-        topLeftTd.style.overflow = "visible";
-        topLeftTd.appendChild(label);
-        overlay.label = label;
-        overlay.labelHost = topLeftTd;
-        overlay.labelTimer = setTimeout(() => {
-          label.classList.add("jss-label-hidden");
-        }, 2000);
-      }
-
-      this.remoteCursors.set(clientId, overlay);
-    });
-
-    for (const [clientId] of this.remoteCursors) {
-      if (!activeClientIds.has(clientId)) {
-        this.clearRemoteCursor(clientId);
-        this.remoteCursors.delete(clientId);
-        this.lastCursorState.delete(clientId);
-      }
-    }
-  }
-
-  private clearRemoteCursor(clientId: number) {
-    const overlay = this.remoteCursors.get(clientId);
-    if (!overlay) return;
-    for (const cell of overlay.cells) {
-      cell.style.boxShadow = "";
-      cell.style.backgroundColor = "";
-    }
-    if (overlay.labelTimer) {
-      clearTimeout(overlay.labelTimer);
-    }
-    if (overlay.label) {
-      overlay.label.remove();
-    }
-    if (overlay.labelHost) {
-      overlay.labelHost.style.overflow = "";
-      overlay.labelHost.style.position = "";
-    }
-  }
-
-  private getWorksheetTable(): HTMLElement | null {
-    const el = this.worksheet?.element || this.worksheet?.el;
-    if (!el) return null;
-    return el.querySelector(".jss_worksheet") ?? el.closest(".jss_worksheet") ?? el;
-  }
-
-  private getCellElement(table: HTMLElement, row: number, col: number): HTMLElement | null {
-    const tbody = table.querySelector("tbody");
-    if (!tbody) return null;
-    const tr = tbody.children[row] as HTMLElement | undefined;
-    if (!tr) return null;
-    return (tr.children[col + 1] as HTMLElement) ?? null;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Formula value tracking
-  //
-  // Captures computed display values for formula cells (those starting with "=")
-  // and stores them in the "formulaValues" Y.Map so server-side extraction
-  // functions (PartyKit + Convex) can read computed values instead of raw formulas.
-  // ---------------------------------------------------------------------------
-
-  /** Track or untrack a cell as a formula cell based on its value. */
-  private updateFormulaCellTracking(row: number, col: number, value: string) {
-    const key = `${row},${col}`;
-    if (typeof value === "string" && value.startsWith("=")) {
-      this.formulaCells.add(key);
-    } else {
-      this.formulaCells.delete(key);
-    }
-  }
-
-  /** Full scan to rebuild formula cell tracking after structural changes (row/col insert/delete). */
-  private rebuildFormulaCellTracking() {
-    this.formulaCells.clear();
-    const colCount = (this.yMeta.get("colCount") as number) ?? DEFAULT_COLS;
-    for (let r = 0; r < this.yData.length; r++) {
-      const rowMap = this.yData.get(r);
-      for (let c = 0; c < colCount; c++) {
-        const val = rowMap.get(String(c)) ?? "";
-        if (val.startsWith("=")) {
-          this.formulaCells.add(`${r},${c}`);
-        }
-      }
-    }
-  }
-
-  /**
-   * Schedule a deferred formula display value refresh.
-   * Uses setTimeout(0) to run after jspreadsheet finishes evaluating formulas
-   * and after the current Yjs transaction completes.
-   */
-  private scheduleFormulaRefresh() {
-    if (this.formulaRefreshTimer !== null) {
-      clearTimeout(this.formulaRefreshTimer);
-    }
-    this.formulaRefreshTimer = setTimeout(() => {
-      this.formulaRefreshTimer = null;
-      this.refreshFormulaDisplayValues();
-    }, 0);
-  }
-
-  /**
-   * Read computed display values for all tracked formula cells and update
-   * the yFormulaValues map. Uses jspreadsheet's getValueFromCoords(x, y, true)
-   * to get the processed (computed) value rather than the raw formula.
-   */
-  private refreshFormulaDisplayValues() {
-    if (!this.worksheet) return;
-
-    const updates: Array<[string, string]> = [];
-    const removals: string[] = [];
-
-    for (const key of this.formulaCells) {
-      const [rowStr, colStr] = key.split(",");
-      const row = Number(rowStr);
-      const col = Number(colStr);
-
-      let displayValue: string;
-      try {
-        const val = this.worksheet.getValueFromCoords(col, row, true);
-        displayValue = val != null ? String(val) : "";
-      } catch {
-        continue;
-      }
-
-      const current = this.yFormulaValues.get(key);
-      if (current !== displayValue) {
-        updates.push([key, displayValue]);
-      }
-    }
-
-    // Clean up entries for cells no longer containing formulas
-    this.yFormulaValues.forEach((_value: string, key: string) => {
-      if (!this.formulaCells.has(key)) {
-        removals.push(key);
-      }
-    });
-
-    if (updates.length === 0 && removals.length === 0) return;
-
-    this.yData.doc!.transact(() => {
-      for (const [key, value] of updates) {
-        this.yFormulaValues.set(key, value);
-      }
-      for (const key of removals) {
-        this.yFormulaValues.delete(key);
-      }
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Utilities
-  // ---------------------------------------------------------------------------
-
-  private getCellName(col: number, row: number): string {
     let name = "";
     let c = col;
     do {
@@ -1491,24 +835,26 @@ export class SpreadsheetYjsBinding {
     return name + (row + 1);
   }
 
-  private parseCellName(cellName: string): { col: number; row: number } | null {
-    const match = cellName.match(/^([A-Z]+)(\d+)$/);
-    if (!match) return null;
-    let col = 0;
-    for (let i = 0; i < match[1].length; i++) {
-      col = col * 26 + (match[1].charCodeAt(i) - 64);
-    }
-    col -= 1;
-    const row = parseInt(match[2], 10) - 1;
-    return { col, row };
+  /** Yjs-native undo. Reverts the most recent local-write transaction. */
+  undo() { this.undoManager.undo(); }
+
+  /** Yjs-native redo. Mirror of `undo`. */
+  redo() { this.undoManager.redo(); }
+
+  /** Underlying jspreadsheet worksheet instance. Exposed for export utilities
+   *  (CSV/XLSX) that need to call `getData()` / `download()` directly. */
+  getWorksheet(): any { return this.worksheet; }
+
+  /** Subscribe to data changes (local or remote). Returns an unsubscribe fn. */
+  subscribe(listener: () => void): () => void {
+    this.subscribers.add(listener);
+    return () => { this.subscribers.delete(listener); };
   }
 
-  private hexToRgba(hex: string, alpha: number): string {
-    const cleanHex = hex.replace("#", "");
-    const r = parseInt(cleanHex.substring(0, 2), 16);
-    const g = parseInt(cleanHex.substring(2, 4), 16);
-    const b = parseInt(cleanHex.substring(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  private notifySubscribers() {
+    for (const listener of this.subscribers) {
+      try { listener(); } catch { /* */ }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1522,31 +868,27 @@ export class SpreadsheetYjsBinding {
     this.yRowHeights.unobserve(this.rowHeightsObserver);
     this.yMerges.unobserve(this.mergesObserver);
 
-    if (this.awareness && this.awarenessHandler) {
-      this.awareness.off("change", this.awarenessHandler);
-    }
-
-    // Cancel pending timers and rAF callbacks
-    if (this.formulaRefreshTimer !== null) clearTimeout(this.formulaRefreshTimer);
-    if (this.highlightExitTimer !== null) clearTimeout(this.highlightExitTimer);
     if (this.selectionRafId !== null) cancelAnimationFrame(this.selectionRafId);
-    if (this.cursorRafId !== null) cancelAnimationFrame(this.cursorRafId);
 
-    this.clearCellRefHighlights();
-    this.clearFormulaEditHighlights({ rerenderRefs: false });
-
-    for (const [clientId] of this.remoteCursors) {
-      this.clearRemoteCursor(clientId);
-    }
-    this.remoteCursors.clear();
-    this.lastCursorState.clear();
-
-    if (this.styleElement) {
-      this.styleElement.remove();
-      this.styleElement = null;
-    }
+    this.overlays.destroy();
+    this.cursors?.destroy();
+    this.formulaTracker.destroy();
 
     this.subscribers.clear();
     this.undoManager.destroy();
   }
+}
+
+/** Local helper for `onchangestyle` — parses jspreadsheet's "A1"-style cell
+ *  names back to coordinates. Doesn't need to be public. */
+function parseCellNameInternal(cellName: string): { col: number; row: number } | null {
+  const match = cellName.match(/^([A-Z]+)(\d+)$/);
+  if (!match) return null;
+  let col = 0;
+  for (let i = 0; i < match[1].length; i++) {
+    col = col * 26 + (match[1].charCodeAt(i) - 64);
+  }
+  col -= 1;
+  const row = parseInt(match[2], 10) - 1;
+  return { col, row };
 }
