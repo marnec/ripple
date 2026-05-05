@@ -21,9 +21,12 @@ interface FormulaBarProps {
   /** Notify the page when the bar is in formula-pickup mode so the grid can
    *  suppress the focus-shift on cell mousedown. */
   onPickingChange?: (picking: boolean) => void;
+  /** Notify the page when the bar gains/loses focus so the page-level
+   *  selection-based highlight effect can step aside. */
+  onFocusChange?: (focused: boolean) => void;
 }
 
-export function FormulaBar({ binding, selection, isEditing, onPickingChange }: FormulaBarProps) {
+export function FormulaBar({ binding, selection, isEditing, onPickingChange, onFocusChange }: FormulaBarProps) {
   // Live raw value from Yjs (re-renders on local + remote yData changes).
   const value = useSyncExternalStore(
     (listener) => binding?.subscribe(listener) ?? (() => {}),
@@ -80,6 +83,12 @@ export function FormulaBar({ binding, selection, isEditing, onPickingChange }: F
   useEffect(() => {
     onPickingChange?.(isPicking);
   }, [isPicking, onPickingChange]);
+
+  // Notify the page so it can suppress the selection-based highlight effect
+  // while the bar owns the highlight state.
+  useEffect(() => {
+    onFocusChange?.(isFocused);
+  }, [isFocused, onFocusChange]);
 
   // Render colored borders around referenced cells while the bar is being edited.
   useEffect(() => {

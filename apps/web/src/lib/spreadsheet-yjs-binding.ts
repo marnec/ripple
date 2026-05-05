@@ -971,11 +971,15 @@ export class SpreadsheetYjsBinding {
   ];
 
   /**
-   * Render colored borders around the cells/ranges referenced by a formula
-   * being edited. One distinct color per ref index. Pass an empty array to
-   * clear. Edit highlights take visual priority over the persistent
-   * `setReferencedCells` overlay — when cleared, the persistent overlay is
-   * re-rendered automatically.
+   * Render marching-ants borders around the cells/ranges referenced by a
+   * formula being edited. One distinct color per ref index. Each cell on a
+   * range edge paints up to four animated dashed sides (top/bottom/left/right)
+   * via layered background-image gradients — cells fully interior to a range
+   * paint nothing. Pass an empty array to clear.
+   *
+   * Edit highlights take visual priority over the persistent
+   * `setReferencedCells` overlay; the persistent overlay is re-rendered
+   * automatically when edit highlights clear.
    */
   setFormulaEditHighlights(refs: string[]) {
     this.clearFormulaEditHighlights({ rerenderRefs: false });
@@ -988,19 +992,23 @@ export class SpreadsheetYjsBinding {
     }
 
     // Suppress the persistent ref overlay while edit highlights are active.
-    // Edit highlights overwrite cell.style.boxShadow, so leaving the persistent
-    // shadows in place would create visual conflicts.
+    // Both write to the cell's inline style; leaving them stacked would create
+    // conflicting borders.
     this.clearCellRefHighlights();
 
     const colors = SpreadsheetYjsBinding.EDIT_HIGHLIGHT_COLORS;
-    const cellShadows = new Map<HTMLElement, string[]>();
-    const addShadow = (td: HTMLElement, shadow: string) => {
-      let list = cellShadows.get(td);
-      if (!list) {
-        list = [];
-        cellShadows.set(td, list);
+    // Track which edges + color each cell needs. Last-ref-wins on color when
+    // ranges overlap, which is rare and acceptable for v1.
+    type CellEdges = { color: string; top: boolean; bot: boolean; lef: boolean; rig: boolean };
+    const cellEdges = new Map<HTMLElement, CellEdges>();
+    const setEdge = (td: HTMLElement, color: string, side: "top" | "bot" | "lef" | "rig") => {
+      let edges = cellEdges.get(td);
+      if (!edges) {
+        edges = { color, top: false, bot: false, lef: false, rig: false };
+        cellEdges.set(td, edges);
       }
-      list.push(shadow);
+      edges.color = color;
+      edges[side] = true;
     };
 
     refs.forEach((ref, idx) => {
@@ -1010,8 +1018,10 @@ export class SpreadsheetYjsBinding {
         if (!c) return;
         const td = this.getCellElement(table, c.row, c.col);
         if (!td) return;
-        addShadow(td, `inset 0 0 0 1.5px ${color}`);
-        td.classList.add("jss-formula-edit-highlight");
+        setEdge(td, color, "top");
+        setEdge(td, color, "bot");
+        setEdge(td, color, "lef");
+        setEdge(td, color, "rig");
       } else {
         const r = parseRange(ref);
         if (!r) return;
@@ -1019,18 +1029,21 @@ export class SpreadsheetYjsBinding {
           for (let col = r.startCol; col <= r.endCol; col++) {
             const td = this.getCellElement(table, row, col);
             if (!td) continue;
-            if (row === r.startRow) addShadow(td, `inset 0 1.5px 0 0 ${color}`);
-            if (row === r.endRow) addShadow(td, `inset 0 -1.5px 0 0 ${color}`);
-            if (col === r.startCol) addShadow(td, `inset 1.5px 0 0 0 ${color}`);
-            if (col === r.endCol) addShadow(td, `inset -1.5px 0 0 0 ${color}`);
-            td.classList.add("jss-formula-edit-highlight");
+            if (row === r.startRow) setEdge(td, color, "top");
+            if (row === r.endRow) setEdge(td, color, "bot");
+            if (col === r.startCol) setEdge(td, color, "lef");
+            if (col === r.endCol) setEdge(td, color, "rig");
           }
         }
       }
     });
 
-    for (const [td, shadows] of cellShadows) {
-      td.style.boxShadow = shadows.join(", ");
+    for (const [td, edges] of cellEdges) {
+      td.classList.add("jss-formula-edit-highlight");
+      td.style.setProperty("--fe-top-c", edges.top ? edges.color : "transparent");
+      td.style.setProperty("--fe-bot-c", edges.bot ? edges.color : "transparent");
+      td.style.setProperty("--fe-lef-c", edges.lef ? edges.color : "transparent");
+      td.style.setProperty("--fe-rig-c", edges.rig ? edges.color : "transparent");
       this.editHighlightedCells.push(td);
     }
   }
@@ -1039,7 +1052,10 @@ export class SpreadsheetYjsBinding {
   clearFormulaEditHighlights(options?: { rerenderRefs?: boolean }) {
     for (const td of this.editHighlightedCells) {
       td.classList.remove("jss-formula-edit-highlight");
-      td.style.boxShadow = "";
+      td.style.removeProperty("--fe-top-c");
+      td.style.removeProperty("--fe-bot-c");
+      td.style.removeProperty("--fe-lef-c");
+      td.style.removeProperty("--fe-rig-c");
     }
     this.editHighlightedCells = [];
     if (options?.rerenderRefs !== false && this.referencedCellRefs.length > 0) {
@@ -1218,7 +1234,25 @@ export class SpreadsheetYjsBinding {
         pointer-events: none;
       }
       .jss-formula-edit-highlight {
-        transition: box-shadow 0.08s ease;
+        background-image:
+          linear-gradient(90deg, var(--fe-top-c, transparent) 50%, transparent 50%),
+          linear-gradient(90deg, var(--fe-bot-c, transparent) 50%, transparent 50%),
+          linear-gradient(0deg, var(--fe-lef-c, transparent) 50%, transparent 50%),
+          linear-gradient(0deg, var(--fe-rig-c, transparent) 50%, transparent 50%);
+        background-size: 6px 1.5px, 6px 1.5px, 1.5px 6px, 1.5px 6px;
+        background-position: 0 0, 0 100%, 0 0, 100% 0;
+        background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+        animation: jss-fe-march 0.5s linear infinite;
+      }
+      @keyframes jss-fe-march {
+        to {
+          background-position: 6px 0, -6px 100%, 0 -6px, 100% 6px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .jss-formula-edit-highlight {
+          animation: none;
+        }
       }
     `;
     document.head.appendChild(this.styleElement);
