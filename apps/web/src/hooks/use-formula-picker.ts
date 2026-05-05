@@ -1,9 +1,11 @@
+import { extractCellRefs } from "@/lib/spreadsheet-formula-refs";
 import {
   filterFormulas,
   getFormulaPickerContext,
 } from "@/lib/spreadsheet-formulas";
+import type { SpreadsheetYjsBinding } from "@/lib/spreadsheet-yjs-binding";
 import type { FormulaPickerHandle } from "@/pages/App/Spreadsheet/FormulaPickerDropdown";
-import { useRef, useState } from "react";
+import { type RefObject, useRef, useState } from "react";
 
 interface FormulaPickerState {
   visible: boolean;
@@ -14,8 +16,13 @@ interface FormulaPickerState {
 /**
  * Manages formula picker state for the spreadsheet editor.
  * Handles input monitoring, keyboard interception, and formula insertion.
+ *
+ * If `bindingRef` is provided, also drives live cell-reference highlights
+ * on the grid as the user types a formula in-cell.
  */
-export function useFormulaPicker() {
+export function useFormulaPicker(
+  bindingRef?: RefObject<SpreadsheetYjsBinding | null>,
+) {
   const [formulaPicker, setFormulaPicker] =
     useState<FormulaPickerState | null>(null);
   const editorInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(
@@ -37,6 +44,19 @@ export function useFormulaPicker() {
       const onInput = () => {
         const value = editorEl.value;
         const cursor = editorEl.selectionStart ?? value.length;
+
+        // Live cell-reference highlights — independent of the picker dropdown.
+        const binding = bindingRef?.current;
+        if (binding) {
+          if (value.startsWith("=")) {
+            binding.setFormulaEditHighlights(
+              extractCellRefs(value).map((m) => m.ref),
+            );
+          } else {
+            binding.clearFormulaEditHighlights();
+          }
+        }
+
         const ctx = getFormulaPickerContext(value, cursor);
         if (!ctx || filterFormulas(ctx.query).length === 0) {
           setFormulaPicker(null);
@@ -80,6 +100,7 @@ export function useFormulaPicker() {
     editorInputRef.current = null;
     inputListenerRef.current = null;
     scrollListenerRef.current = null;
+    bindingRef?.current?.clearFormulaEditHighlights();
     setFormulaPicker(null);
   };
 

@@ -153,6 +153,10 @@ export class SpreadsheetYjsBinding {
   /** Stored cell refs from the server */
   private referencedCellRefs: { cellRef: string }[] = [];
 
+  /** Cells highlighted by the live formula edit overlay (separate from
+   *  `highlightedCells` which serves the persistent reference toggle). */
+  private editHighlightedCells: HTMLElement[] = [];
+
   /** Set of "row,col" keys for cells containing formulas */
   private formulaCells = new Set<string>();
 
@@ -956,6 +960,93 @@ export class SpreadsheetYjsBinding {
     }
   }
 
+  /** Color palette for live formula-edit highlights — one color per ref index. */
+  private static readonly EDIT_HIGHLIGHT_COLORS = [
+    "#3b82f6", // blue
+    "#ec4899", // pink
+    "#10b981", // green
+    "#a855f7", // purple
+    "#f97316", // orange
+    "#06b6d4", // cyan
+  ];
+
+  /**
+   * Render colored borders around the cells/ranges referenced by a formula
+   * being edited. One distinct color per ref index. Pass an empty array to
+   * clear. Edit highlights take visual priority over the persistent
+   * `setReferencedCells` overlay — when cleared, the persistent overlay is
+   * re-rendered automatically.
+   */
+  setFormulaEditHighlights(refs: string[]) {
+    this.clearFormulaEditHighlights({ rerenderRefs: false });
+    const table = this.getWorksheetTable();
+    if (!table) return;
+
+    if (refs.length === 0) {
+      this.renderCellRefHighlights();
+      return;
+    }
+
+    // Suppress the persistent ref overlay while edit highlights are active.
+    // Edit highlights overwrite cell.style.boxShadow, so leaving the persistent
+    // shadows in place would create visual conflicts.
+    this.clearCellRefHighlights();
+
+    const colors = SpreadsheetYjsBinding.EDIT_HIGHLIGHT_COLORS;
+    const cellShadows = new Map<HTMLElement, string[]>();
+    const addShadow = (td: HTMLElement, shadow: string) => {
+      let list = cellShadows.get(td);
+      if (!list) {
+        list = [];
+        cellShadows.set(td, list);
+      }
+      list.push(shadow);
+    };
+
+    refs.forEach((ref, idx) => {
+      const color = colors[idx % colors.length];
+      if (isSingleCell(ref)) {
+        const c = parseCellName(ref);
+        if (!c) return;
+        const td = this.getCellElement(table, c.row, c.col);
+        if (!td) return;
+        addShadow(td, `inset 0 0 0 1.5px ${color}`);
+        td.classList.add("jss-formula-edit-highlight");
+      } else {
+        const r = parseRange(ref);
+        if (!r) return;
+        for (let row = r.startRow; row <= r.endRow; row++) {
+          for (let col = r.startCol; col <= r.endCol; col++) {
+            const td = this.getCellElement(table, row, col);
+            if (!td) continue;
+            if (row === r.startRow) addShadow(td, `inset 0 1.5px 0 0 ${color}`);
+            if (row === r.endRow) addShadow(td, `inset 0 -1.5px 0 0 ${color}`);
+            if (col === r.startCol) addShadow(td, `inset 1.5px 0 0 0 ${color}`);
+            if (col === r.endCol) addShadow(td, `inset -1.5px 0 0 0 ${color}`);
+            td.classList.add("jss-formula-edit-highlight");
+          }
+        }
+      }
+    });
+
+    for (const [td, shadows] of cellShadows) {
+      td.style.boxShadow = shadows.join(", ");
+      this.editHighlightedCells.push(td);
+    }
+  }
+
+  /** Clear edit highlights. Re-renders the persistent ref overlay by default. */
+  clearFormulaEditHighlights(options?: { rerenderRefs?: boolean }) {
+    for (const td of this.editHighlightedCells) {
+      td.classList.remove("jss-formula-edit-highlight");
+      td.style.boxShadow = "";
+    }
+    this.editHighlightedCells = [];
+    if (options?.rerenderRefs !== false && this.referencedCellRefs.length > 0) {
+      this.renderCellRefHighlights();
+    }
+  }
+
   /** Update the set of cell refs referenced by documents. Triggers re-render of highlights. */
   setReferencedCells(refs: { cellRef: string }[]) {
     const wasHighlighted = this.referencedCellRefs.length > 0;
@@ -1125,6 +1216,9 @@ export class SpreadsheetYjsBinding {
         border-width: 0 6px 6px 0;
         border-color: transparent #f59e0b transparent transparent;
         pointer-events: none;
+      }
+      .jss-formula-edit-highlight {
+        transition: box-shadow 0.08s ease;
       }
     `;
     document.head.appendChild(this.styleElement);
@@ -1405,6 +1499,7 @@ export class SpreadsheetYjsBinding {
     if (this.cursorRafId !== null) cancelAnimationFrame(this.cursorRafId);
 
     this.clearCellRefHighlights();
+    this.clearFormulaEditHighlights({ rerenderRefs: false });
 
     for (const [clientId] of this.remoteCursors) {
       this.clearRemoteCursor(clientId);

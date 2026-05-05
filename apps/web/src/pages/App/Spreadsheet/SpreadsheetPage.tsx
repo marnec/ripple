@@ -83,6 +83,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   referencedCellRefs,
   externalRefs,
   importedRows,
+  preventBlurOnClick,
   onSelectionChange,
   onEditingChange,
   onBindingReady,
@@ -93,12 +94,19 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   referencedCellRefs: { cellRef: string }[];
   externalRefs: ReadonlyArray<{ cellRef: string; orphan?: boolean }>;
   importedRows: unknown[][] | null;
+  /** While true, swallow mousedown.preventDefault on the grid so clicking a
+   *  cell doesn't shift focus away from the FormulaBar (click-to-pick). */
+  preventBlurOnClick: boolean;
   onSelectionChange: (sel: { row: number; col: number } | null) => void;
   onEditingChange: (editing: boolean) => void;
   onBindingReady: (binding: SpreadsheetYjsBinding | null) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const importSeededRef = useRef(false);
+  // Mirror ref for the binding so the formula picker (declared before
+  // useJSpreadsheetInstance creates the real ref) can drive live cell-ref
+  // highlights from the in-cell editor.
+  const bindingMirrorRef = useRef<SpreadsheetYjsBinding | null>(null);
 
   // Formula picker
   const {
@@ -108,7 +116,7 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
     onEditionStart: pickerOnEditionStart,
     onEditionEnd: pickerOnEditionEnd,
     registerKeyboardInterception,
-  } = useFormulaPicker();
+  } = useFormulaPicker(bindingMirrorRef);
 
   // Compose formula-picker handlers with isEditing tracking for FormulaBar.
   const onEditionStart = (td: HTMLTableCellElement, wrapper: HTMLElement) => {
@@ -137,7 +145,11 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   // we re-emit when the underlying binding is recreated.
   useEffect(() => {
     onBindingReady(bindingRef.current);
-    return () => onBindingReady(null);
+    bindingMirrorRef.current = bindingRef.current;
+    return () => {
+      onBindingReady(null);
+      bindingMirrorRef.current = null;
+    };
   }, [bindingRef, onBindingReady, yDoc, awareness]);
 
   // Seed once from imported rows (e.g. .xlsx upload). Runs after the binding
@@ -176,6 +188,21 @@ const JSpreadsheetGrid = memo(function JSpreadsheetGrid({
   useEffect(() => {
     bindingRef.current?.setReferencedCells(referencedCellRefs);
   }, [referencedCellRefs, yDoc, awareness, bindingRef]);
+
+  // While the FormulaBar is in click-to-pick mode, prevent the grid's
+  // mousedown from stealing focus. The selection still updates (jspreadsheet
+  // handlers run regardless), so the FormulaBar's selection-change effect
+  // sees the click and inserts the picked cell ref.
+  useEffect(() => {
+    if (!preventBlurOnClick) return;
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    wrapper.addEventListener("mousedown", onMouseDown);
+    return () => wrapper.removeEventListener("mousedown", onMouseDown);
+  }, [preventBlurOnClick]);
 
   return (
     <>
@@ -230,6 +257,7 @@ function SpreadsheetEditor({
   const [selection, setSelection] = useState<{ row: number; col: number } | null>(null);
   const [isCellEditing, setIsCellEditing] = useState(false);
   const [binding, setBinding] = useState<SpreadsheetYjsBinding | null>(null);
+  const [formulaBarPicking, setFormulaBarPicking] = useState(false);
   const myRole = useQuery(
     api.workspaceMembers.myRole,
     spreadsheet ? { workspaceId: spreadsheet.workspaceId } : "skip",
@@ -305,7 +333,12 @@ function SpreadsheetEditor({
             </button>
           )}
         </div>
-        <FormulaBar binding={binding} selection={selection} isEditing={isCellEditing} />
+        <FormulaBar
+          binding={binding}
+          selection={selection}
+          isEditing={isCellEditing}
+          onPickingChange={setFormulaBarPicking}
+        />
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} isOffline={isOffline} />
           {isConnected && (
@@ -363,6 +396,7 @@ function SpreadsheetEditor({
           referencedCellRefs={referencedCellRefs}
           externalRefs={rawRefs ?? []}
           importedRows={importedRows}
+          preventBlurOnClick={formulaBarPicking}
           onSelectionChange={setSelection}
           onEditingChange={setIsCellEditing}
           onBindingReady={setBinding}

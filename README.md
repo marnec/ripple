@@ -4,8 +4,6 @@ NEXT STEPS:
     - option to visually select cells / ranges when embedding
     - visual cue and mouse pick coords in formula editing
 
-- add ability to download docs, diagrams and spreadsheets in various formats, context menu from share btn
-
 - named share links
 - calendar; plan calls; invite guests
 
