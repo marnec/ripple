@@ -18,7 +18,7 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutGroup, m } from "framer-motion";
-import { CheckSquare } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
@@ -97,13 +97,14 @@ export function AppSidebar() {
     }
   };
 
-  const handleMyTasksClick = () => {
+  const handleDashboardClick = () => {
     if (!workspaceId) return;
     if (isMobile) setOpen(false);
-    void navigate(`/workspaces/${workspaceId}/my-tasks`);
+    void navigate(`/workspaces/${workspaceId}/dashboard`);
   };
 
-  const isMyTasksActive = location.pathname.includes("/my-tasks");
+  // Active for /dashboard and any of its child routes (My Tasks, My Calendar).
+  const isDashboardActive = location.pathname.includes("/dashboard");
 
   const toggleChannels = () => toggle("channels");
   const toggleDms = () => toggle("dms");
@@ -165,12 +166,12 @@ export function AppSidebar() {
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={handleMyTasksClick}
-                      isActive={isMyTasksActive}
-                      tooltip="My Tasks"
+                      onClick={handleDashboardClick}
+                      isActive={isDashboardActive}
+                      tooltip="My Dashboard"
                     >
-                      <CheckSquare />
-                      <span>My Tasks</span>
+                      <LayoutDashboard />
+                      <span>My Dashboard</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <ProjectSelectorList

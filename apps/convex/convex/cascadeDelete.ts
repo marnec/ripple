@@ -52,6 +52,16 @@ export const cascadeRules = defineCascadeRules({
     { to: "cycleTasks", via: "by_cycle", field: "cycleId" },
   ],
 
+  // ── calendarEvents ──────────────────────────────────────────────────
+  // When a calendar event is deleted, drop its invitee rows and any
+  // guest share rows pointing at it. Channel deletion does NOT cascade
+  // here — events tied to a deleted channel survive as standalone (the
+  // read path tolerates a missing channelId).
+  calendarEvents: [
+    { to: "calendarEventInvitees", via: "by_event", field: "eventId" },
+    { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
+  ],
+
   // ── channels ────────────────────────────────────────────────────────
   channels: [
     { to: "messages", via: "by_channel", field: "channelId" },
@@ -130,6 +140,7 @@ const deleters: Record<string, (ctx: MutationCtx, id: string, doc: SnapshotDoc) 
   spreadsheets: deleteWithSnapshotCleanup,
   projects: (ctx, id) => deleteWithTriggers(ctx, id),
   channels: (ctx, id) => deleteWithTriggers(ctx, id),
+  calendarEvents: (ctx, id) => deleteWithTriggers(ctx, id),
 };
 
 // ── Audit log hooks ───────────────────────────────────────────────────

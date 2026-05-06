@@ -19,7 +19,19 @@ interface BreadcrumbItemData {
   category?: string;
 }
 
-const KNOWN_SUBPAGES = new Set(["settings", "import", "videocall", "tasks", "cycles", "my-tasks"]);
+// Static path segments that look like resource IDs by virtue of position
+// (i % 2 !== 0) but are actually fixed sub-pages. Keep in sync with routes
+// that introduce new odd-indexed string segments.
+const KNOWN_SUBPAGES = new Set([
+  "settings",
+  "import",
+  "videocall",
+  "tasks",
+  "cycles",
+  "dashboard",
+  "calendar",
+  "events",
+]);
 
 /** Category segment → which sidebar list contains that resource type. */
 const SIDEBAR_CATEGORY: Record<string, "projects" | "documents" | "diagrams" | "spreadsheets" | "channels"> = {

@@ -184,6 +184,87 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  calendarEventInvitees: {
+    document: {
+      eventId: Id<"calendarEvents">;
+      guestEmail?: string;
+      guestName?: string;
+      guestSub?: string;
+      respondedAt?: number;
+      shareId?: string;
+      status: "pending" | "accepted" | "declined" | "tentative";
+      userId?: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"calendarEventInvitees">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "eventId"
+      | "guestEmail"
+      | "guestName"
+      | "guestSub"
+      | "respondedAt"
+      | "shareId"
+      | "status"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_event: ["eventId", "_creationTime"];
+      by_event_email: ["eventId", "guestEmail", "_creationTime"];
+      by_event_user: ["eventId", "userId", "_creationTime"];
+      by_share: ["shareId", "_creationTime"];
+      by_user_workspace_event: [
+        "userId",
+        "workspaceId",
+        "eventId",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  calendarEvents: {
+    document: {
+      cancelledAt?: number;
+      channelId?: Id<"channels">;
+      cloudflareMeetingId?: string;
+      createdBy: Id<"users">;
+      description?: string;
+      endsAt: number;
+      startsAt: number;
+      timezone: string;
+      title: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"calendarEvents">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "cancelledAt"
+      | "channelId"
+      | "cloudflareMeetingId"
+      | "createdBy"
+      | "description"
+      | "endsAt"
+      | "startsAt"
+      | "timezone"
+      | "title"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel: ["channelId", "_creationTime"];
+      by_creator: ["createdBy", "_creationTime"];
+      by_workspace_starts: ["workspaceId", "startsAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   callSessions: {
     document: {
       active: boolean;
@@ -737,6 +818,10 @@ export type DataModel = {
       documentCreated: boolean;
       documentDeleted: boolean;
       documentMention: boolean;
+      eventCancelled?: boolean;
+      eventInvited?: boolean;
+      eventResponseChanged?: boolean;
+      eventUpdated?: boolean;
       projectCreated: boolean;
       projectDeleted: boolean;
       spreadsheetCreated: boolean;
@@ -764,6 +849,10 @@ export type DataModel = {
       | "documentCreated"
       | "documentDeleted"
       | "documentMention"
+      | "eventCancelled"
+      | "eventInvited"
+      | "eventResponseChanged"
+      | "eventUpdated"
       | "projectCreated"
       | "projectDeleted"
       | "spreadsheetCreated"
@@ -957,7 +1046,12 @@ export type DataModel = {
       lastUsedAt?: number;
       name?: string;
       resourceId: string;
-      resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+      resourceType:
+        | "document"
+        | "diagram"
+        | "spreadsheet"
+        | "channel"
+        | "calendarEvent";
       revokedAt?: number;
       shareId: string;
       workspaceId: Id<"workspaces">;

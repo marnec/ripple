@@ -377,6 +377,53 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("by_cycle_task", ["cycleId", "taskId"]),
 
+  // Workspace-level scheduled meetings ("planned calls"). Visible only to the
+  // creator and explicit invitees (see calendarEventInvitees). Optionally tied
+  // to a channel — when channelId is set the call reuses the channel's
+  // RealtimeKit meeting via callSessions; otherwise cloudflareMeetingId is
+  // lazy-created on the event itself on first join.
+  calendarEvents: defineTable({
+    workspaceId: v.id("workspaces"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    startsAt: v.number(),  // ms UTC timestamp
+    endsAt: v.number(),    // ms UTC timestamp
+    timezone: v.string(),  // IANA, e.g. "Europe/Rome" — organizer's tz at creation
+    channelId: v.optional(v.id("channels")),
+    cloudflareMeetingId: v.optional(v.string()), // lazy on first join (standalone events)
+    createdBy: v.id("users"),
+    cancelledAt: v.optional(v.number()),
+  })
+    .index("by_workspace_starts", ["workspaceId", "startsAt"])
+    .index("by_creator", ["createdBy"])
+    .index("by_channel", ["channelId"]),
+
+  // Per-recipient invite + RSVP state for calendar events. Exactly one of
+  // userId / guestEmail is set. For guest rows, shareId references a
+  // resourceShares row (resourceType="calendarEvent", accessLevel="join"); the
+  // magic-link URL emailed to the guest is the existing `${SITE_URL}/share/${shareId}`.
+  calendarEventInvitees: defineTable({
+    eventId: v.id("calendarEvents"),
+    workspaceId: v.id("workspaces"), // denormalized for "my events" cross-event scans
+    userId: v.optional(v.id("users")),
+    guestEmail: v.optional(v.string()),
+    guestName: v.optional(v.string()),  // captured at first RSVP/join
+    guestSub: v.optional(v.string()),   // mirrors shares.ts guest-sub pattern
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("declined"),
+      v.literal("tentative"),
+    ),
+    respondedAt: v.optional(v.number()),
+    shareId: v.optional(v.string()),    // FK to resourceShares.shareId (guest rows only)
+  })
+    .index("by_event", ["eventId"])
+    .index("by_event_user", ["eventId", "userId"])
+    .index("by_event_email", ["eventId", "guestEmail"])
+    .index("by_user_workspace_event", ["userId", "workspaceId", "eventId"])
+    .index("by_share", ["shareId"]),
+
   pushSubscriptions: defineTable({
     userId: v.id("users"),
     device: v.string(),
@@ -433,6 +480,10 @@ export default defineSchema({
     channelDeleted: v.boolean(),
     channelJoinRequest: v.optional(v.boolean()),
     channelJoinDecision: v.optional(v.boolean()),
+    eventInvited: v.optional(v.boolean()),
+    eventUpdated: v.optional(v.boolean()),
+    eventCancelled: v.optional(v.boolean()),
+    eventResponseChanged: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"]),
 
@@ -527,6 +578,7 @@ export default defineSchema({
       v.literal("diagram"),
       v.literal("spreadsheet"),
       v.literal("channel"),
+      v.literal("calendarEvent"),
     ),
     resourceId: v.string(),
     workspaceId: v.id("workspaces"),

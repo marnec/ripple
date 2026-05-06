@@ -4,6 +4,7 @@
  * Shareable surfaces:
  *   - documents / diagrams / spreadsheets → `view` or `edit`
  *   - channels → `join` (call access only, no chat)
+ *   - calendarEvents → `join` (RSVP + call access for invited guests)
  *
  * The `ShareResourceType` vocabulary is user-facing (`document`). The Yjs room
  * prefix uses a shorter vocabulary (`doc`). Use `yjsResourceTypeForShare` to
@@ -15,6 +16,7 @@ export const SHARE_RESOURCE_TYPES = [
   "diagram",
   "spreadsheet",
   "channel",
+  "calendarEvent",
 ] as const;
 
 export type ShareResourceType = (typeof SHARE_RESOURCE_TYPES)[number];
@@ -41,6 +43,7 @@ export function yjsResourceTypeForShare(
     case "spreadsheet":
       return "spreadsheet";
     case "channel":
+    case "calendarEvent":
       return null;
   }
 }
@@ -49,7 +52,9 @@ export function isValidAccessLevelForResource(
   resourceType: ShareResourceType,
   accessLevel: ShareAccessLevel,
 ): boolean {
-  if (resourceType === "channel") return accessLevel === "join";
+  if (resourceType === "channel" || resourceType === "calendarEvent") {
+    return accessLevel === "join";
+  }
   return accessLevel === "view" || accessLevel === "edit";
 }
 

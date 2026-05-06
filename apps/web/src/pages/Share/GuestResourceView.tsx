@@ -8,6 +8,7 @@ import { GuestDocumentView } from "./GuestDocumentView";
 import { GuestDiagramView } from "./GuestDiagramView";
 import { GuestSpreadsheetView } from "./GuestSpreadsheetView";
 import { GuestCallView } from "./GuestCallView";
+import { GuestEventView } from "./GuestEventView";
 
 /**
  * Guest resource surface at `/share/:shareId/view`.
@@ -108,6 +109,13 @@ export function GuestResourceView() {
         )}
         {info.resourceType === "channel" && (
           <GuestCallView
+            shareId={shareId}
+            guestSub={session.guestSub}
+            guestName={session.guestName}
+          />
+        )}
+        {info.resourceType === "calendarEvent" && (
+          <GuestEventView
             shareId={shareId}
             guestSub={session.guestSub}
             guestName={session.guestName}

@@ -57,6 +57,10 @@ export const NOTIFICATION_CATEGORIES = [
   "channelDeleted",
   "channelJoinRequest",
   "channelJoinDecision",
+  "eventInvited",
+  "eventUpdated",
+  "eventCancelled",
+  "eventResponseChanged",
 ] as const;
 
 export type NotificationCategory = (typeof NOTIFICATION_CATEGORIES)[number];
@@ -82,6 +86,10 @@ export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> 
   channelDeleted: "Channel deleted",
   channelJoinRequest: "Channel join requests",
   channelJoinDecision: "Channel join decisions",
+  eventInvited: "Invited to a calendar event",
+  eventUpdated: "Calendar event updated",
+  eventCancelled: "Calendar event cancelled",
+  eventResponseChanged: "Invitee responded to your event",
 };
 
 export type NotificationGroup = {
@@ -128,6 +136,15 @@ export const NOTIFICATION_GROUPS: NotificationGroup[] = [
       "channelDeleted",
       "channelJoinRequest",
       "channelJoinDecision",
+    ],
+  },
+  {
+    label: "Calendar",
+    categories: [
+      "eventInvited",
+      "eventUpdated",
+      "eventCancelled",
+      "eventResponseChanged",
     ],
   },
 ];
@@ -190,4 +207,8 @@ export const DEFAULT_PREFERENCES: Record<NotificationCategory, boolean> = {
   channelDeleted: true,
   channelJoinRequest: true,
   channelJoinDecision: true,
+  eventInvited: true,
+  eventUpdated: true,
+  eventCancelled: true,
+  eventResponseChanged: true,
 };

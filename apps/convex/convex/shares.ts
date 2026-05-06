@@ -30,6 +30,7 @@ const shareResourceTypeValidator = v.union(
   v.literal("diagram"),
   v.literal("spreadsheet"),
   v.literal("channel"),
+  v.literal("calendarEvent"),
 );
 
 const shareAccessLevelValidator = v.union(
@@ -133,7 +134,9 @@ async function resolveResourceWorkspaceId(
       ? ctx.db.get(resourceId as Id<"documents">)
       : resourceType === "diagram"
         ? ctx.db.get(resourceId as Id<"diagrams">)
-        : ctx.db.get(resourceId as Id<"spreadsheets">));
+        : resourceType === "spreadsheet"
+          ? ctx.db.get(resourceId as Id<"spreadsheets">)
+          : ctx.db.get(resourceId as Id<"calendarEvents">));
   if (!resource) throw new ConvexError(`${resourceType} not found`);
   return resource.workspaceId;
 }
@@ -327,6 +330,12 @@ export const getShareInfo = query({
       const channel = await ctx.db.get(share.resourceId as Id<"channels">);
       if (!channel) return { status: "not_found" as const };
       resourceName = channel.name;
+    } else if (share.resourceType === "calendarEvent") {
+      const event = await ctx.db.get(share.resourceId as Id<"calendarEvents">);
+      if (!event) return { status: "not_found" as const };
+      // Cancelled events behave like revoked shares from a guest's POV.
+      if (event.cancelledAt !== undefined) return { status: "revoked" as const };
+      resourceName = event.title;
     } else {
       const resource = await ctx.db.get(share.resourceId as Id<"documents">);
       if (!resource) return { status: "not_found" as const };
@@ -387,8 +396,18 @@ export const loadActiveShare = internalQuery({
     const resource =
       share.resourceType === "channel"
         ? await ctx.db.get(share.resourceId as Id<"channels">)
-        : await ctx.db.get(share.resourceId as Id<"documents">);
+        : share.resourceType === "calendarEvent"
+          ? await ctx.db.get(share.resourceId as Id<"calendarEvents">)
+          : await ctx.db.get(share.resourceId as Id<"documents">);
     if (!resource) return null;
+
+    // A cancelled event is effectively a revoked share — surface as inactive.
+    if (
+      share.resourceType === "calendarEvent" &&
+      (resource as Doc<"calendarEvents">).cancelledAt !== undefined
+    ) {
+      return null;
+    }
 
     return {
       resourceType: share.resourceType,

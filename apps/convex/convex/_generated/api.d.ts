@@ -49,9 +49,182 @@ export declare const api: {
           | Id<"spreadsheets">
           | Id<"tasks">
           | Id<"cycles">
+          | Id<"calendarEvents">
         >;
       },
       Record<string, string | null>
+    >;
+  };
+  calendarEvents: {
+    addInvitees: FunctionReference<
+      "mutation",
+      "public",
+      {
+        eventId: Id<"calendarEvents">;
+        guestEmails: Array<string>;
+        userIds: Array<Id<"users">>;
+      },
+      null
+    >;
+    cancel: FunctionReference<
+      "mutation",
+      "public",
+      { eventId: Id<"calendarEvents"> },
+      null
+    >;
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        channelId?: Id<"channels">;
+        description?: string;
+        endsAt: number;
+        invitees: { guestEmails: Array<string>; userIds: Array<Id<"users">> };
+        startsAt: number;
+        timezone: string;
+        title: string;
+        workspaceId: Id<"workspaces">;
+      },
+      Id<"calendarEvents">
+    >;
+    get: FunctionReference<
+      "query",
+      "public",
+      { eventId: Id<"calendarEvents"> },
+      {
+        channelName?: string;
+        event: {
+          _creationTime: number;
+          _id: Id<"calendarEvents">;
+          cancelledAt?: number;
+          channelId?: Id<"channels">;
+          cloudflareMeetingId?: string;
+          createdBy: Id<"users">;
+          description?: string;
+          endsAt: number;
+          startsAt: number;
+          timezone: string;
+          title: string;
+          workspaceId: Id<"workspaces">;
+        };
+        invitees: Array<{
+          _creationTime: number;
+          _id: Id<"calendarEventInvitees">;
+          eventId: Id<"calendarEvents">;
+          guestEmail?: string;
+          guestName?: string;
+          guestSub?: string;
+          respondedAt?: number;
+          shareId?: string;
+          status: "pending" | "accepted" | "declined" | "tentative";
+          userEmail?: string;
+          userId?: Id<"users">;
+          userImage?: string;
+          userName?: string;
+          workspaceId: Id<"workspaces">;
+        }>;
+        organizer: {
+          email?: string;
+          image?: string;
+          name?: string;
+          userId: Id<"users">;
+        };
+      }
+    >;
+    getByShareId: FunctionReference<
+      "query",
+      "public",
+      { shareId: string },
+      {
+        event?: {
+          description?: string;
+          endsAt: number;
+          organizerName?: string;
+          startsAt: number;
+          timezone: string;
+          title: string;
+          workspaceName?: string;
+        };
+        invitee?: {
+          guestName?: string;
+          status: "pending" | "accepted" | "declined" | "tentative";
+        };
+        status: "active" | "expired" | "revoked" | "not_found";
+      }
+    >;
+    getGuestEventCallToken: FunctionReference<
+      "action",
+      "public",
+      { guestName: string; guestSub: string; shareId: string },
+      { authToken: string; guestSub: string; meetingId: string }
+    >;
+    joinEventCall: FunctionReference<
+      "action",
+      "public",
+      { eventId: Id<"calendarEvents">; userImage?: string; userName: string },
+      { authToken: string; meetingId: string }
+    >;
+    listMineInRange: FunctionReference<
+      "query",
+      "public",
+      {
+        rangeEndMs: number;
+        rangeStartMs: number;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{
+        _creationTime: number;
+        _id: Id<"calendarEvents">;
+        cancelledAt?: number;
+        channelId?: Id<"channels">;
+        cloudflareMeetingId?: string;
+        createdBy: Id<"users">;
+        description?: string;
+        endsAt: number;
+        startsAt: number;
+        timezone: string;
+        title: string;
+        workspaceId: Id<"workspaces">;
+      }>
+    >;
+    removeInvitee: FunctionReference<
+      "mutation",
+      "public",
+      { inviteeId: Id<"calendarEventInvitees"> },
+      null
+    >;
+    respond: FunctionReference<
+      "mutation",
+      "public",
+      {
+        eventId: Id<"calendarEvents">;
+        status: "pending" | "accepted" | "declined" | "tentative";
+      },
+      null
+    >;
+    respondAsGuest: FunctionReference<
+      "mutation",
+      "public",
+      {
+        guestName: string;
+        shareId: string;
+        status: "pending" | "accepted" | "declined" | "tentative";
+      },
+      null
+    >;
+    update: FunctionReference<
+      "mutation",
+      "public",
+      {
+        channelId?: Id<"channels"> | null;
+        description?: string;
+        endsAt?: number;
+        eventId: Id<"calendarEvents">;
+        startsAt?: number;
+        timezone?: string;
+        title?: string;
+      },
+      null
     >;
   };
   callSessions: {
@@ -1173,6 +1346,10 @@ export declare const api: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
+        eventCancelled?: boolean;
+        eventInvited?: boolean;
+        eventResponseChanged?: boolean;
+        eventUpdated?: boolean;
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;
@@ -1200,6 +1377,10 @@ export declare const api: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
+        eventCancelled?: boolean;
+        eventInvited?: boolean;
+        eventResponseChanged?: boolean;
+        eventUpdated?: boolean;
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;
@@ -1406,7 +1587,12 @@ export declare const api: {
         expiresAt?: number;
         name?: string;
         resourceId: string;
-        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+        resourceType:
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "channel"
+          | "calendarEvent";
       },
       { shareId: string }
     >;
@@ -1435,7 +1621,12 @@ export declare const api: {
         accessLevel?: "view" | "edit" | "join";
         resourceId?: string;
         resourceName?: string;
-        resourceType?: "document" | "diagram" | "spreadsheet" | "channel";
+        resourceType?:
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "channel"
+          | "calendarEvent";
         status: "active" | "expired" | "revoked" | "not_found";
         workspaceName?: string;
       }
@@ -1445,7 +1636,12 @@ export declare const api: {
       "public",
       {
         resourceId: string;
-        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+        resourceType:
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "channel"
+          | "calendarEvent";
       },
       Array<{
         _creationTime: number;
@@ -1457,7 +1653,12 @@ export declare const api: {
         lastUsedAt?: number;
         name?: string;
         resourceId: string;
-        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+        resourceType:
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "channel"
+          | "calendarEvent";
         revokedAt?: number;
         shareId: string;
         workspaceId: Id<"workspaces">;
@@ -2503,6 +2704,56 @@ export declare const internal: {
       any
     >;
   };
+  calendarEvents: {
+    _getEventByShareIdForJoin: FunctionReference<
+      "query",
+      "internal",
+      { shareId: string },
+      {
+        cancelledAt?: number;
+        channelId?: Id<"channels">;
+        cloudflareMeetingId?: string;
+        endsAt: number;
+        eventId: Id<"calendarEvents">;
+        inviteeGuestSub?: string;
+        startsAt: number;
+        workspaceId: Id<"workspaces">;
+      } | null
+    >;
+    _getEventForJoin: FunctionReference<
+      "query",
+      "internal",
+      { eventId: Id<"calendarEvents">; userId: Id<"users"> },
+      {
+        _id: Id<"calendarEvents">;
+        cancelledAt?: number;
+        channelId?: Id<"channels">;
+        cloudflareMeetingId?: string;
+        endsAt: number;
+        startsAt: number;
+        title: string;
+        workspaceId: Id<"workspaces">;
+      } | null
+    >;
+    _getEventForJoinPublic: FunctionReference<
+      "query",
+      "internal",
+      { eventId: Id<"calendarEvents"> },
+      { cloudflareMeetingId?: string } | null
+    >;
+    _patchInviteeGuestName: FunctionReference<
+      "mutation",
+      "internal",
+      { guestName: string; inviteeId: Id<"calendarEventInvitees"> },
+      null
+    >;
+    _setEventMeetingId: FunctionReference<
+      "mutation",
+      "internal",
+      { cloudflareMeetingId: string; eventId: Id<"calendarEvents"> },
+      null | string
+    >;
+  };
   callSessions: {
     createSession: FunctionReference<
       "mutation",
@@ -2645,6 +2896,26 @@ export declare const internal: {
     >;
   };
   emails: {
+    sendEventCancellation: FunctionReference<
+      "action",
+      "internal",
+      { eventTitle: string; inviterName: string; recipientEmail: string },
+      null
+    >;
+    sendEventInvite: FunctionReference<
+      "action",
+      "internal",
+      {
+        endsAt: number;
+        eventTitle: string;
+        inviterName: string;
+        recipientEmail: string;
+        shareId: string;
+        startsAt: number;
+        timezone: string;
+      },
+      null
+    >;
     sendWorkspaceInvite: FunctionReference<
       "action",
       "internal",
@@ -3288,6 +3559,10 @@ export declare const internal: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
+        eventCancelled?: boolean;
+        eventInvited?: boolean;
+        eventResponseChanged?: boolean;
+        eventUpdated?: boolean;
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;
@@ -3318,6 +3593,10 @@ export declare const internal: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
+        eventCancelled?: boolean;
+        eventInvited?: boolean;
+        eventResponseChanged?: boolean;
+        eventUpdated?: boolean;
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;
@@ -3476,7 +3755,12 @@ export declare const internal: {
       null | {
         accessLevel: "view" | "edit" | "join";
         resourceId: string;
-        resourceType: "document" | "diagram" | "spreadsheet" | "channel";
+        resourceType:
+          | "document"
+          | "diagram"
+          | "spreadsheet"
+          | "channel"
+          | "calendarEvent";
         workspaceId: Id<"workspaces">;
       }
     >;

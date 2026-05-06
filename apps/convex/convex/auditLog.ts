@@ -15,7 +15,8 @@ type ResourceType =
   | "workspaces"
   | "cycles"
   | "channelMembers"
-  | "workspaceInvites";
+  | "workspaceInvites"
+  | "calendarEvents";
 
 export async function logActivity(
   ctx: MutationCtx,

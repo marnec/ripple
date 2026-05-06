@@ -25,10 +25,12 @@ export const router = createBrowserRouter(
           errorElement: <RouteErrorFallback />,
           children: [
             {
+              // Role-aware: admins see the workspace summary, members are
+              // redirected to their personal dashboard. See WorkspaceLanding.
               index: true,
               lazy: () =>
-                import("./pages/App/Workspace/WorkspaceDetails").then((m) => ({
-                  Component: m.WorkspaceDetails,
+                import("./pages/App/Workspace/WorkspaceLanding").then((m) => ({
+                  Component: m.WorkspaceLanding,
                 })),
             },
             {
@@ -39,10 +41,41 @@ export const router = createBrowserRouter(
                 })),
             },
             {
-              path: "my-tasks",
+              // Replaces the standalone /my-tasks route. The dashboard layout
+              // owns the header + tab selector; the My Tasks tab reuses the
+              // existing MyTasks page body.
+              path: "dashboard",
               lazy: () =>
-                import("./pages/App/Project/MyTasks").then((m) => ({
-                  Component: m.MyTasks,
+                import("./pages/App/Dashboard/DashboardLayout").then((m) => ({
+                  Component: m.DashboardLayout,
+                })),
+              children: [
+                {
+                  index: true,
+                  lazy: () =>
+                    import("./pages/App/Dashboard/MyTasksTab").then((m) => ({
+                      Component: m.MyTasksTab,
+                    })),
+                },
+                {
+                  path: "calendar",
+                  lazy: () =>
+                    import("./pages/App/Dashboard/MyCalendarTab").then((m) => ({
+                      Component: m.MyCalendarTab,
+                    })),
+                },
+              ],
+            },
+            {
+              // Authenticated event-call surface. EventDetailSheet's
+              // "Join call" button navigates here. Distinct from the
+              // channel-bound /channels/:id/videocall route because event
+              // calls can be standalone (no channelId) and use a different
+              // join action (`api.calendarEvents.joinEventCall`).
+              path: "calendar/events/:eventId/videocall",
+              lazy: () =>
+                import("./pages/App/Calendar/EventVideoCall").then((m) => ({
+                  Component: m.EventVideoCall,
                 })),
             },
             {
