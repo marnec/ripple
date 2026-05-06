@@ -1,17 +1,19 @@
 import type RTKClient from "@cloudflare/realtimekit";
-import { useAction, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import {
   createContext,
   lazy,
   Suspense,
   useContext,
-  useEffect,
-  useRef,
   useState,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import type { Id } from "@convex/_generated/dataModel";
+
+import type { DevicePreferences } from "../pages/App/GroupVideoCall/CallLobby";
+import { useCallSession } from "../lib/call/use-call-session";
+import type {
+  CallSourceDescriptor,
+  CallSourcePort,
+} from "../lib/call/source-port";
 
 // Lazy-loaded so the ~1.48 MB realtimekit-ui bundle is fetched only when a
 // call is actually joined, not on every page load.
@@ -21,33 +23,34 @@ const LazyRtkParticipantsAudio = lazy(() =>
   })),
 );
 
-const joinCallRef = makeFunctionReference<
-  "action",
-  { channelId: Id<"channels">; userName: string; userImage?: string },
-  { authToken: string; meetingId: string }
->("callSessions:joinCall");
-
-const endSessionRef = makeFunctionReference<
-  "mutation",
-  { channelId: Id<"channels"> },
-  null
->("callSessions:endSession");
-import type { DevicePreferences } from "../pages/App/GroupVideoCall/CallLobby";
-
 type CallStatus = "idle" | "lobby" | "joining" | "joined" | "error";
 
 interface ActiveCallContextValue {
   meeting: RTKClient | null;
-  channelId: Id<"channels"> | null;
-  workspaceId: Id<"workspaces"> | null;
+  /**
+   * The active source's descriptor, or `null` when no call is active.
+   * Carries the polymorphic identity (channel/event), the resource id,
+   * and the navigation paths. Consumers that care about kind read
+   * `descriptor.kind` and branch from there.
+   */
+  descriptor: CallSourceDescriptor | null;
   status: CallStatus;
   error: string | null;
   isFloating: boolean;
   isPipDismissed: boolean;
   dismissPip: () => void;
-  enterLobby: (channelId: Id<"channels">, workspaceId: Id<"workspaces">) => void;
+  enterLobby: (port: CallSourcePort) => void;
   joinCall: (prefs: DevicePreferences) => Promise<void>;
   leaveCall: () => Promise<void>;
+  /**
+   * Leave the current call and immediately enter the lobby for `next`,
+   * staying on the current URL. Used by `CallBusyScreen` so the user can
+   * "leave that and join this" without an intermediate navigation hop.
+   * Differs from `leaveCall` in that it does NOT navigate to the leaving
+   * call's `leaveDestination` — the user is already on the new call's
+   * route by the time this is called.
+   */
+  switchCall: (next: CallSourcePort) => Promise<void>;
   returnToCall: () => void;
 }
 
@@ -66,176 +69,91 @@ export function ActiveCallProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [meeting, setMeeting] = useState<RTKClient | null>(null);
-  const initMeetingRunning = useRef(false);
-  const initMeeting = async (
-    options: Parameters<typeof RTKClient.init>[0],
-  ): Promise<RTKClient | undefined> => {
-    if (initMeetingRunning.current) return undefined;
-    initMeetingRunning.current = true;
-    try {
-      const { default: RTKClientCtor } = await import(
-        "@cloudflare/realtimekit"
-      );
-      const m = await RTKClientCtor.init(options);
-      setMeeting(m);
-      return m;
-    } finally {
-      initMeetingRunning.current = false;
-    }
-  };
-  const [channelId, setChannelId] = useState<Id<"channels"> | null>(null);
-  const [workspaceId, setWorkspaceId] = useState<Id<"workspaces"> | null>(null);
-  const [status, setStatus] = useState<CallStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [isPipDismissed, setIsPipDismissed] = useState(false);
-
-  const joinCallAction = useAction(joinCallRef);
-  const endSession = useMutation(endSessionRef);
+  const session = useCallSession();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Determine if the call is floating (user navigated away from the call route)
-  const isFloating =
-    status === "joined" &&
-    meeting !== null &&
-    channelId !== null &&
-    !location.pathname.endsWith("/videocall");
+  const [isPipDismissed, setIsPipDismissed] = useState(false);
 
-  // Reset pip dismissed state when user returns to the call page.
-  // Adjusted during render (not in an effect) to avoid a cascading-render cycle.
+  // The reducer surfaces `leaving` as its own phase to express
+  // mid-leave-in-flight. Public consumers don't differentiate — they
+  // see "still joined-ish" until the navigation lands.
+  const publicStatus: CallStatus =
+    session.state.status === "leaving" ? "idle" : session.state.status;
+
+  // PiP visibility: joined + the user has navigated away from the
+  // call's home page. `homePath` lives on the descriptor, so this
+  // works for any source kind without code changes here.
+  const isFloating =
+    publicStatus === "joined" &&
+    session.meeting !== null &&
+    session.source !== null &&
+    location.pathname !== session.source.descriptor.homePath;
+
+  // Reset pip-dismissed when the user returns to the call page so the
+  // window shows up next time they navigate away. Adjusted during render
+  // (not in an effect) to avoid a cascading-render cycle.
   const [prevIsFloating, setPrevIsFloating] = useState(isFloating);
   if (prevIsFloating !== isFloating) {
     setPrevIsFloating(isFloating);
     if (!isFloating) setIsPipDismissed(false);
   }
 
-  // Stable refs for cleanup
-  const meetingRef = useRef(meeting);
-  const channelIdRef = useRef(channelId);
-  useEffect(() => {
-    meetingRef.current = meeting;
-    channelIdRef.current = channelId;
-  }, [meeting, channelId]);
-
-  const enterLobby = (cId: Id<"channels">, wId: Id<"workspaces">) => {
-    // Only enter lobby if we're not already in a call for this channel
-    if (status === "joined" && channelId === cId) return;
-    setChannelId(cId);
-    setWorkspaceId(wId);
-    setStatus("lobby");
-    setError(null);
+  const joinCall = async (prefs: DevicePreferences): Promise<void> => {
+    await session.joinCall({
+      audioEnabled: prefs.audioEnabled,
+      videoEnabled: prefs.videoEnabled,
+      audioDeviceId: prefs.audioDeviceId,
+      videoDeviceId: prefs.videoDeviceId,
+      audioOutputDeviceId: prefs.audioOutputDeviceId,
+      userName: prefs.userName ?? "Anonymous",
+      userImage: prefs.userImage,
+    });
   };
 
-  const joinCall = async (prefs: DevicePreferences) => {
-    if (!channelId) return;
-    try {
-      setStatus("joining");
-
-      const { authToken } = await joinCallAction({
-        channelId,
-        userName: prefs.userName ?? "Anonymous",
-        userImage: prefs.userImage,
-      });
-
-      const m = await initMeeting({
-        authToken,
-        defaults: {
-          audio: prefs.audioEnabled,
-          video: prefs.videoEnabled,
-        },
-      });
-
-      if (m) {
-        await m.join();
-
-        if (prefs.audioDeviceId) {
-          const audioDevices = await m.self.getAudioDevices();
-          const selected = audioDevices.find(
-            (d: { deviceId: string }) => d.deviceId === prefs.audioDeviceId,
-          );
-          if (selected) await m.self.setDevice(selected);
-        }
-        if (prefs.videoDeviceId) {
-          const videoDevices = await m.self.getVideoDevices();
-          const selected = videoDevices.find(
-            (d: { deviceId: string }) => d.deviceId === prefs.videoDeviceId,
-          );
-          if (selected) await m.self.setDevice(selected);
-        }
-
-        setStatus("joined");
-      }
-    } catch (err) {
-      console.error("Failed to join call:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to join call",
-      );
-      setStatus("error");
-    }
+  const leaveCall = async (): Promise<void> => {
+    // Capture the leave destination before `session.leaveCall()` clears
+    // the source — otherwise we lose the route to navigate to.
+    const dest = session.source?.descriptor.leaveDestination ?? null;
+    await session.leaveCall();
+    if (dest) void navigate(dest);
   };
 
-  const leaveCall = async () => {
-    const m = meetingRef.current;
-    const cId = channelIdRef.current;
-    if (m) {
-      await m.leave();
-      const remaining = m.participants.joined.toArray();
-      if (remaining.length === 0 && cId) {
-        await endSession({ channelId: cId });
-      }
-    }
-    // Navigate back to the channel (if we have the info)
-    if (workspaceId && channelId) {
-      void navigate(
-        `/workspaces/${workspaceId}/channels/${channelId}`,
-      );
-    }
-    setStatus("idle");
-    setChannelId(null);
-    setWorkspaceId(null);
-    setError(null);
+  const switchCall = async (next: CallSourcePort): Promise<void> => {
+    // No navigation — the caller is already on the new call's URL. We
+    // tear down the active session, then drop into the lobby for the
+    // requested source. The route's render branch will pick up the new
+    // descriptor and stop showing the busy screen.
+    await session.leaveCall();
+    session.enterLobby(next);
   };
 
-  const returnToCall = () => {
-    if (workspaceId && channelId) {
-      void navigate(
-        `/workspaces/${workspaceId}/channels/${channelId}/videocall`,
-      );
-    }
+  const returnToCall = (): void => {
+    const home = session.source?.descriptor.homePath;
+    if (home) void navigate(home);
   };
-
-  // Cleanup on provider unmount (tab close, logout)
-  useEffect(() => {
-    return () => {
-      const m = meetingRef.current;
-      if (m) {
-        void m.leave();
-      }
-    };
-  }, []);
 
   return (
     <ActiveCallContext.Provider
       value={{
-        meeting,
-        channelId,
-        workspaceId,
-        status,
-        error,
+        meeting: session.meeting,
+        descriptor: session.source?.descriptor ?? null,
+        status: publicStatus,
+        error: session.state.error?.message ?? null,
         isFloating,
         isPipDismissed,
         dismissPip: () => setIsPipDismissed(true),
-        enterLobby,
+        enterLobby: session.enterLobby,
         joinCall,
         leaveCall,
+        switchCall,
         returnToCall,
       }}
     >
       {/* Audio always plays regardless of which view is active */}
-      {meeting && status === "joined" && (
+      {session.meeting && publicStatus === "joined" && (
         <Suspense fallback={null}>
-          <LazyRtkParticipantsAudio meeting={meeting} />
+          <LazyRtkParticipantsAudio meeting={session.meeting} />
         </Suspense>
       )}
       {children}

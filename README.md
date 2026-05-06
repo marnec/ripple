@@ -1,8 +1,7 @@
 NEXT STEPS:
 - calendar; plan calls; invite guests
     - investigate if it is possible to have btn to accept / decline directly on email
-
-    - pip for calendar calls too
+    - [x] pip for calendar calls too
 
 - leave channel logic (only for private?)
 - consider favorite for channels too

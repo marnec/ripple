@@ -1,21 +1,22 @@
 import {
   RealtimeKitProvider,
-  useRealtimeKitClient,
   useRealtimeKitMeeting,
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
-import { RtkParticipantsAudio } from "@cloudflare/realtimekit-react-ui";
-import { useAction } from "convex/react";
 import { LogOut, Monitor, MonitorOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
-import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@ripple/shared/types/routes";
+import { useParams } from "react-router-dom";
+import { CallBusyScreen } from "@/components/CallBusyScreen";
+import { useActiveCall } from "@/contexts/ActiveCallContext";
+import { isCallBusyForOtherResource } from "@/lib/call/source-port";
+import { useEventCallSource } from "@/lib/call/sources/event";
 import { useViewer } from "../UserContext";
 import { CallLobby, type DevicePreferences } from "../GroupVideoCall/CallLobby";
 import { CameraToggle, MicToggle } from "../GroupVideoCall/MediaToggle";
@@ -24,23 +25,20 @@ import { VideoTile } from "../GroupVideoCall/VideoTile";
 /**
  * Authenticated calendar-event call surface.
  *
- * v1 deliberately does NOT integrate with ActiveCallContext (the floating
- * PIP / channel-bound state machine) — that context is heavily keyed on
- * channelId, and event calls can be standalone. We trade away the
- * "navigate-while-in-call" PIP feature in exchange for a simpler,
- * isolated implementation. If the feature is requested for events later,
- * extend ActiveCallContext to take an `eventId | channelId` discriminated
- * union and reuse the lobby/PIP code from there.
+ * Drives the same `ActiveCallContext` lifecycle as channel calls — the
+ * provider is source-agnostic and reads navigation paths from the
+ * `CallSourceDescriptor` an event source supplies. That's what makes the
+ * floating PiP work for events: when the user leaves this page mid-call,
+ * `isFloating` flips on the descriptor's `homePath` mismatch and the
+ * globally-mounted FloatingCallWindow renders.
  *
- * The CallLobby device-picker step is also skipped for now; we join with
- * audio/video off and let the user toggle them inside the meeting.
+ * Tile/control components are duplicated from GroupVideoCall (minus the
+ * FollowMode follow-button) until UI deduplication ships separately.
  */
 export function EventVideoCall() {
   const { workspaceId, eventId } = useParams<QueryParams & { eventId?: string }>();
   if (!workspaceId || !eventId) return <SomethingWentWrong />;
 
-  // QueryParams already types workspaceId as Id<"workspaces">; only eventId
-  // (which we added via the extension type) needs branding.
   return (
     <EventVideoCallContent
       workspaceId={workspaceId}
@@ -58,135 +56,99 @@ function EventVideoCallContent({
 }) {
   const user = useViewer();
   const navigate = useNavigate();
-  const joinEventCall = useAction(api.calendarEvents.joinEventCall);
-  const [meeting, initMeeting] = useRealtimeKitClient();
-  // "lobby" is the new initial state — same UX as the channel call flow,
-  // where CallLobby lets the user pick devices + toggle mic/cam before
-  // they actually issue a Cloudflare token. Skipping straight to
-  // "joining" was the old behaviour and matched what guests get, but
-  // authenticated members are entitled to the device-picker step.
-  const [status, setStatus] = useState<
-    "lobby" | "joining" | "joined" | "error" | "left"
-  >("lobby");
-  const [error, setError] = useState<string | null>(null);
-  const meetingRef = useRef(meeting);
+  const callCtx = useActiveCall();
+  const eventSource = useEventCallSource(eventId, workspaceId);
 
-  useEffect(() => {
-    meetingRef.current = meeting;
-  }, [meeting]);
+  const busyForOther = isCallBusyForOtherResource(
+    callCtx.descriptor,
+    callCtx.status,
+    eventId,
+  );
 
-  // Leave on unmount.
+  // Enter the lobby when this surface mounts. Same pattern as the
+  // channel surface: skip if (a) we're already joined for this event
+  // (user clicked "return to call" from PiP), or (b) another call is
+  // active — the busy-screen branch below handles that UX.
   useEffect(() => {
-    return () => {
-      const m = meetingRef.current;
-      if (m) void m.leave();
-    };
-  }, []);
+    if (busyForOther) return;
+    const sameEventJoined =
+      callCtx.status === "joined" &&
+      callCtx.descriptor?.resourceId === eventId;
+    if (!sameEventJoined) {
+      callCtx.enterLobby(eventSource);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, workspaceId, busyForOther]);
 
   const handleBack = () => {
     void navigate(`/workspaces/${workspaceId}/dashboard/calendar`);
   };
 
-  // User clicked Join in the lobby: now we issue the participant token,
-  // initialise the meeting client with their device prefs, and apply the
-  // chosen mic/cam if any. Mirrors ActiveCallContext.joinCall (channels)
-  // — kept inline rather than refactoring that context to accept events,
-  // which would be a much bigger change. No StrictMode double-fire risk
-  // here because this only runs from a user click, not on mount.
-  const handleJoin = async (prefs: DevicePreferences) => {
-    setStatus("joining");
-    try {
-      const { authToken } = await joinEventCall({
-        eventId,
-        userName: prefs.userName ?? user?.name ?? "Anonymous",
-        userImage: prefs.userImage ?? user?.image ?? undefined,
-      });
-      const m = await initMeeting({
-        authToken,
-        defaults: { audio: prefs.audioEnabled, video: prefs.videoEnabled },
-      });
-      if (!m) return;
-      await m.join();
-      if (prefs.audioDeviceId) {
-        const audioDevices = await m.self.getAudioDevices();
-        const selected = audioDevices.find(
-          (d: { deviceId: string }) => d.deviceId === prefs.audioDeviceId,
-        );
-        if (selected) await m.self.setDevice(selected);
-      }
-      if (prefs.videoDeviceId) {
-        const videoDevices = await m.self.getVideoDevices();
-        const selected = videoDevices.find(
-          (d: { deviceId: string }) => d.deviceId === prefs.videoDeviceId,
-        );
-        if (selected) await m.self.setDevice(selected);
-      }
-      setStatus("joined");
-    } catch (err) {
-      console.error("Failed to join event call:", err);
-      setError(err instanceof Error ? err.message : "Failed to join call");
-      setStatus("error");
-    }
+  const handleJoin = (prefs: DevicePreferences) => {
+    void callCtx.joinCall({
+      ...prefs,
+      userName: prefs.userName ?? user?.name ?? "Anonymous",
+      userImage: prefs.userImage ?? user?.image ?? undefined,
+    });
   };
 
-  if (status === "error") {
+  // Another call is active for a different resource. Render the busy
+  // screen — checked first so we never try to render call A's RTK
+  // client on call B's page.
+  if (busyForOther) {
+    return <CallBusyScreen requestedSource={eventSource} />;
+  }
+
+  if (callCtx.status === "error") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
-        <p className="text-destructive">{error ?? "Something went wrong"}</p>
+        <p className="text-destructive">{callCtx.error ?? "Something went wrong"}</p>
         <Button variant="outline" onClick={handleBack}>Back to calendar</Button>
       </div>
     );
   }
 
-  if (status === "left") {
+  if (
+    callCtx.status === "joined" &&
+    callCtx.meeting &&
+    callCtx.descriptor?.resourceId === eventId
+  ) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 px-4 text-center">
-        <h1 className="text-xl font-semibold">You left the call</h1>
-        <Button variant="outline" onClick={handleBack}>Back to calendar</Button>
+      <div className="h-full w-full overflow-hidden">
+        <RealtimeKitProvider value={callCtx.meeting}>
+          <MeetingRoom />
+        </RealtimeKitProvider>
       </div>
     );
   }
 
-  if (status === "lobby") {
+  if (callCtx.status === "lobby" || callCtx.status === "idle") {
     return (
       <CallLobby
         userName={user?.name ?? "You"}
-        onJoin={(prefs) => void handleJoin(prefs)}
+        onJoin={handleJoin}
         onBack={handleBack}
       />
     );
   }
 
-  if (!meeting || status !== "joined") {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <RippleSpinner size={64} />
-      </div>
-    );
-  }
-
+  // Joining state
   return (
-    <div className="h-full w-full overflow-hidden">
-      <RealtimeKitProvider value={meeting}>
-        <RtkParticipantsAudio meeting={meeting} />
-        <MeetingRoom onLeave={() => setStatus("left")} />
-      </RealtimeKitProvider>
+    <div className="flex h-full items-center justify-center">
+      <RippleSpinner size={64} />
     </div>
   );
 }
 
-// ── Tile/control components — same shape as the guest variants. Kept inline
-//    rather than imported because GroupVideoCall's tiles are wired to
-//    ActiveCallContext / FollowMode which we deliberately bypass here.
+// ── Tile / control components ───────────────────────────────────────────
+// Same shape as GroupVideoCall's, minus FollowMode wiring (events don't
+// participate in follow-mode for v1). Lifted into a shared component
+// library when we ship UI deduplication.
 
-function MeetingRoom({ onLeave }: { onLeave: () => void }) {
-  const { meeting } = useRealtimeKitMeeting();
-  const participants = useRealtimeKitSelector((m) => m.participants.joined.toArray());
-
-  const handleLeave = async () => {
-    await meeting.leave();
-    onLeave();
-  };
+function MeetingRoom() {
+  const participants = useRealtimeKitSelector((m) =>
+    m.participants.joined.toArray(),
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -208,7 +170,7 @@ function MeetingRoom({ onLeave }: { onLeave: () => void }) {
           ))}
         </div>
       </div>
-      <ControlsBar onLeave={() => void handleLeave()} />
+      <ControlsBar />
     </div>
   );
 }
@@ -281,8 +243,9 @@ function ParticipantTile({
   );
 }
 
-function ControlsBar({ onLeave }: { onLeave: () => void }) {
+function ControlsBar() {
   const { meeting } = useRealtimeKitMeeting();
+  const { leaveCall } = useActiveCall();
   const audioEnabled = useRealtimeKitSelector((m) => m.self.audioEnabled);
   const videoEnabled = useRealtimeKitSelector((m) => m.self.videoEnabled);
   const screenShareEnabled = useRealtimeKitSelector((m) => m.self.screenShareEnabled);
@@ -317,7 +280,11 @@ function ControlsBar({ onLeave }: { onLeave: () => void }) {
           <Monitor className="h-5 w-5" />
         )}
       </Button>
-      <Button variant="destructive" onClick={onLeave} className="gap-2 h-11 md:h-9">
+      <Button
+        variant="destructive"
+        onClick={() => void leaveCall()}
+        className="gap-2 h-11 md:h-9"
+      >
         <LogOut className="h-4 w-4" />
         Leave
       </Button>

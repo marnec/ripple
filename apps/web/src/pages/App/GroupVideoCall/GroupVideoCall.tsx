@@ -9,8 +9,11 @@ import { useNavigate } from "react-router-dom";
 import { useViewer } from "../UserContext";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "../../../components/ui/button";
+import { CallBusyScreen } from "../../../components/CallBusyScreen";
 import { useActiveCall } from "../../../contexts/ActiveCallContext";
 import { useFollowMode } from "../../../contexts/FollowModeContext";
+import { isCallBusyForOtherResource } from "../../../lib/call/source-port";
+import { useChannelCallSource } from "../../../lib/call/sources/channel";
 import { RippleSpinner } from "../../../components/RippleSpinner";
 import { CallLobby } from "./CallLobby";
 import { CameraToggle, MicToggle } from "./MediaToggle";
@@ -250,15 +253,31 @@ const GroupVideoCall = ({
 }) => {
   const user = useViewer();
   const callCtx = useActiveCall();
+  const channelSource = useChannelCallSource(channelId, workspaceId);
   const navigate = useNavigate();
 
-  // Enter lobby when component mounts (if not already in a call for this channel)
+  const busyForOther = isCallBusyForOtherResource(
+    callCtx.descriptor,
+    callCtx.status,
+    channelId,
+  );
+
+  // Enter lobby when component mounts. Skip when (a) we're already joined
+  // for THIS channel — the user clicked "return to call" from the
+  // floating PiP — or (b) another call is active, in which case the
+  // session would refuse the entry anyway and the busy-screen branch
+  // below handles the UX. Both gates also live in `useCallSession`; the
+  // duplication here documents intent and avoids a noisy dev-only warn.
   useEffect(() => {
-    if (callCtx.status === "idle" || (callCtx.channelId !== channelId && callCtx.status !== "joined")) {
-      callCtx.enterLobby(channelId, workspaceId);
+    if (busyForOther) return;
+    const sameChannelJoined =
+      callCtx.status === "joined" &&
+      callCtx.descriptor?.resourceId === channelId;
+    if (!sameChannelJoined) {
+      callCtx.enterLobby(channelSource);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelId, workspaceId]);
+  }, [channelId, workspaceId, busyForOther]);
 
   const handleBack = () => {
     void navigate(
@@ -274,8 +293,20 @@ const GroupVideoCall = ({
     });
   };
 
+  // Another call is active for a different resource. Render the busy
+  // screen — checked BEFORE the joined branch below because that branch
+  // would otherwise have a stale-resource near-match while the descriptor
+  // resolves.
+  if (busyForOther) {
+    return <CallBusyScreen requestedSource={channelSource} />;
+  }
+
   // If already joined this channel's call (e.g., returning from floating), show meeting room
-  if (callCtx.status === "joined" && callCtx.meeting && callCtx.channelId === channelId) {
+  if (
+    callCtx.status === "joined" &&
+    callCtx.meeting &&
+    callCtx.descriptor?.resourceId === channelId
+  ) {
     return (
       <div className="h-full w-full overflow-hidden">
         <RealtimeKitProvider value={callCtx.meeting}>
