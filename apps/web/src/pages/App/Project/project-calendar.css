@@ -4,11 +4,6 @@
   border: unset;
 }
 
-/* Custom header slot — reset schedule-x's header padding so our component
-   controls its own layout and spacing. */
-.sx__calendar-wrapper .sx__calendar-header {
-  padding: 0.5rem 0.75rem;
-}
 
 .sx__calendar-wrapper {
   --sx-color-background: var(--color-background);
@@ -146,6 +141,10 @@
 .sx__month-grid-background-event,
 .sx__time-grid-background-event {
   cursor: pointer;
+}
+
+.sx__calendar-header {
+  padding-inline: 0;
 }
 
 /* Month-grid truncation. Two layers of fix here, because the rendered

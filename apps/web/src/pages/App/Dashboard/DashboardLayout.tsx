@@ -18,7 +18,7 @@ export function DashboardLayout() {
   return (
     <div className="flex h-full w-full flex-col">
       {/* Header with inline tabs (right-aligned, mirrors ProjectLayout). */}
-      <div className="flex items-center justify-between gap-4 px-3 border-b min-h-11">
+      <div className="flex items-center justify-between gap-4 px-4 border-b min-h-11">
         <div className="flex items-center gap-2 min-w-0">
           {!isMobile && (
             <h1 className="text-lg font-semibold truncate">My Dashboard</h1>

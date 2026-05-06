@@ -108,12 +108,20 @@ function CalendarHeader() {
     // calendar not initialised yet — fall through with safe defaults
   }
 
-  const label = (() => {
-    if (!date) return "";
+  // Two label variants — long (desktop) shows the full week range with day
+  // numbers; compact (mobile) drops the day numbers because "May 4 – 10,
+  // 2026" eats the whole header row alongside nav buttons + view switcher.
+  // For the week-view compact form we use the month/year of the week's
+  // centre day (Thursday) so a Mon–Sun week that crosses a month boundary
+  // still gets a sensible single-month label rather than a misleading
+  // start-month-only one.
+  const labels = (() => {
+    if (!date) return { full: "", compact: "" };
     if (view === "month-grid") {
-      return date.toLocaleString("en-US", { month: "long", year: "numeric" });
+      const full = date.toLocaleString("en-US", { month: "long", year: "numeric" });
+      return { full, compact: full };
     }
-    // Week view: render the Mon–Sun span containing `date`.
+    // Week view
     const dow = date.dayOfWeek; // 1 (Mon) … 7 (Sun)
     const weekStart = date.subtract({ days: dow - 1 });
     const weekEnd = weekStart.add({ days: 6 });
@@ -129,7 +137,13 @@ function CalendarHeader() {
       day: "numeric",
       year: "numeric",
     });
-    return `${startFmt} – ${endFmt}`;
+    const full = `${startFmt} – ${endFmt}`;
+    const centre = weekStart.add({ days: 3 });
+    const compact = centre.toLocaleString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+    return { full, compact };
   })();
 
   const stepBack = () => {
@@ -146,7 +160,10 @@ function CalendarHeader() {
   };
 
   return (
-    <div className="flex items-center justify-between w-full gap-2 px-1">
+    // No internal horizontal padding — `.sx__calendar-header` had its
+    // 16px inline padding zeroed in project-calendar.css so the header
+    // buttons sit flush with the toolbar's content edge.
+    <div className="flex items-center justify-between w-full gap-2">
       {/* Left: nav + range label + Today */}
       <div className="flex items-center gap-1.5">
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={stepBack} aria-label="Previous">
@@ -155,7 +172,12 @@ function CalendarHeader() {
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={stepForward} aria-label="Next">
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <span className="text-sm font-medium tabular-nums min-w-40">{label}</span>
+        <span className="hidden sm:inline text-sm font-medium tabular-nums min-w-40">
+          {labels.full}
+        </span>
+        <span className="sm:hidden text-sm font-medium tabular-nums">
+          {labels.compact}
+        </span>
         <Button
           variant="ghost"
           size="sm"
@@ -512,7 +534,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
+    <div className="flex-1 flex flex-col min-h-0 px-4 pb-4 gap-3">
       {/* Mobile-only "New event" trigger — promoted to the global app
           header so the calendar's own header (rendered by schedule-x
           inside the grid) doesn't have to fight for horizontal space.
