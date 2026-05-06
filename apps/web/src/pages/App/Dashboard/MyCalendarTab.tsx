@@ -1,16 +1,19 @@
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { createContext, Suspense, useContext, useEffect, useMemo, useState } from "react";
 import {
   createCalendar,
   createViewMonthGrid,
   createViewWeek,
   type CalendarType,
 } from "@schedule-x/calendar";
+import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
+import { createCurrentTimePlugin } from "@schedule-x/current-time";
+import { createScrollControllerPlugin } from "@schedule-x/scroll-controller";
 import { ScheduleXCalendar } from "@schedule-x/react";
 import { Temporal } from "temporal-polyfill";
 import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
 import { useParams } from "react-router-dom";
-import { Plus, CalendarDays } from "lucide-react";
+import { Plus, CalendarDays, CalendarCheck, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -55,6 +58,134 @@ const CALENDARS_CONFIG: Record<string, CalendarType> = {
     lightColors: { main: "#6366f1", container: "#6366f135", onContainer: "#0f172a" },
     darkColors: { main: "#818cf8", container: "#818cf835", onContainer: "#f9fafb" },
   },
+};
+
+// ────────────────────────────────────────────────────────────────────────
+// Custom header — prev/next + Today + range label + Week/Month switcher.
+// Mirrors ProjectCalendar's headerContent slot pattern but trimmed to the
+// controls a personal calendar actually needs (no commitment toggle, no
+// unscheduled sidebar). The schedule-x headerContent slot renders without
+// props, so we feed it via context owned by `MyCalendarTabContent`.
+// ────────────────────────────────────────────────────────────────────────
+
+type CalendarHeaderValue = {
+  calendarControls: ReturnType<typeof createCalendarControlsPlugin>;
+  /** Bumped on every range update so the header re-reads the current date / view. */
+  rangeVersion: number;
+};
+
+const CalendarHeaderContext = createContext<CalendarHeaderValue | null>(null);
+
+function CalendarHeader() {
+  const ctx = useContext(CalendarHeaderContext);
+  if (!ctx) return null;
+  const { calendarControls, rangeVersion: _rangeVersion } = ctx; // _rangeVersion: read to subscribe to nav changes
+
+  let view: string = "week";
+  let date: Temporal.PlainDate | null = null;
+  try {
+    view = calendarControls.getView();
+    date = calendarControls.getDate();
+  } catch {
+    // calendar not initialised yet — fall through with safe defaults
+  }
+
+  const label = (() => {
+    if (!date) return "";
+    if (view === "month-grid") {
+      return date.toLocaleString("en-US", { month: "long", year: "numeric" });
+    }
+    // Week view: render the Mon–Sun span containing `date`.
+    const dow = date.dayOfWeek; // 1 (Mon) … 7 (Sun)
+    const weekStart = date.subtract({ days: dow - 1 });
+    const weekEnd = weekStart.add({ days: 6 });
+    const sameMonth = weekStart.month === weekEnd.month;
+    const sameYear = weekStart.year === weekEnd.year;
+    const startFmt = weekStart.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      ...(sameYear ? {} : { year: "numeric" }),
+    });
+    const endFmt = weekEnd.toLocaleString("en-US", {
+      month: sameMonth ? undefined : "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    return `${startFmt} – ${endFmt}`;
+  })();
+
+  const stepBack = () => {
+    if (!date) return;
+    calendarControls.setDate(
+      view === "month-grid" ? date.subtract({ months: 1 }) : date.subtract({ weeks: 1 }),
+    );
+  };
+  const stepForward = () => {
+    if (!date) return;
+    calendarControls.setDate(
+      view === "month-grid" ? date.add({ months: 1 }) : date.add({ weeks: 1 }),
+    );
+  };
+
+  return (
+    <div className="flex items-center justify-between w-full gap-2 px-1">
+      {/* Left: nav + range label + Today */}
+      <div className="flex items-center gap-1.5">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={stepBack} aria-label="Previous">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={stepForward} aria-label="Next">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <span className="text-sm font-medium tabular-nums min-w-40">{label}</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-muted-foreground"
+          onClick={() => calendarControls.setDate(Temporal.Now.plainDateISO())}
+          aria-label="Today"
+        >
+          <CalendarCheck className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden sm:inline">Today</span>
+        </Button>
+      </div>
+
+      {/* Right: Week / Month switcher */}
+      <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
+        <button
+          className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
+            view === "week"
+              ? "bg-background shadow-sm text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => calendarControls.setView("week")}
+          aria-label="Week view"
+        >
+          <CalendarRange className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden sm:inline">Week</span>
+        </button>
+        <button
+          className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
+            view === "month-grid"
+              ? "bg-background shadow-sm text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => calendarControls.setView("month-grid")}
+          aria-label="Month view"
+        >
+          <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+          <span className="hidden sm:inline">Month</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Stable reference — schedule-x's CalendarRenderer treats `customComponents`
+// as a useEffect dep and replays the slide-in animation when its identity
+// changes. Hoist out of render to keep the calendar quiet.
+const CALENDAR_CUSTOM_COMPONENTS = {
+  headerContent: CalendarHeader,
 };
 
 // ────────────────────────────────────────────────────────────────────────
@@ -175,6 +306,30 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     return out;
   }, [events, tasks]);
 
+  // Calendar-controls plugin — exposes getDate/setDate + getView/setView so
+  // our custom header can drive nav. `rangeVersion` is bumped on every range
+  // change so `<CalendarHeader />` re-reads the current label.
+  const [calendarControls] = useState(() => createCalendarControlsPlugin());
+  const [rangeVersion, setRangeVersion] = useState(0);
+
+  // Current-time indicator: red horizontal line on today's column in the week
+  // view. `fullWeekWidth: false` keeps the line scoped to today (cleaner than
+  // a banner across the entire grid).
+  // Scroll controller: scroll the week view to ~1 hour before "now" on mount
+  // so users land on actionable time-of-day instead of midnight. Lazy
+  // useState computes the initial scroll once per mount; we don't need to
+  // re-pin the scroll position when the user navigates.
+  const [currentTimePlugin] = useState(() =>
+    createCurrentTimePlugin({ fullWeekWidth: false }),
+  );
+  const [scrollController] = useState(() => {
+    const now = new Date();
+    const target = new Date(now.getTime() - 60 * 60 * 1000); // 1h earlier
+    const hh = String(target.getHours()).padStart(2, "0");
+    const mm = String(target.getMinutes()).padStart(2, "0");
+    return createScrollControllerPlugin({ initialScroll: `${hh}:${mm}` });
+  });
+
   // Stable calendar instance — schedule-x docs warn that recreating the app
   // on every render flushes its state.
   const [calendarApp] = useState(() =>
@@ -185,6 +340,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       calendars: CALENDARS_CONFIG,
       isDark,
       theme: "shadcn",
+      plugins: [calendarControls, currentTimePlugin, scrollController],
       callbacks: {
         onEventClick: (ev) => {
           const id = String(ev.id);
@@ -196,6 +352,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           } else if (id.startsWith("event-")) {
             setSelectedEventId(id.slice(6) as Id<"calendarEvents">);
           }
+        },
+        onRangeUpdate() {
+          setRangeVersion((v) => v + 1);
         },
       },
     }),
@@ -254,13 +413,19 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         </Button>
       </div>
 
-      {/* Calendar grid — fills remaining height. */}
-      <div className="flex-1 min-h-0 relative">
-        <ScheduleXCalendar calendarApp={calendarApp} />
-        {events?.length === 0 && tasks?.length === 0 && !isMobile && (
-          <EmptyOverlay onCreate={() => setOpenCreate(true)} />
-        )}
-      </div>
+      {/* Calendar grid — fills remaining height. The header context feeds
+          our custom `headerContent` slot (prev/next, label, view switch). */}
+      <CalendarHeaderContext.Provider value={{ calendarControls, rangeVersion }}>
+        <div className="flex-1 min-h-0 relative">
+          <ScheduleXCalendar
+            calendarApp={calendarApp}
+            customComponents={CALENDAR_CUSTOM_COMPONENTS}
+          />
+          {events?.length === 0 && tasks?.length === 0 && !isMobile && (
+            <EmptyOverlay onCreate={() => setOpenCreate(true)} />
+          )}
+        </div>
+      </CalendarHeaderContext.Provider>
 
       {/* Detail sheets + create dialog. The `*Mounted` flags ratchet
           false → true on first open and stay true so Radix's exit

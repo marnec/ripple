@@ -148,6 +148,31 @@
   cursor: pointer;
 }
 
+/* Current-time indicator (week view) — schedule-x ships a saturated #f00
+   line + dot. We override with a calm, theme-aware treatment:
+     • foreground (oklch primary token) at low opacity for the line
+     • slightly higher opacity + smaller dot for the anchor
+     • 1px instead of 2px so it reads as a soft tide-mark rather than an alarm
+   Both light and dark themes inherit because we use the live `--foreground`
+   token. Only applied where the current-time plugin is loaded
+   (MyCalendarTab); ProjectCalendar doesn't load it so these rules are inert. */
+.sx__current-time-indicator {
+  height: 1px;
+  background-color: color-mix(in oklch, var(--foreground) 45%, transparent);
+}
+.sx__current-time-indicator::before {
+  width: 7px;
+  height: 7px;
+  left: -3.5px;
+  top: -3px;
+  background-color: color-mix(in oklch, var(--foreground) 70%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--background) 90%, transparent);
+}
+.sx__current-time-indicator-full-week {
+  height: 1px;
+  background-color: color-mix(in oklch, var(--foreground) 18%, transparent);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /* Disable all schedule-x navigation and event animations — the class-based

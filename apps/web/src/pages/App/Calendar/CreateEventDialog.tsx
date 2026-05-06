@@ -1,28 +1,14 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { CalendarIcon, Check, ChevronsUpDown, Hash, X } from "lucide-react";
+import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Form,
   FormControl,
@@ -43,12 +29,22 @@ import {
 
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { cn } from "@/lib/utils";
 import { parseEmailChips } from "../Dashboard/dashboard-calendar-utils";
 import { InviteeMultiSelect } from "@/components/InviteeMultiSelect";
+import {
+  ChannelCombobox,
+  DatePopover,
+  TimeSelect,
+} from "./event-fields";
+import {
+  TIME_RE,
+  addMinutes,
+  combineDateAndTime,
+  msToTimeSlot,
+  timeToMinutes,
+} from "./event-time-utils";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
-const TIME_RE = /^\d{2}:\d{2}$/;
 
 // Google-Calendar style: pick a single date, then a start time and an end
 // time. If the end time is ≤ start time, the event is treated as crossing
@@ -75,41 +71,6 @@ const formSchema = z
   );
 
 type FormValues = z.infer<typeof formSchema>;
-
-/** "00:00" … "23:45" in 15-minute increments — Google-Calendar default. */
-const TIME_OPTIONS: string[] = (() => {
-  const out: string[] = [];
-  for (let h = 0; h < 24; h++) {
-    for (const m of [0, 15, 30, 45]) {
-      out.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-    }
-  }
-  return out;
-})();
-
-/** Quantise an ms timestamp's wall-clock time to the nearest 15-min slot
- *  (rounding down) and return as "HH:mm". */
-function msToTimeSlot(ms: number): string {
-  const d = new Date(ms);
-  const minutes = Math.floor(d.getMinutes() / 15) * 15;
-  return `${String(d.getHours()).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
-/** Combine a wall-clock date + "HH:mm" time into a local-tz Date. */
-function combineDateAndTime(date: Date, time: string): Date {
-  const [h, m] = time.split(":").map(Number);
-  const out = new Date(date);
-  out.setHours(h ?? 0, m ?? 0, 0, 0);
-  return out;
-}
-
-/** Pretty-print a "HH:mm" using the user's locale (12h/24h follows the OS). */
-function formatTimeLabel(time: string): string {
-  const [h, m] = time.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h ?? 0, m ?? 0, 0, 0);
-  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-}
 
 export function CreateEventDialog({
   workspaceId,
@@ -172,6 +133,45 @@ export function CreateEventDialog({
   const watchedStart = useWatch({ control: form.control, name: "startTime" });
   const watchedEnd = useWatch({ control: form.control, name: "endTime" });
   const spansMidnight = !!watchedStart && !!watchedEnd && watchedEnd <= watchedStart;
+
+  // End-time auto-bump: when the user shifts the start, slide the end with
+  // it so the duration is preserved. While the end is still pristine
+  // (untouched since defaults seeded a +1h slot), the bump locks the
+  // duration to exactly 60 min — that re-pegs the end if the user picks a
+  // start far from the seeded one without ever interacting with the end
+  // picker. The moment the user opens the end picker we flip
+  // `endTouchedRef` to true and switch to delta-preservation, matching
+  // Google Calendar's behaviour. Stored in a ref because the value is read
+  // & written from event handlers and never needs to drive a re-render.
+  const endTouchedRef = useRef(false);
+
+  const handleStartChange = (newStart: string) => {
+    // Read current values BEFORE the form update propagates so the delta
+    // is computed against the previous start, not the new one.
+    const prevStart = form.getValues("startTime");
+    const prevEnd = form.getValues("endTime");
+    form.setValue("startTime", newStart, { shouldValidate: true });
+
+    if (!endTouchedRef.current) {
+      // Pristine end — relock to start + 1h.
+      form.setValue("endTime", addMinutes(newStart, 60), { shouldValidate: true });
+      return;
+    }
+    // Touched end — preserve the user-set duration, including the
+    // cross-midnight case (negative same-day delta). `addMinutes` wraps at
+    // 24h so the wrapped end correctly signals "+1 day" downstream.
+    const prevDelta = TIME_RE.test(prevStart) && TIME_RE.test(prevEnd)
+      ? (timeToMinutes(prevEnd) - timeToMinutes(prevStart) + 24 * 60) % (24 * 60)
+      : 60;
+    form.setValue("endTime", addMinutes(newStart, prevDelta || 60), {
+      shouldValidate: true,
+    });
+  };
+
+  const handleEndChange = (newEnd: string) => {
+    endTouchedRef.current = true;
+    form.setValue("endTime", newEnd, { shouldValidate: true });
+  };
 
   const handleSubmit = async (values: FormValues) => {
     try {
@@ -290,7 +290,7 @@ export function CreateEventDialog({
                   render={({ field }) => (
                     <FormItem className="flex flex-col min-w-0 sm:w-28 sm:shrink-0">
                       <FormLabel>Start</FormLabel>
-                      <TimeSelect value={field.value} onChange={field.onChange} />
+                      <TimeSelect value={field.value} onChange={handleStartChange} />
                       <FormMessage />
                     </FormItem>
                   )}
@@ -310,7 +310,7 @@ export function CreateEventDialog({
                       </FormLabel>
                       <TimeSelect
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={handleEndChange}
                         startTime={watchedStart}
                       />
                       <FormMessage />
@@ -426,259 +426,3 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   );
 }
 
-// ───────────────────────────────────────────────────────────────────────
-// DatePopover — shadcn `Calendar` in a Popover. Mirrors the trigger-button
-// look of DatePickerField but accepts/returns a Date object directly,
-// since the form schema uses Date (no ISO string round-trip needed).
-// ───────────────────────────────────────────────────────────────────────
-
-function DatePopover({
-  value,
-  onChange,
-}: {
-  value: Date | undefined;
-  onChange: (d: Date) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  // The wrapper <div> is load-bearing: base-ui's PopoverPortal renders
-  // FloatingPortal which inserts two FocusGuard <span>s (and one
-  // visually-hidden aria-owns <span>) inline at the popover's position
-  // in the React tree. Without this wrapper they become siblings of the
-  // trigger inside the parent FormItem. FormItem's `space-y-2` then
-  // matches the trigger via `:not(:last-child)` and adds 8px of
-  // margin-block-end → the dialog (position:fixed top:50%
-  // translate-y:-50%) re-centers, shifting the form up by ~4px on every
-  // popover open. The wrapper absorbs those siblings so the FormItem's
-  // direct-children layout stays stable.
-  return (
-    <div>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger
-          render={
-            <Button
-              variant="outline"
-              className={cn(
-                "w-full min-w-0 justify-start text-left font-normal",
-                !value && "text-muted-foreground",
-              )}
-              type="button"
-            />
-          }
-        >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {value
-            ? value.toLocaleDateString(undefined, {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })
-            : "Pick a date"}
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={value}
-            onSelect={(d) => {
-              if (!d) return;
-              onChange(d);
-              setOpen(false);
-            }}
-          />
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-}
-
-// ───────────────────────────────────────────────────────────────────────
-// TimeSelect — Popover + Command listing 15-min increments.
-//
-// Behaviour mirrors Google Calendar's end-time dropdown:
-//   • If `startTime` is provided (i.e. this is the *end* picker) and the
-//     candidate slot lands AFTER start on the same day, we annotate it
-//     with a duration label ("15 min", "1 hr"). Slots earlier than the
-//     start time are still selectable — they signal a midnight crossing,
-//     which the parent surfaces with a "+1 day" pill.
-//   • The currently-selected slot scrolls into view on open so the user
-//     doesn't have to scroll to find their place in a 96-row list.
-// ───────────────────────────────────────────────────────────────────────
-
-function TimeSelect({
-  value,
-  onChange,
-  startTime,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  startTime?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  // Wrapper rationale documented in DatePopover above — same FocusGuard
-  // siblings + space-y-2 interaction.
-  return (
-    <div>
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="outline"
-            className="w-full justify-between font-normal"
-            type="button"
-          />
-        }
-      >
-        <span>{value ? formatTimeLabel(value) : "Select time"}</span>
-        <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
-      </PopoverTrigger>
-      <PopoverContent className="p-0 w-44" align="start">
-        <Command>
-          <CommandInput placeholder="Search time…" />
-          <CommandList className="max-h-64">
-            <CommandEmpty>No times.</CommandEmpty>
-            <CommandGroup>
-              {TIME_OPTIONS.map((slot) => {
-                const selected = slot === value;
-                const duration =
-                  startTime && slot > startTime ? sameDayDuration(startTime, slot) : null;
-                return (
-                  <CommandItem
-                    key={slot}
-                    value={slot}
-                    onSelect={() => {
-                      onChange(slot);
-                      setOpen(false);
-                    }}
-                    className="cursor-pointer"
-                  >
-                    <span className="flex-1">{formatTimeLabel(slot)}</span>
-                    {duration && (
-                      <span className="ml-2 text-xs text-muted-foreground">{duration}</span>
-                    )}
-                    <Check
-                      className={cn(
-                        "ml-2 h-4 w-4",
-                        selected ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-    </div>
-  );
-}
-
-/** "HH:mm" → "HH:mm" same-day duration label (e.g. "1 hr 15 min"). */
-function sameDayDuration(start: string, end: string): string {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  const minutes = (eh * 60 + em) - (sh * 60 + sm);
-  if (minutes <= 0) return "";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m} min`;
-  if (m === 0) return `${h} hr`;
-  return `${h} hr ${m} min`;
-}
-
-// ───────────────────────────────────────────────────────────────────────
-// ChannelCombobox — replaces the base-ui Select for channel selection.
-// We render the channel name in the trigger ourselves rather than relying
-// on SelectValue's auto-resolution, which intermittently shows the value
-// (channelId) instead of the label depending on mount order.
-// ───────────────────────────────────────────────────────────────────────
-
-function ChannelCombobox({
-  channels,
-  value,
-  onChange,
-}: {
-  channels: { _id: Id<"channels">; name: string }[];
-  value: string;
-  onChange: (next: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = channels.find((c) => c._id === value);
-  // Wrapper rationale documented in DatePopover above — same FocusGuard
-  // siblings + space-y-2 interaction.
-  return (
-    <div>
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="outline"
-            className="w-full justify-between font-normal"
-            type="button"
-          />
-        }
-      >
-        <span className="flex items-center gap-1.5 truncate">
-          {selected ? (
-            <>
-              <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="truncate">{selected.name}</span>
-            </>
-          ) : (
-            <span className="text-muted-foreground">No channel (standalone)</span>
-          )}
-        </span>
-        <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
-      </PopoverTrigger>
-      <PopoverContent className="p-0 w-72" align="start">
-        <Command>
-          <CommandInput placeholder="Search channels…" />
-          <CommandList className="max-h-64">
-            <CommandEmpty>No channels found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                value="__none"
-                onSelect={() => {
-                  onChange("");
-                  setOpen(false);
-                }}
-                className="cursor-pointer"
-              >
-                <span className="flex-1 text-muted-foreground">
-                  No channel (standalone)
-                </span>
-                <Check
-                  className={cn(
-                    "ml-2 h-4 w-4",
-                    !value ? "opacity-100" : "opacity-0",
-                  )}
-                />
-              </CommandItem>
-              {channels.map((c) => (
-                <CommandItem
-                  key={c._id}
-                  value={c.name}
-                  onSelect={() => {
-                    onChange(c._id);
-                    setOpen(false);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <Hash className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="flex-1 truncate">{c.name}</span>
-                  <Check
-                    className={cn(
-                      "ml-2 h-4 w-4",
-                      c._id === value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-    </div>
-  );
-}

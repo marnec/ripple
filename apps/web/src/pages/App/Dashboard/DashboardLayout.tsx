@@ -4,11 +4,12 @@ import { CalendarDays, ListTodo } from "lucide-react";
 import { NavLink, Outlet } from "react-router-dom";
 
 // Tabs mirror ProjectLayout's structure; the index tab uses `end: true` so
-// "My Tasks" doesn't stay highlighted when the user navigates into the
-// calendar tab.
+// "Tasks" doesn't stay highlighted when the user navigates into the
+// calendar tab. Page is already framed as personal ("My Dashboard" header),
+// so the per-tab "My" prefix was redundant.
 const tabs = [
-  { label: "My Tasks", icon: ListTodo, to: ".", end: true },
-  { label: "My Calendar", icon: CalendarDays, to: "calendar", end: false },
+  { label: "Tasks", icon: ListTodo, to: ".", end: true },
+  { label: "Calendar", icon: CalendarDays, to: "calendar", end: false },
 ];
 
 export function DashboardLayout() {

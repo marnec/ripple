@@ -689,6 +689,78 @@ export const cancel = mutation({
   },
 });
 
+/**
+ * Hard-delete an event. Pairs with `cancel` (which is the soft-delete /
+ * guest-aware variant): we deliberately refuse to silently nuke an event
+ * that has external invitees who haven't yet been told it's cancelled —
+ * otherwise organisers could ghost their guests by going straight to
+ * delete. The contract is therefore:
+ *
+ *   • Solo events (no non-organiser invitees) → delete is always allowed.
+ *   • Guest events that are already cancelled → delete is allowed
+ *     (the cancel mutation has already sent notifications + revoked
+ *     guest share links; this just clears the tombstone).
+ *   • Guest events not yet cancelled → reject with a clear error so the
+ *     UI can route the user to `cancel` first.
+ *
+ * Cascade: invitees rows + revoked-or-active resourceShares rows tied to
+ * this event are removed. Notifications/audit logs are not retroactively
+ * scrubbed — those are immutable history.
+ */
+export const remove = mutation({
+  args: { eventId: v.id("calendarEvents") },
+  returns: v.null(),
+  handler: async (ctx, { eventId }) => {
+    const userId = await requireUser(ctx);
+    const event = await ctx.db.get(eventId);
+    if (!event) throw new ConvexError("Event not found");
+    if (event.createdBy !== userId) {
+      throw new ConvexError("Only the organizer can delete this event");
+    }
+
+    const invitees = await ctx.db
+      .query("calendarEventInvitees")
+      .withIndex("by_event", (q) => q.eq("eventId", event._id))
+      .collect();
+
+    const hasGuests = invitees.some((i) => i.userId !== event.createdBy);
+    if (hasGuests && event.cancelledAt === undefined) {
+      throw new ConvexError(
+        "Cancel this event before deleting so invitees are notified.",
+      );
+    }
+
+    // Cascade: invitee rows.
+    for (const row of invitees) {
+      await ctx.db.delete(row._id);
+    }
+
+    // Cascade: resourceShares tied to the event (cancel may have revoked
+    // them already, but the rows still exist — clean them up).
+    for (const row of invitees) {
+      if (!row.shareId) continue;
+      const share = await ctx.db
+        .query("resourceShares")
+        .withIndex("by_shareId", (q) => q.eq("shareId", row.shareId!))
+        .first();
+      if (share) await ctx.db.delete(share._id);
+    }
+
+    await ctx.db.delete(event._id);
+
+    await logActivity(ctx, {
+      userId,
+      resourceType: "calendarEvents",
+      resourceId: event._id,
+      action: "deleted",
+      resourceName: event.title,
+      scope: event.workspaceId,
+    });
+
+    return null;
+  },
+});
+
 export const respond = mutation({
   args: {
     eventId: v.id("calendarEvents"),

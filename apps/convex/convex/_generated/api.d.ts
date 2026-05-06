@@ -187,6 +187,12 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
       }>
     >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { eventId: Id<"calendarEvents"> },
+      null
+    >;
     removeInvitee: FunctionReference<
       "mutation",
       "public",

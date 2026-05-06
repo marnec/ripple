@@ -268,6 +268,98 @@ describe("calendarEvents", () => {
     });
   });
 
+  describe("remove (delete)", () => {
+    it("organiser can hard-delete a solo event", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Solo focus",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      await asUser.mutation(api.calendarEvents.remove, { eventId });
+
+      // `get` throws "Event not found" once the row is gone.
+      await expect(
+        asUser.query(api.calendarEvents.get, { eventId }),
+      ).rejects.toThrow(/not found/i);
+    });
+
+    it("refuses to delete a non-cancelled guest event", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "With guests",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: ["guest@x.com"] },
+      });
+
+      await expect(
+        asUser.mutation(api.calendarEvents.remove, { eventId }),
+      ).rejects.toThrow(/Cancel this event before deleting/i);
+    });
+
+    it("allows delete after cancel for guest events; cleans up shares", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Cancelled then deleted",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: ["guest@x.com"] },
+      });
+
+      await asUser.mutation(api.calendarEvents.cancel, { eventId });
+      await asUser.mutation(api.calendarEvents.remove, { eventId });
+
+      // Event row deleted.
+      const ev = await t.run(async (ctx) => ctx.db.get(eventId));
+      expect(ev).toBeNull();
+
+      // Invitee + share rows cleaned up.
+      const invitees = await t.run(async (ctx) =>
+        ctx.db
+          .query("calendarEventInvitees")
+          .withIndex("by_event", (q) => q.eq("eventId", eventId))
+          .collect(),
+      );
+      expect(invitees.length).toBe(0);
+      const shares = await t.run(async (ctx) =>
+        ctx.db
+          .query("resourceShares")
+          .withIndex("by_resource_id", (q) => q.eq("resourceId", eventId))
+          .collect(),
+      );
+      expect(shares.length).toBe(0);
+    });
+
+    it("non-organiser cannot delete", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const { userId: memberId, asUser: asMember } =
+        await setupAuthenticatedUser(t, { email: "bob@test.com" });
+      await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
+
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Solo focus",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      await expect(
+        asMember.mutation(api.calendarEvents.remove, { eventId }),
+      ).rejects.toThrow(/Only the organizer/i);
+    });
+  });
+
   describe("getByShareId / respondAsGuest", () => {
     it("public lookup returns event for a valid share, and guest can RSVP", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
