@@ -1,5 +1,30 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
 import { RouteErrorFallback } from "./components/RouteErrorFallback";
+
+/**
+ * Bridge for the legacy `/calendar/events/:eventId/videocall` URL into
+ * the new flat `/events/:eventId/videocall` shape. `useParams` reads
+ * eventId from the matched route so the redirect carries the id along
+ * rather than dropping the user on an empty list. Only client-generated
+ * URLs ever hit this path — server notifications use `?event=<id>` on
+ * the calendar tab — but the bridge keeps any pinned tabs working.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- routes.tsx exports `router` (non-component) by design; a local component bridge alongside it doesn't break runtime, only fast-refresh edit-the-route hot reload
+function RedirectToFlatVideocall() {
+  const { workspaceId, eventId } = useParams<{
+    workspaceId?: string;
+    eventId?: string;
+  }>();
+  if (!workspaceId || !eventId) {
+    return <Navigate to="/workspaces" replace />;
+  }
+  return (
+    <Navigate
+      to={`/workspaces/${workspaceId}/events/${eventId}/videocall`}
+      replace
+    />
+  );
+}
 
 export const router = createBrowserRouter(
   [
@@ -67,16 +92,51 @@ export const router = createBrowserRouter(
               ],
             },
             {
-              // Authenticated event-call surface. EventDetailSheet's
-              // "Join call" button navigates here. Distinct from the
-              // channel-bound /channels/:id/videocall route because event
-              // calls can be standalone (no channelId) and use a different
-              // join action (`api.calendarEvents.joinEventCall`).
+              // Calendar event surfaces — flat under `/events/...` so
+              // every breadcrumb segment lands somewhere real:
+              //   /events            → redirect to dashboard calendar tab
+              //   /events/:id        → full event page
+              //   /events/:id/videocall → authenticated event call
+              // The calendar tab itself stays at /dashboard/calendar
+              // (it's a UI surface, not the resource home — same way
+              // tasks live under /projects/:projectId/tasks/:taskId
+              // rather than under any specific tab).
+              path: "events",
+              children: [
+                {
+                  // Bare /events has no list page yet; redirect to the
+                  // calendar tab so the breadcrumb's "Events" segment
+                  // doesn't dead-end. Replace so the redirected URL
+                  // doesn't pollute history.
+                  index: true,
+                  element: <Navigate to="../dashboard/calendar" replace />,
+                },
+                {
+                  path: ":eventId",
+                  lazy: () =>
+                    import("./pages/App/Calendar/EventDetailPage").then((m) => ({
+                      Component: m.EventDetailPage,
+                    })),
+                },
+                {
+                  path: ":eventId/videocall",
+                  lazy: () =>
+                    import("./pages/App/Calendar/EventVideoCall").then((m) => ({
+                      Component: m.EventVideoCall,
+                    })),
+                },
+              ],
+            },
+            {
+              // Back-compat: any in-flight URL pointing at the old
+              // `/calendar/events/:id/videocall` (only generated
+              // client-side from EventDetailSheet — emails use the
+              // `?event=<id>` query param style instead) gets redirected
+              // to the new flat path. Safe to remove once we're
+              // confident no bookmark or in-flight tab still references
+              // the old shape.
               path: "calendar/events/:eventId/videocall",
-              lazy: () =>
-                import("./pages/App/Calendar/EventVideoCall").then((m) => ({
-                  Component: m.EventVideoCall,
-                })),
+              element: <RedirectToFlatVideocall />,
             },
             {
               path: "channels",

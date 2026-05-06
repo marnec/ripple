@@ -148,6 +148,34 @@
   cursor: pointer;
 }
 
+/* Month-grid truncation. Two layers of fix here, because the rendered
+   DOM is a flex container with two child divs:
+     <div class="sx__month-grid-event">                ← flex parent
+       <div class="sx__month-grid-event-time">10:30 AM</div>
+       <div class="sx__month-grid-event-title">…</div> ← long text lives here
+     </div>
+   1) `.sx__month-grid-day { flex: 1 }` plus default `min-width: auto`
+      lets content prevent the day column from shrinking below natural
+      content width. Force `min-width: 0` so the 7-column split holds.
+   2) The base theme sets `overflow: hidden; white-space: nowrap` on
+      the event, but `text-overflow: ellipsis` only works on a block
+      element with overflow:hidden + nowrap — and the actual text lives
+      in the child `.sx__month-grid-event-title` div, which has no
+      truncation rules. Apply the full triple to that child + give it
+      `min-width: 0` so it can shrink inside the flex parent. */
+.sx__month-grid-day {
+  min-width: 0;
+}
+.sx__month-grid-event {
+  min-width: 0;
+}
+.sx__month-grid-event-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* Current-time indicator (week view) — schedule-x ships a saturated #f00
    line + dot. We override with a calm, theme-aware treatment:
      • foreground (oklch primary token) at low opacity for the line

@@ -1,8 +1,10 @@
 import React, { createContext, Suspense, useContext, useEffect, useMemo, useState } from "react";
 import {
   createCalendar,
+  createViewMonthAgenda,
   createViewMonthGrid,
   createViewWeek,
+  createViewWeekAgenda,
   type CalendarType,
 } from "@schedule-x/calendar";
 import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
@@ -12,10 +14,11 @@ import { ScheduleXCalendar } from "@schedule-x/react";
 import { Temporal } from "temporal-polyfill";
 import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
-import { useParams } from "react-router-dom";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { Plus, CalendarDays, CalendarCheck, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { api } from "@convex/_generated/api";
@@ -68,10 +71,20 @@ const CALENDARS_CONFIG: Record<string, CalendarType> = {
 // props, so we feed it via context owned by `MyCalendarTabContent`.
 // ────────────────────────────────────────────────────────────────────────
 
+type DashboardCalendarView = "week" | "month-grid";
+
 type CalendarHeaderValue = {
   calendarControls: ReturnType<typeof createCalendarControlsPlugin>;
-  /** Bumped on every range update so the header re-reads the current date / view. */
+  /** Bumped on every range update so the header re-reads the current date. */
   rangeVersion: number;
+  /** React-owned view state — drives the highlight directly. Single
+   *  source of truth, kept in sync with schedule-x via `setView`. */
+  view: DashboardCalendarView;
+  setView: (next: DashboardCalendarView) => void;
+  /** `null` while the events query is loading — header hides the counter
+   *  in that state to avoid a "0 scheduled" flash before data lands. */
+  eventCount: number | null;
+  onCreateEvent: () => void;
 };
 
 const CalendarHeaderContext = createContext<CalendarHeaderValue | null>(null);
@@ -79,12 +92,17 @@ const CalendarHeaderContext = createContext<CalendarHeaderValue | null>(null);
 function CalendarHeader() {
   const ctx = useContext(CalendarHeaderContext);
   if (!ctx) return null;
-  const { calendarControls, rangeVersion: _rangeVersion } = ctx; // _rangeVersion: read to subscribe to nav changes
+  const {
+    calendarControls,
+    rangeVersion: _rangeVersion, // read to subscribe to nav changes
+    view,
+    setView,
+    eventCount,
+    onCreateEvent,
+  } = ctx;
 
-  let view: string = "week";
   let date: Temporal.PlainDate | null = null;
   try {
-    view = calendarControls.getView();
     date = calendarControls.getDate();
   } catch {
     // calendar not initialised yet — fall through with safe defaults
@@ -150,32 +168,53 @@ function CalendarHeader() {
         </Button>
       </div>
 
-      {/* Right: Week / Month switcher */}
-      <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
-        <button
-          className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
-            view === "week"
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => calendarControls.setView("week")}
-          aria-label="Week view"
+      {/* Right cluster: counter + New event + view switcher.
+          Counter and New event are desktop-only — on mobile they'd
+          crowd the calendar's own header out, so the parent renders
+          a HeaderSlot fallback for "New event" and drops the counter
+          (it's also implied by the visible event list). */}
+      <div className="flex items-center gap-2">
+        {eventCount !== null && (
+          <span className="hidden md:inline text-xs text-muted-foreground tabular-nums">
+            {eventCount} scheduled call{eventCount === 1 ? "" : "s"}
+          </span>
+        )}
+        <Button
+          size="sm"
+          className="hidden md:inline-flex h-7"
+          onClick={onCreateEvent}
         >
-          <CalendarRange className="h-3.5 w-3.5 shrink-0" />
-          <span className="hidden sm:inline">Week</span>
-        </button>
-        <button
-          className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
-            view === "month-grid"
-              ? "bg-background shadow-sm text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => calendarControls.setView("month-grid")}
-          aria-label="Month view"
-        >
-          <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-          <span className="hidden sm:inline">Month</span>
-        </button>
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          New event
+        </Button>
+
+        {/* Week / Month switcher */}
+        <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
+          <button
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
+              view === "week"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setView("week")}
+            aria-label="Week view"
+          >
+            <CalendarRange className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">Week</span>
+          </button>
+          <button
+            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
+              view === "month-grid"
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setView("month-grid")}
+            aria-label="Month view"
+          >
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">Month</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -202,6 +241,8 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const isMobile = useIsMobile();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryEventId = searchParams.get("event");
 
   // Show all my events for the current calendar window. We use a generous
   // 90-day window (45 before / 45 after today) so view nav is snappy without
@@ -232,7 +273,14 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   const [openCreate, setOpenCreate] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [selectedTaskProjectId, setSelectedTaskProjectId] = useState<Id<"projects"> | null>(null);
-  const [selectedEventId, setSelectedEventId] = useState<Id<"calendarEvents"> | null>(null);
+  // Seed `selectedEventId` from a `?event=<id>` deep link (notification
+  // URLs use this query-param shape — see convex/calendarEvents.ts).
+  // Lazy initializer reads searchParams ONCE on mount; the strip effect
+  // below removes the param afterwards so a manual page refresh doesn't
+  // re-open a sheet the user already dismissed.
+  const [selectedEventId, setSelectedEventId] = useState<Id<"calendarEvents"> | null>(
+    () => (queryEventId ? (queryEventId as Id<"calendarEvents">) : null),
+  );
 
   // Sticky "has been opened at least once" flags. Sheets/dialogs need to
   // stay mounted while their `open` prop transitions back to false so the
@@ -257,6 +305,21 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   // fallback).
   useEffect(() => {
     void taskDetailSheetImporter();
+  }, []);
+
+  // Strip the `?event=<id>` query param after we've consumed it (the
+  // selectedEventId initializer above seeded from it on mount). Without
+  // this, a manual refresh would re-open a sheet the user dismissed.
+  // Mobile: the early-return Navigate below redirects away anyway, so
+  // the strip is a no-op there but harmless.
+  useEffect(() => {
+    if (!queryEventId) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("event");
+    setSearchParams(next, { replace: true });
+    // Run once on mount only — re-running after the strip would just
+    // no-op (queryEventId would be empty), but the lint can't see that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Build schedule-x events list. Schedule-x 4.5's
@@ -312,6 +375,23 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   const [calendarControls] = useState(() => createCalendarControlsPlugin());
   const [rangeVersion, setRangeVersion] = useState(0);
 
+  // View state lives in React, not schedule-x — `calendarControls.getView()`
+  // can return stale values immediately after `setView` (the underlying
+  // signal hasn't propagated). React state lets the highlight update
+  // synchronously on click, and the wrapper below pushes the new view to
+  // schedule-x to keep it rendered correctly.
+  const [view, setView] = useState<DashboardCalendarView>("week");
+  const switchView = (next: DashboardCalendarView) => {
+    setView(next);
+    try {
+      calendarControls.setView(next);
+    } catch {
+      // calendar not yet rendered — schedule-x's setView throws before
+      // first render. The defaultView in createCalendar already matches
+      // our initial state, so this is harmless.
+    }
+  };
+
   // Current-time indicator: red horizontal line on today's column in the week
   // view. `fullWeekWidth: false` keeps the line scoped to today (cleaner than
   // a banner across the entire grid).
@@ -334,7 +414,19 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   // on every render flushes its state.
   const [calendarApp] = useState(() =>
     createCalendar({
-      views: [createViewWeek(), createViewMonthGrid()],
+      // Pair each wide-screen view with its small-screen agenda variant.
+      // Schedule-x flags `Week` and `MonthGrid` as `hasSmallScreenCompat:
+      // false` and `WeekAgenda` / `MonthAgenda` as small-only; when the
+      // calendar element is < 700px wide the library auto-swaps to the
+      // small-compatible variant from the same family. The dashboard's
+      // week view doesn't fit on a phone otherwise (7 columns + time
+      // axis), so this is the responsive layer.
+      views: [
+        createViewWeek(),
+        createViewWeekAgenda(),
+        createViewMonthGrid(),
+        createViewMonthAgenda(),
+      ],
       defaultView: "week",
       events: calendarEvents,
       calendars: CALENDARS_CONFIG,
@@ -350,6 +442,11 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
             setSelectedTaskId(taskId);
             setSelectedTaskProjectId(match?.projectId ?? null);
           } else if (id.startsWith("event-")) {
+            // Same on desktop and mobile — set selectedEventId. The
+            // mobile Navigate guard above the calendar render reroutes
+            // mobile users to the dedicated /events/:id page; desktop
+            // users see the side sheet. Routing-by-render keeps the
+            // schedule-x callback closure-free of isMobile / navigate.
             setSelectedEventId(id.slice(6) as Id<"calendarEvents">);
           }
         },
@@ -397,25 +494,55 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     }
   }, [calendarApp, calendarEvents]);
 
+  // Mobile event-detail routing: when an event is selected on mobile —
+  // either via deep-link seed (queryEventId) or a runtime click on the
+  // calendar — render <Navigate> to push the user onto the dedicated
+  // /events/:id page. Sheets on a phone are too constrained for the
+  // 5-section event surface; the page mirrors TaskDetailPage's
+  // mobile-first layout. Render-time Navigate avoids both the
+  // setState-in-effect lint and the captured-closure bug schedule-x
+  // would have if we did the dispatch in the onEventClick callback.
+  if (isMobile && selectedEventId) {
+    return (
+      <Navigate
+        to={`/workspaces/${workspaceId}/events/${selectedEventId}`}
+        replace
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
-      {/* Toolbar — only the "New event" CTA for now; the calendar itself
-          owns view switching. */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-muted-foreground">
-          {tasks && events
-            ? `${events.length} scheduled call${events.length === 1 ? "" : "s"}`
-            : null}
-        </div>
-        <Button size="sm" onClick={() => setOpenCreate(true)}>
-          <Plus className="h-4 w-4 mr-1" />
-          New event
-        </Button>
-      </div>
+      {/* Mobile-only "New event" trigger — promoted to the global app
+          header so the calendar's own header (rendered by schedule-x
+          inside the grid) doesn't have to fight for horizontal space.
+          Desktop renders the same affordance inline in CalendarHeader. */}
+      {isMobile && (
+        <HeaderSlot>
+          <Button
+            size="sm"
+            onClick={() => setOpenCreate(true)}
+            aria-label="New event"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            <span>New event</span>
+          </Button>
+        </HeaderSlot>
+      )}
 
       {/* Calendar grid — fills remaining height. The header context feeds
-          our custom `headerContent` slot (prev/next, label, view switch). */}
-      <CalendarHeaderContext.Provider value={{ calendarControls, rangeVersion }}>
+          our custom `headerContent` slot (prev/next, label, counters,
+          New event, view switcher) — see CalendarHeader. */}
+      <CalendarHeaderContext.Provider
+        value={{
+          calendarControls,
+          rangeVersion,
+          view,
+          setView: switchView,
+          eventCount: events ? events.length : null,
+          onCreateEvent: () => setOpenCreate(true),
+        }}
+      >
         <div className="flex-1 min-h-0 relative">
           <ScheduleXCalendar
             calendarApp={calendarApp}
