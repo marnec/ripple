@@ -221,6 +221,124 @@ describe("calendarEvents", () => {
     });
   });
 
+  describe("update (notifyInvitees flag)", () => {
+    // The update mutation hands off both kinds of notification (in-app
+    // push + guest email) to the Convex scheduler — we assert by
+    // counting `_scheduled_functions` rows whose `name` matches the
+    // expected handler before vs. after the mutation. The diff
+    // approach is robust to other scheduled work the create/update
+    // paths happen to enqueue (push delivery worker, audit log, etc.).
+    async function countScheduled(predicate: (name: string) => boolean) {
+      const rows = await t.run(async (ctx) =>
+        ctx.db.system.query("_scheduled_functions").collect(),
+      );
+      return rows.filter((r: any) => predicate(String(r.name ?? "")))
+        .length;
+    }
+
+    it("default (flag omitted): an in-app deliverPush is scheduled", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const { userId: memberId } = await setupAuthenticatedUser(t, {
+        email: "alice@test.com",
+      });
+      await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
+
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Sync",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [memberId as any], guestEmails: [] },
+      });
+
+      const before = await countScheduled((n) => n.includes("deliverPush"));
+      await asUser.mutation(api.calendarEvents.update, {
+        eventId,
+        startsAt: Date.now() + 2 * ONE_HOUR,
+        endsAt: Date.now() + 3 * ONE_HOUR,
+      });
+      const after = await countScheduled((n) => n.includes("deliverPush"));
+      expect(after).toBeGreaterThan(before);
+    });
+
+    it("notifyInvitees: false suppresses BOTH in-app + email notifications", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const { userId: memberId } = await setupAuthenticatedUser(t, {
+        email: "bob@test.com",
+      });
+      await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
+
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Sync silent",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [memberId as any], guestEmails: ["g@x.com"] },
+      });
+
+      const beforeDeliver = await countScheduled((n) => n.includes("deliverPush"));
+      const beforeEmail = await countScheduled((n) => n.includes("sendEventReschedule"));
+      await asUser.mutation(api.calendarEvents.update, {
+        eventId,
+        startsAt: Date.now() + 3 * ONE_HOUR,
+        endsAt: Date.now() + 4 * ONE_HOUR,
+        notifyInvitees: false,
+      });
+      const afterDeliver = await countScheduled((n) => n.includes("deliverPush"));
+      const afterEmail = await countScheduled((n) => n.includes("sendEventReschedule"));
+
+      expect(afterDeliver).toBe(beforeDeliver);
+      expect(afterEmail).toBe(beforeEmail);
+    });
+
+    it("notifyInvitees: true + time change schedules the reschedule email for guests", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "External",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: ["g@external.com"] },
+      });
+
+      const before = await countScheduled((n) => n.includes("sendEventReschedule"));
+      await asUser.mutation(api.calendarEvents.update, {
+        eventId,
+        startsAt: Date.now() + 5 * ONE_HOUR,
+        endsAt: Date.now() + 6 * ONE_HOUR,
+        notifyInvitees: true,
+      });
+      const after = await countScheduled((n) => n.includes("sendEventReschedule"));
+      expect(after).toBeGreaterThan(before);
+    });
+
+    it("notifyInvitees: true on a non-time edit does NOT schedule a reschedule email", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Title only",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: ["g@external.com"] },
+      });
+
+      const before = await countScheduled((n) => n.includes("sendEventReschedule"));
+      await asUser.mutation(api.calendarEvents.update, {
+        eventId,
+        title: "Renamed",
+        notifyInvitees: true,
+      });
+      const after = await countScheduled((n) => n.includes("sendEventReschedule"));
+      // Reschedule emails are time-change-specific — title rename
+      // does NOT trigger one.
+      expect(after).toBe(before);
+    });
+  });
+
   describe("cancel", () => {
     it("creator can cancel; revokes guest shares", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);

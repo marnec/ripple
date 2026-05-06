@@ -386,9 +386,15 @@ importers:
       '@schedule-x/current-time':
         specifier: 4.5.0
         version: 4.5.0
+      '@schedule-x/drag-and-drop':
+        specifier: ^3.7.3
+        version: 3.7.3
       '@schedule-x/react':
         specifier: 4.1.0
         version: 4.1.0(@schedule-x/calendar@4.5.0(@preact/signals@1.3.4(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@schedule-x/resize':
+        specifier: ^3.7.3
+        version: 3.7.3
       '@schedule-x/scroll-controller':
         specifier: 4.5.0
         version: 4.5.0(@preact/signals@1.3.4(preact@10.29.1))
@@ -4218,12 +4224,18 @@ packages:
   '@schedule-x/current-time@4.5.0':
     resolution: {integrity: sha512-IRHGQVHn9gqia91v+oyXbAO6Y0mCI9NrYI/zG9XRKSuUg4PBwxDWyGyPVdM2RPac4Asn8UkbM34Ul3bYxqCJrg==}
 
+  '@schedule-x/drag-and-drop@3.7.3':
+    resolution: {integrity: sha512-nHwZKzdIKWNTdT5BEXy4vLlHOmOH3C3M744QUIU0EOXPAFZQR1bBTviGs2NhmvaLiGstnVx2/TZtdhocy60hgg==}
+
   '@schedule-x/react@4.1.0':
     resolution: {integrity: sha512-l2hn1kdTModk4Lbt+nEr/VAcuNMA+w+hAAtgz8VLOj5UeieM7PWoK+cDapzPHCjUKisCSPd8QZfAX966Ma82kQ==}
     peerDependencies:
       '@schedule-x/calendar': ^3.1.0 || ^4.0.0
       react: ^16.7.0 || ^17 || ^18 || ^19
       react-dom: ^16.7.0 || ^17 || ^18 || ^19
+
+  '@schedule-x/resize@3.7.3':
+    resolution: {integrity: sha512-rdzsBx6Dw7d7jwYb8IQzphTwxAofegn1caVaWEdv9WTj8RkLzDILgpM2Oe6KHtpgjMcUWs6aKBaPirJh0T9VZg==}
 
   '@schedule-x/scroll-controller@4.5.0':
     resolution: {integrity: sha512-Hvnb7VtLXSymlL6RZGIHMj4fw1KYYqw+30QolV/V12syUAbpN2Lq3+TyoJjzuGwBcwCruBrZ4+TdURR39GPEXw==}
@@ -13424,11 +13436,15 @@ snapshots:
 
   '@schedule-x/current-time@4.5.0': {}
 
+  '@schedule-x/drag-and-drop@3.7.3': {}
+
   '@schedule-x/react@4.1.0(@schedule-x/calendar@4.5.0(@preact/signals@1.3.4(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@schedule-x/calendar': 4.5.0(@preact/signals@1.3.4(preact@10.29.1))(preact@10.29.1)(temporal-polyfill@0.3.2)
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
+
+  '@schedule-x/resize@3.7.3': {}
 
   '@schedule-x/scroll-controller@4.5.0(@preact/signals@1.3.4(preact@10.29.1))':
     dependencies:

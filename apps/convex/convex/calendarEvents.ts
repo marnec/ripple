@@ -224,13 +224,35 @@ async function requireEventViewer(
  * "Visible" = creator OR has an invitee row. Intersection is partial:
  * an event is included if any of its time falls in the window.
  */
+/** Same shape as `eventValidator` plus a denormalized count of
+ *  non-organizer invitees. Used by the dashboard calendar to decide
+ *  whether a drag/resize should prompt "notify invitees?" without a
+ *  follow-up roundtrip per event. */
+const eventInRangeValidator = v.object({
+  _id: v.id("calendarEvents"),
+  _creationTime: v.number(),
+  workspaceId: v.id("workspaces"),
+  title: v.string(),
+  description: v.optional(v.string()),
+  startsAt: v.number(),
+  endsAt: v.number(),
+  timezone: v.string(),
+  channelId: v.optional(v.id("channels")),
+  cloudflareMeetingId: v.optional(v.string()),
+  createdBy: v.id("users"),
+  cancelledAt: v.optional(v.number()),
+  /** Non-organizer invitee count — drives the reschedule prompt's
+   *  "X invitees" copy and gates whether the prompt fires at all. */
+  nonOrganizerInviteeCount: v.number(),
+});
+
 export const listMineInRange = query({
   args: {
     workspaceId: v.id("workspaces"),
     rangeStartMs: v.number(),
     rangeEndMs: v.number(),
   },
-  returns: v.array(eventValidator),
+  returns: v.array(eventInRangeValidator),
   handler: async (ctx, { workspaceId, rangeStartMs, rangeEndMs }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
@@ -278,7 +300,24 @@ export const listMineInRange = query({
     }
 
     events.sort((a, b) => a.startsAt - b.startsAt);
-    return events;
+
+    // Annotate each event with its non-organizer invitee count. One
+    // by_event index scan per event — cheap relative to the existing
+    // `invited` lookups already performed above.
+    const annotated = await Promise.all(
+      events.map(async (e) => {
+        const invitees = await ctx.db
+          .query("calendarEventInvitees")
+          .withIndex("by_event", (q) => q.eq("eventId", e._id))
+          .collect();
+        const nonOrganizerInviteeCount = invitees.filter(
+          (i) => i.userId !== e.createdBy,
+        ).length;
+        return { ...e, nonOrganizerInviteeCount };
+      }),
+    );
+
+    return annotated;
   },
 });
 
@@ -547,6 +586,18 @@ export const update = mutation({
     endsAt: v.optional(v.number()),
     timezone: v.optional(v.string()),
     channelId: v.optional(v.union(v.id("channels"), v.null())),
+    /**
+     * Whether to notify invitees about the change.
+     *   • undefined (default true): preserve existing in-app notify
+     *     behaviour for callers that pre-date this flag (the inline edit
+     *     fields, dialogs, etc.).
+     *   • true with a time change: ALSO sends a reschedule email to
+     *     guests so external invitees aren't left with a stale time.
+     *   • false: silent update — no in-app notification, no email. The
+     *     drag/resize flow uses this when the organizer chooses
+     *     "Don't send updates" in the prompt.
+     */
+    notifyInvitees: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -567,7 +618,9 @@ export const update = mutation({
     }
     const newStart = args.startsAt ?? event.startsAt;
     const newEnd = args.endsAt ?? event.endsAt;
-    if (args.startsAt !== undefined || args.endsAt !== undefined) {
+    const timeChanged =
+      args.startsAt !== undefined || args.endsAt !== undefined;
+    if (timeChanged) {
       validateTimes(newStart, newEnd);
       patch.startsAt = newStart;
       patch.endsAt = newEnd;
@@ -587,20 +640,48 @@ export const update = mutation({
 
     await ctx.db.patch(event._id, patch);
 
-    // Notify invitees about the change.
-    const recipients = await collectInternalRecipientIds(ctx, event._id);
-    if (recipients.length > 0) {
-      const inviter = await ctx.db.get(userId);
-      const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
-      await notify(ctx, {
-        category: "eventUpdated",
-        userId,
-        userName: inviterName,
-        title: "Calendar event updated",
-        body: `${inviterName} updated ${patch.title ?? event.title}`,
-        url: `/workspaces/${event.workspaceId}/dashboard/calendar?event=${event._id}`,
-        recipientIds: recipients,
-      });
+    const shouldNotify = args.notifyInvitees ?? true;
+
+    // In-app notification path — same as before but gated on the flag.
+    if (shouldNotify) {
+      const recipients = await collectInternalRecipientIds(ctx, event._id);
+      if (recipients.length > 0) {
+        const inviter = await ctx.db.get(userId);
+        const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
+        await notify(ctx, {
+          category: "eventUpdated",
+          userId,
+          userName: inviterName,
+          title: "Calendar event updated",
+          body: `${inviterName} updated ${patch.title ?? event.title}`,
+          url: `/workspaces/${event.workspaceId}/dashboard/calendar?event=${event._id}`,
+          recipientIds: recipients,
+        });
+      }
+
+      // Email guests on time changes only (other field edits are
+      // in-app concerns that don't warrant an email blast). The
+      // newRangeLabel is pre-formatted in the organizer's locale —
+      // matches sendEventInvite's pattern of organizer-locale
+      // formatting.
+      if (timeChanged) {
+        const inviter = await ctx.db.get(userId);
+        const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
+        const guestInvitees = await ctx.db
+          .query("calendarEventInvitees")
+          .withIndex("by_event", (q) => q.eq("eventId", event._id))
+          .collect();
+        const newRangeLabel = formatRangeLabel(newStart, newEnd, event.timezone);
+        for (const row of guestInvitees) {
+          if (!row.guestEmail) continue;
+          await ctx.scheduler.runAfter(0, internal.emails.sendEventReschedule, {
+            eventTitle: patch.title ?? event.title,
+            recipientEmail: row.guestEmail,
+            inviterName,
+            newRangeLabel,
+          });
+        }
+      }
     }
 
     await logActivity(ctx, {
@@ -615,6 +696,30 @@ export const update = mutation({
     return null;
   },
 });
+
+/** Format an event's time range as "Mon, May 4 · 10:00 AM – 11:00 AM"
+ *  for the reschedule email. Uses the event's stored timezone so the
+ *  recipient sees the same wall-clock times the organizer set. */
+function formatRangeLabel(
+  startsAt: number,
+  endsAt: number,
+  timezone: string,
+): string {
+  const dateFmt = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: timezone,
+  });
+  const timeFmt = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
+}
 
 export const cancel = mutation({
   args: { eventId: v.id("calendarEvents") },

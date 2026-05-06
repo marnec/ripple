@@ -171,6 +171,70 @@ export const sendEventInvite = internalAction({
   },
 });
 
+/**
+ * Email sent when an organizer reschedules an event (drag-to-reschedule
+ * or resize on the calendar). Includes the new window so guests don't
+ * have to open the calendar to see what changed. Mirrors the visual
+ * shape of `sendEventInvite` / `sendEventCancellation` so the three
+ * lifecycle messages read as a series.
+ */
+export const sendEventReschedule = internalAction({
+  args: {
+    eventTitle: v.string(),
+    recipientEmail: v.string(),
+    inviterName: v.string(),
+    /** Pre-formatted human-readable range, e.g. "Mon, May 4 · 10:00 AM – 11:00 AM".
+     *  Pre-formatted server-side because the recipient's locale isn't
+     *  necessarily known here; we format using the organizer's locale,
+     *  which matches the existing invite/cancellation emails. */
+    newRangeLabel: v.string(),
+  },
+  returns: v.null(),
+  handler: async (_, { eventTitle, recipientEmail, inviterName, newRangeLabel }) => {
+    const emailContent = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr><td style="padding:32px 32px 24px;">
+          <h1 style="margin:0 0 4px;font-size:20px;font-weight:600;color:#18181b;">${APP_NAME}</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#71717a;">Event rescheduled</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#27272a;line-height:1.5;">
+            <strong>${inviterName}</strong> rescheduled <strong>${eventTitle}</strong>.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+            <tr><td style="padding:12px 16px;background:#f4f4f5;border-radius:8px;">
+              <p style="margin:0;font-size:13px;color:#71717a;line-height:1.4;">New time</p>
+              <p style="margin:4px 0 0;font-size:14px;color:#18181b;font-weight:500;line-height:1.4;">${newRangeLabel}</p>
+            </td></tr>
+          </table>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const resendKey = process.env.AUTH_RESEND_KEY;
+    if (!resendKey) throw new ConvexError("Missing Resend API key");
+    const resend = new Resend(resendKey);
+
+    const sent = await resend.emails.send({
+      from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
+      to: recipientEmail,
+      subject: `Rescheduled: ${eventTitle}`,
+      html: emailContent,
+    });
+
+    if (sent.error) {
+      throw new ConvexError(`Failed to send email: ${sent.error.message}`);
+    }
+    return null;
+  },
+});
+
 export const sendEventCancellation = internalAction({
   args: {
     eventTitle: v.string(),

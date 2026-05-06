@@ -1,7 +1,5 @@
 NEXT STEPS:
 - calendar; plan calls; invite guests
-    - drag event to reschedule -> prompt to notify guests via email
-    - resize event -> prompt to notify guests via email
     - investigate if it is possible to have btn to accept / decline directly on email
 
     - pip for calendar calls too

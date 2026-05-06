@@ -9,11 +9,15 @@ import {
 } from "@schedule-x/calendar";
 import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
 import { createCurrentTimePlugin } from "@schedule-x/current-time";
+import { createDragAndDropPlugin } from "@schedule-x/drag-and-drop";
+import { createResizePlugin } from "@schedule-x/resize";
 import { createScrollControllerPlugin } from "@schedule-x/scroll-controller";
 import { ScheduleXCalendar } from "@schedule-x/react";
 import { Temporal } from "temporal-polyfill";
+import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
+import { toast } from "sonner";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { Plus, CalendarDays, CalendarCheck, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -41,6 +45,10 @@ const LazyTaskDetailSheet = React.lazy(taskDetailSheetImporter);
 // keep the open animation snappy without bloating the chunk meaningfully.
 import { EventDetailSheet } from "../Calendar/EventDetailSheet";
 import { CreateEventDialog } from "../Calendar/CreateEventDialog";
+import {
+  NotifyInviteesDialog,
+  type RescheduleChoice,
+} from "../Calendar/NotifyInviteesDialog";
 
 // ────────────────────────────────────────────────────────────────────────
 // Calendar styling — two visual lanes: "tasks" (existing palette, blue) and
@@ -432,6 +440,126 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     return createScrollControllerPlugin({ initialScroll: `${hh}:${mm}` });
   });
 
+  // Drag-to-reschedule + resize plugins — only meaningful for `event-*`
+  // ids (calendar events the viewer organises). Tasks dragged here
+  // would need to write back to the task's plannedStartDate, which is
+  // the project calendar's job; we block those drags via
+  // `onBeforeEventUpdate` below.
+  //
+  // Version compat: schedule-x calendar core is on v4 but the OSS
+  // drag/resize plugins ship at v3.7.x — no v4 plugins were ever
+  // released. The two libraries dispatch through `$app.config.plugins`
+  // by name. Method shapes/signatures match BUT v4 calls
+  // `startTimeGridDrag` / `startDateGridDrag` / `startMonthGridDrag`
+  // while v3 exposes `createTimeGridDragHandler` /
+  // `createDateGridDragHandler` / `createMonthGridDragHandler`. The
+  // resize plugin's `createTimeGridEventResizer` /
+  // `createDateGridEventResizer` names already match. We patch the
+  // missing aliases onto the drag plugin instance — the underlying
+  // handler constructors are side-effect-only (they wire document
+  // listeners in their `init()`), so the alias just forwards the call
+  // and ignores the return value (v4 doesn't read it). When v4 plugins
+  // eventually land, drop the shim.
+  const [dragAndDropPlugin] = useState(() => {
+    const base = createDragAndDropPlugin(15);
+    type DragHandlerArgs = Parameters<typeof base.createTimeGridDragHandler>;
+    type DateHandlerArgs = Parameters<typeof base.createDateGridDragHandler>;
+    type MonthHandlerArgs = Parameters<typeof base.createMonthGridDragHandler>;
+    const shim = base as typeof base & {
+      startTimeGridDrag: (...args: DragHandlerArgs) => void;
+      startDateGridDrag: (...args: DateHandlerArgs) => void;
+      startMonthGridDrag: (...args: MonthHandlerArgs) => void;
+    };
+    shim.startTimeGridDrag = (...args) => {
+      base.createTimeGridDragHandler(...args);
+    };
+    shim.startDateGridDrag = (...args) => {
+      base.createDateGridDragHandler(...args);
+    };
+    shim.startMonthGridDrag = (...args) => {
+      base.createMonthGridDragHandler(...args);
+    };
+    return shim;
+  });
+  const [resizePlugin] = useState(() => createResizePlugin(15));
+
+  // Mutation handle + a ref-trampoline for the schedule-x callback —
+  // the calendar instance is built once in `useState`'s lazy
+  // initializer, so any callback we put on its config closes over the
+  // FIRST render's closure. The ref is updated on every render so the
+  // committed handler always reads the latest state (events, isMobile,
+  // mutation reference, etc.).
+  const updateEventMutation = useMutation(api.calendarEvents.update);
+  type RescheduleAttempt = {
+    eventId: Id<"calendarEvents">;
+    /** Original schedule-x event we can restore on a revert. */
+    original:
+      | { id: string; start: Temporal.PlainDate | Temporal.ZonedDateTime;
+          end: Temporal.PlainDate | Temporal.ZonedDateTime;
+          title: string; calendarId: string };
+    oldStartsAt: number;
+    oldEndsAt: number;
+    newStartsAt: number;
+    newEndsAt: number;
+    title: string;
+    inviteeCount: number;
+  };
+  const [pendingReschedule, setPendingReschedule] = useState<RescheduleAttempt | null>(null);
+  const onEventUpdateRef = React.useRef<(updated: { id: string | number; start: unknown; end: unknown }) => void>(() => {});
+  React.useEffect(() => {
+    onEventUpdateRef.current = (updated) => {
+      const id = String(updated.id);
+      if (!id.startsWith("event-")) return; // tasks blocked at onBeforeEventUpdate
+      const eventId = id.slice(6) as Id<"calendarEvents">;
+      const sourceEvent = events?.find((e) => e._id === eventId);
+      if (!sourceEvent) return;
+
+      // Schedule-x emits start/end as Temporal types; convert to ms.
+      const newStartsAt = temporalToMs(updated.start);
+      const newEndsAt = temporalToMs(updated.end);
+      if (newStartsAt === sourceEvent.startsAt && newEndsAt === sourceEvent.endsAt) {
+        return; // no-op (drag aborted or returned to original cell)
+      }
+
+      const inviteeCount = sourceEvent.nonOrganizerInviteeCount;
+      // No external eyes on the event → just write through. The
+      // organizer's own calendar updates reactively from convex.
+      if (inviteeCount === 0) {
+        void updateEventMutation({
+          eventId,
+          startsAt: newStartsAt,
+          endsAt: newEndsAt,
+          notifyInvitees: false,
+        }).catch((err: unknown) => {
+          toast.error("Could not reschedule", {
+            description: err instanceof Error ? err.message : undefined,
+          });
+        });
+        return;
+      }
+
+      // Has guests → ask. The dialog owns the choice; we stage the
+      // reschedule details + a snapshot of the original event so a
+      // "Revert" action can roll the visual back without a refetch.
+      setPendingReschedule({
+        eventId,
+        original: {
+          id,
+          start: msToZonedDateTime(sourceEvent.startsAt),
+          end: msToZonedDateTime(sourceEvent.endsAt),
+          title: sourceEvent.title,
+          calendarId: CAL_EVENT,
+        },
+        oldStartsAt: sourceEvent.startsAt,
+        oldEndsAt: sourceEvent.endsAt,
+        newStartsAt,
+        newEndsAt,
+        title: sourceEvent.title,
+        inviteeCount,
+      });
+    };
+  });
+
   // Stable calendar instance — schedule-x docs warn that recreating the app
   // on every render flushes its state.
   const [calendarApp] = useState(() =>
@@ -454,23 +582,42 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       calendars: CALENDARS_CONFIG,
       isDark,
       theme: "shadcn",
-      plugins: [calendarControls, currentTimePlugin, scrollController],
+      plugins: [
+        calendarControls,
+        currentTimePlugin,
+        scrollController,
+        dragAndDropPlugin,
+        resizePlugin,
+      ],
       callbacks: {
-        onEventClick: (ev) => {
-          const id = String(ev.id);
-          if (id.startsWith("task-")) {
-            const taskId = id.slice(5) as Id<"tasks">;
-            const match = tasks?.find((t) => t._id === taskId);
-            setSelectedTaskId(taskId);
-            setSelectedTaskProjectId(match?.projectId ?? null);
-          } else if (id.startsWith("event-")) {
-            // Same on desktop and mobile — set selectedEventId. The
-            // mobile Navigate guard above the calendar render reroutes
-            // mobile users to the dedicated /events/:id page; desktop
-            // users see the side sheet. Routing-by-render keeps the
-            // schedule-x callback closure-free of isMobile / navigate.
-            setSelectedEventId(id.slice(6) as Id<"calendarEvents">);
-          }
+        // NB: schedule-x's `onEventClick` is dispatched via the React
+        // synthetic-event system on the rendered event div. With the
+        // drag plugin loaded, schedule-x renders a *copy* event element
+        // overlaid on the original during the 150ms drag-start window.
+        // That copy can intercept the synthetic click after mouseup,
+        // and the v3 OSS plugin's mouseup-handler async path also
+        // mutates `eventCopy` state mid-flight — both paths can leave
+        // the click event undelivered. We therefore handle event
+        // clicks via a capture-phase listener on the calendar wrapper
+        // (see the effect below this useState) and skip schedule-x's
+        // own callback. Keeping `onEventClick` undefined makes the
+        // hand-off explicit.
+        // Block drag/resize on tasks — they aren't owned by the
+        // dashboard calendar (the project calendar is the canonical
+        // surface for rescheduling tasks via plannedStartDate).
+        // Returning `false` aborts the move and snaps the event back
+        // before any persistence happens.
+        onBeforeEventUpdate(oldEvent) {
+          if (!oldEvent || typeof oldEvent.id !== "string") return false;
+          return oldEvent.id.startsWith("event-");
+        },
+        // Drag/resize commit. Dispatched through the ref trampoline so
+        // the callback always reads the freshest events array, mutation
+        // ref, and dialog state setter — the schedule-x calendar
+        // instance is built once and would otherwise capture stale
+        // closures.
+        onEventUpdate(updated) {
+          onEventUpdateRef.current(updated);
         },
         onRangeUpdate() {
           setRangeVersion((v) => v + 1);
@@ -515,6 +662,187 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       }
     }
   }, [calendarApp, calendarEvents]);
+
+  // Document-level capture-phase click listener — resolves event
+  // clicks ourselves so the drag plugin's mid-mouseup state mutation
+  // can't drop them. Schedule-x v4's `onEventClick` is dispatched via
+  // a preact synthetic onClick on a div that the v3 drag plugin's
+  // updateCopy(undefined) call removes from the DOM during the
+  // mouseup async path; that race leaves clicks undelivered.
+  //
+  // Using the wrapper ref was unreliable because schedule-x renders
+  // the calendar via `calendarApp.render(element)` (preact taking
+  // over a child node), and React's reconciliation around the
+  // ScheduleXCalendar component can briefly null the ref. Listening
+  // on `document` at capture-phase removes that timing dependency
+  // entirely — every click in the page passes through here, and we
+  // filter to the calendar's event elements via `data-event-id`.
+  //
+  // The ref-based "did the user actually drag?" check stays: we read
+  // mousedown coordinates and compare to mouseup. If the cursor moved
+  // > 4px the click is treated as a drag artifact (the drag plugin's
+  // `onEventUpdate` handles persistence) and we no-op.
+  //
+  // Resolution timing — IMPORTANT: we resolve the event id at
+  // `mousedown` and dispatch directly from `mouseup`, ignoring `click`
+  // entirely. The two earlier strategies (resolve-at-click,
+  // resolve-at-mouseup) both failed for full-width (solo) time-grid
+  // events.
+  //
+  // Why mousedown is the only safe resolution point:
+  // - At 150 ms of hold the calendar mounts a "copy" event div (sibling
+  //   of the original) for the drag preview. The copy carries the same
+  //   `data-event-id` and lands on top of the original for solo events.
+  // - On mouseup the v3 plugin's document mouseup handler calls
+  //   `updateCopy(undefined)` which detaches the copy via Preact
+  //   re-render before the browser dispatches the synthetic `click`.
+  // - When mouseup target ≠ mousedown target AND one of them is
+  //   detached at click-dispatch time, browsers may skip `click`
+  //   entirely (or fire it on a common ancestor that lacks
+  //   `data-event-id`). Either way `click` cannot be relied on.
+  // - Even at mouseup the target can already be a detached copy:
+  //   `closest('[data-event-id]')` still returns the copy (the
+  //   attribute is preserved) but `closest('.sx-react-calendar-wrapper')`
+  //   walks up from a detached node and returns null.
+  // - At mousedown the copy doesn't exist yet — the 150 ms drag-start
+  //   timer hasn't fired. The target is unambiguously the original
+  //   event div, attached, with a clean ancestor chain. We capture the
+  //   event id here.
+  //
+  // Drag-vs-click filter stays: if mouseup moved > 4 px from mousedown
+  // we treat it as a drag and don't dispatch (the drag plugin's
+  // `onEventUpdate` handles persistence).
+  //
+  // We don't listen on `click` anymore — schedule-x's own onClick on
+  // the event div calls `e.stopPropagation()` and we have
+  // `onEventClick` undefined, so click is a no-op for our purposes.
+  const tasksRef = React.useRef(tasks);
+  React.useEffect(() => {
+    tasksRef.current = tasks;
+  });
+  useEffect(() => {
+    let downX = 0;
+    let downY = 0;
+    let downEventId: string | null = null;
+    function handleMouseDown(e: MouseEvent) {
+      downX = e.clientX;
+      downY = e.clientY;
+      downEventId = null;
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      // Skip resize handles. The handle covers the bottom 20 px of
+      // every event; small resize gestures may snap to the same time
+      // slot and end with movement < 4 px, which would otherwise
+      // trip the click-vs-drag check below and open the sheet on top
+      // of a successful resize.
+      if (
+        target.closest(
+          ".sx__time-grid-event-resize-handle, .sx__date-grid-event-resize-handle",
+        )
+      ) {
+        return;
+      }
+      const eventEl = target.closest<HTMLElement>("[data-event-id]");
+      if (!eventEl) return;
+      // Only react to events inside the dashboard's own calendar
+      // wrapper — the project calendar (and any other schedule-x
+      // instance mounted simultaneously) also uses `data-event-id`,
+      // and we don't want to hijack their clicks.
+      if (!eventEl.closest(".sx-react-calendar-wrapper")) return;
+      downEventId = eventEl.getAttribute("data-event-id");
+    }
+    function handleMouseUp(e: MouseEvent) {
+      const id = downEventId;
+      downEventId = null;
+      if (!id) return;
+      const dx = Math.abs(e.clientX - downX);
+      const dy = Math.abs(e.clientY - downY);
+      // 4 px sits below typical click jitter; anything more is a drag.
+      if (dx > 4 || dy > 4) return;
+      if (id.startsWith("task-")) {
+        const taskId = id.slice(5) as Id<"tasks">;
+        const match = tasksRef.current?.find((t) => t._id === taskId);
+        setSelectedTaskId(taskId);
+        setSelectedTaskProjectId(match?.projectId ?? null);
+      } else if (id.startsWith("event-")) {
+        setSelectedEventId(id.slice(6) as Id<"calendarEvents">);
+      }
+    }
+    // Prevent native HTML5 text-drag from hijacking schedule-x's
+    // time-grid drag. The time-grid event div has no `draggable`
+    // attribute (unlike date-grid / month-grid events, which DO use
+    // HTML5 native drag intentionally), so any dragstart originating
+    // inside `.sx__time-grid-event` is the browser starting a
+    // text-drag on selected text. Browsers suppress `mousemove`
+    // during native drag, which means the v3 drag plugin's mousemove
+    // listener never fires and the event copy stops following the
+    // cursor — the visible symptom is "text follows cursor but the
+    // event block stays still". Cancelling dragstart here lets the
+    // mouse-event drag flow through unimpaired. We must NOT cancel
+    // dragstart for date-grid / month-grid events: those rely on
+    // HTML5 dragend for their drag commit (see
+    // DateGridDragHandlerImpl / MonthGridDragHandlerImpl in
+    // @schedule-x/drag-and-drop).
+    function handleDragStart(e: DragEvent) {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest(".sx-react-calendar-wrapper")) return;
+      if (target.closest(".sx__time-grid-event")) {
+        e.preventDefault();
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown, true);
+    document.addEventListener("mouseup", handleMouseUp, true);
+    document.addEventListener("dragstart", handleDragStart, true);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown, true);
+      document.removeEventListener("mouseup", handleMouseUp, true);
+      document.removeEventListener("dragstart", handleDragStart, true);
+    };
+  }, []);
+
+  // Resolve the user's choice from the notify-invitees dialog.
+  //   • send   → persist + notify (in-app + email guests)
+  //   • silent → persist only (no notifications)
+  //   • revert → roll back the schedule-x visual state to the snapshot
+  //              we captured before opening the dialog. Convex's
+  //              reactivity would eventually pull the original times
+  //              back, but we're more responsive doing it locally — the
+  //              user's eye is already on the event.
+  const handleRescheduleChoice = (choice: RescheduleChoice) => {
+    const attempt = pendingReschedule;
+    if (!attempt) return;
+    setPendingReschedule(null);
+
+    if (choice === "revert") {
+      try {
+        calendarApp.events.update(attempt.original);
+      } catch {
+        // If schedule-x rejects the manual update (event removed in the
+        // meantime, etc.), the diff effect will re-sync on the next
+        // events query update — at worst a brief visual lag.
+      }
+      return;
+    }
+
+    void updateEventMutation({
+      eventId: attempt.eventId,
+      startsAt: attempt.newStartsAt,
+      endsAt: attempt.newEndsAt,
+      notifyInvitees: choice === "send",
+    }).catch((err: unknown) => {
+      // Persistence failed — revert the visual so the calendar stays
+      // truthful with the server, then surface the error.
+      try {
+        calendarApp.events.update(attempt.original);
+      } catch {
+        /* noop */
+      }
+      toast.error("Could not reschedule", {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    });
+  };
 
   // Mobile event-detail routing: when an event is selected on mobile —
   // either via deep-link seed (queryEventId) or a runtime click on the
@@ -596,6 +924,30 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           onOpenChange={setOpenCreate}
         />
       )}
+      {/* Notify-invitees prompt for drag-to-reschedule + resize. Only
+          mounted while a reschedule is in flight — no `*Mounted` ratchet
+          needed because the dialog is small and resolves quickly (close
+          animation plays via the dialog's own `onOpenChange`-driven
+          revert path). */}
+      {pendingReschedule && (
+        <NotifyInviteesDialog
+          open={true}
+          onOpenChange={(o) => {
+            if (!o) handleRescheduleChoice("revert");
+          }}
+          eventTitle={pendingReschedule.title}
+          oldRangeLabel={formatRescheduleRange(
+            pendingReschedule.oldStartsAt,
+            pendingReschedule.oldEndsAt,
+          )}
+          newRangeLabel={formatRescheduleRange(
+            pendingReschedule.newStartsAt,
+            pendingReschedule.newEndsAt,
+          )}
+          inviteeCount={pendingReschedule.inviteeCount}
+          onChoose={handleRescheduleChoice}
+        />
+      )}
       {/* TaskDetailSheet stays lazy (BlockNote + Yjs are heavy); the chunk
           is prefetched on mount above so the open animation is smooth. */}
       <Suspense fallback={null}>
@@ -631,6 +983,39 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
 function msToZonedDateTime(ms: number): Temporal.ZonedDateTime {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   return Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(tz);
+}
+
+/** Compact "Mon, May 4 · 10:00 AM – 11:00 AM" range used by the
+ *  notify-invitees dialog's before/after summary. Locale-driven so the
+ *  organizer sees their own clock format (12h vs 24h). */
+function formatRescheduleRange(startsAt: number, endsAt: number): string {
+  const dateFmt = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const timeFmt = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
+}
+
+/** Inverse of `msToZonedDateTime` — schedule-x hands its drag/resize
+ *  callbacks Temporal `ZonedDateTime` (timed events) or `PlainDate`
+ *  (all-day) instances. The events lane in the dashboard is always
+ *  timed, but accept both shapes defensively so type narrowing
+ *  doesn't trip on a stray PlainDate. */
+function temporalToMs(t: unknown): number {
+  if (t instanceof Temporal.ZonedDateTime) return t.epochMilliseconds;
+  if (t instanceof Temporal.PlainDate) {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    return t.toZonedDateTime({ timeZone: tz }).epochMilliseconds;
+  }
+  // Last-resort: schedule-x sometimes hands strings on legacy paths.
+  return new Date(String(t)).getTime();
 }
 
 function EmptyOverlay({ onCreate }: { onCreate: () => void }) {

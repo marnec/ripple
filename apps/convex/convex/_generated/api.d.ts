@@ -181,6 +181,7 @@ export declare const api: {
         createdBy: Id<"users">;
         description?: string;
         endsAt: number;
+        nonOrganizerInviteeCount: number;
         startsAt: number;
         timezone: string;
         title: string;
@@ -226,6 +227,7 @@ export declare const api: {
         description?: string;
         endsAt?: number;
         eventId: Id<"calendarEvents">;
+        notifyInvitees?: boolean;
         startsAt?: number;
         timezone?: string;
         title?: string;
@@ -2919,6 +2921,17 @@ export declare const internal: {
         shareId: string;
         startsAt: number;
         timezone: string;
+      },
+      null
+    >;
+    sendEventReschedule: FunctionReference<
+      "action",
+      "internal",
+      {
+        eventTitle: string;
+        inviterName: string;
+        newRangeLabel: string;
+        recipientEmail: string;
       },
       null
     >;
