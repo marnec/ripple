@@ -198,17 +198,12 @@ function CalendarHeader() {
         </Button>
       </div>
 
-      {/* Right cluster: counter + New event + view switcher.
-          Counter and New event are desktop-only — on mobile they'd
+      {/* Right cluster: New event + view switcher.
+          New event are desktop-only on mobile it'd
           crowd the calendar's own header out, so the parent renders
-          a HeaderSlot fallback for "New event" and drops the counter
+          a HeaderSlot fallback for "New event"
           (it's also implied by the visible event list). */}
       <div className="flex items-center gap-2">
-        {eventCount !== null && (
-          <span className="hidden md:inline text-xs text-muted-foreground tabular-nums">
-            {eventCount} scheduled call{eventCount === 1 ? "" : "s"}
-          </span>
-        )}
         <Button
           size="sm"
           className="hidden md:inline-flex h-7"

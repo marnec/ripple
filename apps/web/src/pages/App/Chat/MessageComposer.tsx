@@ -62,7 +62,7 @@ const dictionary = {
 
 export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   handleSubmit,
-  channelId: _channelId,
+  channelId,
   workspaceId,
   showCallButton = true,
 }: MessageComposerProps) => {
@@ -301,6 +301,24 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   useEditorChange(() => {
     setIsEmpty(isEditorEmpty(editor));
   }, editor);
+
+  // Autofocus on mount + channel navigation. Tiptap may not be initialized
+  // by the time this effect first runs, so retry on rAF until it is.
+  useEffect(() => {
+    if (!editor) return;
+    let cancelled = false;
+    const tryFocus = () => {
+      if (cancelled) return;
+      if (editor._tiptapEditor?.isInitialized) {
+        editor.focus();
+      } else {
+        requestAnimationFrame(tryFocus);
+      }
+    };
+    tryFocus();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId]);
 
   return (
     <div className="flex shrink-0 sm:flex-col flex-col-reverse p-2 pb-[calc(0.5rem+var(--safe-area-bottom))] max-w-full border-t gap-2">
