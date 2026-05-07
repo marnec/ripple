@@ -22,6 +22,7 @@ import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { Plus, CalendarDays, CalendarCheck, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/errors";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -527,7 +528,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           notifyInvitees: false,
         }).catch((err: unknown) => {
           toast.error("Could not reschedule", {
-            description: err instanceof Error ? err.message : undefined,
+            description: getErrorMessage(err),
           });
         });
         return;
@@ -834,7 +835,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         /* noop */
       }
       toast.error("Could not reschedule", {
-        description: err instanceof Error ? err.message : undefined,
+        description: getErrorMessage(err),
       });
     });
   };

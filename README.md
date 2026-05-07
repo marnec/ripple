@@ -1,6 +1,9 @@
 NEXT STEPS:
 - calendar; plan calls; invite guests
     - investigate if it is possible to have btn to accept / decline directly on email
+    - swap position new event and month/week selector
+    - fix back forth btns in calendar moving always of a month also in week mode
+    - maybe we should send email to every invitee not only to guests or at least notifications to members
 
 - leave channel logic (only for private?)
 - consider favorite for channels too

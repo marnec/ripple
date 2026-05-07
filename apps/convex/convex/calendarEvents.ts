@@ -66,6 +66,7 @@ const eventValidator = v.object({
   cloudflareMeetingId: v.optional(v.string()),
   createdBy: v.id("users"),
   cancelledAt: v.optional(v.number()),
+  sequence: v.optional(v.number()),
 });
 
 const inviteeValidator = v.object({
@@ -241,6 +242,7 @@ const eventInRangeValidator = v.object({
   cloudflareMeetingId: v.optional(v.string()),
   createdBy: v.id("users"),
   cancelledAt: v.optional(v.number()),
+  sequence: v.optional(v.number()),
   /** Non-organizer invitee count — drives the reschedule prompt's
    *  "X invitees" copy and gates whether the prompt fires at all. */
   nonOrganizerInviteeCount: v.number(),
@@ -539,13 +541,16 @@ export const create = mutation({
         shareId,
       });
       await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
+        eventId,
         shareId,
         recipientEmail: email,
         inviterName,
         eventTitle: title,
+        eventDescription: description,
         startsAt: args.startsAt,
         endsAt: args.endsAt,
         timezone: args.timezone,
+        sequence: 0,
       });
     }
 
@@ -672,13 +677,23 @@ export const update = mutation({
           .withIndex("by_event", (q) => q.eq("eventId", event._id))
           .collect();
         const newRangeLabel = formatRangeLabel(newStart, newEnd, event.timezone);
+        // Bump SEQUENCE so the ICS attachment in the reschedule mail
+        // tells recipients' calendars to update the existing entry
+        // (not create a duplicate). Persist before scheduling so all
+        // emails for this revision share the same sequence number.
+        const nextSequence = (event.sequence ?? 0) + 1;
+        await ctx.db.patch(event._id, { sequence: nextSequence });
         for (const row of guestInvitees) {
           if (!row.guestEmail) continue;
           await ctx.scheduler.runAfter(0, internal.emails.sendEventReschedule, {
+            eventId: event._id,
             eventTitle: patch.title ?? event.title,
             recipientEmail: row.guestEmail,
             inviterName,
             newRangeLabel,
+            startsAt: newStart,
+            endsAt: newEnd,
+            sequence: nextSequence,
           });
         }
       }
@@ -734,7 +749,12 @@ export const cancel = mutation({
     if (event.cancelledAt !== undefined) return null;
 
     const now = Date.now();
-    await ctx.db.patch(event._id, { cancelledAt: now });
+    // Bump SEQUENCE alongside cancellation so the ICS METHOD:CANCEL
+    // attachment supersedes the prior REQUEST in recipients' calendars
+    // (Outlook in particular drops cancellations whose sequence is not
+    // strictly greater than the imported invite).
+    const nextSequence = (event.sequence ?? 0) + 1;
+    await ctx.db.patch(event._id, { cancelledAt: now, sequence: nextSequence });
 
     // Revoke all guest share rows tied to this event.
     const guestInvitees = await ctx.db
@@ -775,9 +795,13 @@ export const cancel = mutation({
     for (const row of guestInvitees) {
       if (!row.shareId || !row.guestEmail) continue;
       await ctx.scheduler.runAfter(0, internal.emails.sendEventCancellation, {
+        eventId: event._id,
         eventTitle: event.title,
         recipientEmail: row.guestEmail,
         inviterName,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        sequence: nextSequence,
       });
     }
 
@@ -1037,13 +1061,18 @@ export const addInvitees = mutation({
         shareId,
       });
       await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
+        eventId: event._id,
         shareId,
         recipientEmail: email,
         inviterName,
         eventTitle: event.title,
+        eventDescription: event.description,
         startsAt: event.startsAt,
         endsAt: event.endsAt,
         timezone: event.timezone,
+        // New attendees join the event at its current revision; no need
+        // to bump SEQUENCE since existing recipients aren't affected.
+        sequence: event.sequence ?? 0,
       });
     }
 

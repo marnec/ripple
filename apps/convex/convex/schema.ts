@@ -393,6 +393,10 @@ export default defineSchema({
     cloudflareMeetingId: v.optional(v.string()), // lazy on first join (standalone events)
     createdBy: v.id("users"),
     cancelledAt: v.optional(v.number()),
+    // iCalendar SEQUENCE — bumped each time we email guests about a
+    // change (reschedule, cancel). Mail clients use this to dedupe and
+    // to apply ICS updates in order. Treat undefined as 0 for legacy rows.
+    sequence: v.optional(v.number()),
   })
     .index("by_workspace_starts", ["workspaceId", "startsAt"])
     .index("by_creator", ["createdBy"])

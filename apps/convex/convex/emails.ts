@@ -78,6 +78,130 @@ export const sendWorkspaceInvite = internalAction({
 // /share/:shareId guest entry. All event metadata is passed inline by the
 // scheduling mutation so this action does no queries.
 
+// ─── ICS (iCalendar) builder ─────────────────────────────────────────────
+// Minimal RFC 5545 generator used to attach a `text/calendar` part to
+// invite / reschedule / cancel emails. Mail clients (Gmail, Outlook,
+// Apple Mail, Fastmail…) detect the attachment and render their own
+// native Yes / Maybe / No RSVP UI plus add the event to the recipient's
+// calendar — without requiring the recipient to click through to the
+// Ripple web app. Replies (METHOD:REPLY) are not yet ingested; the body
+// link to /share/${shareId} stays as the canonical RSVP path.
+
+const ICS_LINE_LIMIT = 73; // RFC 5545: lines must fold past 75 octets; 73 leaves headroom.
+
+/** Escape a TEXT property value per RFC 5545 §3.3.11. */
+function icsEscapeText(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+/** Fold a single content line so no physical line exceeds 75 octets. */
+function icsFoldLine(line: string): string {
+  if (line.length <= ICS_LINE_LIMIT) return line;
+  const parts: string[] = [line.slice(0, ICS_LINE_LIMIT)];
+  let i = ICS_LINE_LIMIT;
+  while (i < line.length) {
+    parts.push(line.slice(i, i + ICS_LINE_LIMIT - 1));
+    i += ICS_LINE_LIMIT - 1;
+  }
+  return parts.join("\r\n ");
+}
+
+/** Format ms-since-epoch as the basic UTC form: YYYYMMDDTHHMMSSZ. */
+function icsUtcStamp(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return (
+    `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
+    `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
+  );
+}
+
+type IcsMethod = "REQUEST" | "CANCEL";
+
+interface BuildIcsOpts {
+  uid: string;                    // stable across the event's lifetime
+  method: IcsMethod;
+  sequence: number;
+  startsAt: number;
+  endsAt: number;
+  title: string;
+  description?: string;
+  organizerEmail: string;
+  organizerName: string;
+  attendeeEmail: string;
+  attendeeName?: string;
+  url?: string;                   // back-link to the Ripple share page
+}
+
+function buildEventIcs(opts: BuildIcsOpts): string {
+  const status = opts.method === "CANCEL" ? "CANCELLED" : "CONFIRMED";
+  const partstat = opts.method === "CANCEL" ? "DECLINED" : "NEEDS-ACTION";
+
+  const organizer =
+    `ORGANIZER;CN=${icsEscapeText(opts.organizerName)}:mailto:${opts.organizerEmail}`;
+  const attendee =
+    `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=${partstat};RSVP=TRUE` +
+    (opts.attendeeName ? `;CN=${icsEscapeText(opts.attendeeName)}` : "") +
+    `:mailto:${opts.attendeeEmail}`;
+
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    `PRODID:-//${APP_NAME}//Calendar//EN`,
+    "CALSCALE:GREGORIAN",
+    `METHOD:${opts.method}`,
+    "BEGIN:VEVENT",
+    `UID:${opts.uid}`,
+    `DTSTAMP:${icsUtcStamp(Date.now())}`,
+    `DTSTART:${icsUtcStamp(opts.startsAt)}`,
+    `DTEND:${icsUtcStamp(opts.endsAt)}`,
+    `SUMMARY:${icsEscapeText(opts.title)}`,
+    ...(opts.description
+      ? [`DESCRIPTION:${icsEscapeText(opts.description)}`]
+      : []),
+    ...(opts.url ? [`URL:${opts.url}`] : []),
+    organizer,
+    attendee,
+    `SEQUENCE:${opts.sequence}`,
+    `STATUS:${status}`,
+    "TRANSP:OPAQUE",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+
+  // RFC 5545 mandates CRLF line endings; many clients are lenient but
+  // Outlook is famously not.
+  return lines.map(icsFoldLine).join("\r\n") + "\r\n";
+}
+
+interface IcsAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
+function icsAttachment(ics: string, method: IcsMethod): IcsAttachment {
+  return {
+    filename: "invite.ics",
+    content: Buffer.from(ics, "utf-8"),
+    contentType: `text/calendar; method=${method}; charset=utf-8; name=invite.ics`,
+  };
+}
+
+function eventUid(eventId: string): string {
+  return `${eventId}@${EMAIL_DOMAIN}`;
+}
+
+function organizerAddress(): string {
+  return `noreply@${EMAIL_DOMAIN}`;
+}
+
+// ─── Email helpers ───────────────────────────────────────────────────────
+
 function formatEventDateTime(
   startsAt: number,
   endsAt: number,
@@ -105,21 +229,49 @@ function formatEventDateTime(
 
 export const sendEventInvite = internalAction({
   args: {
+    eventId: v.string(),       // calendarEvents._id, used for the ICS UID
     shareId: v.string(),
     recipientEmail: v.string(),
     inviterName: v.string(),
     eventTitle: v.string(),
+    eventDescription: v.optional(v.string()),
     startsAt: v.number(),
     endsAt: v.number(),
     timezone: v.string(),
+    sequence: v.number(),
   },
   returns: v.null(),
   handler: async (
     _,
-    { shareId, recipientEmail, inviterName, eventTitle, startsAt, endsAt, timezone },
+    {
+      eventId,
+      shareId,
+      recipientEmail,
+      inviterName,
+      eventTitle,
+      eventDescription,
+      startsAt,
+      endsAt,
+      timezone,
+      sequence,
+    },
   ) => {
     const url = `${process.env.SITE_URL}/share/${shareId}`;
     const when = formatEventDateTime(startsAt, endsAt, timezone);
+
+    const ics = buildEventIcs({
+      uid: eventUid(eventId),
+      method: "REQUEST",
+      sequence,
+      startsAt,
+      endsAt,
+      title: eventTitle,
+      description: eventDescription,
+      organizerEmail: organizerAddress(),
+      organizerName: inviterName,
+      attendeeEmail: recipientEmail,
+      url,
+    });
 
     const emailContent = `<!DOCTYPE html>
 <html>
@@ -162,6 +314,7 @@ export const sendEventInvite = internalAction({
       to: recipientEmail,
       subject: `Invitation: ${eventTitle}`,
       html: emailContent,
+      attachments: [icsAttachment(ics, "REQUEST")],
     });
 
     if (sent.error) {
@@ -180,6 +333,7 @@ export const sendEventInvite = internalAction({
  */
 export const sendEventReschedule = internalAction({
   args: {
+    eventId: v.string(),       // for the ICS UID (must match the original invite)
     eventTitle: v.string(),
     recipientEmail: v.string(),
     inviterName: v.string(),
@@ -188,9 +342,38 @@ export const sendEventReschedule = internalAction({
      *  necessarily known here; we format using the organizer's locale,
      *  which matches the existing invite/cancellation emails. */
     newRangeLabel: v.string(),
+    // New ICS times — METHOD:REQUEST with a bumped SEQUENCE makes the
+    // recipient's mail client update the previously-added calendar entry
+    // in place (rather than creating a duplicate).
+    startsAt: v.number(),
+    endsAt: v.number(),
+    sequence: v.number(),
   },
   returns: v.null(),
-  handler: async (_, { eventTitle, recipientEmail, inviterName, newRangeLabel }) => {
+  handler: async (
+    _,
+    {
+      eventId,
+      eventTitle,
+      recipientEmail,
+      inviterName,
+      newRangeLabel,
+      startsAt,
+      endsAt,
+      sequence,
+    },
+  ) => {
+    const ics = buildEventIcs({
+      uid: eventUid(eventId),
+      method: "REQUEST",
+      sequence,
+      startsAt,
+      endsAt,
+      title: eventTitle,
+      organizerEmail: organizerAddress(),
+      organizerName: inviterName,
+      attendeeEmail: recipientEmail,
+    });
     const emailContent = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -226,6 +409,7 @@ export const sendEventReschedule = internalAction({
       to: recipientEmail,
       subject: `Rescheduled: ${eventTitle}`,
       html: emailContent,
+      attachments: [icsAttachment(ics, "REQUEST")],
     });
 
     if (sent.error) {
@@ -237,12 +421,42 @@ export const sendEventReschedule = internalAction({
 
 export const sendEventCancellation = internalAction({
   args: {
+    eventId: v.string(),       // for the ICS UID (must match the original invite)
     eventTitle: v.string(),
     recipientEmail: v.string(),
     inviterName: v.string(),
+    // The original event window is required so the CANCEL VEVENT
+    // matches the request the recipient's calendar previously imported;
+    // some clients (Outlook in particular) ignore CANCEL messages whose
+    // DTSTART differs from the stored copy.
+    startsAt: v.number(),
+    endsAt: v.number(),
+    sequence: v.number(),
   },
   returns: v.null(),
-  handler: async (_, { eventTitle, recipientEmail, inviterName }) => {
+  handler: async (
+    _,
+    {
+      eventId,
+      eventTitle,
+      recipientEmail,
+      inviterName,
+      startsAt,
+      endsAt,
+      sequence,
+    },
+  ) => {
+    const ics = buildEventIcs({
+      uid: eventUid(eventId),
+      method: "CANCEL",
+      sequence,
+      startsAt,
+      endsAt,
+      title: eventTitle,
+      organizerEmail: organizerAddress(),
+      organizerName: inviterName,
+      attendeeEmail: recipientEmail,
+    });
     const emailContent = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -275,6 +489,7 @@ export const sendEventCancellation = internalAction({
       to: recipientEmail,
       subject: `Cancelled: ${eventTitle}`,
       html: emailContent,
+      attachments: [icsAttachment(ics, "CANCEL")],
     });
 
     if (sent.error) {

@@ -235,6 +235,7 @@ export type DataModel = {
       createdBy: Id<"users">;
       description?: string;
       endsAt: number;
+      sequence?: number;
       startsAt: number;
       timezone: string;
       title: string;
@@ -251,6 +252,7 @@ export type DataModel = {
       | "createdBy"
       | "description"
       | "endsAt"
+      | "sequence"
       | "startsAt"
       | "timezone"
       | "title"

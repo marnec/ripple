@@ -28,7 +28,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ErrorBoundary>
       <ThemeProvider attribute="class">
         <PwaUpdateProvider>
-          <Toaster />
+          {/* `richColors` upgrades sonner's default neutral toasts to
+              level-coloured ones (red error / green success / amber
+              warning) so `toast.error(...)` reads as a danger toast
+              without having to style each call site. */}
+          <Toaster richColors closeButton />
           <ConvexAuthProvider client={convex}>
             <ConvexQueryCacheProvider>
               <LazyMotion features={domMax} strict>

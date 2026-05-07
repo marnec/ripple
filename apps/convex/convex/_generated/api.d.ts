@@ -102,6 +102,7 @@ export declare const api: {
           createdBy: Id<"users">;
           description?: string;
           endsAt: number;
+          sequence?: number;
           startsAt: number;
           timezone: string;
           title: string;
@@ -182,6 +183,7 @@ export declare const api: {
         description?: string;
         endsAt: number;
         nonOrganizerInviteeCount: number;
+        sequence?: number;
         startsAt: number;
         timezone: string;
         title: string;
@@ -2907,7 +2909,15 @@ export declare const internal: {
     sendEventCancellation: FunctionReference<
       "action",
       "internal",
-      { eventTitle: string; inviterName: string; recipientEmail: string },
+      {
+        endsAt: number;
+        eventId: string;
+        eventTitle: string;
+        inviterName: string;
+        recipientEmail: string;
+        sequence: number;
+        startsAt: number;
+      },
       null
     >;
     sendEventInvite: FunctionReference<
@@ -2915,9 +2925,12 @@ export declare const internal: {
       "internal",
       {
         endsAt: number;
+        eventDescription?: string;
+        eventId: string;
         eventTitle: string;
         inviterName: string;
         recipientEmail: string;
+        sequence: number;
         shareId: string;
         startsAt: number;
         timezone: string;
@@ -2928,10 +2941,14 @@ export declare const internal: {
       "action",
       "internal",
       {
+        endsAt: number;
+        eventId: string;
         eventTitle: string;
         inviterName: string;
         newRangeLabel: string;
         recipientEmail: string;
+        sequence: number;
+        startsAt: number;
       },
       null
     >;
