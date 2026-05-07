@@ -228,30 +228,24 @@ export function MyTasks() {
 
   return (
     <div className="container mx-auto p-4 animate-fade-in">
-      {/* Page Header — hidden on mobile to save space */}
-      <div className="mb-5 hidden md:block">
-        <div className="flex items-center gap-2.5 mb-1">
-          <h1 className="text-2xl font-semibold">My Tasks</h1>
-          <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 tabular-nums">
+      {/* Toolbar */}
+      <div className="mb-4 flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <TaskToolbar
+            workspaceId={workspaceId as Id<"workspaces">}
+            filters={filters}
+            onFiltersChange={setFiltersAnimated}
+            sort={sort}
+            onSortChange={setSortAnimated}
+            members={[]}
+            hideAssigneeFilter
+          />
+        </div>
+        {!isMobile && (
+          <span className="text-xs font-medium text-muted-foreground bg-muted rounded-full px-2 py-0.5 tabular-nums shrink-0 h-7 inline-flex items-center">
             {totalTaskCount}
           </span>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Tasks assigned to you across all projects
-        </p>
-      </div>
-
-      {/* Toolbar */}
-      <div className="mb-4">
-        <TaskToolbar
-          workspaceId={workspaceId as Id<"workspaces">}
-          filters={filters}
-          onFiltersChange={setFiltersAnimated}
-          sort={sort}
-          onSortChange={setSortAnimated}
-          members={[]}
-          hideAssigneeFilter
-        />
+        )}
       </div>
 
       {/* Grouped Task List */}
