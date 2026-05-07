@@ -1,9 +1,12 @@
 NEXT STEPS:
 - calendar; plan calls; invite guests
     - investigate if it is possible to have btn to accept / decline directly on email
-    - swap position new event and month/week selector
-    - fix back forth btns in calendar moving always of a month also in week mode
     - maybe we should send email to every invitee not only to guests or at least notifications to members
+    
+    - don't ask and don't send notification email if rescheduling is not relevant (editing a past event to still in the past I think it's the only case)
+    - Click on empty space to create event like google calendar
+    
+    - See workspace member events
 
 - leave channel logic (only for private?)
 - consider favorite for channels too

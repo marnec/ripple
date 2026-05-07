@@ -46,6 +46,7 @@ const LazyTaskDetailSheet = React.lazy(taskDetailSheetImporter);
 // keep the open animation snappy without bloating the chunk meaningfully.
 import { EventDetailSheet } from "../Calendar/EventDetailSheet";
 import { CreateEventDialog } from "../Calendar/CreateEventDialog";
+import { InlineEventCreator } from "../Calendar/InlineEventCreator";
 import {
   NotifyInviteesDialog,
   type RescheduleChoice,
@@ -106,7 +107,7 @@ function CalendarHeader() {
     rangeVersion: _rangeVersion, // read to subscribe to nav changes
     view,
     setView,
-    eventCount,
+    eventCount: _eventCount, // wired through context for future header chips
     onCreateEvent,
   } = ctx;
 
@@ -117,6 +118,29 @@ function CalendarHeader() {
     // calendar not initialised yet — fall through with safe defaults
   }
 
+  // Read schedule-x's actual rendered view rather than only the React
+  // `view` state. Two reasons:
+  //  1. Small-screen auto-swap: schedule-x silently swaps "week" ⇄
+  //     "week-agenda" and "month-grid" ⇄ "month-agenda" when the
+  //     viewport crosses 700 px. Our React `view` only tracks the two
+  //     wide-screen variants, so it can disagree with what's actually
+  //     on screen.
+  //  2. Initial render race: `defaultView: "week"` plus React `view`
+  //     defaulting to "week" should agree, but if they ever drift, the
+  //     stepper would advance by the wrong unit (the symptom users hit:
+  //     "back/forward jumps a month while the week view is showing").
+  // Falling back to React `view` keeps the buttons working before the
+  // calendar finishes mounting, when `getView()` throws.
+  const isMonthView = (() => {
+    let v: string = view;
+    try {
+      v = calendarControls.getView() || view;
+    } catch {
+      /* calendar not yet initialised */
+    }
+    return v.startsWith("month");
+  })();
+
   // Two label variants — long (desktop) shows the full week range with day
   // numbers; compact (mobile) drops the day numbers because "May 4 – 10,
   // 2026" eats the whole header row alongside nav buttons + view switcher.
@@ -126,7 +150,7 @@ function CalendarHeader() {
   // start-month-only one.
   const labels = (() => {
     if (!date) return { full: "", compact: "" };
-    if (view === "month-grid") {
+    if (isMonthView) {
       const full = date.toLocaleString("en-US", { month: "long", year: "numeric" });
       return { full, compact: full };
     }
@@ -158,13 +182,13 @@ function CalendarHeader() {
   const stepBack = () => {
     if (!date) return;
     calendarControls.setDate(
-      view === "month-grid" ? date.subtract({ months: 1 }) : date.subtract({ weeks: 1 }),
+      isMonthView ? date.subtract({ months: 1 }) : date.subtract({ weeks: 1 }),
     );
   };
   const stepForward = () => {
     if (!date) return;
     calendarControls.setDate(
-      view === "month-grid" ? date.add({ months: 1 }) : date.add({ weeks: 1 }),
+      isMonthView ? date.add({ months: 1 }) : date.add({ weeks: 1 }),
     );
   };
 
@@ -199,21 +223,14 @@ function CalendarHeader() {
         </Button>
       </div>
 
-      {/* Right cluster: New event + view switcher.
-          New event are desktop-only on mobile it'd
-          crowd the calendar's own header out, so the parent renders
-          a HeaderSlot fallback for "New event"
-          (it's also implied by the visible event list). */}
+      {/* Right cluster: view switcher + New event.
+          New event is desktop-only — on mobile it'd crowd the calendar's
+          own header out, so the parent renders a HeaderSlot fallback for
+          "New event" (it's also implied by the visible event list).
+          Order: switcher first, button last — placing the primary CTA at
+          the trailing edge matches the rest of the app's toolbar layout
+          and pairs the action with empty-state CTAs sitting below. */}
       <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          className="hidden md:inline-flex h-7"
-          onClick={onCreateEvent}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          New event
-        </Button>
-
         {/* Week / Month switcher */}
         <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
           <button
@@ -241,6 +258,15 @@ function CalendarHeader() {
             <span className="hidden sm:inline">Month</span>
           </button>
         </div>
+
+        <Button
+          size="sm"
+          className="hidden md:inline-flex h-7"
+          onClick={onCreateEvent}
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          New event
+        </Button>
       </div>
     </div>
   );
@@ -297,6 +323,178 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   });
 
   const [openCreate, setOpenCreate] = useState(false);
+  // Seeds the start-time defaults inside CreateEventDialog. `null` ⇒ the
+  // dialog falls back to "now + 1h rounded to the next 15-min slot".
+  // Used by the "+ New event" button in the header and by month-grid
+  // empty-cell clicks (the time grid uses a popover-anchored ghost
+  // flow instead — see `creator` below).
+  const [createInitialDate, setCreateInitialDate] = useState<Date | null>(null);
+
+  // Click/drag-to-create state for the time grid (week view). The
+  // popover surface (`<InlineEventCreator />`) replaces the dialog for
+  // this flow — anchored to a ghost event the user is actively
+  // sketching out. Lifecycle:
+  //   1. `onMouseDownDateTime` (schedule-x callback below) seeds this
+  //      with phase="dragging" + the day column + start ms.
+  //   2. A document-level mousemove listener (effect below) updates
+  //      `endMs` as the cursor moves, growing the ghost in real time.
+  //   3. The matching mouseup listener decides drag vs click and
+  //      transitions phase to "creating" (which mounts the popover
+  //      with the form), or — for very short drags — keeps the start
+  //      and bumps the end to start+1h (click-to-create).
+  //   4. Submitting the form or dismissing the popover clears state.
+  type CreatorState = {
+    phase: "dragging" | "creating";
+    dayColumn: HTMLElement;
+    startMs: number;
+    endMs: number;
+    /** Mouse-down coords for the click-vs-drag decision at mouseup. */
+    downX: number;
+    downY: number;
+  };
+  const [creator, setCreator] = useState<CreatorState | null>(null);
+
+  // Begin a drag-to-create. Attaches the document-level mousemove +
+  // mouseup listeners SYNCHRONOUSLY inside this call rather than via a
+  // useEffect keyed on `creator.phase`.
+  //
+  // Why synchronous: schedule-x's `onMouseDownDateTime` callback runs
+  // inside its preact event handler. We schedule a React state update
+  // there, but React batches and may not flush + commit + run effects
+  // before the browser dispatches the matching mouseup. For a fast
+  // click (mousedown → mouseup ≈ 0–10 ms), the mouseup beats React's
+  // effect commit and the listener is never attached — symptom: the
+  // popover never advances from drag-ghost to creating phase.
+  // Attaching listeners here closes the timing gap entirely.
+  //
+  // React state setters are referentially stable, so closing over
+  // `setCreator` from the lazy `createCalendar` initializer below is
+  // safe even though this function is invoked many renders later.
+  function beginCreator(init: {
+    dayColumn: HTMLElement;
+    startMs: number;
+    downX: number;
+    downY: number;
+  }) {
+    const { dayColumn, startMs, downX, downY } = init;
+    const colDateStr = dayColumn.getAttribute("data-time-grid-date");
+    if (!colDateStr) return;
+    const dayStartMs = new Date(`${colDateStr}T00:00`).getTime();
+    if (Number.isNaN(dayStartMs)) return;
+
+    const SLOT_MIN = 15;
+    const DAY_MIN = 24 * 60;
+
+    function cursorYToEpochMs(clientY: number): number {
+      const colRect = dayColumn.getBoundingClientRect();
+      const offsetY = Math.max(
+        0,
+        Math.min(colRect.height, clientY - colRect.top),
+      );
+      const minutesRaw = (offsetY / colRect.height) * DAY_MIN;
+      // Snap to 15-min grid so the ghost lands on a TimeSelect-valid
+      // option (the form's pickers don't expose finer steps anyway).
+      const minutes = Math.max(
+        0,
+        Math.min(DAY_MIN, Math.round(minutesRaw / SLOT_MIN) * SLOT_MIN),
+      );
+      return dayStartMs + minutes * 60 * 1000;
+    }
+
+    function onMove(e: MouseEvent) {
+      const newEndMs = cursorYToEpochMs(e.clientY);
+      setCreator((prev) =>
+        prev && prev.phase === "dragging"
+          ? { ...prev, endMs: newEndMs }
+          : prev,
+      );
+    }
+
+    function onUp(e: MouseEvent) {
+      // Detach immediately so the same drag can't accidentally fire
+      // twice (defensive — mouseup is normally one-shot).
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+
+      // Swallow the `click` event that follows this mouseup. base-ui's
+      // Popover uses floating-ui's `useDismiss` with
+      // `outsidePressEvent: 'intentional'`, which registers a
+      // capture-phase `click` listener on the document that fires
+      // `onOpenChange(false)` when the click target is outside the
+      // popup. The popup mounts in a React microtask between this
+      // mouseup and the browser's `click` dispatch — meaning the
+      // click we generated by ending the drag is interpreted as an
+      // outside-press dismiss the moment the popup appears, closing
+      // it before the user can see it.
+      //
+      // Suppression mechanics:
+      //   - We register on `document` in capture phase, BEFORE base-ui
+      //     gets a chance to (its registration runs in the
+      //     `useEffect` that fires after render commit, which happens
+      //     after this synchronous code finishes).
+      //   - `stopImmediatePropagation` prevents other capture-phase
+      //     listeners on the same node — including base-ui's — from
+      //     running. `stopPropagation` alone wouldn't, since multiple
+      //     capture listeners on the same element fire in
+      //     registration order regardless of bubbling.
+      //   - One-shot self-removal: even if no click follows (rare,
+      //     e.g. drag ends with a focus change), the listener is
+      //     cleaned up after the next click anywhere on the page.
+      function suppressNextClick(ev: MouseEvent) {
+        ev.stopImmediatePropagation();
+        document.removeEventListener("click", suppressNextClick, true);
+      }
+      document.addEventListener("click", suppressNextClick, true);
+
+      const dx = Math.abs(e.clientX - downX);
+      const dy = Math.abs(e.clientY - downY);
+      const isClick = dx < 4 && dy < 4;
+      setCreator((prev) => {
+        if (!prev || prev.phase !== "dragging") return prev;
+        let nextStart = startMs;
+        let nextEnd = isClick
+          ? // Click-to-create: same 15-min ghost the drag preview
+            // shows. Avoids the visual "jump" from 15 min during the
+            // press to 60 min on release; users who want a longer
+            // event drag the slot or extend the end picker.
+            startMs + SLOT_MIN * 60 * 1000
+          : prev.endMs;
+        if (!isClick && nextEnd <= nextStart) {
+          // Dragged upward — swap so start < end. Without this the
+          // ghost rect would have negative height and the form's
+          // submit logic would treat it as "spans midnight" — wrong
+          // semantic for a same-day selection.
+          [nextStart, nextEnd] = [nextEnd, nextStart];
+        }
+        if (!isClick && nextEnd - nextStart < SLOT_MIN * 60 * 1000) {
+          // Drag-distance < one slot — snap to a single-slot ghost
+          // rather than producing a sub-15-min event the form can't
+          // represent cleanly.
+          nextEnd = nextStart + SLOT_MIN * 60 * 1000;
+        }
+        return {
+          ...prev,
+          phase: "creating" as const,
+          startMs: nextStart,
+          endMs: nextEnd,
+        };
+      });
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+
+    setCreator({
+      phase: "dragging",
+      dayColumn,
+      startMs,
+      // Seed `endMs` at start + 15 min so the ghost is visible on the
+      // very first frame; the first mousemove tick overrides it.
+      endMs: startMs + 15 * 60 * 1000,
+      downX,
+      downY,
+    });
+  }
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [selectedTaskProjectId, setSelectedTaskProjectId] = useState<Id<"projects"> | null>(null);
   // Seed `selectedEventId` from a `?event=<id>` deep link (notification
@@ -578,6 +776,19 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       calendars: CALENDARS_CONFIG,
       isDark,
       theme: "shadcn",
+      // Schedule-x's `timezone` config defaults to 'UTC'. When events
+      // are passed as `ZonedDateTime` in the user's local zone (see
+      // `msToZonedDateTime`) but the calendar grid is rendered in UTC,
+      // every coordinate emitted by schedule-x's click/mousedown
+      // callbacks is a UTC moment — its `epochMilliseconds` resolves
+      // to a different wall-clock when fed back through `new Date()`.
+      // For a user in UTC+2 the click-to-create ghost landed 2 h later
+      // than the cursor; aligning schedule-x's grid with the user's
+      // local zone fixes both labelling and click coordinates in one
+      // step. Falls back to "UTC" when the browser doesn't expose a
+      // resolved zone (very old Safari / locked-down environments).
+      timezone:
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       plugins: [
         calendarControls,
         currentTimePlugin,
@@ -617,6 +828,54 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         },
         onRangeUpdate() {
           setRangeVersion((v) => v + 1);
+        },
+        // Month-grid empty-cell click → open the create dialog
+        // pre-anchored to the clicked day. The time grid uses the
+        // ghost+popover flow (see `onMouseDownDateTime` below) instead,
+        // but the month grid has no native concept of a time slot, so
+        // dragging a ghost over a multi-day range would mean a
+        // multi-day event — out of scope here. Schedule-x dispatches
+        // this callback only on truly empty space; event divs absorb
+        // pointer events before they bubble to the cell, so we don't
+        // need a "did the user click an event?" guard.
+        // React state setters are referentially stable, so capturing
+        // them in this lazy initializer is safe across re-renders.
+        onClickDate(date) {
+          // Seed at noon so the dialog's round-to-next-15-min logic
+          // produces a clean 12:00 start rather than landing in the
+          // past for users browsing today.
+          const seed = new Date(
+            date.year,
+            date.month - 1,
+            date.day,
+            12,
+            0,
+            0,
+            0,
+          );
+          setCreateInitialDate(seed);
+          setOpenCreate(true);
+        },
+        // Time-grid mousedown → start drag-to-create. `beginCreator`
+        // attaches the document mousemove + mouseup listeners
+        // synchronously and seeds the creator state in one shot — see
+        // its definition above for why the listeners can't live in a
+        // useEffect (preact-driven setState may not commit before the
+        // browser dispatches the matching mouseup on a fast click).
+        // `preventDefault` suppresses native text-selection during
+        // the drag.
+        onMouseDownDateTime(dateTime, e) {
+          e.preventDefault();
+          const target = e.target;
+          if (!(target instanceof Element)) return;
+          const col = target.closest<HTMLElement>("[data-time-grid-date]");
+          if (!col) return;
+          beginCreator({
+            dayColumn: col,
+            startMs: dateTime.epochMilliseconds,
+            downX: e.clientX,
+            downY: e.clientY,
+          });
         },
       },
     }),
@@ -917,7 +1176,37 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         <CreateEventDialog
           workspaceId={workspaceId}
           open={openCreate}
-          onOpenChange={setOpenCreate}
+          onOpenChange={(o) => {
+            setOpenCreate(o);
+            // Drop the seed when the dialog closes so the next "New
+            // event" button click reverts to the "now + 1h" default,
+            // rather than re-using the last empty-cell anchor.
+            if (!o) setCreateInitialDate(null);
+          }}
+          initialDate={createInitialDate ?? undefined}
+        />
+      )}
+      {/* Click/drag-to-create surface for the time grid. Mounted only
+          while the user has an active gesture in flight — there's no
+          mounted-flag ratchet because the surface is transient by
+          design (no animation cost on close). The popover handles
+          its own exit animation via base-ui's data-closed transitions
+          before unmount. */}
+      {creator && (
+        <InlineEventCreator
+          workspaceId={workspaceId}
+          dayColumn={creator.dayColumn}
+          startMs={creator.startMs}
+          endMs={creator.endMs}
+          phase={creator.phase}
+          onClose={() => setCreator(null)}
+          onTimesChange={(start, end) =>
+            setCreator((prev) =>
+              prev
+                ? { ...prev, startMs: start.getTime(), endMs: end.getTime() }
+                : prev,
+            )
+          }
         />
       )}
       {/* Notify-invitees prompt for drag-to-reschedule + resize. Only
