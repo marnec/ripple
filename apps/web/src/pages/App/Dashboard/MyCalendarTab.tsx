@@ -42,6 +42,7 @@ import {
 import { EmptyOverlay } from "./EmptyOverlay";
 import { useEventDragCreate } from "./hooks/useEventDragCreate";
 import { useEventReschedule } from "./hooks/useEventReschedule";
+import { useScheduleXEventBinding } from "./hooks/useScheduleXEventBinding";
 
 // TaskDetailSheet stays lazy — it pulls in BlockNote + Yjs + y-partyserver
 // (~hundreds of KB). Calling `prefetchTaskDetailSheet()` from a mount
@@ -570,66 +571,15 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     onEventUpdateRef.current = handleEventUpdate;
   });
 
-  // Diff incoming events into the existing calendar instance — schedule-x's
-  // public events API is per-event (add/update/remove), so we maintain the
-  // delta ourselves. The dependency-key keeps the loop O(n) on real change.
-  // Temporal values stringify to a stable ISO form, so toString() works as
-  // an equality key.
-  const eventsKeyRef = React.useRef("");
-  React.useEffect(() => {
-    const key = calendarEvents
-      .map((e) => `${e.id}|${e.start.toString()}|${e.end.toString()}|${e.title}|${e.calendarId}`)
-      .join(",");
-    if (key === eventsKeyRef.current) return;
-    eventsKeyRef.current = key;
-
-    const existing = calendarApp.events.getAll();
-    const existingIds = new Set(existing.map((e) => String(e.id)));
-    const incomingIds = new Set(calendarEvents.map((e) => e.id));
-    for (const id of existingIds) {
-      if (!incomingIds.has(id)) calendarApp.events.remove(id);
-    }
-    for (const e of calendarEvents) {
-      if (!existingIds.has(e.id)) {
-        calendarApp.events.add(e);
-      } else {
-        const prev = existing.find((x) => String(x.id) === e.id);
-        if (
-          prev &&
-          (String(prev.start) !== e.start.toString() ||
-            String(prev.end) !== e.end.toString() ||
-            prev.title !== e.title ||
-            prev.calendarId !== e.calendarId)
-        ) {
-          calendarApp.events.update(e);
-        }
-      }
-    }
-  }, [calendarApp, calendarEvents]);
-
-  // Background-events sync. Schedule-x v4 exposes no public mutator for
-  // its background-events list; the project calendar (cycles overlay)
-  // works around this by reaching into `$app.calendarEvents.backgroundEvents`
-  // — see `useCalendarSync.ts`. We replicate that here. The key-ref
-  // gate keeps the assignment O(1) on no-op renders.
-  const bgEventsKeyRef = React.useRef("");
-  React.useEffect(() => {
-    const key = backgroundEvents
-      .map(
-        (e) =>
-          `${String(e.start)}|${String(e.end)}|${(e.style as Record<string, string> | undefined)?.background ?? ""}`,
-      )
-      .join(",");
-    if (key === bgEventsKeyRef.current) return;
-    bgEventsKeyRef.current = key;
-    (calendarApp as unknown as {
-      $app: {
-        calendarEvents: {
-          backgroundEvents: { value: BackgroundEvent[] };
-        };
-      };
-    }).$app.calendarEvents.backgroundEvents.value = backgroundEvents;
-  }, [calendarApp, backgroundEvents]);
+  // Sync React-state event arrays into the schedule-x instance. The
+  // hook owns the diff loop for foreground events and the v4 private-
+  // state cast for background events — see useScheduleXEventBinding.ts
+  // for the upgrade-zone documentation.
+  useScheduleXEventBinding({
+    calendarApp,
+    events: calendarEvents,
+    backgroundEvents,
+  });
 
   // Document-level capture-phase click listener — resolves event
   // clicks ourselves so the drag plugin's mid-mouseup state mutation
