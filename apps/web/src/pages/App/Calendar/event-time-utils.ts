@@ -185,3 +185,21 @@ export function temporalToMs(t: unknown): number {
   // Last-resort: schedule-x sometimes hands strings on legacy paths.
   return new Date(String(t)).getTime();
 }
+
+/** Compact "Mon, May 4 · 10:00 AM – 11:00 AM" range used by the
+ *  notify-invitees dialog's before/after summary. Locale-driven so the
+ *  organizer sees their own clock format (12h vs 24h). */
+export function formatRescheduleRange(startsAt: number, endsAt: number): string {
+  const dateFmt = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  const timeFmt = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
+}
