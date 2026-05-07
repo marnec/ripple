@@ -74,9 +74,11 @@ export const sendWorkspaceInvite = internalAction({
 });
 
 // ─── Calendar event invitations ──────────────────────────────────────────
-// Mirrors sendWorkspaceInvite but the magic link reuses the existing
-// /share/:shareId guest entry. All event metadata is passed inline by the
-// scheduling mutation so this action does no queries.
+// Mirrors sendWorkspaceInvite. The "View invitation" CTA URL is supplied
+// by the caller via `targetUrl`: guests get the public /share/:shareId
+// entry, internal members get the in-app calendar deep-link. The action
+// does no queries — all event metadata is passed inline by the
+// scheduling mutation.
 
 // ─── ICS (iCalendar) builder ─────────────────────────────────────────────
 // Minimal RFC 5545 generator used to attach a `text/calendar` part to
@@ -230,7 +232,11 @@ function formatEventDateTime(
 export const sendEventInvite = internalAction({
   args: {
     eventId: v.string(),       // calendarEvents._id, used for the ICS UID
-    shareId: v.string(),
+    /** Absolute URL the recipient lands on when they click "View invitation".
+     *  Caller decides: guests get `${SITE_URL}/share/${shareId}`; internal
+     *  members get the in-app calendar deep-link. Embedded in both the
+     *  HTML body and the ICS X-ALT-DESC for client deep-linking. */
+    targetUrl: v.string(),
     recipientEmail: v.string(),
     inviterName: v.string(),
     eventTitle: v.string(),
@@ -245,7 +251,7 @@ export const sendEventInvite = internalAction({
     _,
     {
       eventId,
-      shareId,
+      targetUrl,
       recipientEmail,
       inviterName,
       eventTitle,
@@ -256,7 +262,7 @@ export const sendEventInvite = internalAction({
       sequence,
     },
   ) => {
-    const url = `${process.env.SITE_URL}/share/${shareId}`;
+    const url = targetUrl;
     const when = formatEventDateTime(startsAt, endsAt, timezone);
 
     const ics = buildEventIcs({

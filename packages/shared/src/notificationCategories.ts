@@ -186,6 +186,63 @@ export function getCategoryScope(cat: NotificationCategory): ScopeType {
 /** Kept for backwards compatibility — union of all broadcast categories. */
 export const WORKSPACE_SCOPED_CATEGORIES = BROADCAST_WORKSPACE_CATEGORIES;
 
+// ── Per-channel preference axis ─────────────────────────────────────
+// Categories that send email in addition to push declare it here. The
+// settings UI reads this to decide whether to render an Email column,
+// and the `notificationPreferences` schema stores those categories as
+// `{ push, email }` objects (see prefersChannel for the read path).
+//
+// Adding a new email-supporting category: list it here, widen its
+// schema field to `v.union(v.boolean(), v.object({ push, email }))`,
+// and emit the email from the relevant mutation. Other categories
+// stay flat booleans until they get email support.
+
+export type NotificationChannel = "push" | "email";
+
+export const CATEGORY_CHANNELS: Record<NotificationCategory, ReadonlyArray<NotificationChannel>> = {
+  chatMention: ["push"],
+  chatChannelMessage: ["push"],
+  taskAssigned: ["push"],
+  taskDescriptionMention: ["push"],
+  taskCommentMention: ["push"],
+  taskComment: ["push"],
+  taskStatusChange: ["push"],
+  documentMention: ["push"],
+  documentCreated: ["push"],
+  documentDeleted: ["push"],
+  spreadsheetCreated: ["push"],
+  spreadsheetDeleted: ["push"],
+  diagramCreated: ["push"],
+  diagramDeleted: ["push"],
+  projectCreated: ["push"],
+  projectDeleted: ["push"],
+  channelCreated: ["push"],
+  channelDeleted: ["push"],
+  channelJoinRequest: ["push"],
+  channelJoinDecision: ["push"],
+  eventInvited: ["push", "email"],
+  eventUpdated: ["push", "email"],
+  eventCancelled: ["push", "email"],
+  eventResponseChanged: ["push"],
+};
+
+/** Categories that store their preference as `{ push, email }` rather
+ *  than a flat boolean. Used to constrain `filterUsersWantingEmail`
+ *  and to type the settings UI matrix. */
+export const EMAIL_CAPABLE_CATEGORIES = [
+  "eventInvited",
+  "eventUpdated",
+  "eventCancelled",
+] as const;
+
+export type EmailCapableCategory = (typeof EMAIL_CAPABLE_CATEGORIES)[number];
+
+export function isEmailCapableCategory(
+  cat: NotificationCategory,
+): cat is EmailCapableCategory {
+  return (EMAIL_CAPABLE_CATEGORIES as readonly string[]).includes(cat);
+}
+
 export const DEFAULT_PREFERENCES: Record<NotificationCategory, boolean> = {
   chatMention: true,
   chatChannelMessage: true,

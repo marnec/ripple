@@ -10,7 +10,10 @@ import {
   NOTIFICATION_GROUPS,
   NOTIFICATION_CATEGORY_LABELS,
   DEFAULT_PREFERENCES,
+  CATEGORY_CHANNELS,
+  isEmailCapableCategory,
   type NotificationCategory,
+  type NotificationChannel,
 } from "@ripple/shared/notificationCategories";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
@@ -103,23 +106,72 @@ export function WorkspaceSettings() {
   );
 }
 
+// Stored shape of a single category pref. Matches the schema validator
+// (apps/convex/convex/schema.ts notificationPreferences). Boolean is
+// the legacy shape (still valid); event categories may store the
+// `{ push, email }` object form.
+type PrefValue = boolean | { push: boolean; email: boolean } | undefined;
+
+function readChannelOn(
+  value: PrefValue,
+  channel: NotificationChannel,
+  fallback: boolean,
+): boolean {
+  if (value === undefined) return fallback;
+  if (typeof value === "boolean") {
+    // Legacy bool: gates push only. Email defaults true (the user
+    // could not have meaningfully said "no" to email when no email
+    // path existed; honour the new opt-out only via explicit object
+    // writes).
+    return channel === "push" ? value : true;
+  }
+  return value[channel];
+}
+
 function WorkspaceNotificationSettings() {
   const prefs = useQuery(api.notificationPreferences.get);
   const savePrefs = useMutation(api.notificationPreferences.save);
 
-  const currentPrefs: Record<NotificationCategory, boolean> = prefs
-        ? (Object.fromEntries(
-            Object.entries(DEFAULT_PREFERENCES).map(([key]) => [
-              key,
-              prefs[key as NotificationCategory],
-            ]),
-          ) as Record<NotificationCategory, boolean>)
-        : { ...DEFAULT_PREFERENCES };
+  const handleToggle = (
+    category: NotificationCategory,
+    channel: NotificationChannel,
+    enabled: boolean,
+  ) => {
+    // Build a fresh full prefs payload — `save` replaces the row.
+    // Categories without an existing row default to DEFAULT_PREFERENCES.
+    const next: Record<string, unknown> = {};
+    for (const key of Object.keys(DEFAULT_PREFERENCES) as NotificationCategory[]) {
+      const cur: PrefValue = prefs ? (prefs as unknown as Record<string, PrefValue>)[key] : undefined;
+      const fallback = DEFAULT_PREFERENCES[key];
+      if (isEmailCapableCategory(key)) {
+        // Always serialize as the object shape so the row normalizes
+        // away from the legacy boolean after a single save.
+        const pushOn = readChannelOn(cur, "push", fallback);
+        const emailOn = readChannelOn(cur, "email", fallback);
+        if (key === category) {
+          next[key] = {
+            push: channel === "push" ? enabled : pushOn,
+            email: channel === "email" ? enabled : emailOn,
+          };
+        } else {
+          next[key] = { push: pushOn, email: emailOn };
+        }
+      } else {
+        // Flat-bool categories — still toggled via the push column only.
+        const value = readChannelOn(cur, "push", fallback);
+        next[key] = key === category ? enabled : value;
+      }
+    }
+    void savePrefs(next as Parameters<typeof savePrefs>[0]);
+  };
 
-  const handleCategoryToggle = (category: NotificationCategory, enabled: boolean) => {
-      const updated = { ...currentPrefs, [category]: enabled };
-      void savePrefs(updated);
-    };
+  const getChannelOn = (
+    category: NotificationCategory,
+    channel: NotificationChannel,
+  ): boolean => {
+    const cur: PrefValue = prefs ? (prefs as unknown as Record<string, PrefValue>)[category] : undefined;
+    return readChannelOn(cur, channel, DEFAULT_PREFERENCES[category]);
+  };
 
   return (
     <section className="mb-8">
@@ -128,37 +180,99 @@ function WorkspaceNotificationSettings() {
         Configure which workspace notifications you receive. Chat and task notifications are configured in each channel's and project's settings.
       </p>
       <div className="space-y-4">
-        {NOTIFICATION_GROUPS.map((group) => (
-          <div key={group.label} className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              {group.label}
-            </p>
-            {group.perResource ? (
-              <p className="text-sm text-muted-foreground">
-                Configured per {group.perResource} in each {group.perResource}'s settings.
+        {NOTIFICATION_GROUPS.map((group) => {
+          // A group renders the Email column only when at least one of
+          // its categories actually supports email (today: Calendar).
+          // Other groups stay single-column to match the existing
+          // Channel/Project settings layout.
+          const showEmailColumn = group.categories.some((c) =>
+            CATEGORY_CHANNELS[c].includes("email"),
+          );
+          return (
+            <div key={group.label} className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                {group.label}
               </p>
-            ) : (
-              <div className="space-y-2">
-                {group.categories.map((category) => (
-                  <div
-                    key={category}
-                    className="flex items-center justify-between py-0.5"
-                  >
-                    <span className="text-sm">
-                      {NOTIFICATION_CATEGORY_LABELS[category]}
-                    </span>
-                    <Switch
-                      checked={currentPrefs[category]}
-                      onCheckedChange={(checked) =>
-                        handleCategoryToggle(category, checked)
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+              {group.perResource ? (
+                <p className="text-sm text-muted-foreground">
+                  Configured per {group.perResource} in each {group.perResource}'s settings.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {showEmailColumn && (
+                    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 pb-1 border-b">
+                      <span />
+                      <span className="text-xs font-medium text-muted-foreground w-12 text-center">
+                        Push
+                      </span>
+                      <span className="text-xs font-medium text-muted-foreground w-12 text-center">
+                        Email
+                      </span>
+                    </div>
+                  )}
+                  {group.categories.map((category) => {
+                    const supportsEmail = CATEGORY_CHANNELS[category].includes("email");
+                    if (showEmailColumn) {
+                      return (
+                        <div
+                          key={category}
+                          className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 py-0.5"
+                        >
+                          <span className="text-sm">
+                            {NOTIFICATION_CATEGORY_LABELS[category]}
+                          </span>
+                          <div className="w-12 flex justify-center">
+                            <Switch
+                              checked={getChannelOn(category, "push")}
+                              onCheckedChange={(checked) =>
+                                handleToggle(category, "push", checked)
+                              }
+                              aria-label={`${NOTIFICATION_CATEGORY_LABELS[category]} — push`}
+                            />
+                          </div>
+                          <div className="w-12 flex justify-center">
+                            {supportsEmail ? (
+                              <Switch
+                                checked={getChannelOn(category, "email")}
+                                onCheckedChange={(checked) =>
+                                  handleToggle(category, "email", checked)
+                                }
+                                aria-label={`${NOTIFICATION_CATEGORY_LABELS[category]} — email`}
+                              />
+                            ) : (
+                              <span
+                                className="text-xs text-muted-foreground"
+                                aria-hidden="true"
+                              >
+                                —
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div
+                        key={category}
+                        className="flex items-center justify-between py-0.5"
+                      >
+                        <span className="text-sm">
+                          {NOTIFICATION_CATEGORY_LABELS[category]}
+                        </span>
+                        <Switch
+                          checked={getChannelOn(category, "push")}
+                          onCheckedChange={(checked) =>
+                            handleToggle(category, "push", checked)
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </section>
   );

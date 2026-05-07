@@ -3,12 +3,12 @@ import { internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { NotificationCategory } from "@ripple/shared/notificationCategories";
 import {
-  DEFAULT_PREFERENCES,
   DEFAULT_PROJECT_TASK_PREFERENCES,
   DEFAULT_CHANNEL_CHAT_PREFERENCES,
   isTaskCategory,
   isChatCategory,
 } from "@ripple/shared/notificationCategories";
+import { prefersChannel } from "./utils/notificationChannels";
 
 /**
  * Look up users who have subscribed to a given category+scope via the
@@ -99,7 +99,10 @@ export const getFilteredSubscriptions = internalQuery({
         return prefs[cat];
       });
     } else {
-      // Global preferences — no resource-scoped index, use parallel index lookups
+      // Global preferences — no resource-scoped index, use parallel index lookups.
+      // Read via prefersChannel so the union-shaped event categories
+      // (`{ push, email }`) and the legacy boolean shape both resolve
+      // correctly to the push axis.
       const prefsResults = await Promise.all(
         userIds.map((uid) =>
           ctx.db
@@ -108,12 +111,9 @@ export const getFilteredSubscriptions = internalQuery({
             .unique(),
         ),
       );
-      enabledUserIds = userIds.filter((_, i) => {
-        const prefs = prefsResults[i];
-        if (!prefs) return DEFAULT_PREFERENCES[cat];
-        const val = prefs[cat as keyof typeof prefs];
-        return val === undefined ? DEFAULT_PREFERENCES[cat] : val;
-      });
+      enabledUserIds = userIds.filter((_, i) =>
+        prefersChannel(prefsResults[i], cat, "push"),
+      );
     }
 
     if (enabledUserIds.length === 0) return [];

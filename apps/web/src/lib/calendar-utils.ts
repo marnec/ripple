@@ -72,6 +72,21 @@ export function computeHofstadterLabels(estimate: number): { plan: string; commi
 }
 
 /**
+ * Suppress reschedule prompts and notifications when a past event is
+ * being moved to another past time — the organizer is cleaning up
+ * history, not changing anyone's plans. Mirrored on the server
+ * (apps/convex/convex/calendarEvents.ts) so non-dashboard edit paths
+ * stay quiet too.
+ */
+export function isHistoricalReschedule(
+  oldStart: number,
+  newStart: number,
+  now: number,
+): boolean {
+  return oldStart < now && newStart < now;
+}
+
+/**
  * Returns true when the planned end date exceeds the due date.
  * plannedEndDate = plannedStartDate + estimateToDays(estimate, multiplier) - 1
  */

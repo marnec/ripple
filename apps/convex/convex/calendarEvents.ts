@@ -197,6 +197,49 @@ function isInJoinWindow(
   );
 }
 
+/**
+ * Suppress notifications when a past event is being shuffled to another
+ * past time — the organizer is cleaning up history, not changing
+ * anyone's plans. Mirrored client-side (apps/web/src/lib/calendar-utils)
+ * to skip the "notify invitees?" dialog at the source; this server
+ * check is the safety net for non-dashboard edit paths.
+ */
+export function isHistoricalReschedule(
+  oldStart: number,
+  newStart: number,
+  now: number,
+): boolean {
+  return oldStart < now && newStart < now;
+}
+
+/** Build the in-app calendar deep-link used as the email CTA for
+ *  internal member invitees. SITE_URL is set per Convex environment. */
+function calendarDeepLink(workspaceId: string, eventId: string): string {
+  const base = process.env.SITE_URL ?? "";
+  return `${base}/workspaces/${workspaceId}/dashboard/calendar?event=${eventId}`;
+}
+
+/** Build the public guest landing URL used as the email CTA for guests. */
+function shareDeepLink(shareId: string): string {
+  const base = process.env.SITE_URL ?? "";
+  return `${base}/share/${shareId}`;
+}
+
+/** Look up emails for a list of user ids, skipping users without one.
+ *  Used to fan out calendar emails to internal members. */
+async function loadRecipientEmails(
+  ctx: { db: import("./_generated/server").QueryCtx["db"] },
+  userIds: Id<"users">[],
+): Promise<Array<{ userId: Id<"users">; email: string }>> {
+  const docs = await Promise.all(userIds.map((uid) => ctx.db.get(uid)));
+  const out: Array<{ userId: Id<"users">; email: string }> = [];
+  for (let i = 0; i < userIds.length; i++) {
+    const doc = docs[i];
+    if (doc?.email) out.push({ userId: userIds[i]!, email: doc.email });
+  }
+  return out;
+}
+
 /** Throws unless the given user is the event creator OR has an invitee row. */
 async function requireEventViewer(
   ctx: { db: import("./_generated/server").QueryCtx["db"]; auth: import("./_generated/server").QueryCtx["auth"] },
@@ -635,7 +678,7 @@ export const create = mutation({
       });
       await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
         eventId,
-        shareId,
+        targetUrl: shareDeepLink(shareId),
         recipientEmail: email,
         inviterName,
         eventTitle: title,
@@ -660,6 +703,32 @@ export const create = mutation({
         url: `/workspaces/${args.workspaceId}/dashboard/calendar?event=${eventId}`,
         recipientIds: userIds,
       });
+
+      // Email + ICS to internal members whose `eventInvited.email` pref
+      // is on (default ON). Push is independent — gated by
+      // `eventInvited.push` inside notify() above. Members who never
+      // granted browser notification permission still receive the
+      // email, which is the only path that lands in their external
+      // calendar (Google/Outlook) via the ICS attachment.
+      const memberEmailRecipients = await ctx.runQuery(
+        internal.notificationPreferences.filterUsersWantingEmail,
+        { userIds, category: "eventInvited" },
+      );
+      const memberEmails = await loadRecipientEmails(ctx, memberEmailRecipients);
+      for (const { email } of memberEmails) {
+        await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
+          eventId,
+          targetUrl: calendarDeepLink(args.workspaceId, eventId),
+          recipientEmail: email,
+          inviterName,
+          eventTitle: title,
+          eventDescription: description,
+          startsAt: args.startsAt,
+          endsAt: args.endsAt,
+          timezone: args.timezone,
+          sequence: 0,
+        });
+      }
     }
 
     await logActivity(ctx, {
@@ -739,9 +808,17 @@ export const update = mutation({
     await ctx.db.patch(event._id, patch);
 
     const shouldNotify = args.notifyInvitees ?? true;
+    // Past→past time edits are organizer history-cleanup, not real
+    // schedule changes. Suppress every notification channel even if
+    // the caller forgot to pass `notifyInvitees: false` (e.g. event
+    // detail sheet, future API consumers). The dashboard skips the
+    // dialog up front via the same predicate in calendar-utils.
+    const historical = timeChanged
+      ? isHistoricalReschedule(event.startsAt, newStart, Date.now())
+      : false;
 
     // In-app notification path — same as before but gated on the flag.
-    if (shouldNotify) {
+    if (shouldNotify && !historical) {
       const recipients = await collectInternalRecipientIds(ctx, event._id);
       if (recipients.length > 0) {
         const inviter = await ctx.db.get(userId);
@@ -757,26 +834,26 @@ export const update = mutation({
         });
       }
 
-      // Email guests on time changes only (other field edits are
-      // in-app concerns that don't warrant an email blast). The
-      // newRangeLabel is pre-formatted in the organizer's locale —
-      // matches sendEventInvite's pattern of organizer-locale
-      // formatting.
+      // Email guests AND internal members on time changes only (other
+      // field edits are in-app concerns that don't warrant an email
+      // blast). The newRangeLabel is pre-formatted in the organizer's
+      // locale — matches sendEventInvite's pattern of organizer-locale
+      // formatting. All recipients (guests + members) share the same
+      // bumped SEQUENCE so calendar clients update the existing entry
+      // in place rather than creating duplicates.
       if (timeChanged) {
         const inviter = await ctx.db.get(userId);
         const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
-        const guestInvitees = await ctx.db
+        const allInvitees = await ctx.db
           .query("calendarEventInvitees")
           .withIndex("by_event", (q) => q.eq("eventId", event._id))
           .collect();
         const newRangeLabel = formatRangeLabel(newStart, newEnd, event.timezone);
-        // Bump SEQUENCE so the ICS attachment in the reschedule mail
-        // tells recipients' calendars to update the existing entry
-        // (not create a duplicate). Persist before scheduling so all
-        // emails for this revision share the same sequence number.
         const nextSequence = (event.sequence ?? 0) + 1;
         await ctx.db.patch(event._id, { sequence: nextSequence });
-        for (const row of guestInvitees) {
+
+        // Guests — same loop as before.
+        for (const row of allInvitees) {
           if (!row.guestEmail) continue;
           await ctx.scheduler.runAfter(0, internal.emails.sendEventReschedule, {
             eventId: event._id,
@@ -788,6 +865,37 @@ export const update = mutation({
             endsAt: newEnd,
             sequence: nextSequence,
           });
+        }
+
+        // Internal members whose eventUpdated.email pref is on.
+        const memberIds = allInvitees
+          .map((r) => r.userId)
+          .filter((id): id is Id<"users"> => id !== undefined);
+        if (memberIds.length > 0) {
+          const memberEmailRecipients = await ctx.runQuery(
+            internal.notificationPreferences.filterUsersWantingEmail,
+            { userIds: memberIds, category: "eventUpdated" },
+          );
+          const memberEmails = await loadRecipientEmails(
+            ctx,
+            memberEmailRecipients,
+          );
+          for (const { email } of memberEmails) {
+            await ctx.scheduler.runAfter(
+              0,
+              internal.emails.sendEventReschedule,
+              {
+                eventId: event._id,
+                eventTitle: patch.title ?? event.title,
+                recipientEmail: email,
+                inviterName,
+                newRangeLabel,
+                startsAt: newStart,
+                endsAt: newEnd,
+                sequence: nextSequence,
+              },
+            );
+          }
         }
       }
     }
@@ -896,6 +1004,28 @@ export const cancel = mutation({
         endsAt: event.endsAt,
         sequence: nextSequence,
       });
+    }
+
+    // Cancellation emails to internal members whose eventCancelled.email
+    // pref is on. The ICS METHOD:CANCEL with bumped sequence supersedes
+    // any earlier REQUEST in their external calendar (Google/Outlook).
+    if (recipients.length > 0) {
+      const memberEmailRecipients = await ctx.runQuery(
+        internal.notificationPreferences.filterUsersWantingEmail,
+        { userIds: recipients, category: "eventCancelled" },
+      );
+      const memberEmails = await loadRecipientEmails(ctx, memberEmailRecipients);
+      for (const { email } of memberEmails) {
+        await ctx.scheduler.runAfter(0, internal.emails.sendEventCancellation, {
+          eventId: event._id,
+          eventTitle: event.title,
+          recipientEmail: email,
+          inviterName,
+          startsAt: event.startsAt,
+          endsAt: event.endsAt,
+          sequence: nextSequence,
+        });
+      }
     }
 
     await logActivity(ctx, {
@@ -1155,7 +1285,7 @@ export const addInvitees = mutation({
       });
       await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
         eventId: event._id,
-        shareId,
+        targetUrl: shareDeepLink(shareId),
         recipientEmail: email,
         inviterName,
         eventTitle: event.title,
@@ -1179,6 +1309,29 @@ export const addInvitees = mutation({
         url: `/workspaces/${event.workspaceId}/dashboard/calendar?event=${event._id}`,
         recipientIds: newUsers,
       });
+
+      // Email + ICS to newly-added internal members whose
+      // eventInvited.email pref is on. Mirrors the create-mutation
+      // member-email loop; same default-ON semantics apply.
+      const memberEmailRecipients = await ctx.runQuery(
+        internal.notificationPreferences.filterUsersWantingEmail,
+        { userIds: newUsers, category: "eventInvited" },
+      );
+      const memberEmails = await loadRecipientEmails(ctx, memberEmailRecipients);
+      for (const { email } of memberEmails) {
+        await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
+          eventId: event._id,
+          targetUrl: calendarDeepLink(event.workspaceId, event._id),
+          recipientEmail: email,
+          inviterName,
+          eventTitle: event.title,
+          eventDescription: event.description,
+          startsAt: event.startsAt,
+          endsAt: event.endsAt,
+          timezone: event.timezone,
+          sequence: event.sequence ?? 0,
+        });
+      }
     }
 
     return null;

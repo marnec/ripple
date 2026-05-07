@@ -24,6 +24,7 @@ import { Plus, CalendarDays, CalendarCheck, CalendarRange, ChevronLeft, ChevronR
 
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
+import { isHistoricalReschedule } from "@/lib/calendar-utils";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisibleMemberCalendars } from "@/hooks/use-visible-member-calendars";
@@ -816,9 +817,18 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       }
 
       const inviteeCount = sourceEvent.nonOrganizerInviteeCount;
+      // Past→past edits are organizer history-cleanup, not real
+      // schedule changes — silent write regardless of invitee count.
+      // Server applies the same predicate as a safety net for
+      // non-dashboard edit paths.
+      const historical = isHistoricalReschedule(
+        sourceEvent.startsAt,
+        newStartsAt,
+        Date.now(),
+      );
       // No external eyes on the event → just write through. The
       // organizer's own calendar updates reactively from convex.
-      if (inviteeCount === 0) {
+      if (inviteeCount === 0 || historical) {
         void updateEventMutation({
           eventId,
           startsAt: newStartsAt,

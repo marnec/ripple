@@ -820,10 +820,10 @@ export type DataModel = {
       documentCreated: boolean;
       documentDeleted: boolean;
       documentMention: boolean;
-      eventCancelled?: boolean;
-      eventInvited?: boolean;
+      eventCancelled?: boolean | { email: boolean; push: boolean };
+      eventInvited?: boolean | { email: boolean; push: boolean };
       eventResponseChanged?: boolean;
-      eventUpdated?: boolean;
+      eventUpdated?: boolean | { email: boolean; push: boolean };
       projectCreated: boolean;
       projectDeleted: boolean;
       spreadsheetCreated: boolean;
@@ -852,9 +852,15 @@ export type DataModel = {
       | "documentDeleted"
       | "documentMention"
       | "eventCancelled"
+      | "eventCancelled.email"
+      | "eventCancelled.push"
       | "eventInvited"
+      | "eventInvited.email"
+      | "eventInvited.push"
       | "eventResponseChanged"
       | "eventUpdated"
+      | "eventUpdated.email"
+      | "eventUpdated.push"
       | "projectCreated"
       | "projectDeleted"
       | "spreadsheetCreated"

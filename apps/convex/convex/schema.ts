@@ -484,9 +484,20 @@ export default defineSchema({
     channelDeleted: v.boolean(),
     channelJoinRequest: v.optional(v.boolean()),
     channelJoinDecision: v.optional(v.boolean()),
-    eventInvited: v.optional(v.boolean()),
-    eventUpdated: v.optional(v.boolean()),
-    eventCancelled: v.optional(v.boolean()),
+    // Event categories: per-channel object shape `{ push, email }`. The
+    // legacy plain-boolean shape is preserved in the union so existing
+    // rows keep validating; `prefersChannel` reads either form. New
+    // writes from settings always use the object form. See
+    // packages/shared/src/notificationCategories.ts:CATEGORY_CHANNELS.
+    eventInvited: v.optional(
+      v.union(v.boolean(), v.object({ push: v.boolean(), email: v.boolean() })),
+    ),
+    eventUpdated: v.optional(
+      v.union(v.boolean(), v.object({ push: v.boolean(), email: v.boolean() })),
+    ),
+    eventCancelled: v.optional(
+      v.union(v.boolean(), v.object({ push: v.boolean(), email: v.boolean() })),
+    ),
     eventResponseChanged: v.optional(v.boolean()),
   })
     .index("by_user", ["userId"]),

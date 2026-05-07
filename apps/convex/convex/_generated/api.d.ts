@@ -1367,10 +1367,10 @@ export declare const api: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
-        eventCancelled?: boolean;
-        eventInvited?: boolean;
+        eventCancelled?: boolean | { email: boolean; push: boolean };
+        eventInvited?: boolean | { email: boolean; push: boolean };
         eventResponseChanged?: boolean;
-        eventUpdated?: boolean;
+        eventUpdated?: boolean | { email: boolean; push: boolean };
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;
@@ -1398,10 +1398,10 @@ export declare const api: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
-        eventCancelled?: boolean;
-        eventInvited?: boolean;
+        eventCancelled?: boolean | { email: boolean; push: boolean };
+        eventInvited?: boolean | { email: boolean; push: boolean };
         eventResponseChanged?: boolean;
-        eventUpdated?: boolean;
+        eventUpdated?: boolean | { email: boolean; push: boolean };
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;
@@ -2942,8 +2942,8 @@ export declare const internal: {
         inviterName: string;
         recipientEmail: string;
         sequence: number;
-        shareId: string;
         startsAt: number;
+        targetUrl: string;
         timezone: string;
       },
       null
@@ -3588,6 +3588,15 @@ export declare const internal: {
     >;
   };
   notificationPreferences: {
+    filterUsersWantingEmail: FunctionReference<
+      "query",
+      "internal",
+      {
+        category: "eventInvited" | "eventUpdated" | "eventCancelled";
+        userIds: Array<Id<"users">>;
+      },
+      Array<Id<"users">>
+    >;
     getForUser: FunctionReference<
       "query",
       "internal",
@@ -3606,10 +3615,10 @@ export declare const internal: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
-        eventCancelled?: boolean;
-        eventInvited?: boolean;
+        eventCancelled?: boolean | { email: boolean; push: boolean };
+        eventInvited?: boolean | { email: boolean; push: boolean };
         eventResponseChanged?: boolean;
-        eventUpdated?: boolean;
+        eventUpdated?: boolean | { email: boolean; push: boolean };
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;
@@ -3640,10 +3649,10 @@ export declare const internal: {
         documentCreated: boolean;
         documentDeleted: boolean;
         documentMention: boolean;
-        eventCancelled?: boolean;
-        eventInvited?: boolean;
+        eventCancelled?: boolean | { email: boolean; push: boolean };
+        eventInvited?: boolean | { email: boolean; push: boolean };
         eventResponseChanged?: boolean;
-        eventUpdated?: boolean;
+        eventUpdated?: boolean | { email: boolean; push: boolean };
         projectCreated: boolean;
         projectDeleted: boolean;
         spreadsheetCreated: boolean;

@@ -1,8 +1,23 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { requireUser } from "./authHelpers";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
+import type { EmailCapableCategory } from "@ripple/shared/notificationCategories";
+import { prefersChannel } from "./utils/notificationChannels";
+
+// Re-exported so callers can keep importing from this module's public
+// surface; the implementation lives in utils/notificationChannels for
+// test ergonomics (no Convex harness boot needed).
+export { prefersChannel };
+
+// Event categories store either a flat boolean (legacy) or `{ push, email }`.
+// Keeping the union here matches the schema so writes from `save` validate.
+const eventChannelPref = v.union(
+  v.boolean(),
+  v.object({ push: v.boolean(), email: v.boolean() }),
+);
 
 const preferencesValidator = v.object({
   _id: v.id("notificationPreferences"),
@@ -28,9 +43,9 @@ const preferencesValidator = v.object({
   channelDeleted: v.boolean(),
   channelJoinRequest: v.optional(v.boolean()),
   channelJoinDecision: v.optional(v.boolean()),
-  eventInvited: v.optional(v.boolean()),
-  eventUpdated: v.optional(v.boolean()),
-  eventCancelled: v.optional(v.boolean()),
+  eventInvited: v.optional(eventChannelPref),
+  eventUpdated: v.optional(eventChannelPref),
+  eventCancelled: v.optional(eventChannelPref),
   eventResponseChanged: v.optional(v.boolean()),
 });
 
@@ -69,9 +84,9 @@ export const save = mutation({
     channelDeleted: v.boolean(),
     channelJoinRequest: v.optional(v.boolean()),
     channelJoinDecision: v.optional(v.boolean()),
-    eventInvited: v.optional(v.boolean()),
-    eventUpdated: v.optional(v.boolean()),
-    eventCancelled: v.optional(v.boolean()),
+    eventInvited: v.optional(eventChannelPref),
+    eventUpdated: v.optional(eventChannelPref),
+    eventCancelled: v.optional(eventChannelPref),
     eventResponseChanged: v.optional(v.boolean()),
   },
   returns: v.null(),
@@ -91,6 +106,36 @@ export const save = mutation({
     }
 
     return null;
+  },
+});
+
+/**
+ * Returns the subset of `userIds` whose email preference for the given
+ * email-capable category is on (default ON when the row or field is
+ * missing). Used by calendar event mutations to decide who gets an
+ * email + ICS in addition to push.
+ */
+export const filterUsersWantingEmail = internalQuery({
+  args: {
+    userIds: v.array(v.id("users")),
+    category: v.union(
+      v.literal("eventInvited"),
+      v.literal("eventUpdated"),
+      v.literal("eventCancelled"),
+    ),
+  },
+  returns: v.array(v.id("users")),
+  handler: async (ctx, { userIds, category }) => {
+    const cat = category as EmailCapableCategory;
+    const rows = await Promise.all(
+      userIds.map((uid: Id<"users">) =>
+        ctx.db
+          .query("notificationPreferences")
+          .withIndex("by_user", (q) => q.eq("userId", uid))
+          .unique(),
+      ),
+    );
+    return userIds.filter((_, i) => prefersChannel(rows[i], cat, "email"));
   },
 });
 
