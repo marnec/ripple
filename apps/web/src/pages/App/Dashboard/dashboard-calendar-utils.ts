@@ -44,21 +44,3 @@ export function parseEmailChips(raw: string): {
   return { valid: Array.from(new Set(valid)), invalid };
 }
 
-/** Convert an ms timestamp to a YYYY-MM-DDTHH:mm string in the local tz —
- *  matches the value shape of an `<input type="datetime-local">` field. */
-export function toLocalDateTimeInput(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
-}
-
-/** Inverse of toLocalDateTimeInput — interprets the datetime-local value in
- *  the local timezone and returns ms since epoch. */
-export function fromLocalDateTimeInput(value: string): number {
-  // `new Date("YYYY-MM-DDTHH:mm")` parses as local time (no Z), which is what
-  // we want. Returning getTime() converts to absolute ms.
-  return new Date(value).getTime();
-}

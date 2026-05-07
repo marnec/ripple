@@ -5,6 +5,7 @@
  * exports are all components, and bundling utils alongside components in
  * one file degrades the dev edit loop.
  */
+import { Temporal } from "temporal-polyfill";
 
 export const TIME_RE = /^\d{2}:\d{2}$/;
 
@@ -148,4 +149,39 @@ export function parseTypedTime(input: string): string | null {
   }
 
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Schedule-x Temporal interop
+//
+// The dashboard calendar maps Convex's `ms` timestamps to schedule-x's
+// `Temporal.ZonedDateTime` shapes for the timed-events lane, and back
+// for drag/resize callbacks. Centralised here (rather than inside
+// MyCalendarTab) so any other surface that talks to schedule-x can
+// reuse the same conversions without duplicating the timezone-fallback
+// + PlainDate-defensive logic.
+// ────────────────────────────────────────────────────────────────────────
+
+/** Convert a UTC ms timestamp into a `Temporal.ZonedDateTime` in the
+ *  user's local timezone. Schedule-x's `CalendarEventExternal` typing
+ *  requires ZonedDateTime for timed events; PlainDateTime crashes the
+ *  week view with `_start.withTimeZone is not a function`. */
+export function msToZonedDateTime(ms: number): Temporal.ZonedDateTime {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  return Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(tz);
+}
+
+/** Inverse of `msToZonedDateTime` — schedule-x hands its drag/resize
+ *  callbacks Temporal `ZonedDateTime` (timed events) or `PlainDate`
+ *  (all-day) instances. The events lane in the dashboard is always
+ *  timed, but accept both shapes defensively so type narrowing
+ *  doesn't trip on a stray PlainDate. */
+export function temporalToMs(t: unknown): number {
+  if (t instanceof Temporal.ZonedDateTime) return t.epochMilliseconds;
+  if (t instanceof Temporal.PlainDate) {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    return t.toZonedDateTime({ timeZone: tz }).epochMilliseconds;
+  }
+  // Last-resort: schedule-x sometimes hands strings on legacy paths.
+  return new Date(String(t)).getTime();
 }

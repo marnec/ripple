@@ -5,7 +5,7 @@
  * keep Vite's React Fast Refresh happy.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { joinWindowStatus } from "../Dashboard/dashboard-calendar-utils";
+import { useJoinStatusTick } from "./useJoinStatusTick";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants
@@ -107,11 +108,7 @@ export function useEventDetail({
   );
 
   // 30s tick so the Join window opens / closes without a refresh.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useJoinStatusTick();
   const callStatus =
     detail && detail.event.cancelledAt === undefined
       ? joinWindowStatus(detail.event.startsAt, detail.event.endsAt, now)

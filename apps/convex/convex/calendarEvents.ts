@@ -18,6 +18,10 @@ import {
 } from "./authHelpers";
 import { logActivity } from "./auditLog";
 import { notify } from "./utils/notify";
+import { generateShareId, sanitizeGuestName } from "./utils/shareIds";
+import { assertOrganizer } from "./utils/eventAuth";
+import { loadInviteeRows } from "./utils/eventInvitees";
+import { dispatchEventNotifications } from "./utils/eventNotifications";
 import { rateLimiter } from "./rateLimits";
 import { CF_API_BASE, ensureMeetingForChannel } from "./callSessions";
 import { GUEST_SUB_PREFIX } from "@ripple/shared/shareTypes";
@@ -33,8 +37,6 @@ const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
 const JOIN_WINDOW_LEAD_MS = 5 * 60 * 1000; // join allowed from start − 5 min
 const JOIN_WINDOW_TAIL_MS = 15 * 60 * 1000; // until end + 15 min
 const SHARE_BUFFER_MS = 24 * 60 * 60 * 1000; // share expires endsAt + 24h
-const GUEST_NAME_MIN = 1;
-const GUEST_NAME_MAX = 40;
 const GUEST_SUB_MAX = 64;
 // Simple practical email regex — server-side validation only filters obvious
 // junk; real deliverability is verified by the email provider.
@@ -104,18 +106,6 @@ const eventWithInviteesValidator = v.object({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function generateShareId(): string {
-  // 16 random bytes → 22-char base64url, mirrors shares.ts.
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
 function generateGuestSub(): string {
   // Stable per-invitee identifier — used as Cloudflare custom_participant_id
   // so reconnects are recognised. 12 bytes is plenty: invitees per event are
@@ -128,14 +118,6 @@ function generateGuestSub(): string {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
-}
-
-function sanitizeGuestName(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length < GUEST_NAME_MIN || trimmed.length > GUEST_NAME_MAX) {
-    throw new ConvexError("Guest name must be 1-40 characters");
-  }
-  return trimmed;
 }
 
 function sanitizeGuestSubInput(raw: string): string {
@@ -210,34 +192,6 @@ export function isHistoricalReschedule(
   now: number,
 ): boolean {
   return oldStart < now && newStart < now;
-}
-
-/** Build the in-app calendar deep-link used as the email CTA for
- *  internal member invitees. SITE_URL is set per Convex environment. */
-function calendarDeepLink(workspaceId: string, eventId: string): string {
-  const base = process.env.SITE_URL ?? "";
-  return `${base}/workspaces/${workspaceId}/dashboard/calendar?event=${eventId}`;
-}
-
-/** Build the public guest landing URL used as the email CTA for guests. */
-function shareDeepLink(shareId: string): string {
-  const base = process.env.SITE_URL ?? "";
-  return `${base}/share/${shareId}`;
-}
-
-/** Look up emails for a list of user ids, skipping users without one.
- *  Used to fan out calendar emails to internal members. */
-async function loadRecipientEmails(
-  ctx: { db: import("./_generated/server").QueryCtx["db"] },
-  userIds: Id<"users">[],
-): Promise<Array<{ userId: Id<"users">; email: string }>> {
-  const docs = await Promise.all(userIds.map((uid) => ctx.db.get(uid)));
-  const out: Array<{ userId: Id<"users">; email: string }> = [];
-  for (let i = 0; i < userIds.length; i++) {
-    const doc = docs[i];
-    if (doc?.email) out.push({ userId: userIds[i]!, email: doc.email });
-  }
-  return out;
 }
 
 /** Throws unless the given user is the event creator OR has an invitee row. */
@@ -351,10 +305,7 @@ export const listMineInRange = query({
     // `invited` lookups already performed above.
     const annotated = await Promise.all(
       events.map(async (e) => {
-        const invitees = await ctx.db
-          .query("calendarEventInvitees")
-          .withIndex("by_event", (q) => q.eq("eventId", e._id))
-          .collect();
+        const invitees = await loadInviteeRows(ctx, e._id);
         const nonOrganizerInviteeCount = invitees.filter(
           (i) => i.userId !== e.createdBy,
         ).length;
@@ -465,10 +416,7 @@ export const get = query({
   handler: async (ctx, { eventId }) => {
     const { event } = await requireEventViewer(ctx, eventId);
 
-    const inviteeRows = await ctx.db
-      .query("calendarEventInvitees")
-      .withIndex("by_event", (q) => q.eq("eventId", eventId))
-      .collect();
+    const inviteeRows = await loadInviteeRows(ctx, eventId);
 
     // Denormalize user fields for cheap rendering.
     const invitees = await Promise.all(
@@ -655,11 +603,9 @@ export const create = mutation({
       });
     }
 
-    // Insert guest invitees + share rows + schedule emails.
-    const now = Date.now();
-    const inviter = await ctx.db.get(userId);
-    const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
-
+    // Insert guest invitees + share rows. Email scheduling is handled
+    // by dispatchEventNotifications below alongside the member fan-out.
+    const guestRows: Array<{ shareId: string; guestEmail: string }> = [];
     for (const email of guestEmails) {
       const shareId = await insertGuestShare(ctx, {
         eventId,
@@ -676,60 +622,20 @@ export const create = mutation({
         status: "pending",
         shareId,
       });
-      await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
-        eventId,
-        targetUrl: shareDeepLink(shareId),
-        recipientEmail: email,
-        inviterName,
-        eventTitle: title,
-        eventDescription: description,
-        startsAt: args.startsAt,
-        endsAt: args.endsAt,
-        timezone: args.timezone,
-        sequence: 0,
-      });
+      guestRows.push({ shareId, guestEmail: email });
     }
 
-    // Notify in-app for internal invitees (targeted preference path).
-    // No `resourceId` — calendar events have no per-resource preference
-    // scope (preferences live at the workspace level only).
-    if (userIds.length > 0) {
-      await notify(ctx, {
-        category: "eventInvited",
-        userId,
-        userName: inviterName,
-        title: "Calendar invitation",
-        body: `${inviterName} invited you to ${title}`,
-        url: `/workspaces/${args.workspaceId}/dashboard/calendar?event=${eventId}`,
-        recipientIds: userIds,
-      });
-
-      // Email + ICS to internal members whose `eventInvited.email` pref
-      // is on (default ON). Push is independent — gated by
-      // `eventInvited.push` inside notify() above. Members who never
-      // granted browser notification permission still receive the
-      // email, which is the only path that lands in their external
-      // calendar (Google/Outlook) via the ICS attachment.
-      const memberEmailRecipients = await ctx.runQuery(
-        internal.notificationPreferences.filterUsersWantingEmail,
-        { userIds, category: "eventInvited" },
-      );
-      const memberEmails = await loadRecipientEmails(ctx, memberEmailRecipients);
-      for (const { email } of memberEmails) {
-        await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
-          eventId,
-          targetUrl: calendarDeepLink(args.workspaceId, eventId),
-          recipientEmail: email,
-          inviterName,
-          eventTitle: title,
-          eventDescription: description,
-          startsAt: args.startsAt,
-          endsAt: args.endsAt,
-          timezone: args.timezone,
-          sequence: 0,
-        });
-      }
-    }
+    // In-app + email fan-out to all newly-added invitees. The helper
+    // covers both the guest CTA (share landing) and member CTA (in-app
+    // calendar) plus the email-preference filter.
+    const event = (await ctx.db.get(eventId))!;
+    await dispatchEventNotifications(ctx, {
+      event,
+      inviterId: userId,
+      action: { kind: "invited", sequence: 0 },
+      memberRecipientIds: userIds,
+      guestRows,
+    });
 
     await logActivity(ctx, {
       userId,
@@ -771,9 +677,7 @@ export const update = mutation({
     const userId = await requireUser(ctx);
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new ConvexError("Event not found");
-    if (event.createdBy !== userId) {
-      throw new ConvexError("Only the organizer can edit this event");
-    }
+    assertOrganizer(event, userId, "edit this event");
     if (event.cancelledAt !== undefined) {
       throw new ConvexError("Cannot edit a cancelled event");
     }
@@ -817,87 +721,38 @@ export const update = mutation({
       ? isHistoricalReschedule(event.startsAt, newStart, Date.now())
       : false;
 
-    // In-app notification path — same as before but gated on the flag.
+    // In-app + email fan-out — gated on the flag and on the
+    // historical-reschedule predicate. The helper handles both the
+    // notify-only path (non-time edits) and the email path (time
+    // changes, with guests + members sharing one bumped SEQUENCE so
+    // external calendar clients update in place).
     if (shouldNotify && !historical) {
       const recipients = await collectInternalRecipientIds(ctx, event._id);
-      if (recipients.length > 0) {
-        const inviter = await ctx.db.get(userId);
-        const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
-        await notify(ctx, {
-          category: "eventUpdated",
-          userId,
-          userName: inviterName,
-          title: "Calendar event updated",
-          body: `${inviterName} updated ${patch.title ?? event.title}`,
-          url: `/workspaces/${event.workspaceId}/dashboard/calendar?event=${event._id}`,
-          recipientIds: recipients,
-        });
-      }
-
-      // Email guests AND internal members on time changes only (other
-      // field edits are in-app concerns that don't warrant an email
-      // blast). The newRangeLabel is pre-formatted in the organizer's
-      // locale — matches sendEventInvite's pattern of organizer-locale
-      // formatting. All recipients (guests + members) share the same
-      // bumped SEQUENCE so calendar clients update the existing entry
-      // in place rather than creating duplicates.
+      let action: Parameters<typeof dispatchEventNotifications>[1]["action"];
+      let guestRows: Array<{ guestEmail?: string }> = [];
+      let updatedEvent = event;
       if (timeChanged) {
-        const inviter = await ctx.db.get(userId);
-        const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
-        const allInvitees = await ctx.db
-          .query("calendarEventInvitees")
-          .withIndex("by_event", (q) => q.eq("eventId", event._id))
-          .collect();
+        const allInvitees = await loadInviteeRows(ctx, event._id);
         const newRangeLabel = formatRangeLabel(newStart, newEnd, event.timezone);
         const nextSequence = (event.sequence ?? 0) + 1;
         await ctx.db.patch(event._id, { sequence: nextSequence });
-
-        // Guests — same loop as before.
-        for (const row of allInvitees) {
-          if (!row.guestEmail) continue;
-          await ctx.scheduler.runAfter(0, internal.emails.sendEventReschedule, {
-            eventId: event._id,
-            eventTitle: patch.title ?? event.title,
-            recipientEmail: row.guestEmail,
-            inviterName,
-            newRangeLabel,
-            startsAt: newStart,
-            endsAt: newEnd,
-            sequence: nextSequence,
-          });
-        }
-
-        // Internal members whose eventUpdated.email pref is on.
-        const memberIds = allInvitees
-          .map((r) => r.userId)
-          .filter((id): id is Id<"users"> => id !== undefined);
-        if (memberIds.length > 0) {
-          const memberEmailRecipients = await ctx.runQuery(
-            internal.notificationPreferences.filterUsersWantingEmail,
-            { userIds: memberIds, category: "eventUpdated" },
-          );
-          const memberEmails = await loadRecipientEmails(
-            ctx,
-            memberEmailRecipients,
-          );
-          for (const { email } of memberEmails) {
-            await ctx.scheduler.runAfter(
-              0,
-              internal.emails.sendEventReschedule,
-              {
-                eventId: event._id,
-                eventTitle: patch.title ?? event.title,
-                recipientEmail: email,
-                inviterName,
-                newRangeLabel,
-                startsAt: newStart,
-                endsAt: newEnd,
-                sequence: nextSequence,
-              },
-            );
-          }
-        }
+        updatedEvent = (await ctx.db.get(event._id))!;
+        guestRows = allInvitees.filter((r) => r.guestEmail !== undefined);
+        action = {
+          kind: "updated-time",
+          newRangeLabel,
+          sequence: nextSequence,
+        };
+      } else {
+        action = { kind: "updated-meta" };
       }
+      await dispatchEventNotifications(ctx, {
+        event: updatedEvent,
+        inviterId: userId,
+        action,
+        memberRecipientIds: recipients,
+        guestRows,
+      });
     }
 
     await logActivity(ctx, {
@@ -944,9 +799,7 @@ export const cancel = mutation({
     const userId = await requireUser(ctx);
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
-    if (event.createdBy !== userId) {
-      throw new ConvexError("Only the organizer can cancel this event");
-    }
+    assertOrganizer(event, userId, "cancel this event");
     if (event.cancelledAt !== undefined) return null;
 
     const now = Date.now();
@@ -958,10 +811,7 @@ export const cancel = mutation({
     await ctx.db.patch(event._id, { cancelledAt: now, sequence: nextSequence });
 
     // Revoke all guest share rows tied to this event.
-    const guestInvitees = await ctx.db
-      .query("calendarEventInvitees")
-      .withIndex("by_event", (q) => q.eq("eventId", event._id))
-      .collect();
+    const guestInvitees = await loadInviteeRows(ctx, event._id);
     for (const row of guestInvitees) {
       if (!row.shareId) continue;
       const share = await ctx.db
@@ -973,60 +823,23 @@ export const cancel = mutation({
       }
     }
 
-    const inviter = await ctx.db.get(userId);
-    const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
-
-    // Notify invited members.
-    const recipients = guestInvitees
+    // In-app + email fan-out. The ICS METHOD:CANCEL with bumped
+    // sequence supersedes any earlier REQUEST in recipients' external
+    // calendars (Google/Outlook).
+    const memberRecipientIds = guestInvitees
       .map((r) => r.userId)
       .filter((id): id is Id<"users"> => id !== undefined);
-    if (recipients.length > 0) {
-      await notify(ctx, {
-        category: "eventCancelled",
-        userId,
-        userName: inviterName,
-        title: "Calendar event cancelled",
-        body: `${inviterName} cancelled ${event.title}`,
-        url: `/workspaces/${event.workspaceId}/dashboard/calendar`,
-        recipientIds: recipients,
-      });
-    }
-
-    // Schedule cancellation emails to guests (one per shareId).
-    for (const row of guestInvitees) {
-      if (!row.shareId || !row.guestEmail) continue;
-      await ctx.scheduler.runAfter(0, internal.emails.sendEventCancellation, {
-        eventId: event._id,
-        eventTitle: event.title,
-        recipientEmail: row.guestEmail,
-        inviterName,
-        startsAt: event.startsAt,
-        endsAt: event.endsAt,
-        sequence: nextSequence,
-      });
-    }
-
-    // Cancellation emails to internal members whose eventCancelled.email
-    // pref is on. The ICS METHOD:CANCEL with bumped sequence supersedes
-    // any earlier REQUEST in their external calendar (Google/Outlook).
-    if (recipients.length > 0) {
-      const memberEmailRecipients = await ctx.runQuery(
-        internal.notificationPreferences.filterUsersWantingEmail,
-        { userIds: recipients, category: "eventCancelled" },
-      );
-      const memberEmails = await loadRecipientEmails(ctx, memberEmailRecipients);
-      for (const { email } of memberEmails) {
-        await ctx.scheduler.runAfter(0, internal.emails.sendEventCancellation, {
-          eventId: event._id,
-          eventTitle: event.title,
-          recipientEmail: email,
-          inviterName,
-          startsAt: event.startsAt,
-          endsAt: event.endsAt,
-          sequence: nextSequence,
-        });
-      }
-    }
+    const guestEmailRows = guestInvitees.filter(
+      (r) => r.shareId !== undefined && r.guestEmail !== undefined,
+    );
+    const updatedEvent = (await ctx.db.get(event._id))!;
+    await dispatchEventNotifications(ctx, {
+      event: updatedEvent,
+      inviterId: userId,
+      action: { kind: "cancelled", sequence: nextSequence },
+      memberRecipientIds,
+      guestRows: guestEmailRows,
+    });
 
     await logActivity(ctx, {
       userId,
@@ -1066,14 +879,9 @@ export const remove = mutation({
     const userId = await requireUser(ctx);
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
-    if (event.createdBy !== userId) {
-      throw new ConvexError("Only the organizer can delete this event");
-    }
+    assertOrganizer(event, userId, "delete this event");
 
-    const invitees = await ctx.db
-      .query("calendarEventInvitees")
-      .withIndex("by_event", (q) => q.eq("eventId", event._id))
-      .collect();
+    const invitees = await loadInviteeRows(ctx, event._id);
 
     const hasGuests = invitees.some((i) => i.userId !== event.createdBy);
     if (hasGuests && event.cancelledAt === undefined) {
@@ -1225,18 +1033,13 @@ export const addInvitees = mutation({
     const userId = await requireUser(ctx);
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new ConvexError("Event not found");
-    if (event.createdBy !== userId) {
-      throw new ConvexError("Only the organizer can add invitees");
-    }
+    assertOrganizer(event, userId, "add invitees");
     if (event.cancelledAt !== undefined) {
       throw new ConvexError("Cannot add invitees to a cancelled event");
     }
 
     // Existing invitees — used to filter duplicates.
-    const existing = await ctx.db
-      .query("calendarEventInvitees")
-      .withIndex("by_event", (q) => q.eq("eventId", event._id))
-      .collect();
+    const existing = await loadInviteeRows(ctx, event._id);
     const existingUsers = new Set(
       existing.map((r) => r.userId).filter((u): u is Id<"users"> => u !== undefined),
     );
@@ -1264,9 +1067,10 @@ export const addInvitees = mutation({
       });
     }
 
-    const inviter = await ctx.db.get(userId);
-    const inviterName = inviter?.name ?? inviter?.email ?? "Someone";
-
+    // Insert guest invitee rows + share rows. Email scheduling for
+    // both the new guests and the new members goes through the
+    // shared dispatch helper.
+    const newGuestRows: Array<{ shareId: string; guestEmail: string }> = [];
     for (const email of newEmails) {
       const shareId = await insertGuestShare(ctx, {
         eventId: event._id,
@@ -1283,56 +1087,18 @@ export const addInvitees = mutation({
         status: "pending",
         shareId,
       });
-      await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
-        eventId: event._id,
-        targetUrl: shareDeepLink(shareId),
-        recipientEmail: email,
-        inviterName,
-        eventTitle: event.title,
-        eventDescription: event.description,
-        startsAt: event.startsAt,
-        endsAt: event.endsAt,
-        timezone: event.timezone,
-        // New attendees join the event at its current revision; no need
-        // to bump SEQUENCE since existing recipients aren't affected.
-        sequence: event.sequence ?? 0,
-      });
+      newGuestRows.push({ shareId, guestEmail: email });
     }
 
-    if (newUsers.length > 0) {
-      await notify(ctx, {
-        category: "eventInvited",
-        userId,
-        userName: inviterName,
-        title: "Calendar invitation",
-        body: `${inviterName} invited you to ${event.title}`,
-        url: `/workspaces/${event.workspaceId}/dashboard/calendar?event=${event._id}`,
-        recipientIds: newUsers,
-      });
-
-      // Email + ICS to newly-added internal members whose
-      // eventInvited.email pref is on. Mirrors the create-mutation
-      // member-email loop; same default-ON semantics apply.
-      const memberEmailRecipients = await ctx.runQuery(
-        internal.notificationPreferences.filterUsersWantingEmail,
-        { userIds: newUsers, category: "eventInvited" },
-      );
-      const memberEmails = await loadRecipientEmails(ctx, memberEmailRecipients);
-      for (const { email } of memberEmails) {
-        await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
-          eventId: event._id,
-          targetUrl: calendarDeepLink(event.workspaceId, event._id),
-          recipientEmail: email,
-          inviterName,
-          eventTitle: event.title,
-          eventDescription: event.description,
-          startsAt: event.startsAt,
-          endsAt: event.endsAt,
-          timezone: event.timezone,
-          sequence: event.sequence ?? 0,
-        });
-      }
-    }
+    // New attendees join at the event's current revision; no SEQUENCE
+    // bump because existing recipients aren't affected.
+    await dispatchEventNotifications(ctx, {
+      event,
+      inviterId: userId,
+      action: { kind: "invited", sequence: event.sequence ?? 0 },
+      memberRecipientIds: newUsers,
+      guestRows: newGuestRows,
+    });
 
     return null;
   },
@@ -1347,9 +1113,7 @@ export const removeInvitee = mutation({
     if (!invitee) return null;
     const event = await ctx.db.get(invitee.eventId);
     if (!event) throw new ConvexError("Event not found");
-    if (event.createdBy !== userId) {
-      throw new ConvexError("Only the organizer can remove invitees");
-    }
+    assertOrganizer(event, userId, "remove invitees");
 
     // Revoke share if any.
     if (invitee.shareId) {
@@ -1764,10 +1528,7 @@ async function collectInternalRecipientIds(
   ctx: { db: import("./_generated/server").QueryCtx["db"] },
   eventId: Id<"calendarEvents">,
 ): Promise<Id<"users">[]> {
-  const rows = await ctx.db
-    .query("calendarEventInvitees")
-    .withIndex("by_event", (q) => q.eq("eventId", eventId))
-    .collect();
+  const rows = await loadInviteeRows(ctx, eventId);
   return rows
     .map((r) => r.userId)
     .filter((u): u is Id<"users"> => u !== undefined);

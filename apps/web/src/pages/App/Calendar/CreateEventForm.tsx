@@ -6,7 +6,6 @@ import { useQuery } from "convex-helpers/react/cache";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { parseEmailChips } from "../Dashboard/dashboard-calendar-utils";
+import { Chip } from "./Chip";
 import { InviteeMultiSelect } from "@/components/InviteeMultiSelect";
 import {
   ChannelCombobox,
@@ -537,18 +537,3 @@ export function CreateEventForm({
   );
 }
 
-function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted text-foreground text-xs px-2 py-0.5">
-      {label}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="text-muted-foreground hover:text-foreground"
-        aria-label={`Remove ${label}`}
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </span>
-  );
-}

@@ -29,7 +29,6 @@ import {
   Hash,
   Pencil,
   UserPlus,
-  X,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -41,6 +40,7 @@ import { InviteeMultiSelect } from "@/components/InviteeMultiSelect";
 
 import type { Id } from "@convex/_generated/dataModel";
 import { parseEmailChips } from "../Dashboard/dashboard-calendar-utils";
+import { Chip } from "./Chip";
 import { ChannelCombobox, DatePopover, TimeSelect } from "./event-fields";
 import { combineDateAndTime, msToExactTime } from "./event-time-utils";
 import { ONE_DAY_MS, formatRange } from "./event-detail-data";
@@ -465,22 +465,6 @@ export function InviteAdder({
         </Button>
       </div>
     </div>
-  );
-}
-
-function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted text-foreground text-xs px-2 py-0.5">
-      {label}
-      <button
-        type="button"
-        onClick={onRemove}
-        className="text-muted-foreground hover:text-foreground"
-        aria-label={`Remove ${label}`}
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </span>
   );
 }
 

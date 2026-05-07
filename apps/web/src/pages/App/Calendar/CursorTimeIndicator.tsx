@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 
-// ────────────────────────────────────────────────────────────────────────
-// 15-min snap math — must mirror `beginCreator`'s `cursorYToEpochMs` in
-// MyCalendarTab so the visual hint and the click-to-create result land
-// on the exact same slot. If you change one, change both.
-// ────────────────────────────────────────────────────────────────────────
-
-const SLOT_MIN = 15;
-const DAY_MIN = 24 * 60;
+import {
+  DAY_MINUTES as DAY_MIN,
+  SLOT_MINUTES as SLOT_MIN,
+} from "./calendar-grid-constants";
 
 type IndicatorState = {
   /** schedule-x time-grid day column the cursor is over. */

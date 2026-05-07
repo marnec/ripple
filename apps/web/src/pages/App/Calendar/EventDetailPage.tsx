@@ -9,19 +9,14 @@
  * actions into HeaderSlot so the global header stays in charge of chrome.
  *
  * Content composition is identical to the sheet — same `useEventDetail`
- * hook, same Editable* / Read* leaves — so editing here is one-for-one
+ * hook, same `EventDetailContent` body — so editing here is one-for-one
  * with the side panel. The only deltas are layout (wider content
  * column, larger title) and post-destroy navigation (back to the
  * calendar tab, not closing a popover).
  */
 
-import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-  Hash,
-  Trash2,
-  Video,
-} from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
@@ -29,25 +24,14 @@ import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import { cn } from "@/lib/utils";
 import type { QueryParams } from "@ripple/shared/types/routes";
 import type { Id } from "@convex/_generated/dataModel";
 
-import {
-  EditableChannel,
-  EditableDateTime,
-  EditableDescription,
-  EditableTitle,
-  InviteAdder,
-  PersonRow,
-  ReadDateTime,
-  ReadSection,
-} from "./event-detail-blocks";
-import {
-  RSVP_BADGE_CLASS,
-  RSVP_LABEL,
-  useEventDetail,
-} from "./event-detail-data";
+import { EditableTitle } from "./event-detail-blocks";
+import { useEventDetail } from "./event-detail-data";
+import { EventDetailContent } from "./EventDetailContent";
+import { JoinCallButton } from "./JoinCallButton";
+import { RsvpResponseGroup } from "./RsvpResponseGroup";
 
 export function EventDetailPage() {
   const { workspaceId, eventId } = useParams<
@@ -98,26 +82,6 @@ function EventDetailPageContent({
   const joinCall = () => {
     void navigate(`/workspaces/${workspaceId}/events/${eventId}/videocall`);
   };
-
-  const hasInvitees = !!detail && detail.invitees.length > 0;
-  const existingUserIds = useMemo(
-    () =>
-      new Set(
-        detail?.invitees
-          .map((i) => i.userId)
-          .filter((id): id is Id<"users"> => !!id) ?? [],
-      ),
-    [detail?.invitees],
-  );
-  const existingGuestEmails = useMemo(
-    () =>
-      new Set(
-        detail?.invitees
-          .map((i) => i.guestEmail)
-          .filter((e): e is string => !!e) ?? [],
-      ),
-    [detail?.invitees],
-  );
 
   // Loading: matches TaskDetailPage's RippleSpinner full-screen pattern.
   // Once Convex resolves the query we render content (or ResourceDeleted
@@ -234,198 +198,37 @@ function EventDetailPageContent({
           <div className="h-6" />
 
           {/* ───── Sections ───── */}
-          <div className="flex flex-col gap-7">
-            {editable ? (
-              <EditableDateTime
-                startsAt={detail.event.startsAt}
-                endsAt={detail.event.endsAt}
-                onSave={(startsAt, endsAt) =>
-                  saveField("Time", {
-                    eventId: detail.event._id,
-                    startsAt,
-                    endsAt,
-                  })
-                }
-              />
-            ) : (
-              <ReadDateTime
-                startsAt={detail.event.startsAt}
-                endsAt={detail.event.endsAt}
-              />
-            )}
-
-            {editable ? (
-              <EditableChannel
-                value={detail.event.channelId ?? ""}
-                channels={channels ?? []}
-                onSave={(channelId) =>
-                  saveField("Channel", {
-                    eventId: detail.event._id,
-                    channelId: channelId
-                      ? (channelId as Id<"channels">)
-                      : null,
-                  })
-                }
-              />
-            ) : detail.channelName && detail.event.channelId ? (
-              <ReadSection
-                icon={<Hash className="h-3.5 w-3.5" />}
-                label="Channel"
-              >
-                <button
-                  type="button"
-                  className="flex items-center gap-2 text-sm hover:underline self-start"
-                  onClick={() => {
-                    void navigate(
-                      `/workspaces/${workspaceId}/channels/${detail.event.channelId}`,
-                    );
-                  }}
-                >
-                  <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium">{detail.channelName}</span>
-                </button>
-              </ReadSection>
-            ) : null}
-
-            {editable ? (
-              <EditableDescription
-                value={detail.event.description ?? ""}
-                onSave={(description) =>
-                  saveField("Description", {
-                    eventId: detail.event._id,
-                    description,
-                  })
-                }
-                rows={6}
-              />
-            ) : detail.event.description ? (
-              <ReadSection label="Description">
-                <p className="text-sm whitespace-pre-wrap">
-                  {detail.event.description}
-                </p>
-              </ReadSection>
-            ) : null}
-
-            <ReadSection label="Organizer">
-              <PersonRow
-                name={detail.organizer.name ?? detail.organizer.email ?? "Unknown"}
-                image={detail.organizer.image}
-              />
-            </ReadSection>
-
-            {/* ───── Invitees ───── */}
-            <section>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Invitees
-                </p>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  {detail.invitees.length}
-                </span>
-              </div>
-              {!hasInvitees ? (
-                <p className="text-xs text-muted-foreground">
-                  No one invited yet.
-                </p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {detail.invitees.map((inv) => (
-                    <li
-                      key={inv._id}
-                      className="group flex items-center gap-2 text-sm"
-                    >
-                      <PersonRow
-                        name={
-                          inv.userName ??
-                          inv.guestName ??
-                          inv.guestEmail ??
-                          "Invitee"
-                        }
-                        image={inv.userImage}
-                        guest={!inv.userId}
-                        subtitle={inv.userId ? inv.userEmail : "Guest"}
-                      />
-                      <span
-                        className={cn(
-                          "ml-auto text-[11px] px-1.5 py-0.5 rounded font-medium",
-                          RSVP_BADGE_CLASS[inv.status],
-                        )}
-                      >
-                        {RSVP_LABEL[inv.status]}
-                      </span>
-                      {editable && (
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveInvitee(inv._id)}
-                          aria-label={`Remove ${inv.userName ?? inv.guestEmail ?? "invitee"}`}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-md p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {editable && (
-                <InviteAdder
-                  members={members ?? []}
-                  existingUserIds={existingUserIds}
-                  existingGuestEmails={existingGuestEmails}
-                  organizerId={detail.event.createdBy}
-                  onSubmit={handleAddInvitees}
-                />
-              )}
-            </section>
-          </div>
+          <EventDetailContent
+            detail={detail}
+            channels={channels}
+            members={members}
+            editable={editable}
+            workspaceId={workspaceId}
+            saveField={saveField}
+            handleAddInvitees={handleAddInvitees}
+            handleRemoveInvitee={handleRemoveInvitee}
+            gapClassName="gap-7"
+            channelDisplay="section"
+          />
 
           {/* ───── Footer actions (Join + RSVP) — kept in the body
                  (not a sticky footer) since the page already scrolls
                  and a fixed bar would chew vertical space on mobile. */}
           <div className="mt-10 flex flex-col gap-2 border-t pt-6">
-            {callStatus === "open" && detail.event.cancelledAt === undefined && (
-              <Button onClick={joinCall} className="self-start min-w-40">
-                <Video className="h-4 w-4 mr-1.5" />
-                Join call
-              </Button>
-            )}
-            {callStatus === "pending" && (
-              <p className="text-xs text-muted-foreground">
-                Join opens 5 minutes before the event.
-              </p>
-            )}
+            <JoinCallButton
+              status={callStatus}
+              cancelled={detail.event.cancelledAt !== undefined}
+              onJoin={joinCall}
+              className="self-start min-w-40"
+            />
 
             {!isOrganizer && myInvitee && detail.event.cancelledAt === undefined && (
-              <div className="flex items-center gap-1.5 max-w-md">
-                <Button
-                  type="button"
-                  variant={myInvitee.status === "accepted" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => void handleRespond("accepted")}
-                >
-                  Going
-                </Button>
-                <Button
-                  type="button"
-                  variant={myInvitee.status === "tentative" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => void handleRespond("tentative")}
-                >
-                  Maybe
-                </Button>
-                <Button
-                  type="button"
-                  variant={myInvitee.status === "declined" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => void handleRespond("declined")}
-                >
-                  Decline
-                </Button>
-              </div>
+              <RsvpResponseGroup
+                myStatus={myInvitee.status}
+                onRespond={(s) => void handleRespond(s)}
+                className="max-w-md"
+                buttonClassName="flex-1"
+              />
             )}
           </div>
         </div>
@@ -433,4 +236,3 @@ function EventDetailPageContent({
     </div>
   );
 }
-

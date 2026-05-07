@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  fromLocalDateTimeInput,
   joinWindowStatus,
   parseEmailChips,
-  toLocalDateTimeInput,
 } from "./dashboard-calendar-utils";
 
 describe("joinWindowStatus", () => {
@@ -45,12 +43,3 @@ describe("parseEmailChips", () => {
   });
 });
 
-describe("local datetime round-trip", () => {
-  it("toLocalDateTimeInput → fromLocalDateTimeInput preserves wall-clock minute", () => {
-    const ms = new Date(2026, 4, 15, 14, 30).getTime(); // local 14:30
-    const s = toLocalDateTimeInput(ms);
-    expect(s).toBe("2026-05-15T14:30");
-    const back = fromLocalDateTimeInput(s);
-    expect(back).toBe(ms);
-  });
-});

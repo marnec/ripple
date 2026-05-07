@@ -214,7 +214,6 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_event: ["eventId", "_creationTime"];
-      by_event_email: ["eventId", "guestEmail", "_creationTime"];
       by_event_user: ["eventId", "userId", "_creationTime"];
       by_share: ["shareId", "_creationTime"];
       by_user_workspace_event: [

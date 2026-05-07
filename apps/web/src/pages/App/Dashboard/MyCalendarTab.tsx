@@ -1,4 +1,4 @@
-import React, { createContext, Suspense, useContext, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import {
   createCalendar,
   createViewMonthAgenda,
@@ -20,7 +20,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
-import { Plus, CalendarDays, CalendarCheck, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
@@ -35,11 +35,14 @@ import type { Id } from "@convex/_generated/dataModel";
 import type { QueryParams } from "@ripple/shared/types/routes";
 import "../Project/project-calendar.css";
 
-import {
-  MemberCalendarFilter,
-  type MemberCalendarMember,
-} from "./MemberCalendarFilter";
+import { type MemberCalendarMember } from "./MemberCalendarFilter";
 import { memberBlockStyle } from "./member-calendar-colors";
+import { CalendarHeader } from "./CalendarHeader";
+import {
+  CalendarHeaderContext,
+  type DashboardCalendarView,
+} from "./calendar-header-context";
+import { EmptyOverlay } from "./EmptyOverlay";
 
 // TaskDetailSheet stays lazy — it pulls in BlockNote + Yjs + y-partyserver
 // (~hundreds of KB). Calling `prefetchTaskDetailSheet()` from a mount
@@ -62,6 +65,15 @@ import {
   NotifyInviteesDialog,
   type RescheduleChoice,
 } from "../Calendar/NotifyInviteesDialog";
+import {
+  DAY_MINUTES,
+  SLOT_MINUTES,
+} from "../Calendar/calendar-grid-constants";
+import { parseScheduleXEventId } from "../Calendar/scheduleXEventId";
+import {
+  msToZonedDateTime,
+  temporalToMs,
+} from "../Calendar/event-time-utils";
 
 // ────────────────────────────────────────────────────────────────────────
 // Calendar styling — two visual lanes: "tasks" (existing palette, blue) and
@@ -83,227 +95,6 @@ const CALENDARS_CONFIG: Record<string, CalendarType> = {
     darkColors: { main: "#818cf8", container: "#818cf835", onContainer: "#f9fafb" },
   },
 };
-
-// ────────────────────────────────────────────────────────────────────────
-// Custom header — prev/next + Today + range label + Week/Month switcher.
-// Mirrors ProjectCalendar's headerContent slot pattern but trimmed to the
-// controls a personal calendar actually needs (no commitment toggle, no
-// unscheduled sidebar). The schedule-x headerContent slot renders without
-// props, so we feed it via context owned by `MyCalendarTabContent`.
-// ────────────────────────────────────────────────────────────────────────
-
-type DashboardCalendarView = "week" | "month-grid";
-
-type CalendarHeaderValue = {
-  calendarControls: ReturnType<typeof createCalendarControlsPlugin>;
-  /** Bumped on every range update so the header re-reads the current date. */
-  rangeVersion: number;
-  /** React-owned view state — drives the highlight directly. Single
-   *  source of truth, kept in sync with schedule-x via `setView`. */
-  view: DashboardCalendarView;
-  setView: (next: DashboardCalendarView) => void;
-  /** `null` while the events query is loading — header hides the counter
-   *  in that state to avoid a "0 scheduled" flash before data lands. */
-  eventCount: number | null;
-  onCreateEvent: () => void;
-  /** Workspace members the viewer can overlay (excludes themselves).
-   *  `null` while the members query is loading — header hides the
-   *  combobox trigger in that state to avoid a flicker. */
-  filterableMembers: MemberCalendarMember[] | null;
-  /** Currently overlaid members (subset of `filterableMembers`). */
-  visibleMemberIds: Id<"users">[];
-  setVisibleMemberIds: (ids: Id<"users">[]) => void;
-};
-
-const CalendarHeaderContext = createContext<CalendarHeaderValue | null>(null);
-
-function CalendarHeader() {
-  const ctx = useContext(CalendarHeaderContext);
-  if (!ctx) return null;
-  const {
-    calendarControls,
-    rangeVersion: _rangeVersion, // read to subscribe to nav changes
-    view,
-    setView,
-    eventCount: _eventCount, // wired through context for future header chips
-    onCreateEvent,
-    filterableMembers,
-    visibleMemberIds,
-    setVisibleMemberIds,
-  } = ctx;
-
-  let date: Temporal.PlainDate | null = null;
-  try {
-    date = calendarControls.getDate();
-  } catch {
-    // calendar not initialised yet — fall through with safe defaults
-  }
-
-  // Read schedule-x's actual rendered view rather than only the React
-  // `view` state. Two reasons:
-  //  1. Small-screen auto-swap: schedule-x silently swaps "week" ⇄
-  //     "week-agenda" and "month-grid" ⇄ "month-agenda" when the
-  //     viewport crosses 700 px. Our React `view` only tracks the two
-  //     wide-screen variants, so it can disagree with what's actually
-  //     on screen.
-  //  2. Initial render race: `defaultView: "week"` plus React `view`
-  //     defaulting to "week" should agree, but if they ever drift, the
-  //     stepper would advance by the wrong unit (the symptom users hit:
-  //     "back/forward jumps a month while the week view is showing").
-  // Falling back to React `view` keeps the buttons working before the
-  // calendar finishes mounting, when `getView()` throws.
-  const isMonthView = (() => {
-    let v: string = view;
-    try {
-      v = calendarControls.getView() || view;
-    } catch {
-      /* calendar not yet initialised */
-    }
-    return v.startsWith("month");
-  })();
-
-  // Two label variants — long (desktop) shows the full week range with day
-  // numbers; compact (mobile) drops the day numbers because "May 4 – 10,
-  // 2026" eats the whole header row alongside nav buttons + view switcher.
-  // For the week-view compact form we use the month/year of the week's
-  // centre day (Thursday) so a Mon–Sun week that crosses a month boundary
-  // still gets a sensible single-month label rather than a misleading
-  // start-month-only one.
-  const labels = (() => {
-    if (!date) return { full: "", compact: "" };
-    if (isMonthView) {
-      const full = date.toLocaleString("en-US", { month: "long", year: "numeric" });
-      return { full, compact: full };
-    }
-    // Week view
-    const dow = date.dayOfWeek; // 1 (Mon) … 7 (Sun)
-    const weekStart = date.subtract({ days: dow - 1 });
-    const weekEnd = weekStart.add({ days: 6 });
-    const sameMonth = weekStart.month === weekEnd.month;
-    const sameYear = weekStart.year === weekEnd.year;
-    const startFmt = weekStart.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      ...(sameYear ? {} : { year: "numeric" }),
-    });
-    const endFmt = weekEnd.toLocaleString("en-US", {
-      month: sameMonth ? undefined : "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    const full = `${startFmt} – ${endFmt}`;
-    const centre = weekStart.add({ days: 3 });
-    const compact = centre.toLocaleString("en-US", {
-      month: "long",
-      year: "numeric",
-    });
-    return { full, compact };
-  })();
-
-  const stepBack = () => {
-    if (!date) return;
-    calendarControls.setDate(
-      isMonthView ? date.subtract({ months: 1 }) : date.subtract({ weeks: 1 }),
-    );
-  };
-  const stepForward = () => {
-    if (!date) return;
-    calendarControls.setDate(
-      isMonthView ? date.add({ months: 1 }) : date.add({ weeks: 1 }),
-    );
-  };
-
-  return (
-    // No internal horizontal padding — `.sx__calendar-header` had its
-    // 16px inline padding zeroed in project-calendar.css so the header
-    // buttons sit flush with the toolbar's content edge.
-    <div className="flex items-center justify-between w-full gap-2">
-      {/* Left: nav + range label + Today */}
-      <div className="flex items-center gap-1.5">
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={stepBack} aria-label="Previous">
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={stepForward} aria-label="Next">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <span className="hidden sm:inline text-sm font-medium tabular-nums min-w-40">
-          {labels.full}
-        </span>
-        <span className="sm:hidden text-sm font-medium tabular-nums">
-          {labels.compact}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs text-muted-foreground"
-          onClick={() => calendarControls.setDate(Temporal.Now.plainDateISO())}
-          aria-label="Today"
-        >
-          <CalendarCheck className="h-3.5 w-3.5 shrink-0" />
-          <span className="hidden sm:inline">Today</span>
-        </Button>
-        {/* Member-calendar overlay filter — pick colleagues whose busy
-            time should render as background blocks behind your own
-            events. Hidden until the workspace member query resolves
-            and the workspace has at least one OTHER member (a solo
-            workspace would just show an empty popup). */}
-        {filterableMembers && filterableMembers.length > 0 && (
-          <MemberCalendarFilter
-            members={filterableMembers}
-            selectedIds={visibleMemberIds}
-            onSelectedIdsChange={setVisibleMemberIds}
-          />
-        )}
-      </div>
-
-      {/* Right cluster: view switcher + New event.
-          New event is desktop-only — on mobile it'd crowd the calendar's
-          own header out, so the parent renders a HeaderSlot fallback for
-          "New event" (it's also implied by the visible event list).
-          Order: switcher first, button last — placing the primary CTA at
-          the trailing edge matches the rest of the app's toolbar layout
-          and pairs the action with empty-state CTAs sitting below. */}
-      <div className="flex items-center gap-2">
-        {/* Week / Month switcher */}
-        <div className="flex items-center rounded-md border p-0.5 text-xs font-medium">
-          <button
-            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
-              view === "week"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setView("week")}
-            aria-label="Week view"
-          >
-            <CalendarRange className="h-3.5 w-3.5 shrink-0" />
-            <span className="hidden sm:inline">Week</span>
-          </button>
-          <button
-            className={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
-              view === "month-grid"
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setView("month-grid")}
-            aria-label="Month view"
-          >
-            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-            <span className="hidden sm:inline">Month</span>
-          </button>
-        </div>
-
-        <Button
-          size="sm"
-          className="hidden md:inline-flex h-7"
-          onClick={onCreateEvent}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          New event
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 // Stable reference — schedule-x's CalendarRenderer treats `customComponents`
 // as a useEffect dep and replays the slide-in animation when its identity
@@ -459,8 +250,8 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     const dayStartMs = new Date(`${colDateStr}T00:00`).getTime();
     if (Number.isNaN(dayStartMs)) return;
 
-    const SLOT_MIN = 15;
-    const DAY_MIN = 24 * 60;
+    const SLOT_MIN = SLOT_MINUTES;
+    const DAY_MIN = DAY_MINUTES;
 
     function cursorYToEpochMs(clientY: number): number {
       const colRect = dayColumn.getBoundingClientRect();
@@ -804,8 +595,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   React.useEffect(() => {
     onEventUpdateRef.current = (updated) => {
       const id = String(updated.id);
-      if (!id.startsWith("event-")) return; // tasks blocked at onBeforeEventUpdate
-      const eventId = id.slice(6) as Id<"calendarEvents">;
+      const parsed = parseScheduleXEventId(id);
+      if (parsed?.kind !== "event") return; // tasks blocked at onBeforeEventUpdate
+      const eventId = parsed.id;
       const sourceEvent = events?.find((e) => e._id === eventId);
       if (!sourceEvent) return;
 
@@ -1154,13 +946,13 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       const dy = Math.abs(e.clientY - downY);
       // 4 px sits below typical click jitter; anything more is a drag.
       if (dx > 4 || dy > 4) return;
-      if (id.startsWith("task-")) {
-        const taskId = id.slice(5) as Id<"tasks">;
-        const match = tasksRef.current?.find((t) => t._id === taskId);
-        setSelectedTaskId(taskId);
+      const parsed = parseScheduleXEventId(id);
+      if (parsed?.kind === "task") {
+        const match = tasksRef.current?.find((t) => t._id === parsed.id);
+        setSelectedTaskId(parsed.id);
         setSelectedTaskProjectId(match?.projectId ?? null);
-      } else if (id.startsWith("event-")) {
-        setSelectedEventId(id.slice(6) as Id<"calendarEvents">);
+      } else if (parsed?.kind === "event") {
+        setSelectedEventId(parsed.id);
       }
     }
     // Prevent native HTML5 text-drag from hijacking schedule-x's
@@ -1421,15 +1213,6 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
 // Helpers
 // ────────────────────────────────────────────────────────────────────────
 
-/** Convert a UTC ms timestamp into a `Temporal.ZonedDateTime` in the user's
- *  local timezone. Schedule-x's `CalendarEventExternal` typing requires
- *  ZonedDateTime for timed events; PlainDateTime crashes the week view
- *  with `_start.withTimeZone is not a function`. */
-function msToZonedDateTime(ms: number): Temporal.ZonedDateTime {
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  return Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(tz);
-}
-
 /** Compact "Mon, May 4 · 10:00 AM – 11:00 AM" range used by the
  *  notify-invitees dialog's before/after summary. Locale-driven so the
  *  organizer sees their own clock format (12h vs 24h). */
@@ -1448,35 +1231,4 @@ function formatRescheduleRange(startsAt: number, endsAt: number): string {
   return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
 }
 
-/** Inverse of `msToZonedDateTime` — schedule-x hands its drag/resize
- *  callbacks Temporal `ZonedDateTime` (timed events) or `PlainDate`
- *  (all-day) instances. The events lane in the dashboard is always
- *  timed, but accept both shapes defensively so type narrowing
- *  doesn't trip on a stray PlainDate. */
-function temporalToMs(t: unknown): number {
-  if (t instanceof Temporal.ZonedDateTime) return t.epochMilliseconds;
-  if (t instanceof Temporal.PlainDate) {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    return t.toZonedDateTime({ timeZone: tz }).epochMilliseconds;
-  }
-  // Last-resort: schedule-x sometimes hands strings on legacy paths.
-  return new Date(String(t)).getTime();
-}
-
-function EmptyOverlay({ onCreate }: { onCreate: () => void }) {
-  return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <div className="flex flex-col items-center gap-2 text-center bg-background/80 backdrop-blur-sm rounded-lg px-6 py-4 pointer-events-auto">
-        <CalendarDays className="h-8 w-8 text-muted-foreground/40" />
-        <p className="text-sm font-medium">Nothing scheduled</p>
-        <p className="text-xs text-muted-foreground max-w-xs">
-          Plan a call or schedule a task to see it here.
-        </p>
-        <Button size="sm" variant="outline" onClick={onCreate} className="mt-1">
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          New event
-        </Button>
-      </div>
-    </div>
-  );
-}
+// EmptyOverlay extracted to ./EmptyOverlay.tsx

@@ -424,7 +424,6 @@ export default defineSchema({
   })
     .index("by_event", ["eventId"])
     .index("by_event_user", ["eventId", "userId"])
-    .index("by_event_email", ["eventId", "guestEmail"])
     .index("by_user_workspace_event", ["userId", "workspaceId", "eventId"])
     .index("by_share", ["shareId"]),
 

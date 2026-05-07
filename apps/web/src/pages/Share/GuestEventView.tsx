@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { CalendarDays, Video } from "lucide-react";
@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { joinWindowStatus } from "../App/Dashboard/dashboard-calendar-utils";
+import { useJoinStatusTick } from "../App/Calendar/useJoinStatusTick";
 import { api } from "@convex/_generated/api";
 
 import { GuestEventCall } from "./GuestEventCall";
@@ -36,11 +37,7 @@ export function GuestEventView({ shareId, guestSub, guestName }: Props) {
   // Tick `now` every 30 s so the Join button appears at start − 5 min
   // without a manual refresh. Hooks must run unconditionally; the early
   // returns happen below.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useJoinStatusTick();
 
   if (data === undefined) {
     return (

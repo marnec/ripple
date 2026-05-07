@@ -204,6 +204,66 @@ function organizerAddress(): string {
 
 // ─── Email helpers ───────────────────────────────────────────────────────
 
+/**
+ * Shared HTML layout for calendar lifecycle emails. Each variant
+ * provides its own `subhead` (the small grey label below the brand
+ * heading) and `bodyHtml` (the message-specific block). The outer
+ * table chrome, brand line, and footer copy are constant across
+ * invite / reschedule / cancellation, so changes to the visual
+ * frame land in one place.
+ */
+function renderEventEmailLayout(opts: {
+  subhead: string;
+  bodyHtml: string;
+}): string {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;">
+        <tr><td style="padding:32px 32px 24px;">
+          <h1 style="margin:0 0 4px;font-size:20px;font-weight:600;color:#18181b;">${APP_NAME}</h1>
+          <p style="margin:0 0 24px;font-size:14px;color:#71717a;">${opts.subhead}</p>
+          ${opts.bodyHtml}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Resend wiring for calendar lifecycle emails. Centralises the
+ * API-key guard, client construction, and error mapping that was
+ * duplicated across the three sendEvent* actions.
+ */
+async function sendCalendarEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  ics: string;
+  method: IcsMethod;
+}): Promise<void> {
+  const resendKey = process.env.AUTH_RESEND_KEY;
+  if (!resendKey) throw new ConvexError("Missing Resend API key");
+  const resend = new Resend(resendKey);
+
+  const sent = await resend.emails.send({
+    from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+    attachments: [icsAttachment(opts.ics, opts.method)],
+  });
+
+  if (sent.error) {
+    throw new ConvexError(`Failed to send email: ${sent.error.message}`);
+  }
+}
+
 function formatEventDateTime(
   startsAt: number,
   endsAt: number,
@@ -262,7 +322,6 @@ export const sendEventInvite = internalAction({
       sequence,
     },
   ) => {
-    const url = targetUrl;
     const when = formatEventDateTime(startsAt, endsAt, timezone);
 
     const ics = buildEventIcs({
@@ -276,56 +335,31 @@ export const sendEventInvite = internalAction({
       organizerEmail: organizerAddress(),
       organizerName: inviterName,
       attendeeEmail: recipientEmail,
-      url,
+      url: targetUrl,
     });
 
-    const emailContent = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;">
-        <tr><td style="padding:32px 32px 24px;">
-          <h1 style="margin:0 0 4px;font-size:20px;font-weight:600;color:#18181b;">${APP_NAME}</h1>
-          <p style="margin:0 0 24px;font-size:14px;color:#71717a;">Calendar invitation</p>
+    const html = renderEventEmailLayout({
+      subhead: "Calendar invitation",
+      bodyHtml: `
           <p style="margin:0 0 8px;font-size:15px;color:#27272a;line-height:1.5;">
             <strong>${inviterName}</strong> invited you to <strong>${eventTitle}</strong>.
           </p>
           <p style="margin:0 0 24px;font-size:14px;color:#52525b;line-height:1.5;">${when}</p>
-          <a href="${url}" style="display:inline-block;padding:10px 28px;background-color:#18181b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;">
+          <a href="${targetUrl}" style="display:inline-block;padding:10px 28px;background-color:#18181b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;">
             View invitation
           </a>
           <p style="margin:24px 0 0;font-size:12px;color:#a1a1aa;line-height:1.5;">
-            Or copy this link: <a href="${url}" style="color:#71717a;">${url}</a>
-          </p>
-        </td></tr>
-        <tr><td style="padding:16px 32px;border-top:1px solid #f4f4f5;">
-          <p style="margin:0;font-size:12px;color:#a1a1aa;">
-            If you didn't expect this invitation, you can ignore this email.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-
-    const resendKey = process.env.AUTH_RESEND_KEY;
-    if (!resendKey) throw new ConvexError("Missing Resend API key");
-    const resend = new Resend(resendKey);
-
-    const sent = await resend.emails.send({
-      from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
-      to: recipientEmail,
-      subject: `Invitation: ${eventTitle}`,
-      html: emailContent,
-      attachments: [icsAttachment(ics, "REQUEST")],
+            Or copy this link: <a href="${targetUrl}" style="color:#71717a;">${targetUrl}</a>
+          </p>`,
     });
 
-    if (sent.error) {
-      throw new ConvexError(`Failed to send email: ${sent.error.message}`);
-    }
+    await sendCalendarEmail({
+      to: recipientEmail,
+      subject: `Invitation: ${eventTitle}`,
+      html,
+      ics,
+      method: "REQUEST",
+    });
     return null;
   },
 });
@@ -380,16 +414,10 @@ export const sendEventReschedule = internalAction({
       organizerName: inviterName,
       attendeeEmail: recipientEmail,
     });
-    const emailContent = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;">
-        <tr><td style="padding:32px 32px 24px;">
-          <h1 style="margin:0 0 4px;font-size:20px;font-weight:600;color:#18181b;">${APP_NAME}</h1>
-          <p style="margin:0 0 24px;font-size:14px;color:#71717a;">Event rescheduled</p>
+
+    const html = renderEventEmailLayout({
+      subhead: "Event rescheduled",
+      bodyHtml: `
           <p style="margin:0 0 16px;font-size:15px;color:#27272a;line-height:1.5;">
             <strong>${inviterName}</strong> rescheduled <strong>${eventTitle}</strong>.
           </p>
@@ -398,29 +426,16 @@ export const sendEventReschedule = internalAction({
               <p style="margin:0;font-size:13px;color:#71717a;line-height:1.4;">New time</p>
               <p style="margin:4px 0 0;font-size:14px;color:#18181b;font-weight:500;line-height:1.4;">${newRangeLabel}</p>
             </td></tr>
-          </table>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-
-    const resendKey = process.env.AUTH_RESEND_KEY;
-    if (!resendKey) throw new ConvexError("Missing Resend API key");
-    const resend = new Resend(resendKey);
-
-    const sent = await resend.emails.send({
-      from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
-      to: recipientEmail,
-      subject: `Rescheduled: ${eventTitle}`,
-      html: emailContent,
-      attachments: [icsAttachment(ics, "REQUEST")],
+          </table>`,
     });
 
-    if (sent.error) {
-      throw new ConvexError(`Failed to send email: ${sent.error.message}`);
-    }
+    await sendCalendarEmail({
+      to: recipientEmail,
+      subject: `Rescheduled: ${eventTitle}`,
+      html,
+      ics,
+      method: "REQUEST",
+    });
     return null;
   },
 });
@@ -463,44 +478,25 @@ export const sendEventCancellation = internalAction({
       organizerName: inviterName,
       attendeeEmail: recipientEmail,
     });
-    const emailContent = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;">
-        <tr><td style="padding:32px 32px 24px;">
-          <h1 style="margin:0 0 4px;font-size:20px;font-weight:600;color:#18181b;">${APP_NAME}</h1>
-          <p style="margin:0 0 24px;font-size:14px;color:#71717a;">Event cancelled</p>
+
+    const html = renderEventEmailLayout({
+      subhead: "Event cancelled",
+      bodyHtml: `
           <p style="margin:0 0 8px;font-size:15px;color:#27272a;line-height:1.5;">
             <strong>${inviterName}</strong> cancelled <strong>${eventTitle}</strong>.
           </p>
           <p style="margin:0;font-size:14px;color:#52525b;line-height:1.5;">
             The previously shared invitation link is no longer valid.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-
-    const resendKey = process.env.AUTH_RESEND_KEY;
-    if (!resendKey) throw new ConvexError("Missing Resend API key");
-    const resend = new Resend(resendKey);
-
-    const sent = await resend.emails.send({
-      from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
-      to: recipientEmail,
-      subject: `Cancelled: ${eventTitle}`,
-      html: emailContent,
-      attachments: [icsAttachment(ics, "CANCEL")],
+          </p>`,
     });
 
-    if (sent.error) {
-      throw new ConvexError(`Failed to send email: ${sent.error.message}`);
-    }
+    await sendCalendarEmail({
+      to: recipientEmail,
+      subject: `Cancelled: ${eventTitle}`,
+      html,
+      ics,
+      method: "CANCEL",
+    });
     return null;
   },
 });

@@ -7,19 +7,15 @@ import {
 
 import type { Id } from "@convex/_generated/dataModel";
 import { CreateEventForm } from "./CreateEventForm";
+import {
+  DAY_END_MINUTES as DAY_END_MIN,
+  DAY_MINUTES as DAY_RANGE_MIN,
+  DAY_START_MINUTES as DAY_START_MIN,
+} from "./calendar-grid-constants";
 
 // ────────────────────────────────────────────────────────────────────────
 // Ghost geometry helpers
 // ────────────────────────────────────────────────────────────────────────
-
-/** schedule-x's default day window — `00:00` → `24:00`. The package
- *  supports custom `dayBoundaries`, but our calendar doesn't set any so
- *  we hard-code the full-day range when mapping ms ↔ pixel offsets
- *  inside a day column. If that changes, this constant + the cursor →
- *  time helpers in `MyCalendarTab` must be updated together. */
-const DAY_START_MIN = 0;
-const DAY_END_MIN = 24 * 60;
-const DAY_RANGE_MIN = DAY_END_MIN - DAY_START_MIN;
 
 /** Resolve an absolute epoch ms timestamp into the local-time minute
  *  offset within its day. Used to pixel-map start/end onto a column. */
