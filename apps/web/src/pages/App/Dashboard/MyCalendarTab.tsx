@@ -18,13 +18,10 @@ import { Temporal } from "temporal-polyfill";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
-import { toast } from "sonner";
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { getErrorMessage } from "@/lib/errors";
-import { isHistoricalReschedule } from "@/lib/calendar-utils";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useVisibleMemberCalendars } from "@/hooks/use-visible-member-calendars";
@@ -44,6 +41,7 @@ import {
 } from "./calendar-header-context";
 import { EmptyOverlay } from "./EmptyOverlay";
 import { useEventDragCreate } from "./hooks/useEventDragCreate";
+import { useEventReschedule } from "./hooks/useEventReschedule";
 
 // TaskDetailSheet stays lazy — it pulls in BlockNote + Yjs + y-partyserver
 // (~hundreds of KB). Calling `prefetchTaskDetailSheet()` from a mount
@@ -67,10 +65,7 @@ import {
   type RescheduleChoice,
 } from "../Calendar/NotifyInviteesDialog";
 import { parseScheduleXEventId } from "../Calendar/scheduleXEventId";
-import {
-  msToZonedDateTime,
-  temporalToMs,
-} from "../Calendar/event-time-utils";
+import { msToZonedDateTime } from "../Calendar/event-time-utils";
 
 // ────────────────────────────────────────────────────────────────────────
 // Calendar styling — two visual lanes: "tasks" (existing palette, blue) and
@@ -403,92 +398,21 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   });
   const [resizePlugin] = useState(() => createResizePlugin(15));
 
-  // Mutation handle + a ref-trampoline for the schedule-x callback —
-  // the calendar instance is built once in `useState`'s lazy
-  // initializer, so any callback we put on its config closes over the
-  // FIRST render's closure. The ref is updated on every render so the
-  // committed handler always reads the latest state (events, isMobile,
-  // mutation reference, etc.).
+  // Mutation handle for the reschedule hook (drag/resize commit) and
+  // for any other inline persistence path the tab might grow later.
   const updateEventMutation = useMutation(api.calendarEvents.update);
-  type RescheduleAttempt = {
-    eventId: Id<"calendarEvents">;
-    /** Original schedule-x event we can restore on a revert. */
-    original:
-      | { id: string; start: Temporal.PlainDate | Temporal.ZonedDateTime;
-          end: Temporal.PlainDate | Temporal.ZonedDateTime;
-          title: string; calendarId: string };
-    oldStartsAt: number;
-    oldEndsAt: number;
-    newStartsAt: number;
-    newEndsAt: number;
-    title: string;
-    inviteeCount: number;
-  };
-  const [pendingReschedule, setPendingReschedule] = useState<RescheduleAttempt | null>(null);
+
+  // Ref-trampoline for schedule-x's drag/resize commit callback. The
+  // calendar instance is built once in `useState`'s lazy initializer
+  // below, so any callback we put on its config closes over the FIRST
+  // render's closure. The ref is updated on every render (effect after
+  // `useEventReschedule`) so the committed handler always reads the
+  // freshest events array, mutation reference, etc. Lives here rather
+  // than inside `useEventReschedule` because schedule-x's plugin
+  // callback registry captures its callback at plugin construction
+  // time — replacing the ref with a hook return value would break the
+  // fresh-state read pattern.
   const onEventUpdateRef = React.useRef<(updated: { id: string | number; start: unknown; end: unknown }) => void>(() => {});
-  React.useEffect(() => {
-    onEventUpdateRef.current = (updated) => {
-      const id = String(updated.id);
-      const parsed = parseScheduleXEventId(id);
-      if (parsed?.kind !== "event") return; // tasks blocked at onBeforeEventUpdate
-      const eventId = parsed.id;
-      const sourceEvent = events?.find((e) => e._id === eventId);
-      if (!sourceEvent) return;
-
-      // Schedule-x emits start/end as Temporal types; convert to ms.
-      const newStartsAt = temporalToMs(updated.start);
-      const newEndsAt = temporalToMs(updated.end);
-      if (newStartsAt === sourceEvent.startsAt && newEndsAt === sourceEvent.endsAt) {
-        return; // no-op (drag aborted or returned to original cell)
-      }
-
-      const inviteeCount = sourceEvent.nonOrganizerInviteeCount;
-      // Past→past edits are organizer history-cleanup, not real
-      // schedule changes — silent write regardless of invitee count.
-      // Server applies the same predicate as a safety net for
-      // non-dashboard edit paths.
-      const historical = isHistoricalReschedule(
-        sourceEvent.startsAt,
-        newStartsAt,
-        Date.now(),
-      );
-      // No external eyes on the event → just write through. The
-      // organizer's own calendar updates reactively from convex.
-      if (inviteeCount === 0 || historical) {
-        void updateEventMutation({
-          eventId,
-          startsAt: newStartsAt,
-          endsAt: newEndsAt,
-          notifyInvitees: false,
-        }).catch((err: unknown) => {
-          toast.error("Could not reschedule", {
-            description: getErrorMessage(err),
-          });
-        });
-        return;
-      }
-
-      // Has guests → ask. The dialog owns the choice; we stage the
-      // reschedule details + a snapshot of the original event so a
-      // "Revert" action can roll the visual back without a refetch.
-      setPendingReschedule({
-        eventId,
-        original: {
-          id,
-          start: msToZonedDateTime(sourceEvent.startsAt),
-          end: msToZonedDateTime(sourceEvent.endsAt),
-          title: sourceEvent.title,
-          calendarId: CAL_EVENT,
-        },
-        oldStartsAt: sourceEvent.startsAt,
-        oldEndsAt: sourceEvent.endsAt,
-        newStartsAt,
-        newEndsAt,
-        title: sourceEvent.title,
-        inviteeCount,
-      });
-    };
-  });
 
   // Stable calendar instance — schedule-x docs warn that recreating the app
   // on every render flushes its state.
@@ -622,6 +546,29 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       },
     }),
   );
+
+  // Reschedule decision flow + modal staging. Owned by useEventReschedule:
+  // the silent-vs-prompted branching (invitee count + historical-edit
+  // predicate), the optimistic revert path, and the `pendingReschedule`
+  // modal state. We thread `handleEventUpdate` into `onEventUpdateRef`
+  // (effect below) so the schedule-x callback registry — which captured
+  // its callback at plugin construction time, above — calls the freshest
+  // handler on every commit.
+  const {
+    pendingReschedule,
+    handleEventUpdate,
+    sendReschedule,
+    persistSilently,
+    revertReschedule,
+  } = useEventReschedule({
+    events,
+    updateEvent: updateEventMutation,
+    calendarApp,
+    eventCalendarId: CAL_EVENT,
+  });
+  React.useEffect(() => {
+    onEventUpdateRef.current = handleEventUpdate;
+  });
 
   // Diff incoming events into the existing calendar instance — schedule-x's
   // public events API is per-event (add/update/remove), so we maintain the
@@ -826,43 +773,12 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   //   • send   → persist + notify (in-app + email guests)
   //   • silent → persist only (no notifications)
   //   • revert → roll back the schedule-x visual state to the snapshot
-  //              we captured before opening the dialog. Convex's
-  //              reactivity would eventually pull the original times
-  //              back, but we're more responsive doing it locally — the
-  //              user's eye is already on the event.
+  //              we captured before opening the dialog
+  // Hook owns the actual mechanics — see useEventReschedule.ts.
   const handleRescheduleChoice = (choice: RescheduleChoice) => {
-    const attempt = pendingReschedule;
-    if (!attempt) return;
-    setPendingReschedule(null);
-
-    if (choice === "revert") {
-      try {
-        calendarApp.events.update(attempt.original);
-      } catch {
-        // If schedule-x rejects the manual update (event removed in the
-        // meantime, etc.), the diff effect will re-sync on the next
-        // events query update — at worst a brief visual lag.
-      }
-      return;
-    }
-
-    void updateEventMutation({
-      eventId: attempt.eventId,
-      startsAt: attempt.newStartsAt,
-      endsAt: attempt.newEndsAt,
-      notifyInvitees: choice === "send",
-    }).catch((err: unknown) => {
-      // Persistence failed — revert the visual so the calendar stays
-      // truthful with the server, then surface the error.
-      try {
-        calendarApp.events.update(attempt.original);
-      } catch {
-        /* noop */
-      }
-      toast.error("Could not reschedule", {
-        description: getErrorMessage(err),
-      });
-    });
+    if (choice === "send") sendReschedule();
+    else if (choice === "silent") persistSilently();
+    else revertReschedule();
   };
 
   // Mobile event-detail routing: when an event is selected on mobile —
