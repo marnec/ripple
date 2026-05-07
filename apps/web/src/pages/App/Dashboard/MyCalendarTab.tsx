@@ -47,6 +47,7 @@ const LazyTaskDetailSheet = React.lazy(taskDetailSheetImporter);
 import { EventDetailSheet } from "../Calendar/EventDetailSheet";
 import { CreateEventDialog } from "../Calendar/CreateEventDialog";
 import { InlineEventCreator } from "../Calendar/InlineEventCreator";
+import { CursorTimeIndicator } from "../Calendar/CursorTimeIndicator";
 import {
   NotifyInviteesDialog,
   type RescheduleChoice,
@@ -372,11 +373,10 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   // safe even though this function is invoked many renders later.
   function beginCreator(init: {
     dayColumn: HTMLElement;
-    startMs: number;
     downX: number;
     downY: number;
   }) {
-    const { dayColumn, startMs, downX, downY } = init;
+    const { dayColumn, downX, downY } = init;
     const colDateStr = dayColumn.getAttribute("data-time-grid-date");
     if (!colDateStr) return;
     const dayStartMs = new Date(`${colDateStr}T00:00`).getTime();
@@ -400,6 +400,15 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       );
       return dayStartMs + minutes * 60 * 1000;
     }
+
+    // Derive the start from the cursor Y rather than schedule-x's
+    // `dateTime.epochMilliseconds` — schedule-x's value is computed
+    // at its `timePointsPerDay` resolution (1-min by default) and
+    // would land on whatever exact pixel the user clicked. Using
+    // `cursorYToEpochMs` snaps to the same 15-min grid the
+    // `<CursorTimeIndicator />` displays, so the ghost that appears
+    // on mouseup starts exactly where the hover hint promised.
+    const startMs = cursorYToEpochMs(downY);
 
     function onMove(e: MouseEvent) {
       const newEndMs = cursorYToEpochMs(e.clientY);
@@ -864,7 +873,14 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
         // browser dispatches the matching mouseup on a fast click).
         // `preventDefault` suppresses native text-selection during
         // the drag.
-        onMouseDownDateTime(dateTime, e) {
+        // `dateTime` is intentionally unused — `beginCreator` derives
+        // the start time from the cursor Y instead, snapping to the
+        // same 15-min grid the `<CursorTimeIndicator />` shows. See
+        // the comment on `cursorYToEpochMs` inside `beginCreator`.
+        onMouseDownDateTime(_dateTime, e) {
+          // Ignore non-primary buttons — right-click / middle-click
+          // shouldn't open a create popover.
+          if (e.button !== 0) return;
           e.preventDefault();
           const target = e.target;
           if (!(target instanceof Element)) return;
@@ -872,7 +888,6 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           if (!col) return;
           beginCreator({
             dayColumn: col,
-            startMs: dateTime.epochMilliseconds,
             downX: e.clientX,
             downY: e.clientY,
           });
@@ -1185,6 +1200,15 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           }}
           initialDate={createInitialDate ?? undefined}
         />
+      )}
+      {/* Hover hint — a snapped "+ create here" bar that follows the
+          cursor over empty time-grid cells. Tracking is paused
+          (`active={false}`) while a drag/create is in flight; the
+          ghost takes over the visual role then, and the indicator
+          would just be visual noise behind the popover. Mobile users
+          don't get hover, so the listener is a no-op there. */}
+      {!isMobile && (
+        <CursorTimeIndicator active={creator === null} />
       )}
       {/* Click/drag-to-create surface for the time grid. Mounted only
           while the user has an active gesture in flight — there's no
