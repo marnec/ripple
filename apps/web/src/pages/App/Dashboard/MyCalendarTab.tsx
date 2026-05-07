@@ -43,6 +43,7 @@ import {
   type DashboardCalendarView,
 } from "./calendar-header-context";
 import { EmptyOverlay } from "./EmptyOverlay";
+import { useEventDragCreate } from "./hooks/useEventDragCreate";
 
 // TaskDetailSheet stays lazy — it pulls in BlockNote + Yjs + y-partyserver
 // (~hundreds of KB). Calling `prefetchTaskDetailSheet()` from a mount
@@ -65,10 +66,6 @@ import {
   NotifyInviteesDialog,
   type RescheduleChoice,
 } from "../Calendar/NotifyInviteesDialog";
-import {
-  DAY_MINUTES,
-  SLOT_MINUTES,
-} from "../Calendar/calendar-grid-constants";
 import { parseScheduleXEventId } from "../Calendar/scheduleXEventId";
 import {
   msToZonedDateTime,
@@ -199,179 +196,16 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   // flow instead — see `creator` below).
   const [createInitialDate, setCreateInitialDate] = useState<Date | null>(null);
 
-  // Click/drag-to-create state for the time grid (week view). The
-  // popover surface (`<InlineEventCreator />`) replaces the dialog for
-  // this flow — anchored to a ghost event the user is actively
-  // sketching out. Lifecycle:
-  //   1. `onMouseDownDateTime` (schedule-x callback below) seeds this
-  //      with phase="dragging" + the day column + start ms.
-  //   2. A document-level mousemove listener (effect below) updates
-  //      `endMs` as the cursor moves, growing the ghost in real time.
-  //   3. The matching mouseup listener decides drag vs click and
-  //      transitions phase to "creating" (which mounts the popover
-  //      with the form), or — for very short drags — keeps the start
-  //      and bumps the end to start+1h (click-to-create).
-  //   4. Submitting the form or dismissing the popover clears state.
-  type CreatorState = {
-    phase: "dragging" | "creating";
-    dayColumn: HTMLElement;
-    startMs: number;
-    endMs: number;
-    /** Mouse-down coords for the click-vs-drag decision at mouseup. */
-    downX: number;
-    downY: number;
-  };
-  const [creator, setCreator] = useState<CreatorState | null>(null);
+  // Click/drag-to-create state machine for the time grid (week view).
+  // The popover surface (`<InlineEventCreator />`) replaces the dialog
+  // for this flow — anchored to a ghost event the user is actively
+  // sketching out. The hook owns the synchronous-document-listener
+  // trick (mousemove/mouseup attached during the originating mousedown
+  // to beat React batching), the 4 px click-vs-drag threshold, and the
+  // snap-to-SLOT_MINUTES math; see useEventDragCreate.ts for details.
+  const { creator, beginCreator, dismissCreator, setCreatorTimes } =
+    useEventDragCreate();
 
-  // Begin a drag-to-create. Attaches the document-level mousemove +
-  // mouseup listeners SYNCHRONOUSLY inside this call rather than via a
-  // useEffect keyed on `creator.phase`.
-  //
-  // Why synchronous: schedule-x's `onMouseDownDateTime` callback runs
-  // inside its preact event handler. We schedule a React state update
-  // there, but React batches and may not flush + commit + run effects
-  // before the browser dispatches the matching mouseup. For a fast
-  // click (mousedown → mouseup ≈ 0–10 ms), the mouseup beats React's
-  // effect commit and the listener is never attached — symptom: the
-  // popover never advances from drag-ghost to creating phase.
-  // Attaching listeners here closes the timing gap entirely.
-  //
-  // React state setters are referentially stable, so closing over
-  // `setCreator` from the lazy `createCalendar` initializer below is
-  // safe even though this function is invoked many renders later.
-  function beginCreator(init: {
-    dayColumn: HTMLElement;
-    downX: number;
-    downY: number;
-  }) {
-    const { dayColumn, downX, downY } = init;
-    const colDateStr = dayColumn.getAttribute("data-time-grid-date");
-    if (!colDateStr) return;
-    const dayStartMs = new Date(`${colDateStr}T00:00`).getTime();
-    if (Number.isNaN(dayStartMs)) return;
-
-    const SLOT_MIN = SLOT_MINUTES;
-    const DAY_MIN = DAY_MINUTES;
-
-    function cursorYToEpochMs(clientY: number): number {
-      const colRect = dayColumn.getBoundingClientRect();
-      const offsetY = Math.max(
-        0,
-        Math.min(colRect.height, clientY - colRect.top),
-      );
-      const minutesRaw = (offsetY / colRect.height) * DAY_MIN;
-      // Snap to 15-min grid so the ghost lands on a TimeSelect-valid
-      // option (the form's pickers don't expose finer steps anyway).
-      const minutes = Math.max(
-        0,
-        Math.min(DAY_MIN, Math.round(minutesRaw / SLOT_MIN) * SLOT_MIN),
-      );
-      return dayStartMs + minutes * 60 * 1000;
-    }
-
-    // Derive the start from the cursor Y rather than schedule-x's
-    // `dateTime.epochMilliseconds` — schedule-x's value is computed
-    // at its `timePointsPerDay` resolution (1-min by default) and
-    // would land on whatever exact pixel the user clicked. Using
-    // `cursorYToEpochMs` snaps to the same 15-min grid the
-    // `<CursorTimeIndicator />` displays, so the ghost that appears
-    // on mouseup starts exactly where the hover hint promised.
-    const startMs = cursorYToEpochMs(downY);
-
-    function onMove(e: MouseEvent) {
-      const newEndMs = cursorYToEpochMs(e.clientY);
-      setCreator((prev) =>
-        prev && prev.phase === "dragging"
-          ? { ...prev, endMs: newEndMs }
-          : prev,
-      );
-    }
-
-    function onUp(e: MouseEvent) {
-      // Detach immediately so the same drag can't accidentally fire
-      // twice (defensive — mouseup is normally one-shot).
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-
-      // Swallow the `click` event that follows this mouseup. base-ui's
-      // Popover uses floating-ui's `useDismiss` with
-      // `outsidePressEvent: 'intentional'`, which registers a
-      // capture-phase `click` listener on the document that fires
-      // `onOpenChange(false)` when the click target is outside the
-      // popup. The popup mounts in a React microtask between this
-      // mouseup and the browser's `click` dispatch — meaning the
-      // click we generated by ending the drag is interpreted as an
-      // outside-press dismiss the moment the popup appears, closing
-      // it before the user can see it.
-      //
-      // Suppression mechanics:
-      //   - We register on `document` in capture phase, BEFORE base-ui
-      //     gets a chance to (its registration runs in the
-      //     `useEffect` that fires after render commit, which happens
-      //     after this synchronous code finishes).
-      //   - `stopImmediatePropagation` prevents other capture-phase
-      //     listeners on the same node — including base-ui's — from
-      //     running. `stopPropagation` alone wouldn't, since multiple
-      //     capture listeners on the same element fire in
-      //     registration order regardless of bubbling.
-      //   - One-shot self-removal: even if no click follows (rare,
-      //     e.g. drag ends with a focus change), the listener is
-      //     cleaned up after the next click anywhere on the page.
-      function suppressNextClick(ev: MouseEvent) {
-        ev.stopImmediatePropagation();
-        document.removeEventListener("click", suppressNextClick, true);
-      }
-      document.addEventListener("click", suppressNextClick, true);
-
-      const dx = Math.abs(e.clientX - downX);
-      const dy = Math.abs(e.clientY - downY);
-      const isClick = dx < 4 && dy < 4;
-      setCreator((prev) => {
-        if (!prev || prev.phase !== "dragging") return prev;
-        let nextStart = startMs;
-        let nextEnd = isClick
-          ? // Click-to-create: same 15-min ghost the drag preview
-            // shows. Avoids the visual "jump" from 15 min during the
-            // press to 60 min on release; users who want a longer
-            // event drag the slot or extend the end picker.
-            startMs + SLOT_MIN * 60 * 1000
-          : prev.endMs;
-        if (!isClick && nextEnd <= nextStart) {
-          // Dragged upward — swap so start < end. Without this the
-          // ghost rect would have negative height and the form's
-          // submit logic would treat it as "spans midnight" — wrong
-          // semantic for a same-day selection.
-          [nextStart, nextEnd] = [nextEnd, nextStart];
-        }
-        if (!isClick && nextEnd - nextStart < SLOT_MIN * 60 * 1000) {
-          // Drag-distance < one slot — snap to a single-slot ghost
-          // rather than producing a sub-15-min event the form can't
-          // represent cleanly.
-          nextEnd = nextStart + SLOT_MIN * 60 * 1000;
-        }
-        return {
-          ...prev,
-          phase: "creating" as const,
-          startMs: nextStart,
-          endMs: nextEnd,
-        };
-      });
-    }
-
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-
-    setCreator({
-      phase: "dragging",
-      dayColumn,
-      startMs,
-      // Seed `endMs` at start + 15 min so the ghost is visible on the
-      // very first frame; the first mousemove tick overrides it.
-      endMs: startMs + 15 * 60 * 1000,
-      downX,
-      downY,
-    });
-  }
   const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
   const [selectedTaskProjectId, setSelectedTaskProjectId] = useState<Id<"projects"> | null>(null);
   // Seed `selectedEventId` from a `?event=<id>` deep link (notification
@@ -1147,13 +981,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           startMs={creator.startMs}
           endMs={creator.endMs}
           phase={creator.phase}
-          onClose={() => setCreator(null)}
+          onClose={dismissCreator}
           onTimesChange={(start, end) =>
-            setCreator((prev) =>
-              prev
-                ? { ...prev, startMs: start.getTime(), endMs: end.getTime() }
-                : prev,
-            )
+            setCreatorTimes(start.getTime(), end.getTime())
           }
           // Pre-invite the colleagues whose calendars are currently
           // overlaid — same as the dialog flow above. Compact form
