@@ -35,11 +35,17 @@ export function CreateEventDialog({
   open,
   onOpenChange,
   initialDate,
+  initialMemberIds,
 }: {
   workspaceId: Id<"workspaces">;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialDate?: Date;
+  /** See `CreateEventForm.initialMemberIds`. Forwarded as-is — the
+   *  parent's `seedKey`-driven `key` remount on every false→true open
+   *  ensures a stale prop from the previous session doesn't carry over
+   *  between dialog openings. */
+  initialMemberIds?: Id<"users">[];
 }) {
   // Increments on every false→true open transition so React remounts
   // the inner form with fresh defaults derived from the current
@@ -73,6 +79,7 @@ export function CreateEventDialog({
             key={seedKey}
             workspaceId={workspaceId}
             initialDate={initialDate}
+            initialMemberIds={initialMemberIds}
             onSuccess={() => onOpenChange(false)}
             onCancel={() => onOpenChange(false)}
           />

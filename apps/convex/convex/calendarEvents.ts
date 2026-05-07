@@ -323,6 +323,99 @@ export const listMineInRange = query({
   },
 });
 
+// Background-event lane for the dashboard "view colleague calendar" filter.
+// Returns timing + memberId only — no title, description, channel, or
+// organizer fields cross the wire so a curious viewer can't see what their
+// colleagues are actually doing, only when they're booked. The dashboard
+// renders these as schedule-x background events tinted per memberId.
+const memberBusyBlockValidator = v.object({
+  startsAt: v.number(),
+  endsAt: v.number(),
+  memberId: v.id("users"),
+});
+
+export const listForMembersInRange = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    memberIds: v.array(v.id("users")),
+    rangeStartMs: v.number(),
+    rangeEndMs: v.number(),
+  },
+  returns: v.array(memberBusyBlockValidator),
+  handler: async (ctx, { workspaceId, memberIds, rangeStartMs, rangeEndMs }) => {
+    const { userId: viewerId } = await requireWorkspaceMember(ctx, workspaceId);
+    if (memberIds.length === 0 || rangeEndMs <= rangeStartMs) return [];
+
+    // Block cross-workspace probing — only return blocks for memberIds that
+    // are actually members of this workspace. (The viewer is already
+    // authorised; the requested members are not necessarily.)
+    const validMemberIds: Id<"users">[] = [];
+    for (const m of memberIds) {
+      // Skip the viewer themselves — their own events are already in
+      // listMineInRange and we don't want to draw a busy-block on top.
+      if (m === viewerId) continue;
+      const membership = await getWorkspaceMembership(ctx, workspaceId, m);
+      if (membership) validMemberIds.push(m);
+    }
+
+    const out: { startsAt: number; endsAt: number; memberId: Id<"users"> }[] = [];
+    const seen = new Set<string>(); // dedupe by `${eventId}:${memberId}`
+
+    // Helper: also skip events the viewer is already an invitee on, since
+    // those events render in their own foreground lane via listMineInRange.
+    async function viewerIsInvitee(eventId: Id<"calendarEvents">): Promise<boolean> {
+      const row = await ctx.db
+        .query("calendarEventInvitees")
+        .withIndex("by_event_user", (q) =>
+          q.eq("eventId", eventId).eq("userId", viewerId),
+        )
+        .first();
+      return row !== null;
+    }
+
+    for (const memberId of validMemberIds) {
+      // Events the member organises…
+      const created = await ctx.db
+        .query("calendarEvents")
+        .withIndex("by_creator", (q) => q.eq("createdBy", memberId))
+        .collect();
+      for (const e of created) {
+        if (e.workspaceId !== workspaceId) continue;
+        if (e.cancelledAt !== undefined) continue;
+        if (e.endsAt <= rangeStartMs || e.startsAt >= rangeEndMs) continue;
+        if (e.createdBy === viewerId) continue;
+        if (await viewerIsInvitee(e._id)) continue;
+        const k = `${e._id}:${memberId}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push({ startsAt: e.startsAt, endsAt: e.endsAt, memberId });
+      }
+
+      // …and events the member is invited to.
+      const invited = await ctx.db
+        .query("calendarEventInvitees")
+        .withIndex("by_user_workspace_event", (q) =>
+          q.eq("userId", memberId).eq("workspaceId", workspaceId),
+        )
+        .collect();
+      for (const row of invited) {
+        const e = await ctx.db.get(row.eventId);
+        if (!e) continue;
+        if (e.cancelledAt !== undefined) continue;
+        if (e.endsAt <= rangeStartMs || e.startsAt >= rangeEndMs) continue;
+        if (e.createdBy === viewerId) continue;
+        if (await viewerIsInvitee(e._id)) continue;
+        const k = `${e._id}:${memberId}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push({ startsAt: e.startsAt, endsAt: e.endsAt, memberId });
+      }
+    }
+
+    return out;
+  },
+});
+
 export const get = query({
   args: { eventId: v.id("calendarEvents") },
   returns: eventWithInviteesValidator,

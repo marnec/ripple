@@ -5,6 +5,7 @@ import {
   createViewMonthGrid,
   createViewWeek,
   createViewWeekAgenda,
+  type BackgroundEvent,
   type CalendarType,
 } from "@schedule-x/calendar";
 import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
@@ -25,11 +26,19 @@ import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/errors";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useVisibleMemberCalendars } from "@/hooks/use-visible-member-calendars";
+import { useViewer } from "@/pages/App/UserContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { QueryParams } from "@ripple/shared/types/routes";
 import "../Project/project-calendar.css";
+
+import {
+  MemberCalendarFilter,
+  type MemberCalendarMember,
+} from "./MemberCalendarFilter";
+import { memberBlockStyle } from "./member-calendar-colors";
 
 // TaskDetailSheet stays lazy — it pulls in BlockNote + Yjs + y-partyserver
 // (~hundreds of KB). Calling `prefetchTaskDetailSheet()` from a mount
@@ -96,6 +105,13 @@ type CalendarHeaderValue = {
    *  in that state to avoid a "0 scheduled" flash before data lands. */
   eventCount: number | null;
   onCreateEvent: () => void;
+  /** Workspace members the viewer can overlay (excludes themselves).
+   *  `null` while the members query is loading — header hides the
+   *  combobox trigger in that state to avoid a flicker. */
+  filterableMembers: MemberCalendarMember[] | null;
+  /** Currently overlaid members (subset of `filterableMembers`). */
+  visibleMemberIds: Id<"users">[];
+  setVisibleMemberIds: (ids: Id<"users">[]) => void;
 };
 
 const CalendarHeaderContext = createContext<CalendarHeaderValue | null>(null);
@@ -110,6 +126,9 @@ function CalendarHeader() {
     setView,
     eventCount: _eventCount, // wired through context for future header chips
     onCreateEvent,
+    filterableMembers,
+    visibleMemberIds,
+    setVisibleMemberIds,
   } = ctx;
 
   let date: Temporal.PlainDate | null = null;
@@ -222,6 +241,18 @@ function CalendarHeader() {
           <CalendarCheck className="h-3.5 w-3.5 shrink-0" />
           <span className="hidden sm:inline">Today</span>
         </Button>
+        {/* Member-calendar overlay filter — pick colleagues whose busy
+            time should render as background blocks behind your own
+            events. Hidden until the workspace member query resolves
+            and the workspace has at least one OTHER member (a solo
+            workspace would just show an empty popup). */}
+        {filterableMembers && filterableMembers.length > 0 && (
+          <MemberCalendarFilter
+            members={filterableMembers}
+            selectedIds={visibleMemberIds}
+            onSelectedIdsChange={setVisibleMemberIds}
+          />
+        )}
       </div>
 
       {/* Right cluster: view switcher + New event.
@@ -322,6 +353,51 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     workspaceId,
     completed: false,
   });
+
+  // ── Member calendar overlay (busy-blocks behind own events) ──────────
+  // Persisted per-workspace in localStorage so the overlay survives reloads
+  // without a server round-trip. Cross-tab sync rides on StorageEvent.
+  const [visibleMemberIds, setVisibleMemberIds] =
+    useVisibleMemberCalendars(workspaceId);
+  const viewer = useViewer();
+  const allMembers = useQuery(api.workspaceMembers.membersWithRoles, {
+    workspaceId,
+  });
+  // Strip the viewer themselves — their own events are the foreground
+  // lane; overlaying them on top of themselves is meaningless.
+  const filterableMembers: MemberCalendarMember[] | null = useMemo(() => {
+    if (!allMembers) return null;
+    return allMembers
+      .filter((m) => m.userId !== viewer?._id)
+      .map((m) => ({
+        userId: m.userId,
+        name: m.name ?? m.email ?? "Unknown",
+        email: m.email,
+        image: m.image,
+      }));
+  }, [allMembers, viewer?._id]);
+  // Defensive narrowing: stale localStorage ids (member removed since the
+  // pref was saved) shouldn't make it into the query — Convex would
+  // reject them via getWorkspaceMembership anyway, but we'd rather not
+  // make that round-trip. If everything filtered out we collapse to []
+  // so the query is "skip"-eligible below.
+  const liveVisibleMemberIds = useMemo(() => {
+    if (!filterableMembers) return visibleMemberIds;
+    const live = new Set(filterableMembers.map((m) => m.userId));
+    return visibleMemberIds.filter((id) => live.has(id));
+  }, [filterableMembers, visibleMemberIds]);
+
+  const memberBusyBlocks = useQuery(
+    api.calendarEvents.listForMembersInRange,
+    liveVisibleMemberIds.length > 0
+      ? {
+          workspaceId,
+          memberIds: liveVisibleMemberIds,
+          rangeStartMs,
+          rangeEndMs,
+        }
+      : "skip",
+  );
 
   const [openCreate, setOpenCreate] = useState(false);
   // Seeds the start-time defaults inside CreateEventDialog. `null` ⇒ the
@@ -601,6 +677,21 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     }
     return out;
   }, [events, tasks]);
+
+  // Background events derived from the member-calendar overlay query.
+  // Title is intentionally empty: schedule-x renders BackgroundEvents
+  // without an event card, so no copy ever leaks colleague event names
+  // — only their busy time. Per-member tinting comes from `style`,
+  // hashed deterministically in `memberBlockStyle`.
+  const backgroundEvents = useMemo<BackgroundEvent[]>(() => {
+    if (!memberBusyBlocks) return [];
+    return memberBusyBlocks.map((b) => ({
+      title: "",
+      start: msToZonedDateTime(b.startsAt),
+      end: msToZonedDateTime(b.endsAt),
+      style: memberBlockStyle(b.memberId),
+    }));
+  }, [memberBusyBlocks]);
 
   // Calendar-controls plugin — exposes getDate/setDate + getView/setView so
   // our custom header can drive nav. `rangeVersion` is bumped on every range
@@ -933,6 +1024,30 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
     }
   }, [calendarApp, calendarEvents]);
 
+  // Background-events sync. Schedule-x v4 exposes no public mutator for
+  // its background-events list; the project calendar (cycles overlay)
+  // works around this by reaching into `$app.calendarEvents.backgroundEvents`
+  // — see `useCalendarSync.ts`. We replicate that here. The key-ref
+  // gate keeps the assignment O(1) on no-op renders.
+  const bgEventsKeyRef = React.useRef("");
+  React.useEffect(() => {
+    const key = backgroundEvents
+      .map(
+        (e) =>
+          `${String(e.start)}|${String(e.end)}|${(e.style as Record<string, string> | undefined)?.background ?? ""}`,
+      )
+      .join(",");
+    if (key === bgEventsKeyRef.current) return;
+    bgEventsKeyRef.current = key;
+    (calendarApp as unknown as {
+      $app: {
+        calendarEvents: {
+          backgroundEvents: { value: BackgroundEvent[] };
+        };
+      };
+    }).$app.calendarEvents.backgroundEvents.value = backgroundEvents;
+  }, [calendarApp, backgroundEvents]);
+
   // Document-level capture-phase click listener — resolves event
   // clicks ourselves so the drag plugin's mid-mouseup state mutation
   // can't drop them. Schedule-x v4's `onEventClick` is dispatched via
@@ -1161,6 +1276,9 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           setView: switchView,
           eventCount: events ? events.length : null,
           onCreateEvent: () => setOpenCreate(true),
+          filterableMembers,
+          visibleMemberIds: liveVisibleMemberIds,
+          setVisibleMemberIds,
         }}
       >
         <div className="flex-1 min-h-0 relative">
@@ -1199,6 +1317,10 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
             if (!o) setCreateInitialDate(null);
           }}
           initialDate={createInitialDate ?? undefined}
+          // When the viewer is overlaying colleague calendars, pre-select
+          // those colleagues as invitees on creation. Removable in the
+          // form before submit — see CreateEventForm.
+          initialMemberIds={liveVisibleMemberIds}
         />
       )}
       {/* Hover hint — a snapped "+ create here" bar that follows the
@@ -1231,6 +1353,10 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
                 : prev,
             )
           }
+          // Pre-invite the colleagues whose calendars are currently
+          // overlaid — same as the dialog flow above. Compact form
+          // surfaces a one-line summary instead of the full picker.
+          initialMemberIds={liveVisibleMemberIds}
         />
       )}
       {/* Notify-invitees prompt for drag-to-reschedule + resize. Only

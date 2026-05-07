@@ -96,6 +96,10 @@ export type InlineEventCreatorProps = {
    *  can update its `startMs`/`endMs` state and the ghost follows the
    *  user's edits live. Only fires in the "creating" phase. */
   onTimesChange?: (start: Date, end: Date) => void;
+  /** See `CreateEventForm.initialMemberIds`. The compact form hides the
+   *  invitee picker but still submits the seeded ids and surfaces a
+   *  short "Inviting N members from your filter" line. */
+  initialMemberIds?: Id<"users">[];
 };
 
 /**
@@ -136,6 +140,7 @@ export function InlineEventCreator({
   phase,
   onClose,
   onTimesChange,
+  initialMemberIds,
 }: InlineEventCreatorProps) {
   // `geometryEpoch` is bumped on scroll/resize to force a re-render
   // that re-reads the column's bounding rect. Cheaper than a
@@ -237,6 +242,7 @@ export function InlineEventCreator({
             workspaceId={workspaceId}
             initialDate={new Date(startMs)}
             initialEndDate={new Date(endMs)}
+            initialMemberIds={initialMemberIds}
             density="compact"
             onSuccess={onClose}
             onCancel={onClose}

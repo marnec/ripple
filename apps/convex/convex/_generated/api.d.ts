@@ -165,6 +165,17 @@ export declare const api: {
       { eventId: Id<"calendarEvents">; userImage?: string; userName: string },
       { authToken: string; meetingId: string }
     >;
+    listForMembersInRange: FunctionReference<
+      "query",
+      "public",
+      {
+        memberIds: Array<Id<"users">>;
+        rangeEndMs: number;
+        rangeStartMs: number;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{ endsAt: number; memberId: Id<"users">; startsAt: number }>
+    >;
     listMineInRange: FunctionReference<
       "query",
       "public",

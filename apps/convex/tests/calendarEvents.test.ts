@@ -540,4 +540,307 @@ describe("calendarEvents", () => {
       expect(info.status).toBe("revoked");
     });
   });
+
+  describe("listForMembersInRange (member calendar overlay)", () => {
+    // Helper: insert a calendarEvents row directly via t.run so each test
+    // can stage events authored by users it cares about without going
+    // through the public mutation (which always sets createdBy = caller).
+    async function insertEvent(
+      ctx: TestContext,
+      args: {
+        workspaceId: string;
+        createdBy: string;
+        title: string;
+        startsAt: number;
+        endsAt: number;
+        cancelledAt?: number;
+      },
+    ) {
+      return await ctx.run(async (db) => {
+        return await db.db.insert("calendarEvents", {
+          workspaceId: args.workspaceId as any,
+          title: args.title,
+          startsAt: args.startsAt,
+          endsAt: args.endsAt,
+          timezone: "UTC",
+          createdBy: args.createdBy as any,
+          cancelledAt: args.cancelledAt,
+        });
+      });
+    }
+    async function insertInvitee(
+      ctx: TestContext,
+      args: {
+        eventId: string;
+        workspaceId: string;
+        userId: string;
+      },
+    ) {
+      await ctx.run(async (db) => {
+        await db.db.insert("calendarEventInvitees", {
+          eventId: args.eventId as any,
+          workspaceId: args.workspaceId as any,
+          userId: args.userId as any,
+          status: "pending",
+        });
+      });
+    }
+
+    it("rejects when caller is not a workspace member", async () => {
+      const { workspaceId, userId: memberId } = await setupWorkspaceWithAdmin(t);
+      const { asUser: asOutsider } = await setupAuthenticatedUser(t, {
+        email: "outsider@test.com",
+      });
+      await expect(
+        asOutsider.query(api.calendarEvents.listForMembersInRange, {
+          workspaceId: workspaceId as any,
+          memberIds: [memberId as any],
+          rangeStartMs: Date.now(),
+          rangeEndMs: Date.now() + 24 * ONE_HOUR,
+        }),
+      ).rejects.toThrow(/Not a member/i);
+    });
+
+    it("returns busy-blocks for events organised AND attended by the member", async () => {
+      const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
+      const { userId: aliceId } = await setupAuthenticatedUser(t, {
+        email: "alice@test.com",
+        name: "Alice",
+      });
+      const { userId: bobId } = await setupAuthenticatedUser(t, {
+        email: "bob@test.com",
+        name: "Bob",
+      });
+      await addMember(t, workspaceId, aliceId, WorkspaceRole.MEMBER);
+      await addMember(t, workspaceId, bobId, WorkspaceRole.MEMBER);
+
+      const now = Date.now();
+      // Alice organises one event…
+      const aliceEvent = await insertEvent(t, {
+        workspaceId,
+        createdBy: aliceId,
+        title: "Alice solo",
+        startsAt: now + ONE_HOUR,
+        endsAt: now + 2 * ONE_HOUR,
+      });
+      // …and is invited to a second one that Bob organises.
+      const bobEvent = await insertEvent(t, {
+        workspaceId,
+        createdBy: bobId,
+        title: "Bob hosts",
+        startsAt: now + 3 * ONE_HOUR,
+        endsAt: now + 4 * ONE_HOUR,
+      });
+      await insertInvitee(t, {
+        eventId: bobEvent,
+        workspaceId,
+        userId: aliceId,
+      });
+
+      const blocks = await asViewer.query(
+        api.calendarEvents.listForMembersInRange,
+        {
+          workspaceId: workspaceId as any,
+          memberIds: [aliceId as any],
+          rangeStartMs: now,
+          rangeEndMs: now + 24 * ONE_HOUR,
+        },
+      );
+      expect(blocks).toHaveLength(2);
+      const ids = blocks.map((b) => b.startsAt).sort();
+      expect(ids).toEqual([now + ONE_HOUR, now + 3 * ONE_HOUR]);
+      // Privacy: only timing + memberId leak, never titles.
+      for (const b of blocks) {
+        expect(Object.keys(b).sort()).toEqual([
+          "endsAt",
+          "memberId",
+          "startsAt",
+        ]);
+        expect(b.memberId).toBe(aliceId);
+      }
+      // Sanity: aliceEvent is one of them.
+      expect(blocks.some((b) => b.startsAt === now + ONE_HOUR)).toBe(true);
+      void aliceEvent;
+    });
+
+    it("filters out cancelled events", async () => {
+      const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
+      const { userId: aliceId } = await setupAuthenticatedUser(t, {
+        email: "alice@test.com",
+      });
+      await addMember(t, workspaceId, aliceId, WorkspaceRole.MEMBER);
+
+      const now = Date.now();
+      await insertEvent(t, {
+        workspaceId,
+        createdBy: aliceId,
+        title: "Cancelled",
+        startsAt: now + ONE_HOUR,
+        endsAt: now + 2 * ONE_HOUR,
+        cancelledAt: now,
+      });
+
+      const blocks = await asViewer.query(
+        api.calendarEvents.listForMembersInRange,
+        {
+          workspaceId: workspaceId as any,
+          memberIds: [aliceId as any],
+          rangeStartMs: now,
+          rangeEndMs: now + 24 * ONE_HOUR,
+        },
+      );
+      expect(blocks).toHaveLength(0);
+    });
+
+    it("filters out events outside the requested range", async () => {
+      const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
+      const { userId: aliceId } = await setupAuthenticatedUser(t, {
+        email: "alice@test.com",
+      });
+      await addMember(t, workspaceId, aliceId, WorkspaceRole.MEMBER);
+
+      const now = Date.now();
+      // Way before
+      await insertEvent(t, {
+        workspaceId,
+        createdBy: aliceId,
+        title: "Past",
+        startsAt: now - 10 * 24 * ONE_HOUR,
+        endsAt: now - 10 * 24 * ONE_HOUR + ONE_HOUR,
+      });
+      // Way after
+      await insertEvent(t, {
+        workspaceId,
+        createdBy: aliceId,
+        title: "Future",
+        startsAt: now + 10 * 24 * ONE_HOUR,
+        endsAt: now + 10 * 24 * ONE_HOUR + ONE_HOUR,
+      });
+      // In window
+      await insertEvent(t, {
+        workspaceId,
+        createdBy: aliceId,
+        title: "Now-ish",
+        startsAt: now + ONE_HOUR,
+        endsAt: now + 2 * ONE_HOUR,
+      });
+
+      const blocks = await asViewer.query(
+        api.calendarEvents.listForMembersInRange,
+        {
+          workspaceId: workspaceId as any,
+          memberIds: [aliceId as any],
+          rangeStartMs: now,
+          rangeEndMs: now + 24 * ONE_HOUR,
+        },
+      );
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0]!.startsAt).toBe(now + ONE_HOUR);
+    });
+
+    it("excludes events the viewer already sees in their own calendar", async () => {
+      // Viewer organises an event with Alice as invitee. Viewer requests
+      // the overlay for Alice. The shared event must NOT come back as a
+      // busy-block — listMineInRange already shows it as a regular event,
+      // and a duplicate ghost would clutter the calendar.
+      const { workspaceId, asUser: asViewer, userId: viewerId } =
+        await setupWorkspaceWithAdmin(t);
+      const { userId: aliceId } = await setupAuthenticatedUser(t, {
+        email: "alice@test.com",
+      });
+      await addMember(t, workspaceId, aliceId, WorkspaceRole.MEMBER);
+
+      const now = Date.now();
+      const sharedEvent = await insertEvent(t, {
+        workspaceId,
+        createdBy: viewerId,
+        title: "Shared",
+        startsAt: now + ONE_HOUR,
+        endsAt: now + 2 * ONE_HOUR,
+      });
+      await insertInvitee(t, {
+        eventId: sharedEvent,
+        workspaceId,
+        userId: aliceId,
+      });
+      // Alice also has a private event the viewer is NOT on.
+      await insertEvent(t, {
+        workspaceId,
+        createdBy: aliceId,
+        title: "Alice private",
+        startsAt: now + 3 * ONE_HOUR,
+        endsAt: now + 4 * ONE_HOUR,
+      });
+
+      const blocks = await asViewer.query(
+        api.calendarEvents.listForMembersInRange,
+        {
+          workspaceId: workspaceId as any,
+          memberIds: [aliceId as any],
+          rangeStartMs: now,
+          rangeEndMs: now + 24 * ONE_HOUR,
+        },
+      );
+      // Only Alice's private event leaks through as a busy-block.
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0]!.startsAt).toBe(now + 3 * ONE_HOUR);
+    });
+
+    it("ignores cross-workspace probing — memberIds outside the workspace yield nothing", async () => {
+      const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
+      // Alice exists but is NOT a member of `workspaceId`.
+      const { userId: outsiderId } = await setupAuthenticatedUser(t, {
+        email: "outsider@elsewhere.com",
+      });
+
+      const now = Date.now();
+      // Plant an event the outsider organises in a *different* workspace
+      // — even if our query happened to scan globally by-creator, the
+      // workspace check should keep it out.
+      const otherWs = await t.run(async (ctx) => {
+        const ws = await ctx.db.insert("workspaces", {
+          name: "Other",
+          ownerId: outsiderId,
+        });
+        await ctx.db.insert("workspaceMembers", {
+          workspaceId: ws,
+          userId: outsiderId,
+          role: WorkspaceRole.ADMIN,
+        });
+        return ws;
+      });
+      await insertEvent(t, {
+        workspaceId: otherWs,
+        createdBy: outsiderId,
+        title: "Hidden",
+        startsAt: now + ONE_HOUR,
+        endsAt: now + 2 * ONE_HOUR,
+      });
+
+      const blocks = await asViewer.query(
+        api.calendarEvents.listForMembersInRange,
+        {
+          workspaceId: workspaceId as any,
+          memberIds: [outsiderId as any],
+          rangeStartMs: now,
+          rangeEndMs: now + 24 * ONE_HOUR,
+        },
+      );
+      expect(blocks).toHaveLength(0);
+    });
+
+    it("returns [] for empty memberIds (no work, no auth surprise)", async () => {
+      const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
+      const blocks = await asViewer.query(
+        api.calendarEvents.listForMembersInRange,
+        {
+          workspaceId: workspaceId as any,
+          memberIds: [],
+          rangeStartMs: Date.now(),
+          rangeEndMs: Date.now() + 24 * ONE_HOUR,
+        },
+      );
+      expect(blocks).toEqual([]);
+    });
+  });
 });

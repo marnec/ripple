@@ -88,6 +88,12 @@ export type CreateEventFormProps = {
   initialDate?: Date;
   /** Pre-fills the end time. Defaults to start + 1h when omitted. */
   initialEndDate?: Date;
+  /** Workspace members to pre-select in the invitee picker. Used by the
+   *  dashboard's "view colleague calendar" overlay so a created event
+   *  auto-invites the people the viewer was looking at. The user can
+   *  deselect any of them before submitting. Empty/undefined ⇒ no
+   *  invitees seeded (the default for the global "+ New event" CTA). */
+  initialMemberIds?: Id<"users">[];
   /** Called after the create mutation succeeds (used to dismiss the
    *  surface — dialog or popover — that mounted this form). */
   onSuccess: () => void;
@@ -123,6 +129,7 @@ export function CreateEventForm({
   workspaceId,
   initialDate,
   initialEndDate,
+  initialMemberIds,
   onSuccess,
   onCancel,
   onTimesChange,
@@ -134,8 +141,13 @@ export function CreateEventForm({
   const members = useQuery(api.workspaceMembers.membersWithRoles, { workspaceId });
 
   // Local invitees state — kept outside RHF because the chip widget owns
-  // its own UI. We submit them alongside the form values.
-  const [memberIds, setMemberIds] = useState<Id<"users">[]>([]);
+  // its own UI. We submit them alongside the form values. The lazy
+  // initializer reads `initialMemberIds` exactly once on mount so a
+  // re-render with a different parent prop doesn't blow away whatever
+  // the user has since deselected.
+  const [memberIds, setMemberIds] = useState<Id<"users">[]>(
+    () => initialMemberIds ?? [],
+  );
   const [guestEmails, setGuestEmails] = useState<string[]>([]);
   const [invalidEmail, setInvalidEmail] = useState<string | null>(null);
 
@@ -492,6 +504,18 @@ export function CreateEventForm({
                 )}
               </div>
             </>
+          )}
+
+          {/* Compact (popover) mode hides the full invitee picker, but
+              if the parent seeded members via `initialMemberIds` we
+              still surface a short summary so the user knows the event
+              will go out with invitees attached. They can pop the full
+              dialog (or edit post-create) for fine-grained control. */}
+          {compact && memberIds.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Inviting {memberIds.length} member
+              {memberIds.length === 1 ? "" : "s"} from your filter
+            </p>
           )}
         </div>
 
