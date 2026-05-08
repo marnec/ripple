@@ -312,6 +312,47 @@ describe("useEventDragCreate", () => {
     expect(result.current.creator?.endMs).toBe(newEnd);
   });
 
+  it("treats a beginCreator call while in creating phase as an outside-press dismiss (no new drag, popover closes)", () => {
+    // Bug repro: with the popover open, mousedowning on the time grid
+    // used to start a fresh drag-create whose mouseup re-committed the
+    // popover at the new coordinates — so the popover appeared to hop
+    // around rather than close. Calling `beginCreator` while a
+    // "creating"-phase creator exists must instead clear it and return
+    // without registering listeners.
+    const { result } = renderHook(() => useEventDragCreate());
+    const col = makeDayColumn();
+
+    act(() => {
+      result.current.beginCreator({
+        dayColumn: col,
+        downX: 50,
+        downY: COL_TOP_PX + 60,
+      });
+    });
+    act(() => {
+      fireMouse("mouseup", { clientX: 50, clientY: COL_TOP_PX + 60 });
+    });
+    expect(result.current.creator?.phase).toBe("creating");
+
+    // Second gesture begins while the popover is open — should dismiss
+    // the existing creator instead of seeding a new one.
+    act(() => {
+      result.current.beginCreator({
+        dayColumn: col,
+        downX: 50,
+        downY: COL_TOP_PX + 600,
+      });
+    });
+    expect(result.current.creator).toBeNull();
+
+    // No mousemove/mouseup listeners should have been re-registered —
+    // a stray mouseup must not be able to resurrect the creator.
+    act(() => {
+      fireMouse("mouseup", { clientX: 50, clientY: COL_TOP_PX + 600 });
+    });
+    expect(result.current.creator).toBeNull();
+  });
+
   it("registers a one-shot capture-phase click suppressor on mouseup so the trailing click is swallowed", () => {
     // Re-prove the base-ui Popover-from-mouseup race fix: any
     // capture-phase document `click` listener registered AFTER the

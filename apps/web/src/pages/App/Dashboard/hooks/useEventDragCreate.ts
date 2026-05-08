@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   DAY_MINUTES,
@@ -85,8 +85,37 @@ export type UseEventDragCreateResult = {
  */
 export function useEventDragCreate(): UseEventDragCreateResult {
   const [creator, setCreator] = useState<CreatorState | null>(null);
+  // Mirror `creator` into a ref so `beginCreator` can read the latest
+  // phase synchronously even when the call site is a stale closure —
+  // schedule-x's `onMouseDownDateTime` callback is captured at calendar
+  // construction time (lazy `useState` initializer) and never re-binds.
+  // The effect-based sync lags by one commit, but the user's next
+  // mousedown can't fire until after the prior commit has flushed, so
+  // by the time the read happens the ref already reflects the latest
+  // phase. We also write to it inline from setters within this hook
+  // (see `beginCreator`'s dismiss branch and `dismissCreator`) so
+  // back-to-back calls within the same tick read consistently.
+  const creatorRef = useRef<CreatorState | null>(null);
+  useEffect(() => {
+    creatorRef.current = creator;
+  }, [creator]);
 
   function beginCreator(init: BeginCreatorInit) {
+    // Outside-press dismiss path: when the popover is already open and
+    // the user mousedowns on the time grid, treat that gesture as
+    // "close the popover", not "start a new drag-create on top". Without
+    // this short-circuit, the trailing `onUp` would fire `setCreator`
+    // back into "creating" with the new coordinates and the popover
+    // would appear to hop to wherever you clicked instead of closing.
+    // base-ui's own outside-press handler can't help us here — it runs
+    // on `click` (not `mousedown`), and our drag-end click suppressor
+    // (registered below in `onUp`) actively swallows that click to
+    // protect the legitimate open-from-drag flow.
+    if (creatorRef.current?.phase === "creating") {
+      creatorRef.current = null;
+      setCreator(null);
+      return;
+    }
     const { dayColumn, downX, downY } = init;
     const colDateStr = dayColumn.getAttribute("data-time-grid-date");
     if (!colDateStr) return;
@@ -222,6 +251,7 @@ export function useEventDragCreate(): UseEventDragCreateResult {
   }
 
   function dismissCreator() {
+    creatorRef.current = null;
     setCreator(null);
   }
 
