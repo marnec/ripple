@@ -62,6 +62,7 @@ import { EventDetailSheet } from "../Calendar/EventDetailSheet";
 import { CreateEventDialog } from "../Calendar/CreateEventDialog";
 import { InlineEventCreator } from "../Calendar/InlineEventCreator";
 import { CursorTimeIndicator } from "../Calendar/CursorTimeIndicator";
+import { CursorDateIndicator } from "../Calendar/CursorDateIndicator";
 import {
   NotifyInviteesDialog,
   type RescheduleChoice,
@@ -712,8 +713,17 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
           ghost takes over the visual role then, and the indicator
           would just be visual noise behind the popover. Mobile users
           don't get hover, so the listener is a no-op there. */}
-      {!isMobile && (
+      {!isMobile && view === "week" && (
         <CursorTimeIndicator active={creator === null} />
+      )}
+      {/* Month-grid counterpart — outlines the hovered day cell with a
+          subtle primary-tinted fill + a `+` pill, signalling that an
+          empty-cell click will open the create dialog. Gated on the
+          month-grid view (the time-grid uses CursorTimeIndicator
+          instead) and paused (`active={false}`) while the create
+          dialog is open so the cue doesn't sit behind the modal. */}
+      {!isMobile && view === "month-grid" && (
+        <CursorDateIndicator active={!openCreate} />
       )}
       {/* Click/drag-to-create surface for the time grid. Mounted only
           while the user has an active gesture in flight — there's no

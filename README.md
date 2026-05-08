@@ -3,8 +3,6 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status
     - events as nodes
     - events-tags
-    - improve scrollbar style in desktop mode, hide in mobile view
-    - add visual cue for event creation in month view
 
 - leave channel logic (only for private?)
 - consider favorite for channels too
