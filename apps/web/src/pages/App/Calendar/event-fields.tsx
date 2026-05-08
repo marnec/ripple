@@ -10,12 +10,7 @@
  * without inheriting the create-flow's React-Hook-Form context.
  */
 
-import {
-  type KeyboardEvent,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 import { CalendarIcon, Check, ChevronsUpDown, Hash } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -28,21 +23,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 import type { Id } from "@convex/_generated/dataModel";
 
-import {
-  TIME_OPTIONS,
-  formatTimeLabel,
-  parseTypedTime,
-  sameDayDuration,
-} from "./event-time-utils";
+import { TIME_OPTIONS, formatTimeLabel, parseTypedTime, sameDayDuration } from "./event-time-utils";
 
 // ───────────────────────────────────────────────────────────────────────────
 // DatePopover — shadcn `Calendar` in a popover.
@@ -147,9 +133,7 @@ export function TimeSelect({
         if (cancelled) return;
         const list = listRef.current;
         if (!list) return;
-        const target = list.querySelector<HTMLElement>(
-          `[data-time-slot="${CSS.escape(value)}"]`,
-        );
+        const target = list.querySelector<HTMLElement>(`[data-time-slot="${CSS.escape(value)}"]`);
         if (!target) return;
         // `block: "center"` keeps a few neighbours visible on either side
         // so users get spatial context, not just their own pick.
@@ -196,18 +180,16 @@ export function TimeSelect({
           render={
             <Button
               variant="outline"
-              className={cn(
-                "w-full justify-between font-normal",
-                triggerHeight,
-                triggerClassName,
-              )}
+              className={cn("font-normal", triggerHeight, triggerClassName)}
               type="button"
-            />
+            >
+              <div className="flex gap-1 items-center">
+                <div>{value ? formatTimeLabel(value) : "Select time"}</div>
+                <ChevronsUpDown className="opacity-50" />
+              </div>
+            </Button>
           }
-        >
-          <span>{value ? formatTimeLabel(value) : "Select time"}</span>
-          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
-        </PopoverTrigger>
+        ></PopoverTrigger>
         <PopoverContent className="p-0 w-48" align="start">
           <Command
             // Disable the built-in fuzzy filter — our search input is also
@@ -234,9 +216,7 @@ export function TimeSelect({
                   >
                     <span className="flex-1">
                       Use{" "}
-                      <span className="font-medium tabular-nums">
-                        {formatTimeLabel(typedTime)}
-                      </span>
+                      <span className="font-medium tabular-nums">{formatTimeLabel(typedTime)}</span>
                     </span>
                   </CommandItem>
                 </CommandGroup>
@@ -252,9 +232,7 @@ export function TimeSelect({
                 }).map((slot) => {
                   const selected = slot === value;
                   const duration =
-                    startTime && slot > startTime
-                      ? sameDayDuration(startTime, slot)
-                      : null;
+                    startTime && slot > startTime ? sameDayDuration(startTime, slot) : null;
                   return (
                     <CommandItem
                       key={slot}
@@ -268,15 +246,10 @@ export function TimeSelect({
                     >
                       <span className="flex-1">{formatTimeLabel(slot)}</span>
                       {duration && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {duration}
-                        </span>
+                        <span className="ml-2 text-xs text-muted-foreground">{duration}</span>
                       )}
                       <Check
-                        className={cn(
-                          "ml-2 h-4 w-4",
-                          selected ? "opacity-100" : "opacity-0",
-                        )}
+                        className={cn("ml-2 h-4 w-4", selected ? "opacity-100" : "opacity-0")}
                       />
                     </CommandItem>
                   );
@@ -314,10 +287,7 @@ export function ChannelCombobox({
           render={
             <Button
               variant="outline"
-              className={cn(
-                "w-full justify-between font-normal",
-                triggerClassName,
-              )}
+              className={cn("w-full justify-between font-normal", triggerClassName)}
               type="button"
             />
           }
@@ -348,15 +318,8 @@ export function ChannelCombobox({
                   }}
                   className="cursor-pointer"
                 >
-                  <span className="flex-1 text-muted-foreground">
-                    No channel (standalone)
-                  </span>
-                  <Check
-                    className={cn(
-                      "ml-2 h-4 w-4",
-                      !value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
+                  <span className="flex-1 text-muted-foreground">No channel (standalone)</span>
+                  <Check className={cn("ml-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
                 </CommandItem>
                 {channels.map((c) => (
                   <CommandItem
@@ -371,10 +334,7 @@ export function ChannelCombobox({
                     <Hash className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
                     <span className="flex-1 truncate">{c.name}</span>
                     <Check
-                      className={cn(
-                        "ml-2 h-4 w-4",
-                        c._id === value ? "opacity-100" : "opacity-0",
-                      )}
+                      className={cn("ml-2 h-4 w-4", c._id === value ? "opacity-100" : "opacity-0")}
                     />
                   </CommandItem>
                 ))}
