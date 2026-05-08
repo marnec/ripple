@@ -2,7 +2,12 @@ NEXT STEPS:
 - calendar; plan calls; invite guests
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
 
-- are tags just nodes of type tag????? I think so
+- knowledge-graph
+    - are tags just nodes of type tag????? I think so
+    - add events counter and add them to the workspace dashboard
+    - explore pdf reading, annotation and embedding
+
+
 
 - leave channel logic (only for private?)
 - consider favorite for channels too
@@ -16,8 +21,6 @@ NEXT STEPS:
 
 - [ ] link previews in chat
 
-- knowledge-graph
-    - [ ] explore pdf reading, annotation and embedding
 
 keyboard accessiblity
     - [ ] focus traps

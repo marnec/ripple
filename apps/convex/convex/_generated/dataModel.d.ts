@@ -562,7 +562,13 @@ export type DataModel = {
     document: {
       createdAt: number;
       createdBy?: Id<"users">;
-      edgeType: "embeds" | "blocks" | "relates_to" | "mentions" | "belongs_to";
+      edgeType:
+        | "embeds"
+        | "blocks"
+        | "relates_to"
+        | "mentions"
+        | "belongs_to"
+        | "hosted_in";
       sourceId: string;
       sourceNodeId?: Id<"nodes">;
       sourceType:

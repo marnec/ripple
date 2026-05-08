@@ -411,6 +411,70 @@ triggers.register("tasks", async (ctx, change) => {
   // delete: edge cleanup handled by cascade rules
 });
 
+// ── calendarEvent → channel "hosted_in" edge ────────────────────────
+// Mirrors the channelId field on calendarEvents into the polymorphic graph
+// using a dedicated `hosted_in` edge type. Visible link in the workspace
+// graph (unlike `belongs_to`, which is filtered as structural grouping —
+// see edges.getWorkspaceGraph). Channel-side deletion cascades remove the
+// edge; event-side deletion is also handled via cascadeDelete. NOTE:
+// registered after the calendarEvent node trigger above so findNodeId
+// resolves the event's node.
+
+triggers.register("calendarEvents", async (ctx, change) => {
+  if (change.operation === "insert") {
+    if (!change.newDoc.channelId) return;
+    const [sourceNodeId, targetNodeId] = await Promise.all([
+      findNodeId(ctx, change.id),
+      findNodeId(ctx, change.newDoc.channelId),
+    ]);
+    await ctx.db.insert("edges", {
+      sourceType: "calendarEvent",
+      sourceId: change.id,
+      targetType: "channel",
+      targetId: change.newDoc.channelId,
+      edgeType: "hosted_in",
+      workspaceId: change.newDoc.workspaceId,
+      sourceNodeId,
+      targetNodeId,
+      createdAt: Date.now(),
+    } as never);
+  } else if (change.operation === "update") {
+    const oldChannelId = change.oldDoc.channelId;
+    const newChannelId = change.newDoc.channelId;
+    if (oldChannelId === newChannelId) return;
+    if (oldChannelId) {
+      const oldEdges = await ctx.db
+        .query("edges")
+        .withIndex("by_source_target", (q) =>
+          q.eq("sourceId", change.id).eq("targetId", oldChannelId),
+        )
+        .collect();
+      const edge = oldEdges.find(
+        (e) => e.edgeType === "hosted_in" && e.targetType === "channel",
+      );
+      if (edge) await ctx.db.delete(edge._id);
+    }
+    if (newChannelId) {
+      const [sourceNodeId, targetNodeId] = await Promise.all([
+        findNodeId(ctx, change.id),
+        findNodeId(ctx, newChannelId),
+      ]);
+      await ctx.db.insert("edges", {
+        sourceType: "calendarEvent",
+        sourceId: change.id,
+        targetType: "channel",
+        targetId: newChannelId,
+        edgeType: "hosted_in",
+        workspaceId: change.newDoc.workspaceId,
+        sourceNodeId,
+        targetNodeId,
+        createdAt: Date.now(),
+      } as never);
+    }
+  }
+  // delete: edge cleanup handled by cascade rules
+});
+
 // ── Channel mention edge helpers ────────────────────────────────────
 
 async function insertChannelMentionEdge(

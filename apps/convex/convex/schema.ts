@@ -544,6 +544,9 @@ export default defineSchema({
       v.literal("relates_to"),
       v.literal("mentions"),
       v.literal("belongs_to"),
+      // calendarEvent → channel: the channel hosts this event's meeting room.
+      // Visible link in the workspace graph (not filtered like belongs_to).
+      v.literal("hosted_in"),
     ),
     workspaceId: v.id("workspaces"),
     sourceNodeId: v.optional(v.id("nodes")),

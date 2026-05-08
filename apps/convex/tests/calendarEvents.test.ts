@@ -810,6 +810,132 @@ describe("calendarEvents", () => {
       expect(hits.find((h) => h.resourceType === "calendarEvent")).toBeUndefined();
     });
 
+    it("hosting an event in a channel inserts a hosted_in edge", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await asUser.mutation(api.channels.create, {
+        name: "engineering",
+        workspaceId: workspaceId as any,
+        type: "open" as const,
+      });
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Standup",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        channelId,
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      const edges = await t.run(async (ctx) =>
+        ctx.db
+          .query("edges")
+          .withIndex("by_source", (q) => q.eq("sourceId", eventId))
+          .collect(),
+      );
+      const channelEdge = edges.find(
+        (e) => e.targetType === "channel" && e.targetId === channelId,
+      );
+      expect(channelEdge).toBeDefined();
+      expect(channelEdge?.edgeType).toBe("hosted_in");
+      expect(channelEdge?.sourceType).toBe("calendarEvent");
+      expect(channelEdge?.workspaceId).toBe(workspaceId);
+      expect(channelEdge?.sourceNodeId).toBeDefined();
+      expect(channelEdge?.targetNodeId).toBeDefined();
+    });
+
+    it("creating an event with no channel inserts no channel edge", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Standalone",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      const edges = await t.run(async (ctx) =>
+        ctx.db
+          .query("edges")
+          .withIndex("by_source", (q) => q.eq("sourceId", eventId))
+          .collect(),
+      );
+      expect(edges.find((e) => e.targetType === "channel")).toBeUndefined();
+    });
+
+    it("changing the host channel moves the hosted_in edge", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelA = await asUser.mutation(api.channels.create, {
+        name: "alpha",
+        workspaceId: workspaceId as any,
+        type: "open" as const,
+      });
+      const channelB = await asUser.mutation(api.channels.create, {
+        name: "beta",
+        workspaceId: workspaceId as any,
+        type: "open" as const,
+      });
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Movable",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        channelId: channelA,
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      await asUser.mutation(api.calendarEvents.update, {
+        eventId,
+        channelId: channelB,
+        notifyInvitees: false,
+      });
+
+      const edges = await t.run(async (ctx) =>
+        ctx.db
+          .query("edges")
+          .withIndex("by_source", (q) => q.eq("sourceId", eventId))
+          .collect(),
+      );
+      const channelEdges = edges.filter((e) => e.targetType === "channel");
+      expect(channelEdges).toHaveLength(1);
+      expect(channelEdges[0].targetId).toBe(channelB);
+      expect(channelEdges[0].edgeType).toBe("hosted_in");
+    });
+
+    it("clearing the host channel removes the hosted_in edge", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await asUser.mutation(api.channels.create, {
+        name: "ephemeral",
+        workspaceId: workspaceId as any,
+        type: "open" as const,
+      });
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Unhosted",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        channelId,
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      await asUser.mutation(api.calendarEvents.update, {
+        eventId,
+        channelId: null,
+        notifyInvitees: false,
+      });
+
+      const edges = await t.run(async (ctx) =>
+        ctx.db
+          .query("edges")
+          .withIndex("by_source", (q) => q.eq("sourceId", eventId))
+          .collect(),
+      );
+      expect(edges.find((e) => e.targetType === "channel")).toBeUndefined();
+    });
+
     it("cancel (hard-delete) cascades to the node + entityTags + edges", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const eventId = await asUser.mutation(api.calendarEvents.create, {
