@@ -534,6 +534,44 @@ body {
   background: hsl(var(--foreground) / 0.3);
 }
 
+/* Global scrollbar style — matches .scrollbar-stable but without the fixed
+   gutter, so any scrollable element inherits the subtle thin look used in
+   Documents and TaskDetailSheet. Standard properties are inherited from html;
+   webkit pseudo-elements are applied universally. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--foreground) / 0.08) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--foreground) / 0.08);
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground) / 0.3);
+}
+
+/* Hide scrollbars on touch devices — momentum scrolling makes them
+   unnecessary and they steal screen real estate on mobile. */
+@media (hover: none) and (pointer: coarse) {
+  html {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* BlockNote editor transparent backgrounds */
 .bn-shadcn {
   --bn-colors-editor-background: transparent !important;
