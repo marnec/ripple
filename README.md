@@ -1,6 +1,7 @@
 NEXT STEPS:
 - calendar; plan calls; invite guests
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
+    - recurrent events
 
 - knowledge-graph
     - are tags just nodes of type tag????? I think so

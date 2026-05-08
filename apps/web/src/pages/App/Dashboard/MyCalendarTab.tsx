@@ -231,6 +231,31 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
   if (selectedEventId && !eventSheetMounted) setEventSheetMounted(true);
   if (openCreate && !createMounted) setCreateMounted(true);
 
+  // First-mount animation guard for the event detail Sheet. Mounting and
+  // opening in the same render skips the slide-in: base-ui's Dialog tracks
+  // open transitions via `useTransitionStatus`, which only sets
+  // `transitionStatus='starting'` (and therefore applies
+  // `data-starting-style`) when it observes `open` go false → true. A first
+  // mount with `open=true` initialises `mounted=true` straight away, the
+  // `if (open && !mounted)` branch never fires, and the panel jumps to its
+  // final position with no animation — exactly the "delayed and abrupt"
+  // first-open glitch users saw after a hard reload.
+  //
+  // `eventSheetReady` is a one-shot deferred-true ratchet: it stays false
+  // for the first commit after `eventSheetMounted` flips true, then a rAF
+  // schedule flips it true. So the Sheet's `open` prop is forced to false
+  // on the mounting commit and then true on the next frame — the very
+  // false → true edge base-ui needs to play the slide-in. Once flipped,
+  // it stays true forever; subsequent opens animate naturally because the
+  // Sheet is already in the tree with `open=false`.
+  const [eventSheetReady, setEventSheetReady] = useState(false);
+  useEffect(() => {
+    if (!eventSheetMounted || eventSheetReady) return;
+    const handle = requestAnimationFrame(() => setEventSheetReady(true));
+    return () => cancelAnimationFrame(handle);
+  }, [eventSheetMounted, eventSheetReady]);
+  const eventSheetOpen = !!selectedEventId && eventSheetReady;
+
   // Warm the heavy TaskDetailSheet chunk after the calendar has rendered
   // so the first click on a task event opens with a smooth animation
   // instead of waiting on a network fetch. Vite/React.lazy share their
@@ -682,7 +707,7 @@ function MyCalendarTabContent({ workspaceId }: { workspaceId: Id<"workspaces"> }
       {eventSheetMounted && (
         <EventDetailSheet
           eventId={selectedEventId}
-          open={!!selectedEventId}
+          open={eventSheetOpen}
           onOpenChange={(open) => {
             if (!open) setSelectedEventId(null);
           }}
