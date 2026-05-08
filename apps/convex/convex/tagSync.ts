@@ -19,6 +19,7 @@ export const resourceTypeSchema = v.union(
   v.literal("spreadsheet"),
   v.literal("project"),
   v.literal("task"),
+  v.literal("calendarEvent"),
 );
 
 export type TaggableResourceType =
@@ -26,7 +27,8 @@ export type TaggableResourceType =
   | "diagram"
   | "spreadsheet"
   | "project"
-  | "task";
+  | "task"
+  | "calendarEvent";
 
 /** Resources that flow through `syncTagsForResource` (excludes tasks, which
  *  are project-scoped and use `syncTaskTags` against the `taskTags` table,
@@ -34,7 +36,8 @@ export type TaggableResourceType =
 export type ListableResourceType =
   | "document"
   | "diagram"
-  | "spreadsheet";
+  | "spreadsheet"
+  | "calendarEvent";
 
 /** Trim, lowercase, drop empties / over-length, dedupe. */
 export function normalizeTagList(raw: readonly string[]): string[] {

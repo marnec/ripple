@@ -625,8 +625,8 @@ describe("calendarEvents", () => {
     });
   });
 
-  describe("cancel", () => {
-    it("creator can cancel; revokes guest shares", async () => {
+  describe("cancel (hard-delete + notify)", () => {
+    it("creator can cancel; row + invitees + shares are cascade-deleted", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
@@ -639,16 +639,25 @@ describe("calendarEvents", () => {
 
       await asUser.mutation(api.calendarEvents.cancel, { eventId });
 
-      const detail = await asUser.query(api.calendarEvents.get, { eventId });
-      expect(detail.event.cancelledAt).toBeTypeOf("number");
+      // Event row gone.
+      const ev = await t.run(async (ctx) => ctx.db.get(eventId));
+      expect(ev).toBeNull();
 
-      const shares = await t.run(async (ctx) => {
-        return ctx.db
+      // Invitee + share rows cascade-deleted.
+      const invitees = await t.run(async (ctx) =>
+        ctx.db
+          .query("calendarEventInvitees")
+          .withIndex("by_event", (q) => q.eq("eventId", eventId))
+          .collect(),
+      );
+      expect(invitees.length).toBe(0);
+      const shares = await t.run(async (ctx) =>
+        ctx.db
           .query("resourceShares")
           .withIndex("by_resource_id", (q) => q.eq("resourceId", eventId))
-          .collect();
-      });
-      expect(shares[0]?.revokedAt).toBeTypeOf("number");
+          .collect(),
+      );
+      expect(shares.length).toBe(0);
     });
 
     it("non-creator cannot cancel", async () => {
@@ -670,10 +679,8 @@ describe("calendarEvents", () => {
         asMember.mutation(api.calendarEvents.cancel, { eventId }),
       ).rejects.toThrow(/Only the organizer/i);
     });
-  });
 
-  describe("remove (delete)", () => {
-    it("organiser can hard-delete a solo event", async () => {
+    it("solo (no guests) cancellation also hard-deletes", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
@@ -684,83 +691,156 @@ describe("calendarEvents", () => {
         invitees: { userIds: [], guestEmails: [] },
       });
 
-      await asUser.mutation(api.calendarEvents.remove, { eventId });
+      await asUser.mutation(api.calendarEvents.cancel, { eventId });
 
       // `get` throws "Event not found" once the row is gone.
       await expect(
         asUser.query(api.calendarEvents.get, { eventId }),
       ).rejects.toThrow(/not found/i);
     });
+  });
 
-    it("refuses to delete a non-cancelled guest event", async () => {
+  describe("events-as-nodes (graph integration)", () => {
+    it("create inserts a corresponding nodes row with searchable: false", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
-        title: "With guests",
-        startsAt: Date.now() + ONE_HOUR,
-        endsAt: Date.now() + 2 * ONE_HOUR,
-        timezone: "UTC",
-        invitees: { userIds: [], guestEmails: ["guest@x.com"] },
-      });
-
-      await expect(
-        asUser.mutation(api.calendarEvents.remove, { eventId }),
-      ).rejects.toThrow(/Cancel this event before deleting/i);
-    });
-
-    it("allows delete after cancel for guest events; cleans up shares", async () => {
-      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
-      const eventId = await asUser.mutation(api.calendarEvents.create, {
-        workspaceId: workspaceId as any,
-        title: "Cancelled then deleted",
-        startsAt: Date.now() + ONE_HOUR,
-        endsAt: Date.now() + 2 * ONE_HOUR,
-        timezone: "UTC",
-        invitees: { userIds: [], guestEmails: ["guest@x.com"] },
-      });
-
-      await asUser.mutation(api.calendarEvents.cancel, { eventId });
-      await asUser.mutation(api.calendarEvents.remove, { eventId });
-
-      // Event row deleted.
-      const ev = await t.run(async (ctx) => ctx.db.get(eventId));
-      expect(ev).toBeNull();
-
-      // Invitee + share rows cleaned up.
-      const invitees = await t.run(async (ctx) =>
-        ctx.db
-          .query("calendarEventInvitees")
-          .withIndex("by_event", (q) => q.eq("eventId", eventId))
-          .collect(),
-      );
-      expect(invitees.length).toBe(0);
-      const shares = await t.run(async (ctx) =>
-        ctx.db
-          .query("resourceShares")
-          .withIndex("by_resource_id", (q) => q.eq("resourceId", eventId))
-          .collect(),
-      );
-      expect(shares.length).toBe(0);
-    });
-
-    it("non-organiser cannot delete", async () => {
-      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
-      const { userId: memberId, asUser: asMember } =
-        await setupAuthenticatedUser(t, { email: "bob@test.com" });
-      await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
-
-      const eventId = await asUser.mutation(api.calendarEvents.create, {
-        workspaceId: workspaceId as any,
-        title: "Solo focus",
+        title: "Sprint planning",
         startsAt: Date.now() + ONE_HOUR,
         endsAt: Date.now() + 2 * ONE_HOUR,
         timezone: "UTC",
         invitees: { userIds: [], guestEmails: [] },
       });
 
-      await expect(
-        asMember.mutation(api.calendarEvents.remove, { eventId }),
-      ).rejects.toThrow(/Only the organizer/i);
+      const node = await t.run(async (ctx) =>
+        ctx.db
+          .query("nodes")
+          .withIndex("by_resource", (q) => q.eq("resourceId", eventId))
+          .first(),
+      );
+      expect(node).not.toBeNull();
+      expect(node?.resourceType).toBe("calendarEvent");
+      expect(node?.name).toBe("Sprint planning");
+      expect(node?.workspaceId).toBe(workspaceId);
+      expect(node?.searchable).toBe(false);
+      expect(node?.tags).toEqual([]);
+    });
+
+    it("renaming an event syncs the node name", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Original",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      await asUser.mutation(api.calendarEvents.update, {
+        eventId,
+        title: "Renamed",
+        notifyInvitees: false,
+      });
+
+      const node = await t.run(async (ctx) =>
+        ctx.db
+          .query("nodes")
+          .withIndex("by_resource", (q) => q.eq("resourceId", eventId))
+          .first(),
+      );
+      expect(node?.name).toBe("Renamed");
+    });
+
+    it("updateEventTags reconciles entityTags + denormalised tags + node tags", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Tagged event",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      await asUser.mutation(api.calendarEvents.updateEventTags, {
+        eventId,
+        tags: ["Planning", "Q2", "planning"], // dupes + casing tested
+      });
+
+      // Denormalised on event row.
+      const event = await t.run(async (ctx) => ctx.db.get(eventId));
+      expect(event?.tags?.sort()).toEqual(["planning", "q2"]);
+
+      // Synced into the node row.
+      const node = await t.run(async (ctx) =>
+        ctx.db
+          .query("nodes")
+          .withIndex("by_resource", (q) => q.eq("resourceId", eventId))
+          .first(),
+      );
+      expect(node?.tags.sort()).toEqual(["planning", "q2"]);
+
+      // entityTags rows exist for the event.
+      const entityTags = await t.run(async (ctx) =>
+        ctx.db
+          .query("entityTags")
+          .withIndex("by_resource_id", (q) => q.eq("resourceId", eventId))
+          .collect(),
+      );
+      expect(entityTags.length).toBe(2);
+      expect(entityTags.every((r) => r.resourceType === "calendarEvent")).toBe(true);
+    });
+
+    it("nodes.search (Ctrl+K) does not return events", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Findable name",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: [] },
+      });
+
+      const hits = await asUser.query(api.nodes.search, {
+        workspaceId: workspaceId as any,
+        searchText: "Findable",
+      });
+      expect(hits.find((h) => h.resourceType === "calendarEvent")).toBeUndefined();
+    });
+
+    it("cancel (hard-delete) cascades to the node + entityTags + edges", async () => {
+      const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const eventId = await asUser.mutation(api.calendarEvents.create, {
+        workspaceId: workspaceId as any,
+        title: "Will be cancelled",
+        startsAt: Date.now() + ONE_HOUR,
+        endsAt: Date.now() + 2 * ONE_HOUR,
+        timezone: "UTC",
+        invitees: { userIds: [], guestEmails: [] },
+      });
+      await asUser.mutation(api.calendarEvents.updateEventTags, {
+        eventId,
+        tags: ["q2"],
+      });
+
+      await asUser.mutation(api.calendarEvents.cancel, { eventId });
+
+      const node = await t.run(async (ctx) =>
+        ctx.db
+          .query("nodes")
+          .withIndex("by_resource", (q) => q.eq("resourceId", eventId))
+          .first(),
+      );
+      expect(node).toBeNull();
+      const tags = await t.run(async (ctx) =>
+        ctx.db
+          .query("entityTags")
+          .withIndex("by_resource_id", (q) => q.eq("resourceId", eventId))
+          .collect(),
+      );
+      expect(tags.length).toBe(0);
     });
   });
 
@@ -808,7 +888,7 @@ describe("calendarEvents", () => {
       ).rejects.toThrow(/not found|Invalid/i);
     });
 
-    it("after cancellation, guest landing reports revoked", async () => {
+    it("after cancellation, guest landing reports not_found (share is cascade-deleted)", async () => {
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
@@ -820,10 +900,13 @@ describe("calendarEvents", () => {
       });
       const detail = await asUser.query(api.calendarEvents.get, { eventId });
       const shareId = detail.invitees.find((i) => i.guestEmail)!.shareId!;
+      // cancel = hard delete + cascade. The resourceShares row keyed by
+      // resourceId on the event is dropped along with the row, so the
+      // public lookup can't find the share at all.
       await asUser.mutation(api.calendarEvents.cancel, { eventId });
 
       const info = await t.query(api.calendarEvents.getByShareId, { shareId });
-      expect(info.status).toBe("revoked");
+      expect(info.status).toBe("not_found");
     });
   });
 
@@ -839,7 +922,6 @@ describe("calendarEvents", () => {
         title: string;
         startsAt: number;
         endsAt: number;
-        cancelledAt?: number;
       },
     ) {
       return await ctx.run(async (db) => {
@@ -850,7 +932,6 @@ describe("calendarEvents", () => {
           endsAt: args.endsAt,
           timezone: "UTC",
           createdBy: args.createdBy as any,
-          cancelledAt: args.cancelledAt,
         });
       });
     }
@@ -949,34 +1030,11 @@ describe("calendarEvents", () => {
       void aliceEvent;
     });
 
-    it("filters out cancelled events", async () => {
-      const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
-      const { userId: aliceId } = await setupAuthenticatedUser(t, {
-        email: "alice@test.com",
-      });
-      await addMember(t, workspaceId, aliceId, WorkspaceRole.MEMBER);
-
-      const now = Date.now();
-      await insertEvent(t, {
-        workspaceId,
-        createdBy: aliceId,
-        title: "Cancelled",
-        startsAt: now + ONE_HOUR,
-        endsAt: now + 2 * ONE_HOUR,
-        cancelledAt: now,
-      });
-
-      const blocks = await asViewer.query(
-        api.calendarEvents.listForMembersInRange,
-        {
-          workspaceId: workspaceId as any,
-          memberIds: [aliceId as any],
-          rangeStartMs: now,
-          rangeEndMs: now + 24 * ONE_HOUR,
-        },
-      );
-      expect(blocks).toHaveLength(0);
-    });
+    // Soft-delete was removed (cancellation = hard delete + cascade), so
+    // there's no "cancelled but visible" state to filter out anymore — a
+    // cancelled event simply isn't in the calendarEvents table. The
+    // listForMembersInRange query inherently excludes deleted events
+    // because they aren't returned by `ctx.db.query("calendarEvents")`.
 
     it("filters out events outside the requested range", async () => {
       const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);

@@ -198,7 +198,12 @@ export function EditableDateTime({
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// EditableChannel — channel picker inline. Treats null/empty as "unlink".
+// EditableChannel — picks the channel whose persistent meeting room hosts
+// this event's call. Optional; null/empty means "give this event its own
+// one-time room". DM channels are excluded by the parent (see
+// useEventDetail). The label is "Hosted in" rather than "Channel" to make
+// clear that the channel is a venue, not an access boundary — event access
+// is always invitee-based.
 // ───────────────────────────────────────────────────────────────────────────
 
 export function EditableChannel({
@@ -215,7 +220,7 @@ export function EditableChannel({
       <div className="flex items-center gap-1.5 mb-1.5">
         <Hash className="h-3.5 w-3.5 text-muted-foreground" />
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Channel
+          Hosted in
         </p>
       </div>
       <ChannelCombobox

@@ -27,7 +27,6 @@ const reasonValidator = v.union(
   v.literal("stale"),
   v.literal("unknown_event"),
   v.literal("unknown_attendee"),
-  v.literal("event_cancelled"),
 );
 
 const PARTSTAT_TO_STATUS = {
@@ -84,12 +83,12 @@ export const recordEmailRsvp = internalMutation({
       return { applied: false, reason: "unknown_event" as const };
     }
 
+    // The event row may already be hard-deleted (cancellation = hard delete).
+    // Treat as unknown_event and drop the reply silently — no row to update,
+    // no organizer to notify. Worker logs `applied: false` for observability.
     const event = await ctx.db.get(eventId);
     if (!event) {
       return { applied: false, reason: "unknown_event" as const };
-    }
-    if (event.cancelledAt !== undefined) {
-      return { applied: false, reason: "event_cancelled" as const };
     }
 
     // 2. Locate invitee row. Members are matched by linking the email to a

@@ -49,21 +49,16 @@ export function EventDetailSheet({
     myInvitee,
     isOrganizer,
     editable,
-    hasGuests,
     callStatus,
     saveField,
     handleRespond,
     handleCancel,
-    handleDelete,
     handleAddInvitees,
     handleRemoveInvitee,
   } = useEventDetail({ eventId, workspaceId });
 
   const onCancel = async () => {
     if (await handleCancel()) onOpenChange(false);
-  };
-  const onDelete = async () => {
-    if (await handleDelete()) onOpenChange(false);
   };
 
   const joinCall = () => {
@@ -121,13 +116,6 @@ export function EventDetailSheet({
                   </SheetTitle>
                 )}
               </div>
-              {detail.event.cancelledAt !== undefined && (
-                <div className="mt-1.5">
-                  <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-destructive/15 text-destructive uppercase tracking-wide">
-                    Cancelled
-                  </span>
-                </div>
-              )}
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -160,13 +148,12 @@ export function EventDetailSheet({
             <div className="border-t p-3 flex flex-col gap-2">
               <JoinCallButton
                 status={callStatus}
-                cancelled={detail.event.cancelledAt !== undefined}
                 onJoin={joinCall}
                 className="w-full"
                 pendingClassName="text-center"
               />
 
-              {!isOrganizer && myInvitee && detail.event.cancelledAt === undefined && (
+              {!isOrganizer && myInvitee && (
                 <RsvpResponseGroup
                   myStatus={myInvitee.status}
                   onRespond={(s) => void handleRespond(s)}
@@ -174,37 +161,19 @@ export function EventDetailSheet({
                 />
               )}
 
-              {/* Organizer destructive actions. Cancel = guest-aware
-                  soft-delete; Delete = hard remove (rejects when there
-                  are still un-notified guests). The pair is documented
-                  in README's calendar block. */}
+              {/* Cancel = hard delete with notifications. Single verb now —
+                  events have no soft-delete state. */}
               {isOrganizer && (
-                <div className="flex items-center gap-1.5">
-                  {detail.event.cancelledAt === undefined && hasGuests && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 text-destructive hover:text-destructive"
-                      onClick={() => void onCancel()}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1.5" />
-                      Cancel event
-                    </Button>
-                  )}
-                  {(!hasGuests || detail.event.cancelledAt !== undefined) && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 text-destructive hover:text-destructive"
-                      onClick={() => void onDelete()}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1.5" />
-                      Delete event
-                    </Button>
-                  )}
-                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => void onCancel()}
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Cancel event
+                </Button>
               )}
             </div>
           </>

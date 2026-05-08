@@ -127,6 +127,7 @@ triggers.register("documents", async (ctx, change) => {
       resourceId: change.id,
       name: change.newDoc.name,
       tags: change.newDoc.tags ?? [],
+      searchable: true,
     });
   } else if (change.operation === "update") {
     await syncNode(ctx, change.id,
@@ -144,6 +145,7 @@ triggers.register("diagrams", async (ctx, change) => {
       resourceId: change.id,
       name: change.newDoc.name,
       tags: change.newDoc.tags ?? [],
+      searchable: true,
     });
   } else if (change.operation === "update") {
     await syncNode(ctx, change.id,
@@ -161,6 +163,7 @@ triggers.register("spreadsheets", async (ctx, change) => {
       resourceId: change.id,
       name: change.newDoc.name,
       tags: change.newDoc.tags ?? [],
+      searchable: true,
     });
   } else if (change.operation === "update") {
     await syncNode(ctx, change.id,
@@ -178,6 +181,7 @@ triggers.register("projects", async (ctx, change) => {
       resourceId: change.id,
       name: change.newDoc.name,
       tags: [],
+      searchable: true,
     });
   } else if (change.operation === "update") {
     if (change.newDoc.name === change.oldDoc.name) return;
@@ -198,6 +202,7 @@ triggers.register("channels", async (ctx, change) => {
       resourceId: change.id,
       name: change.newDoc.name,
       tags: [],
+      searchable: true,
     });
   } else if (change.operation === "update") {
     if (change.newDoc.name === change.oldDoc.name) return;
@@ -219,6 +224,7 @@ triggers.register("tasks", async (ctx, change) => {
       name: change.newDoc.title,
       tags: change.newDoc.labels ?? [],
       metadata: { type: "task", projectId: change.newDoc.projectId },
+      searchable: true,
     });
   } else if (change.operation === "update") {
     // Tasks are updated frequently (status, assignee, dates…) — only sync when
@@ -241,6 +247,42 @@ triggers.register("tasks", async (ctx, change) => {
   // delete: node cleanup handled by cascade rules
 });
 
+// Calendar events become nodes with `searchable: false` — they participate
+// in the graph and edges (so transcripts, mentions, action-items can link to
+// them) but stay out of `nodes.search` (Ctrl+K). High-frequency patches like
+// SEQUENCE bumps and RSVP-driven sequence increments shouldn't write to the
+// node, so we filter on title/tags changes only — same shape as the tasks
+// trigger above.
+triggers.register("calendarEvents", async (ctx, change) => {
+  if (change.operation === "insert") {
+    await ctx.db.insert("nodes", {
+      workspaceId: change.newDoc.workspaceId,
+      resourceType: "calendarEvent",
+      resourceId: change.id,
+      name: change.newDoc.title,
+      tags: change.newDoc.tags ?? [],
+      searchable: false,
+    });
+  } else if (change.operation === "update") {
+    const titleChanged = change.newDoc.title !== change.oldDoc.title;
+    const tagsChanged =
+      JSON.stringify(change.newDoc.tags ?? []) !==
+      JSON.stringify(change.oldDoc.tags ?? []);
+    if (!titleChanged && !tagsChanged) return;
+    const node = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
+      .first();
+    if (node) {
+      await ctx.db.patch(node._id, {
+        name: change.newDoc.title,
+        tags: change.newDoc.tags ?? [],
+      });
+    }
+  }
+  // delete: cascadeDelete.ts handles node + edges + entityTags + invitees
+});
+
 // ── User nodes (via workspaceMembers) ──────────────────────────────
 // One user node per workspace membership. Name synced from user profile.
 
@@ -253,6 +295,7 @@ triggers.register("workspaceMembers", async (ctx, change) => {
       resourceId: change.newDoc.userId,
       name: user?.name ?? user?.email ?? "Unknown",
       tags: [],
+      searchable: true,
     });
   } else if (change.operation === "delete") {
     const node = await ctx.db

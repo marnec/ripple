@@ -90,6 +90,50 @@ export const list = query({
   },
 });
 
+// Channels that can host a calendar event's meeting room — i.e. open + closed,
+// excluding DMs. The calendar "Hosted in" picker uses this. DMs are excluded
+// because a DM has no agenda of its own and reusing its persistent room would
+// surface the meeting to whichever two members the DM happens to belong to.
+// One indexed equality lookup per non-DM type via `by_type_workspace`, so we
+// never call .filter() and never read DM rows.
+export const listHostable = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.array(v.object({
+    _id: v.id("channels"),
+    _creationTime: v.number(),
+    name: v.string(),
+    workspaceId: v.id("workspaces"),
+    type: channelTypeSchema,
+  })),
+  handler: async (ctx, { workspaceId }) => {
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
+
+    const [open, closed] = await Promise.all([
+      ctx.db
+        .query("channels")
+        .withIndex("by_type_workspace", (q) =>
+          q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId),
+        )
+        .collect(),
+      ctx.db
+        .query("channels")
+        .withIndex("by_type_workspace", (q) =>
+          q.eq("type", ChannelType.CLOSED).eq("workspaceId", workspaceId),
+        )
+        .collect(),
+    ]);
+
+    return [...open, ...closed].map((c) => ({
+      _id: c._id,
+      _creationTime: c._creationTime,
+      name: c.name,
+      workspaceId: c.workspaceId,
+      type: c.type,
+    }));
+  },
+});
+
 export const get = query({
   args: { id: v.id("channels") },
   returns: v.union(

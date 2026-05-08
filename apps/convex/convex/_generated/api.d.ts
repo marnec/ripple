@@ -96,7 +96,6 @@ export declare const api: {
         event: {
           _creationTime: number;
           _id: Id<"calendarEvents">;
-          cancelledAt?: number;
           channelId?: Id<"channels">;
           cloudflareMeetingId?: string;
           createdBy: Id<"users">;
@@ -104,6 +103,7 @@ export declare const api: {
           endsAt: number;
           sequence?: number;
           startsAt: number;
+          tags?: Array<string>;
           timezone: string;
           title: string;
           workspaceId: Id<"workspaces">;
@@ -187,7 +187,6 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"calendarEvents">;
-        cancelledAt?: number;
         channelId?: Id<"channels">;
         cloudflareMeetingId?: string;
         createdBy: Id<"users">;
@@ -196,16 +195,11 @@ export declare const api: {
         nonOrganizerInviteeCount: number;
         sequence?: number;
         startsAt: number;
+        tags?: Array<string>;
         timezone: string;
         title: string;
         workspaceId: Id<"workspaces">;
       }>
-    >;
-    remove: FunctionReference<
-      "mutation",
-      "public",
-      { eventId: Id<"calendarEvents"> },
-      null
     >;
     removeInvitee: FunctionReference<
       "mutation",
@@ -245,6 +239,12 @@ export declare const api: {
         timezone?: string;
         title?: string;
       },
+      null
+    >;
+    updateEventTags: FunctionReference<
+      "mutation",
+      "public",
+      { eventId: Id<"calendarEvents">; tags: Array<string> },
       null
     >;
   };
@@ -435,6 +435,18 @@ export declare const api: {
       }>
     >;
     listByUserMembership: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"channels">;
+        name: string;
+        type: "open" | "closed" | "dm";
+        workspaceId: Id<"workspaces">;
+      }>
+    >;
+    listHostable: FunctionReference<
       "query",
       "public",
       { workspaceId: Id<"workspaces"> },
@@ -2738,11 +2750,7 @@ export declare const internal: {
       },
       {
         applied: boolean;
-        reason?:
-          | "stale"
-          | "unknown_event"
-          | "unknown_attendee"
-          | "event_cancelled";
+        reason?: "stale" | "unknown_event" | "unknown_attendee";
       }
     >;
   };
@@ -2752,7 +2760,6 @@ export declare const internal: {
       "internal",
       { shareId: string },
       {
-        cancelledAt?: number;
         channelId?: Id<"channels">;
         cloudflareMeetingId?: string;
         endsAt: number;
@@ -2768,7 +2775,6 @@ export declare const internal: {
       { eventId: Id<"calendarEvents">; userId: Id<"users"> },
       {
         _id: Id<"calendarEvents">;
-        cancelledAt?: number;
         channelId?: Id<"channels">;
         cloudflareMeetingId?: string;
         endsAt: number;
@@ -3008,6 +3014,20 @@ export declare const internal: {
         skipped: number;
       }
     >;
+    backfillCalendarEventNodes: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillChannelAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -3163,6 +3183,20 @@ export declare const internal: {
       any
     >;
     backfillMemberAggregates: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    backfillNodeSearchable: FunctionReference<
       "mutation",
       "internal",
       {
@@ -3454,6 +3488,20 @@ export declare const internal: {
       any
     >;
     runChannelTypeMigration: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    stripCalendarEventCancelledAt: FunctionReference<
       "mutation",
       "internal",
       {

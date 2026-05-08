@@ -222,7 +222,11 @@ describe("calendarEventInvitees.recordEmailRsvp", () => {
     expect(row?.status).toBe("accepted");
   });
 
-  it("cancelled event -> event_cancelled", async () => {
+  it("cancelled (hard-deleted) event -> unknown_event", async () => {
+    // Soft-delete was removed: cancellation hard-deletes the row + cascade.
+    // A REPLY arriving after cancellation can no longer find the event,
+    // so the worker reports unknown_event (no row to update, no organizer
+    // to notify) and the inbound email is silently dropped.
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const memberId = await inviteMember(t, workspaceId, "alice@test.com");
     const eventId = await asUser.mutation(api.calendarEvents.create, {
@@ -233,9 +237,7 @@ describe("calendarEventInvitees.recordEmailRsvp", () => {
       timezone: "UTC",
       invitees: { userIds: [memberId as any], guestEmails: [] },
     });
-    await t.run(async (ctx) => {
-      await ctx.db.patch(eventId as any, { cancelledAt: Date.now() });
-    });
+    await asUser.mutation(api.calendarEvents.cancel, { eventId });
 
     const result = await t.mutation(internal.calendarEventInvitees.recordEmailRsvp, {
       uid: uidFor(eventId),
@@ -244,7 +246,7 @@ describe("calendarEventInvitees.recordEmailRsvp", () => {
       dtstamp: Date.now(),
       sequence: 0,
     });
-    expect(result).toEqual({ applied: false, reason: "event_cancelled" });
+    expect(result).toEqual({ applied: false, reason: "unknown_event" });
   });
 
   it("strictly newer dtstamp at same sequence -> applied (status flips)", async () => {

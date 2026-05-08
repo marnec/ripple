@@ -1,8 +1,11 @@
 import { Hash, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useMutation } from "convex/react";
 
 import { cn } from "@/lib/utils";
+import { TagInput } from "@/components/TagInput";
 
+import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import {
   EditableChannel,
@@ -57,6 +60,7 @@ export function EventDetailContent({
   channelDisplay?: "inline" | "section";
 }) {
   const navigate = useNavigate();
+  const updateEventTags = useMutation(api.calendarEvents.updateEventTags);
 
   return (
     <div className={cn("flex flex-col", gapClassName)}>
@@ -96,7 +100,7 @@ export function EventDetailContent({
         channelDisplay === "section" ? (
           <ReadSection
             icon={<Hash className="h-3.5 w-3.5" />}
-            label="Channel"
+            label="Hosted in"
           >
             <button
               type="button"
@@ -122,7 +126,7 @@ export function EventDetailContent({
             }}
           >
             <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-muted-foreground">Linked to</span>
+            <span className="text-muted-foreground">Hosted in</span>
             <span className="font-medium">{detail.channelName}</span>
           </button>
         )
@@ -143,6 +147,35 @@ export function EventDetailContent({
           <p className="text-sm whitespace-pre-wrap">
             {detail.event.description}
           </p>
+        </ReadSection>
+      ) : null}
+
+      {/* Tags. Editable inline for organisers; read-only chips otherwise.
+          Wires into the polymorphic `entityTags` system via
+          `calendarEvents.updateEventTags`, mirroring documents/diagrams. */}
+      {editable ? (
+        <ReadSection label="Tags">
+          <TagInput
+            value={detail.event.tags ?? []}
+            onChange={(tags) =>
+              void updateEventTags({ eventId: detail.event._id, tags })
+            }
+            workspaceId={workspaceId}
+            placeholder="Add tags…"
+          />
+        </ReadSection>
+      ) : detail.event.tags && detail.event.tags.length > 0 ? (
+        <ReadSection label="Tags">
+          <div className="flex flex-wrap gap-1.5">
+            {detail.event.tags.map((tag) => (
+              <span
+                key={tag}
+                className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
         </ReadSection>
       ) : null}
 

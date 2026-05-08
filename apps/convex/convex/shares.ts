@@ -310,10 +310,11 @@ export const getShareInfo = query({
       if (!channel) return { status: "not_found" as const };
       resourceName = channel.name;
     } else if (share.resourceType === "calendarEvent") {
+      // A missing event row means the organizer cancelled (cancellation =
+      // hard delete + cascade). The share row itself is cascade-deleted, so
+      // we usually don't reach here, but handle the race defensively.
       const event = await ctx.db.get(share.resourceId as Id<"calendarEvents">);
-      if (!event) return { status: "not_found" as const };
-      // Cancelled events behave like revoked shares from a guest's POV.
-      if (event.cancelledAt !== undefined) return { status: "revoked" as const };
+      if (!event) return { status: "revoked" as const };
       resourceName = event.title;
     } else {
       const resource = await ctx.db.get(share.resourceId as Id<"documents">);
@@ -379,14 +380,6 @@ export const loadActiveShare = internalQuery({
           ? await ctx.db.get(share.resourceId as Id<"calendarEvents">)
           : await ctx.db.get(share.resourceId as Id<"documents">);
     if (!resource) return null;
-
-    // A cancelled event is effectively a revoked share — surface as inactive.
-    if (
-      share.resourceType === "calendarEvent" &&
-      (resource as Doc<"calendarEvents">).cancelledAt !== undefined
-    ) {
-      return null;
-    }
 
     return {
       resourceType: share.resourceType,

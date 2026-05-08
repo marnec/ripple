@@ -56,10 +56,16 @@ export const cascadeRules = defineCascadeRules({
   // When a calendar event is deleted, drop its invitee rows and any
   // guest share rows pointing at it. Channel deletion does NOT cascade
   // here — events tied to a deleted channel survive as standalone (the
-  // read path tolerates a missing channelId).
+  // read path tolerates a missing channelId). Events also participate in
+  // the polymorphic graph (nodes/edges) and tag system (entityTags), so
+  // those are cascaded too — same shape as documents/diagrams.
   calendarEvents: [
     { to: "calendarEventInvitees", via: "by_event", field: "eventId" },
     { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
+    { to: "edges", via: "by_source", field: "sourceId" },
+    { to: "edges", via: "by_target", field: "targetId" },
+    { to: "nodes", via: "by_resource", field: "resourceId" },
+    { to: "entityTags", via: "by_resource_id", field: "resourceId" },
   ],
 
   // ── channels ────────────────────────────────────────────────────────

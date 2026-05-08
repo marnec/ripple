@@ -20,6 +20,7 @@
     "test:backend": "pnpm --filter @ripple/convex test",
     "test:frontend": "pnpm --filter @ripple/web test",
     "deploy:convex": "pnpm --filter @ripple/convex run deploy",
+    "migrate": "pnpm --filter @ripple/convex exec convex run migrations:runAll",
     "deploy:frontend": "pnpm --filter @ripple/web run deploy",
     "deploy:rsvp-worker": "pnpm --filter @ripple/rsvp-worker run deploy",
     "deploy": "pnpm --filter @ripple/web run build && pnpm --filter @ripple/convex run deploy && pnpm --filter @ripple/web run deploy && pnpm --filter @ripple/rsvp-worker run deploy"

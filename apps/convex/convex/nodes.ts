@@ -35,10 +35,17 @@ export const search = query({
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
 
+    // `searchable: false` is the calendar-event opt-out; everything
+    // else is `true` (enforced by the dbTriggers.ts inserts and the
+    // backfillNodeSearchable migration). Filtering at the index level
+    // means the search engine never has to materialise the events.
     const results = await ctx.db
       .query("nodes")
       .withSearchIndex("by_name", (q) => {
-        const base = q.search("name", searchText).eq("workspaceId", workspaceId);
+        const base = q
+          .search("name", searchText)
+          .eq("workspaceId", workspaceId)
+          .eq("searchable", true);
         return resourceType ? base.eq("resourceType", resourceType) : base;
       })
       .take(20);

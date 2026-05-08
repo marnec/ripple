@@ -57,26 +57,21 @@ function EventDetailPageContent({
     myInvitee,
     isOrganizer,
     editable,
-    hasGuests,
     callStatus,
     saveField,
     handleRespond,
     handleCancel,
-    handleDelete,
     handleAddInvitees,
     handleRemoveInvitee,
   } = useEventDetail({ eventId, workspaceId });
 
-  // Where to land after a destroy. Pop the URL back to the calendar
-  // tab — both Cancel (which leaves a tombstone) and Delete (which
-  // wipes the resource) want the user out of the now-stale event URL.
+  // Where to land after cancellation (= hard delete). Pop the URL back
+  // to the calendar tab so the user isn't stranded on a now-stale event
+  // URL.
   const calendarHref = `/workspaces/${workspaceId}/dashboard/calendar`;
 
   const onCancel = async () => {
     if (await handleCancel()) void navigate(calendarHref);
-  };
-  const onDelete = async () => {
-    if (await handleDelete()) void navigate(calendarHref);
   };
 
   const joinCall = () => {
@@ -105,58 +100,32 @@ function EventDetailPageContent({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Desktop toolbar: actions live on a flat bar above the content,
-          mirroring TaskDetailPage. Mobile gets the same actions injected
-          into the global HeaderSlot so the page body stays uncluttered.
-          We render Cancel/Delete only for organisers; non-organisers
-          have no destructive actions. */}
+      {/* Desktop toolbar: a single Cancel-event action (cancellation is
+          a hard delete with notifications — there is no separate
+          "delete"). Mobile pushes the same action into HeaderSlot. */}
       {!isMobile && isOrganizer && (
         <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
           <div className="flex h-8 min-w-0 items-center gap-2">
-            {detail.event.cancelledAt === undefined && hasGuests && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void onCancel()}
-                title="Cancel event (notifies guests)"
-              >
-                <Trash2 className="h-4 w-4 mr-1.5 text-destructive" />
-                Cancel event
-              </Button>
-            )}
-            {(!hasGuests || detail.event.cancelledAt !== undefined) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void onDelete()}
-                title="Delete event"
-              >
-                <Trash2 className="h-4 w-4 mr-1.5 text-destructive" />
-                Delete event
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void onCancel()}
+              title="Cancel event"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5 text-destructive" />
+              Cancel event
+            </Button>
           </div>
         </div>
       )}
 
       {isMobile && isOrganizer && (
         <HeaderSlot>
-          {/* Single destructive button on mobile: it dispatches based on
-              event state. The full Cancel-vs-Delete distinction is more
-              nuance than a phone header has room for — mobile users get
-              the safer choice (cancel-with-notify) when guests are still
-              around, otherwise plain delete. */}
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => {
-              if (detail.event.cancelledAt === undefined && hasGuests) {
-                void onCancel();
-              } else {
-                void onDelete();
-              }
-            }}
-            aria-label="Cancel or delete event"
+            onClick={() => void onCancel()}
+            aria-label="Cancel event"
           >
             <Trash2 className="size-4 text-destructive" />
           </Button>
@@ -186,14 +155,6 @@ function EventDetailPageContent({
               </h1>
             )}
           </div>
-          {detail.event.cancelledAt !== undefined && (
-            <div className="mb-4">
-              <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-destructive/15 text-destructive uppercase tracking-wide">
-                Cancelled
-              </span>
-            </div>
-          )}
-
           {/* Spacer */}
           <div className="h-6" />
 
@@ -217,12 +178,11 @@ function EventDetailPageContent({
           <div className="mt-10 flex flex-col gap-2 border-t pt-6">
             <JoinCallButton
               status={callStatus}
-              cancelled={detail.event.cancelledAt !== undefined}
               onJoin={joinCall}
               className="self-start min-w-40"
             />
 
-            {!isOrganizer && myInvitee && detail.event.cancelledAt === undefined && (
+            {!isOrganizer && myInvitee && (
               <RsvpResponseGroup
                 myStatus={myInvitee.status}
                 onRespond={(s) => void handleRespond(s)}

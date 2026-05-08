@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
  * Renders the Join-call affordance for an event detail surface (sheet,
  * page, or guest landing). Shows the Join button while the call window
  * is open; renders a "Join opens 5 minutes before the event" hint
- * during the pending phase; renders nothing once the window closes or
- * the event is cancelled.
+ * during the pending phase; renders nothing once the window closes.
  *
  * The button styling differs subtly between surfaces (`w-full` in the
  * sheet footer, `self-start min-w-40` on the page) so callers pass a
@@ -16,18 +15,15 @@ import { cn } from "@/lib/utils";
  */
 export function JoinCallButton({
   status,
-  cancelled,
   onJoin,
   className,
   pendingClassName,
 }: {
   status: JoinWindowStatus;
-  cancelled: boolean;
   onJoin: () => void;
   className?: string;
   pendingClassName?: string;
 }) {
-  if (cancelled) return null;
   if (status === "open") {
     return (
       <Button onClick={onJoin} className={className}>

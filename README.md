@@ -1,8 +1,8 @@
 NEXT STEPS:
 - calendar; plan calls; invite guests
-    - ics accept/decline sync with ripple invitation status
-    - events as nodes
-    - events-tags
+    - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
+
+- are tags just nodes of type tag????? I think so
 
 - leave channel logic (only for private?)
 - consider favorite for channels too

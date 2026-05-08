@@ -4,6 +4,7 @@ import type { DataModel, Id } from "./_generated/dataModel.js";
 import { internalMutation } from "./_generated/server.js";
 import { v } from "convex/values";
 import { auditLog } from "./auditLog.js";
+import { cascadeDelete } from "./cascadeDelete.js";
 import { extractMessageTargets } from "./utils/blocknote.js";
 import {
   BROADCAST_WORKSPACE_CATEGORIES,
@@ -118,6 +119,8 @@ export const runAll = migrations.runner([
   internal.migrations.backfillProjectNodes,
   internal.migrations.backfillChannelNodes,
   internal.migrations.backfillTaskNodes,
+  internal.migrations.backfillNodeSearchable,
+  internal.migrations.backfillCalendarEventNodes,
   internal.migrations.stripMessageEdges,
   internal.migrations.stripEdgeGroupId,
   internal.migrations.backfillChannelMentionEdges,
@@ -485,6 +488,7 @@ export const backfillDocumentNodes = migrations.define({
       resourceId: doc._id,
       name: doc.name,
       tags: doc.tags ?? [],
+      searchable: true,
     });
   },
 });
@@ -503,6 +507,7 @@ export const backfillDiagramNodes = migrations.define({
       resourceId: doc._id,
       name: doc.name,
       tags: doc.tags ?? [],
+      searchable: true,
     });
   },
 });
@@ -521,6 +526,7 @@ export const backfillSpreadsheetNodes = migrations.define({
       resourceId: doc._id,
       name: doc.name,
       tags: doc.tags ?? [],
+      searchable: true,
     });
   },
 });
@@ -539,6 +545,7 @@ export const backfillProjectNodes = migrations.define({
       resourceId: doc._id,
       name: doc.name,
       tags: [],
+      searchable: true,
     });
   },
 });
@@ -557,6 +564,7 @@ export const backfillChannelNodes = migrations.define({
       resourceId: channel._id,
       name: channel.name,
       tags: [],
+      searchable: true,
     });
   },
 });
@@ -576,6 +584,79 @@ export const backfillTaskNodes = migrations.define({
       name: task.title,
       tags: task.labels ?? [],
       metadata: { type: "task", projectId: task.projectId },
+      searchable: true,
+    });
+  },
+});
+
+// Backfill `nodes.searchable` so the by_name searchIndex's `searchable`
+// filter (added alongside calendar events) returns deterministic results.
+// `nodes.search` filters with `.eq("searchable", true)`; rows that
+// existed before the field was added would otherwise drop out of search
+// entirely. Calendar event nodes are inserted with `searchable: false`
+// from their own backfill, so we only flip undefined → true here.
+export const backfillNodeSearchable = migrations.define({
+  table: "nodes",
+  migrateOne: async (ctx, node) => {
+    if (node.searchable !== undefined) return;
+    await ctx.db.patch(node._id, { searchable: true });
+  },
+});
+
+// Calendar events as nodes. `searchable: false` keeps them out of Ctrl+K
+// (`nodes.search`) — events are discovered via the calendar UI or via
+// backlinks from connected nodes — but they still participate in the
+// graph and can be edge sources/targets (transcripts, action-items, etc.).
+export const backfillCalendarEventNodes = migrations.define({
+  table: "calendarEvents",
+  migrateOne: async (ctx, event) => {
+    const existing = await ctx.db
+      .query("nodes")
+      .withIndex("by_resource", (q) => q.eq("resourceId", event._id))
+      .first();
+    if (existing) return;
+    await ctx.db.insert("nodes", {
+      workspaceId: event.workspaceId,
+      resourceType: "calendarEvent",
+      resourceId: event._id,
+      name: event.title,
+      tags: event.tags ?? [],
+      searchable: false,
+    });
+  },
+});
+
+// `cancelledAt` was removed when soft-delete was dropped: cancellation is
+// now a hard delete. Pre-migration rows with `cancelledAt` set were already
+// cancelled (notifications were dispatched at that time), so we simply
+// drop the row + cascade. Rows without `cancelledAt` get the field stripped
+// via `replace` so schema validation passes after the type was removed.
+export const stripCalendarEventCancelledAt = migrations.define({
+  table: "calendarEvents",
+  migrateOne: async (ctx, event) => {
+    const legacy = event as Record<string, unknown>;
+    if (!("cancelledAt" in legacy)) return;
+    if (legacy.cancelledAt !== undefined) {
+      // Already-cancelled rows: hard-delete + cascade. Notifications were
+      // sent when the row was originally cancelled, so this is just
+      // tombstone cleanup. Goes through cascadeDelete so the related
+      // invitee/share/node/edge/entityTag rows are tidied in the same pass.
+      await cascadeDelete.deleteWithCascade(ctx, "calendarEvents", event._id, {});
+      return;
+    }
+    // Active rows: rewrite without the optional cancelledAt field.
+    await ctx.db.replace(event._id, {
+      workspaceId: event.workspaceId,
+      title: event.title,
+      description: event.description,
+      startsAt: event.startsAt,
+      endsAt: event.endsAt,
+      timezone: event.timezone,
+      channelId: event.channelId,
+      cloudflareMeetingId: event.cloudflareMeetingId,
+      createdBy: event.createdBy,
+      sequence: event.sequence,
+      tags: event.tags,
     });
   },
 });

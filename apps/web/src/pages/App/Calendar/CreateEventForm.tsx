@@ -137,7 +137,8 @@ export function CreateEventForm({
   className,
 }: CreateEventFormProps) {
   const create = useMutation(api.calendarEvents.create);
-  const channels = useQuery(api.channels.list, { workspaceId });
+  // `listHostable` returns open + closed channels only; DMs can't host events.
+  const channels = useQuery(api.channels.listHostable, { workspaceId });
   const members = useQuery(api.workspaceMembers.membersWithRoles, { workspaceId });
 
   // Local invitees state — kept outside RHF because the chip widget owns

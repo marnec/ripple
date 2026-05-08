@@ -83,7 +83,10 @@ export function useEventDetail({
     api.calendarEvents.get,
     eventId ? { eventId } : "skip",
   );
-  const channels = useQuery(api.channels.list, { workspaceId });
+  // Events can be "hosted in" a channel — when set, the meeting reuses that
+  // channel's persistent RealtimeKit room (see callSessions). `listHostable`
+  // returns open + closed channels only; DMs are excluded server-side.
+  const channels = useQuery(api.channels.listHostable, { workspaceId });
   const members = useQuery(api.workspaceMembers.membersWithRoles, {
     workspaceId,
   });
@@ -92,7 +95,6 @@ export function useEventDetail({
   const update = useMutation(api.calendarEvents.update);
   const respond = useMutation(api.calendarEvents.respond);
   const cancel = useMutation(api.calendarEvents.cancel);
-  const remove = useMutation(api.calendarEvents.remove);
   const addInvitees = useMutation(api.calendarEvents.addInvitees);
   const removeInvitee = useMutation(api.calendarEvents.removeInvitee);
 
@@ -101,18 +103,19 @@ export function useEventDetail({
     return detail.invitees.find((i) => i.userId === viewer._id);
   }, [detail, viewer]);
 
+  // Cancellation is a hard delete (events have no soft-delete state). If
+  // we have `detail`, the event still exists, so an organizer can edit it.
   const isOrganizer = !!viewer && detail?.event.createdBy === viewer._id;
-  const editable = isOrganizer && detail?.event.cancelledAt === undefined;
+  const editable = isOrganizer;
   const hasGuests = !!detail?.invitees.some(
     (i) => i.userId !== detail.event.createdBy,
   );
 
   // 30s tick so the Join window opens / closes without a refresh.
   const now = useJoinStatusTick();
-  const callStatus =
-    detail && detail.event.cancelledAt === undefined
-      ? joinWindowStatus(detail.event.startsAt, detail.event.endsAt, now)
-      : "ended";
+  const callStatus = detail
+    ? joinWindowStatus(detail.event.startsAt, detail.event.endsAt, now)
+    : "ended";
 
   const saveField = async (
     label: string,
@@ -149,33 +152,22 @@ export function useEventDetail({
     }
   };
 
+  /** Cancel = hard delete with notifications. Invitees receive ICS CANCEL
+   *  emails + in-app notifications, then the event row (and its node,
+   *  edges, tags, shares, invitees) is dropped via cascade. There is no
+   *  separate "delete" verb — cancellation is the only removal path. */
   const handleCancel = async (): Promise<boolean> => {
     if (!eventId) return false;
-    if (!confirm("Cancel this event? Invitees will be notified.")) return false;
+    const msg = hasGuests
+      ? "Cancel this event? Invitees will be notified and the event will be removed."
+      : "Cancel this event? This cannot be undone.";
+    if (!confirm(msg)) return false;
     try {
       await cancel({ eventId });
       toast.success("Event cancelled");
       return true;
     } catch (e) {
       toast.error("Could not cancel event", {
-        description: e instanceof Error ? e.message : undefined,
-      });
-      return false;
-    }
-  };
-
-  const handleDelete = async (): Promise<boolean> => {
-    if (!eventId || !detail) return false;
-    const msg = hasGuests
-      ? "Delete this event? It's already cancelled — invitees were already notified."
-      : "Delete this event? This cannot be undone.";
-    if (!confirm(msg)) return false;
-    try {
-      await remove({ eventId });
-      toast.success("Event deleted");
-      return true;
-    } catch (e) {
-      toast.error("Could not delete event", {
         description: e instanceof Error ? e.message : undefined,
       });
       return false;
@@ -224,7 +216,6 @@ export function useEventDetail({
     saveField,
     handleRespond,
     handleCancel,
-    handleDelete,
     handleAddInvitees,
     handleRemoveInvitee,
   };

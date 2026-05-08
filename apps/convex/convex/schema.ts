@@ -213,6 +213,7 @@ export default defineSchema({
       v.literal("diagram"),
       v.literal("spreadsheet"),
       v.literal("project"),
+      v.literal("calendarEvent"),
     ),
     resourceId: v.string(),
   })
@@ -378,10 +379,14 @@ export default defineSchema({
     .index("by_cycle_task", ["cycleId", "taskId"]),
 
   // Workspace-level scheduled meetings ("planned calls"). Visible only to the
-  // creator and explicit invitees (see calendarEventInvitees). Optionally tied
-  // to a channel — when channelId is set the call reuses the channel's
-  // RealtimeKit meeting via callSessions; otherwise cloudflareMeetingId is
-  // lazy-created on the event itself on first join.
+  // creator and explicit invitees (see calendarEventInvitees) — channel
+  // membership is NEVER consulted for event access (see requireEventViewer in
+  // calendarEvents.ts). channelId is purely a meeting venue: when set, the
+  // call reuses that channel's persistent RealtimeKit room via callSessions;
+  // otherwise cloudflareMeetingId is lazy-created on the event itself on first
+  // join. DM channels are excluded from the picker UI side — a DM has no
+  // agenda of its own and reusing its room would surface the meeting to
+  // whichever two members the DM happens to belong to.
   calendarEvents: defineTable({
     workspaceId: v.id("workspaces"),
     title: v.string(),
@@ -392,11 +397,15 @@ export default defineSchema({
     channelId: v.optional(v.id("channels")),
     cloudflareMeetingId: v.optional(v.string()), // lazy on first join (standalone events)
     createdBy: v.id("users"),
-    cancelledAt: v.optional(v.number()),
     // iCalendar SEQUENCE — bumped each time we email guests about a
     // change (reschedule, cancel). Mail clients use this to dedupe and
     // to apply ICS updates in order. Treat undefined as 0 for legacy rows.
     sequence: v.optional(v.number()),
+    // Denormalized tag list, mirrors documents/diagrams. Authoritative tag
+    // membership lives in `entityTags` (with `resourceType: "calendarEvent"`).
+    // Sync via `syncTagsForResource` in tagSync.ts; the calendarEvents
+    // dbTrigger forwards changes to the polymorphic `nodes` row.
+    tags: v.optional(v.array(v.string())),
   })
     .index("by_workspace_starts", ["workspaceId", "startsAt"])
     .index("by_creator", ["createdBy"])
@@ -515,6 +524,7 @@ export default defineSchema({
       v.literal("diagram"),
       v.literal("spreadsheet"),
       v.literal("channel"),
+      v.literal("calendarEvent"),
     ),
     sourceId: v.string(),
     targetType: v.union(
@@ -525,6 +535,7 @@ export default defineSchema({
       v.literal("user"),
       v.literal("project"),
       v.literal("channel"),
+      v.literal("calendarEvent"),
     ),
     targetId: v.string(),
     edgeType: v.union(
@@ -558,6 +569,7 @@ export default defineSchema({
       v.literal("channel"),
       v.literal("task"),
       v.literal("user"),
+      v.literal("calendarEvent"),
     ),
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name
@@ -567,6 +579,13 @@ export default defineSchema({
         v.object({ type: v.literal("task"), projectId: v.id("projects") }),
       ),
     ), // immutable, set once at node creation
+    // Whether this node should appear in `nodes.search` (Ctrl+K). Defaults
+    // to `true` when undefined, so existing rows are unchanged. Calendar
+    // events explicitly set `false`: they participate in the graph and
+    // edges but are discovered via the calendar UI or via backlinks from
+    // connected nodes — fuzzy search would surface low-information past
+    // events as noise.
+    searchable: v.optional(v.boolean()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_type", ["workspaceId", "resourceType"])
@@ -574,7 +593,7 @@ export default defineSchema({
     .index("by_resource_workspace", ["resourceId", "workspaceId"])
     .searchIndex("by_name", {
       searchField: "name",
-      filterFields: ["workspaceId", "resourceType"],
+      filterFields: ["workspaceId", "resourceType", "searchable"],
     }),
 
   notificationSubscriptions: defineTable({

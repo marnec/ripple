@@ -10,6 +10,7 @@ import {
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { writerWithTriggers } from "convex-helpers/server/triggers";
 import {
   getWorkspaceMembership,
   requireChannelAccess,
@@ -25,6 +26,9 @@ import { dispatchEventNotifications } from "./utils/eventNotifications";
 import { rateLimiter } from "./rateLimits";
 import { CF_API_BASE, ensureMeetingForChannel } from "./callSessions";
 import { GUEST_SUB_PREFIX } from "@ripple/shared/shareTypes";
+import { triggers } from "./dbTriggers";
+import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
+import { syncTagsForResource } from "./tagSync";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -67,8 +71,8 @@ const eventValidator = v.object({
   channelId: v.optional(v.id("channels")),
   cloudflareMeetingId: v.optional(v.string()),
   createdBy: v.id("users"),
-  cancelledAt: v.optional(v.number()),
   sequence: v.optional(v.number()),
+  tags: v.optional(v.array(v.string())),
 });
 
 const inviteeValidator = v.object({
@@ -169,10 +173,9 @@ function validateDescription(description: string | undefined): string | undefine
 }
 
 function isInJoinWindow(
-  event: { startsAt: number; endsAt: number; cancelledAt?: number },
+  event: { startsAt: number; endsAt: number },
   now: number,
 ): boolean {
-  if (event.cancelledAt !== undefined) return false;
   return (
     now >= event.startsAt - JOIN_WINDOW_LEAD_MS &&
     now <= event.endsAt + JOIN_WINDOW_TAIL_MS
@@ -238,8 +241,8 @@ const eventInRangeValidator = v.object({
   channelId: v.optional(v.id("channels")),
   cloudflareMeetingId: v.optional(v.string()),
   createdBy: v.id("users"),
-  cancelledAt: v.optional(v.number()),
   sequence: v.optional(v.number()),
+  tags: v.optional(v.array(v.string())),
   /** Non-organizer invitee count — drives the reschedule prompt's
    *  "X invitees" copy and gates whether the prompt fires at all. */
   nonOrganizerInviteeCount: v.number(),
@@ -375,7 +378,6 @@ export const listForMembersInRange = query({
         .collect();
       for (const e of created) {
         if (e.workspaceId !== workspaceId) continue;
-        if (e.cancelledAt !== undefined) continue;
         if (e.endsAt <= rangeStartMs || e.startsAt >= rangeEndMs) continue;
         if (e.createdBy === viewerId) continue;
         if (await viewerIsInvitee(e._id)) continue;
@@ -395,7 +397,6 @@ export const listForMembersInRange = query({
       for (const row of invited) {
         const e = await ctx.db.get(row.eventId);
         if (!e) continue;
-        if (e.cancelledAt !== undefined) continue;
         if (e.endsAt <= rangeStartMs || e.startsAt >= rangeEndMs) continue;
         if (e.createdBy === viewerId) continue;
         if (await viewerIsInvitee(e._id)) continue;
@@ -500,9 +501,12 @@ export const getByShareId = query({
       return { status: "expired" as const };
     }
 
+    // The event row may already be gone (cancellation hard-deletes the
+    // event and cascades the share row). In normal flow the `share`
+    // lookup above returns null, so we rarely reach this branch — but
+    // race conditions / stale tokens still hit here.
     const event = await ctx.db.get(share.resourceId as Id<"calendarEvents">);
-    if (!event) return { status: "not_found" as const };
-    if (event.cancelledAt !== undefined) return { status: "revoked" as const };
+    if (!event) return { status: "revoked" as const };
 
     const organizer = await ctx.db.get(event.createdBy);
     const workspace = await ctx.db.get(event.workspaceId);
@@ -581,8 +585,10 @@ export const create = mutation({
       if (!m) throw new ConvexError("Invitee is not a member of this workspace");
     }
 
-    // Insert event.
-    const eventId = await ctx.db.insert("calendarEvents", {
+    // Insert event. Goes through writerWithTriggers so the calendarEvents
+    // trigger in dbTriggers.ts creates the matching `nodes` row.
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    const eventId = await db.insert("calendarEvents", {
       workspaceId: args.workspaceId,
       title,
       description,
@@ -678,9 +684,8 @@ export const update = mutation({
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new ConvexError("Event not found");
     assertOrganizer(event, userId, "edit this event");
-    if (event.cancelledAt !== undefined) {
-      throw new ConvexError("Cannot edit a cancelled event");
-    }
+
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
 
     const patch: Partial<Doc<"calendarEvents">> = {};
     if (args.title !== undefined) patch.title = validateTitle(args.title);
@@ -709,7 +714,7 @@ export const update = mutation({
       }
     }
 
-    await ctx.db.patch(event._id, patch);
+    await db.patch(event._id, patch);
 
     const shouldNotify = args.notifyInvitees ?? true;
     // Past→past time edits are organizer history-cleanup, not real
@@ -735,7 +740,7 @@ export const update = mutation({
         const allInvitees = await loadInviteeRows(ctx, event._id);
         const newRangeLabel = formatRangeLabel(newStart, newEnd, event.timezone);
         const nextSequence = (event.sequence ?? 0) + 1;
-        await ctx.db.patch(event._id, { sequence: nextSequence });
+        await db.patch(event._id, { sequence: nextSequence });
         updatedEvent = (await ctx.db.get(event._id))!;
         guestRows = allInvitees.filter((r) => r.guestEmail !== undefined);
         action = {
@@ -768,6 +773,36 @@ export const update = mutation({
   },
 });
 
+/** Replace the tag set on an event. Mirrors `documents.updateTags` /
+ *  `diagrams.updateTags`: reconciles the central `tags` + `entityTags`
+ *  tables, then patches the denormalized `tags` column on the event row
+ *  through `writerWithTriggers` so the dbTrigger forwards the change to
+ *  the polymorphic `nodes` row in one write. Auth = organizer only. */
+export const updateEventTags = mutation({
+  args: {
+    eventId: v.id("calendarEvents"),
+    tags: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { eventId, tags }) => {
+    const userId = await requireUser(ctx);
+    const event = await ctx.db.get(eventId);
+    if (!event) throw new ConvexError("Event not found");
+    assertOrganizer(event, userId, "edit this event");
+
+    const normalized = await syncTagsForResource(ctx, {
+      workspaceId: event.workspaceId,
+      resourceType: "calendarEvent",
+      resourceId: eventId,
+      nextTagNames: tags,
+    });
+
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.patch(eventId, { tags: normalized });
+    return null;
+  },
+});
+
 /** Format an event's time range as "Mon, May 4 · 10:00 AM – 11:00 AM"
  *  for the reschedule email. Uses the event's stored timezone so the
  *  recipient sees the same wall-clock times the organizer set. */
@@ -792,6 +827,23 @@ function formatRangeLabel(
   return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
 }
 
+/**
+ * Cancel an event. Hard-delete: we send ICS METHOD:CANCEL emails + in-app
+ * notifications to every invitee, then drop the row and let cascade rules
+ * (cascadeDelete.ts) clean up invitees, shares, the polymorphic node,
+ * edges pointing at the event, and entityTags.
+ *
+ * Soft-delete (`cancelledAt`) was removed: events can only be rescheduled
+ * or cancelled. There is no separate "delete" verb — calling cancel is
+ * the only way to remove an event.
+ *
+ * Notifications fire BEFORE the cascade nukes the row, since
+ * `dispatchEventNotifications` reads invitee/share state from the DB.
+ * SEQUENCE is still bumped on the event row prior to dispatch so the
+ * outgoing ICS attachment carries a sequence strictly greater than the
+ * prior REQUEST — Outlook in particular drops cancellations whose
+ * sequence isn't bumped.
+ */
 export const cancel = mutation({
   args: { eventId: v.id("calendarEvents") },
   returns: v.null(),
@@ -800,39 +852,21 @@ export const cancel = mutation({
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
     assertOrganizer(event, userId, "cancel this event");
-    if (event.cancelledAt !== undefined) return null;
 
-    const now = Date.now();
-    // Bump SEQUENCE alongside cancellation so the ICS METHOD:CANCEL
-    // attachment supersedes the prior REQUEST in recipients' calendars
-    // (Outlook in particular drops cancellations whose sequence is not
-    // strictly greater than the imported invite).
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+
+    // Snapshot invitees + bump sequence so ICS recipients accept the CANCEL.
+    const invitees = await loadInviteeRows(ctx, event._id);
     const nextSequence = (event.sequence ?? 0) + 1;
-    await ctx.db.patch(event._id, { cancelledAt: now, sequence: nextSequence });
+    await db.patch(event._id, { sequence: nextSequence });
+    const updatedEvent = (await ctx.db.get(event._id))!;
 
-    // Revoke all guest share rows tied to this event.
-    const guestInvitees = await loadInviteeRows(ctx, event._id);
-    for (const row of guestInvitees) {
-      if (!row.shareId) continue;
-      const share = await ctx.db
-        .query("resourceShares")
-        .withIndex("by_shareId", (q) => q.eq("shareId", row.shareId!))
-        .first();
-      if (share && share.revokedAt === undefined) {
-        await ctx.db.patch(share._id, { revokedAt: now });
-      }
-    }
-
-    // In-app + email fan-out. The ICS METHOD:CANCEL with bumped
-    // sequence supersedes any earlier REQUEST in recipients' external
-    // calendars (Google/Outlook).
-    const memberRecipientIds = guestInvitees
+    const memberRecipientIds = invitees
       .map((r) => r.userId)
       .filter((id): id is Id<"users"> => id !== undefined);
-    const guestEmailRows = guestInvitees.filter(
+    const guestEmailRows = invitees.filter(
       (r) => r.shareId !== undefined && r.guestEmail !== undefined,
     );
-    const updatedEvent = (await ctx.db.get(event._id))!;
     await dispatchEventNotifications(ctx, {
       event: updatedEvent,
       inviterId: userId,
@@ -850,71 +884,14 @@ export const cancel = mutation({
       scope: event.workspaceId,
     });
 
-    return null;
-  },
-});
-
-/**
- * Hard-delete an event. Pairs with `cancel` (which is the soft-delete /
- * guest-aware variant): we deliberately refuse to silently nuke an event
- * that has external invitees who haven't yet been told it's cancelled —
- * otherwise organisers could ghost their guests by going straight to
- * delete. The contract is therefore:
- *
- *   • Solo events (no non-organiser invitees) → delete is always allowed.
- *   • Guest events that are already cancelled → delete is allowed
- *     (the cancel mutation has already sent notifications + revoked
- *     guest share links; this just clears the tombstone).
- *   • Guest events not yet cancelled → reject with a clear error so the
- *     UI can route the user to `cancel` first.
- *
- * Cascade: invitees rows + revoked-or-active resourceShares rows tied to
- * this event are removed. Notifications/audit logs are not retroactively
- * scrubbed — those are immutable history.
- */
-export const remove = mutation({
-  args: { eventId: v.id("calendarEvents") },
-  returns: v.null(),
-  handler: async (ctx, { eventId }) => {
-    const userId = await requireUser(ctx);
-    const event = await ctx.db.get(eventId);
-    if (!event) throw new ConvexError("Event not found");
-    assertOrganizer(event, userId, "delete this event");
-
-    const invitees = await loadInviteeRows(ctx, event._id);
-
-    const hasGuests = invitees.some((i) => i.userId !== event.createdBy);
-    if (hasGuests && event.cancelledAt === undefined) {
-      throw new ConvexError(
-        "Cancel this event before deleting so invitees are notified.",
-      );
-    }
-
-    // Cascade: invitee rows.
-    for (const row of invitees) {
-      await ctx.db.delete(row._id);
-    }
-
-    // Cascade: resourceShares tied to the event (cancel may have revoked
-    // them already, but the rows still exist — clean them up).
-    for (const row of invitees) {
-      if (!row.shareId) continue;
-      const share = await ctx.db
-        .query("resourceShares")
-        .withIndex("by_shareId", (q) => q.eq("shareId", row.shareId!))
-        .first();
-      if (share) await ctx.db.delete(share._id);
-    }
-
-    await ctx.db.delete(event._id);
-
-    await logActivity(ctx, {
-      userId,
-      resourceType: "calendarEvents",
-      resourceId: event._id,
-      action: "deleted",
-      resourceName: event.title,
-      scope: event.workspaceId,
+    // Hard-delete: cascade removes invitees, shares, node, edges, entityTags.
+    await cascadeDelete.deleteWithCascade(ctx, "calendarEvents", event._id, {
+      onComplete: logCascadeSummary({
+        userId,
+        resourceType: "calendarEvents",
+        resourceId: event._id,
+        scope: event.workspaceId,
+      }),
     });
 
     return null;
@@ -931,9 +908,6 @@ export const respond = mutation({
     const userId = await requireUser(ctx);
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
-    if (event.cancelledAt !== undefined) {
-      throw new ConvexError("Event is cancelled");
-    }
 
     const invitee = await ctx.db
       .query("calendarEventInvitees")
@@ -997,9 +971,7 @@ export const respondAsGuest = mutation({
     if (!invitee) throw new ConvexError("Invitee record not found");
 
     const event = await ctx.db.get(invitee.eventId);
-    if (!event || event.cancelledAt !== undefined) {
-      throw new ConvexError("Event is no longer scheduled");
-    }
+    if (!event) throw new ConvexError("Event is no longer scheduled");
 
     await ctx.db.patch(invitee._id, {
       status,
@@ -1034,9 +1006,6 @@ export const addInvitees = mutation({
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new ConvexError("Event not found");
     assertOrganizer(event, userId, "add invitees");
-    if (event.cancelledAt !== undefined) {
-      throw new ConvexError("Cannot add invitees to a cancelled event");
-    }
 
     // Existing invitees — used to filter duplicates.
     const existing = await loadInviteeRows(ctx, event._id);
@@ -1143,7 +1112,6 @@ const eventForJoinValidator = v.object({
   endsAt: v.number(),
   channelId: v.optional(v.id("channels")),
   cloudflareMeetingId: v.optional(v.string()),
-  cancelledAt: v.optional(v.number()),
 });
 
 export const _getEventForJoin = internalQuery({
@@ -1169,7 +1137,6 @@ export const _getEventForJoin = internalQuery({
       endsAt: event.endsAt,
       channelId: event.channelId,
       cloudflareMeetingId: event.cloudflareMeetingId,
-      cancelledAt: event.cancelledAt,
     };
   },
 });
@@ -1184,7 +1151,6 @@ export const _getEventByShareIdForJoin = internalQuery({
       endsAt: v.number(),
       channelId: v.optional(v.id("channels")),
       cloudflareMeetingId: v.optional(v.string()),
-      cancelledAt: v.optional(v.number()),
       inviteeGuestSub: v.optional(v.string()),
     }),
     v.null(),
@@ -1201,7 +1167,6 @@ export const _getEventByShareIdForJoin = internalQuery({
 
     const event = await ctx.db.get(share.resourceId as Id<"calendarEvents">);
     if (!event) return null;
-    if (event.cancelledAt !== undefined) return null;
 
     const invitee = await ctx.db
       .query("calendarEventInvitees")
@@ -1215,7 +1180,6 @@ export const _getEventByShareIdForJoin = internalQuery({
       endsAt: event.endsAt,
       channelId: event.channelId,
       cloudflareMeetingId: event.cloudflareMeetingId,
-      cancelledAt: event.cancelledAt,
       inviteeGuestSub: invitee?.guestSub,
     };
   },
@@ -1235,7 +1199,11 @@ export const _setEventMeetingId = internalMutation({
       // the orphan Cloudflare meeting (mirrors callSessions.createSession).
       return event.cloudflareMeetingId;
     }
-    await ctx.db.patch(eventId, { cloudflareMeetingId });
+    // writerWithTriggers so the calendarEvents trigger sees the patch (no-op
+    // for this field — title/tags unchanged — but keeps the access pattern
+    // uniform across mutations on this table).
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.patch(eventId, { cloudflareMeetingId });
     return null;
   },
 });
@@ -1345,9 +1313,6 @@ export const joinEventCall = action({
       userId,
     });
     if (!event) throw new ConvexError("Event not found or you are not invited");
-    if (event.cancelledAt !== undefined) {
-      throw new ConvexError("Event has been cancelled");
-    }
     if (!isInJoinWindow(event, Date.now())) {
       throw new ConvexError("This call is not open yet");
     }

@@ -233,7 +233,6 @@ export type DataModel = {
   };
   calendarEvents: {
     document: {
-      cancelledAt?: number;
       channelId?: Id<"channels">;
       cloudflareMeetingId?: string;
       createdBy: Id<"users">;
@@ -241,6 +240,7 @@ export type DataModel = {
       endsAt: number;
       sequence?: number;
       startsAt: number;
+      tags?: Array<string>;
       timezone: string;
       title: string;
       workspaceId: Id<"workspaces">;
@@ -250,7 +250,6 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
-      | "cancelledAt"
       | "channelId"
       | "cloudflareMeetingId"
       | "createdBy"
@@ -258,6 +257,7 @@ export type DataModel = {
       | "endsAt"
       | "sequence"
       | "startsAt"
+      | "tags"
       | "timezone"
       | "title"
       | "workspaceId";
@@ -565,7 +565,13 @@ export type DataModel = {
       edgeType: "embeds" | "blocks" | "relates_to" | "mentions" | "belongs_to";
       sourceId: string;
       sourceNodeId?: Id<"nodes">;
-      sourceType: "document" | "task" | "diagram" | "spreadsheet" | "channel";
+      sourceType:
+        | "document"
+        | "task"
+        | "diagram"
+        | "spreadsheet"
+        | "channel"
+        | "calendarEvent";
       targetId: string;
       targetNodeId?: Id<"nodes">;
       targetType:
@@ -575,7 +581,8 @@ export type DataModel = {
         | "spreadsheet"
         | "user"
         | "project"
-        | "channel";
+        | "channel"
+        | "calendarEvent";
       workspaceId: Id<"workspaces">;
       _id: Id<"edges">;
       _creationTime: number;
@@ -610,7 +617,12 @@ export type DataModel = {
   entityTags: {
     document: {
       resourceId: string;
-      resourceType: "document" | "diagram" | "spreadsheet" | "project";
+      resourceType:
+        | "document"
+        | "diagram"
+        | "spreadsheet"
+        | "project"
+        | "calendarEvent";
       tagId: Id<"tags">;
       tagName: string;
       workspaceId: Id<"workspaces">;
@@ -778,7 +790,9 @@ export type DataModel = {
         | "project"
         | "channel"
         | "task"
-        | "user";
+        | "user"
+        | "calendarEvent";
+      searchable?: boolean;
       tags: Array<string>;
       workspaceId: Id<"workspaces">;
       _id: Id<"nodes">;
@@ -793,6 +807,7 @@ export type DataModel = {
       | "name"
       | "resourceId"
       | "resourceType"
+      | "searchable"
       | "tags"
       | "workspaceId";
     indexes: {
@@ -806,7 +821,7 @@ export type DataModel = {
     searchIndexes: {
       by_name: {
         searchField: "name";
-        filterFields: "resourceType" | "workspaceId";
+        filterFields: "resourceType" | "searchable" | "workspaceId";
       };
     };
     vectorIndexes: {};
