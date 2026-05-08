@@ -17,6 +17,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "EMAIL_DOMAIN": "conduits.space",
-    "CONVEX_HTTP_URL": "https://example.convex.site"
+    "CONVEX_HTTP_URL": "https://dutiful-pika-875.convex.site"
   }
 }

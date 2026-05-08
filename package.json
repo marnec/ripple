@@ -19,10 +19,10 @@
     "test:watch": "pnpm --filter @ripple/web test:watch",
     "test:backend": "pnpm --filter @ripple/convex test",
     "test:frontend": "pnpm --filter @ripple/web test",
-    "deploy:convex": "pnpm --filter @ripple/convex deploy",
-    "deploy:frontend": "pnpm --filter @ripple/web deploy",
-    "deploy:rsvp-worker": "pnpm --filter @ripple/rsvp-worker deploy",
-    "deploy": "pnpm --filter @ripple/web build && pnpm --filter @ripple/convex deploy && pnpm --filter @ripple/web deploy && pnpm --filter @ripple/rsvp-worker deploy"
+    "deploy:convex": "pnpm --filter @ripple/convex run deploy",
+    "deploy:frontend": "pnpm --filter @ripple/web run deploy",
+    "deploy:rsvp-worker": "pnpm --filter @ripple/rsvp-worker run deploy",
+    "deploy": "pnpm --filter @ripple/web run build && pnpm --filter @ripple/convex run deploy && pnpm --filter @ripple/web run deploy && pnpm --filter @ripple/rsvp-worker run deploy"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.14",
