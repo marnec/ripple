@@ -700,4 +700,104 @@ http.route({
   }),
 });
 
+/**
+ * POST /calendar/rsvp
+ *
+ * Inbound ICS RSVP from the rsvp-worker (packages/rsvp-worker). Called when
+ * a recipient clicks Yes / Maybe / No on the calendar card their mail client
+ * rendered, the worker parses the resulting METHOD:REPLY ICS, verifies
+ * authenticity (DKIM + DMARC + From-vs-ATTENDEE), and forwards it here.
+ *
+ * Authentication: Shared secret via Authorization: Bearer <RSVP_WORKER_SECRET>
+ * Body (JSON): { uid, attendeeEmail, partstat, dtstamp, sequence }
+ *   - uid: ${eventId}@${EMAIL_DOMAIN} (built by emails.ts `eventUid()`)
+ *   - partstat: "ACCEPTED" | "DECLINED" | "TENTATIVE"
+ *   - dtstamp, sequence: numbers (idempotency keys)
+ *
+ * Response:
+ * - 200: { ok: true, applied: boolean, reason?: "stale" | "unknown_event"
+ *         | "unknown_attendee" | "event_cancelled" }
+ * - 400: Invalid body
+ * - 401: Unauthorized
+ * - 500: Internal error
+ *
+ * Note: requires RSVP_WORKER_SECRET set via
+ *   `npx convex env set RSVP_WORKER_SECRET <value>`
+ * (same value as the Cloudflare Worker secret of the same name).
+ */
+http.route({
+  path: "/calendar/rsvp",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const authHeader = request.headers.get("Authorization");
+      const expectedSecret = process.env.RSVP_WORKER_SECRET;
+
+      if (!expectedSecret) {
+        console.error("RSVP_WORKER_SECRET environment variable not configured");
+        return new Response(
+          JSON.stringify({ error: "Server configuration error" }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (
+        !authHeader ||
+        !authHeader.startsWith("Bearer ") ||
+        authHeader.substring(7) !== expectedSecret
+      ) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const body = (await request.json()) as Partial<{
+        uid: string;
+        attendeeEmail: string;
+        partstat: "ACCEPTED" | "DECLINED" | "TENTATIVE";
+        dtstamp: number;
+        sequence: number;
+      }>;
+
+      if (
+        typeof body.uid !== "string" ||
+        typeof body.attendeeEmail !== "string" ||
+        (body.partstat !== "ACCEPTED" &&
+          body.partstat !== "DECLINED" &&
+          body.partstat !== "TENTATIVE") ||
+        typeof body.dtstamp !== "number" ||
+        typeof body.sequence !== "number"
+      ) {
+        return new Response(JSON.stringify({ error: "Invalid body" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const result = await ctx.runMutation(
+        internal.calendarEventInvitees.recordEmailRsvp,
+        {
+          uid: body.uid,
+          attendeeEmail: body.attendeeEmail,
+          partstat: body.partstat,
+          dtstamp: body.dtstamp,
+          sequence: body.sequence,
+        },
+      );
+
+      return new Response(JSON.stringify({ ok: true, ...result }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("RSVP ingest error:", error);
+      return new Response(
+        JSON.stringify({ error: "Internal server error" }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+  }),
+});
+
 export default http;

@@ -198,8 +198,15 @@ function eventUid(eventId: string): string {
   return `${eventId}@${EMAIL_DOMAIN}`;
 }
 
+// ICS ORGANIZER must point at a routable inbox so mail clients' Yes / Maybe /
+// No buttons mail their METHOD:REPLY to somewhere we can ingest. Cloudflare
+// Email Routing forwards `rsvp@${EMAIL_DOMAIN}` to the rsvp-worker package
+// (packages/rsvp-worker), which parses the REPLY and updates
+// calendarEventInvitees.status via /calendar/rsvp. Note: the SMTP `From:` on
+// outbound mail stays `noreply@…` (see Resend send call) so threaded replies
+// don't pollute the RSVP mailbox — clients honour ICS ORGANIZER over From.
 function organizerAddress(): string {
-  return `noreply@${EMAIL_DOMAIN}`;
+  return `rsvp@${EMAIL_DOMAIN}`;
 }
 
 // ─── Email helpers ───────────────────────────────────────────────────────

@@ -421,9 +421,16 @@ export default defineSchema({
     ),
     respondedAt: v.optional(v.number()),
     shareId: v.optional(v.string()),    // FK to resourceShares.shareId (guest rows only)
+    // Idempotency for inbound ICS RSVP replies (packages/rsvp-worker). The
+    // mail client echoes the original UID and a fresh DTSTAMP/SEQUENCE on
+    // every Yes/Maybe/No click. Drop replies whose (sequence, dtstamp) is
+    // not strictly newer than what we've already applied.
+    lastRsvpDtstamp: v.optional(v.number()),
+    lastRsvpSequence: v.optional(v.number()),
   })
     .index("by_event", ["eventId"])
     .index("by_event_user", ["eventId", "userId"])
+    .index("by_event_guest_email", ["eventId", "guestEmail"])
     .index("by_user_workspace_event", ["userId", "workspaceId", "eventId"])
     .index("by_share", ["shareId"]),
 

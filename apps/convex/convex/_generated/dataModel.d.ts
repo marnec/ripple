@@ -190,6 +190,8 @@ export type DataModel = {
       guestEmail?: string;
       guestName?: string;
       guestSub?: string;
+      lastRsvpDtstamp?: number;
+      lastRsvpSequence?: number;
       respondedAt?: number;
       shareId?: string;
       status: "pending" | "accepted" | "declined" | "tentative";
@@ -205,6 +207,8 @@ export type DataModel = {
       | "guestEmail"
       | "guestName"
       | "guestSub"
+      | "lastRsvpDtstamp"
+      | "lastRsvpSequence"
       | "respondedAt"
       | "shareId"
       | "status"
@@ -214,6 +218,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_event: ["eventId", "_creationTime"];
+      by_event_guest_email: ["eventId", "guestEmail", "_creationTime"];
       by_event_user: ["eventId", "userId", "_creationTime"];
       by_share: ["shareId", "_creationTime"];
       by_user_workspace_event: [

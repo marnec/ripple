@@ -1,9 +1,8 @@
 NEXT STEPS:
 - calendar; plan calls; invite guests
-    - investigate if it is possible to have btn to accept / decline directly on email
+    - ics accept/decline sync with ripple invitation status
     - events as nodes
     - events-tags
-    - cancel popover event creation by clicking outside of popover
     - improve scrollbar style in desktop mode, hide in mobile view
     - add visual cue for event creation in month view
 

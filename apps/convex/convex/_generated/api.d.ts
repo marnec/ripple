@@ -2725,6 +2725,27 @@ export declare const internal: {
       any
     >;
   };
+  calendarEventInvitees: {
+    recordEmailRsvp: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        attendeeEmail: string;
+        dtstamp: number;
+        partstat: "ACCEPTED" | "DECLINED" | "TENTATIVE";
+        sequence: number;
+        uid: string;
+      },
+      {
+        applied: boolean;
+        reason?:
+          | "stale"
+          | "unknown_event"
+          | "unknown_attendee"
+          | "event_cancelled";
+      }
+    >;
+  };
   calendarEvents: {
     _getEventByShareIdForJoin: FunctionReference<
       "query",

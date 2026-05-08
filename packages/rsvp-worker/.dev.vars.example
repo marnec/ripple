@@ -1,0 +1,3 @@
+RSVP_WORKER_SECRET=devsecret
+CONVEX_HTTP_URL=https://your-dev.convex.site
+EMAIL_DOMAIN=conduits.space

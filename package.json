@@ -12,6 +12,7 @@
     "dev:frontend": "pnpm --filter @ripple/web dev",
     "dev:backend": "pnpm --filter @ripple/convex dev",
     "dev:partykit": "pnpm --filter @ripple/partykit dev",
+    "dev:rsvp-worker": "pnpm --filter @ripple/rsvp-worker dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
@@ -20,7 +21,8 @@
     "test:frontend": "pnpm --filter @ripple/web test",
     "deploy:convex": "pnpm --filter @ripple/convex deploy",
     "deploy:frontend": "pnpm --filter @ripple/web deploy",
-    "deploy": "pnpm --filter @ripple/web build && pnpm --filter @ripple/convex deploy && pnpm --filter @ripple/web deploy"
+    "deploy:rsvp-worker": "pnpm --filter @ripple/rsvp-worker deploy",
+    "deploy": "pnpm --filter @ripple/web build && pnpm --filter @ripple/convex deploy && pnpm --filter @ripple/web deploy && pnpm --filter @ripple/rsvp-worker deploy"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.14",
