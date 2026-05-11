@@ -710,7 +710,7 @@ http.route({
  *
  * Authentication: Shared secret via Authorization: Bearer <RSVP_WORKER_SECRET>
  * Body (JSON): { uid, attendeeEmail, partstat, dtstamp, sequence }
- *   - uid: ${eventId}@${EMAIL_DOMAIN} (built by emails.ts `eventUid()`)
+ *   - uid: ${eventId}@${EMAIL_RSVP_DOMAIN} (built by emails.ts `eventUid()`)
  *   - partstat: "ACCEPTED" | "DECLINED" | "TENTATIVE"
  *   - dtstamp, sequence: numbers (idempotency keys)
  *

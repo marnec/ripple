@@ -1,8 +1,12 @@
 // Cloudflare Email Worker that ingests ICS RSVP replies (METHOD:REPLY) and
 // forwards parsed verdicts to Convex via /calendar/rsvp. Bound to the
-// `rsvp@<EMAIL_DOMAIN>` Email Routing rule (configured in the Cloudflare
+// `rsvp@<RSVP_DOMAIN>` Email Routing rule (configured in the Cloudflare
 // dashboard, NOT here). Distinct from packages/partykit because Email
 // Workers use the `email()` handler signature, not `fetch()`.
+//
+// RSVP_DOMAIN must match `EMAIL_RSVP_DOMAIN` in
+// packages/shared/src/constants.ts — outbound ICS UIDs are minted with
+// that suffix and the worker rejects any UID that doesn't match.
 //
 // Secrets to set with `wrangler secret put`:
 //   RSVP_WORKER_SECRET — must match Convex env of the same name
@@ -16,7 +20,7 @@
   "compatibility_date": "2026-02-07",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "EMAIL_DOMAIN": "conduits.space",
+    "RSVP_DOMAIN": "conduits.space",
     "CONVEX_HTTP_URL": "https://dutiful-pika-875.convex.site"
   }
 }

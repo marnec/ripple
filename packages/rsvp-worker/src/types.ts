@@ -5,7 +5,7 @@ export type Partstat = "ACCEPTED" | "DECLINED" | "TENTATIVE";
 
 export interface ParsedRsvp {
   /** RFC 5545 UID, echoed unchanged from the original invite. Built by
-   *  apps/convex/convex/emails.ts `eventUid()` as `${eventId}@${EMAIL_DOMAIN}`. */
+   *  apps/convex/convex/emails.ts `eventUid()` as `${eventId}@${RSVP_DOMAIN}`. */
   uid: string;
   /** Lowercased mailto: from the ICS ATTENDEE property. */
   attendeeEmail: string;
@@ -37,5 +37,9 @@ export interface AuthVerdict {
 export interface Env {
   RSVP_WORKER_SECRET: string;
   CONVEX_HTTP_URL: string;
-  EMAIL_DOMAIN: string;
+  /** Inbound RSVP domain — must match `EMAIL_RSVP_DOMAIN` in
+   *  packages/shared/src/constants.ts (the apex domain whose MX records
+   *  forward to this Worker). Distinct from the Resend-verified `from:`
+   *  domain (`EMAIL_FROM_DOMAIN`), which the worker never sees. */
+  RSVP_DOMAIN: string;
 }

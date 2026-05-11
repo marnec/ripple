@@ -3,18 +3,18 @@
 // When a recipient clicks Yes / Maybe / No on the calendar card their mail
 // client renders, the client mails a `text/calendar; method=REPLY` ICS to
 // the address in the original ICS `ORGANIZER:mailto:` (now
-// `rsvp@${EMAIL_DOMAIN}` — see emails.ts `organizerAddress`). Cloudflare
-// Email Routing forwards that mail to the rsvp-worker, which parses the
-// REPLY, verifies authenticity (DKIM/DMARC + From-vs-ATTENDEE), and POSTs
-// to the `/calendar/rsvp` HTTP route in http.ts. That route calls this
-// internal mutation.
+// `rsvp@${EMAIL_RSVP_DOMAIN}` — see emails.ts `organizerAddress`).
+// Cloudflare Email Routing forwards that mail to the rsvp-worker, which
+// parses the REPLY, verifies authenticity (DKIM/DMARC + From-vs-ATTENDEE),
+// and POSTs to the `/calendar/rsvp` HTTP route in http.ts. That route calls
+// this internal mutation.
 //
 // The web-app RSVP path (`calendarEvents.respond` / `respondAsGuest`)
 // stays where it is — this file is the parallel email path.
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { EMAIL_DOMAIN } from "@ripple/shared/constants";
+import { EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants";
 import { notify } from "./utils/notify";
 
 const partstatValidator = v.union(
@@ -62,8 +62,8 @@ export const recordEmailRsvp = internalMutation({
   }),
   handler: async (ctx, { uid, attendeeEmail, partstat, dtstamp, sequence }) => {
     // 1. Decode UID — built by emails.ts `eventUid()` as
-    //    `${eventId}@${EMAIL_DOMAIN}`. A foreign UID hitting our mailbox
-    //    means the recipient forwarded our invite to a third-party
+    //    `${eventId}@${EMAIL_RSVP_DOMAIN}`. A foreign UID hitting our
+    //    mailbox means the recipient forwarded our invite to a third-party
     //    invitation system, or this is an unrelated email; drop.
     const atIdx = uid.indexOf("@");
     if (atIdx <= 0) {
@@ -71,7 +71,7 @@ export const recordEmailRsvp = internalMutation({
     }
     const rawEventId = uid.slice(0, atIdx);
     const uidDomain = uid.slice(atIdx + 1);
-    if (uidDomain !== EMAIL_DOMAIN) {
+    if (uidDomain !== EMAIL_RSVP_DOMAIN) {
       return { applied: false, reason: "unknown_event" as const };
     }
 

@@ -3,7 +3,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { Resend } from "resend";
-import { APP_NAME, EMAIL_DOMAIN } from "@ripple/shared/constants"
+import { APP_NAME, EMAIL_FROM_DOMAIN, EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants"
 
 export const sendWorkspaceInvite = internalAction({
   args: {
@@ -59,7 +59,7 @@ export const sendWorkspaceInvite = internalAction({
     const resend = new Resend(resendKey);
 
     const sent = await resend.emails.send({
-      from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
+      from: `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>`,
       to: recipientEmail,
       subject: `Invitation to join ${workspaceName} on ${APP_NAME}`,
       html: emailContent,
@@ -195,18 +195,19 @@ function icsAttachment(ics: string, method: IcsMethod): IcsAttachment {
 }
 
 function eventUid(eventId: string): string {
-  return `${eventId}@${EMAIL_DOMAIN}`;
+  return `${eventId}@${EMAIL_RSVP_DOMAIN}`;
 }
 
 // ICS ORGANIZER must point at a routable inbox so mail clients' Yes / Maybe /
 // No buttons mail their METHOD:REPLY to somewhere we can ingest. Cloudflare
-// Email Routing forwards `rsvp@${EMAIL_DOMAIN}` to the rsvp-worker package
-// (packages/rsvp-worker), which parses the REPLY and updates
+// Email Routing forwards `rsvp@${EMAIL_RSVP_DOMAIN}` to the rsvp-worker
+// package (packages/rsvp-worker), which parses the REPLY and updates
 // calendarEventInvitees.status via /calendar/rsvp. Note: the SMTP `From:` on
-// outbound mail stays `noreply@…` (see Resend send call) so threaded replies
-// don't pollute the RSVP mailbox — clients honour ICS ORGANIZER over From.
+// outbound mail stays `noreply@${EMAIL_FROM_DOMAIN}` (Resend-verified) so
+// threaded replies don't pollute the RSVP mailbox — clients honour ICS
+// ORGANIZER over From.
 function organizerAddress(): string {
-  return `rsvp@${EMAIL_DOMAIN}`;
+  return `rsvp@${EMAIL_RSVP_DOMAIN}`;
 }
 
 // ─── Email helpers ───────────────────────────────────────────────────────
@@ -259,7 +260,7 @@ async function sendCalendarEmail(opts: {
   const resend = new Resend(resendKey);
 
   const sent = await resend.emails.send({
-    from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
+    from: `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>`,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,

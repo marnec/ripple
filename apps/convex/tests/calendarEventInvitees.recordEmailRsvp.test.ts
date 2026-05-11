@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { api } from "../convex/_generated/api";
 import { internal } from "../convex/_generated/api";
-import { EMAIL_DOMAIN } from "@ripple/shared/constants";
+import { EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants";
 import { setupAuthenticatedUser, setupWorkspaceWithAdmin, createTestContext } from "./helpers";
 
 type TestContext = ReturnType<typeof createTestContext>;
@@ -9,7 +9,7 @@ type TestContext = ReturnType<typeof createTestContext>;
 const ONE_HOUR = 60 * 60 * 1000;
 
 function uidFor(eventId: string): string {
-  return `${eventId}@${EMAIL_DOMAIN}`;
+  return `${eventId}@${EMAIL_RSVP_DOMAIN}`;
 }
 
 async function inviteMember(
@@ -106,7 +106,7 @@ describe("calendarEventInvitees.recordEmailRsvp", () => {
   it("unknown event UID -> reason=unknown_event", async () => {
     await setupWorkspaceWithAdmin(t);
     const result = await t.mutation(internal.calendarEventInvitees.recordEmailRsvp, {
-      uid: `not-a-real-id@${EMAIL_DOMAIN}`,
+      uid: `not-a-real-id@${EMAIL_RSVP_DOMAIN}`,
       attendeeEmail: "x@y.com",
       partstat: "ACCEPTED",
       dtstamp: Date.now(),

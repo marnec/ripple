@@ -1,5 +1,5 @@
 // Cloudflare Email Worker entry point. Bound by an Email Routing rule on
-// `rsvp@<EMAIL_DOMAIN>` (configured manually in the Cloudflare dashboard).
+// `rsvp@<RSVP_DOMAIN>` (configured manually in the Cloudflare dashboard).
 //
 // We intentionally swallow every error and never bounce — see auth.ts for
 // the rationale. All observability goes through console.* (visible in
@@ -44,7 +44,7 @@ export default {
       return;
     }
 
-    if (!parsed.uid.endsWith(`@${env.EMAIL_DOMAIN}`)) {
+    if (!parsed.uid.endsWith(`@${env.RSVP_DOMAIN}`)) {
       // Forwarded invite from a third-party calendar system whose UID
       // happens to land in our mailbox. Not ours; drop.
       console.info("rsvp foreign_uid", { uid: parsed.uid });

@@ -2,7 +2,7 @@ import GitHub from "@auth/core/providers/github";
 import Resend from "@auth/core/providers/resend";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
-import { APP_NAME, EMAIL_DOMAIN } from "@ripple/shared/constants";
+import { APP_NAME, EMAIL_FROM_DOMAIN } from "@ripple/shared/constants";
 import { ConvexError } from "convex/values";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import type { QueryCtx } from "./_generated/server";
@@ -44,7 +44,7 @@ const ResendOTP = Resend({
     }
     await sendResendEmail(
       provider.apiKey,
-      `My ${APP_NAME} <onboarding@${EMAIL_DOMAIN}>`,
+      `My ${APP_NAME} <onboarding@${EMAIL_FROM_DOMAIN}>`,
       [email],
       `Sign in to ${APP_NAME}`,
       "Your code is " + token
@@ -64,7 +64,7 @@ const ResendOTPPasswordReset = Resend({
     }
     await sendResendEmail(
       provider.apiKey,
-      `${APP_NAME} <noreply@${EMAIL_DOMAIN}>`,
+      `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>`,
       [email],
       `Reset your password in ${APP_NAME}`,
       "Your password reset code is " + token
@@ -97,7 +97,7 @@ async function findVerifiedPhoneUser(ctx: QueryCtx, phone: string) {
 export const { auth, signIn, signOut, store } = convexAuth({
   providers: [
     GitHub,
-    Resend({ from: `${APP_NAME} <noreply@${EMAIL_DOMAIN}>` }),
+    Resend({ from: `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>` }),
     Password({ reset: ResendOTPPasswordReset, verify: ResendOTP }),
   ],
   callbacks: {
