@@ -366,7 +366,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           </button>
         </div>
       )}
-      <div className="flex gap-2">
+      <div className="flex gap-2 sm:mb-3">
         <BlockNoteView
           id="message-composer"
           editor={editor}
