@@ -599,9 +599,11 @@ export const create = mutation({
       createdBy: userId,
     });
 
-    // Insert internal-member invitee rows.
+    // Insert internal-member invitee rows. Routes through `db` (not
+    // bare `ctx.db`) so the `calendarEventInvitees` trigger fires and
+    // creates the matching `invites` edge in the graph.
     for (const uid of userIds) {
-      await ctx.db.insert("calendarEventInvitees", {
+      await db.insert("calendarEventInvitees", {
         eventId,
         workspaceId: args.workspaceId,
         userId: uid,
@@ -609,8 +611,9 @@ export const create = mutation({
       });
     }
 
-    // Insert guest invitees + share rows. Email scheduling is handled
-    // by dispatchEventNotifications below alongside the member fan-out.
+    // Insert guest invitees + share rows. Guest rows have no `userId`
+    // so the invitee trigger is a no-op for them; we still route the
+    // write through `db` for consistency.
     const guestRows: Array<{ shareId: string; guestEmail: string }> = [];
     for (const email of guestEmails) {
       const shareId = await insertGuestShare(ctx, {
@@ -620,7 +623,7 @@ export const create = mutation({
         expiresAt: args.endsAt + SHARE_BUFFER_MS,
       });
       const guestSub = generateGuestSub();
-      await ctx.db.insert("calendarEventInvitees", {
+      await db.insert("calendarEventInvitees", {
         eventId,
         workspaceId: args.workspaceId,
         guestEmail: email,
@@ -1025,10 +1028,15 @@ export const addInvitees = mutation({
       throw new ConvexError(`Cannot invite more than ${MAX_INVITEES} people`);
     }
 
+    // Route invitee writes through writerWithTriggers so the
+    // `calendarEventInvitees` trigger fires and the matching `invites`
+    // edge in the graph is created for each member row.
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+
     for (const uid of newUsers) {
       const m = await getWorkspaceMembership(ctx, event.workspaceId, uid);
       if (!m) throw new ConvexError("Invitee is not a member of this workspace");
-      await ctx.db.insert("calendarEventInvitees", {
+      await db.insert("calendarEventInvitees", {
         eventId: event._id,
         workspaceId: event.workspaceId,
         userId: uid,
@@ -1036,9 +1044,10 @@ export const addInvitees = mutation({
       });
     }
 
-    // Insert guest invitee rows + share rows. Email scheduling for
-    // both the new guests and the new members goes through the
-    // shared dispatch helper.
+    // Insert guest invitee rows + share rows. Guest rows have no
+    // `userId` so the invitee trigger is a no-op for them. Email
+    // scheduling for both the new guests and the new members goes
+    // through the shared dispatch helper.
     const newGuestRows: Array<{ shareId: string; guestEmail: string }> = [];
     for (const email of newEmails) {
       const shareId = await insertGuestShare(ctx, {
@@ -1048,7 +1057,7 @@ export const addInvitees = mutation({
         expiresAt: event.endsAt + SHARE_BUFFER_MS,
       });
       const guestSub = generateGuestSub();
-      await ctx.db.insert("calendarEventInvitees", {
+      await db.insert("calendarEventInvitees", {
         eventId: event._id,
         workspaceId: event.workspaceId,
         guestEmail: email,
@@ -1069,6 +1078,66 @@ export const addInvitees = mutation({
       guestRows: newGuestRows,
     });
 
+    return null;
+  },
+});
+
+/**
+ * Self-invite: organiser adds themselves to the invitee list with an
+ * already-accepted RSVP. Distinct from `addInvitees` so that:
+ *   - no invite email / notification is dispatched (no point notifying
+ *     yourself about a meeting you just decided to attend),
+ *   - the row lands as "accepted" instead of "pending",
+ *   - intent ("I am attending my own event") is explicit at the API
+ *     boundary and trivially auditable in logs.
+ *
+ * Auth matches the rest of the invitee surface: must be the organiser.
+ * Idempotent — silently no-ops if the organiser already has a row.
+ */
+export const selfInvite = mutation({
+  args: { eventId: v.id("calendarEvents") },
+  returns: v.null(),
+  handler: async (ctx, { eventId }) => {
+    const userId = await requireUser(ctx);
+    const event = await ctx.db.get(eventId);
+    if (!event) throw new ConvexError("Event not found");
+    assertOrganizer(event, userId, "self-invite");
+
+    // Idempotent: organiser already invited → no-op.
+    const existing = await ctx.db
+      .query("calendarEventInvitees")
+      .withIndex("by_event_user", (q) =>
+        q.eq("eventId", eventId).eq("userId", userId),
+      )
+      .first();
+    if (existing) return null;
+
+    // Symmetric cap with addInvitees so the organiser can't slip past
+    // the limit by self-inviting after maxing out the guest list.
+    const rows = await loadInviteeRows(ctx, eventId);
+    if (rows.length + 1 > MAX_INVITEES) {
+      throw new ConvexError(`Cannot invite more than ${MAX_INVITEES} people`);
+    }
+
+    // Defensive — the organiser is normally still a workspace member,
+    // but cascade edge cases (member removed without owning cleanup)
+    // shouldn't insert a dangling row.
+    const m = await getWorkspaceMembership(ctx, event.workspaceId, userId);
+    if (!m) throw new ConvexError("You are no longer a member of this workspace");
+
+    // Route through writerWithTriggers so the `calendarEventInvitees`
+    // trigger creates the matching `invites` edge for this organiser
+    // in the workspace graph. Same write path as `addInvitees`.
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.insert("calendarEventInvitees", {
+      eventId,
+      workspaceId: event.workspaceId,
+      userId,
+      status: "accepted",
+      respondedAt: Date.now(),
+    });
+    // No `dispatchEventNotifications` call — the whole point of
+    // self-invite is that nobody (including the organiser) gets pinged.
     return null;
   },
 });
@@ -1095,7 +1164,11 @@ export const removeInvitee = mutation({
       }
     }
 
-    await ctx.db.delete(invitee._id);
+    // Route the invitee delete through writerWithTriggers so the
+    // `calendarEventInvitees` trigger fires and tears down the
+    // matching `invites` edge in the graph.
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    await db.delete(invitee._id);
     return null;
   },
 });

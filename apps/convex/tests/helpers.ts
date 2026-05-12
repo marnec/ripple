@@ -24,6 +24,8 @@ export function createTestContext() {
   aggregateComponent.register(t, "channelsByWorkspace");
   aggregateComponent.register(t, "membersByWorkspace");
   aggregateComponent.register(t, "tasksByWorkspace");
+  aggregateComponent.register(t, "eventsByWorkspace");
+  aggregateComponent.register(t, "tagsByWorkspace");
   return t;
 }
 

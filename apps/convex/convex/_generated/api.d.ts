@@ -226,6 +226,12 @@ export declare const api: {
       },
       null
     >;
+    selfInvite: FunctionReference<
+      "mutation",
+      "public",
+      { eventId: Id<"calendarEvents"> },
+      null
+    >;
     update: FunctionReference<
       "mutation",
       "public",

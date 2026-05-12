@@ -54,6 +54,7 @@ export function EventDetailSheet({
     handleRespond,
     handleCancel,
     handleAddInvitees,
+    handleSelfInvite,
     handleRemoveInvitee,
   } = useEventDetail({ eventId, workspaceId });
 
@@ -135,9 +136,11 @@ export function EventDetailSheet({
                 channels={channels}
                 members={members}
                 editable={editable}
+                viewerInvited={!!myInvitee}
                 workspaceId={workspaceId}
                 saveField={saveField}
                 handleAddInvitees={handleAddInvitees}
+                handleSelfInvite={handleSelfInvite}
                 handleRemoveInvitee={handleRemoveInvitee}
                 gapClassName="gap-5"
                 channelDisplay="inline"

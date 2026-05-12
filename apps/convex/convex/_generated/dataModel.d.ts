@@ -568,7 +568,8 @@ export type DataModel = {
         | "relates_to"
         | "mentions"
         | "belongs_to"
-        | "hosted_in";
+        | "hosted_in"
+        | "invites";
       sourceId: string;
       sourceNodeId?: Id<"nodes">;
       sourceType:

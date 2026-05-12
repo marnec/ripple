@@ -62,6 +62,7 @@ function EventDetailPageContent({
     handleRespond,
     handleCancel,
     handleAddInvitees,
+    handleSelfInvite,
     handleRemoveInvitee,
   } = useEventDetail({ eventId, workspaceId });
 
@@ -164,9 +165,11 @@ function EventDetailPageContent({
             channels={channels}
             members={members}
             editable={editable}
+            viewerInvited={!!myInvitee}
             workspaceId={workspaceId}
             saveField={saveField}
             handleAddInvitees={handleAddInvitees}
+            handleSelfInvite={handleSelfInvite}
             handleRemoveInvitee={handleRemoveInvitee}
             gapClassName="gap-7"
             channelDisplay="section"

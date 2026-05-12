@@ -1,4 +1,4 @@
-import { Hash, Trash2 } from "lucide-react";
+import { Hash, Trash2, UserPlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "convex/react";
 
@@ -41,7 +41,9 @@ export function EventDetailContent({
   workspaceId,
   saveField,
   handleAddInvitees,
+  handleSelfInvite,
   handleRemoveInvitee,
+  viewerInvited,
   gapClassName = "gap-5",
   channelDisplay = "inline",
 }: {
@@ -52,7 +54,11 @@ export function EventDetailContent({
   workspaceId: Id<"workspaces">;
   saveField: ReturnType<typeof useEventDetail>["saveField"];
   handleAddInvitees: ReturnType<typeof useEventDetail>["handleAddInvitees"];
+  handleSelfInvite: ReturnType<typeof useEventDetail>["handleSelfInvite"];
   handleRemoveInvitee: ReturnType<typeof useEventDetail>["handleRemoveInvitee"];
+  /** Whether the current viewer already has a row in `detail.invitees`.
+   *  Drives the "Add yourself" ghost row at the top of the list. */
+  viewerInvited: boolean;
   /** Tailwind gap class applied to the field column. */
   gapClassName?: string;
   /** Sheet renders the read-only channel as a bare button row; the page
@@ -190,7 +196,9 @@ export function EventDetailContent({
         detail={detail}
         members={members}
         editable={editable}
+        viewerInvited={viewerInvited}
         handleAddInvitees={handleAddInvitees}
+        handleSelfInvite={handleSelfInvite}
         handleRemoveInvitee={handleRemoveInvitee}
       />
     </div>
@@ -208,13 +216,17 @@ function InviteesSection({
   detail,
   members,
   editable,
+  viewerInvited,
   handleAddInvitees,
+  handleSelfInvite,
   handleRemoveInvitee,
 }: {
   detail: Detail;
   members: Parameters<typeof InviteAdder>[0]["members"] | undefined;
   editable: boolean;
+  viewerInvited: boolean;
   handleAddInvitees: ReturnType<typeof useEventDetail>["handleAddInvitees"];
+  handleSelfInvite: ReturnType<typeof useEventDetail>["handleSelfInvite"];
   handleRemoveInvitee: ReturnType<typeof useEventDetail>["handleRemoveInvitee"];
 }) {
   const existingUserIds = new Set(
@@ -228,6 +240,13 @@ function InviteesSection({
       .filter((e): e is string => !!e),
   );
 
+  // Ghost CTA at the top of the list. Shown when the viewer is the
+  // organiser (`editable`) and hasn't already invited themselves —
+  // keeps organiser↔event out of the knowledge graph by default while
+  // making opt-in a single click. Reappears if the organiser later
+  // removes their own invitee row.
+  const showSelfInvite = editable && !viewerInvited;
+
   return (
     <section>
       <div className="flex items-center justify-between mb-1.5">
@@ -238,10 +257,22 @@ function InviteesSection({
           {detail.invitees.length}
         </span>
       </div>
-      {detail.invitees.length === 0 ? (
+      {detail.invitees.length === 0 && !showSelfInvite ? (
         <p className="text-xs text-muted-foreground">No one invited yet.</p>
       ) : (
         <ul className="space-y-1.5">
+          {showSelfInvite && (
+            <li>
+              <button
+                type="button"
+                onClick={() => void handleSelfInvite()}
+                className="w-full flex items-center gap-2 text-sm rounded-md border border-dashed border-muted-foreground/30 px-2 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-muted/40 transition-colors"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Add yourself as invitee</span>
+              </button>
+            </li>
+          )}
           {detail.invitees.map((inv) => (
             <li
               key={inv._id}

@@ -96,6 +96,7 @@ export function useEventDetail({
   const respond = useMutation(api.calendarEvents.respond);
   const cancel = useMutation(api.calendarEvents.cancel);
   const addInvitees = useMutation(api.calendarEvents.addInvitees);
+  const selfInvite = useMutation(api.calendarEvents.selfInvite);
   const removeInvitee = useMutation(api.calendarEvents.removeInvitee);
 
   const myInvitee = useMemo(() => {
@@ -190,6 +191,22 @@ export function useEventDetail({
     }
   };
 
+  /** Organiser shortcut: drop a self-invite row at status="accepted"
+   *  without firing the standard invite email/notification fan-out. The
+   *  organiser is the only caller (server-side `assertOrganizer`),
+   *  which matches the UX — the ghost row is only rendered for them. */
+  const handleSelfInvite = async () => {
+    if (!eventId) return;
+    try {
+      await selfInvite({ eventId });
+      toast.success("Added you as an invitee", { duration: 1500 });
+    } catch (e) {
+      toast.error("Could not add you as invitee", {
+        description: e instanceof Error ? e.message : undefined,
+      });
+    }
+  };
+
   const handleRemoveInvitee = async (
     inviteeId: Id<"calendarEventInvitees">,
   ) => {
@@ -217,6 +234,7 @@ export function useEventDetail({
     handleRespond,
     handleCancel,
     handleAddInvitees,
+    handleSelfInvite,
     handleRemoveInvitee,
   };
 }

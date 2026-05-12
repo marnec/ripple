@@ -497,6 +497,79 @@ triggers.register("calendarEvents", async (ctx, change) => {
   // delete: edge cleanup handled by cascade rules
 });
 
+// ── calendarEventInvitee → user "invites" edge ──────────────────────
+// Mirrors each (eventId, userId) join row into the polymorphic graph as
+// an `invites` edge. The trigger is the single source of truth — both
+// `calendarEvents.addInvitees` and the organiser-only
+// `calendarEvents.selfInvite` route their writes through
+// writerWithTriggers, so neither mutation has to know about edges.
+//
+// Guest invitees (rows with `guestEmail` instead of `userId`) are
+// skipped: guests don't have a workspace user node to link to. If a
+// guest later self-converts into a workspace member, that flow creates
+// a fresh `calendarEventInvitees` row with `userId`, which fires this
+// trigger normally.
+//
+// Edges are intentionally created for any RSVP status — pending,
+// accepted, tentative, and declined. The data model treats "invitee
+// row exists" as the relationship of record, and the knowledge graph
+// follows that. (Future: if declined invitees feel noisy, an `update`
+// branch could toggle the edge on status transitions.)
+//
+// Event creation: organisers do NOT get an edge automatically. The
+// `create` mutation inserts the event node but writes no invitee row
+// for the creator. Organisers only appear in the graph as attendees
+// when they explicitly use the self-invite shortcut.
+//
+// Removal: single-row deletion fires this trigger's delete branch.
+// Full event cancellation goes through cascadeDelete which drops both
+// the invitee rows AND `edges` rows directly — both paths converge on
+// a clean state.
+//
+// Registered after the calendarEvents + workspaceMembers node triggers
+// so `findNodeId` resolves both endpoints by the time we reach here.
+
+triggers.register("calendarEventInvitees", async (ctx, change) => {
+  if (change.operation === "insert") {
+    const inv = change.newDoc;
+    if (!inv.userId) return; // guest invitee — no user node to link
+    const [sourceNodeId, targetNodeId] = await Promise.all([
+      findNodeId(ctx, inv.eventId),
+      findNodeId(ctx, inv.userId),
+    ]);
+    await ctx.db.insert("edges", {
+      sourceType: "calendarEvent",
+      sourceId: inv.eventId,
+      targetType: "user",
+      targetId: inv.userId,
+      edgeType: "invites",
+      workspaceId: inv.workspaceId,
+      sourceNodeId,
+      targetNodeId,
+      createdAt: Date.now(),
+    } as never);
+  } else if (change.operation === "delete") {
+    const inv = change.oldDoc;
+    const inviteeUserId = inv.userId;
+    if (!inviteeUserId) return;
+    // by_source_target narrows the scan; `find` picks our specific
+    // edge type so we don't tread on `hosted_in` etc. should the same
+    // (sourceId, targetId) pair ever appear under a different kind.
+    const candidates = await ctx.db
+      .query("edges")
+      .withIndex("by_source_target", (q) =>
+        q.eq("sourceId", inv.eventId).eq("targetId", inviteeUserId),
+      )
+      .collect();
+    const edge = candidates.find(
+      (e) => e.edgeType === "invites" && e.targetType === "user",
+    );
+    if (edge) await ctx.db.delete(edge._id);
+  }
+  // update: RSVP status flips don't affect edge existence under the
+  // current row-exists semantic. See header comment.
+});
+
 // ── Channel mention edge helpers ────────────────────────────────────
 
 async function insertChannelMentionEdge(

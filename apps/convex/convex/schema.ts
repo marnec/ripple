@@ -547,6 +547,14 @@ export default defineSchema({
       // calendarEvent → channel: the channel hosts this event's meeting room.
       // Visible link in the workspace graph (not filtered like belongs_to).
       v.literal("hosted_in"),
+      // calendarEvent → user: the user is an invitee on this event. Created
+      // via a trigger on `calendarEventInvitees` insert; cleaned up via the
+      // same trigger's delete branch (single-row removal) or via cascade
+      // when the event itself is deleted. Organisers do NOT get this edge
+      // automatically — only via the explicit self-invite shortcut, which
+      // is the same physical write path. Edge presence tracks row presence
+      // regardless of RSVP status; declined invitees stay edged.
+      v.literal("invites"),
     ),
     workspaceId: v.id("workspaces"),
     sourceNodeId: v.optional(v.id("nodes")),
