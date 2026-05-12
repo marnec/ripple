@@ -944,26 +944,6 @@ export declare const api: {
         workspaceId: string;
       }>
     >;
-    getNodeLabel: FunctionReference<
-      "query",
-      "public",
-      { id: string; type: string },
-      string | null
-    >;
-    getWorkspaceGraph: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      {
-        links: Array<{ edgeType: string; source: string; target: string }>;
-        nodes: Array<{
-          groupId?: string;
-          id: string;
-          name?: string;
-          type: string;
-        }>;
-      }
-    >;
     listByTask: FunctionReference<
       "query",
       "public",
@@ -1110,6 +1090,28 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
       },
       boolean
+    >;
+  };
+  graph: {
+    getNodeLabel: FunctionReference<
+      "query",
+      "public",
+      { id: string; type: string },
+      string | null
+    >;
+    getWorkspaceGraph: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      {
+        links: Array<{ edgeType: string; source: string; target: string }>;
+        nodes: Array<{
+          groupId?: string;
+          id: string;
+          name?: string;
+          type: string;
+        }>;
+      }
     >;
   };
   medias: {
@@ -3308,6 +3310,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillTagAggregates: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillTaskAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -4051,4 +4067,5 @@ export declare const components: {
   membersByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"membersByWorkspace">;
   tasksByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"tasksByWorkspace">;
   eventsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"eventsByWorkspace">;
+  tagsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"tagsByWorkspace">;
 };

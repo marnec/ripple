@@ -15,6 +15,7 @@ import {
   PenTool,
   Settings,
   Table,
+  Tag,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -54,6 +55,7 @@ const overviewCards: OverviewCard[] = [
   { key: "diagrams", filterType: "diagram", label: "Diagrams", icon: PenTool, to: "diagrams" },
   { key: "spreadsheets", filterType: "spreadsheet", label: "Spreadsheets", icon: Table, to: "spreadsheets" },
   { key: "calendarEvents", filterType: "calendarEvent", label: "Events", icon: CalendarDays, to: "dashboard/calendar" },
+  { key: "tags", filterType: "tag", label: "Tags", icon: Tag, to: "tags" },
 ];
 
 type Tab = "graph" | "activity";
@@ -69,7 +71,7 @@ export function WorkspaceDetails() {
   const isDark = resolvedTheme === "dark";
 
   const workspace = useQuery(api.workspaces.get, { id });
-  const graph = useQuery(api.edges.getWorkspaceGraph, { workspaceId: id });
+  const graph = useQuery(api.graph.getWorkspaceGraph, { workspaceId: id });
 
   // Derive counts from graph nodes (replaces aggregate count queries)
   const overview = (() => {
@@ -82,8 +84,10 @@ export function WorkspaceDetails() {
     return c;
   })();
 
-  // Node type visibility for graph/activity filtering
-  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
+  // Node type visibility for graph/activity filtering. Tags are off by
+  // default — they're dense metadata; the Tags card's eye toggle is the
+  // "switch" that lights them up in the graph.
+  const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(() => new Set(["tag"]));
   const [highlightedType, setHighlightedType] = useState<string | null>(null);
   const toggleType = (type: string) => {
     setHiddenTypes((prev) => {

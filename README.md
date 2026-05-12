@@ -4,7 +4,6 @@ NEXT STEPS:
     - recurrent events
 
 - knowledge-graph
-    - add events counter and add them to the workspace dashboard
     - explore pdf reading, annotation and embedding
 
 

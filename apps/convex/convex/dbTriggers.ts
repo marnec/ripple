@@ -94,6 +94,16 @@ export const eventsByWorkspace = new TableAggregate<{
   sortKey: (doc) => doc._creationTime,
 });
 
+export const tagsByWorkspace = new TableAggregate<{
+  Namespace: string;
+  Key: number;
+  DataModel: DataModel;
+  TableName: "tags";
+}>(components.tagsByWorkspace, {
+  namespace: (doc) => doc.workspaceId,
+  sortKey: (doc) => doc._creationTime,
+});
+
 // ── Triggers ────────────────────────────────────────────────────────
 // Auto-maintain aggregates and the nodes index whenever resource rows change.
 // Multiple registrations per table stack — all handlers are called in sequence.
@@ -109,6 +119,7 @@ triggers.register("channels", channelsByWorkspace.trigger());
 triggers.register("workspaceMembers", membersByWorkspace.trigger());
 triggers.register("tasks", tasksByWorkspace.trigger());
 triggers.register("calendarEvents", eventsByWorkspace.trigger());
+triggers.register("tags", tagsByWorkspace.trigger());
 
 // ── Nodes sync triggers ──────────────────────────────────────────────
 // Keep the nodes table in sync on insert/update. Delete-time cleanup of
@@ -426,7 +437,7 @@ triggers.register("tasks", async (ctx, change) => {
 // Mirrors the channelId field on calendarEvents into the polymorphic graph
 // using a dedicated `hosted_in` edge type. Visible link in the workspace
 // graph (unlike `belongs_to`, which is filtered as structural grouping —
-// see edges.getWorkspaceGraph). Channel-side deletion cascades remove the
+// see graph.getWorkspaceGraph). Channel-side deletion cascades remove the
 // edge; event-side deletion is also handled via cascadeDelete. NOTE:
 // registered after the calendarEvent node trigger above so findNodeId
 // resolves the event's node.

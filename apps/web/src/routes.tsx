@@ -66,6 +66,16 @@ export const router = createBrowserRouter(
                 })),
             },
             {
+              // No real tag-management surface yet — the dashboard's Tags
+              // counter links here as a placeholder so the card isn't a
+              // dead pixel.
+              path: "tags",
+              lazy: () =>
+                import("./pages/App/Workspace/TagsEasterEgg").then((m) => ({
+                  Component: m.TagsEasterEgg,
+                })),
+            },
+            {
               // Replaces the standalone /my-tasks route. The dashboard layout
               // owns the header + tab selector; the My Tasks tab reuses the
               // existing MyTasks page body.

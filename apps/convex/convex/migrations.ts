@@ -113,6 +113,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillMemberAggregates,
   internal.migrations.backfillTaskAggregates,
   internal.migrations.backfillEventAggregates,
+  internal.migrations.backfillTagAggregates,
   internal.migrations.stripTaskStartDate,
   internal.migrations.backfillDocumentNodes,
   internal.migrations.backfillDiagramNodes,
@@ -398,6 +399,7 @@ import {
   membersByWorkspace,
   tasksByWorkspace,
   eventsByWorkspace,
+  tagsByWorkspace,
 } from "./dbTriggers.js";
 
 export const backfillDocumentAggregates = migrations.define({
@@ -453,6 +455,13 @@ export const backfillEventAggregates = migrations.define({
   table: "calendarEvents",
   migrateOne: async (ctx, doc) => {
     await eventsByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillTagAggregates = migrations.define({
+  table: "tags",
+  migrateOne: async (ctx, doc) => {
+    await tagsByWorkspace.insertIfDoesNotExist(ctx, doc);
   },
 });
 

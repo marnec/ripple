@@ -8,6 +8,7 @@ export const NODE_COLORS: Record<string, { light: string; dark: string }> = {
   channel: { light: "#06b6d4", dark: "#22d3ee" },
   message: { light: "#06b6d4", dark: "#22d3ee" },
   calendarEvent: { light: "#6366f1", dark: "#818cf8" },
+  tag: { light: "#a3a3a3", dark: "#d4d4d4" },
 };
 
 export const NODE_SIZE: Record<string, number> = {
@@ -20,9 +21,10 @@ export const NODE_SIZE: Record<string, number> = {
   channel: 6,
   message: 3,
   calendarEvent: 4,
+  tag: 3,
 };
 
-export const NODE_TYPES = ["document", "task", "diagram", "spreadsheet", "user", "project", "channel", "calendarEvent"] as const;
+export const NODE_TYPES = ["document", "task", "diagram", "spreadsheet", "user", "project", "channel", "calendarEvent", "tag"] as const;
 
 export function getNodeColor(type: string, isDark: boolean): string {
   const colors = NODE_COLORS[type] ?? { light: "#6b7280", dark: "#9ca3af" };
