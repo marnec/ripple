@@ -3,6 +3,7 @@ import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex-helpers/react/cache";
 import {
+  CalendarDays,
   Clock,
   Eye,
   EyeOff,
@@ -52,6 +53,7 @@ const overviewCards: OverviewCard[] = [
   { key: "documents", filterType: "document", label: "Documents", icon: FileText, to: "documents" },
   { key: "diagrams", filterType: "diagram", label: "Diagrams", icon: PenTool, to: "diagrams" },
   { key: "spreadsheets", filterType: "spreadsheet", label: "Spreadsheets", icon: Table, to: "spreadsheets" },
+  { key: "calendarEvents", filterType: "calendarEvent", label: "Events", icon: CalendarDays, to: "dashboard/calendar" },
 ];
 
 type Tab = "graph" | "activity";

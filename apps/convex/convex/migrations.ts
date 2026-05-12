@@ -112,6 +112,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillChannelAggregates,
   internal.migrations.backfillMemberAggregates,
   internal.migrations.backfillTaskAggregates,
+  internal.migrations.backfillEventAggregates,
   internal.migrations.stripTaskStartDate,
   internal.migrations.backfillDocumentNodes,
   internal.migrations.backfillDiagramNodes,
@@ -396,6 +397,7 @@ import {
   channelsByWorkspace,
   membersByWorkspace,
   tasksByWorkspace,
+  eventsByWorkspace,
 } from "./dbTriggers.js";
 
 export const backfillDocumentAggregates = migrations.define({
@@ -444,6 +446,13 @@ export const backfillTaskAggregates = migrations.define({
   table: "tasks",
   migrateOne: async (ctx, doc) => {
     await tasksByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+export const backfillEventAggregates = migrations.define({
+  table: "calendarEvents",
+  migrateOne: async (ctx, doc) => {
+    await eventsByWorkspace.insertIfDoesNotExist(ctx, doc);
   },
 });
 

@@ -3182,6 +3182,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillEventAggregates: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillMemberAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -4036,4 +4050,5 @@ export declare const components: {
   channelsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"channelsByWorkspace">;
   membersByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"membersByWorkspace">;
   tasksByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"tasksByWorkspace">;
+  eventsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"eventsByWorkspace">;
 };

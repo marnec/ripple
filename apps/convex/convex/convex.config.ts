@@ -23,5 +23,6 @@ app.use(aggregate, { name: "projectsByWorkspace" });
 app.use(aggregate, { name: "channelsByWorkspace" });
 app.use(aggregate, { name: "membersByWorkspace" });
 app.use(aggregate, { name: "tasksByWorkspace" });
+app.use(aggregate, { name: "eventsByWorkspace" });
 
 export default app;

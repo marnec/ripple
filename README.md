@@ -4,7 +4,6 @@ NEXT STEPS:
     - recurrent events
 
 - knowledge-graph
-    - are tags just nodes of type tag????? I think so
     - add events counter and add them to the workspace dashboard
     - explore pdf reading, annotation and embedding
 
@@ -15,7 +14,7 @@ NEXT STEPS:
 
 - import tasks from csv
 
-- external ticketing system: 
+- external ticketing system??: 
     - connected to project
     - connected somehow to tasks
     - external ticketer can be given access to specific resources in workspaces through links (attach to ticket??)

@@ -84,6 +84,16 @@ export const tasksByWorkspace = new TableAggregate<{
   sortKey: (doc) => doc._creationTime,
 });
 
+export const eventsByWorkspace = new TableAggregate<{
+  Namespace: string;
+  Key: number;
+  DataModel: DataModel;
+  TableName: "calendarEvents";
+}>(components.eventsByWorkspace, {
+  namespace: (doc) => doc.workspaceId,
+  sortKey: (doc) => doc._creationTime,
+});
+
 // ── Triggers ────────────────────────────────────────────────────────
 // Auto-maintain aggregates and the nodes index whenever resource rows change.
 // Multiple registrations per table stack — all handlers are called in sequence.
@@ -98,6 +108,7 @@ triggers.register("projects", projectsByWorkspace.trigger());
 triggers.register("channels", channelsByWorkspace.trigger());
 triggers.register("workspaceMembers", membersByWorkspace.trigger());
 triggers.register("tasks", tasksByWorkspace.trigger());
+triggers.register("calendarEvents", eventsByWorkspace.trigger());
 
 // ── Nodes sync triggers ──────────────────────────────────────────────
 // Keep the nodes table in sync on insert/update. Delete-time cleanup of
