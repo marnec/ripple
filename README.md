@@ -6,12 +6,8 @@ NEXT STEPS:
 - knowledge-graph
     - explore pdf reading, annotation and embedding
 
-
-
 - leave channel logic (only for private?)
 - consider favorite for channels too
-
-- import tasks from csv
 
 - external ticketing system??: 
     - connected to project
