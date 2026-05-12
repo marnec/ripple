@@ -29,8 +29,8 @@ keyboard accessiblity
 - [ ] AI integrations
     - [ ] AI bot in chat (called on mention)
     - [ ] AI dictate content
-    - [ ] AI translations in videocalls
-    - [ ] AI agent in videocall (unclear how)
+    - [ ] AI transcription in videocalls
+    - [ ] AI agent in videocall (unclear how to handle diarization)
     - [ ] AI document agent
     - [ ] AI tasks agent
 

@@ -12,6 +12,7 @@ import { useParams, NavLink, Outlet } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { ImportActiveBanner } from "./ImportActiveBanner";
 
 export function ProjectLayout() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -102,6 +103,9 @@ function ProjectLayoutContent({
         accent={project ? <ProjectColorTag color={project.color} /> : undefined}
       />
 
+
+      {/* Active CSV-import notice. Renders nothing when no import is running. */}
+      <ImportActiveBanner workspaceId={workspaceId} projectId={projectId} />
 
       {/* Page content */}
       <div className="flex-1 flex flex-col min-h-0">

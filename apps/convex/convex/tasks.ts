@@ -38,6 +38,7 @@ export const baseTaskFields = {
     completedAt: v.optional(v.number()),
   }))),
   estimate: v.optional(v.number()),
+  importJobId: v.optional(v.id("taskImportJobs")),
 };
 
 export const enrichedTaskValidator = v.object({

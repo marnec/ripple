@@ -28,6 +28,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "tasks", via: "by_project", field: "projectId" },
     { to: "taskStatuses", via: "by_project", field: "projectId" },
     { to: "cycles", via: "by_project", field: "projectId" },
+    { to: "taskImportJobs", via: "by_project", field: "projectId" },
     { to: "projectNotificationPreferences", via: "by_project", field: "projectId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },

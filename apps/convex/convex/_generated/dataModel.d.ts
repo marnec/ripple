@@ -1222,6 +1222,45 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  taskImportJobs: {
+    document: {
+      completedAt?: number;
+      creatorId: Id<"users">;
+      errorMessage?: string;
+      failedRows: number;
+      numberRangeStart: number;
+      processedRows: number;
+      projectId: Id<"projects">;
+      rows: Array<any>;
+      status: "queued" | "running" | "completed" | "failed";
+      totalRows: number;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"taskImportJobs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "completedAt"
+      | "creatorId"
+      | "errorMessage"
+      | "failedRows"
+      | "numberRangeStart"
+      | "processedRows"
+      | "projectId"
+      | "rows"
+      | "status"
+      | "totalRows"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_project: ["projectId", "_creationTime"];
+      by_project_status: ["projectId", "status", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   tasks: {
     document: {
       assigneeId?: Id<"users">;
@@ -1229,6 +1268,7 @@ export type DataModel = {
       creatorId: Id<"users">;
       dueDate?: string;
       estimate?: number;
+      importJobId?: Id<"taskImportJobs">;
       labels?: Array<string>;
       number?: number;
       plannedStartDate?: string;
@@ -1252,6 +1292,7 @@ export type DataModel = {
       | "creatorId"
       | "dueDate"
       | "estimate"
+      | "importJobId"
       | "labels"
       | "number"
       | "plannedStartDate"
@@ -1269,6 +1310,7 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_assignee: ["assigneeId", "_creationTime"];
       by_assignee_completed: ["assigneeId", "completed", "_creationTime"];
+      by_importJob: ["importJobId", "_creationTime"];
       by_project: ["projectId", "_creationTime"];
       by_project_completed: ["projectId", "completed", "_creationTime"];
       by_project_completed_assignee: [

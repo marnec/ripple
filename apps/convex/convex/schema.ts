@@ -261,6 +261,7 @@ export default defineSchema({
       completedAt: v.optional(v.number()), // ms timestamp, auto-set by isCompleted status transition
     }))),
     estimate: v.optional(v.number()), // effort estimate in hours
+    importJobId: v.optional(v.id("taskImportJobs")), // set when the task was created via CSV import
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
@@ -279,7 +280,36 @@ export default defineSchema({
     .index("by_workspace_completed", ["workspaceId", "completed"])
     .index("by_project_status_position", ["projectId", "statusId", "position"])
     .index("by_project_number", ["projectId", "number"])
+    .index("by_importJob", ["importJobId"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"]),
+
+  // CSV-driven bulk-task import jobs. One per project at a time (enforced in
+  // taskImports.createImportJob). Rows are stored opaquely (v.any()) — the
+  // strict shape lives in @shared/taskImportSchema and is enforced on both
+  // client and server before tasks are written.
+  taskImportJobs: defineTable({
+    projectId: v.id("projects"),
+    workspaceId: v.id("workspaces"),
+    creatorId: v.id("users"),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+    ),
+    rows: v.array(v.any()),
+    // Pre-reserved contiguous task-number range. project.taskCounter is
+    // advanced by totalRows once at job creation; the workpool action then
+    // assigns numberRangeStart + index per row without touching the counter.
+    numberRangeStart: v.number(),
+    totalRows: v.number(),
+    processedRows: v.number(),
+    failedRows: v.number(),
+    errorMessage: v.optional(v.string()), // top-level failure (e.g. all rows rejected)
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_project_status", ["projectId", "status"])
+    .index("by_project", ["projectId"]),
 
   taskComments: defineTable({
     taskId: v.id("tasks"),

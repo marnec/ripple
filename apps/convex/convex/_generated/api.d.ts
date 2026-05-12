@@ -50,6 +50,7 @@ export declare const api: {
           | Id<"tasks">
           | Id<"cycles">
           | Id<"calendarEvents">
+          | Id<"taskImportJobs">
         >;
       },
       Record<string, string | null>
@@ -620,6 +621,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         hasBlockers: boolean;
+        importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
@@ -1952,6 +1954,105 @@ export declare const api: {
       null
     >;
   };
+  taskImports: {
+    createImportJob: FunctionReference<
+      "mutation",
+      "public",
+      {
+        projectId: Id<"projects">;
+        rows: Array<any>;
+        workspaceId: Id<"workspaces">;
+      },
+      Id<"taskImportJobs">
+    >;
+    getActiveJobForProject: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      {
+        _creationTime: number;
+        _id: Id<"taskImportJobs">;
+        completedAt?: number;
+        creatorId: Id<"users">;
+        errorMessage?: string;
+        failedRows: number;
+        numberRangeStart: number;
+        processedRows: number;
+        projectId: Id<"projects">;
+        status: "queued" | "running" | "completed" | "failed";
+        totalRows: number;
+        workspaceId: Id<"workspaces">;
+      } | null
+    >;
+    getJob: FunctionReference<
+      "query",
+      "public",
+      { jobId: Id<"taskImportJobs"> },
+      {
+        _creationTime: number;
+        _id: Id<"taskImportJobs">;
+        completedAt?: number;
+        creatorId: Id<"users">;
+        errorMessage?: string;
+        failedRows: number;
+        numberRangeStart: number;
+        processedRows: number;
+        projectId: Id<"projects">;
+        status: "queued" | "running" | "completed" | "failed";
+        totalRows: number;
+        workspaceId: Id<"workspaces">;
+      } | null
+    >;
+    listJobTasks: FunctionReference<
+      "query",
+      "public",
+      { jobId: Id<"taskImportJobs"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"tasks">;
+        assignee: {
+          _creationTime: number;
+          _id: Id<"users">;
+          email?: string;
+          emailVerificationTime?: number;
+          image?: string;
+          isAnonymous?: boolean;
+          name?: string;
+        } | null;
+        assigneeId?: Id<"users">;
+        completed: boolean;
+        creatorId: Id<"users">;
+        dueDate?: string;
+        estimate?: number;
+        hasBlockers: boolean;
+        importJobId?: Id<"taskImportJobs">;
+        labels?: Array<string>;
+        number?: number;
+        plannedStartDate?: string;
+        position?: string;
+        priority: "urgent" | "high" | "medium" | "low";
+        projectId: Id<"projects">;
+        projectKey?: string;
+        status: {
+          _creationTime: number;
+          _id: Id<"taskStatuses">;
+          color: string;
+          isCompleted: boolean;
+          isDefault: boolean;
+          name: string;
+          order: number;
+          pendingDeletion?: boolean;
+          projectId: Id<"projects">;
+          setsStartDate?: boolean;
+        } | null;
+        statusId: Id<"taskStatuses">;
+        title: string;
+        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
+        workspaceId: Id<"workspaces">;
+        yjsSnapshotId?: Id<"_storage">;
+      }>
+    >;
+  };
   tasks: {
     create: FunctionReference<
       "mutation",
@@ -1993,6 +2094,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         hasBlockers: boolean;
+        importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
@@ -2050,6 +2152,7 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
@@ -2114,6 +2217,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         hasBlockers: boolean;
+        importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
@@ -2156,6 +2260,7 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
@@ -2214,6 +2319,7 @@ export declare const api: {
           dueDate?: string;
           estimate?: number;
           hasBlockers: boolean;
+          importJobId?: Id<"taskImportJobs">;
           labels?: Array<string>;
           number?: number;
           plannedStartDate?: string;
@@ -2265,6 +2371,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         hasBlockers: boolean;
+        importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
         plannedStartDate?: string;
@@ -4003,6 +4110,38 @@ export declare const internal: {
       null
     >;
   };
+  taskImports: {
+    createImportedTask: FunctionReference<
+      "mutation",
+      "internal",
+      { jobId: Id<"taskImportJobs">; rowIndex: number },
+      null
+    >;
+    finalizeJob: FunctionReference<
+      "mutation",
+      "internal",
+      { jobId: Id<"taskImportJobs"> },
+      null
+    >;
+    recordRowFailure: FunctionReference<
+      "mutation",
+      "internal",
+      { jobId: Id<"taskImportJobs"> },
+      null
+    >;
+    runImport: FunctionReference<
+      "action",
+      "internal",
+      { jobId: Id<"taskImportJobs"> },
+      null
+    >;
+    startJob: FunctionReference<
+      "mutation",
+      "internal",
+      { jobId: Id<"taskImportJobs"> },
+      { totalRows: number } | null
+    >;
+  };
   tasks: {
     getInternal: FunctionReference<
       "query",
@@ -4065,6 +4204,7 @@ export declare const components: {
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
   notificationPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"notificationPool">;
   taskReassignPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskReassignPool">;
+  taskImportPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskImportPool">;
   documentsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"documentsByWorkspace">;
   diagramsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"diagramsByWorkspace">;
   spreadsheetsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"spreadsheetsByWorkspace">;

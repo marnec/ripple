@@ -14,6 +14,7 @@ app.use(migrations);
 app.use(rateLimiter);
 app.use(workpool, { name: "notificationPool" });
 app.use(workpool, { name: "taskReassignPool" });
+app.use(workpool, { name: "taskImportPool" });
 
 // Workspace resource count aggregates (O(log n) counts per workspace)
 app.use(aggregate, { name: "documentsByWorkspace" });

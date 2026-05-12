@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 
-const resourceIdValidator = v.union(v.id("workspaces"), v.id("channels"), v.id("projects"), v.id("documents"), v.id("diagrams"), v.id("spreadsheets"), v.id("tasks"), v.id("cycles"), v.id("calendarEvents"));
+const resourceIdValidator = v.union(v.id("workspaces"), v.id("channels"), v.id("projects"), v.id("documents"), v.id("diagrams"), v.id("spreadsheets"), v.id("tasks"), v.id("cycles"), v.id("calendarEvents"), v.id("taskImportJobs"));
 
 async function resolveResourceName(
   ctx: { db: { get: (id: any) => Promise<any> } },
@@ -19,6 +19,12 @@ async function resolveResourceName(
       const title = "title" in resource ? resource.title : "";
       return title ? `[ ${code} ] ${title}` : `[ ${code} ]`;
     }
+  }
+
+  // Task import jobs have no name; render a compact "CSV import (N rows)" label.
+  if ("totalRows" in resource && "processedRows" in resource) {
+    const n = resource.totalRows as number;
+    return `CSV import (${n} row${n === 1 ? "" : "s"})`;
   }
 
   return "title" in resource ? resource.title : resource.name;

@@ -16,6 +16,7 @@ export function createTestContext() {
   rateLimiterComponent.register(t);
   workpoolComponent.register(t, "notificationPool");
   workpoolComponent.register(t, "taskReassignPool");
+  workpoolComponent.register(t, "taskImportPool");
   // Register workspace resource count aggregates
   aggregateComponent.register(t, "documentsByWorkspace");
   aggregateComponent.register(t, "diagramsByWorkspace");

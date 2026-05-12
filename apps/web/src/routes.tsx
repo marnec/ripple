@@ -252,6 +252,13 @@ export const router = createBrowserRouter(
                           }),
                         ),
                     },
+                    {
+                      path: "import/:jobId",
+                      lazy: () =>
+                        import("./pages/App/Project/ProjectTaskImport").then(
+                          (m) => ({ Component: m.ProjectTaskImport }),
+                        ),
+                    },
                   ],
                 },
               ],

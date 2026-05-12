@@ -22,6 +22,7 @@ import { KanbanBoard } from "./KanbanBoard";
 import { CreateTaskDialog } from "./CreateTaskDialog";
 import { Tasks } from "./Tasks";
 import { TaskToolbar, type TaskFilters, type TaskSort, type CompletionFilter } from "./TaskToolbar";
+import { ImportTasksButton } from "./ImportTasksButton";
 
 export function ProjectTasksPage() {
   const { workspaceId, projectId } = useParams<QueryParams>();
@@ -120,10 +121,13 @@ function ProjectTasksContent({
             {!isMobile && contentLoading && <RippleSpinner size={24} />}
           </div>
           {!isMobile && (
-            <Button size="sm" onClick={() => setDialogOpen(true)}>
-              <Plus  />
-              New task
-            </Button>
+            <div className="flex items-center gap-2">
+              <ImportTasksButton projectId={projectId} workspaceId={workspaceId} />
+              <Button size="sm" onClick={() => setDialogOpen(true)}>
+                <Plus  />
+                New task
+              </Button>
+            </div>
           )}
         </div>
 
