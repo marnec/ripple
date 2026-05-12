@@ -7,6 +7,7 @@ import { DiagramEmbed } from "./CustomInlineContent/DiagramEmbed";
 import { DocumentLink } from "./CustomInlineContent/DocumentLink";
 import { UserMention } from "./CustomInlineContent/UserMention";
 import { ProjectReference } from "./CustomInlineContent/ProjectReference";
+import { EventMention } from "../Chat/CustomInlineContent/EventMention";
 
 // Task descriptions are richer than chat messages. Keep all default block specs.
 export const taskDescriptionSchema = BlockNoteSchema.create({
@@ -24,5 +25,6 @@ export const taskDescriptionSchema = BlockNoteSchema.create({
     projectReference: ProjectReference,
     spreadsheetLink: SpreadsheetLink,
     spreadsheetCellRef: SpreadsheetCellRef,
+    eventMention: EventMention,
   },
 });

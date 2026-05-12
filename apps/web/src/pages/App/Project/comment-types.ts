@@ -11,6 +11,8 @@ export type EditCommentEditorProps = {
   commentId: Id<"taskComments">;
   initialBody: string;
   workspaceMembers: WorkspaceMemberSummary[];
+  /** Used for `@event` autocomplete in the edit composer. */
+  workspaceId: Id<"workspaces">;
   uploadFile?: (file: File) => Promise<string>;
   onSave: (id: Id<"taskComments">, body: string) => void;
   onCancel: () => void;

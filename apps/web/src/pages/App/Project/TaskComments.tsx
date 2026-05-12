@@ -17,6 +17,7 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { StaticCommentBody } from "./StaticCommentBody";
 import type { EditCommentEditorProps } from "./comment-types";
@@ -52,6 +53,11 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
     members: workspaceMembers,
     editor,
   });
+  const getEventItems = useEventSuggestions({ workspaceId, editor });
+  const getAtMentionItems = async (query: string) => {
+    const [m, e] = await Promise.all([getMemberItems(query), getEventItems(query)]);
+    return [...m, ...e];
+  };
 
   // Handle submitting new comment
   const handleSubmit = () => {
@@ -119,6 +125,7 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
                     commentId={comment._id}
                     initialBody={comment.body}
                     workspaceMembers={workspaceMembers}
+                    workspaceId={workspaceId}
                     uploadFile={uploadFile}
                     onSave={(id, body) => {
                       void updateComment({ id, body }).then(() => {
@@ -175,7 +182,7 @@ export function TaskComments({ taskId, currentUserId, workspaceId }: TaskComment
           >
             <SuggestionMenuController
               triggerCharacter="@"
-              getItems={getMemberItems}
+              getItems={getAtMentionItems}
             />
           </BlockNoteView>
         </div>
@@ -197,6 +204,7 @@ function EditCommentEditor({
   commentId,
   initialBody,
   workspaceMembers,
+  workspaceId,
   uploadFile,
   onSave,
   onCancel,
@@ -213,6 +221,11 @@ function EditCommentEditor({
     members: workspaceMembers,
     editor: editEditor,
   });
+  const getEventItems = useEventSuggestions({ workspaceId, editor: editEditor });
+  const getAtMentionItems = async (query: string) => {
+    const [m, e] = await Promise.all([getMemberItems(query), getEventItems(query)]);
+    return [...m, ...e];
+  };
 
   const handleSave = () => {
     if (isBlocksEmpty(editEditor.document)) return;
@@ -230,7 +243,7 @@ function EditCommentEditor({
         >
           <SuggestionMenuController
             triggerCharacter="@"
-            getItems={getMemberItems}
+            getItems={getAtMentionItems}
           />
         </BlockNoteView>
       </div>

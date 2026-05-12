@@ -3,7 +3,7 @@ import { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
-import { extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
+import { extractEventMentionIds, extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
@@ -30,6 +30,12 @@ const mentionedResourcesValidator = v.record(v.string(), v.object({
   name: v.string(),
   type: v.union(v.literal("document"), v.literal("diagram"), v.literal("spreadsheet")),
 }));
+const mentionedEventsValidator = v.record(v.string(), v.object({
+  title: v.optional(v.string()),
+  startsAt: v.optional(v.number()),
+  endsAt: v.optional(v.number()),
+  deleted: v.boolean(),
+}));
 
 const enrichedMessageValidator = v.object({
   _id: v.id("messages"),
@@ -48,6 +54,7 @@ const enrichedMessageValidator = v.object({
   mentionedTasks: mentionedTasksValidator,
   mentionedProjects: mentionedProjectsValidator,
   mentionedResources: mentionedResourcesValidator,
+  mentionedEvents: mentionedEventsValidator,
 });
 
 /**
@@ -234,6 +241,49 @@ async function enrichWithMentionedResources<T extends { body: string }>(
 }
 
 /**
+ * Enrich messages with mentionedEvents record, batch-resolving all @event
+ * mentions. Events are workspace-scoped reads (matches diagrams/tasks/projects)
+ * so the only access check is the cross-workspace guard — a stray paste from
+ * another workspace surfaces as `deleted: true` without leaking metadata.
+ */
+async function enrichWithMentionedEvents<T extends { body: string }>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+  workspaceId: Id<"workspaces">,
+): Promise<(T & { mentionedEvents: Record<string, { title?: string; startsAt?: number; endsAt?: number; deleted: boolean }> })[]> {
+  const allEventIds = new Set<string>();
+  for (const msg of messages) {
+    for (const id of extractEventMentionIds(msg.body)) {
+      allEventIds.add(id);
+    }
+  }
+
+  const eventIds = [...allEventIds];
+  const eventMap = new Map<string, { title?: string; startsAt?: number; endsAt?: number; deleted: boolean }>();
+  if (eventIds.length > 0) {
+    const events = await getAll(ctx.db, eventIds as Id<"calendarEvents">[]);
+    events.forEach((e, i) => {
+      const id = eventIds[i];
+      if (!e || e.workspaceId !== workspaceId) {
+        eventMap.set(id, { deleted: true });
+      } else {
+        eventMap.set(id, { title: e.title, startsAt: e.startsAt, endsAt: e.endsAt, deleted: false });
+      }
+    });
+  }
+
+  return messages.map(msg => {
+    const ids = extractEventMentionIds(msg.body);
+    const mentionedEvents: Record<string, { title?: string; startsAt?: number; endsAt?: number; deleted: boolean }> = {};
+    for (const id of ids) {
+      const e = eventMap.get(id);
+      if (e) mentionedEvents[id] = e;
+    }
+    return { ...msg, mentionedEvents };
+  });
+}
+
+/**
  * Enrich messages with replyTo info, resolving mention text from parent bodies.
  * Shared by list, search, and getMessageContext queries.
  */
@@ -353,10 +403,11 @@ export const list = query({
     const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
     const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
     const messagesWithResources = await enrichWithMentionedResources(ctx, messagesWithProjects);
+    const messagesWithEvents = await enrichWithMentionedEvents(ctx, messagesWithResources, channel.workspaceId);
 
     return {
       ...messagesPage,
-      page: messagesWithResources,
+      page: messagesWithEvents,
     };
   },
 });
@@ -492,8 +543,9 @@ export const search = query({
     const searchResultsWithTasks = await enrichWithMentionedTasks(ctx, searchResultsWithMentions);
     const searchResultsWithProjects = await enrichWithMentionedProjects(ctx, searchResultsWithTasks);
     const searchResultsWithResources = await enrichWithMentionedResources(ctx, searchResultsWithProjects);
+    const searchResultsWithEvents = await enrichWithMentionedEvents(ctx, searchResultsWithResources, channel.workspaceId);
 
-    return searchResultsWithResources;
+    return searchResultsWithEvents;
   },
 });
 
@@ -552,9 +604,10 @@ export const getMessageContext = query({
     const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
     const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
     const messagesWithResources = await enrichWithMentionedResources(ctx, messagesWithProjects);
+    const messagesWithEvents = await enrichWithMentionedEvents(ctx, messagesWithResources, channel.workspaceId);
 
     return {
-      messages: messagesWithResources,
+      messages: messagesWithEvents,
       targetMessageId: messageId,
       targetIndex: messagesBefore.length // Index of the target message in the results
     };

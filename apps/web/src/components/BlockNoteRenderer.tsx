@@ -3,6 +3,7 @@ import { TaskMentionChip } from "@/pages/App/Chat/TaskMentionChip";
 import { ProjectReferenceChip } from "@/pages/App/Chat/ProjectReferenceChip";
 import { ResourceReferenceChip } from "@/pages/App/Chat/ResourceReferenceChip";
 import { UserMentionRenderer } from "@/pages/App/Chat/UserMentionRenderer";
+import { EventMentionChip } from "@/pages/App/Chat/EventMentionChip";
 import { useDocumentBlockPreview } from "@/hooks/use-document-block-preview";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "@convex/_generated/api";
@@ -52,13 +53,19 @@ type ResourceReferenceContent = {
   props: { resourceId: string; resourceType: string; resourceName: string };
 };
 
+type EventMentionContent = {
+  type: "eventMention";
+  props: { eventId: string };
+};
+
 export type InlineContent =
   | TextContent
   | LinkContent
   | TaskMentionContent
   | ProjectReferenceContent
   | UserMentionContent
-  | ResourceReferenceContent;
+  | ResourceReferenceContent
+  | EventMentionContent;
 
 export type Block = {
   id?: string;
@@ -275,6 +282,9 @@ function InlineRenderer({ content }: { content: InlineContent }) {
           resourceType={content.props.resourceType}
         />
       );
+
+    case "eventMention":
+      return <EventMentionChip eventId={content.props.eventId} />;
 
     default:
       return null;

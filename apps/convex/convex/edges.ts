@@ -209,11 +209,15 @@ export const syncMentionEdges = mutation({
   args: {
     sourceType: v.union(v.literal("document"), v.literal("task")),
     sourceId: v.string(),
-    mentionedUserIds: v.array(v.string()),
+    // Either array may be omitted to leave that target type untouched —
+    // lets the editor sync user and event mentions independently without
+    // each call wiping the other's edges. Pass [] to clear a type.
+    mentionedUserIds: v.optional(v.array(v.string())),
+    mentionedEventIds: v.optional(v.array(v.string())),
     workspaceId: v.id("workspaces"),
   },
   returns: v.null(),
-  handler: async (ctx, { sourceType, sourceId, mentionedUserIds, workspaceId }) => {
+  handler: async (ctx, { sourceType, sourceId, mentionedUserIds, mentionedEventIds, workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     const existingMentions = await ctx.db
@@ -223,36 +227,82 @@ export const syncMentionEdges = mutation({
       )
       .collect();
 
-    const existingByTarget = new Map(existingMentions.map((e) => [e.targetId, e]));
-    const newTargetIds = new Set(mentionedUserIds);
-    const newMentionIds = mentionedUserIds.filter((id) => !existingByTarget.has(id));
+    // Partition existing mention edges by target type so user and event
+    // diffs don't interfere with each other.
+    const existingUserEdges = existingMentions.filter((e) => e.targetType === "user");
+    const existingEventEdges = existingMentions.filter((e) => e.targetType === "calendarEvent");
 
-    // Resolve node IDs for new edges
-    const sourceNodeId = newMentionIds.length > 0 ? await getNodeId(ctx, sourceId) : undefined;
-    const targetNodeIds = await Promise.all(
-      newMentionIds.map((id) => getUserNodeId(ctx, id, workspaceId)),
-    );
+    const existingUserByTarget = new Map(existingUserEdges.map((e) => [e.targetId, e]));
+    const existingEventByTarget = new Map(existingEventEdges.map((e) => [e.targetId, e]));
 
-    await Promise.all([
-      ...existingMentions
-        .filter((e) => !newTargetIds.has(e.targetId))
-        .map((e) => ctx.db.delete(e._id)),
-      ...newMentionIds.map((id, i) =>
-        ctx.db.insert("edges", {
-          sourceType,
-          sourceId,
-          targetType: "user",
-          targetId: id,
-          edgeType: "mentions",
-          workspaceId,
-          sourceNodeId,
-          targetNodeId: targetNodeIds[i],
-          createdBy: userId,
-          createdAt: Date.now(),
-        }),
-      ),
-    ]);
+    const ops: Promise<unknown>[] = [];
+    let sourceNodeId: Id<"nodes"> | undefined;
+    const resolveSourceNode = async () => {
+      if (sourceNodeId === undefined) sourceNodeId = await getNodeId(ctx, sourceId);
+      return sourceNodeId;
+    };
 
+    // Diff user edges only if the caller is responsible for them.
+    if (mentionedUserIds !== undefined) {
+      const newUserIdSet = new Set(mentionedUserIds);
+      const addedUserIds = mentionedUserIds.filter((id) => !existingUserByTarget.has(id));
+      const userTargetNodeIds = await Promise.all(
+        addedUserIds.map((id) => getUserNodeId(ctx, id, workspaceId)),
+      );
+      if (addedUserIds.length > 0) await resolveSourceNode();
+
+      for (const e of existingUserEdges) {
+        if (!newUserIdSet.has(e.targetId)) ops.push(ctx.db.delete(e._id));
+      }
+      addedUserIds.forEach((id, i) => {
+        ops.push(
+          ctx.db.insert("edges", {
+            sourceType,
+            sourceId,
+            targetType: "user",
+            targetId: id,
+            edgeType: "mentions",
+            workspaceId,
+            sourceNodeId,
+            targetNodeId: userTargetNodeIds[i],
+            createdBy: userId,
+            createdAt: Date.now(),
+          }),
+        );
+      });
+    }
+
+    // Diff event edges only if the caller is responsible for them.
+    if (mentionedEventIds !== undefined) {
+      const newEventIdSet = new Set(mentionedEventIds);
+      const addedEventIds = mentionedEventIds.filter((id) => !existingEventByTarget.has(id));
+      const eventTargetNodeIds = await Promise.all(
+        addedEventIds.map((id) => getNodeId(ctx, id)),
+      );
+      if (addedEventIds.length > 0) await resolveSourceNode();
+
+      for (const e of existingEventEdges) {
+        if (!newEventIdSet.has(e.targetId)) ops.push(ctx.db.delete(e._id));
+      }
+      addedEventIds.forEach((id, i) => {
+        ops.push(
+          ctx.db.insert("edges", {
+            sourceType,
+            sourceId,
+            targetType: "calendarEvent",
+            targetId: id,
+            edgeType: "mentions",
+            workspaceId,
+            sourceNodeId,
+            targetNodeId: eventTargetNodeIds[i],
+            createdBy: userId,
+            createdAt: Date.now(),
+          }),
+        );
+      });
+    }
+
+    await Promise.all(ops);
     return null;
   },
 });

@@ -136,14 +136,20 @@ describe("calendarEvents", () => {
   });
 
   describe("get / permissions", () => {
-    it("invitee can read; non-invitee non-creator cannot", async () => {
+    it("workspace members can read any event; non-members cannot", async () => {
+      // Events read access is workspace-scoped (matches diagrams/tasks/projects
+      // in CLAUDE.md). Invitee/creator status only gates writes (edit, cancel,
+      // RSVP) and the join-call action, not reads.
       const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
-      const { userId: memberId, asUser: asMember } =
+      const { userId: inviteeId, asUser: asInvitee } =
         await setupAuthenticatedUser(t, { email: "alice@test.com" });
-      const { asUser: asOther } = await setupAuthenticatedUser(t, {
-        email: "bob@test.com",
+      const { userId: bystanderId, asUser: asBystander } =
+        await setupAuthenticatedUser(t, { email: "bob@test.com" });
+      const { asUser: asOutsider } = await setupAuthenticatedUser(t, {
+        email: "outsider@test.com",
       });
-      await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
+      await addMember(t, workspaceId, inviteeId, WorkspaceRole.MEMBER);
+      await addMember(t, workspaceId, bystanderId, WorkspaceRole.MEMBER);
 
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
@@ -151,17 +157,21 @@ describe("calendarEvents", () => {
         startsAt: Date.now() + ONE_HOUR,
         endsAt: Date.now() + 2 * ONE_HOUR,
         timezone: "UTC",
-        invitees: { userIds: [memberId as any], guestEmails: [] },
+        invitees: { userIds: [inviteeId as any], guestEmails: [] },
       });
 
-      // Invitee reads OK.
-      const ok = await asMember.query(api.calendarEvents.get, { eventId });
-      expect(ok.event._id).toBe(eventId);
+      // Invitee workspace member: reads OK.
+      const okInvitee = await asInvitee.query(api.calendarEvents.get, { eventId });
+      expect(okInvitee.event._id).toBe(eventId);
 
-      // Non-invitee throws.
+      // Non-invitee workspace member: reads OK (new behaviour).
+      const okBystander = await asBystander.query(api.calendarEvents.get, { eventId });
+      expect(okBystander.event._id).toBe(eventId);
+
+      // Non-member of the workspace: still rejected.
       await expect(
-        asOther.query(api.calendarEvents.get, { eventId }),
-      ).rejects.toThrow(/Not authorized/i);
+        asOutsider.query(api.calendarEvents.get, { eventId }),
+      ).rejects.toThrow(/Not a member of this workspace/i);
     });
   });
 

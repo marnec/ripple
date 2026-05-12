@@ -439,7 +439,13 @@ export default defineSchema({
   })
     .index("by_workspace_starts", ["workspaceId", "startsAt"])
     .index("by_creator", ["createdBy"])
-    .index("by_channel", ["channelId"]),
+    .index("by_channel", ["channelId"])
+    // For @event mention autocomplete: title search filtered to the active
+    // workspace. Empty queries still use by_workspace_starts (browse mode).
+    .searchIndex("by_title", {
+      searchField: "title",
+      filterFields: ["workspaceId"],
+    }),
 
   // Per-recipient invite + RSVP state for calendar events. Exactly one of
   // userId / guestEmail is set. For guest rows, shareId references a

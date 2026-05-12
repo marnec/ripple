@@ -195,6 +195,7 @@ function TaskDetailPageContent({
               diagrams={detail.diagrams}
               spreadsheets={detail.spreadsheets}
               members={detail.members}
+              workspaceId={workspaceId}
               className="min-h-50 md:min-h-75"
               hideLabel
             />

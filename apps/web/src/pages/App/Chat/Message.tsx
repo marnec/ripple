@@ -18,7 +18,7 @@ import {
 } from "../../../components/ui/context-menu";
 import { Dialog, DialogClose, DialogOverlay, DialogPortal } from "../../../components/ui/dialog";
 import { useChatContext } from "./ChatContext";
-import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext } from "./MentionedUsersContext";
+import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext, MentionedEventsContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
 import { MessageRenderer } from "./MessageRenderer";
 import { useReactions } from "./ReactionsContext";
@@ -191,6 +191,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
               <MentionedTasksContext.Provider value={message.mentionedTasks ?? {}}>
               <MentionedProjectsContext.Provider value={message.mentionedProjects ?? {}}>
               <MentionedResourcesContext.Provider value={message.mentionedResources ?? {}}>
+              <MentionedEventsContext.Provider value={message.mentionedEvents ?? {}}>
                 <div
                   className={cn(
                     "w-fit transition-all",
@@ -237,6 +238,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                     </div>
                   )}
                 </div>
+              </MentionedEventsContext.Provider>
               </MentionedResourcesContext.Provider>
               </MentionedProjectsContext.Provider>
               </MentionedTasksContext.Provider>

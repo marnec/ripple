@@ -576,7 +576,7 @@ async function insertChannelMentionEdge(
   ctx: TriggerCtx,
   channelId: Id<"channels">,
   workspaceId: Id<"workspaces">,
-  target: { targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string },
+  target: { targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent"; targetId: string },
 ) {
   const [sourceNodeId, targetNodeId] = await Promise.all([
     findNodeId(ctx, channelId),

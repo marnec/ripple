@@ -207,6 +207,41 @@ export function extractMentions(blocks: unknown[]): Set<string> {
   return refs;
 }
 
+/** Collect eventMention eventIds from a list of inline nodes. */
+function collectInlineEventMentions(nodes: InlineNode[], refs: Set<string>) {
+  for (const ic of nodes) {
+    // eventMention is the type used across chat, doc, and task surfaces.
+    // The prop key is `eventId` (mirrors `taskId` on taskMention).
+    if (ic.type === "eventMention" && typeof (ic.props as { eventId?: unknown })?.eventId === "string") {
+      const id = (ic.props as { eventId: string }).eventId;
+      if (id) refs.add(id);
+    }
+  }
+}
+
+/** Extract all @event mention IDs from the editor document tree. */
+export function extractEventMentions(blocks: unknown[]): Set<string> {
+  const refs = new Set<string>();
+  for (const block of blocks as EditorBlock[]) {
+    if (Array.isArray(block.content)) {
+      collectInlineEventMentions(block.content, refs);
+    }
+    if (block.content && !Array.isArray(block.content) && block.content.type === "tableContent") {
+      for (const row of block.content.rows) {
+        for (const cell of row.cells) {
+          collectInlineEventMentions(cell.content, refs);
+        }
+      }
+    }
+    if (block.children) {
+      for (const key of extractEventMentions(block.children)) {
+        refs.add(key);
+      }
+    }
+  }
+  return refs;
+}
+
 /** Collect cell ref keys from a list of inline nodes.
  *  Key shape: `<spreadsheetId>|<stableRef>`. Refs without a stableRef
  *  (which shouldn't exist post-Phase-B) are skipped — their cache row

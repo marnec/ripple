@@ -672,6 +672,174 @@ describe("edges.syncMentionEdges", () => {
     expect(backlinks[0].sourceName).toBe("My Doc");
     expect(backlinks[0].edgeType).toBe("mentions");
   });
+
+  // ── @event mentions ──────────────────────────────────────────────────
+  // The mutation accepts `mentionedEventIds` alongside `mentionedUserIds`
+  // and diffs each target type independently so syncing one type doesn't
+  // wipe the other's edges.
+
+  async function createCalEvent(
+    t: ReturnType<typeof createTestContext>,
+    workspaceId: Id<"workspaces">,
+    userId: Id<"users">,
+    title: string,
+  ): Promise<Id<"calendarEvents">> {
+    return await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const now = Date.now();
+      return await db.insert("calendarEvents", {
+        workspaceId,
+        title,
+        startsAt: now + 60 * 60 * 1000,
+        endsAt: now + 2 * 60 * 60 * 1000,
+        timezone: "UTC",
+        createdBy: userId,
+      });
+    });
+  }
+
+  it("should insert mention edges for mentioned events", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser, userId } = await setupWorkspaceWithAdmin(t);
+
+    const documentId = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      return await db.insert("documents", { workspaceId, name: "Doc" });
+    });
+    const eventId = await createCalEvent(t, workspaceId, userId, "Sprint Demo");
+
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedEventIds: [eventId],
+      workspaceId,
+    });
+
+    const edges = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect();
+    });
+
+    expect(edges).toHaveLength(1);
+    expect(edges[0].edgeType).toBe("mentions");
+    expect(edges[0].targetType).toBe("calendarEvent");
+    expect(edges[0].targetId).toBe(eventId);
+    // node ids should resolve since the writer trigger created the event node
+    expect(edges[0].sourceNodeId).toBeDefined();
+    expect(edges[0].targetNodeId).toBeDefined();
+  });
+
+  it("diffs user-mention edges and event-mention edges independently", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser, userId } = await setupWorkspaceWithAdmin(t);
+
+    const documentId = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      return await db.insert("documents", { workspaceId, name: "Doc" });
+    });
+    const mentionedUserId = await t.run(async (ctx) => {
+      return await ctx.db.insert("users", { name: "User", email: "u@test.com" });
+    });
+    const eventId = await createCalEvent(t, workspaceId, userId, "Demo");
+
+    // First, sync both types in two calls (the editor's natural pattern —
+    // one tracker per type).
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedUserIds: [mentionedUserId],
+      workspaceId,
+    });
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedEventIds: [eventId],
+      workspaceId,
+    });
+
+    let edges = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect();
+    });
+    expect(edges.filter((e) => e.targetType === "user")).toHaveLength(1);
+    expect(edges.filter((e) => e.targetType === "calendarEvent")).toHaveLength(1);
+
+    // Now clear users: event edge must survive.
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedUserIds: [],
+      workspaceId,
+    });
+    edges = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect();
+    });
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetType).toBe("calendarEvent");
+
+    // Clear events too: nothing should remain.
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedEventIds: [],
+      workspaceId,
+    });
+    edges = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect();
+    });
+    expect(edges).toHaveLength(0);
+  });
+
+  it("omitting an array leaves edges of that type untouched", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser, userId } = await setupWorkspaceWithAdmin(t);
+
+    const documentId = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      return await db.insert("documents", { workspaceId, name: "Doc" });
+    });
+    const mentionedUserId = await t.run(async (ctx) => {
+      return await ctx.db.insert("users", { name: "U", email: "u@t.com" });
+    });
+    const eventId = await createCalEvent(t, workspaceId, userId, "Demo");
+
+    // Plant both kinds.
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedUserIds: [mentionedUserId],
+      mentionedEventIds: [eventId],
+      workspaceId,
+    });
+
+    // Call again with only mentionedUserIds — events array omitted.
+    // The mutation MUST NOT touch event edges.
+    await asUser.mutation(api.edges.syncMentionEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedUserIds: [mentionedUserId],
+      workspaceId,
+    });
+
+    const edges = await t.run(async (ctx) => {
+      return await ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect();
+    });
+    expect(edges).toHaveLength(2);
+    expect(edges.filter((e) => e.targetType === "calendarEvent")).toHaveLength(1);
+  });
 });
 
 describe("channel mention edges (via messages trigger)", () => {

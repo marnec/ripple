@@ -197,25 +197,6 @@ export function isHistoricalReschedule(
   return oldStart < now && newStart < now;
 }
 
-/** Throws unless the given user is the event creator OR has an invitee row. */
-async function requireEventViewer(
-  ctx: { db: import("./_generated/server").QueryCtx["db"]; auth: import("./_generated/server").QueryCtx["auth"] },
-  eventId: Id<"calendarEvents">,
-): Promise<{ userId: Id<"users">; event: Doc<"calendarEvents"> }> {
-  const userId = await requireUser(ctx);
-  const event = await ctx.db.get(eventId);
-  if (!event) throw new ConvexError("Event not found");
-  if (event.createdBy === userId) return { userId, event };
-  const invitee = await ctx.db
-    .query("calendarEventInvitees")
-    .withIndex("by_event_user", (q) =>
-      q.eq("eventId", eventId).eq("userId", userId),
-    )
-    .first();
-  if (!invitee) throw new ConvexError("Not authorized to view this event");
-  return { userId, event };
-}
-
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
@@ -415,7 +396,11 @@ export const get = query({
   args: { eventId: v.id("calendarEvents") },
   returns: eventWithInviteesValidator,
   handler: async (ctx, { eventId }) => {
-    const { event } = await requireEventViewer(ctx, eventId);
+    // Workspace-scoped read (matches diagrams/tasks/projects). Any workspace
+    // member can view any event; edit/cancel/RSVP/join still gated separately.
+    const event = await ctx.db.get(eventId);
+    if (!event) throw new ConvexError("Event not found");
+    await requireWorkspaceMember(ctx, event.workspaceId);
 
     const inviteeRows = await loadInviteeRows(ctx, eventId);
 
@@ -534,6 +519,143 @@ export const getByShareId = query({
           }
         : undefined,
     };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Mention helpers (@event in chats/docs/tasks)
+// ---------------------------------------------------------------------------
+
+/**
+ * Autocomplete data source for @event mentions. Returns workspace-scoped
+ * events grouped into "upcoming" (future, ascending) and "recent" (past,
+ * descending) buckets.
+ *
+ * Empty query → browse mode: range scan on `by_workspace_starts` for the
+ *   `[now − 7d, now + 30d]` window. Cheap, time-ordered.
+ * Non-empty query → search mode: `by_title` full-text search filtered by
+ *   workspaceId. Constant cost regardless of workspace event count.
+ */
+const mentionSuggestionValidator = v.object({
+  eventId: v.id("calendarEvents"),
+  title: v.string(),
+  startsAt: v.number(),
+  endsAt: v.number(),
+  group: v.union(v.literal("upcoming"), v.literal("recent")),
+});
+
+const MENTION_AUTOCOMPLETE_DEFAULT_LIMIT = 8;
+const MENTION_AUTOCOMPLETE_WINDOW_PAST_MS = 7 * 24 * 60 * 60 * 1000;
+const MENTION_AUTOCOMPLETE_WINDOW_FUTURE_MS = 30 * 24 * 60 * 60 * 1000;
+
+export const listForMentionAutocomplete = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    query: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(mentionSuggestionValidator),
+  handler: async (ctx, { workspaceId, query, limit }) => {
+    await requireWorkspaceMember(ctx, workspaceId);
+
+    const now = Date.now();
+    const perGroup = Math.max(1, Math.min(limit ?? MENTION_AUTOCOMPLETE_DEFAULT_LIMIT, 25));
+    const trimmedQuery = (query ?? "").trim();
+
+    let events: Doc<"calendarEvents">[];
+    if (trimmedQuery.length > 0) {
+      // Search mode: title FTS, workspace-filtered. Take headroom so we have
+      // enough docs to split into upcoming/recent after filtering by time.
+      events = await ctx.db
+        .query("calendarEvents")
+        .withSearchIndex("by_title", (q) =>
+          q.search("title", trimmedQuery).eq("workspaceId", workspaceId),
+        )
+        .take(perGroup * 4);
+    } else {
+      // Browse mode: tight time window via the existing range index.
+      events = await ctx.db
+        .query("calendarEvents")
+        .withIndex("by_workspace_starts", (q) =>
+          q
+            .eq("workspaceId", workspaceId)
+            .gte("startsAt", now - MENTION_AUTOCOMPLETE_WINDOW_PAST_MS)
+            .lte("startsAt", now + MENTION_AUTOCOMPLETE_WINDOW_FUTURE_MS),
+        )
+        .take(perGroup * 4);
+    }
+
+    const upcoming = events
+      .filter((e) => e.startsAt >= now)
+      .sort((a, b) => a.startsAt - b.startsAt)
+      .slice(0, perGroup)
+      .map((e) => ({
+        eventId: e._id,
+        title: e.title,
+        startsAt: e.startsAt,
+        endsAt: e.endsAt,
+        group: "upcoming" as const,
+      }));
+
+    const recent = events
+      .filter((e) => e.startsAt < now)
+      .sort((a, b) => b.startsAt - a.startsAt)
+      .slice(0, perGroup)
+      .map((e) => ({
+        eventId: e._id,
+        title: e.title,
+        startsAt: e.startsAt,
+        endsAt: e.endsAt,
+        group: "recent" as const,
+      }));
+
+    return [...upcoming, ...recent];
+  },
+});
+
+/**
+ * Batch-resolve event mentions referenced by a page of messages / a
+ * document / a task description / a task comment. Skips cross-workspace
+ * IDs (defensive — clients shouldn't be able to insert them, but the
+ * BlockNote JSON is user-controlled). Missing rows surface as
+ * `{ deleted: true }` so chips can render a strikethrough fallback.
+ *
+ * Internal-only: callers are server enrichment helpers that already
+ * validated the viewer's workspace access.
+ */
+const mentionedEventDataValidator = v.object({
+  eventId: v.id("calendarEvents"),
+  title: v.optional(v.string()),
+  startsAt: v.optional(v.number()),
+  endsAt: v.optional(v.number()),
+  deleted: v.boolean(),
+});
+
+export const getManyForMentions = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    eventIds: v.array(v.id("calendarEvents")),
+  },
+  returns: v.array(mentionedEventDataValidator),
+  handler: async (ctx, { workspaceId, eventIds }) => {
+    if (eventIds.length === 0) return [];
+    // De-dupe defensively.
+    const uniqueIds = Array.from(new Set(eventIds));
+    const docs = await Promise.all(uniqueIds.map((id) => ctx.db.get(id)));
+    return uniqueIds.map((id, i) => {
+      const doc = docs[i];
+      if (!doc) return { eventId: id, deleted: true };
+      // Cross-workspace guard: silently treat as deleted so a stray paste
+      // can't leak metadata across workspaces.
+      if (doc.workspaceId !== workspaceId) return { eventId: id, deleted: true };
+      return {
+        eventId: id,
+        title: doc.title,
+        startsAt: doc.startsAt,
+        endsAt: doc.endsAt,
+        deleted: false,
+      };
+    });
   },
 });
 

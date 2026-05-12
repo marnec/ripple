@@ -9,6 +9,7 @@ import { useAction, useMutation } from "convex/react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { BlockPickerDialog } from "../Document/BlockPickerDialog";
 import { CellRefDialog } from "../Document/CellRefDialog";
 import { api } from "@convex/_generated/api";
@@ -20,6 +21,8 @@ type TaskDescriptionEditorProps = {
   diagrams?: Array<{ _id: string; name: string }>;
   spreadsheets?: Array<{ _id: string; name: string }>;
   members?: Array<{ userId: string; name?: string | null; image?: string }>;
+  /** Required for `@event` autocomplete; omit only in static previews. */
+  workspaceId?: Id<"workspaces">;
   className?: string;
   hideLabel?: boolean;
 };
@@ -30,6 +33,7 @@ export function TaskDescriptionEditor({
   diagrams,
   spreadsheets,
   members,
+  workspaceId,
   className,
   hideLabel,
 }: TaskDescriptionEditorProps) {
@@ -55,6 +59,17 @@ export function TaskDescriptionEditor({
     editor,
     group: "Project members",
   });
+
+  const getEventItems = useEventSuggestions({ workspaceId, editor });
+
+  // `@` trigger: members first, then events grouped by Upcoming / Recent.
+  const getAtMentionItems = async (query: string) => {
+    const [m, e] = await Promise.all([
+      getMemberItems(query),
+      getEventItems(query),
+    ]);
+    return [...m, ...e];
+  };
 
   const handleBlockPickerInsert = (blockId: string) => {
       if (!editor || !blockPickerDialog) return;
@@ -228,7 +243,7 @@ export function TaskDescriptionEditor({
           />
           <SuggestionMenuController
             triggerCharacter={"@"}
-            getItems={getMemberItems}
+            getItems={getAtMentionItems}
           />
         </BlockNoteView>
       </div>

@@ -10,6 +10,7 @@ import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useUploadFile } from "../../../hooks/use-upload-file";
+import { extractEventMentions } from "../../../hooks/use-editor-tracking";
 
 /** Extract all @mention user IDs from task description blocks. */
 function extractMentionUserIds(blocks: any[]): Set<string> {
@@ -248,6 +249,32 @@ export function useTaskDetail({
 
     return () => { unsubscribe(); };
   }, [editor, taskId, workspaceId, notifyMentions, syncMentionEdges]);
+
+  // Track @event mentions in task description: sync to mention edges. The
+  // mutation diffs user / event edges independently, so this runs alongside
+  // the user-mention effect without interference.
+  useEffect(() => {
+    if (!editor || !taskId) return;
+    const initial = extractEventMentions(editor.document);
+    if (initial.size > 0) {
+      void syncMentionEdges({
+        sourceType: "task",
+        sourceId: taskId,
+        mentionedEventIds: [...initial],
+        workspaceId,
+      });
+    }
+    const unsubscribe = editor.onChange(() => {
+      const current = extractEventMentions(editor.document);
+      void syncMentionEdges({
+        sourceType: "task",
+        sourceId: taskId,
+        mentionedEventIds: [...current],
+        workspaceId,
+      });
+    });
+    return () => { unsubscribe(); };
+  }, [editor, taskId, workspaceId, syncMentionEdges]);
 
   // Sync title when task loads — render-time derived state from server.
   const [prevServerTitle, setPrevServerTitle] = useState<string | undefined>(

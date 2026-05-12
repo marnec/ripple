@@ -29,10 +29,11 @@ import { useLocalRecents } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
-import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs, extractMentions } from "../../../hooks/use-editor-tracking";
+import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs, extractMentions, extractEventMentions } from "../../../hooks/use-editor-tracking";
 import { useReferencedBlockDeleteProtection } from "../../../hooks/use-referenced-block-delete-protection";
 import { useReferencedBlocks } from "../../../hooks/use-referenced-blocks";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useSnapshotFallback } from "../../../hooks/use-snapshot-fallback";
 import { useUploadFile } from "../../../hooks/use-upload-file";
@@ -146,6 +147,22 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     mentionType: "mention",
   });
 
+  const getEventItems = useEventSuggestions({
+    workspaceId: document?.workspaceId,
+    editor,
+  });
+
+  // Combined `@` suggestion items: workspace members first, then events
+  // grouped under "Upcoming" / "Recent". BlockNote renders groups in
+  // insertion order.
+  const getAtMentionItems = async (query: string) => {
+    const [members, events] = await Promise.all([
+      getMemberItems(query),
+      getEventItems(query),
+    ]);
+    return [...members, ...events];
+  };
+
   // Track cell ref removals and clean up orphaned cache entries.
   // Keys come in as `<spreadsheetId>|<stableRef>`.
   const onCellRefsRemoved = (removed: Set<string>) => {
@@ -190,6 +207,23 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     }
   };
   useEditorTracking(editor, extractMentions, { onChanged: onMentionsChanged, syncOnMount: true });
+
+  // Track @event mentions in parallel: sync to edges (mention graph). The
+  // mutation diffs user/event edges independently — passing one array
+  // leaves the other type untouched.
+  const onEventMentionsChanged = (current: Set<string>) => {
+    if (!document) return;
+    void syncMentionEdges({
+      sourceType: "document",
+      sourceId: documentId,
+      mentionedEventIds: [...current],
+      workspaceId: document.workspaceId,
+    });
+  };
+  useEditorTracking(editor, extractEventMentions, {
+    onChanged: onEventMentionsChanged,
+    syncOnMount: true,
+  });
 
   // Sync hard-embed references (diagrams, spreadsheets, documents) to edges table
   const onEmbedsChanged = (current: Set<string>) => {
@@ -364,7 +398,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           />
           <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
             <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
-            <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
+            <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
           </BlockNoteView>
           {cellRefDialog && (
             <CellRefDialog

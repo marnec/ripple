@@ -217,6 +217,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
                   currentUserId={currentUserId}
                   editingCommentId={editingCommentId}
                   workspaceMembers={workspaceMembers}
+                  workspaceId={workspaceId}
                   uploadFile={uploadFile}
                   onEdit={setEditingCommentId}
                   onDelete={handleDelete}
@@ -283,6 +284,7 @@ function CommentItem({
   currentUserId,
   editingCommentId,
   workspaceMembers,
+  workspaceId,
   uploadFile,
   onEdit,
   onDelete,
@@ -293,6 +295,7 @@ function CommentItem({
   currentUserId: Id<"users">;
   editingCommentId: Id<"taskComments"> | null;
   workspaceMembers: WorkspaceMemberSummary[];
+  workspaceId: Id<"workspaces">;
   uploadFile?: (file: File) => Promise<string>;
   onEdit: (id: Id<"taskComments"> | null) => void;
   onDelete: (id: Id<"taskComments">) => void;
@@ -328,6 +331,7 @@ function CommentItem({
             commentId={commentId}
             initialBody={item.body ?? ""}
             workspaceMembers={workspaceMembers}
+            workspaceId={workspaceId}
             uploadFile={uploadFile}
             onSave={onSave}
             onCancel={onCancelEdit}

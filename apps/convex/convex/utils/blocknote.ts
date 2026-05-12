@@ -16,6 +16,7 @@ type InlineContent =
   | { type: "taskMention"; props: { taskId: string; taskTitle?: string } }
   | { type: "projectReference"; props: { projectId: string } }
   | { type: "resourceReference"; props: { resourceId: string; resourceType: string; resourceName: string } }
+  | { type: "eventMention"; props: { eventId: string } }
   | { type: string; [key: string]: unknown };
 
 /**
@@ -28,10 +29,11 @@ export function extractPlainTextFromBody(
   bodyJson: string,
   userNames?: Map<string, string>,
   projectNames?: Map<string, string>,
+  eventTitles?: Map<string, string>,
 ): string {
   try {
     const blocks: BlockNoteBlock[] = JSON.parse(bodyJson);
-    return blocksToPlainText(blocks, userNames, projectNames);
+    return blocksToPlainText(blocks, userNames, projectNames, eventTitles);
   } catch {
     return "";
   }
@@ -41,16 +43,17 @@ function blocksToPlainText(
   blocks: BlockNoteBlock[],
   userNames?: Map<string, string>,
   projectNames?: Map<string, string>,
+  eventTitles?: Map<string, string>,
 ): string {
   const lines: string[] = [];
   for (const block of blocks) {
     let line = "";
     if (Array.isArray(block.content)) {
-      line = inlineContentToPlainText(block.content, userNames, projectNames);
+      line = inlineContentToPlainText(block.content, userNames, projectNames, eventTitles);
     }
     lines.push(line);
     if (block.children?.length) {
-      lines.push(blocksToPlainText(block.children, userNames, projectNames));
+      lines.push(blocksToPlainText(block.children, userNames, projectNames, eventTitles));
     }
   }
   return lines.join("\n").trim();
@@ -60,6 +63,7 @@ function inlineContentToPlainText(
   content: InlineContent[],
   userNames?: Map<string, string>,
   projectNames?: Map<string, string>,
+  eventTitles?: Map<string, string>,
 ): string {
   let text = "";
   for (const item of content) {
@@ -70,7 +74,7 @@ function inlineContentToPlainText(
       case "link": {
         const link = item as { type: "link"; content: InlineContent[] };
         if (Array.isArray(link.content)) {
-          text += inlineContentToPlainText(link.content, userNames, projectNames);
+          text += inlineContentToPlainText(link.content, userNames, projectNames, eventTitles);
         }
         break;
       }
@@ -94,6 +98,12 @@ function inlineContentToPlainText(
       case "resourceReference": {
         const ref = item as { type: "resourceReference"; props: { resourceName?: string } };
         text += `#${ref.props.resourceName || "resource"}`;
+        break;
+      }
+      case "eventMention": {
+        const mention = item as { type: "eventMention"; props: { eventId: string } };
+        const title = eventTitles?.get(mention.props.eventId);
+        text += `@${title || "event"}`;
         break;
       }
     }
@@ -176,6 +186,47 @@ export function extractTaskMentionIds(documentJson: string): string[] {
 
     traverse(blocks);
     return Array.from(taskIds);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extract all event IDs referenced via eventMention in BlockNote JSON document.
+ * @<event> mentions in chats, docs, task descriptions, and task comments.
+ */
+export function extractEventMentionIds(documentJson: string): string[] {
+  try {
+    const blocks: BlockNoteBlock[] = JSON.parse(documentJson);
+    const eventIds = new Set<string>();
+
+    function traverse(blocks: BlockNoteBlock[]): void {
+      for (const block of blocks) {
+        if (block.content) {
+          for (const item of block.content) {
+            if (item.type === "eventMention") {
+              const mention = item as { type: "eventMention"; props: { eventId: string } };
+              if (mention.props?.eventId) eventIds.add(mention.props.eventId);
+            }
+            if (item.type === "link") {
+              const link = item as { type: "link"; content: InlineContent[] };
+              if (Array.isArray(link.content)) {
+                for (const c of link.content) {
+                  if (c.type === "eventMention") {
+                    const mention = c as { type: "eventMention"; props: { eventId: string } };
+                    if (mention.props?.eventId) eventIds.add(mention.props.eventId);
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (block.children) traverse(block.children);
+      }
+    }
+
+    traverse(blocks);
+    return Array.from(eventIds);
   } catch {
     return [];
   }
@@ -278,8 +329,8 @@ export function extractResourceReferenceIds(documentJson: string): Array<{ id: s
  * Extract all reference targets from a message body (users, tasks, projects, resources).
  * Pure function — no DB access.
  */
-export function extractMessageTargets(body: string): Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> {
-  const targets: Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet"; targetId: string }> = [];
+export function extractMessageTargets(body: string): Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent"; targetId: string }> {
+  const targets: Array<{ targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent"; targetId: string }> = [];
   const seen = new Set<string>();
 
   const add = (targetType: typeof targets[number]["targetType"], targetId: string) => {
@@ -292,6 +343,7 @@ export function extractMessageTargets(body: string): Array<{ targetType: "user" 
   for (const userId of extractMentionedUserIds(body)) add("user", userId);
   for (const taskId of extractTaskMentionIds(body)) add("task", taskId);
   for (const projectId of extractProjectIds(body)) add("project", projectId);
+  for (const eventId of extractEventMentionIds(body)) add("calendarEvent", eventId);
   for (const ref of extractResourceReferenceIds(body)) {
     add(ref.type as "document" | "diagram" | "spreadsheet", ref.id);
   }

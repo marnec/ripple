@@ -8,6 +8,7 @@ import { DiagramBlock } from "./CustomBlocks/DiagramBlock";
 import { SpreadsheetLink, SpreadsheetCellRef } from "./CustomBlocks/SpreadsheetRef";
 import { SpreadsheetRangeBlock } from "./CustomBlocks/SpreadsheetRangeBlock";
 import { User } from "./CustomBlocks/UserBlock";
+import { EventBlock } from "./CustomBlocks/EventBlock";
 import { DocumentBlockEmbed } from "./CustomBlocks/DocumentBlockEmbed";
 
 /** BlockNote schema shared by DocumentEditor and SnapshotFallback. */
@@ -21,6 +22,7 @@ export const documentSchema = BlockNoteSchema.create({
   inlineContentSpecs: {
     ...defaultInlineContentSpecs,
     mention: User,
+    eventMention: EventBlock,
     spreadsheetLink: SpreadsheetLink,
     spreadsheetCellRef: SpreadsheetCellRef,
   },

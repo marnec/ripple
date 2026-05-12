@@ -177,6 +177,18 @@ export declare const api: {
       },
       Array<{ endsAt: number; memberId: Id<"users">; startsAt: number }>
     >;
+    listForMentionAutocomplete: FunctionReference<
+      "query",
+      "public",
+      { limit?: number; query?: string; workspaceId: Id<"workspaces"> },
+      Array<{
+        endsAt: number;
+        eventId: Id<"calendarEvents">;
+        group: "upcoming" | "recent";
+        startsAt: number;
+        title: string;
+      }>
+    >;
     listMineInRange: FunctionReference<
       "query",
       "public",
@@ -1013,7 +1025,8 @@ export declare const api: {
       "mutation",
       "public",
       {
-        mentionedUserIds: Array<string>;
+        mentionedEventIds?: Array<string>;
+        mentionedUserIds?: Array<string>;
         sourceId: string;
         sourceType: "document" | "task";
         workspaceId: Id<"workspaces">;
@@ -1194,6 +1207,15 @@ export declare const api: {
           channelId: Id<"channels">;
           deleted: boolean;
           isomorphicId: string;
+          mentionedEvents: Record<
+            string,
+            {
+              deleted: boolean;
+              endsAt?: number;
+              startsAt?: number;
+              title?: string;
+            }
+          >;
           mentionedProjects: Record<string, { color: string; name: string }>;
           mentionedResources: Record<
             string,
@@ -1247,6 +1269,15 @@ export declare const api: {
           channelId: Id<"channels">;
           deleted: boolean;
           isomorphicId: string;
+          mentionedEvents: Record<
+            string,
+            {
+              deleted: boolean;
+              endsAt?: number;
+              startsAt?: number;
+              title?: string;
+            }
+          >;
           mentionedProjects: Record<string, { color: string; name: string }>;
           mentionedResources: Record<
             string,
@@ -1293,6 +1324,15 @@ export declare const api: {
         channelId: Id<"channels">;
         deleted: boolean;
         isomorphicId: string;
+        mentionedEvents: Record<
+          string,
+          {
+            deleted: boolean;
+            endsAt?: number;
+            startsAt?: number;
+            title?: string;
+          }
+        >;
         mentionedProjects: Record<string, { color: string; name: string }>;
         mentionedResources: Record<
           string,
@@ -2915,6 +2955,18 @@ export declare const internal: {
       "internal",
       { cloudflareMeetingId: string; eventId: Id<"calendarEvents"> },
       null | string
+    >;
+    getManyForMentions: FunctionReference<
+      "query",
+      "internal",
+      { eventIds: Array<Id<"calendarEvents">>; workspaceId: Id<"workspaces"> },
+      Array<{
+        deleted: boolean;
+        endsAt?: number;
+        eventId: Id<"calendarEvents">;
+        startsAt?: number;
+        title?: string;
+      }>
     >;
   };
   callSessions: {

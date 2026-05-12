@@ -11,6 +11,7 @@ import { Button } from "../../../components/ui/button";
 import { useChatContext } from "./ChatContext";
 import { TaskMention } from "./CustomInlineContent/TaskMention";
 import { ResourceReference } from "./CustomInlineContent/ResourceReference";
+import { EventMention } from "./CustomInlineContent/EventMention";
 import { ProjectReference } from "../Project/CustomInlineContent/ProjectReference";
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
@@ -27,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { useUploadFile, type ImageUploadResult } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
+import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
 import { FormattingToolbar } from "./FormattingToolbar";
 import { Kbd } from "../../../components/ui/kbd";
@@ -47,6 +49,7 @@ const schema = BlockNoteSchema.create({
     projectReference: ProjectReference,
     resourceReference: ResourceReference,
     userMention: UserMention,
+    eventMention: EventMention,
   },
 });
 
@@ -186,6 +189,20 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     editor,
     excludeUserId: currentUser?._id,
   });
+
+  const getEventItems = useEventSuggestions({ workspaceId, editor });
+
+  // Combine members + events under a single `@` trigger. Members render
+  // first (existing behaviour); events are grouped under "Upcoming" / "Recent".
+  const getAtMentionItems = useMemo(() => {
+    return async (query: string) => {
+      const [members, events] = await Promise.all([
+        getMemberItems(query),
+        getEventItems(query),
+      ]);
+      return [...members, ...events];
+    };
+  }, [getMemberItems, getEventItems]);
 
   const getResourceItems = useMemo(() => {
     return async (query: string) => {
@@ -389,7 +406,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           }}
         >
           <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
-          <SuggestionMenuController triggerCharacter={"@"} getItems={getMemberItems} />
+          <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
         </BlockNoteView>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <Button

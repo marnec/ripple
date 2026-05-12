@@ -268,7 +268,12 @@ export type DataModel = {
       by_creator: ["createdBy", "_creationTime"];
       by_workspace_starts: ["workspaceId", "startsAt", "_creationTime"];
     };
-    searchIndexes: {};
+    searchIndexes: {
+      by_title: {
+        searchField: "title";
+        filterFields: "workspaceId";
+      };
+    };
     vectorIndexes: {};
   };
   callSessions: {
