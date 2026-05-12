@@ -1,5 +1,48 @@
-import { createBrowserRouter, Navigate, useParams } from "react-router-dom";
+import { useEffect } from "react";
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+  useParams,
+} from "react-router-dom";
 import { RouteErrorFallback } from "./components/RouteErrorFallback";
+import {
+  getLastWorkspaceId,
+  setLastWorkspaceId,
+} from "./lib/last-workspace";
+import type { Id } from "@convex/_generated/dataModel";
+
+/**
+ * Root index redirect. Drops the user into the workspace they were
+ * last using so a fresh `/` doesn't always land on the workspaces
+ * list. The workspace's own index (`WorkspaceLanding`) still does the
+ * admin → summary / member → dashboard fork, and if the stored id is
+ * stale (workspace deleted, access revoked) the landing query returns
+ * `role === null` and bounces back to `/workspaces`.
+ *
+ * No stored id → fall back to the explicit list page.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- routes.tsx exports `router` (non-component) by design; a local redirect component alongside it doesn't break runtime, only fast-refresh edit-the-route hot reload
+function RootIndexRedirect() {
+  const last = getLastWorkspaceId();
+  return <Navigate to={last ? `/workspaces/${last}` : "/workspaces"} replace />;
+}
+
+/**
+ * Shell mounted at `workspaces/:workspaceId`. Records the current
+ * workspace id in localStorage so `RootIndexRedirect` can recover it
+ * on the next cold start. We write on every workspaceId change rather
+ * than once at mount because the same shell instance is reused when
+ * switching between sibling workspaces.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- same rationale as RootIndexRedirect: small local component beside the router config
+function WorkspaceRouteShell() {
+  const { workspaceId } = useParams<{ workspaceId?: string }>();
+  useEffect(() => {
+    if (workspaceId) setLastWorkspaceId(workspaceId as Id<"workspaces">);
+  }, [workspaceId]);
+  return <Outlet />;
+}
 
 /**
  * Bridge for the legacy `/calendar/events/:eventId/videocall` URL into
@@ -36,7 +79,7 @@ export const router = createBrowserRouter(
       children: [
         {
           index: true,
-          element: <Navigate to="/workspaces" replace />,
+          element: <RootIndexRedirect />,
         },
         {
           path: "workspaces",
@@ -47,6 +90,7 @@ export const router = createBrowserRouter(
         },
         {
           path: "workspaces/:workspaceId",
+          element: <WorkspaceRouteShell />,
           errorElement: <RouteErrorFallback />,
           children: [
             {

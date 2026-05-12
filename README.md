@@ -2,6 +2,7 @@ NEXT STEPS:
 - calendar; plan calls; invite guests
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
+    - @<event> in chats and docs
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding
@@ -15,7 +16,6 @@ NEXT STEPS:
     - external ticketer can be given access to specific resources in workspaces through links (attach to ticket??)
 
 - [ ] link previews in chat
-
 
 keyboard accessiblity
     - [ ] focus traps
