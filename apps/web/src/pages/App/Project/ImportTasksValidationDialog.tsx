@@ -31,9 +31,16 @@ interface RowFailure {
   message: string;
 }
 
+/**
+ * Papaparse with `header: true` and no `dynamicTyping` always yields a
+ * record of string cells; that's the input contract for this dialog. Keeping
+ * the type tight here means we never need runtime type-narrowing on cells.
+ */
+type CsvRow = Record<string, string>;
+
 interface Props {
   open: boolean;
-  rows: unknown[];
+  rows: CsvRow[];
   onOpenChange: (open: boolean) => void;
 }
 
@@ -41,27 +48,19 @@ export function ImportTasksValidationDialog({ open, rows, onOpenChange }: Props)
   const failures = useMemo<RowFailure[]>(() => {
     if (!open || rows.length === 0) return [];
     const out: RowFailure[] = [];
-    rows.forEach((row, idx) => {
+    for (const [idx, row] of rows.entries()) {
       const result = taskImportRowSchema.safeParse(row);
-      if (result.success) return;
+      if (result.success) continue;
       for (const iss of result.error.issues) {
         const field = String(iss.path[0] ?? "");
-        // CSV cells out of papaparse are always strings; narrow accordingly
-        // so we don't tripwire no-base-to-string on Object values.
-        let raw = "";
-        if (row && typeof row === "object" && field in row) {
-          const cell = (row as Record<string, unknown>)[field];
-          if (typeof cell === "string") raw = cell;
-          else if (typeof cell === "number" || typeof cell === "boolean") raw = String(cell);
-        }
         out.push({
           rowNumber: idx + 1,
           field,
-          value: raw,
+          value: row[field] ?? "",
           message: iss.message,
         });
       }
-    });
+    }
     return out;
   }, [open, rows]);
 

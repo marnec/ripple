@@ -56,9 +56,12 @@ export function ImportTasksButton({ projectId, workspaceId }: Props) {
   // Phase-2 dialog state — populated when phase-1 fails and the user clicks
   // "Show details". We keep the raw parsed rows so the dialog can re-parse
   // per row and decorate each issue with its offending cell value.
+  // Rows stay typed as Papa.parse's output (strings only — we don't enable
+  // dynamicTyping) so the validation dialog can index into them without
+  // runtime narrowing.
   const [validationDialog, setValidationDialog] = useState<{
     open: boolean;
-    rows: unknown[];
+    rows: Record<string, string>[];
   }>({ open: false, rows: [] });
 
   // Prefetch papaparse so the chunk loads in parallel with the file dialog.
