@@ -11,10 +11,10 @@ import { ShareCallButton } from "./ShareCallButton";
 
 /**
  * Channel call route. Mounts the polymorphic `<CallSurface>` with a
- * channel source and channel-specific chrome (share-call button +
- * follow-mode overlay on participant tiles). Lifecycle, busy handling,
- * lobby, and meeting UI all live in `CallSurface` — shared with the
- * calendar event surface.
+ * channel source and channel-specific chrome (share-call button in the
+ * controls bar + follow-mode overlay on participant tiles). Lifecycle,
+ * busy handling, lobby, and meeting UI all live in `CallSurface` —
+ * shared with the calendar event surface.
  */
 export const ChannelVideoCall = () => {
   const { channelId, workspaceId } = useParams<QueryParams>();
@@ -52,7 +52,7 @@ function ChannelVideoCallContent({
         onClick: () =>
           void navigate(`/workspaces/${workspaceId}/channels/${channelId}`),
       }}
-      stageOverlay={
+      controlsTrailing={
         <ShareCallButton channelId={channelId} workspaceId={workspaceId} />
       }
       renderParticipantOverlay={(participant) => (

@@ -3,10 +3,20 @@ import {
   useRealtimeKitSelector,
 } from "@cloudflare/realtimekit-react";
 import { LogOut, Monitor, MonitorOff } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useActiveCall } from "@/contexts/ActiveCallContext";
 import { CameraToggle, MicToggle } from "@/pages/App/GroupVideoCall/MediaToggle";
+
+interface CallControlsBarProps {
+  /**
+   * Surface-specific control rendered inline with the standard
+   * mic/camera/screen-share/leave controls. Channel calls use this for
+   * the admin-only share-call button.
+   */
+  trailing?: ReactNode;
+}
 
 /**
  * Controls strip for the joined meeting: mic, camera, screen share, leave.
@@ -14,7 +24,7 @@ import { CameraToggle, MicToggle } from "@/pages/App/GroupVideoCall/MediaToggle"
  * from the live meeting selectors. Leave delegates to the active-call
  * context so navigation + cleanup happen in one place.
  */
-export function CallControlsBar() {
+export function CallControlsBar({ trailing }: CallControlsBarProps) {
   const { meeting } = useRealtimeKitMeeting();
   const { leaveCall } = useActiveCall();
 
@@ -54,6 +64,7 @@ export function CallControlsBar() {
           <Monitor className="h-5 w-5" />
         )}
       </Button>
+      {trailing}
       <Button
         variant="destructive"
         onClick={() => void leaveCall()}

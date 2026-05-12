@@ -35,11 +35,12 @@ interface CallSurfaceProps {
   /** Back-button shown on lobby + error screens. */
   back: { label: string; onClick: () => void };
   /**
-   * Surface-specific chrome rendered as an absolutely-positioned overlay
-   * in the top-right of the joined meeting. Hidden on lobby/error/busy.
-   * Channel calls use this for the share-call button.
+   * Surface-specific control rendered inside the controls bar at the
+   * bottom of the joined meeting, alongside mic/camera/screen-share.
+   * Hidden on lobby/error/busy. Channel calls use this for the
+   * admin-only share-call button.
    */
-  stageOverlay?: ReactNode;
+  controlsTrailing?: ReactNode;
   /**
    * Per-tile decoration rendered as overlay children of each remote
    * participant tile. Receives the participant; return `null` to skip.
@@ -58,7 +59,7 @@ export function CallSurface({
   source,
   resourceId,
   back,
-  stageOverlay,
+  controlsTrailing,
   renderParticipantOverlay,
 }: CallSurfaceProps) {
   const callCtx = useActiveCall();
@@ -115,15 +116,12 @@ export function CallSurface({
   ) {
     return (
       <div className="relative h-full w-full overflow-hidden">
-        {stageOverlay && (
-          <div className="absolute right-4 top-4 z-10">{stageOverlay}</div>
-        )}
         <RealtimeKitProvider value={callCtx.meeting}>
           <div className="flex h-full flex-col">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
               <CallMeetingGrid renderParticipantOverlay={renderParticipantOverlay} />
             </div>
-            <CallControlsBar />
+            <CallControlsBar trailing={controlsTrailing} />
           </div>
         </RealtimeKitProvider>
       </div>

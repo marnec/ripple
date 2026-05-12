@@ -12,8 +12,9 @@ interface ShareCallButtonProps {
 }
 
 /**
- * Admin-only pill rendered on the channel call page. Opens the ShareDialog
- * prefilled for the channel so admins can generate a guest-join link.
+ * Admin-only icon button rendered inside the call's controls bar
+ * alongside mute/camera/screen-share. Opens the ShareDialog prefilled
+ * for the channel so admins can generate a guest-join link.
  */
 export function ShareCallButton({ channelId, workspaceId }: ShareCallButtonProps) {
   const [open, setOpen] = useState(false);
@@ -26,12 +27,12 @@ export function ShareCallButton({ channelId, workspaceId }: ShareCallButtonProps
     <>
       <Button
         variant="secondary"
-        size="sm"
-        className="gap-2"
+        size="icon"
+        className="h-11 w-11 md:h-9 md:w-9"
         onClick={() => setOpen(true)}
+        title="Share call link"
       >
-        <Share2 className="h-4 w-4" />
-        Share call link
+        <Share2 className="h-5 w-5" />
       </Button>
       <ShareDialog
         open={open}
