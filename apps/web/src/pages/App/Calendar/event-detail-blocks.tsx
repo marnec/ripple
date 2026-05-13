@@ -70,17 +70,24 @@ export function EditableTitle({
   // `null` draft = read mode, string = in-flight edit. Avoids a
   // sync-from-prop effect (which lints fail under react-hooks/set-state-in-effect).
   const [draft, setDraft] = useState<string | null>(null);
+  // While a save is in flight, hold the committed value here so the read-mode
+  // label doesn't briefly flash back to the stale prop before the parent
+  // query refreshes. Cleared once onSave resolves (by which point `value`
+  // should reflect the new title).
+  const [pending, setPending] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editing = draft !== null;
+  const display = pending ?? value;
 
-  const startEditing = () => setDraft(value);
+  const startEditing = () => setDraft(display);
 
   const commit = () => {
     if (draft === null) return;
     const next = draft.trim();
     setDraft(null);
-    if (next === "" || next === value.trim()) return;
-    void onSave(next);
+    if (next === "" || next === display.trim()) return;
+    setPending(next);
+    void Promise.resolve(onSave(next)).finally(() => setPending(null));
   };
 
   const cancel = () => setDraft(null);
@@ -121,7 +128,7 @@ export function EditableTitle({
       onClick={startEditing}
       className="group flex items-center gap-1.5 text-left min-w-0 -mx-1.5 px-1.5 py-0.5 rounded-md hover:bg-muted/50 transition-colors"
     >
-      <Title className={titleClass}>{value}</Title>
+      <Title className={titleClass}>{display}</Title>
       <Pencil
         className={cn(
           "text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0",

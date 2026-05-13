@@ -83,7 +83,12 @@ export function EventDetailSheet({
           than max-w-xl (36rem), so the cap controls the visible width. */}
       <SheetContent
         side="right"
-        className="data-[side=right]:sm:max-w-xl flex flex-col gap-0 p-0"
+        // `outline-none` strips the focus-visible ring base-ui's Dialog
+        // applies to the popup root when focus returns to the container
+        // (e.g. after EditableTitle's input commits on Enter and unmounts,
+        // the focus trap parks focus on the popup). Matches the kanban
+        // card treatment for the same reason.
+        className="data-[side=right]:sm:max-w-xl flex flex-col gap-0 p-0 outline-none"
       >
         {!detail ? (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">

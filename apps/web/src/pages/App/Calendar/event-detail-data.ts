@@ -125,7 +125,6 @@ export function useEventDetail({
     if (!eventId) return;
     try {
       await update(args);
-      toast.success(`${label} saved`, { duration: 1500 });
     } catch (e) {
       toast.error(`Could not save ${label.toLowerCase()}`, {
         description: e instanceof Error ? e.message : undefined,

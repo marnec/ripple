@@ -143,6 +143,19 @@
   cursor: pointer;
 }
 
+/* Strip the default focus outline on event cells. Matches the kanban
+   card treatment (KanbanCard.tsx: `outline-none`) so clicking through
+   events doesn't leave a stray focus ring on the previously-clicked one. */
+.sx__date-grid-event,
+.sx__time-grid-event,
+.sx__month-grid-event,
+.sx__month-agenda-event,
+.sx__date-grid-background-event,
+.sx__month-grid-background-event,
+.sx__time-grid-background-event {
+  outline: none;
+}
+
 .sx__calendar-header {
   padding-inline: 0;
 }
