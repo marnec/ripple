@@ -297,10 +297,14 @@ function buildCycleBackgroundEvents(cycles: CycleWithProgress[]): BackgroundEven
       start: Temporal.PlainDate.from(c.startDate!),
       end: Temporal.PlainDate.from(c.dueDate!),
       title: c.name,
+      // `--sx-bg-event-opacity` drives both the persistent dim *and*
+      // the fade-in keyframe's `to` value (see project-calendar.css) so
+      // the entrance lands exactly at the natural opacity — no end-of-
+      // animation snap-down from 1 to 0.6.
       style: {
         background: "color-mix(in srgb, var(--color-primary) 12%, transparent)",
         borderLeft: "2px solid var(--color-primary)",
-        opacity: "0.6",
+        "--sx-bg-event-opacity": "0.6",
       },
     }));
 }

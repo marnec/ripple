@@ -80,11 +80,61 @@
 }
 
 
-.sx__calendar-wrapper .sx__date-grid-event.is-event-new,
-.sx__calendar-wrapper .sx__time-grid-event.is-event-new,
-.sx__calendar-wrapper .sx__month-grid-event.is-event-new,
-.sx__calendar-wrapper .sx__month-agenda-event.is-event-new {
-  animation: none;
+/* Event entrance — fade-in with a per-sibling stagger so events don't
+   appear abruptly when the calendarEvents query resolves. Mirrors the
+   `animate-fade-in` + `animationDelay: idx * N` pattern used by chat
+   Message.tsx and sidebar selector items, but expressed in pure CSS
+   via `sibling-index()` (CSS Values 5; baseline 2024) — schedule-x
+   owns the event wrapper, so we can't inline a style prop the way
+   the React renders do. The `min(... , 20)` caps the delay the same
+   way `MESSAGE_STAGGER_CAP` does in chat: big calendars still settle
+   within ~240ms of the first event landing.
+
+   The selector duplicates each event class with and without
+   `.is-event-new` because schedule-x's theme tags newly-rendered
+   events with that class to play its own slide-in; matching both
+   states means our calm fade always wins and the theme's slide-in
+   stays suppressed (this rule supersedes the previous
+   `animation: none` override added to stop the theme replaying on
+   every CalendarRenderer re-render — see CALENDAR_CUSTOM_COMPONENTS
+   hoist note in ProjectCalendar.tsx / MyCalendarTab.tsx).
+
+   `backwards` fill-mode keeps the pre-animation opacity:0 active
+   during the per-event delay; without it events flash on at full
+   opacity before their delay elapses. */
+/* `--sx-bg-event-opacity` lets background events (cycle bars, member
+   busy blocks) declare their natural dim via inline style — see
+   buildCycleBackgroundEvents in ProjectCalendar.tsx and
+   memberBlockStyle in member-calendar-colors.ts. Foreground events
+   leave the var unset and pick up the `, 1` fallback both as the
+   static opacity and as the keyframe's `to` target, so the animation
+   lands exactly where the steady state holds (no snap-down to the
+   dimmed value after fade-in completes). */
+@keyframes sx-event-fade-in {
+  from { opacity: 0; }
+  to   { opacity: var(--sx-bg-event-opacity, 1); }
+}
+.sx__calendar-wrapper :is(
+  .sx__date-grid-event,
+  .sx__time-grid-event,
+  .sx__month-grid-event,
+  .sx__month-agenda-event,
+  .sx__date-grid-background-event,
+  .sx__time-grid-background-event,
+  .sx__month-grid-background-event
+),
+.sx__calendar-wrapper :is(
+  .sx__date-grid-event,
+  .sx__time-grid-event,
+  .sx__month-grid-event,
+  .sx__month-agenda-event,
+  .sx__date-grid-background-event,
+  .sx__time-grid-background-event,
+  .sx__month-grid-background-event
+).is-event-new {
+  opacity: var(--sx-bg-event-opacity, 1);
+  animation: sx-event-fade-in 0.35s ease backwards;
+  animation-delay: calc(12ms * min(sibling-index() - 1, 20));
 }
 
 /* ─── Custom event content ─────────────────────────────────────────────────── */

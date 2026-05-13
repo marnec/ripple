@@ -33,9 +33,12 @@ export function memberHueFor(userId: string): number {
  */
 export function memberBlockStyle(userId: string): Record<string, string> {
   const hue = memberHueFor(userId);
+  // `--sx-bg-event-opacity` is read by the dim + fade-in pair in
+  // project-calendar.css — see comment on buildCycleBackgroundEvents in
+  // ProjectCalendar.tsx for why this isn't `opacity: "0.75"` anymore.
   return {
     background: `hsl(${hue} 70% 55% / 0.18)`,
     borderLeft: `2px solid hsl(${hue} 70% 50% / 0.85)`,
-    opacity: "0.75",
+    "--sx-bg-event-opacity": "0.75",
   };
 }

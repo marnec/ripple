@@ -5,6 +5,10 @@ NEXT STEPS:
 
 - [ ] External integrations
     - [ ] github issues
+        - v1 deferrals (revisit after first ship):
+            - [ ] milestone ↔ cycle sync (opt-in, name-paired via stored `externalMilestoneId`)
+            - [ ] priority sync via configurable label template (e.g. `priority/high`)
+            - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
     - [ ] add sentry
 
 - knowledge-graph
