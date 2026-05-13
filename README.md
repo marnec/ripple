@@ -3,10 +3,12 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- bring activity log up to speed
-
 - knowledge-graph
     - explore pdf reading, annotation and embedding
+
+- [ ] External integrations
+    - [ ] github issues
+    - [ ] add sentry
 
 - leave channel logic (only for private?)
 - consider favorite for channels too
@@ -31,9 +33,7 @@ keyboard accessiblity
     - [ ] AI document agent
     - [ ] AI tasks agent
 
-- [ ] External integrations
-    - [ ] github issues
-    - [ ] add sentry
+
 
 - partykit
     - [ ] share presence connection across tabs (BroadcastChannel/SharedWorker)

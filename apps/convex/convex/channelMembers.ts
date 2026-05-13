@@ -1,4 +1,4 @@
-import { ChannelRole } from "@ripple/shared/enums";
+import { ChannelRole, ChannelType } from "@ripple/shared/enums";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ChannelMember } from "@ripple/shared/types/channel";
@@ -145,9 +145,17 @@ export const addToChannel = mutation({
 });
 
 export const removeFromChannel = mutation({
-  args: { userId: v.id("users"), channelId: v.id("channels") },
+  args: {
+    userId: v.id("users"),
+    channelId: v.id("channels"),
+    // Optional: promote this user to admin in the same transaction before the
+    // removal proceeds. Lets the last admin leave in a single mutation instead
+    // of "promote, then leave" round-trips (one OCC commit, one invalidation
+    // pass). Ignored on DM/open channels — admin role isn't meaningful there.
+    transferAdminTo: v.optional(v.id("users")),
+  },
   returns: v.null(),
-  handler: async (ctx, { userId, channelId }) => {
+  handler: async (ctx, { userId, channelId, transferAdminTo }) => {
     const callerId = await requireUser(ctx);
 
     const channel = await ctx.db.get(channelId);
@@ -187,13 +195,36 @@ export const removeFromChannel = mutation({
       throw new ConvexError(`User id=${userId} is not part of channel id=${channelId}`);
     }
 
+    // Optional admin transfer: promote target in the same transaction. Only
+    // meaningful for closed channels (admin role is irrelevant on DM/open).
+    if (transferAdminTo && channel.type === ChannelType.CLOSED) {
+      if (transferAdminTo === userId) {
+        throw new ConvexError("Cannot transfer admin to the user being removed");
+      }
+      const targetMembership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", channelId).eq("userId", transferAdminTo),
+        )
+        .unique();
+      if (!targetMembership) {
+        throw new ConvexError("Transfer target is not a member of this channel");
+      }
+      if (targetMembership.role !== ChannelRole.ADMIN) {
+        await ctx.db.patch(targetMembership._id, { role: ChannelRole.ADMIN });
+      }
+    }
+
     if (channelMember.role === ChannelRole.ADMIN) {
+      // Only need to know whether another admin exists. `.take(2)` reads at
+      // most two rows; `.collect()` was reading every admin row just to check
+      // `length <= 1`.
       const channelAdmins = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel_role", (q) =>
           q.eq("channelId", channelId).eq("role", "admin"),
         )
-        .collect();
+        .take(2);
 
       if (channelAdmins.length <= 1) {
         throw new ConvexError(
@@ -252,12 +283,13 @@ export const changeMemberRole = mutation({
     if (channelMember.role === role) return null;
 
     if (channelMember.role === "admin") {
+      // See note on `.take(2)` in removeFromChannel — same rationale.
       const channelAdmins = await ctx.db
         .query("channelMembers")
         .withIndex("by_channel_role", (q) =>
           q.eq("channelId", channelMember.channelId).eq("role", "admin"),
         )
-        .collect();
+        .take(2);
 
       if (channelAdmins.length <= 1) {
         throw new ConvexError(

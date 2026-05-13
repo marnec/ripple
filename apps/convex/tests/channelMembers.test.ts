@@ -331,6 +331,89 @@ describe("channelMembers", () => {
       ).rejects.toThrow("Not authorized");
     });
 
+    it("transferAdminTo promotes target then removes last admin in one mutation", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await setupPrivateChannel(t, { workspaceId, userId });
+
+      const { userId: targetId } = await setupAuthenticatedUser(t, {
+        name: "Target",
+        email: "target@example.com",
+      });
+      await t.run(async (ctx) => {
+        await ctx.db.insert("workspaceMembers", { userId: targetId, workspaceId, role: "member" });
+        await ctx.db.insert("channelMembers", {
+          channelId, workspaceId, userId: targetId, role: ChannelRole.MEMBER,
+        });
+      });
+
+      await asUser.mutation(api.channelMembers.removeFromChannel, {
+        userId,
+        channelId,
+        transferAdminTo: targetId,
+      });
+
+      const members = await t.run(async (ctx) => {
+        return ctx.db
+          .query("channelMembers")
+          .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+          .collect();
+      });
+
+      expect(members).toHaveLength(1);
+      expect(members[0].userId).toBe(targetId);
+      expect(members[0].role).toBe(ChannelRole.ADMIN);
+    });
+
+    it("transferAdminTo rejects non-member target", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await setupPrivateChannel(t, { workspaceId, userId });
+
+      const { userId: outsiderId } = await setupAuthenticatedUser(t, {
+        name: "Outsider",
+        email: "outsider@example.com",
+      });
+      await t.run(async (ctx) => {
+        await ctx.db.insert("workspaceMembers", { userId: outsiderId, workspaceId, role: "member" });
+      });
+
+      await expect(
+        asUser.mutation(api.channelMembers.removeFromChannel, {
+          userId,
+          channelId,
+          transferAdminTo: outsiderId,
+        }),
+      ).rejects.toThrow("Transfer target is not a member");
+    });
+
+    it("transferAdminTo rejects when target equals the user being removed", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await setupPrivateChannel(t, { workspaceId, userId });
+
+      await expect(
+        asUser.mutation(api.channelMembers.removeFromChannel, {
+          userId,
+          channelId,
+          transferAdminTo: userId,
+        }),
+      ).rejects.toThrow("Cannot transfer admin to the user being removed");
+    });
+
+    it("still rejects last-admin removal when no transferAdminTo provided", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await setupPrivateChannel(t, { workspaceId, userId });
+
+      await expect(
+        asUser.mutation(api.channelMembers.removeFromChannel, {
+          userId,
+          channelId,
+        }),
+      ).rejects.toThrow("Cannot remove last");
+    });
+
     it("allows self-removal from channel", async () => {
       const t = createTestContext();
       const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
