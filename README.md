@@ -3,13 +3,6 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- [ ] External integrations
-    - [ ] github issues
-        - v1 deferrals (revisit after first ship):
-            - [ ] milestone ↔ cycle sync (opt-in, name-paired via stored `externalMilestoneId`)
-            - [ ] priority sync via configurable label template (e.g. `priority/high`)
-            - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
-    - [ ] add sentry
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding
@@ -50,3 +43,12 @@ keyboard accessiblity
     - [ ] cross-workspace overflow on `listByAssignee` for heavy users with assignments across many workspaces
     - [ ] kanban active-backlog overflow strategy when a project's uncompleted set grows past the read cap
     - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
+
+
+- [ ] External integrations
+    - [ ] github issues
+        - v1 deferrals (revisit after first ship):
+            - [ ] milestone ↔ cycle sync (opt-in, name-paired via stored `externalMilestoneId`)
+            - [ ] priority sync via configurable label template (e.g. `priority/high`)
+            - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
+    - [ ] add sentry
