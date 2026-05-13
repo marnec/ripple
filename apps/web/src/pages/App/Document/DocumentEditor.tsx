@@ -390,7 +390,25 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       <MobileHeaderTitle name={document.name} />
       <div className="flex-1 flex flex-col min-h-0 relative">
         <EditorRevealRipple />
-        <div className="flex-1 overflow-y-scroll scrollbar-stable pt-4">
+        <div
+          className="flex-1 overflow-y-scroll scrollbar-stable pt-4"
+          onMouseDown={(e) => {
+            // Clicking outside the editable area (padding / below last block /
+            // side margins) should drop the caret at the end of the document
+            // rather than reset it to the first block.
+            // BlockNote's `editor.focus()` alone lands at the top; we have to
+            // explicitly position the caret with setTextCursorPosition first.
+            const target = e.target as HTMLElement;
+            if (target.closest(".bn-editor")) return;
+            e.preventDefault();
+            const blocks = editor.document;
+            const lastBlock = blocks[blocks.length - 1];
+            if (lastBlock) {
+              editor.setTextCursorPosition(lastBlock, "end");
+            }
+            editor.focus();
+          }}
+        >
         <DocumentSpotlightFrame>
           <ReferencedBlocksHighlight
             blockIds={referencedBlockIds}

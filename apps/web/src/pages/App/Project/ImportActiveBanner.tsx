@@ -4,6 +4,7 @@
 // Lives between the project header and the page outlet (see
 // ProjectLayout). Renders nothing when no active job exists.
 
+import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useQuery } from "convex-helpers/react/cache";
@@ -16,8 +17,11 @@ interface Props {
 }
 
 export function ImportActiveBanner({ workspaceId, projectId }: Props) {
+  const isMobile = useIsMobile();
   const job = useQuery(api.taskImports.getActiveJobForProject, { projectId });
-  if (!job) return null;
+  // CSV import is a desktop-only flow (see ImportTasksButton); hide the banner
+  // on mobile so the import UI surface stays consistent.
+  if (isMobile || !job) return null;
 
   const pct =
     job.totalRows > 0 ? Math.round((job.processedRows / job.totalRows) * 100) : 0;

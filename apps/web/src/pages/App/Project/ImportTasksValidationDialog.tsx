@@ -86,7 +86,7 @@ export function ImportTasksValidationDialog({ open, rows, onOpenChange }: Props)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-5xl w-[min(96vw,72rem)]">
         <DialogHeader>
           <DialogTitle>CSV validation errors</DialogTitle>
           <DialogDescription>

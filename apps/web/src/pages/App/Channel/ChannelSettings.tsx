@@ -33,12 +33,14 @@ function ChannelSettingsContent({
   const channel = useQuery(api.channels.get, { id: channelId });
   const channelMembers = useQuery(api.channelMembers.membersByChannel, { channelId });
   const workspaceMembers = useWorkspaceMembers();
+  const workspaceMembersWithRoles = useQuery(api.workspaceMembers.membersWithRoles, { workspaceId });
   const currentUser = useViewer();
 
   if (
     channel === undefined ||
     channelMembers === undefined ||
     workspaceMembers === undefined ||
+    workspaceMembersWithRoles === undefined ||
     currentUser === undefined
   ) {
     return (
@@ -61,6 +63,17 @@ function ChannelSettingsContent({
   );
   const isAdmin = channel.type === "open"
     ? true
+    : currentMembership?.role === ChannelRole.ADMIN;
+
+  // Deletion authority must mirror channels.remove on the backend:
+  // open channels → workspace admins; closed channels → channel admins.
+  // (Without this, regular workspace members would see a Danger Zone in any
+  // open channel and hit a server-side "Not authorized" error on click.)
+  const workspaceRole = workspaceMembersWithRoles.find(
+    (m) => m.userId === currentUser._id,
+  )?.role;
+  const canDelete = channel.type === "open"
+    ? workspaceRole === "admin"
     : currentMembership?.role === ChannelRole.ADMIN;
 
   const channelMemberIds = new Set(channelMembers.map((m) => m.userId));
@@ -103,7 +116,7 @@ function ChannelSettingsContent({
 
       <ChannelNotificationSettings channelId={channelId} />
 
-      {isAdmin && !isDm && (
+      {canDelete && !isDm && (
         <>
           <Separator className="my-6" />
           <ChannelDangerZone

@@ -3,13 +3,6 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- leave channel logic (only for private?)
-
-- docs: clicking outside doc puts cursor on last position
-- fix layout shift for estimates in task details (inline it)
-- widen task import validation error dialog (hide all imports in mobile)
-- user facing error when a user attempts deleting a channel he doesn't have permission to (maybe prevent action altogether)
-
 - [ ] External integrations
     - [ ] github issues
     - [ ] add sentry
