@@ -42,7 +42,6 @@ export const membersByChannel = query({
     role: v.union(v.literal("admin"), v.literal("member")),
     name: v.string(),
     email: v.optional(v.string()),
-    lastReadAt: v.optional(v.number()),
   })),
   handler: async (ctx, { channelId }) => {
     await requireUser(ctx);
@@ -56,6 +55,44 @@ export const membersByChannel = query({
       ...member,
       name: member.name ?? member.email ?? "Unknown",
     } satisfies ChannelMember));
+  },
+});
+
+/**
+ * Returns true if the calling user is an admin of the channel AND no other
+ * admin exists. Used by the "Leave channel" UI to decide whether to require
+ * an admin transfer before proceeding (via `removeFromChannel`'s
+ * `transferAdminTo` arg).
+ *
+ * Cheap by design: at most one row read for the caller's membership and at
+ * most two rows read via `by_channel_role` (matches the `.take(2)` used in
+ * `removeFromChannel`'s last-admin check, so the UI can pre-flight the same
+ * condition the mutation will check).
+ *
+ * Returns false for DM/open channels — the concept doesn't apply.
+ */
+export const amILastAdmin = query({
+  args: { channelId: v.id("channels") },
+  returns: v.boolean(),
+  handler: async (ctx, { channelId }) => {
+    const userId = await requireUser(ctx);
+
+    const channel = await ctx.db.get(channelId);
+    if (!channel || channel.type !== "closed") return false;
+
+    const myMembership = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
+      .unique();
+    if (myMembership?.role !== ChannelRole.ADMIN) return false;
+
+    const admins = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_role", (q) =>
+        q.eq("channelId", channelId).eq("role", "admin"),
+      )
+      .take(2);
+    return admins.length === 1;
   },
 });
 

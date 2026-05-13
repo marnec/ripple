@@ -82,15 +82,41 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     userId: v.id("users"),
     role: channelRoleSchema,
-    lastReadAt: v.optional(v.number()),
     email: v.optional(v.string()), // denormalized from users.email — used for DM dedup when a user row is replaced
     name: v.optional(v.string()),  // denormalized from users displayName — avoids N+1 when rendering member lists; synced via the users trigger
+    // DEPRECATED: moved to userChannelState. Kept as v.optional so deploys
+    // accept production rows that still carry it. Drop after
+    // migrateChannelLastReadAtToUserChannelState (in runAll) has run on prod.
+    lastReadAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_channel", ["channelId"])
     .index("by_channel_user", ["channelId", "userId"])
     .index("by_workspace_user", ["workspaceId", "userId"])
     .index("by_channel_role", ["channelId", "role"]),
+
+  // Per-(user, channel) auxiliary state. Split from `channelMembers` because
+  // `lastReadAt` mutates on every channel visit and `channelMembers` is read
+  // by `membersByChannel` for every member of the channel — co-locating
+  // user-private hot writes with a widely-subscribed doc would invalidate
+  // every member's subscription on every visit by anyone. This table is only
+  // ever read for the calling user (`by_channel_user` / `by_workspace_user`),
+  // so writes here only invalidate the writer's own subscriptions.
+  userChannelState: defineTable({
+    userId: v.id("users"),
+    channelId: v.id("channels"),
+    workspaceId: v.id("workspaces"),
+    lastReadAt: v.optional(v.number()),
+    // Sidebar hide timestamp. Semantics depend on channel type — handled by
+    // the sidebar query, not by this field:
+    //   - DM: "hidden until a message newer than this arrives." Auto-unhide
+    //     on next message, no write needed.
+    //   - Open: "hidden until explicitly unhidden." Any value = stay hidden.
+    //   - Closed: ignored (closed channels are left, not hidden).
+    hiddenAt: v.optional(v.number()),
+  })
+    .index("by_channel_user", ["channelId", "userId"])
+    .index("by_workspace_user", ["workspaceId", "userId"]),
 
   channelJoinRequests: defineTable({
     workspaceId: v.id("workspaces"),

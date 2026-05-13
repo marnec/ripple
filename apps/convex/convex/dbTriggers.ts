@@ -825,6 +825,17 @@ triggers.register("channelMembers", async (ctx, change) => {
     );
   } else if (change.operation === "delete") {
     await onChannelMemberDelete(ctx, change.oldDoc.userId, change.oldDoc.channelId);
+
+    // Clean up the user's auxiliary state for this channel (unread tracking,
+    // sidebar hide). Cascade only handles channel-deletion; this covers the
+    // "user leaves channel" path. Idempotent — `.unique()` + null guard.
+    const state = await ctx.db
+      .query("userChannelState")
+      .withIndex("by_channel_user", (q) =>
+        q.eq("channelId", change.oldDoc.channelId).eq("userId", change.oldDoc.userId),
+      )
+      .unique();
+    if (state) await ctx.db.delete(state._id);
   }
 });
 

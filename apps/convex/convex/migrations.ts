@@ -130,6 +130,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillUserNodes,
   internal.migrations.backfillEdgeNodeIds,
   internal.migrations.backfillChannelMemberDenormalized,
+  internal.migrations.migrateChannelLastReadAtToUserChannelState,
   internal.migrations.backfillNotificationSubscriptions,
   internal.migrations.backfillDocumentTags,
   internal.migrations.backfillDiagramTags,
@@ -275,6 +276,62 @@ export const backfillChannelMemberDenormalized = migrations.define({
 export const runBackfillChannelMemberDenormalized = migrations.runner(
   internal.migrations.backfillChannelMemberDenormalized,
 );
+
+/**
+ * Move `lastReadAt` off `channelMembers` and onto `userChannelState`.
+ *
+ * `channelMembers` is read by `membersByChannel` (one sub per member of each
+ * channel). `lastReadAt` mutates on every channel visit, so co-locating it
+ * with the membership row invalidated every member's subscription on every
+ * visit by anyone — pure invalidation amplification. `userChannelState` is
+ * user-private, so writes only invalidate the writer's own subscriptions.
+ *
+ * Widen-migrate-narrow: this is the migrate step. After this migration
+ * reports `isDone: true` on all deployments, drop `lastReadAt` from the
+ * `channelMembers` validator in schema.ts.
+ *
+ * Run: npx convex run migrations:run '{"fn":"migrations:migrateChannelLastReadAtToUserChannelState"}'
+ */
+export const migrateChannelLastReadAtToUserChannelState = migrations.define({
+  table: "channelMembers",
+  migrateOne: async (ctx, member) => {
+    if (member.lastReadAt === undefined) return;
+
+    // Upsert into userChannelState. If a row already exists, keep the larger
+    // timestamp — covers the case where markRead has already written to the
+    // new table since the dual-state period began.
+    const existing = await ctx.db
+      .query("userChannelState")
+      .withIndex("by_channel_user", (q) =>
+        q.eq("channelId", member.channelId).eq("userId", member.userId),
+      )
+      .unique();
+
+    if (existing) {
+      if ((existing.lastReadAt ?? 0) < member.lastReadAt) {
+        await ctx.db.patch(existing._id, { lastReadAt: member.lastReadAt });
+      }
+    } else {
+      await ctx.db.insert("userChannelState", {
+        userId: member.userId,
+        channelId: member.channelId,
+        workspaceId: member.workspaceId,
+        lastReadAt: member.lastReadAt,
+      });
+    }
+
+    // Strip the field from the membership row. `replace` is the only way to
+    // remove an optional field — `patch` with `undefined` would leave it.
+    await ctx.db.replace(member._id, {
+      channelId: member.channelId,
+      workspaceId: member.workspaceId,
+      userId: member.userId,
+      role: member.role,
+      email: member.email,
+      name: member.name,
+    });
+  },
+});
 
 /**
  * Rename audit log action prefix from "task." to "tasks." for consistency

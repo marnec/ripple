@@ -3,15 +3,20 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- knowledge-graph
-    - explore pdf reading, annotation and embedding
+- leave channel logic (only for private?)
+
+- docs: clicking outside doc puts cursor on last position
+- fix layout shift for estimates in task details (inline it)
+- widen task import validation error dialog (hide all imports in mobile)
+- user facing error when a user attempts deleting a channel he doesn't have permission to (maybe prevent action altogether)
 
 - [ ] External integrations
     - [ ] github issues
     - [ ] add sentry
 
-- leave channel logic (only for private?)
-- consider favorite for channels too
+- knowledge-graph
+    - explore pdf reading, annotation and embedding
+
 
 - external ticketing system??: 
     - connected to project
@@ -33,8 +38,6 @@ keyboard accessiblity
     - [ ] AI document agent
     - [ ] AI tasks agent
 
-
-
 - partykit
     - [ ] share presence connection across tabs (BroadcastChannel/SharedWorker)
     - [ ] deduplicate token requests per resource across tabs
@@ -42,8 +45,6 @@ keyboard accessiblity
 - avatars:
     - [ ] user custom avatars: look at dicebear
     - [ ] facepile not using user avatar (investigate convex cost)
-
-
 
 - tag system follow-ups
     - [ ] cycle-scoped tag filter — `taskTags` already has room for a `[cycleId, tagId]` index when needed

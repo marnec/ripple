@@ -1487,6 +1487,33 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  userChannelState: {
+    document: {
+      channelId: Id<"channels">;
+      hiddenAt?: number;
+      lastReadAt?: number;
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"userChannelState">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "channelId"
+      | "hiddenAt"
+      | "lastReadAt"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel_user: ["channelId", "userId", "_creationTime"];
+      by_workspace_user: ["workspaceId", "userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   users: {
     document: {
       email?: string;

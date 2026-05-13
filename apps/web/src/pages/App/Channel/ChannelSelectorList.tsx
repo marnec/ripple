@@ -3,7 +3,7 @@ import { useAcknowledgedChannels } from "@/hooks/use-acknowledged-channels";
 
 import { useQuery } from "convex-helpers/react/cache";
 import { AnimatePresence, m } from "framer-motion";
-import { ChevronRight, Hash, MessageSquare, Plus } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Hash, MessageSquare, Plus } from "lucide-react";
 import { memo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
@@ -25,9 +25,15 @@ export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
   channelId: Id<"channels"> | undefined;
   onChannelSelect: (id: string | null) => void;
-  channels?: { _id: string; _creationTime: number; name: string; workspaceId: string; type: string }[];
+  channels?: { _id: string; _creationTime: number; name: string; workspaceId: string; type: string; isHidden: boolean }[];
   isOpen: boolean;
   onToggle: () => void;
+  /** Total hidden channels (across both Channels and DMs sections). Used to
+   *  render the "Show N hidden" footer. */
+  hiddenChannelCount?: number;
+  /** Whether the sidebar query currently includes hidden channels. */
+  includeHidden: boolean;
+  onToggleIncludeHidden: () => void;
 }
 
 export const ChannelSelectorList = memo(function ChannelSelectorList({
@@ -37,6 +43,9 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
   channels: channelsProp,
   isOpen,
   onToggle,
+  hiddenChannelCount = 0,
+  includeHidden,
+  onToggleIncludeHidden,
 }: ChannelSelectorListProps) {
   const [showCreateChannel, setShowCreateChannel] = useState(false);
   const { state: sidebarState, open: sidebarOpen, isMobile, setOpen } = useSidebar();
@@ -44,7 +53,9 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
 
   const navigate = useNavigate();
 
-  const channels = channelsProp as unknown as Doc<"channels">[] | undefined;
+  const channels = channelsProp as unknown as
+    | (Doc<"channels"> & { isHidden: boolean })[]
+    | undefined;
 
   const channelIds = channels?.map((c) => c._id).slice(0, 50) ?? [];
   const unreadCounts = useQuery(
@@ -63,7 +74,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
 
   // Build a map from id → Doc for live channels
   const channelMap = (() => {
-    const m = new Map<string, Doc<"channels">>();
+    const m = new Map<string, Doc<"channels"> & { isHidden: boolean }>();
     if (channels) for (const c of channels) m.set(c._id, c);
     return m;
   })();
@@ -113,6 +124,24 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
             </span>
           )}
         </SidebarMenuButton>
+        {hiddenChannelCount > 0 && (
+          // Sits left of the Plus action. Always visible (not showOnHover)
+          // because its presence is the only cue the user has hidden channels.
+          <SidebarMenuAction
+            className="right-7 text-muted-foreground"
+            onClick={() => {
+              autoAcknowledgeNext();
+              onToggleIncludeHidden();
+            }}
+          >
+            {includeHidden ? <EyeOff /> : <Eye />}
+            <span className="sr-only">
+              {includeHidden
+                ? "Hide hidden channels"
+                : `Show ${hiddenChannelCount} hidden channel${hiddenChannelCount === 1 ? "" : "s"}`}
+            </span>
+          </SidebarMenuAction>
+        )}
         <SidebarMenuAction showOnHover onClick={handleCreateChannel}>
           <Plus />
           <span className="sr-only">New Channel</span>
@@ -171,6 +200,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
                       }}
                       onManageChannel={navigateToChannelSettings}
                       onStartCall={navigateToVideoCall}
+                      onSelfChangeIntent={autoAcknowledgeNext}
                     />
                   </m.div>
                 );

@@ -288,6 +288,12 @@ export declare const api: {
       { channelId: Id<"channels">; userId: Id<"users"> },
       Id<"channelMembers">
     >;
+    amILastAdmin: FunctionReference<
+      "query",
+      "public",
+      { channelId: Id<"channels"> },
+      boolean
+    >;
     byChannel: FunctionReference<
       "query",
       "public",
@@ -316,7 +322,6 @@ export declare const api: {
         _id: Id<"channelMembers">;
         channelId: Id<"channels">;
         email?: string;
-        lastReadAt?: number;
         name: string;
         role: "admin" | "member";
         userId: Id<"users">;
@@ -326,7 +331,11 @@ export declare const api: {
     removeFromChannel: FunctionReference<
       "mutation",
       "public",
-      { channelId: Id<"channels">; userId: Id<"users"> },
+      {
+        channelId: Id<"channels">;
+        transferAdminTo?: Id<"users">;
+        userId: Id<"users">;
+      },
       null
     >;
   };
@@ -537,6 +546,20 @@ export declare const api: {
       "mutation",
       "public",
       { id: Id<"channels">; name?: string },
+      null
+    >;
+  };
+  channelVisibility: {
+    hideChannel: FunctionReference<
+      "mutation",
+      "public",
+      { channelId: Id<"channels"> },
+      null
+    >;
+    unhideChannel: FunctionReference<
+      "mutation",
+      "public",
+      { channelId: Id<"channels"> },
       null
     >;
   };
@@ -2753,11 +2776,12 @@ export declare const api: {
     get: FunctionReference<
       "query",
       "public",
-      { workspaceId: Id<"workspaces"> },
+      { includeHidden?: boolean; workspaceId: Id<"workspaces"> },
       {
         channels: Array<{
           _creationTime: number;
           _id: Id<"channels">;
+          isHidden: boolean;
           name: string;
           type: "open" | "closed" | "dm";
           workspaceId: Id<"workspaces">;
@@ -2774,6 +2798,7 @@ export declare const api: {
           name: string;
           tags?: Array<string>;
         }>;
+        hiddenChannelCount: number;
         projects: Array<{
           _creationTime: number;
           _id: Id<"projects">;
@@ -3613,6 +3638,20 @@ export declare const internal: {
       }
     >;
     migrateChannelIsPublicToType: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    migrateChannelLastReadAtToUserChannelState: FunctionReference<
       "mutation",
       "internal",
       {

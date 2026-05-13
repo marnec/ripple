@@ -15,7 +15,7 @@ import { useUserSettings } from "@/hooks/use-user-settings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSidebarSections } from "@/hooks/use-sidebar-sections";
 import type { QueryParams } from "@ripple/shared/types/routes";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
+import { useWorkspaceSidebar, useWorkspaceSidebarHiddenToggle } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutGroup, m } from "framer-motion";
 import { LayoutDashboard } from "lucide-react";
@@ -46,6 +46,7 @@ export function AppSidebar() {
   const workspaces = useQuery(api.workspaces.list);
   const activeWorkspace = useQuery(api.workspaces.get, workspaceId ? { id: workspaceId } : "skip");
   const sidebarData = useWorkspaceSidebar();
+  const { includeHidden, toggleIncludeHidden } = useWorkspaceSidebarHiddenToggle();
 
   const handleChannelSelect = (id: string | null) => {
     if (isMobile) setOpen(false);
@@ -135,6 +136,9 @@ export function AppSidebar() {
                     onChannelSelect={handleChannelSelect}
                     isOpen={isOpen("channels")}
                     onToggle={toggleChannels}
+                    hiddenChannelCount={sidebarData?.hiddenChannelCount ?? 0}
+                    includeHidden={includeHidden}
+                    onToggleIncludeHidden={toggleIncludeHidden}
                   />
                 </SidebarMenu>
               </SidebarGroup>
