@@ -28,6 +28,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "../../../components/ui/sidebar";
+import { preloadChatContainer } from "../preload";
 
 type DmChannel = {
   _id: string;
@@ -84,7 +85,13 @@ export const DmSelectorList = memo(function DmSelectorList({
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
+    <Collapsible
+      open={isOpen}
+      onOpenChange={onToggle}
+      render={<SidebarMenuItem />}
+      onMouseEnter={() => void preloadChatContainer()}
+      onFocus={() => void preloadChatContainer()}
+    >
       <SidebarMenuButton tooltip="Direct Messages">
         <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
           <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />

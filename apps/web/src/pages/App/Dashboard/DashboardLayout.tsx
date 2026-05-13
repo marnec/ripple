@@ -1,7 +1,9 @@
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CalendarDays, ListTodo } from "lucide-react";
+import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { preloadMyCalendarTab } from "../preload";
 
 // Tabs mirror ProjectLayout's structure; the index tab uses `end: true` so
 // "Tasks" doesn't stay highlighted when the user navigates into the
@@ -14,6 +16,14 @@ const tabs = [
 
 export function DashboardLayout() {
   const isMobile = useIsMobile();
+
+  // Warm the @schedule-x/* chunk in the background while MyTasksTab renders.
+  // Covers the non-admin auto-redirect path (no hover gesture available);
+  // admins typically also benefit since they reach this layout via the
+  // sidebar. Idempotent — see ./preload.ts.
+  useEffect(() => {
+    void preloadMyCalendarTab();
+  }, []);
 
   return (
     <div className="flex h-full w-full flex-col">

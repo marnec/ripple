@@ -23,6 +23,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
 import type { BrowsableResourceType as ResourceType, FavoritableResourceType as FavoritableType } from "@ripple/shared/types/resources";
+import { getResourcePreloader } from "../preload";
 
 type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; type?: string };
 
@@ -186,6 +187,12 @@ function ResourceListRow({
   };
 
   const to = subPath ? `${resource._id}/${subPath}` : `${resource._id}`;
+  // Warm the editor chunk on hover/focus. Every row in the list opens
+  // the same lazy route (DocumentEditor / DiagramPage / SpreadsheetPage /
+  // ChatContainer / ProjectLayout), so the preloader is idempotent and
+  // safe to call once per row mouseenter.
+  const preload = getResourcePreloader(resourceType);
+  const preloadHandler = () => void preload();
   const transitionStyle = !isChannel
     ? ({
         viewTransitionName: `--resource-${resource._id}`,
@@ -203,11 +210,13 @@ function ResourceListRow({
           isChannel ? "rounded-none" : "rounded-lg border border-border",
         )}
         style={transitionStyle}
+        onMouseEnter={preloadHandler}
       >
         <Link
           to={to}
           className="absolute inset-0 z-0 rounded-[inherit]"
           aria-label={resource.name}
+          onFocus={preloadHandler}
         />
         <Icon className="pointer-events-none h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="pointer-events-none flex-1 min-w-0 truncate font-medium">
@@ -277,6 +286,8 @@ function ResourceListRow({
       <Link
         to={to}
         className="flex w-full items-center gap-2.5 px-3 py-2.5 bg-card hover:bg-accent transition-colors text-sm h-14"
+        onMouseEnter={preloadHandler}
+        onFocus={preloadHandler}
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="flex-1 min-w-0 truncate font-medium">{resource.name}</span>
@@ -433,6 +444,10 @@ export function SearchResults({
   }
 
   // ── Desktop: card grid with always-visible star ───────────────────────────
+  // Same idempotent preloader as the list rows — warms the editor chunk
+  // before the user actually clicks through.
+  const preloadCard = getResourcePreloader(resourceType);
+  const preloadCardHandler = () => void preloadCard();
   return (
     <>
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -444,11 +459,13 @@ export function SearchResults({
             viewTransitionName: `--resource-${resource._id}`,
             viewTransitionClass: "resource-card",
           }}
+          onMouseEnter={preloadCardHandler}
         >
           <Link
             to={subPath ? `${resource._id}/${subPath}` : `${resource._id}`}
             className="absolute inset-0 z-0"
             aria-label={resource.name}
+            onFocus={preloadCardHandler}
           />
           <CardHeader className="pointer-events-none flex flex-row items-center gap-2 pr-9">
             <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />

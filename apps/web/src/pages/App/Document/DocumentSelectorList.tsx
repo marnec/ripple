@@ -11,6 +11,7 @@ import {
   useSidebar,
 } from "../../../components/ui/sidebar";
 import { preselectSearchTab } from "../Resources/sidebar-constants";
+import { preloadDocumentEditor } from "../preload";
 
 export type DocumentSelectorProps = {
   workspaceId: Id<"workspaces">;
@@ -42,7 +43,10 @@ export const DocumentSelectorList = memo(function DocumentSelectorList({
   };
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem
+      onMouseEnter={() => void preloadDocumentEditor()}
+      onFocus={() => void preloadDocumentEditor()}
+    >
       <SidebarMenuButton tooltip="Documents" onClick={handleHeaderClick} isActive={isListActive}>
         <File className="size-4" />
         <span className="font-medium">Documents</span>

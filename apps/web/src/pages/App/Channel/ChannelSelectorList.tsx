@@ -20,6 +20,7 @@ import {
 import { ChannelSelectorItem } from "./ChannelSelectorItem";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { SIDEBAR_ELEMENT_FADEIN_DELAY } from "../Resources/sidebar-constants";
+import { preloadChatContainer } from "../preload";
 
 export interface ChannelSelectorListProps {
   workspaceId: Id<"workspaces">;
@@ -102,7 +103,13 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
   };
 
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle} render={<SidebarMenuItem />}>
+    <Collapsible
+      open={isOpen}
+      onOpenChange={onToggle}
+      render={<SidebarMenuItem />}
+      onMouseEnter={() => void preloadChatContainer()}
+      onFocus={() => void preloadChatContainer()}
+    >
         <SidebarMenuButton tooltip="Channels" onClick={handleHeaderClick}>
           <CollapsibleTrigger render={<span role="button" className="shrink-0" />} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
               <ChevronRight className={`size-3.5 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />

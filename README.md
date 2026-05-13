@@ -3,6 +3,10 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
+- brief flash of old content when updating event name from the event details form;
+- we need to prevent focus outline on events the same way that we have done for tasks on kanban board
+- sidebar items should have cursor poitner
+
 - [ ] External integrations
     - [ ] github issues
     - [ ] add sentry

@@ -11,6 +11,7 @@ import {
   useSidebar,
 } from "../../../components/ui/sidebar";
 import { preselectSearchTab } from "../Resources/sidebar-constants";
+import { preloadSpreadsheetPage } from "../preload";
 
 export type SpreadsheetSelectorProps = {
   workspaceId: Id<"workspaces">;
@@ -41,7 +42,10 @@ export const SpreadsheetSelectorList = memo(function SpreadsheetSelectorList({
   };
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem
+      onMouseEnter={() => void preloadSpreadsheetPage()}
+      onFocus={() => void preloadSpreadsheetPage()}
+    >
       <SidebarMenuButton tooltip="Spreadsheets" onClick={handleHeaderClick} isActive={isListActive}>
         <Table2 className="size-4" />
         <span className="font-medium">Spreadsheets</span>

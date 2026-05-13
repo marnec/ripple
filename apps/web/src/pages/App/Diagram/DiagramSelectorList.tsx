@@ -11,6 +11,7 @@ import {
   useSidebar,
 } from "../../../components/ui/sidebar";
 import { preselectSearchTab } from "../Resources/sidebar-constants";
+import { preloadDiagramPage } from "../preload";
 
 export type DiagramSelectorProps = {
   workspaceId: Id<"workspaces">;
@@ -41,7 +42,10 @@ export const DiagramSelectorList = memo(function DiagramSelectorList({
   };
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem
+      onMouseEnter={() => void preloadDiagramPage()}
+      onFocus={() => void preloadDiagramPage()}
+    >
       <SidebarMenuButton tooltip="Diagrams" onClick={handleHeaderClick} isActive={isListActive}>
         <PenTool className="size-4" />
         <span className="font-medium">Diagrams</span>

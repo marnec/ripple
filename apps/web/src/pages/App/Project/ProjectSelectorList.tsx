@@ -9,6 +9,14 @@ import {
 } from "../../../components/ui/sidebar";
 import { CreateProjectDialog } from "./CreateProjectDialog";
 import { preselectSearchTab } from "../Resources/sidebar-constants";
+import { preloadProjectLayout, preloadProjectTasksPage } from "../preload";
+
+// Clicking a project lands on `/projects/:id/tasks`, so warming the
+// layout alone leaves the kanban chunk cold — preload both together.
+function preloadProject() {
+  void preloadProjectLayout();
+  void preloadProjectTasksPage();
+}
 
 export interface ProjectSelectorListProps {
   workspaceId: Id<"workspaces">;
@@ -31,7 +39,7 @@ export const ProjectSelectorList = memo(function ProjectSelectorList({
   };
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem onMouseEnter={preloadProject} onFocus={preloadProject}>
       <SidebarMenuButton tooltip="Projects" onClick={handleHeaderClick} isActive={isListActive}>
         <Folder className="size-4" />
         <span className="font-medium">Projects</span>

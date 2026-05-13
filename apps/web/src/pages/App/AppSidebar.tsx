@@ -5,6 +5,7 @@ import {
   SidebarGroup,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
@@ -18,7 +19,7 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useWorkspaceSidebar, useWorkspaceSidebarHiddenToggle } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutGroup, m } from "framer-motion";
-import { LayoutDashboard } from "lucide-react";
+import { CalendarDays, LayoutDashboard, ListTodo } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import { WorkspaceSwitcher } from "./Workspace/WorkspaceSwitcher";
@@ -31,6 +32,7 @@ import { SpreadsheetSelectorList } from "./Spreadsheet/SpreadsheetSelectorList";
 import { NavUser } from "@/pages/App/UserMenu";
 import { NotificationDrawer } from "@/components/NotificationDrawer";
 import { RecentsSidebarSection } from "./Recents/RecentsSidebarSection";
+import { preloadMyCalendarTab, preloadMyTasksTab } from "./preload";
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -104,6 +106,26 @@ export function AppSidebar() {
     void navigate(`/workspaces/${workspaceId}/dashboard`);
   };
 
+  const handleTasksClick = () => {
+    if (!workspaceId) return;
+    if (isMobile) setOpen(false);
+    void navigate(`/workspaces/${workspaceId}/dashboard`);
+  };
+
+  const handleCalendarClick = () => {
+    if (!workspaceId) return;
+    if (isMobile) setOpen(false);
+    void navigate(`/workspaces/${workspaceId}/dashboard/calendar`);
+  };
+
+  // Warm dashboard chunks on hover. The calendar chunk pulls in the
+  // @schedule-x/* packages, so this gives the bundle a head-start before
+  // the route mounts. Idempotent — see Dashboard/preload.ts.
+  const handleDashboardHover = () => {
+    void preloadMyTasksTab();
+    void preloadMyCalendarTab();
+  };
+
   // Active for /dashboard and any of its child routes (My Tasks, My Calendar).
   const isDashboardActive = location.pathname.includes("/dashboard");
 
@@ -168,7 +190,7 @@ export function AppSidebar() {
             <m.div layout="position" transition={{ duration: 0.2, ease: "easeOut" }}>
               <SidebarGroup className="py-0">
                 <SidebarMenu>
-                  <SidebarMenuItem>
+                  <SidebarMenuItem onMouseEnter={handleDashboardHover} onFocus={handleDashboardHover}>
                     <SidebarMenuButton
                       onClick={handleDashboardClick}
                       isActive={isDashboardActive}
@@ -177,6 +199,27 @@ export function AppSidebar() {
                       <LayoutDashboard />
                       <span>My Dashboard</span>
                     </SidebarMenuButton>
+                    {/* Right-side shortcuts to the dashboard tabs. The Calendar
+                        action is paired with the on-hover preload above so the
+                        @schedule-x/* chunk is already warm by the time it's
+                        clicked. */}
+                    <SidebarMenuAction
+                      showOnHover
+                      className="right-7"
+                      onClick={handleTasksClick}
+                      title="My Tasks"
+                    >
+                      <ListTodo />
+                      <span className="sr-only">My Tasks</span>
+                    </SidebarMenuAction>
+                    <SidebarMenuAction
+                      showOnHover
+                      onClick={handleCalendarClick}
+                      title="My Calendar"
+                    >
+                      <CalendarDays />
+                      <span className="sr-only">My Calendar</span>
+                    </SidebarMenuAction>
                   </SidebarMenuItem>
                   <ProjectSelectorList
                     workspaceId={workspaceId}
