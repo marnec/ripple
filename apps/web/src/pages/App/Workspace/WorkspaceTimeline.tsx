@@ -3,6 +3,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { AnimatePresence, m } from "framer-motion";
 import {
   ArrowRight,
+  CalendarDays,
   Calendar,
   CircleDot,
   Clock,
@@ -12,10 +13,14 @@ import {
   Hash,
   Link2,
   ListTodo,
+  MessageSquare,
+  MessageSquarePlus,
   Minus,
   Pencil,
   PenTool,
   Plus,
+  Send,
+  Share2,
   Shield,
   Table2,
   Tag,
@@ -24,6 +29,7 @@ import {
   UserPlus,
   UserMinus,
   UserRound,
+  XCircle,
 } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -54,6 +60,8 @@ const RESOURCE_LABEL: Record<string, string> = {
   cycles: "cycle",
   channelMembers: "member",
   workspaceInvites: "invite",
+  calendarEvents: "event",
+  shares: "share link",
 };
 
 function getActionIcon(action: string) {
@@ -62,13 +70,20 @@ function getActionIcon(action: string) {
   switch (verb) {
     case "created": return <Plus className={iconClass} />;
     case "deleted":
+    case "cancelled":
     case "cascade_deleted": return <Trash2 className={iconClass} />;
     case "renamed":
     case "title_change": return <Type className={iconClass} />;
     case "invited":
     case "accepted":
-    case "member_added": return <UserPlus className={iconClass} />;
-    case "member_removed": return <UserMinus className={iconClass} />;
+    case "member_added":
+    case "invitee_added":
+    case "join_requested": return <UserPlus className={iconClass} />;
+    case "declined":
+    case "join_denied":
+    case "member_removed":
+    case "member_left":
+    case "invitee_removed": return <UserMinus className={iconClass} />;
     case "role_changed": return <Shield className={iconClass} />;
     case "status_change": return <CircleDot className={iconClass} />;
     case "priority_change": return <Gauge className={iconClass} />;
@@ -77,11 +92,23 @@ function getActionIcon(action: string) {
     case "label_remove": return <Tag className={iconClass} />;
     case "due_date_change":
     case "start_date_change": return <Calendar className={iconClass} />;
+    case "dates_changed": return <CalendarDays className={iconClass} />;
     case "estimate_change": return <Clock className={iconClass} />;
     case "dependency_add":
     case "dependency_remove": return <Link2 className={iconClass} />;
+    case "comment_create": return <Send className={iconClass} />;
     case "comment_edit": return <Pencil className={iconClass} />;
     case "comment_delete": return <Trash2 className={iconClass} />;
+    case "dm_created": return <MessageSquarePlus className={iconClass} />;
+    case "updated": return <Pencil className={iconClass} />;
+    case "task_added": return <Plus className={iconClass} />;
+    case "task_removed": return <Minus className={iconClass} />;
+    case "share_created":
+    case "share_renamed": return <Share2 className={iconClass} />;
+    case "share_revoked": return <XCircle className={iconClass} />;
+    case "document_mention":
+    case "description_mention":
+    case "task_mention": return <MessageSquare className={iconClass} />;
     default: return <Minus className={iconClass} />;
   }
 }
@@ -108,6 +135,8 @@ function getResourceIcon(resourceType: string | undefined, isDark: boolean) {
     case "channels": return <Hash className={iconClass} style={style} />;
     case "projects": return <Folder className={iconClass} style={style} />;
     case "tasks": return <ListTodo className={iconClass} style={style} />;
+    case "calendarEvents": return <Calendar className={iconClass} />;
+    case "shares": return <Share2 className={iconClass} />;
     default: return null;
   }
 }
@@ -210,10 +239,53 @@ function formatAction(entry: TimelineEntry): React.ReactNode {
       return <>{actor} added a dependency{onResource}</>;
     case "dependency_remove":
       return <>{actor} removed a dependency{onResource}</>;
+    case "comment_create":
+      return <>{actor} commented{onResource}</>;
     case "comment_edit":
       return <>{actor} edited a comment{onResource}</>;
     case "comment_delete":
       return <>{actor} deleted a comment{onResource}</>;
+    // Calendar events
+    case "updated":
+      return <>{actor} updated {label} {name}</>;
+    case "cancelled":
+      return <>{actor} cancelled {label} {name ?? <span className="font-medium">{oldValue}</span>}</>;
+    case "invitee_added":
+      return <>{actor} added an invitee{resourceName ? <> to {name}</> : null}</>;
+    case "invitee_removed":
+      return <>{actor} removed an invitee{resourceName ? <> from {name}</> : null}</>;
+    // Workspace invite decline
+    case "declined":
+      return <>{actor} declined an invite</>;
+    // Workspace member leave (self)
+    case "member_left":
+      return <>{actor} left the workspace</>;
+    // Channel join flow
+    case "join_requested":
+      return <>{actor} requested to join {name}</>;
+    case "join_denied":
+      return <>{actor} denied a join request{resourceName ? <> for {name}</> : null}</>;
+    case "dm_created":
+      return <>{actor} started a DM</>;
+    // Cycle field changes
+    case "dates_changed":
+      return <>{actor} updated dates on {label} {name}</>;
+    case "task_added":
+      return <>{actor} added a task to {label} {name}</>;
+    case "task_removed":
+      return <>{actor} removed a task from {label} {name}</>;
+    // Shares
+    case "share_created":
+      return <>{actor} created a share link{resourceName ? <> for {name}</> : null}</>;
+    case "share_renamed":
+      return <>{actor} renamed a share link <span className="font-medium">{oldValue}</span> {arrow} <span className="font-medium">{newValue}</span></>;
+    case "share_revoked":
+      return <>{actor} revoked a share link{resourceName ? <> for {name}</> : null}</>;
+    // Mentions
+    case "document_mention":
+    case "description_mention":
+    case "task_mention":
+      return <>{actor} mentioned someone{onResource}</>;
     case "cascade_deleted": {
       const summary = formatCascadeSummary(entry.cascadeSummary);
       return <>{actor} triggered cascade deletion{summary ? <span className="text-muted-foreground"> — {summary}</span> : null}</>;

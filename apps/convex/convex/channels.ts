@@ -429,6 +429,12 @@ export const createDm = mutation({
       name: otherName,
     });
 
+    await logActivity(ctx, {
+      userId, resourceType: "channels", resourceId: channelId,
+      action: "dm_created", newValue: otherName,
+      resourceName: dmName, scope: workspaceId,
+    });
+
     return channelId;
   },
 });
@@ -562,6 +568,12 @@ export const requestJoin = mutation({
       title: `${getUserDisplayName(user)} wants to join #${channel.name}`,
       body: "Open notifications to approve or deny.",
       url: `/workspaces/${channel.workspaceId}`,
+    });
+
+    await logActivity(ctx, {
+      userId, resourceType: "channels", resourceId: channelId,
+      action: "join_requested", resourceName: channel.name,
+      scope: channel.workspaceId,
     });
 
     return null;
@@ -761,6 +773,12 @@ export const denyJoinRequest = mutation({
       title: `Your request to join #${channel.name} was declined`,
       body: "Ask the channel admins for more information.",
       url: `/workspaces/${request.workspaceId}`,
+    });
+
+    await logActivity(ctx, {
+      userId: adminId, resourceType: "channels", resourceId: channel._id,
+      action: "join_denied", resourceName: channel.name,
+      scope: request.workspaceId,
     });
 
     return null;

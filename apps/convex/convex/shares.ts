@@ -9,6 +9,7 @@ import {
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { requireUser, requireWorkspaceMember } from "./authHelpers";
+import { logActivity } from "./auditLog";
 import { generateShareId, sanitizeGuestName } from "./utils/shareIds";
 import { signToken } from "./tokenSigning";
 import { rateLimiter } from "./rateLimits";
@@ -121,6 +122,28 @@ async function resolveResourceWorkspaceId(
 }
 
 /**
+ * Resolve a human-readable label for a shared resource — used to give the
+ * audit log entry context ("created a share link for <name>") without
+ * forcing every consumer of the timeline to do an extra lookup.
+ */
+async function resolveResourceLabel(
+  ctx: { db: import("./_generated/server").QueryCtx["db"] },
+  resourceType: ShareResourceType,
+  resourceId: string,
+): Promise<string | undefined> {
+  if (resourceType === "channel") {
+    const c = await ctx.db.get(resourceId as Id<"channels">);
+    return c?.name;
+  }
+  if (resourceType === "calendarEvent") {
+    const e = await ctx.db.get(resourceId as Id<"calendarEvents">);
+    return e?.title;
+  }
+  const r = await ctx.db.get(resourceId as Id<"documents">);
+  return (r as { name?: string } | null)?.name;
+}
+
+/**
  * Look up a share row by its public shareId. Uses `.first()` instead of
  * `.unique()` so an astronomically-unlikely collision (two rows with the
  * same shareId, which `createShare`'s retry loop already defends against)
@@ -194,6 +217,16 @@ export const createShare = mutation({
         expiresAt,
         name: cleanName,
       });
+
+      const resourceLabel = await resolveResourceLabel(ctx, resourceType, resourceId);
+      await logActivity(ctx, {
+        userId, resourceType: "shares", resourceId: shareId,
+        action: "share_created",
+        newValue: accessLevel,
+        resourceName: cleanName ?? resourceLabel,
+        scope: workspaceId,
+      });
+
       return { shareId };
     }
     throw new ConvexError("Failed to allocate share id");
@@ -223,6 +256,18 @@ export const renameShare = mutation({
     const cleanName = sanitizeShareName(name);
     // Convex `patch` with `undefined` clears the optional field.
     await ctx.db.patch(share._id, { name: cleanName });
+
+    const userId = await requireUser(ctx);
+    const resourceLabel = await resolveResourceLabel(ctx, share.resourceType, share.resourceId);
+    await logActivity(ctx, {
+      userId, resourceType: "shares", resourceId: share.shareId,
+      action: "share_renamed",
+      oldValue: share.name ?? resourceLabel,
+      newValue: cleanName ?? resourceLabel,
+      resourceName: cleanName ?? resourceLabel,
+      scope: share.workspaceId,
+    });
+
     return null;
   },
 });
@@ -266,6 +311,15 @@ export const revokeShare = mutation({
 
     if (share.revokedAt === undefined) {
       await ctx.db.patch(share._id, { revokedAt: Date.now() });
+
+      const userId = await requireUser(ctx);
+      const resourceLabel = await resolveResourceLabel(ctx, share.resourceType, share.resourceId);
+      await logActivity(ctx, {
+        userId, resourceType: "shares", resourceId: share.shareId,
+        action: "share_revoked",
+        resourceName: share.name ?? resourceLabel,
+        scope: share.workspaceId,
+      });
     }
     return null;
   },

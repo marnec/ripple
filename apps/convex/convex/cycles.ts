@@ -97,7 +97,7 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { cycleId, name, description, startDate, dueDate, status }) => {
-    const { resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
+    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
     const patch: Record<string, unknown> = {};
     if (name !== undefined) patch.name = name;
@@ -125,6 +125,33 @@ export const update = mutation({
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(cycleId, patch);
+    }
+
+    // Log activity: rename and date changes get their own entries so the
+    // timeline shows what actually changed. Description-only edits stay
+    // silent (same convention as projects/workspaces).
+    const finalName = name ?? cycle.name;
+    if (name !== undefined && name !== cycle.name) {
+      await logActivity(ctx, {
+        userId, resourceType: "cycles", resourceId: cycleId,
+        action: "renamed", oldValue: cycle.name, newValue: name,
+        resourceName: finalName, scope: cycle.workspaceId,
+      });
+    }
+    if (datesChanged) {
+      const fmt = (s: string | undefined) =>
+        s ? s : "";
+      const oldRange = `${fmt(cycle.startDate)}${cycle.startDate || cycle.dueDate ? " – " : ""}${fmt(cycle.dueDate)}`.trim();
+      const newRange = `${fmt(newStartDate)}${newStartDate || newDueDate ? " – " : ""}${fmt(newDueDate)}`.trim();
+      if (oldRange !== newRange) {
+        await logActivity(ctx, {
+          userId, resourceType: "cycles", resourceId: cycleId,
+          action: "dates_changed",
+          oldValue: oldRange || undefined,
+          newValue: newRange || undefined,
+          resourceName: finalName, scope: cycle.workspaceId,
+        });
+      }
     }
 
     return null;
@@ -226,6 +253,13 @@ export const addTask = mutation({
       addedBy: userId,
     });
 
+    const task = await ctx.db.get(taskId);
+    await logActivity(ctx, {
+      userId, resourceType: "cycles", resourceId: cycleId,
+      action: "task_added", newValue: task?.title,
+      resourceName: cycle.name, scope: cycle.workspaceId,
+    });
+
     return null;
   },
 });
@@ -237,14 +271,21 @@ export const removeTask = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { cycleId, taskId }) => {
-    await requireResourceMember(ctx, "cycles", cycleId);
+    const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
     const ct = await ctx.db
       .query("cycleTasks")
       .withIndex("by_cycle_task", (q) => q.eq("cycleId", cycleId).eq("taskId", taskId))
       .first();
     if (ct) {
+      const task = await ctx.db.get(taskId);
       await ctx.db.delete(ct._id);
+
+      await logActivity(ctx, {
+        userId, resourceType: "cycles", resourceId: cycleId,
+        action: "task_removed", oldValue: task?.title,
+        resourceName: cycle.name, scope: cycle.workspaceId,
+      });
     }
 
     return null;

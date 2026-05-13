@@ -16,7 +16,8 @@ type ResourceType =
   | "cycles"
   | "channelMembers"
   | "workspaceInvites"
-  | "calendarEvents";
+  | "calendarEvents"
+  | "shares";
 
 export async function logActivity(
   ctx: MutationCtx,
@@ -31,19 +32,31 @@ export async function logActivity(
     scope?: string;
   },
 ) {
-  await auditLog.log(ctx, {
-    action: `${args.resourceType}.${args.action}`,
-    actorId: args.userId.toString(),
-    resourceType: args.resourceType,
-    resourceId: args.resourceId,
-    severity: "info",
-    metadata: {
-      resourceName: args.resourceName,
-      oldValue: args.oldValue,
-      newValue: args.newValue,
-    },
-    scope: args.scope,
-  });
+  // Failure isolation: audit logging must never abort a user-facing
+  // mutation. The component already defers its expensive aggregate
+  // updates internally, so the only remaining failure surface is the
+  // single append-only insert into `auditLogs` — which we'd rather
+  // drop than have take the whole mutation down with it.
+  try {
+    await auditLog.log(ctx, {
+      action: `${args.resourceType}.${args.action}`,
+      actorId: args.userId.toString(),
+      resourceType: args.resourceType,
+      resourceId: args.resourceId,
+      severity: "info",
+      metadata: {
+        resourceName: args.resourceName,
+        oldValue: args.oldValue,
+        newValue: args.newValue,
+      },
+      scope: args.scope,
+    });
+  } catch (err) {
+    console.error(
+      `[auditLog] failed to log ${args.resourceType}.${args.action}`,
+      err,
+    );
+  }
 }
 
 export async function logTaskActivity(

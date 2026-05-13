@@ -189,5 +189,12 @@ export const decline = mutation({
     await ctx.db.patch(inviteId, {
       status: InviteStatus.DECLINED,
     });
+
+    await logActivity(ctx, {
+      userId, resourceType: "workspaceInvites", resourceId: inviteId,
+      action: "declined", scope: invite.workspaceId,
+    });
+
+    return null;
   },
 });

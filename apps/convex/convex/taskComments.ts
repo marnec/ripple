@@ -67,6 +67,15 @@ export const create = mutation({
       deleted: false,
     });
 
+    // Log comment creation activity
+    await logTaskActivity(ctx, {
+      taskId,
+      userId,
+      workspaceId: task.workspaceId,
+      type: "comment_create",
+      taskTitle: task.title,
+    });
+
     // Schedule mention notifications after database write
     const mentionedUserIds = extractMentionedUserIds(body);
     const filteredMentions = mentionedUserIds.filter(id => id !== userId);

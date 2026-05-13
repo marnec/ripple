@@ -1200,6 +1200,17 @@ export const addInvitees = mutation({
       guestRows: newGuestRows,
     });
 
+    const addedCount = newUsers.length + newEmails.length;
+    if (addedCount > 0) {
+      await logActivity(ctx, {
+        userId, resourceType: "calendarEvents", resourceId: event._id,
+        action: "invitee_added",
+        newValue: String(addedCount),
+        resourceName: event.title,
+        scope: event.workspaceId,
+      });
+    }
+
     return null;
   },
 });
@@ -1291,6 +1302,14 @@ export const removeInvitee = mutation({
     // matching `invites` edge in the graph.
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.delete(invitee._id);
+
+    await logActivity(ctx, {
+      userId, resourceType: "calendarEvents", resourceId: event._id,
+      action: "invitee_removed",
+      resourceName: event.title,
+      scope: event.workspaceId,
+    });
+
     return null;
   },
 });
