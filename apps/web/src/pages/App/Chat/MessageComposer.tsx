@@ -338,7 +338,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, [channelId]);
 
   return (
-    <div className="flex shrink-0 sm:flex-col flex-col-reverse p-2 pb-[calc(0.5rem+var(--safe-area-bottom))] max-w-full border-t gap-2">
+    <div className="flex shrink-0 sm:flex-col flex-col-reverse p-4 pb-[calc(0.5rem+var(--safe-area-bottom))] max-w-full border-t gap-2">
       <div className="flex justify-between items-center">
         <FormattingToolbar
           editor={editor}
