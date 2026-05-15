@@ -64,6 +64,26 @@ type TimelineItem = {
 };
 
 
+function formatRelativeTimestamp(ts: number): string {
+  const now = Date.now();
+  const diff = Math.max(0, now - ts);
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return "now";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d`;
+  const d = new Date(ts);
+  const nowD = new Date(now);
+  const sameYear = d.getFullYear() === nowD.getFullYear();
+  const month = d.toLocaleString(undefined, { month: "short" });
+  return sameYear
+    ? `${month} ${d.getDate()}`
+    : `${month} ${d.getDate()}, ${String(d.getFullYear()).slice(2)}`;
+}
+
 function getActivityIcon(type: string) {
   switch (type) {
     case "created": return <Plus className="h-3 w-3" />;
@@ -217,8 +237,8 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
         <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
         <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "comments")}>
           <TabsList className="h-7">
-            <TabsTrigger value="all" className="text-xs px-2 py-0.5">All</TabsTrigger>
             <TabsTrigger value="comments" className="text-xs px-2 py-0.5">Comments</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs px-2 py-0.5">All</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -228,44 +248,46 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
         ref={listRef}
         className={
           fillHeight
-            ? "relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
-            : "relative"
+            ? "lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+            : ""
         }
       >
-        {/* Vertical connector line */}
-        {filteredItems.length > 1 && (
-          <div className="absolute left-2.75 top-3 bottom-3 w-px bg-border" />
-        )}
-        <div className="space-y-1">
-          {filteredItems.length === 0 ? (
-            filter === "all" ? (
-              <p className="text-sm text-muted-foreground">No activity yet</p>
-            ) : null
-          ) : (
-            filteredItems.map((item: TimelineItem) =>
-              item.kind === "comment" ? (
-                <CommentItem
-                  key={item._id}
-                  item={item}
-                  currentUserId={currentUserId}
-                  editingCommentId={editingCommentId}
-                  workspaceMembers={workspaceMembers}
-                  workspaceId={workspaceId}
-                  uploadFile={uploadFile}
-                  onEdit={setEditingCommentId}
-                  onDelete={handleDelete}
-                  onSave={(id, body) => {
-                    void updateComment({ id, body }).then(() => {
-                      setEditingCommentId(null);
-                    });
-                  }}
-                  onCancelEdit={() => setEditingCommentId(null)}
-                />
-              ) : (
-                <ActivityItem key={item._id} item={item} />
-              )
-            )
+        <div className="relative">
+          {/* Vertical connector line — sits inside the content box so it spans full scroll height. */}
+          {filteredItems.length > 1 && (
+            <div className="absolute left-3 top-3 bottom-3 -ml-px w-px bg-border" />
           )}
+          <div className="space-y-1">
+            {filteredItems.length === 0 ? (
+              filter === "all" ? (
+                <p className="text-sm text-muted-foreground">No activity yet</p>
+              ) : null
+            ) : (
+              filteredItems.map((item: TimelineItem) =>
+                item.kind === "comment" ? (
+                  <CommentItem
+                    key={item._id}
+                    item={item}
+                    currentUserId={currentUserId}
+                    editingCommentId={editingCommentId}
+                    workspaceMembers={workspaceMembers}
+                    workspaceId={workspaceId}
+                    uploadFile={uploadFile}
+                    onEdit={setEditingCommentId}
+                    onDelete={handleDelete}
+                    onSave={(id, body) => {
+                      void updateComment({ id, body }).then(() => {
+                        setEditingCommentId(null);
+                      });
+                    }}
+                    onCancelEdit={() => setEditingCommentId(null)}
+                  />
+                ) : (
+                  <ActivityItem key={item._id} item={item} />
+                )
+              )
+            )}
+          </div>
         </div>
       </div>
 
@@ -305,14 +327,17 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
 function ActivityItem({ item }: { item: TimelineItem }) {
   return (
     <div className="relative flex items-center gap-2 py-1">
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground z-10">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ring-2 ring-background z-10">
         {getActivityIcon(item.type ?? "")}
       </div>
       <div className="flex-1 min-w-0 text-sm text-muted-foreground leading-6">
         {getActivityDescription(item)}
       </div>
-      <span className="text-xs text-muted-foreground/60 shrink-0 leading-6">
-        {new Date(item._creationTime).toLocaleString()}
+      <span
+        className="text-xs text-muted-foreground/60 shrink-0 leading-6"
+        title={new Date(item._creationTime).toLocaleString()}
+      >
+        {formatRelativeTimestamp(item._creationTime)}
       </span>
     </div>
   );
@@ -348,7 +373,7 @@ function CommentItem({
   return (
     <div className="group relative flex gap-2 py-1">
       {/* Avatar — same 6x6 size as activity dots */}
-      <Avatar className="h-6 w-6 shrink-0 z-10">
+      <Avatar className="h-6 w-6 shrink-0 ring-2 ring-background z-10">
         {item.userImage && <AvatarImage src={item.userImage} alt={item.userName} />}
         <AvatarFallback className="text-[10px]">
           {item.userName.slice(0, 2).toUpperCase()}
@@ -360,8 +385,11 @@ function CommentItem({
         <div className="flex items-center gap-2 leading-6">
           <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" />
           <span className="font-medium text-sm flex-1 min-w-0">{item.userName}</span>
-          <span className="text-xs text-muted-foreground/60 shrink-0">
-            {new Date(item._creationTime).toLocaleString()}
+          <span
+            className="text-xs text-muted-foreground/60 shrink-0"
+            title={new Date(item._creationTime).toLocaleString()}
+          >
+            {formatRelativeTimestamp(item._creationTime)}
           </span>
         </div>
 

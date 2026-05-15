@@ -136,9 +136,9 @@ function TaskDetailPageContent({
       <MobileHeaderTitle name={detail.titleValue} />
 
       <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
-        <div className="mx-auto flex w-full max-w-7xl flex-col lg:h-full lg:flex-row">
+        <div className="mx-auto flex w-full max-w-8xl flex-col lg:h-full lg:flex-row">
           <div className="min-w-0 lg:h-full lg:flex-2 lg:overflow-y-auto">
-            <div className="space-y-5 px-3 pt-2 pb-6 md:space-y-8 md:px-6 md:pt-6 lg:pr-8">
+            <div className="space-y-5 px-3 pt-2 pb-4 md:space-y-8 md:px-4 md:pt-6 lg:pr-8">
               {isMobile && (
                 <div className="mb-4 md:mb-6">
                   <Input

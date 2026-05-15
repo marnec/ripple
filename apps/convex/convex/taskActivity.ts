@@ -77,12 +77,14 @@ export const timeline = query({
       users.map((u, i) => [allUserIds[i] as string, u]),
     );
 
-    // Build unified timeline items
-    const activityItems = auditEntries.map((entry) => {
+    // Build unified timeline items. Skip `comment_create` audit entries — the comment itself already
+    // represents that event in the timeline; the audit row would just duplicate it as a generic "made a change".
+    const activityItems = auditEntries.flatMap((entry) => {
+      const type = entry.action.startsWith("tasks.") ? entry.action.slice(6) : entry.action;
+      if (type === "comment_create") return [];
       const user = entry.actorId ? userMap.get(entry.actorId) : undefined;
       const meta = (entry.metadata ?? {}) as { oldValue?: string; newValue?: string };
-      const type = entry.action.startsWith("tasks.") ? entry.action.slice(6) : entry.action;
-      return {
+      return [{
         kind: "activity" as const,
         _id: entry._id,
         _creationTime: entry.timestamp,
@@ -92,7 +94,7 @@ export const timeline = query({
         type,
         oldValue: meta.oldValue,
         newValue: meta.newValue,
-      };
+      }];
     });
 
     const commentItems = comments.map((c) => {
