@@ -72,7 +72,7 @@ export function TaskDetailSheet({
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
-          className="w-full scrollbar-stable outline-none"
+          className="w-full overflow-hidden scrollbar-stable outline-none"
           style={{ maxWidth: "44rem" }}
           finalFocus={false}
         >
@@ -83,7 +83,7 @@ export function TaskDetailSheet({
             </div>
           ) : (
             <>
-              <SheetHeader className="pr-20 gap-3">
+              <SheetHeader className="shrink-0 pr-20 gap-3">
                 <div className="flex items-center gap-2">
                   {(() => {
                     const taskIdStr = formatTaskId(task.projectKey, task.number);
@@ -129,7 +129,7 @@ export function TaskDetailSheet({
                 </div>
               </SheetHeader>
 
-              <div className="space-y-5 px-4 pb-4">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-5 px-4 pb-4">
                 <TaskProperties
                   task={task}
                   statuses={detail.statuses!}

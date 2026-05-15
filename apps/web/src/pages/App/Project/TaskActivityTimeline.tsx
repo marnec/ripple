@@ -21,7 +21,7 @@ import {
   Gauge,
   Minus,
 } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { BlockNoteView } from "@blocknote/shadcn";
@@ -43,6 +43,8 @@ type TaskActivityTimelineProps = {
   workspaceId: Id<"workspaces">;
   /** Pre-fetched workspace members — avoids a duplicate query when parent already has them. */
   members?: WorkspaceMemberSummary[];
+  /** On lg+, pin header & composer and scroll only the list. Requires a parent with a defined height. */
+  fillHeight?: boolean;
 };
 
 type TimelineItem = {
@@ -130,7 +132,7 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
   }
 }
 
-export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp }: TaskActivityTimelineProps) {
+export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, fillHeight = false }: TaskActivityTimelineProps) {
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
   // Use pre-fetched members when available; fall back to workspace context
   const contextMembers = useWorkspaceMembers();
@@ -178,18 +180,40 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     void removeComment({ id: commentId });
   };
 
+  const filteredItems = timeline === undefined
+    ? []
+    : filter === "comments"
+      ? timeline.filter((item: TimelineItem) => item.kind === "comment")
+      : timeline;
+
+  const listRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!fillHeight || filter !== "all") return;
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [fillHeight, filter, filteredItems.length]);
+
   if (timeline === undefined || workspaceMembers === undefined) {
     return null;
   }
 
-  const filteredItems = filter === "comments"
-    ? timeline.filter((item: TimelineItem) => item.kind === "comment")
-    : timeline;
-
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div
+      className={
+        fillHeight
+          ? "animate-fade-in space-y-4 lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:space-y-0"
+          : "animate-fade-in space-y-4"
+      }
+    >
       {/* Header with filter */}
-      <div className="flex items-center justify-between">
+      <div
+        className={
+          fillHeight
+            ? "flex items-center justify-between lg:mb-3 lg:shrink-0 lg:border-b lg:pb-3"
+            : "flex items-center justify-between"
+        }
+      >
         <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
         <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "comments")}>
           <TabsList className="h-7">
@@ -200,14 +224,23 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
       </div>
 
       {/* Timeline items with connector line */}
-      <div className="relative">
+      <div
+        ref={listRef}
+        className={
+          fillHeight
+            ? "relative lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+            : "relative"
+        }
+      >
         {/* Vertical connector line */}
         {filteredItems.length > 1 && (
           <div className="absolute left-2.75 top-3 bottom-3 w-px bg-border" />
         )}
         <div className="space-y-1">
           {filteredItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No activity yet</p>
+            filter === "all" ? (
+              <p className="text-sm text-muted-foreground">No activity yet</p>
+            ) : null
           ) : (
             filteredItems.map((item: TimelineItem) =>
               item.kind === "comment" ? (
@@ -237,7 +270,14 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
       </div>
 
       {/* Comment input */}
-      <div className="space-y-2" onKeyDown={handleKeyDown}>
+      <div
+        className={
+          fillHeight
+            ? "space-y-2 lg:mt-3 lg:shrink-0 lg:border-t lg:pt-3"
+            : "space-y-2"
+        }
+        onKeyDown={handleKeyDown}
+      >
         <div className="task-comment-editor border rounded-md p-2">
           <BlockNoteView
             editor={editor}
@@ -341,25 +381,23 @@ function CommentItem({
             <CommentBody body={item.body ?? ""} />
             {/* Edit/delete — bottom-right of comment box */}
             {item.userId === currentUserId && (
-              <div className="absolute bottom-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button
-                  variant="ghost"
-                  size="icon"
+              <div className="absolute bottom-1 right-1 flex gap-1.5 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                <button
+                  type="button"
                   onClick={() => onEdit(commentId)}
-                  className="h-5 w-5"
+                  className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus:outline-none focus-visible:outline-none"
                   title="Edit comment"
                 >
-                  <Pencil className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => onDelete(commentId)}
-                  className="h-5 w-5 text-destructive hover:text-destructive"
+                  className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-destructive outline-none hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:outline-none"
                   title="Delete comment"
                 >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
           </div>

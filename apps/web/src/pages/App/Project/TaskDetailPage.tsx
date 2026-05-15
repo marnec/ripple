@@ -89,31 +89,35 @@ function TaskDetailPageContent({
       {/* Task toolbar — desktop only. On mobile, the breadcrumb shows
           the task code + title and the delete action moves to HeaderSlot. */}
       {!isMobile && (
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
-          <div className="flex h-8 min-w-0 items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={() => detail.setShowDeleteDialog(true)}
-              title="Delete task"
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-            <TagPickerButton
-              workspaceId={workspaceId}
-              value={detail.task.labels ?? []}
-              onChange={detail.handleSetTags}
-            />
-            {taskCode && (
-              <span className="shrink-0 text-sm text-muted-foreground">
-                [ {taskCode} ]
-              </span>
-            )}
-            <h1 className="truncate text-lg font-semibold">
-              {detail.titleValue}
-            </h1>
-          </div>
+        <div className="flex h-11 shrink-0 items-center gap-3 border-b px-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 shrink-0 p-0"
+            onClick={() => detail.setShowDeleteDialog(true)}
+            title="Delete task"
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+          <TagPickerButton
+            workspaceId={workspaceId}
+            value={detail.task.labels ?? []}
+            onChange={detail.handleSetTags}
+          />
+          {taskCode && (
+            <span className="shrink-0 text-sm text-muted-foreground">
+              [ {taskCode} ]
+            </span>
+          )}
+          <Input
+            ref={titleInputRef}
+            value={detail.titleValue}
+            onChange={(e) => detail.setTitleValue(e.target.value)}
+            onBlur={detail.handleTitleBlur}
+            onKeyDown={detail.handleTitleKeyDown}
+            className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
+            placeholder="Task title"
+          />
         </div>
       )}
 
@@ -131,101 +135,106 @@ function TaskDetailPageContent({
       )}
       <MobileHeaderTitle name={detail.titleValue} />
 
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="w-full mx-auto px-3 md:px-6 pt-2 md:pt-6 max-w-4xl pb-6">
-          <div className="mb-4 md:mb-6">
-            <Input
-              ref={titleInputRef}
-              value={detail.titleValue}
-              onChange={(e) => detail.setTitleValue(e.target.value)}
-              onBlur={detail.handleTitleBlur}
-              onKeyDown={detail.handleTitleKeyDown}
-              className="text-lg md:text-2xl font-bold focus-visible:ring-0 md:h-10 h-7"
-              placeholder="Task title"
-            />
-          </div>
-
-        <div className="space-y-5 md:space-y-8">
-          <TaskProperties
-            task={detail.task}
-            statuses={detail.statuses}
-            members={detail.members}
-            onStatusChange={detail.handleStatusChange}
-            onPriorityChange={detail.handlePriorityChange}
-            onAssigneeChange={detail.handleAssigneeChange}
-            onSetTags={detail.handleSetTags}
-            onRemoveTag={detail.handleRemoveTag}
-            onDueDateChange={detail.handleDueDateChange}
-            onStartDateChange={detail.handlePlannedStartDateChange}
-            onEstimateChange={detail.handleEstimateChange}
-          />
-
-          <TaskDependencies
-            taskId={taskId}
-            workspaceId={workspaceId}
-          />
-
-          <BacklinksDrawerTrigger resourceId={taskId} workspaceId={workspaceId} />
-
-          <div className="space-y-2 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-muted-foreground">
-                Description
-              </h3>
-              <div className="flex items-center gap-2 min-h-8">
-                <ConnectionStatus isConnected={detail.isConnected} />
-                {detail.isConnected && (
-                  <ActiveUsers
-                    remoteUsers={detail.remoteUsers}
-                    currentUser={
-                      detail.currentUser
-                        ? {
-                          name: detail.currentUser.name,
-                          color: getUserColor(detail.currentUser._id),
-                        }
-                        : undefined
-                    }
+      <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
+        <div className="mx-auto flex w-full max-w-7xl flex-col lg:h-full lg:flex-row">
+          <div className="min-w-0 lg:h-full lg:flex-2 lg:overflow-y-auto">
+            <div className="space-y-5 px-3 pt-2 pb-6 md:space-y-8 md:px-6 md:pt-6 lg:pr-8">
+              {isMobile && (
+                <div className="mb-4 md:mb-6">
+                  <Input
+                    ref={titleInputRef}
+                    value={detail.titleValue}
+                    onChange={(e) => detail.setTitleValue(e.target.value)}
+                    onBlur={detail.handleTitleBlur}
+                    onKeyDown={detail.handleTitleKeyDown}
+                    className="h-7 text-lg font-bold focus-visible:ring-0 md:h-10 md:text-2xl"
+                    placeholder="Task title"
                   />
-                )}
+                </div>
+              )}
+
+              <TaskProperties
+                task={detail.task}
+                statuses={detail.statuses}
+                members={detail.members}
+                onStatusChange={detail.handleStatusChange}
+                onPriorityChange={detail.handlePriorityChange}
+                onAssigneeChange={detail.handleAssigneeChange}
+                onSetTags={detail.handleSetTags}
+                onRemoveTag={detail.handleRemoveTag}
+                onDueDateChange={detail.handleDueDateChange}
+                onStartDateChange={detail.handlePlannedStartDateChange}
+                onEstimateChange={detail.handleEstimateChange}
+              />
+
+              <TaskDependencies
+                taskId={taskId}
+                workspaceId={workspaceId}
+              />
+
+              <BacklinksDrawerTrigger resourceId={taskId} workspaceId={workspaceId} />
+
+              <div className="space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-muted-foreground">
+                    Description
+                  </h3>
+                  <div className="flex items-center gap-2 min-h-8">
+                    <ConnectionStatus isConnected={detail.isConnected} />
+                    {detail.isConnected && (
+                      <ActiveUsers
+                        remoteUsers={detail.remoteUsers}
+                        currentUser={
+                          detail.currentUser
+                            ? {
+                              name: detail.currentUser.name,
+                              color: getUserColor(detail.currentUser._id),
+                            }
+                            : undefined
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+                <TaskDescriptionEditor
+                  editor={detail.editor}
+                  documents={detail.documents}
+                  diagrams={detail.diagrams}
+                  spreadsheets={detail.spreadsheets}
+                  members={detail.members}
+                  workspaceId={workspaceId}
+                  className="min-h-50 md:min-h-75"
+                  hideLabel
+                />
               </div>
             </div>
-            <TaskDescriptionEditor
-              editor={detail.editor}
-              documents={detail.documents}
-              diagrams={detail.diagrams}
-              spreadsheets={detail.spreadsheets}
-              members={detail.members}
-              workspaceId={workspaceId}
-              className="min-h-50 md:min-h-75"
-              hideLabel
-            />
           </div>
 
           {detail.currentUser && (
-            <div className="space-y-2 animate-fade-in">
+            <div className="min-w-0 border-t px-3 pt-6 pb-6 md:px-6 lg:flex lg:h-full lg:flex-1 lg:flex-col lg:border-t-0 lg:border-l lg:pt-6 lg:pb-6 lg:pl-8">
               <TaskActivityTimeline
                 taskId={taskId}
                 currentUserId={detail.currentUser._id}
                 workspaceId={workspaceId}
                 members={detail.members}
+                fillHeight
               />
             </div>
           )}
         </div>
-
-          <TaskDeleteDialog
-            open={detail.showDeleteDialog}
-            onOpenChange={detail.setShowDeleteDialog}
-            onConfirm={() =>
-              detail.handleDelete(() => {
-                void navigate(
-                  `/workspaces/${workspaceId}/projects/${projectId}`
-                );
-              })
-            }
-          />
-        </div>
       </div>
+
+      <TaskDeleteDialog
+        open={detail.showDeleteDialog}
+        onOpenChange={detail.setShowDeleteDialog}
+        onConfirm={() =>
+          detail.handleDelete(() => {
+            void navigate(
+              `/workspaces/${workspaceId}/projects/${projectId}`
+            );
+          })
+        }
+      />
     </div>
   );
 }
