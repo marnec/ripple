@@ -16,6 +16,19 @@ import { getAll } from "convex-helpers/server/relationships";
 import type { Doc } from "./_generated/dataModel";
 import { notify } from "./utils/notify";
 
+/**
+ * Triage is reserved for externally-ingested issues — only the internal
+ * sync paths in `core/syncIn` may place a task there. Every user-facing
+ * mutation that writes `statusId` runs this guard.
+ */
+function assertNotTriage(status: Doc<"taskStatuses">): void {
+  if (status.isTriage) {
+    throw new ConvexError(
+      "Cannot place a task into a triage status from user mutations",
+    );
+  }
+}
+
 export const baseTaskFields = {
   _id: v.id("tasks"),
   _creationTime: v.number(),
@@ -97,6 +110,7 @@ export const create = mutation({
     // Get status to check if it marks task as completed
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
+    assertNotTriage(status);
 
     // Calculate position if not provided
     let position = args.position;
@@ -801,6 +815,7 @@ export const update = mutation({
     if (statusId !== undefined) {
       const newStatus = await ctx.db.get(statusId);
       if (!newStatus) throw new ConvexError("Status not found");
+      assertNotTriage(newStatus);
 
       patch.statusId = statusId;
       // Two-way sync: auto-complete when moving TO a completed status,
@@ -992,6 +1007,7 @@ export const updatePosition = mutation({
     // Look up status to sync completed field both ways
     const newStatus = await ctx.db.get(statusId);
     if (!newStatus) throw new ConvexError("Status not found");
+    assertNotTriage(newStatus);
 
     const patchData: Record<string, any> = {
       statusId,

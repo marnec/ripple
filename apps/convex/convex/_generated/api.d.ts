@@ -648,6 +648,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -1157,6 +1158,42 @@ export declare const api: {
         }>;
       }
     >;
+  };
+  integrations: {
+    core: {
+      entitlements: {
+        setWorkspaceFeature: FunctionReference<
+          "mutation",
+          "public",
+          {
+            enabled: boolean;
+            featureKey: string;
+            workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
+      };
+      links: {
+        createLink: FunctionReference<
+          "mutation",
+          "public",
+          {
+            externalAccountId: string;
+            externalRepoFullName: string;
+            externalRepoId: string;
+            projectId: Id<"projects">;
+            workspaceId: Id<"workspaces">;
+          },
+          Id<"projectIntegrationLinks">
+        >;
+        unlinkLink: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+      };
+    };
   };
   medias: {
     generateUploadUrl: FunctionReference<"mutation", "public", {}, string>;
@@ -2080,6 +2117,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2149,6 +2187,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2208,6 +2247,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2272,6 +2312,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2374,6 +2415,7 @@ export declare const api: {
             emailVerificationTime?: number;
             image?: string;
             isAnonymous?: boolean;
+            isBot?: boolean;
             name?: string;
           } | null;
           assigneeId?: Id<"users">;
@@ -2426,6 +2468,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2565,6 +2608,7 @@ export declare const api: {
         emailVerificationTime?: number;
         image?: string;
         isAnonymous?: boolean;
+        isBot?: boolean;
         name?: string;
       } | null
     >;
@@ -2581,6 +2625,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         }
       >
@@ -2602,6 +2647,7 @@ export declare const api: {
         emailVerificationTime?: number;
         image?: string;
         isAnonymous?: boolean;
+        isBot?: boolean;
         name?: string;
       } | null
     >;
@@ -2691,6 +2737,7 @@ export declare const api: {
         emailVerificationTime?: number;
         image?: string;
         isAnonymous?: boolean;
+        isBot?: boolean;
         name?: string;
       }>
     >;

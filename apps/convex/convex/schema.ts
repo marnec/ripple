@@ -18,6 +18,23 @@ export const channelTypeSchema = v.union(
 export default defineSchema({
   ...authTables,
 
+  // Extend the auth-provided users table with `isBot` so integration-created
+  // synthetic users (e.g. the GitHub bot) can be distinguished from human
+  // workspace members. The spread above includes the default users table;
+  // this explicit override replaces it with the augmented shape.
+  users: defineTable({
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    isBot: v.optional(v.boolean()),
+  })
+    .index("email", ["email"])
+    .index("phone", ["phone"]),
+
   messages: defineTable({
     userId: v.id("users"),
     isomorphicId: v.string(), // to use as key in react (client generated, same in optimistic update and db)
@@ -256,6 +273,17 @@ export default defineSchema({
     isCompleted: v.boolean(), // when true, tasks with this status are considered completed
     setsStartDate: v.optional(v.boolean()), // when true, auto-sets startDate on tasks entering this status
     pendingDeletion: v.optional(v.boolean()), // true while bulk task reassignment drains via workpool
+    // Marks the destination for externally-ingested issues (GitHub etc.).
+    // Mutually exclusive with isDefault. Activating an integration requires
+    // exactly one isTriage=true status per project; the integration
+    // mutation layer is the only writer that may place a task here.
+    isTriage: v.optional(v.boolean()),
+    // Provider-specific close-reason hint. When set on a completed status,
+    // inbound `state=closed, state_reason=not_planned` routes here.
+    // Defaults to "completed" semantics if unset.
+    externalCloseReason: v.optional(
+      v.union(v.literal("completed"), v.literal("not_planned")),
+    ),
   })
     .index("by_project", ["projectId"])
     .index("by_project_order", ["projectId", "order"])
@@ -288,6 +316,20 @@ export default defineSchema({
     }))),
     estimate: v.optional(v.number()), // effort estimate in hours
     importJobId: v.optional(v.id("taskImportJobs")), // set when the task was created via CSV import
+    // Static, immutable-per-link external references. Written exactly twice
+    // (link create, link destroy) plus on repo rename. Read by kanban /
+    // task-list — high-churn integration state lives on taskIntegrationLinks
+    // to keep this row stable.
+    externalRefs: v.optional(
+      v.array(
+        v.object({
+          provider: v.string(),
+          repoFullName: v.string(),
+          issueNumber: v.number(),
+          url: v.string(),
+        }),
+      ),
+    ),
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
@@ -333,6 +375,13 @@ export default defineSchema({
     failedRows: v.number(),
     errorMessage: v.optional(v.string()), // top-level failure (e.g. all rows rejected)
     completedAt: v.optional(v.number()),
+    // What kind of import drives this job. Absent on existing rows (= CSV);
+    // integration imports set this explicitly so workspace-settings UIs can
+    // distinguish them. The `rows` field stays as `[]` for non-CSV sources.
+    sourceType: v.optional(
+      v.union(v.literal("csv"), v.literal("github_integration")),
+    ),
+    projectIntegrationLinkId: v.optional(v.id("projectIntegrationLinks")),
   })
     .index("by_project_status", ["projectId", "status"])
     .index("by_project", ["projectId"]),
@@ -731,4 +780,113 @@ export default defineSchema({
     .index("by_user_workspace_visited", ["userId", "workspaceId", "visitedAt"])
     .index("by_user_resource", ["userId", "resourceId"])
     .index("by_resource_id", ["resourceId"]),
+
+  // Per-workspace feature capability rows. Single chokepoint for "is this
+  // workspace allowed to use feature X?" via `hasFeature`. v1 sources rows
+  // manually from admin toggles; future billing flips the same rows with a
+  // non-manual `source`, leaving the UI affordance unchanged.
+  workspaceEntitlements: defineTable({
+    workspaceId: v.id("workspaces"),
+    featureKey: v.string(),
+    enabled: v.boolean(),
+    // Where the entitlement came from. v1 ships only "manual" via the
+    // admin toggle; future billing flows would write "tier" or "plugin"
+    // through the same code path so the UI affordance stays stable.
+    source: v.optional(
+      v.union(
+        v.literal("manual"),
+        v.literal("tier"),
+        v.literal("plugin"),
+      ),
+    ),
+  })
+    .index("by_workspace_feature", ["workspaceId", "featureKey"]),
+
+  // Per-workspace integration install. Carries the synthetic bot user used
+  // for attributing externally-authored tasks and comments. One row per
+  // (workspace, externalAccountId) — a workspace can install on multiple
+  // accounts (e.g. org + personal), each producing its own bot user.
+  workspaceIntegrations: defineTable({
+    workspaceId: v.id("workspaces"),
+    botUserId: v.id("users"),
+    // Provider identifier. Open string for v1 ("github"); a future GitLab
+    // adapter sets "gitlab". Kept here rather than on each
+    // projectIntegrationLinks row because installation is per-provider.
+    provider: v.string(),
+    // Provider-side account/install id. GitHub: App installation id.
+    // Lookup key when the webhook adapter resolves a delivery's
+    // workspace by `payload.installation.id`.
+    externalAccountId: v.string(),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_externalAccount", ["externalAccountId"]),
+
+  // Per repo↔project binding. The `status` state machine is orthogonal to
+  // the `pausedByBilling` entitlement flag — both feed `effectiveLinkStatus`.
+  // Provider-agnostic field names so a future GitLab adapter slots in
+  // without a schema migration.
+  projectIntegrationLinks: defineTable({
+    workspaceId: v.id("workspaces"),
+    projectId: v.id("projects"),
+    status: v.union(
+      v.literal("configuring"),
+      v.literal("active"),
+      v.literal("paused"),
+      v.literal("disconnected"),
+    ),
+    pausedByBilling: v.boolean(),
+    // Human-readable "owner/repo" — feeds tasks.externalRefs[].repoFullName
+    // and the URL for issue links. Updated silently on repo rename events;
+    // stable lookups use externalRepoId.
+    externalRepoFullName: v.string(),
+    // Stable provider-side repo identifier. GitHub: repository node id.
+    // Survives renames; the webhook adapter resolves the link by this
+    // before falling back to anything else.
+    externalRepoId: v.string(),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_project", ["projectId"])
+    .index("by_externalRepo", ["externalRepoId"]),
+
+  // Per-task hot/dynamic integration state. Read only by task-detail and
+  // webhook handlers — kanban/task-list reads stay on `tasks.externalRefs`.
+  // High-churn fields (externalUpdatedAt, descriptionSyncState, lastSyncError,
+  // etc.) live here so kanban subscriptions don't invalidate on webhook traffic.
+  taskIntegrationLinks: defineTable({
+    taskId: v.id("tasks"),
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+    externalIssueId: v.string(),
+    externalUpdatedAt: v.number(),
+    externalAuthor: v.object({
+      login: v.string(),
+      avatarUrl: v.string(),
+      url: v.string(),
+    }),
+    // Markdown body captured at issue creation. Phase 6 converts this into
+    // BlockNote/Yjs as a creation-time seed. Absent for Ripple-native tasks
+    // that get a taskIntegrationLinks row via outbound link creation.
+    initialBodyMarkdown: v.optional(v.string()),
+    // Last-known external state. Written by inbound, read by outbound's
+    // echo guard to skip PATCHes that would produce no GitHub-side change.
+    externalState: v.optional(v.union(v.literal("open"), v.literal("closed"))),
+    externalStateReason: v.optional(
+      v.union(v.literal("completed"), v.literal("not_planned")),
+    ),
+    // Permanent-failure marker. Set when outbound dispatch hits a 4xx
+    // (non-429) response; surfaces the "⚠ Sync failed — Retry" affordance
+    // on the affected task. Cleared on next successful outbound.
+    lastSyncError: v.optional(
+      v.object({
+        occurredAt: v.number(),
+        message: v.string(),
+        httpStatus: v.optional(v.number()),
+      }),
+    ),
+  })
+    // Idempotency / "have we imported this issue?" lookup.
+    .index("by_link_externalIssueId", [
+      "projectIntegrationLinkId",
+      "externalIssueId",
+    ])
+    .index("by_task", ["taskId"]),
 });

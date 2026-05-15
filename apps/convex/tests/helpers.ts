@@ -1,5 +1,6 @@
 import { convexTest } from "convex-test";
 import schema from "../convex/schema";
+import type { Id } from "../convex/_generated/dataModel";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import auditLogComponent from "convex-audit-log/test";
 import aggregateComponent from "@convex-dev/aggregate/test";
@@ -77,4 +78,30 @@ export async function setupWorkspaceWithAdmin(
   });
 
   return { userId, workspaceId, asUser };
+}
+
+/**
+ * Insert a project under the given workspace. Returns the projectId.
+ * Color and key are filled with safe defaults; pass overrides via `opts`.
+ */
+export async function setupProject(
+  t: ReturnType<typeof convexTest>,
+  opts: {
+    workspaceId: Id<"workspaces">;
+    creatorId: Id<"users">;
+    name?: string;
+    color?: string;
+    key?: string;
+  },
+) {
+  const {
+    workspaceId,
+    creatorId,
+    name = "Test Project",
+    color = "bg-blue-500",
+    key,
+  } = opts;
+  return t.run(async (ctx) =>
+    ctx.db.insert("projects", { name, color, workspaceId, creatorId, key }),
+  );
 }

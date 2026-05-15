@@ -937,6 +937,36 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  projectIntegrationLinks: {
+    document: {
+      externalRepoFullName: string;
+      externalRepoId: string;
+      pausedByBilling: boolean;
+      projectId: Id<"projects">;
+      status: "configuring" | "active" | "paused" | "disconnected";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"projectIntegrationLinks">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "externalRepoFullName"
+      | "externalRepoId"
+      | "pausedByBilling"
+      | "projectId"
+      | "status"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_externalRepo: ["externalRepoId", "_creationTime"];
+      by_project: ["projectId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   projectNotificationPreferences: {
     document: {
       projectId: Id<"projects">;
@@ -1236,7 +1266,9 @@ export type DataModel = {
       numberRangeStart: number;
       processedRows: number;
       projectId: Id<"projects">;
+      projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
       rows: Array<any>;
+      sourceType?: "csv" | "github_integration";
       status: "queued" | "running" | "completed" | "failed";
       totalRows: number;
       workspaceId: Id<"workspaces">;
@@ -1253,7 +1285,9 @@ export type DataModel = {
       | "numberRangeStart"
       | "processedRows"
       | "projectId"
+      | "projectIntegrationLinkId"
       | "rows"
+      | "sourceType"
       | "status"
       | "totalRows"
       | "workspaceId";
@@ -1266,6 +1300,55 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  taskIntegrationLinks: {
+    document: {
+      externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalIssueId: string;
+      externalState?: "open" | "closed";
+      externalStateReason?: "completed" | "not_planned";
+      externalUpdatedAt: number;
+      initialBodyMarkdown?: string;
+      lastSyncError?: {
+        httpStatus?: number;
+        message: string;
+        occurredAt: number;
+      };
+      projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+      taskId: Id<"tasks">;
+      _id: Id<"taskIntegrationLinks">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "externalAuthor"
+      | "externalAuthor.avatarUrl"
+      | "externalAuthor.login"
+      | "externalAuthor.url"
+      | "externalIssueId"
+      | "externalState"
+      | "externalStateReason"
+      | "externalUpdatedAt"
+      | "initialBodyMarkdown"
+      | "lastSyncError"
+      | "lastSyncError.httpStatus"
+      | "lastSyncError.message"
+      | "lastSyncError.occurredAt"
+      | "projectIntegrationLinkId"
+      | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_link_externalIssueId: [
+        "projectIntegrationLinkId",
+        "externalIssueId",
+        "_creationTime",
+      ];
+      by_task: ["taskId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   tasks: {
     document: {
       assigneeId?: Id<"users">;
@@ -1273,6 +1356,12 @@ export type DataModel = {
       creatorId: Id<"users">;
       dueDate?: string;
       estimate?: number;
+      externalRefs?: Array<{
+        issueNumber: number;
+        provider: string;
+        repoFullName: string;
+        url: string;
+      }>;
       importJobId?: Id<"taskImportJobs">;
       labels?: Array<string>;
       number?: number;
@@ -1297,6 +1386,7 @@ export type DataModel = {
       | "creatorId"
       | "dueDate"
       | "estimate"
+      | "externalRefs"
       | "importJobId"
       | "labels"
       | "number"
@@ -1388,8 +1478,10 @@ export type DataModel = {
   taskStatuses: {
     document: {
       color: string;
+      externalCloseReason?: "completed" | "not_planned";
       isCompleted: boolean;
       isDefault: boolean;
+      isTriage?: boolean;
       name: string;
       order: number;
       pendingDeletion?: boolean;
@@ -1402,8 +1494,10 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "color"
+      | "externalCloseReason"
       | "isCompleted"
       | "isDefault"
+      | "isTriage"
       | "name"
       | "order"
       | "pendingDeletion"
@@ -1520,6 +1614,7 @@ export type DataModel = {
       emailVerificationTime?: number;
       image?: string;
       isAnonymous?: boolean;
+      isBot?: boolean;
       name?: string;
       phone?: string;
       phoneVerificationTime?: number;
@@ -1533,6 +1628,7 @@ export type DataModel = {
       | "emailVerificationTime"
       | "image"
       | "isAnonymous"
+      | "isBot"
       | "name"
       | "phone"
       | "phoneVerificationTime";
@@ -1541,6 +1637,55 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       email: ["email", "_creationTime"];
       phone: ["phone", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  workspaceEntitlements: {
+    document: {
+      enabled: boolean;
+      featureKey: string;
+      source?: "manual" | "tier" | "plugin";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"workspaceEntitlements">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "enabled"
+      | "featureKey"
+      | "source"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace_feature: ["workspaceId", "featureKey", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  workspaceIntegrations: {
+    document: {
+      botUserId: Id<"users">;
+      externalAccountId: string;
+      provider: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"workspaceIntegrations">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "botUserId"
+      | "externalAccountId"
+      | "provider"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_externalAccount: ["externalAccountId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

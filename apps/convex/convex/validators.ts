@@ -41,6 +41,10 @@ export const userValidator = v.object({
   emailVerificationTime: v.optional(v.number()),
   image: v.optional(v.string()),
   isAnonymous: v.optional(v.boolean()),
+  // Synthetic users (integration bots etc.) carry isBot=true so the
+  // frontend can render external-author identity instead of bot identity
+  // on task creators / comment authors / facepiles.
+  isBot: v.optional(v.boolean()),
 });
 
 export const referenceValidator = v.object({
