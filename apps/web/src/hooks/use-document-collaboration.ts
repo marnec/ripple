@@ -1,4 +1,5 @@
 import type { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema } from "@blocknote/core";
+import { en } from "@blocknote/core/locales";
 import { useCreateBlockNote } from "@blocknote/react";
 import { useEffect, useMemo, useState } from "react";
 import { Awareness } from "y-protocols/awareness";
@@ -18,6 +19,8 @@ export interface UseDocumentCollaborationOptions<
   resourceType?: "doc" | "diagram" | "task";
   enabled?: boolean;
   uploadFile?: (file: File) => Promise<string>;
+  /** Optional BlockNote dictionary override (used for placeholder customization). */
+  dictionary?: typeof en;
 }
 
 export interface UseDocumentCollaborationResult<
@@ -45,6 +48,7 @@ export function useDocumentCollaboration<
   resourceType = "doc",
   enabled = true,
   uploadFile,
+  dictionary,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
   const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
     resourceType,
@@ -97,6 +101,7 @@ export function useDocumentCollaboration<
     {
       schema,
       uploadFile,
+      dictionary,
       collaboration: {
         provider: provider ?? { awareness: localAwareness },
         fragment: yDoc.getXmlFragment("document-store"),
@@ -106,7 +111,7 @@ export function useDocumentCollaboration<
         },
       },
     },
-    [provider, localAwareness, userName, userColor, schema, uploadFile]
+    [provider, localAwareness, userName, userColor, schema, uploadFile, dictionary]
   );
 
   // Workaround for BlockNote #2244 / y-prosemirror #102: when ProseMirror

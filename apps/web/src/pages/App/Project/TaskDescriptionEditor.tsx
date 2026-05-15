@@ -140,7 +140,7 @@ export function TaskDescriptionEditor({
   }
 
   return (
-    <div className={hideLabel ? undefined : "space-y-2"}>
+    <div className={hideLabel ? "contents" : "space-y-2"}>
       {!hideLabel && (
         <h3 className="text-sm font-semibold text-muted-foreground">
           Description
@@ -151,6 +151,17 @@ export function TaskDescriptionEditor({
           "task-description-editor border rounded-md p-2 animate-fade-in",
           className
         )}
+        onMouseDown={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest(".bn-editor")) return;
+          e.preventDefault();
+          const blocks = editor.document;
+          const lastBlock = blocks[blocks.length - 1];
+          if (lastBlock) {
+            editor.setTextCursorPosition(lastBlock, "end");
+          }
+          editor.focus();
+        }}
       >
         <BlockNoteView
           editor={editor}

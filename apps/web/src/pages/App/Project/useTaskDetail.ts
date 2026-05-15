@@ -7,7 +7,17 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
+import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+
+const taskDescriptionDictionary = {
+  ...bnEn,
+  placeholders: {
+    ...bnEn.placeholders,
+    default: "Write a description… # refs, @ mentions, / commands",
+    emptyDocument: "Write a description… # refs, @ mentions, / commands",
+  },
+};
 import { useCursorAwareness } from "../../../hooks/use-cursor-awareness";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { extractEventMentions } from "../../../hooks/use-editor-tracking";
@@ -125,6 +135,7 @@ export function useTaskDetail({
     resourceType: "task",
     enabled: !!taskId && collaborationEnabled,
     uploadFile: fileUpload?.uploadFile,
+    dictionary: taskDescriptionDictionary,
   });
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);

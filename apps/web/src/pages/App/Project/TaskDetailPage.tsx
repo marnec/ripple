@@ -136,9 +136,9 @@ function TaskDetailPageContent({
       <MobileHeaderTitle name={detail.titleValue} />
 
       <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
-        <div className="mx-auto flex w-full max-w-8xl flex-col lg:h-full lg:flex-row">
-          <div className="min-w-0 lg:h-full lg:flex-2 lg:overflow-y-auto">
-            <div className="space-y-5 px-3 pt-2 pb-4 md:space-y-8 md:px-4 md:pt-6 lg:pr-8">
+        <div className="mx-auto flex w-full max-w-430 flex-col lg:h-full lg:flex-row">
+          <div className="min-w-0 lg:flex lg:h-full lg:flex-2 lg:flex-col">
+            <div className="space-y-5 px-3 pt-2 pb-6 md:space-y-8 md:px-4 md:pt-6 lg:flex lg:flex-1 lg:flex-col lg:min-h-0 lg:pr-8">
               {isMobile && (
                 <div className="mb-4 md:mb-6">
                   <Input
@@ -174,8 +174,8 @@ function TaskDetailPageContent({
 
               <BacklinksDrawerTrigger resourceId={taskId} workspaceId={workspaceId} />
 
-              <div className="space-y-2 animate-fade-in">
-                <div className="flex items-center justify-between">
+              <div className="space-y-2 animate-fade-in lg:flex lg:flex-1 lg:flex-col lg:min-h-0">
+                <div className="flex items-center justify-between lg:shrink-0">
                   <h3 className="text-sm font-semibold text-muted-foreground">
                     Description
                   </h3>
@@ -203,7 +203,7 @@ function TaskDetailPageContent({
                   spreadsheets={detail.spreadsheets}
                   members={detail.members}
                   workspaceId={workspaceId}
-                  className="min-h-50 md:min-h-75"
+                  className="min-h-50 md:min-h-75 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
                   hideLabel
                 />
               </div>
@@ -211,7 +211,7 @@ function TaskDetailPageContent({
           </div>
 
           {detail.currentUser && (
-            <div className="min-w-0 border-t px-3 pt-6 pb-6 md:px-6 lg:flex lg:h-full lg:flex-1 lg:flex-col lg:border-t-0 lg:border-l lg:pt-6 lg:pb-6 lg:pl-8">
+            <div className="min-w-0 border-t px-3 pt-6 pb-6 md:pl-6 md:pr-4 lg:flex lg:h-full lg:flex-1 lg:flex-col lg:border-t-0 lg:border-l lg:pt-6 lg:pb-6 lg:pl-8">
               <TaskActivityTimeline
                 taskId={taskId}
                 currentUserId={detail.currentUser._id}

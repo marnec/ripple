@@ -27,7 +27,17 @@ import type { Id } from "@convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
 import { useLocalRecents } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
+import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+
+const documentDictionary = {
+  ...bnEn,
+  placeholders: {
+    ...bnEn.placeholders,
+    default: "Start writing… # refs, @ mentions, / commands",
+    emptyDocument: "Start writing… # refs, @ mentions, / commands",
+  },
+};
 import { useEmbedDeleteProtection } from "../../../hooks/use-embed-delete-protection";
 import { useEditorTracking, extractCellRefs, extractHardEmbeds, extractDocBlockRefs, extractMentions, extractEventMentions } from "../../../hooks/use-editor-tracking";
 import { useReferencedBlockDeleteProtection } from "../../../hooks/use-referenced-block-delete-protection";
@@ -128,6 +138,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     userId: viewer?._id ?? "anonymous",
     schema,
     uploadFile: fileUpload?.uploadFile,
+    dictionary: documentDictionary,
   });
 
   // Inject imported content (from .docx import) once when the editor is ready
