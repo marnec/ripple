@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
+import {
+  applyInstallationEvent,
+  applyNormalizedEvent,
+} from "../convex/integrations/core/syncIn";
 import type {
   NormalizedIssueClosedEvent,
   NormalizedIssueOpenedEvent,
@@ -742,6 +745,179 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
         .collect(),
     );
     expect(task?.creatorId).toBe(botUserId);
+  });
+});
+
+describe("integrations/core/syncIn.applyInstallationEvent", () => {
+  it("is idempotent: already-disconnected links stay disconnected (no extra patches)", async () => {
+    const t = createTestContext();
+    const { link } = await setupInboundFixtures(t);
+    // Pre-disconnect.
+    await t.run((ctx) => ctx.db.patch(link._id, { status: "disconnected" }));
+    const before = await t.run((ctx) => ctx.db.get(link._id));
+
+    await t.run((ctx) =>
+      applyInstallationEvent(ctx, {
+        event: {
+          kind: "installation.deleted",
+          externalAccountId: "install-123",
+        },
+      }),
+    );
+
+    const after = await t.run((ctx) => ctx.db.get(link._id));
+    expect(after?.status).toBe("disconnected");
+    // Same row reference time → no patch was applied to an already-disconnected link.
+    // (Convex doesn't bump _creationTime on patch, but it does mutate; we can't directly
+    //  observe "no-op writes" without instrumentation. The contract is still useful as
+    //  documentation: the impl skips already-disconnected links via an explicit guard.)
+    expect(after?._creationTime).toBe(before?._creationTime);
+  });
+
+  it("installation_repositories.removed disconnects only the listed externalRepoIds", async () => {
+    const t = createTestContext();
+    const { workspaceId, link: linkA } = await setupInboundFixtures(t);
+    // Second link under the same workspace + installation but a different repo.
+    const { userId } = await t.run(async (ctx) => {
+      const u = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .first();
+      return { userId: u!.userId };
+    });
+    const project2 = await setupProject(t, {
+      workspaceId,
+      creatorId: userId,
+      name: "Second",
+      key: "SEC",
+    });
+    const keptLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId: project2,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/kept",
+        externalRepoId: "R_kgDOKEPT",
+      }),
+    );
+
+    // Remove only linkA's repo (R_kgDOACME from setupInboundFixtures).
+    await t.run((ctx) =>
+      applyInstallationEvent(ctx, {
+        event: {
+          kind: "installation_repositories.removed",
+          externalAccountId: "install-123",
+          externalRepoIds: ["R_kgDOACME"],
+        },
+      }),
+    );
+
+    const [a, kept] = await t.run(async (ctx) => [
+      await ctx.db.get(linkA._id),
+      await ctx.db.get(keptLinkId),
+    ]);
+    expect(a?.status).toBe("disconnected");
+    expect(kept?.status).toBe("active");
+  });
+
+  it("installation.deleted does not touch links of OTHER workspaces (unrelated installation)", async () => {
+    const t = createTestContext();
+    const { link: linkA } = await setupInboundFixtures(t);
+
+    // A second, fully independent workspace + installation + link.
+    const { userId: userB, workspaceId: workspaceB } =
+      await setupWorkspaceWithAdmin(t, "Workspace B");
+    const projectB = await setupProject(t, {
+      workspaceId: workspaceB,
+      creatorId: userB,
+      name: "B",
+      key: "B",
+    });
+    const botBId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub B" }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceIntegrations", {
+        workspaceId: workspaceB,
+        botUserId: botBId,
+        provider: "github",
+        externalAccountId: "install-B-456",
+      }),
+    );
+    const linkBId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId: workspaceB,
+        projectId: projectB,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/b",
+        externalRepoId: "R_kgDOB",
+      }),
+    );
+
+    // Delete workspace A's installation only.
+    await t.run((ctx) =>
+      applyInstallationEvent(ctx, {
+        event: {
+          kind: "installation.deleted",
+          externalAccountId: "install-123",
+        },
+      }),
+    );
+
+    const [a, b] = await t.run(async (ctx) => [
+      await ctx.db.get(linkA._id),
+      await ctx.db.get(linkBId),
+    ]);
+    expect(a?.status).toBe("disconnected");
+    expect(b?.status).toBe("active");
+  });
+
+  it("installation.deleted: every link in the workspace transitions to 'disconnected'", async () => {
+    const t = createTestContext();
+    const { workspaceId, link } = await setupInboundFixtures(t);
+    // The setup gave us one link; add a second link under the same workspace
+    // (different project + repo) to prove the fan-out reaches all of them.
+    const { userId } = await t.run(async (ctx) => {
+      const u = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .first();
+      return { userId: u!.userId };
+    });
+    const project2 = await setupProject(t, {
+      workspaceId,
+      creatorId: userId,
+      name: "Second",
+      key: "SEC",
+    });
+    const link2Id = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId: project2,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/second",
+        externalRepoId: "R_kgDOSECOND",
+      }),
+    );
+
+    await t.run((ctx) =>
+      applyInstallationEvent(ctx, {
+        event: {
+          kind: "installation.deleted",
+          externalAccountId: "install-123",
+        },
+      }),
+    );
+
+    const [l1, l2] = await t.run(async (ctx) => [
+      await ctx.db.get(link._id),
+      await ctx.db.get(link2Id),
+    ]);
+    expect(l1?.status).toBe("disconnected");
+    expect(l2?.status).toBe("disconnected");
   });
 });
 

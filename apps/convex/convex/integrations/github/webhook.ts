@@ -1,7 +1,16 @@
-import type { MutationCtx } from "../../_generated/server";
+import { v } from "convex/values";
+import {
+  internalAction,
+  internalMutation,
+  type MutationCtx,
+} from "../../_generated/server";
+import { internal } from "../../_generated/api";
 import { effectiveLinkStatus } from "../core/entitlements";
-import { applyNormalizedEvent } from "../core/syncIn";
-import type { NormalizedIssueEvent } from "../core/types";
+import {
+  applyInstallationEvent,
+  applyNormalizedEvent,
+} from "../core/syncIn";
+import type { NormalizedWebhookEvent } from "../core/types";
 
 /**
  * Provider-specific webhook parsing. Translates a GitHub webhook payload
@@ -73,6 +82,17 @@ export async function handleGithubWebhook(
   const event = normalize(args.eventName, args.payload);
   if (!event) return; // delivered-but-irrelevant — drop, no error
 
+  // Installation-lifecycle events operate at the workspace/installation
+  // level and resolve their own DB lookups; no per-repo link resolution
+  // needed at this layer.
+  if (
+    event.kind === "installation.deleted" ||
+    event.kind === "installation_repositories.removed"
+  ) {
+    await applyInstallationEvent(ctx, { event });
+    return;
+  }
+
   const p = args.payload as GithubIssuesPayload;
   const externalAccountId = String(p.installation?.id ?? "");
   const externalRepoId = p.repository?.node_id ?? "";
@@ -111,11 +131,27 @@ export async function handleGithubWebhook(
   await applyNormalizedEvent(ctx, { event, link: resolvedLink });
 }
 
+interface GithubInstallationPayload {
+  action: string;
+  installation: GithubInstallation;
+  // Only present on installation_repositories.* events.
+  repositories_removed?: GithubRepository[];
+  repositories_added?: GithubRepository[];
+}
+
 export function normalize(
   eventName: string,
   payload: unknown,
-): NormalizedIssueEvent | null {
-  if (eventName !== "issues") return null;
+): NormalizedWebhookEvent | null {
+  if (eventName === "issues") return normalizeIssuesEvent(payload);
+  if (eventName === "installation") return normalizeInstallationEvent(payload);
+  if (eventName === "installation_repositories") {
+    return normalizeInstallationRepositoriesEvent(payload);
+  }
+  return null;
+}
+
+function normalizeIssuesEvent(payload: unknown): NormalizedWebhookEvent | null {
   const p = payload as GithubIssuesPayload;
 
   if (p.action === "opened") {
@@ -143,6 +179,29 @@ export function normalize(
   return null;
 }
 
+function normalizeInstallationEvent(
+  payload: unknown,
+): NormalizedWebhookEvent | null {
+  const p = payload as GithubInstallationPayload;
+  if (p.action !== "deleted") return null;
+  return {
+    kind: "installation.deleted",
+    externalAccountId: String(p.installation.id),
+  };
+}
+
+function normalizeInstallationRepositoriesEvent(
+  payload: unknown,
+): NormalizedWebhookEvent | null {
+  const p = payload as GithubInstallationPayload;
+  if (p.action !== "removed") return null;
+  return {
+    kind: "installation_repositories.removed",
+    externalAccountId: String(p.installation.id),
+    externalRepoIds: (p.repositories_removed ?? []).map((r) => r.node_id),
+  };
+}
+
 /**
  * The seven fields every issue-event variant carries. Extracted because
  * GitHub's payload shape is identical across `opened`, `closed`, and
@@ -164,3 +223,49 @@ function sharedIssueFields(issue: GithubIssue) {
     },
   };
 }
+
+/**
+ * Registered Convex surface for the webhook handler. Unit tests target the
+ * plain `handleGithubWebhook` helper above; the receiver bridge calls this
+ * internal mutation by reference.
+ */
+export const handleGithubWebhookMutation = internalMutation({
+  args: { eventName: v.string(), payload: v.any() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await handleGithubWebhook(ctx, args);
+    return null;
+  },
+});
+
+/**
+ * Bridge action invoked by `@convex-webhook-receiver` per delivery. The
+ * receiver has already verified the HMAC signature and deduplicated by
+ * `X-GitHub-Delivery`; our job is to parse + dispatch.
+ *
+ * Throwing here makes the receiver flag the delivery for retry/DLQ;
+ * we throw on JSON-parse failure (genuinely malformed) but NOT on
+ * "irrelevant event" cases (those return cleanly from the mutation).
+ */
+export const receiveGithubWebhook = internalAction({
+  args: {
+    provider: v.string(),
+    rawBody: v.string(),
+    headers: v.record(v.string(), v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const eventName = args.headers["x-github-event"];
+    if (!eventName) {
+      // Missing event-name header — drop silently. Marking as malformed
+      // would consume DLQ slots on every probe ping.
+      return null;
+    }
+    const payload = JSON.parse(args.rawBody) as unknown;
+    await ctx.runMutation(
+      internal.integrations.github.webhook.handleGithubWebhookMutation,
+      { eventName, payload },
+    );
+    return null;
+  },
+});

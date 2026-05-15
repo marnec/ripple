@@ -15,6 +15,7 @@ import { syncTaskTags, normalizeTagList } from "./tagSync";
 import { getAll } from "convex-helpers/server/relationships";
 import type { Doc } from "./_generated/dataModel";
 import { notify } from "./utils/notify";
+import { maybeEnqueueOutboundPush } from "./integrations/core/outboundDispatch";
 
 /**
  * Triage is reserved for externally-ingested issues — only the internal
@@ -941,6 +942,14 @@ export const update = mutation({
       });
     }
 
+    // Outbound integration push — fires only when the task is linked to an
+    // external issue AND the desired external state differs. The helper
+    // itself returns silently for unlinked / frozen / no-change cases, so
+    // it's safe to call unconditionally.
+    if (statusId !== undefined && statusId !== task.statusId) {
+      await maybeEnqueueOutboundPush(ctx, taskId);
+    }
+
     return null;
   },
 });
@@ -1052,6 +1061,10 @@ export const updatePosition = mutation({
           url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
         });
       }
+
+      // Outbound integration push on kanban drag — fires only for linked
+      // tasks with a state change. Silent no-op otherwise.
+      await maybeEnqueueOutboundPush(ctx, taskId);
     }
 
     return null;

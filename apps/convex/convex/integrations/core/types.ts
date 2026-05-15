@@ -4,13 +4,45 @@
  * is responsible for translating raw webhook payloads into this shape.
  *
  * Phases 1–2 model `issue.opened`, `issue.closed`, `issue.reopened`.
- * Later phases add `issue.edited`, `issue_comment.*`, `pull_request.*`, and
- * `installation.*` variants as additional branches.
+ * Later phases add `issue.edited`, `issue_comment.*`, `pull_request.*`
+ * variants as additional branches.
  */
 export type NormalizedIssueEvent =
   | NormalizedIssueOpenedEvent
   | NormalizedIssueClosedEvent
   | NormalizedIssueReopenedEvent;
+
+/**
+ * Installation-lifecycle events — distinct from `NormalizedIssueEvent`
+ * because they operate at the workspace/installation level rather than
+ * per-task. Consumed by `core/syncIn.applyInstallationEvent`.
+ */
+export type NormalizedInstallationEvent =
+  | NormalizedInstallationDeletedEvent
+  | NormalizedRepositoriesRemovedEvent;
+
+export interface NormalizedInstallationDeletedEvent {
+  kind: "installation.deleted";
+  /** Provider-side account/install id — used to find all
+   *  `workspaceIntegrations` / `projectIntegrationLinks` to disconnect. */
+  externalAccountId: string;
+}
+
+export interface NormalizedRepositoriesRemovedEvent {
+  kind: "installation_repositories.removed";
+  externalAccountId: string;
+  /** Stable repo ids whose links should be disconnected. */
+  externalRepoIds: string[];
+}
+
+/**
+ * Discriminated union of every event kind the webhook router can emit.
+ * `github/webhook.normalize` returns this; `handleGithubWebhook` switches
+ * on `kind` to choose the right `core/syncIn.apply*` function.
+ */
+export type NormalizedWebhookEvent =
+  | NormalizedIssueEvent
+  | NormalizedInstallationEvent;
 
 interface NormalizedExternalAuthor {
   login: string;

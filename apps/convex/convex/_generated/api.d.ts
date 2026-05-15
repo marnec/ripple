@@ -1173,6 +1173,20 @@ export declare const api: {
           null
         >;
       };
+      install: {
+        completeAppInstallation: FunctionReference<
+          "mutation",
+          "public",
+          {
+            accountLogin?: string;
+            externalAccountId: string;
+            externalAccountType?: "organization" | "user";
+            provider: string;
+            workspaceId: Id<"workspaces">;
+          },
+          Id<"workspaceIntegrations">
+        >;
+      };
       links: {
         createLink: FunctionReference<
           "mutation",
@@ -3241,6 +3255,100 @@ export declare const internal: {
       null
     >;
   };
+  integrations: {
+    github: {
+      importDrain: {
+        drainImportBatch: FunctionReference<
+          "action",
+          "internal",
+          {
+            batchStartIndex: number;
+            externalAccountId: string;
+            includeClosed: boolean;
+            jobId: Id<"taskImportJobs">;
+            repoFullName: string;
+            sinceCursor?: string;
+          },
+          null
+        >;
+      };
+      importDrainMutations: {
+        applyBatch: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            batchStartIndex: number;
+            events: Array<any>;
+            jobId: Id<"taskImportJobs">;
+          },
+          null
+        >;
+        markCompleted: FunctionReference<
+          "mutation",
+          "internal",
+          { jobId: Id<"taskImportJobs"> },
+          null
+        >;
+        markFailed: FunctionReference<
+          "mutation",
+          "internal",
+          { jobId: Id<"taskImportJobs">; message: string },
+          null
+        >;
+      };
+      syncOutAction: {
+        pushIssueState: FunctionReference<
+          "action",
+          "internal",
+          {
+            desiredState: "open" | "closed";
+            desiredStateReason?: "completed" | "not_planned";
+            installationId: string;
+            issueNumber: number;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+      };
+      syncOutMutations: {
+        recordOutboundFailure: FunctionReference<
+          "mutation",
+          "internal",
+          { httpStatus?: number; message: string; taskId: Id<"tasks"> },
+          null
+        >;
+        recordOutboundSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            newExternalState: "open" | "closed";
+            newExternalStateReason?: "completed" | "not_planned";
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+      };
+      webhook: {
+        handleGithubWebhookMutation: FunctionReference<
+          "mutation",
+          "internal",
+          { eventName: string; payload: any },
+          null
+        >;
+        receiveGithubWebhook: FunctionReference<
+          "action",
+          "internal",
+          {
+            headers: Record<string, string>;
+            provider: string;
+            rawBody: string;
+          },
+          null
+        >;
+      };
+    };
+  };
   migrations: {
     backfillAuditScope: FunctionReference<
       "mutation",
@@ -4336,10 +4444,12 @@ export declare const internal: {
 };
 
 export declare const components: {
+  actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
   auditLog: import("convex-audit-log/_generated/component.js").ComponentApi<"auditLog">;
   convexCascadingDelete: import("convex-cascading-delete/_generated/component.js").ComponentApi<"convexCascadingDelete">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+  webhookReceiver: import("convex-webhook-receiver/_generated/component.js").ComponentApi<"webhookReceiver">;
   notificationPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"notificationPool">;
   taskReassignPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskReassignPool">;
   taskImportPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskImportPool">;

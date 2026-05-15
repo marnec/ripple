@@ -1,11 +1,34 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { internal, components } from "./_generated/api";
 import { auth } from "./auth";
+import { WebhookReceiver } from "convex-webhook-receiver";
 
 const http = httpRouter();
 
 auth.addHttpRoutes(http);
+
+/**
+ * POST /integrations/github/webhook
+ *
+ * Inbound GitHub webhook endpoint. The `convex-webhook-receiver` component
+ * verifies the HMAC-SHA256 signature against `GITHUB_WEBHOOK_SECRET`,
+ * dedupes by `X-GitHub-Delivery`, and invokes our bridge action
+ * `receiveGithubWebhook` for accepted deliveries.
+ *
+ * Set the secret with: npx convex env set GITHUB_WEBHOOK_SECRET <value>
+ */
+const webhookReceiver = new WebhookReceiver(components.webhookReceiver);
+
+http.route({
+  path: "/integrations/github/webhook",
+  method: "POST",
+  handler: webhookReceiver.httpHandler({
+    provider: "github",
+    verifierSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
+    handler: internal.integrations.github.webhook.receiveGithubWebhook,
+  }),
+});
 
 /**
  * POST /collaboration/snapshot

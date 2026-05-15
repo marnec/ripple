@@ -817,6 +817,12 @@ export default defineSchema({
     // Lookup key when the webhook adapter resolves a delivery's
     // workspace by `payload.installation.id`.
     externalAccountId: v.string(),
+    // Display metadata captured at install time so workspace-settings can
+    // render "Installed on @acme (Organization)" without a REST call.
+    externalAccountType: v.optional(
+      v.union(v.literal("organization"), v.literal("user")),
+    ),
+    accountLogin: v.optional(v.string()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_externalAccount", ["externalAccountId"]),

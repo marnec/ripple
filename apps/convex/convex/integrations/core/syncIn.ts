@@ -1,6 +1,9 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
-import type { NormalizedIssueEvent } from "./types";
+import type {
+  NormalizedInstallationEvent,
+  NormalizedIssueEvent,
+} from "./types";
 
 /**
  * Optional import-time context. Set by `core/importJob.applyImportBatch` so
@@ -285,4 +288,56 @@ async function resolveCompletedStatus(
     );
   }
   return completed;
+}
+
+/**
+ * Apply an installation-lifecycle event. Auto-disconnects affected links
+ * when the GitHub App is uninstalled or specific repos are removed from
+ * the installation.
+ *
+ * Phase 1 minimum: status patch only. Phase 8 will extend with the
+ * freeze-snapshot (`tasks.externalRefFrozen`) + hard-delete of per-task /
+ * per-comment / per-PR link rows; doing the snapshot work later is
+ * additive — already-disconnected links stay disconnected.
+ */
+export async function applyInstallationEvent(
+  ctx: MutationCtx,
+  args: { event: NormalizedInstallationEvent },
+): Promise<void> {
+  const { event } = args;
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_externalAccount", (q) =>
+      q.eq("externalAccountId", event.externalAccountId),
+    )
+    .unique();
+  if (!integration) return; // unknown installation — drop silently
+
+  if (event.kind === "installation.deleted") {
+    const links = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_workspace", (q) =>
+        q.eq("workspaceId", integration.workspaceId),
+      )
+      .collect();
+    for (const link of links) {
+      if (link.status === "disconnected") continue;
+      await ctx.db.patch(link._id, { status: "disconnected" });
+    }
+    return;
+  }
+
+  // installation_repositories.removed — disconnect only the listed repos.
+  const targetIds = new Set(event.externalRepoIds);
+  for (const repoId of targetIds) {
+    const link = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_externalRepo", (q) => q.eq("externalRepoId", repoId))
+      .unique();
+    if (!link) continue;
+    if (link.workspaceId !== integration.workspaceId) continue;
+    if (link.status === "disconnected") continue;
+    await ctx.db.patch(link._id, { status: "disconnected" });
+  }
 }

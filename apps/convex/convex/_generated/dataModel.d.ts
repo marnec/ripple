@@ -1667,8 +1667,10 @@ export type DataModel = {
   };
   workspaceIntegrations: {
     document: {
+      accountLogin?: string;
       botUserId: Id<"users">;
       externalAccountId: string;
+      externalAccountType?: "organization" | "user";
       provider: string;
       workspaceId: Id<"workspaces">;
       _id: Id<"workspaceIntegrations">;
@@ -1677,8 +1679,10 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "accountLogin"
       | "botUserId"
       | "externalAccountId"
+      | "externalAccountType"
       | "provider"
       | "workspaceId";
     indexes: {

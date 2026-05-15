@@ -137,6 +137,24 @@ async function setupWebhookRouting(
   };
 }
 
+function installationDeletedPayload(installationId = 999_111) {
+  return {
+    action: "deleted",
+    installation: { id: installationId },
+  };
+}
+
+function installationRepositoriesRemovedPayload(opts: {
+  installationId?: number;
+  repos: { node_id: string; full_name: string }[];
+}) {
+  return {
+    action: "removed",
+    installation: { id: opts.installationId ?? 999_111 },
+    repositories_removed: opts.repos,
+  };
+}
+
 function reopenedPayload() {
   return {
     action: "reopened",
@@ -184,10 +202,51 @@ describe("integrations/github/webhook.normalize", () => {
     expect(normalize("issues", payload)).toBeNull();
   });
 
-  it("returns null for non-issues event names (pull_request, installation, etc.)", () => {
+  it("returns null for non-issues / non-installation event names", () => {
     expect(normalize("pull_request", openedPayload())).toBeNull();
-    expect(normalize("installation", openedPayload())).toBeNull();
     expect(normalize("issue_comment", openedPayload())).toBeNull();
+  });
+
+  it("maps an installation.deleted payload to NormalizedInstallationDeletedEvent", () => {
+    const event = normalize("installation", installationDeletedPayload(999_111));
+    expect(event).toEqual({
+      kind: "installation.deleted",
+      externalAccountId: "999111",
+    });
+  });
+
+  it("returns null for installation actions we don't act on (created, suspend, unsuspend, …)", () => {
+    expect(
+      normalize("installation", { action: "created", installation: { id: 1 } }),
+    ).toBeNull();
+    expect(
+      normalize("installation", { action: "suspend", installation: { id: 1 } }),
+    ).toBeNull();
+    expect(
+      normalize("installation_repositories", {
+        action: "added",
+        installation: { id: 1 },
+        repositories_added: [],
+      }),
+    ).toBeNull();
+  });
+
+  it("maps an installation_repositories.removed payload to NormalizedRepositoriesRemovedEvent", () => {
+    const event = normalize(
+      "installation_repositories",
+      installationRepositoriesRemovedPayload({
+        installationId: 999_111,
+        repos: [
+          { node_id: "R_kgDOREMOVED1", full_name: "acme/a" },
+          { node_id: "R_kgDOREMOVED2", full_name: "acme/b" },
+        ],
+      }),
+    );
+    expect(event).toEqual({
+      kind: "installation_repositories.removed",
+      externalAccountId: "999111",
+      externalRepoIds: ["R_kgDOREMOVED1", "R_kgDOREMOVED2"],
+    });
   });
 
   it("maps an issues.reopened payload to a NormalizedIssueReopenedEvent", () => {
@@ -265,6 +324,23 @@ describe("integrations/github/webhook.handleGithubWebhook", () => {
     );
     expect(tasks).toHaveLength(1);
     expect(tasks[0]?.statusId).toBe(triageStatusId);
+  });
+
+  it("routes installation.deleted to applyInstallationEvent — all workspace links disconnect end-to-end", async () => {
+    const t = createTestContext();
+    const { linkId } = await setupWebhookRouting(t, {
+      externalAccountId: "999111",
+    });
+
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "installation",
+        payload: installationDeletedPayload(999_111),
+      }),
+    );
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.status).toBe("disconnected");
   });
 
   it("recognizes a repo rename: externalRepoId lookup wins and externalRepoFullName is updated silently", async () => {

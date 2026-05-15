@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@auth/core": "0.37.0",
+    "@convex-dev/action-retrier": "^0.3.0",
     "@convex-dev/aggregate": "0.2.1",
     "@convex-dev/auth": "0.0.92",
     "@convex-dev/migrations": "0.3.4",
@@ -36,6 +37,7 @@
     "convex-audit-log": "workspace:*",
     "convex-cascading-delete": "workspace:*",
     "convex-helpers": "0.1.115",
+    "convex-webhook-receiver": "^1.0.6",
     "fractional-indexing": "3.2.0",
     "oslo": "1.2.1",
     "resend": "6.12.2",
