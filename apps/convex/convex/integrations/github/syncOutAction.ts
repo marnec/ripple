@@ -350,3 +350,264 @@ export const pushAssigneeChanges = internalAction({
     return null;
   },
 });
+
+/**
+ * Outbound comment-create action. POSTs the Ripple-side body to GitHub's
+ * `/repos/:owner/:repo/issues/:n/comments` endpoint, and on 2xx writes a
+ * `taskCommentIntegrationLinks` row keyed on the returned GitHub comment id.
+ * Failures land on `taskComments.lastSyncError` so the UI can surface a
+ * "⚠ Sync failed — Retry" affordance.
+ *
+ * Pre-condition: the calling dispatcher resolved the task's
+ * `taskIntegrationLinks` row and passed its id; the link row's existence is
+ * assumed by the success recorder.
+ */
+export const pushCommentCreate = internalAction({
+  args: {
+    commentId: v.id("taskComments"),
+    body: v.string(),
+    taskIntegrationLinkId: v.id("taskIntegrationLinks"),
+    installationId: v.string(),
+    repoFullName: v.string(),
+    issueNumber: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const appId = process.env.GITHUB_APP_ID;
+    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (!appId || !privateKeyPem) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations
+          .recordCommentCreateFailure,
+        {
+          commentId: args.commentId,
+          message: "GitHub App credentials not configured",
+          httpStatus: undefined,
+        },
+      );
+      return null;
+    }
+
+    const client = new GithubClient({ appId, privateKeyPem });
+    const token = await client.mintInstallationToken(args.installationId);
+
+    const res = await client.request<{
+      id: number;
+      node_id: string;
+      updated_at: string;
+      user: { login: string; avatar_url: string; html_url: string };
+    }>({
+      installationToken: token,
+      method: "POST",
+      path: `/repos/${args.repoFullName}/issues/${args.issueNumber}/comments`,
+      body: { body: args.body },
+    });
+
+    const normalized: OutboundResponse = {
+      status: res.status as number | null,
+      retryAfterMs: res.retryAfterMs,
+      errorMessage: res.errorMessage,
+    };
+    const decision = classifyResponse(normalized);
+
+    if (decision === "success" && res.body) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations
+          .recordCommentCreateSuccess,
+        {
+          commentId: args.commentId,
+          taskIntegrationLinkId: args.taskIntegrationLinkId,
+          externalCommentId: String(res.body.id),
+          externalUpdatedAt: Date.parse(res.body.updated_at),
+          externalAuthor: {
+            login: res.body.user.login,
+            avatarUrl: res.body.user.avatar_url,
+            url: res.body.user.html_url,
+          },
+        },
+      );
+      return null;
+    }
+
+    if (decision === "permanent_fail") {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations
+          .recordCommentCreateFailure,
+        {
+          commentId: args.commentId,
+          message: normalized.errorMessage ?? `HTTP ${normalized.status}`,
+          httpStatus:
+            typeof normalized.status === "number" ? normalized.status : undefined,
+        },
+      );
+      return null;
+    }
+
+    if (res.status === 429 && normalized.retryAfterMs) {
+      await new Promise((r) => setTimeout(r, normalized.retryAfterMs));
+    }
+    throw new Error(
+      `GitHub comment-create transient failure (status=${normalized.status}); retrier will back off`,
+    );
+  },
+});
+
+/**
+ * Outbound comment-edit action. PATCHes the body of an existing GitHub
+ * issue comment. The `externalCommentId` is the numeric REST id stored on
+ * the link row at create-success time.
+ */
+export const pushCommentEdit = internalAction({
+  args: {
+    commentLinkId: v.id("taskCommentIntegrationLinks"),
+    externalCommentId: v.string(),
+    body: v.string(),
+    installationId: v.string(),
+    repoFullName: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const appId = process.env.GITHUB_APP_ID;
+    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (!appId || !privateKeyPem) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordCommentLinkFailure,
+        {
+          commentLinkId: args.commentLinkId,
+          message: "GitHub App credentials not configured",
+          httpStatus: undefined,
+        },
+      );
+      return null;
+    }
+
+    const client = new GithubClient({ appId, privateKeyPem });
+    const token = await client.mintInstallationToken(args.installationId);
+
+    const res = await client.request<{ updated_at: string }>({
+      installationToken: token,
+      method: "PATCH",
+      path: `/repos/${args.repoFullName}/issues/comments/${args.externalCommentId}`,
+      body: { body: args.body },
+    });
+
+    const normalized: OutboundResponse = {
+      status: res.status as number | null,
+      retryAfterMs: res.retryAfterMs,
+      errorMessage: res.errorMessage,
+    };
+    const decision = classifyResponse(normalized);
+
+    if (decision === "success" && res.body) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations
+          .recordCommentEditSuccess,
+        {
+          commentLinkId: args.commentLinkId,
+          externalUpdatedAt: Date.parse(res.body.updated_at),
+        },
+      );
+      return null;
+    }
+
+    if (decision === "permanent_fail") {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordCommentLinkFailure,
+        {
+          commentLinkId: args.commentLinkId,
+          message: normalized.errorMessage ?? `HTTP ${normalized.status}`,
+          httpStatus:
+            typeof normalized.status === "number" ? normalized.status : undefined,
+        },
+      );
+      return null;
+    }
+
+    if (res.status === 429 && normalized.retryAfterMs) {
+      await new Promise((r) => setTimeout(r, normalized.retryAfterMs));
+    }
+    throw new Error(
+      `GitHub comment-edit transient failure (status=${normalized.status}); retrier will back off`,
+    );
+  },
+});
+
+/**
+ * Outbound comment-delete action. DELETEs the GitHub-side comment. A 404
+ * is treated as success — the comment was already gone (someone deleted it
+ * on GitHub first), and surfacing a "Sync failed" badge for a benign race
+ * would be noise.
+ */
+export const pushCommentDelete = internalAction({
+  args: {
+    commentLinkId: v.id("taskCommentIntegrationLinks"),
+    externalCommentId: v.string(),
+    installationId: v.string(),
+    repoFullName: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const appId = process.env.GITHUB_APP_ID;
+    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (!appId || !privateKeyPem) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordCommentLinkFailure,
+        {
+          commentLinkId: args.commentLinkId,
+          message: "GitHub App credentials not configured",
+          httpStatus: undefined,
+        },
+      );
+      return null;
+    }
+
+    const client = new GithubClient({ appId, privateKeyPem });
+    const token = await client.mintInstallationToken(args.installationId);
+
+    const res = await client.request<unknown>({
+      installationToken: token,
+      method: "DELETE",
+      path: `/repos/${args.repoFullName}/issues/comments/${args.externalCommentId}`,
+    });
+
+    if (res.status === 404 || (typeof res.status === "number" && res.status >= 200 && res.status < 300)) {
+      // Clear lastSyncError on the link row — the delete succeeded (or was
+      // a benign no-op). We deliberately leave the link row in place so a
+      // future webhook delivery for the same externalCommentId can be
+      // deduped via the existing by_externalCommentId index.
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations
+          .recordCommentDeleteSuccess,
+        { commentLinkId: args.commentLinkId },
+      );
+      return null;
+    }
+
+    const normalized: OutboundResponse = {
+      status: res.status as number | null,
+      retryAfterMs: res.retryAfterMs,
+      errorMessage: res.errorMessage,
+    };
+    const decision = classifyResponse(normalized);
+
+    if (decision === "permanent_fail") {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordCommentLinkFailure,
+        {
+          commentLinkId: args.commentLinkId,
+          message: normalized.errorMessage ?? `HTTP ${normalized.status}`,
+          httpStatus:
+            typeof normalized.status === "number" ? normalized.status : undefined,
+        },
+      );
+      return null;
+    }
+
+    if (res.status === 429 && normalized.retryAfterMs) {
+      await new Promise((r) => setTimeout(r, normalized.retryAfterMs));
+    }
+    throw new Error(
+      `GitHub comment-delete transient failure (status=${normalized.status}); retrier will back off`,
+    );
+  },
+});

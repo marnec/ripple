@@ -1232,10 +1232,57 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
+  taskCommentIntegrationLinks: {
+    document: {
+      externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalCommentId: string;
+      externalUpdatedAt: number;
+      lastSyncError?: {
+        httpStatus?: number;
+        message: string;
+        occurredAt: number;
+      };
+      outboundRunId?: string;
+      taskCommentId: Id<"taskComments">;
+      taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+      _id: Id<"taskCommentIntegrationLinks">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "externalAuthor"
+      | "externalAuthor.avatarUrl"
+      | "externalAuthor.login"
+      | "externalAuthor.url"
+      | "externalCommentId"
+      | "externalUpdatedAt"
+      | "lastSyncError"
+      | "lastSyncError.httpStatus"
+      | "lastSyncError.message"
+      | "lastSyncError.occurredAt"
+      | "outboundRunId"
+      | "taskCommentId"
+      | "taskIntegrationLinkId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_externalCommentId: ["externalCommentId", "_creationTime"];
+      by_outboundRunId: ["outboundRunId", "_creationTime"];
+      by_taskComment: ["taskCommentId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   taskComments: {
     document: {
       body: string;
       deleted: boolean;
+      lastSyncError?: {
+        httpStatus?: number;
+        message: string;
+        occurredAt: number;
+      };
       taskId: Id<"tasks">;
       userId: Id<"users">;
       _id: Id<"taskComments">;
@@ -1246,6 +1293,10 @@ export type DataModel = {
       | "_id"
       | "body"
       | "deleted"
+      | "lastSyncError"
+      | "lastSyncError.httpStatus"
+      | "lastSyncError.message"
+      | "lastSyncError.occurredAt"
       | "taskId"
       | "userId";
     indexes: {

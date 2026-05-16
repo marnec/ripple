@@ -12,7 +12,10 @@ export type NormalizedIssueEvent =
   | NormalizedIssueClosedEvent
   | NormalizedIssueReopenedEvent
   | NormalizedIssueLabelsChangedEvent
-  | NormalizedIssueAssigneesChangedEvent;
+  | NormalizedIssueAssigneesChangedEvent
+  | NormalizedCommentCreatedEvent
+  | NormalizedCommentEditedEvent
+  | NormalizedCommentDeletedEvent;
 
 /**
  * Installation-lifecycle events — distinct from `NormalizedIssueEvent`
@@ -134,4 +137,47 @@ export interface NormalizedIssueAssigneesChangedEvent {
     avatarUrl: string;
     url: string;
   }[];
+}
+
+/**
+ * Comment created on the external side. The adapter resolves the parent
+ * issue's stable id (`externalIssueId`) so `core/syncIn` can find the
+ * `taskIntegrationLinks` row to attach the comment to. Comments on issues
+ * Ripple never imported are dropped — no orphan task synthesis.
+ */
+export interface NormalizedCommentCreatedEvent {
+  kind: "comment.created";
+  /** Stable provider-side comment id. GitHub: comment node id. */
+  externalCommentId: string;
+  externalIssueId: string;
+  externalUpdatedAt: number;
+  body: string;
+  externalAuthor: NormalizedExternalAuthor;
+}
+
+/**
+ * Comment edited on the external side. Carries the full new body — the
+ * core reconciler treats every edit as a replace, not a delta. The
+ * `externalIssueId` is informational (the comment row already knows its
+ * parent); kept on the event so adapters can construct it from any
+ * payload shape without a pre-lookup.
+ */
+export interface NormalizedCommentEditedEvent {
+  kind: "comment.edited";
+  externalCommentId: string;
+  externalIssueId: string;
+  externalUpdatedAt: number;
+  body: string;
+}
+
+/**
+ * Comment deleted on the external side. The receiver soft-deletes the
+ * Ripple comment row; the link row stays so a redelivery is a no-op via
+ * the externalUpdatedAt guard.
+ */
+export interface NormalizedCommentDeletedEvent {
+  kind: "comment.deleted";
+  externalCommentId: string;
+  externalIssueId: string;
+  externalUpdatedAt: number;
 }

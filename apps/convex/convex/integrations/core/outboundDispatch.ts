@@ -249,3 +249,142 @@ export async function maybeEnqueueAssigneesPush(
     },
   );
 }
+
+/**
+ * Outbound comment create dispatcher. Called by `taskComments.create` after
+ * the Ripple-side row is inserted. Gated by the same task-link + freeze
+ * checks as the other comment/task pushers; skipped silently when:
+ *
+ *  - The parent task has no `taskIntegrationLinks` row (Ripple-native task).
+ *  - The project link is paused or entitlement-frozen.
+ *
+ * The push action POSTs to GitHub and (on success) writes a
+ * `taskCommentIntegrationLinks` row carrying the returned GitHub comment id.
+ * Failures land on `taskComments.lastSyncError` (no link row yet).
+ */
+export async function maybeEnqueueCommentCreate(
+  ctx: MutationCtx,
+  commentId: Id<"taskComments">,
+): Promise<void> {
+  const comment = await ctx.db.get(commentId);
+  if (!comment) return;
+
+  const link = await ctx.db
+    .query("taskIntegrationLinks")
+    .withIndex("by_task", (q) => q.eq("taskId", comment.taskId))
+    .unique();
+  if (!link) return; // Ripple-native task.
+
+  const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
+  if (!projectLink) return;
+  if (shouldSkipForFreeze(projectLink)) return;
+
+  const task = await ctx.db.get(comment.taskId);
+  if (!task) return;
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) =>
+      q.eq("workspaceId", projectLink.workspaceId),
+    )
+    .unique();
+  if (!integration) return;
+
+  await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushCommentCreate,
+    {
+      commentId,
+      body: comment.body,
+      taskIntegrationLinkId: link._id,
+      installationId: integration.externalAccountId,
+      repoFullName: projectLink.externalRepoFullName,
+      issueNumber: task.externalRefs?.[0]?.issueNumber ?? 0,
+    },
+  );
+}
+
+/**
+ * Outbound comment update dispatcher. Skipped when no comment-link row
+ * exists yet (the create POST is still in flight, never ran, or the
+ * comment is Ripple-native on an unlinked task).
+ */
+export async function maybeEnqueueCommentUpdate(
+  ctx: MutationCtx,
+  commentId: Id<"taskComments">,
+): Promise<void> {
+  const comment = await ctx.db.get(commentId);
+  if (!comment) return;
+
+  const commentLink = await ctx.db
+    .query("taskCommentIntegrationLinks")
+    .withIndex("by_taskComment", (q) => q.eq("taskCommentId", commentId))
+    .unique();
+  if (!commentLink) return;
+
+  const taskLink = await ctx.db.get(commentLink.taskIntegrationLinkId);
+  if (!taskLink) return;
+  const projectLink = await ctx.db.get(taskLink.projectIntegrationLinkId);
+  if (!projectLink) return;
+  if (shouldSkipForFreeze(projectLink)) return;
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) =>
+      q.eq("workspaceId", projectLink.workspaceId),
+    )
+    .unique();
+  if (!integration) return;
+
+  await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushCommentEdit,
+    {
+      commentLinkId: commentLink._id,
+      externalCommentId: commentLink.externalCommentId,
+      body: comment.body,
+      installationId: integration.externalAccountId,
+      repoFullName: projectLink.externalRepoFullName,
+    },
+  );
+}
+
+/**
+ * Outbound comment delete dispatcher. Skipped when no comment-link row
+ * exists (nothing to delete on the GitHub side).
+ */
+export async function maybeEnqueueCommentDelete(
+  ctx: MutationCtx,
+  commentId: Id<"taskComments">,
+): Promise<void> {
+  const commentLink = await ctx.db
+    .query("taskCommentIntegrationLinks")
+    .withIndex("by_taskComment", (q) => q.eq("taskCommentId", commentId))
+    .unique();
+  if (!commentLink) return;
+
+  const taskLink = await ctx.db.get(commentLink.taskIntegrationLinkId);
+  if (!taskLink) return;
+  const projectLink = await ctx.db.get(taskLink.projectIntegrationLinkId);
+  if (!projectLink) return;
+  if (shouldSkipForFreeze(projectLink)) return;
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) =>
+      q.eq("workspaceId", projectLink.workspaceId),
+    )
+    .unique();
+  if (!integration) return;
+
+  await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushCommentDelete,
+    {
+      commentLinkId: commentLink._id,
+      externalCommentId: commentLink.externalCommentId,
+      installationId: integration.externalAccountId,
+      repoFullName: projectLink.externalRepoFullName,
+    },
+  );
+}

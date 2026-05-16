@@ -385,9 +385,95 @@ describe("integrations/github/webhook.normalize", () => {
     });
   });
 
-  it("returns null for non-issues / non-installation event names", () => {
+  it("returns null for non-issues / non-installation / non-issue_comment event names", () => {
     expect(normalize("pull_request", openedPayload())).toBeNull();
-    expect(normalize("issue_comment", openedPayload())).toBeNull();
+  });
+
+  it("maps an issue_comment.created payload to a NormalizedCommentCreatedEvent", () => {
+    const payload = {
+      action: "created",
+      issue: { node_id: "I_kwDOABC123", number: 42 },
+      comment: {
+        node_id: "IC_kwDOABC123_1",
+        body: "Thanks for the report!",
+        updated_at: "2026-05-15T16:00:00Z",
+        user: {
+          login: "external-user",
+          avatar_url: "https://avatars.githubusercontent.com/u/9?v=4",
+          html_url: "https://github.com/external-user",
+        },
+      },
+      installation: { id: 999_111 },
+      repository: { node_id: "R_kgDOACME", full_name: "acme/web" },
+    };
+    const event = normalize("issue_comment", payload);
+    expect(event).toEqual({
+      kind: "comment.created",
+      externalCommentId: "IC_kwDOABC123_1",
+      externalIssueId: "I_kwDOABC123",
+      externalUpdatedAt: Date.parse("2026-05-15T16:00:00Z"),
+      body: "Thanks for the report!",
+      externalAuthor: {
+        login: "external-user",
+        avatarUrl: "https://avatars.githubusercontent.com/u/9?v=4",
+        url: "https://github.com/external-user",
+      },
+    });
+  });
+
+  it("maps an issue_comment.edited payload to a NormalizedCommentEditedEvent (no author)", () => {
+    const payload = {
+      action: "edited",
+      issue: { node_id: "I_kwDOABC123", number: 42 },
+      comment: {
+        node_id: "IC_kwDOABC123_1",
+        body: "Edited body",
+        updated_at: "2026-05-15T17:00:00Z",
+        user: {
+          login: "external-user",
+          avatar_url: "https://avatars.githubusercontent.com/u/9?v=4",
+          html_url: "https://github.com/external-user",
+        },
+      },
+    };
+    const event = normalize("issue_comment", payload);
+    expect(event).toEqual({
+      kind: "comment.edited",
+      externalCommentId: "IC_kwDOABC123_1",
+      externalIssueId: "I_kwDOABC123",
+      externalUpdatedAt: Date.parse("2026-05-15T17:00:00Z"),
+      body: "Edited body",
+    });
+  });
+
+  it("maps an issue_comment.deleted payload to a NormalizedCommentDeletedEvent", () => {
+    const payload = {
+      action: "deleted",
+      issue: { node_id: "I_kwDOABC123", number: 42 },
+      comment: {
+        node_id: "IC_kwDOABC123_1",
+        body: "Will be gone",
+        updated_at: "2026-05-15T18:00:00Z",
+        user: {
+          login: "external-user",
+          avatar_url: "https://avatars.githubusercontent.com/u/9?v=4",
+          html_url: "https://github.com/external-user",
+        },
+      },
+    };
+    const event = normalize("issue_comment", payload);
+    expect(event).toEqual({
+      kind: "comment.deleted",
+      externalCommentId: "IC_kwDOABC123_1",
+      externalIssueId: "I_kwDOABC123",
+      externalUpdatedAt: Date.parse("2026-05-15T18:00:00Z"),
+    });
+  });
+
+  it("returns null for issue_comment actions we don't act on", () => {
+    expect(
+      normalize("issue_comment", { action: "unknown" }),
+    ).toBeNull();
   });
 
   it("maps an installation.deleted payload to NormalizedInstallationDeletedEvent", () => {
@@ -669,5 +755,96 @@ describe("integrations/github/webhook.handleGithubWebhook", () => {
         .collect(),
     );
     expect(tasks).toHaveLength(0);
+  });
+
+  it("issue_comment.created routes through syncIn and creates a taskComments row", async () => {
+    const t = createTestContext();
+    await setupWebhookRouting(t);
+
+    // Seed an imported issue so the comment has a parent task.
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issues",
+        payload: openedPayload(),
+      }),
+    );
+
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issue_comment",
+        payload: {
+          action: "created",
+          issue: { node_id: "I_kwDOABC123", number: 42 },
+          comment: {
+            node_id: "IC_kwDOABC123_1",
+            body: "External comment body",
+            updated_at: "2026-05-15T16:00:00Z",
+            user: {
+              login: "external-user",
+              avatar_url: "https://avatars.githubusercontent.com/u/9?v=4",
+              html_url: "https://github.com/external-user",
+            },
+          },
+          installation: { id: 999_111 },
+          repository: { node_id: "R_kgDOACME", full_name: "acme/web" },
+        },
+      }),
+    );
+
+    const comments = await t.run((ctx) =>
+      ctx.db.query("taskComments").collect(),
+    );
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toBe("External comment body");
+  });
+
+  it("drops an issue_comment event when the link is entitlement-frozen", async () => {
+    const t = createTestContext();
+    // Seed the issue before freezing (the open ran while still active).
+    await setupWebhookRouting(t);
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issues",
+        payload: openedPayload(),
+      }),
+    );
+
+    // Freeze the link via entitlement.
+    await t.run(async (ctx) => {
+      const link = await ctx.db
+        .query("projectIntegrationLinks")
+        .withIndex("by_externalRepo", (q) =>
+          q.eq("externalRepoId", "R_kgDOACME"),
+        )
+        .unique();
+      await ctx.db.patch(link!._id, { pausedByBilling: true });
+    });
+
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issue_comment",
+        payload: {
+          action: "created",
+          issue: { node_id: "I_kwDOABC123", number: 42 },
+          comment: {
+            node_id: "IC_kwDOABC123_FROZEN",
+            body: "Should not be inserted",
+            updated_at: "2026-05-15T16:00:00Z",
+            user: {
+              login: "external-user",
+              avatar_url: "https://avatars.githubusercontent.com/u/9?v=4",
+              html_url: "https://github.com/external-user",
+            },
+          },
+          installation: { id: 999_111 },
+          repository: { node_id: "R_kgDOACME", full_name: "acme/web" },
+        },
+      }),
+    );
+
+    const comments = await t.run((ctx) =>
+      ctx.db.query("taskComments").collect(),
+    );
+    expect(comments).toHaveLength(0);
   });
 });

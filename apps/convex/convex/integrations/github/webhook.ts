@@ -157,9 +157,63 @@ export function normalize(
   payload: unknown,
 ): NormalizedWebhookEvent | null {
   if (eventName === "issues") return normalizeIssuesEvent(payload);
+  if (eventName === "issue_comment") {
+    return normalizeIssueCommentEvent(payload);
+  }
   if (eventName === "installation") return normalizeInstallationEvent(payload);
   if (eventName === "installation_repositories") {
     return normalizeInstallationRepositoriesEvent(payload);
+  }
+  return null;
+}
+
+interface GithubIssueComment {
+  node_id: string;
+  body: string | null;
+  updated_at: string;
+  user: GithubUser;
+}
+
+interface GithubIssueCommentPayload {
+  action: string;
+  issue: { node_id: string; number: number };
+  comment: GithubIssueComment;
+}
+
+function normalizeIssueCommentEvent(
+  payload: unknown,
+): NormalizedWebhookEvent | null {
+  const p = payload as GithubIssueCommentPayload;
+  if (p.action === "created") {
+    return {
+      kind: "comment.created",
+      externalCommentId: p.comment.node_id,
+      externalIssueId: p.issue.node_id,
+      externalUpdatedAt: Date.parse(p.comment.updated_at),
+      body: p.comment.body ?? "",
+      externalAuthor: {
+        login: p.comment.user.login,
+        avatarUrl: p.comment.user.avatar_url,
+        url: p.comment.user.html_url,
+      },
+    };
+  }
+  if (p.action === "edited") {
+    return {
+      kind: "comment.edited",
+      externalCommentId: p.comment.node_id,
+      externalIssueId: p.issue.node_id,
+      externalUpdatedAt: Date.parse(p.comment.updated_at),
+      body: p.comment.body ?? "",
+    };
+  }
+  if (p.action === "deleted") {
+    return {
+      kind: "comment.deleted",
+      externalCommentId: p.comment.node_id,
+      externalIssueId: p.issue.node_id,
+      externalUpdatedAt: Date.parse(p.comment.updated_at),
+    };
   }
   return null;
 }

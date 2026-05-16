@@ -161,6 +161,98 @@ export const recordOutboundFailure = internalMutation({
  *    affordance surfaces.
  *  - result.type === "canceled": same as success — just clear.
  */
+export const recordCommentCreateSuccess = internalMutation({
+  args: {
+    commentId: v.id("taskComments"),
+    taskIntegrationLinkId: v.id("taskIntegrationLinks"),
+    externalCommentId: v.string(),
+    externalUpdatedAt: v.number(),
+    externalAuthor: v.object({
+      login: v.string(),
+      avatarUrl: v.string(),
+      url: v.string(),
+    }),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.insert("taskCommentIntegrationLinks", {
+      taskCommentId: args.commentId,
+      taskIntegrationLinkId: args.taskIntegrationLinkId,
+      externalCommentId: args.externalCommentId,
+      externalUpdatedAt: args.externalUpdatedAt,
+      externalAuthor: args.externalAuthor,
+    });
+    // Clear any prior failure marker so the UI's "⚠ Sync failed" affordance
+    // goes away.
+    await ctx.db.patch(args.commentId, { lastSyncError: undefined });
+    return null;
+  },
+});
+
+export const recordCommentCreateFailure = internalMutation({
+  args: {
+    commentId: v.id("taskComments"),
+    message: v.string(),
+    httpStatus: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.commentId, {
+      lastSyncError: {
+        occurredAt: Date.now(),
+        message: args.message,
+        httpStatus: args.httpStatus,
+      },
+    });
+    return null;
+  },
+});
+
+export const recordCommentEditSuccess = internalMutation({
+  args: {
+    commentLinkId: v.id("taskCommentIntegrationLinks"),
+    externalUpdatedAt: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.commentLinkId, {
+      externalUpdatedAt: args.externalUpdatedAt,
+      lastSyncError: undefined,
+    });
+    return null;
+  },
+});
+
+export const recordCommentDeleteSuccess = internalMutation({
+  args: {
+    commentLinkId: v.id("taskCommentIntegrationLinks"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.commentLinkId, { lastSyncError: undefined });
+    return null;
+  },
+});
+
+export const recordCommentLinkFailure = internalMutation({
+  args: {
+    commentLinkId: v.id("taskCommentIntegrationLinks"),
+    message: v.string(),
+    httpStatus: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.commentLinkId, {
+      lastSyncError: {
+        occurredAt: Date.now(),
+        message: args.message,
+        httpStatus: args.httpStatus,
+      },
+    });
+    return null;
+  },
+});
+
 export const onOutboundComplete = internalMutation({
   args: onCompleteValidator,
   returns: v.null(),

@@ -2078,6 +2078,7 @@ export declare const api: {
         author: string;
         body: string;
         deleted: boolean;
+        externalAuthor?: { avatarUrl: string; login: string; url: string };
         image?: string;
         taskId: Id<"tasks">;
         userId: Id<"users">;
@@ -3360,6 +3361,42 @@ export declare const internal: {
           },
           null
         >;
+        pushCommentCreate: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            commentId: Id<"taskComments">;
+            installationId: string;
+            issueNumber: number;
+            repoFullName: string;
+            taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+          },
+          null
+        >;
+        pushCommentDelete: FunctionReference<
+          "action",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            externalCommentId: string;
+            installationId: string;
+            repoFullName: string;
+          },
+          null
+        >;
+        pushCommentEdit: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            externalCommentId: string;
+            installationId: string;
+            repoFullName: string;
+          },
+          null
+        >;
         pushIssueState: FunctionReference<
           "action",
           "internal",
@@ -3405,6 +3442,53 @@ export declare const internal: {
           "mutation",
           "internal",
           { nextLogins: Array<string>; taskId: Id<"tasks"> },
+          null
+        >;
+        recordCommentCreateFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentId: Id<"taskComments">;
+            httpStatus?: number;
+            message: string;
+          },
+          null
+        >;
+        recordCommentCreateSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentId: Id<"taskComments">;
+            externalAuthor: { avatarUrl: string; login: string; url: string };
+            externalCommentId: string;
+            externalUpdatedAt: number;
+            taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+          },
+          null
+        >;
+        recordCommentDeleteSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          { commentLinkId: Id<"taskCommentIntegrationLinks"> },
+          null
+        >;
+        recordCommentEditSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            externalUpdatedAt: number;
+          },
+          null
+        >;
+        recordCommentLinkFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            httpStatus?: number;
+            message: string;
+          },
           null
         >;
         recordLabelsSuccess: FunctionReference<

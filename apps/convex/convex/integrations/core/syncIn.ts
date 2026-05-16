@@ -112,7 +112,115 @@ export async function applyNormalizedEvent(
       if (isStale(event, existingLink)) return;
       await applyAssigneesChanged(ctx, { event, link, existingLink });
       return;
+
+    case "comment.created":
+      // Comments on issues we never imported are dropped — no orphan task
+      // synthesis from a comment-only event.
+      if (!existingLink) return;
+      await applyCommentCreated(ctx, { event, link, existingLink });
+      return;
+
+    case "comment.edited":
+      if (!existingLink) return;
+      await applyCommentEdited(ctx, { event });
+      return;
+
+    case "comment.deleted":
+      if (!existingLink) return;
+      await applyCommentDeleted(ctx, { event });
+      return;
   }
+}
+
+async function applyCommentDeleted(
+  ctx: MutationCtx,
+  args: {
+    event: Extract<NormalizedIssueEvent, { kind: "comment.deleted" }>;
+  },
+): Promise<void> {
+  const { event } = args;
+  const commentLink = await ctx.db
+    .query("taskCommentIntegrationLinks")
+    .withIndex("by_externalCommentId", (q) =>
+      q.eq("externalCommentId", event.externalCommentId),
+    )
+    .unique();
+  if (!commentLink) return;
+  if (event.externalUpdatedAt <= commentLink.externalUpdatedAt) return;
+
+  await ctx.db.patch(commentLink.taskCommentId, { deleted: true });
+  await ctx.db.patch(commentLink._id, {
+    externalUpdatedAt: event.externalUpdatedAt,
+  });
+}
+
+async function applyCommentEdited(
+  ctx: MutationCtx,
+  args: {
+    event: Extract<NormalizedIssueEvent, { kind: "comment.edited" }>;
+  },
+): Promise<void> {
+  const { event } = args;
+  const commentLink = await ctx.db
+    .query("taskCommentIntegrationLinks")
+    .withIndex("by_externalCommentId", (q) =>
+      q.eq("externalCommentId", event.externalCommentId),
+    )
+    .unique();
+  // Edits for comments we never imported are dropped.
+  if (!commentLink) return;
+  // Ordering guard: stale edits are dropped.
+  if (event.externalUpdatedAt <= commentLink.externalUpdatedAt) return;
+
+  await ctx.db.patch(commentLink.taskCommentId, { body: event.body });
+  await ctx.db.patch(commentLink._id, {
+    externalUpdatedAt: event.externalUpdatedAt,
+  });
+}
+
+async function applyCommentCreated(
+  ctx: MutationCtx,
+  args: {
+    event: Extract<NormalizedIssueEvent, { kind: "comment.created" }>;
+    link: Doc<"projectIntegrationLinks">;
+    existingLink: Doc<"taskIntegrationLinks">;
+  },
+): Promise<void> {
+  const { event, link, existingLink } = args;
+
+  // Idempotency: same externalCommentId arriving twice → no-op.
+  const dupe = await ctx.db
+    .query("taskCommentIntegrationLinks")
+    .withIndex("by_externalCommentId", (q) =>
+      q.eq("externalCommentId", event.externalCommentId),
+    )
+    .unique();
+  if (dupe) return;
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
+    .unique();
+  if (!integration) {
+    throw new Error(
+      `applyCommentCreated: workspace ${link.workspaceId} has no integration row`,
+    );
+  }
+
+  const commentId = await ctx.db.insert("taskComments", {
+    taskId: existingLink.taskId,
+    userId: integration.botUserId,
+    body: event.body,
+    deleted: false,
+  });
+
+  await ctx.db.insert("taskCommentIntegrationLinks", {
+    taskCommentId: commentId,
+    taskIntegrationLinkId: existingLink._id,
+    externalCommentId: event.externalCommentId,
+    externalUpdatedAt: event.externalUpdatedAt,
+    externalAuthor: event.externalAuthor,
+  });
 }
 
 /**
@@ -125,7 +233,14 @@ async function createTaskFromEvent(
   args: {
     event: Exclude<
       NormalizedIssueEvent,
-      { kind: "issue.labels_changed" | "issue.assignees_changed" }
+      {
+        kind:
+          | "issue.labels_changed"
+          | "issue.assignees_changed"
+          | "comment.created"
+          | "comment.edited"
+          | "comment.deleted";
+      }
     >;
     link: Doc<"projectIntegrationLinks">;
     destinationStatus: Doc<"taskStatuses">;

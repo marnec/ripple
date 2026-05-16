@@ -391,6 +391,17 @@ export default defineSchema({
     userId: v.id("users"),
     body: v.string(),
     deleted: v.boolean(),
+    // Permanent outbound failure marker for the *create* dispatch — there's
+    // no `taskCommentIntegrationLinks` row yet at create-failure time, so the
+    // error lives on the comment row itself. Update/delete failures land on
+    // the link row's `lastSyncError`.
+    lastSyncError: v.optional(
+      v.object({
+        occurredAt: v.number(),
+        message: v.string(),
+        httpStatus: v.optional(v.number()),
+      }),
+    ),
   })
     .index("by_task", ["taskId"])
     .index("undeleted_by_task", ["taskId", "deleted"]),
@@ -948,5 +959,39 @@ export default defineSchema({
       "externalIssueId",
     ])
     .index("by_task", ["taskId"])
+    .index("by_outboundRunId", ["outboundRunId"]),
+
+  // Per-comment integration state. Mirrors the task-level link split: the hot
+  // `taskComments` row stays free of webhook-driven churn; this row carries
+  // the GitHub comment id, the echo-guard mirror, the external author blob,
+  // and the in-flight outbound bookkeeping.
+  taskCommentIntegrationLinks: defineTable({
+    taskCommentId: v.id("taskComments"),
+    taskIntegrationLinkId: v.id("taskIntegrationLinks"),
+    // Stable provider-side comment id. GitHub returns this as a number; we
+    // stringify in the adapter so the schema stays provider-agnostic.
+    externalCommentId: v.string(),
+    // Last-known external mtime. Drives the inbound stale-event drop and
+    // the outbound echo guard (skip when our pending push matches what
+    // GitHub already shows).
+    externalUpdatedAt: v.number(),
+    // GitHub identity for display — rendered as the small chip next to the
+    // bot-user avatar on external-authored comments.
+    externalAuthor: v.object({
+      login: v.string(),
+      avatarUrl: v.string(),
+      url: v.string(),
+    }),
+    outboundRunId: v.optional(v.string()),
+    lastSyncError: v.optional(
+      v.object({
+        occurredAt: v.number(),
+        message: v.string(),
+        httpStatus: v.optional(v.number()),
+      }),
+    ),
+  })
+    .index("by_taskComment", ["taskCommentId"])
+    .index("by_externalCommentId", ["externalCommentId"])
     .index("by_outboundRunId", ["outboundRunId"]),
 });

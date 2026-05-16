@@ -161,7 +161,7 @@ A Ripple `assigneeId` pushes 1→1 to GitHub as the single assignee. GitHub issu
 
 ---
 
-## Phase 5 — Comments bidirectional
+## Phase 5 — Comments bidirectional ✅
 
 **User stories**: 37–39, 50.
 
