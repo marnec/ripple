@@ -1,5 +1,6 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
+import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import type {
   NormalizedInstallationEvent,
   NormalizedIssueEvent,
@@ -79,6 +80,14 @@ export async function applyNormalizedEvent(
       });
       return;
 
+    case "issue.labels_changed":
+      // Label events arriving for an issue we never imported are dropped —
+      // we don't synthesize an orphan task from a labels-only event.
+      if (!existingLink) return;
+      if (isStale(event, existingLink)) return;
+      await applyLabelsChanged(ctx, { event, link, existingLink });
+      return;
+
     case "issue.reopened":
       if (existingLink) {
         if (isStale(event, existingLink)) return;
@@ -106,7 +115,10 @@ export async function applyNormalizedEvent(
 async function createTaskFromEvent(
   ctx: MutationCtx,
   args: {
-    event: NormalizedIssueEvent;
+    event: Exclude<
+      NormalizedIssueEvent,
+      { kind: "issue.labels_changed" }
+    >;
     link: Doc<"projectIntegrationLinks">;
     destinationStatus: Doc<"taskStatuses">;
     externalState: "open" | "closed";
@@ -192,6 +204,61 @@ async function updateExistingOnClose(
   });
 }
 
+async function applyLabelsChanged(
+  ctx: MutationCtx,
+  args: {
+    event: Extract<NormalizedIssueEvent, { kind: "issue.labels_changed" }>;
+    link: Doc<"projectIntegrationLinks">;
+    existingLink: Doc<"taskIntegrationLinks">;
+  },
+): Promise<void> {
+  const { event, link, existingLink } = args;
+
+  const task = await ctx.db.get(existingLink.taskId);
+  if (!task) return;
+
+  const normalized = normalizeTagList(event.labels);
+
+  // Echo guard: if the inbound set already matches the last-known GitHub
+  // set, this event is a bounce-back from our own outbound write. Skip the
+  // taskTags reconciliation and externalUpdatedAt bump entirely.
+  if (sameLabelSet(normalized, existingLink.externalLabels)) return;
+
+  // Reconcile the dictionary `tags` + project-scoped `taskTags` join. We then
+  // mirror that list into `tasks.labels` (denormalized projection) and into
+  // `taskIntegrationLinks.externalLabels` (the last-known GitHub set).
+  await syncTaskTags(ctx, {
+    workspaceId: link.workspaceId,
+    projectId: link.projectId,
+    taskId: task._id,
+    completed: task.completed,
+    dueDate: task.dueDate,
+    plannedStartDate: task.plannedStartDate,
+    assigneeId: task.assigneeId,
+    nextTagNames: normalized,
+  });
+
+  await ctx.db.patch(task._id, { labels: normalized });
+  await ctx.db.patch(existingLink._id, {
+    externalLabels: normalized,
+    externalUpdatedAt: event.externalUpdatedAt,
+  });
+}
+
+/** Order-insensitive label-set comparison. Both sides are pre-normalized. */
+function sameLabelSet(
+  next: readonly string[],
+  prev: readonly string[] | undefined,
+): boolean {
+  if (!prev) return false;
+  if (next.length !== prev.length) return false;
+  const prevSet = new Set(prev);
+  for (const n of next) {
+    if (!prevSet.has(n)) return false;
+  }
+  return true;
+}
+
 async function updateExistingOnReopen(
   ctx: MutationCtx,
   args: {
@@ -224,7 +291,7 @@ async function updateExistingOnReopen(
 function isStale(
   event: Extract<
     NormalizedIssueEvent,
-    { kind: "issue.closed" | "issue.reopened" }
+    { kind: "issue.closed" | "issue.reopened" | "issue.labels_changed" }
   >,
   existingLink: Doc<"taskIntegrationLinks">,
 ): boolean {

@@ -670,8 +670,10 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2168,8 +2170,10 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2238,8 +2242,10 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2308,8 +2314,10 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2363,8 +2371,10 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2466,8 +2476,10 @@ export declare const api: {
             _creationTime: number;
             _id: Id<"taskStatuses">;
             color: string;
+            externalCloseReason?: "completed" | "not_planned";
             isCompleted: boolean;
             isDefault: boolean;
+            isTriage?: boolean;
             name: string;
             order: number;
             pendingDeletion?: boolean;
@@ -2519,8 +2531,10 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2597,8 +2611,10 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"taskStatuses">;
         color: string;
+        externalCloseReason?: "completed" | "not_planned";
         isCompleted: boolean;
         isDefault: boolean;
+        isTriage?: boolean;
         name: string;
         order: number;
         pendingDeletion?: boolean;
@@ -3333,6 +3349,20 @@ export declare const internal: {
           },
           null
         >;
+        pushLabelChanges: FunctionReference<
+          "action",
+          "internal",
+          {
+            add: Array<string>;
+            installationId: string;
+            issueNumber: number;
+            nextLabels: Array<string>;
+            remove: Array<string>;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
       };
       syncOutMutations: {
         onOutboundComplete: FunctionReference<
@@ -3345,6 +3375,12 @@ export declare const internal: {
               | { type: "canceled" };
             runId: string;
           },
+          null
+        >;
+        recordLabelsSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          { nextLabels: Array<string>; taskId: Id<"tasks"> },
           null
         >;
         recordOutboundFailure: FunctionReference<

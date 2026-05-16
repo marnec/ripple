@@ -893,6 +893,11 @@ export default defineSchema({
     // back to this link to record retry-exhaustion failures. Cleared on
     // completion (success or failure).
     outboundRunId: v.optional(v.string()),
+    // Mirror of the last-known GitHub label set (normalized: lowercased,
+    // deduped). Drives the inbound echo guard (if nextLabels matches, the
+    // event is a re-delivery of our own outbound push) and the outbound diff
+    // (what to POST/DELETE on the GitHub side).
+    externalLabels: v.optional(v.array(v.string())),
   })
     // Idempotency / "have we imported this issue?" lookup.
     .index("by_link_externalIssueId", [

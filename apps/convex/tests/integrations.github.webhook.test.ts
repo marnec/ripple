@@ -197,9 +197,106 @@ describe("integrations/github/webhook.normalize", () => {
     });
   });
 
-  it("returns null for issues actions we don't handle yet (e.g. assigned, labeled)", () => {
+  it("returns null for issues actions we don't handle yet (e.g. assigned)", () => {
     const payload = openedPayload({ action: "assigned" });
     expect(normalize("issues", payload)).toBeNull();
+  });
+
+  it("maps an issues.labeled payload to a NormalizedIssueLabelsChangedEvent carrying the full label set", () => {
+    // GitHub's `issues.labeled` event ships the `label` that was just added
+    // AND the full current `issue.labels` array. We normalize against the
+    // full set so reconciliation is delta-insensitive (resilient to dropped
+    // or out-of-order deliveries).
+    const payload = {
+      action: "labeled",
+      issue: {
+        id: 12345,
+        node_id: "I_kwDOABC123",
+        number: 42,
+        title: "Issue with labels",
+        body: "body",
+        state: "open",
+        html_url: "https://github.com/acme/web/issues/42",
+        updated_at: "2026-05-15T13:00:00Z",
+        user: {
+          login: "octocat",
+          avatar_url: "https://avatars.githubusercontent.com/u/1?v=4",
+          html_url: "https://github.com/octocat",
+        },
+        labels: [
+          { name: "Bug" },
+          { name: "good first issue" },
+        ],
+      },
+      label: { name: "good first issue" },
+    };
+    const event = normalize("issues", payload);
+    expect(event).toEqual({
+      kind: "issue.labels_changed",
+      externalIssueId: "I_kwDOABC123",
+      issueNumber: 42,
+      externalUpdatedAt: Date.parse("2026-05-15T13:00:00Z"),
+      labels: ["Bug", "good first issue"],
+    });
+  });
+
+  it("maps an issues.unlabeled payload to a NormalizedIssueLabelsChangedEvent carrying the surviving label set", () => {
+    const payload = {
+      action: "unlabeled",
+      issue: {
+        id: 12345,
+        node_id: "I_kwDOABC123",
+        number: 42,
+        title: "Issue with labels",
+        body: "body",
+        state: "open",
+        html_url: "https://github.com/acme/web/issues/42",
+        updated_at: "2026-05-15T14:00:00Z",
+        user: {
+          login: "octocat",
+          avatar_url: "https://avatars.githubusercontent.com/u/1?v=4",
+          html_url: "https://github.com/octocat",
+        },
+        labels: [{ name: "Bug" }], // "good first issue" was removed
+      },
+      label: { name: "good first issue" },
+    };
+    const event = normalize("issues", payload);
+    expect(event).toEqual({
+      kind: "issue.labels_changed",
+      externalIssueId: "I_kwDOABC123",
+      issueNumber: 42,
+      externalUpdatedAt: Date.parse("2026-05-15T14:00:00Z"),
+      labels: ["Bug"],
+    });
+  });
+
+  it("normalizes an unlabeled-everything payload to an empty label set", () => {
+    const payload = {
+      action: "unlabeled",
+      issue: {
+        id: 12345,
+        node_id: "I_kwDOABC123",
+        number: 42,
+        title: "Issue with labels",
+        body: "body",
+        state: "open",
+        html_url: "https://github.com/acme/web/issues/42",
+        updated_at: "2026-05-15T14:30:00Z",
+        user: {
+          login: "octocat",
+          avatar_url: "https://avatars.githubusercontent.com/u/1?v=4",
+          html_url: "https://github.com/octocat",
+        },
+        labels: [],
+      },
+      label: { name: "Bug" },
+    };
+    const event = normalize("issues", payload);
+    expect(event).toMatchObject({
+      kind: "issue.labels_changed",
+      labels: [],
+    });
   });
 
   it("returns null for non-issues / non-installation event names", () => {

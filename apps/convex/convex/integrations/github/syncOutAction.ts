@@ -116,3 +116,124 @@ export const pushIssueState = internalAction({
     );
   },
 });
+
+/**
+ * Outbound label dispatch. Posts `add` labels and deletes `remove` labels on
+ * the linked GitHub issue. On full success records the post-change
+ * `nextLabels` set as the new `externalLabels` mirror — that mirror is what
+ * the inbound echo guard compares against when GitHub's webhook bounces back.
+ *
+ * Retry/permanent-fail classification matches `pushIssueState`: any
+ * permanent failure on any sub-call records `lastSyncError` and returns;
+ * any retryable failure throws so the action-retrier backs off and re-runs
+ * the whole batch (idempotent — POST/DELETE label by name produces no
+ * per-call duplicates).
+ */
+export const pushLabelChanges = internalAction({
+  args: {
+    taskId: v.id("tasks"),
+    add: v.array(v.string()),
+    remove: v.array(v.string()),
+    nextLabels: v.array(v.string()),
+    installationId: v.string(),
+    repoFullName: v.string(),
+    issueNumber: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const appId = process.env.GITHUB_APP_ID;
+    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (!appId || !privateKeyPem) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordOutboundFailure,
+        {
+          taskId: args.taskId,
+          message: "GitHub App credentials not configured",
+          httpStatus: undefined,
+        },
+      );
+      return null;
+    }
+
+    const client = new GithubClient({ appId, privateKeyPem });
+    const token = await client.mintInstallationToken(args.installationId);
+
+    // POST /repos/:owner/:repo/issues/:n/labels — body { labels: [...] }
+    // auto-creates labels missing on the repo.
+    if (args.add.length > 0) {
+      const res = await client.request<unknown>({
+        installationToken: token,
+        method: "POST",
+        path: `/repos/${args.repoFullName}/issues/${args.issueNumber}/labels`,
+        body: { labels: args.add },
+      });
+      const decision = classifyResponse({
+        status: res.status as number | null,
+        retryAfterMs: res.retryAfterMs,
+        errorMessage: res.errorMessage,
+      });
+      if (decision === "permanent_fail") {
+        await ctx.runMutation(
+          internal.integrations.github.syncOutMutations.recordOutboundFailure,
+          {
+            taskId: args.taskId,
+            message: res.errorMessage ?? `HTTP ${res.status} on label add`,
+            httpStatus: typeof res.status === "number" ? res.status : undefined,
+          },
+        );
+        return null;
+      }
+      if (decision === "retry") {
+        if (res.status === 429 && res.retryAfterMs) {
+          await new Promise((r) => setTimeout(r, res.retryAfterMs));
+        }
+        throw new Error(
+          `GitHub label-add transient failure (status=${res.status}); retrier will back off`,
+        );
+      }
+    }
+
+    // DELETE /repos/:owner/:repo/issues/:n/labels/:name per removed label.
+    for (const name of args.remove) {
+      const res = await client.request<unknown>({
+        installationToken: token,
+        method: "DELETE",
+        path: `/repos/${args.repoFullName}/issues/${args.issueNumber}/labels/${encodeURIComponent(name)}`,
+      });
+      // 404 on DELETE means the label was already absent on GitHub — treat
+      // as success so we don't surface a "Sync failed" affordance for a
+      // benign race (e.g. someone removed the label on GitHub first).
+      if (res.status === 404) continue;
+      const decision = classifyResponse({
+        status: res.status as number | null,
+        retryAfterMs: res.retryAfterMs,
+        errorMessage: res.errorMessage,
+      });
+      if (decision === "permanent_fail") {
+        await ctx.runMutation(
+          internal.integrations.github.syncOutMutations.recordOutboundFailure,
+          {
+            taskId: args.taskId,
+            message: res.errorMessage ?? `HTTP ${res.status} on label remove`,
+            httpStatus: typeof res.status === "number" ? res.status : undefined,
+          },
+        );
+        return null;
+      }
+      if (decision === "retry") {
+        if (res.status === 429 && res.retryAfterMs) {
+          await new Promise((r) => setTimeout(r, res.retryAfterMs));
+        }
+        throw new Error(
+          `GitHub label-remove transient failure (status=${res.status}); retrier will back off`,
+        );
+      }
+    }
+
+    await ctx.runMutation(
+      internal.integrations.github.syncOutMutations.recordLabelsSuccess,
+      { taskId: args.taskId, nextLabels: args.nextLabels },
+    );
+    return null;
+  },
+});

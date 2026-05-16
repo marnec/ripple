@@ -10,6 +10,29 @@ import { onCompleteValidator } from "@convex-dev/action-retrier";
  * Co-located so future Phase 9 "Force resync" wiring drops in here too.
  */
 
+export const recordLabelsSuccess = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    nextLabels: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .unique();
+    if (!link) return null;
+    await ctx.db.patch(link._id, {
+      externalLabels: args.nextLabels,
+      // Bump the ordering guard so the inevitable webhook bounce-back of
+      // these label changes will compare stale and be dropped by isStale.
+      externalUpdatedAt: Date.now(),
+      lastSyncError: undefined,
+    });
+    return null;
+  },
+});
+
 export const recordOutboundSuccess = internalMutation({
   args: {
     taskId: v.id("tasks"),

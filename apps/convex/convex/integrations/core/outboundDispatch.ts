@@ -3,6 +3,7 @@ import { components, internal } from "../../_generated/api";
 import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import type { FunctionReference } from "convex/server";
+import { normalizeTagList } from "../../tagSync";
 import {
   deriveDesiredExternalState,
   shouldSkipForEcho,
@@ -103,4 +104,63 @@ export async function maybeEnqueueOutboundPush(
   // Map runId → link so the onComplete callback can find this link from the
   // bare `{ runId, result }` payload action-retrier hands it.
   await ctx.db.patch(link._id, { outboundRunId: runId });
+}
+
+/**
+ * Outbound label dispatcher. Called by `tasks.update` whenever the `labels`
+ * arg is present, after `syncTaskTags` reconciles the post-patch label set.
+ * Computes the (add, remove) diff against the link's `externalLabels` mirror
+ * and enqueues a single retrier-managed action that POSTs the adds and
+ * DELETEs the removes. The action records the final label set as the new
+ * `externalLabels` on success so subsequent webhook bounce-backs are
+ * caught by the inbound echo guard.
+ */
+export async function maybeEnqueueLabelsPush(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+): Promise<void> {
+  const task = await ctx.db.get(taskId);
+  if (!task) return;
+
+  const link = await ctx.db
+    .query("taskIntegrationLinks")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .unique();
+  if (!link) return;
+
+  const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
+  if (!projectLink) return;
+  if (shouldSkipForFreeze(projectLink)) return;
+
+  const nextLabels = normalizeTagList(task.labels ?? []);
+  const prevLabels = link.externalLabels ?? [];
+  const prevSet = new Set(prevLabels);
+  const nextSet = new Set(nextLabels);
+  const add = nextLabels.filter((l) => !prevSet.has(l));
+  const remove = prevLabels.filter((l) => !nextSet.has(l));
+
+  // Echo guard: no diff, no PATCH.
+  if (add.length === 0 && remove.length === 0) return;
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) =>
+      q.eq("workspaceId", projectLink.workspaceId),
+    )
+    .unique();
+  if (!integration) return;
+
+  await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushLabelChanges,
+    {
+      taskId,
+      add,
+      remove,
+      nextLabels,
+      installationId: integration.externalAccountId,
+      repoFullName: projectLink.externalRepoFullName,
+      issueNumber: task.externalRefs?.[0]?.issueNumber ?? 0,
+    },
+  );
 }

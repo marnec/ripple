@@ -6,7 +6,10 @@ import {
   shouldSkipForFreeze,
   type OutboundResponse,
 } from "../convex/integrations/core/syncOut";
-import { maybeEnqueueOutboundPush } from "../convex/integrations/core/outboundDispatch";
+import {
+  maybeEnqueueLabelsPush,
+  maybeEnqueueOutboundPush,
+} from "../convex/integrations/core/outboundDispatch";
 import { internal } from "../convex/_generated/api";
 import { auditLog } from "../convex/auditLog";
 import {
@@ -454,5 +457,206 @@ describe("integrations/github/syncOutMutations.recordOutboundFailure", () => {
       message: "Unprocessable Entity",
       httpStatus: 422,
     });
+  });
+});
+
+describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
+  // Same env-vars-unset trick as the status push tests: with GitHub App
+  // credentials missing, the scheduled label-push action records a
+  // permanent failure as `lastSyncError`. That gives an observable
+  // "did the action run?" signal without mocking HTTP.
+  let savedAppId: string | undefined;
+  let savedKey: string | undefined;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    savedAppId = process.env.GITHUB_APP_ID;
+    savedKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    delete process.env.GITHUB_APP_ID;
+    delete process.env.GITHUB_APP_PRIVATE_KEY;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (savedAppId !== undefined) process.env.GITHUB_APP_ID = savedAppId;
+    if (savedKey !== undefined) process.env.GITHUB_APP_PRIVATE_KEY = savedKey;
+  });
+
+  async function setupLinkedTask(
+    t: ReturnType<typeof createTestContext>,
+    opts: {
+      linkStatus?: "configuring" | "active" | "paused" | "disconnected";
+      pausedByBilling?: boolean;
+      taskLabels?: string[];
+      externalLabels?: string[];
+    } = {},
+  ) {
+    const {
+      linkStatus = "active",
+      pausedByBilling = false,
+      taskLabels = [],
+      externalLabels = [],
+    } = opts;
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const botUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub", isBot: true }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "github",
+        externalAccountId: "install-1",
+      }),
+    );
+    const projectLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        projectId,
+        workspaceId,
+        status: linkStatus,
+        pausedByBilling,
+        externalRepoId: "R_kg1",
+        externalRepoFullName: "acme/web",
+      }),
+    );
+    const statusId = await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Todo",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: false,
+      }),
+    );
+    const taskId = await t.run((ctx) =>
+      ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "Outbound labels test",
+        statusId,
+        priority: "medium",
+        completed: false,
+        creatorId: botUserId,
+        labels: taskLabels,
+        externalRefs: [
+          {
+            provider: "github",
+            repoFullName: "acme/web",
+            issueNumber: 42,
+            url: "https://github.com/acme/web/issues/42",
+          },
+        ],
+      }),
+    );
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("taskIntegrationLinks", {
+        taskId,
+        projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_kg1",
+        externalUpdatedAt: 1_000,
+        externalAuthor: {
+          login: "octocat",
+          avatarUrl: "https://avatars/octocat.png",
+          url: "https://github.com/octocat",
+        },
+        externalState: "open",
+        externalLabels,
+      }),
+    );
+    return { workspaceId, projectId, taskId, linkId };
+  }
+
+  async function readLastSyncError(
+    t: ReturnType<typeof createTestContext>,
+    linkId: Id<"taskIntegrationLinks">,
+  ) {
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    return link?.lastSyncError;
+  }
+
+  it("schedules the label push when task.labels has additions over externalLabels", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      taskLabels: ["bug"],
+      externalLabels: [],
+    });
+
+    await t.run((ctx) => maybeEnqueueLabelsPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const err = await readLastSyncError(t, linkId);
+    expect(err).toBeDefined();
+    expect(err?.message).toMatch(/credentials not configured/i);
+  });
+
+  it("schedules the label push when task.labels has removals from externalLabels", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      taskLabels: [],
+      externalLabels: ["bug"],
+    });
+
+    await t.run((ctx) => maybeEnqueueLabelsPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const err = await readLastSyncError(t, linkId);
+    expect(err).toBeDefined();
+    expect(err?.message).toMatch(/credentials not configured/i);
+  });
+
+  it("echo skip: next labels equal externalLabels does NOT schedule the action", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      taskLabels: ["bug", "good first issue"],
+      externalLabels: ["good first issue", "bug"], // same set, different order
+    });
+
+    await t.run((ctx) => maybeEnqueueLabelsPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+  });
+
+  it("freeze gate: paused link does NOT schedule the action", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      linkStatus: "paused",
+      taskLabels: ["bug"],
+      externalLabels: [],
+    });
+
+    await t.run((ctx) => maybeEnqueueLabelsPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+  });
+
+  it("recordLabelsSuccess writes nextLabels into externalLabels and clears lastSyncError", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      taskLabels: ["bug", "good first issue"],
+      externalLabels: [],
+    });
+    // Seed a prior failure so we can observe it being cleared on success.
+    await t.run((ctx) =>
+      ctx.db.patch(linkId, {
+        lastSyncError: {
+          occurredAt: 1_000,
+          message: "earlier failure",
+          httpStatus: 500,
+        },
+      }),
+    );
+
+    await t.mutation(
+      internal.integrations.github.syncOutMutations.recordLabelsSuccess,
+      { taskId, nextLabels: ["bug", "good first issue"] },
+    );
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.externalLabels).toEqual(["bug", "good first issue"]);
+    expect(link?.lastSyncError).toBeUndefined();
   });
 });

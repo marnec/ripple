@@ -10,7 +10,8 @@
 export type NormalizedIssueEvent =
   | NormalizedIssueOpenedEvent
   | NormalizedIssueClosedEvent
-  | NormalizedIssueReopenedEvent;
+  | NormalizedIssueReopenedEvent
+  | NormalizedIssueLabelsChangedEvent;
 
 /**
  * Installation-lifecycle events — distinct from `NormalizedIssueEvent`
@@ -92,4 +93,21 @@ export interface NormalizedIssueReopenedEvent {
   body: string;
   url: string;
   externalAuthor: NormalizedExternalAuthor;
+}
+
+/**
+ * Emitted by the provider adapter for both `issues.labeled` and
+ * `issues.unlabeled` events. Carries the **full** new label set rather than
+ * a delta so the core reconciler can call `syncTaskTags` once and remain
+ * idempotent against missed or out-of-order deliveries.
+ *
+ * Names are passed through as the provider stored them; `core/syncIn`
+ * normalizes (trim/lowercase/dedupe) before writing.
+ */
+export interface NormalizedIssueLabelsChangedEvent {
+  kind: "issue.labels_changed";
+  externalIssueId: string;
+  issueNumber: number;
+  externalUpdatedAt: number;
+  labels: string[];
 }

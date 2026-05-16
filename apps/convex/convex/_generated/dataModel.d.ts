@@ -1304,6 +1304,7 @@ export type DataModel = {
     document: {
       externalAuthor: { avatarUrl: string; login: string; url: string };
       externalIssueId: string;
+      externalLabels?: Array<string>;
       externalState?: "open" | "closed";
       externalStateReason?: "completed" | "not_planned";
       externalUpdatedAt: number;
@@ -1327,6 +1328,7 @@ export type DataModel = {
       | "externalAuthor.login"
       | "externalAuthor.url"
       | "externalIssueId"
+      | "externalLabels"
       | "externalState"
       | "externalStateReason"
       | "externalUpdatedAt"

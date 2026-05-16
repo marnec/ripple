@@ -5,6 +5,7 @@ import {
 } from "../convex/integrations/core/syncIn";
 import type {
   NormalizedIssueClosedEvent,
+  NormalizedIssueLabelsChangedEvent,
   NormalizedIssueOpenedEvent,
   NormalizedIssueReopenedEvent,
 } from "../convex/integrations/core/types";
@@ -107,6 +108,19 @@ function makeClosedEvent(
     url: `https://github.com/acme/web/issues/${issueNumber}`,
     externalAuthor: defaultAuthor,
     stateReason: "completed",
+    ...overrides,
+  };
+}
+
+function makeLabelsChangedEvent(
+  overrides: Partial<NormalizedIssueLabelsChangedEvent> = {},
+): NormalizedIssueLabelsChangedEvent {
+  return {
+    kind: "issue.labels_changed",
+    externalIssueId: "I_kwDOABC123",
+    issueNumber: 42,
+    externalUpdatedAt: 1_700_000_003_000, // newer than opened
+    labels: [],
     ...overrides,
   };
 }
@@ -745,6 +759,245 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
         .collect(),
     );
     expect(task?.creatorId).toBe(botUserId);
+  });
+});
+
+describe("integrations/core/syncIn.applyNormalizedEvent — issue.labels_changed", () => {
+  it("creates tags + taskTags rows, patches tasks.labels, and mirrors externalLabels", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({
+          labels: ["Bug", "good first issue"],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.labels).toEqual(["bug", "good first issue"]);
+
+    const tagNames = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("tags")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect()
+      )
+        .map((r) => r.name)
+        .sort(),
+    );
+    expect(tagNames).toEqual(["bug", "good first issue"]);
+
+    const taskTagNames = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("taskTags")
+          .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+          .collect()
+      )
+        .map((r) => r.tagName)
+        .sort(),
+    );
+    expect(taskTagNames).toEqual(["bug", "good first issue"]);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalLabels).toEqual(["bug", "good first issue"]);
+  });
+
+  it("redelivered event with the same label set creates no duplicate taskTags rows", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    const event = makeLabelsChangedEvent({ labels: ["bug"] });
+    await t.run((ctx) => applyNormalizedEvent(ctx, { event, link }));
+    // Redeliver the exact same event (e.g. webhook retry).
+    await t.run((ctx) => applyNormalizedEvent(ctx, { event, link }));
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    const taskTagRows = await t.run((ctx) =>
+      ctx.db
+        .query("taskTags")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .collect(),
+    );
+    expect(taskTagRows).toHaveLength(1);
+    expect(taskTagRows[0]?.tagName).toBe("bug");
+  });
+
+  it("empty label set removes existing taskTags rows, clears tasks.labels, and clears externalLabels", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+    // Seed labels first.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({
+          labels: ["bug", "good first issue"],
+          externalUpdatedAt: 1_700_000_003_000,
+        }),
+        link,
+      }),
+    );
+
+    // Then unlabel everything (later event timestamp).
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({
+          labels: [],
+          externalUpdatedAt: 1_700_000_004_000,
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.labels).toEqual([]);
+
+    const taskTagRows = await t.run((ctx) =>
+      ctx.db
+        .query("taskTags")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .collect(),
+    );
+    expect(taskTagRows).toHaveLength(0);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalLabels).toEqual([]);
+  });
+
+  it("drops the event when externalUpdatedAt is not strictly newer than the stored value", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({ externalUpdatedAt: 2_000 }),
+        link,
+      }),
+    );
+    // First labels event lands the canonical state.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({
+          labels: ["bug"],
+          externalUpdatedAt: 3_000,
+        }),
+        link,
+      }),
+    );
+
+    // A stale labels event (older timestamp) trying to clear labels.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({
+          labels: [],
+          externalUpdatedAt: 2_500,
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.labels).toEqual(["bug"]);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalLabels).toEqual(["bug"]);
+    expect(linkRow?.externalUpdatedAt).toBe(3_000);
+  });
+
+  it("echo skip: inbound labels matching externalLabels does not bump externalUpdatedAt", async () => {
+    // Scenario: a Ripple-side label change fires our outbound PATCH; GitHub
+    // accepts it and then immediately fires the `issues.labeled` webhook
+    // back at us. The bounced event's label set already matches what we
+    // wrote — re-applying would be redundant work and an unnecessary
+    // subscription invalidation. Echo guard short-circuits in that case.
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({ externalUpdatedAt: 2_000 }),
+        link,
+      }),
+    );
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({
+          labels: ["bug"],
+          externalUpdatedAt: 3_000,
+        }),
+        link,
+      }),
+    );
+
+    // Echo: same labels arrive at a strictly newer timestamp.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeLabelsChangedEvent({
+          labels: ["bug"],
+          externalUpdatedAt: 4_000,
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalUpdatedAt).toBe(3_000);
   });
 });
 

@@ -32,6 +32,10 @@ interface GithubUser {
   html_url: string;
 }
 
+interface GithubLabel {
+  name: string;
+}
+
 interface GithubIssue {
   node_id: string;
   number: number;
@@ -42,6 +46,9 @@ interface GithubIssue {
   updated_at: string; // ISO 8601
   html_url: string;
   user: GithubUser;
+  // Present on issues.labeled / issues.unlabeled (and on the full issue
+  // object generally). Carries the current label set after the delta.
+  labels?: GithubLabel[];
 }
 
 interface GithubInstallation {
@@ -173,6 +180,16 @@ function normalizeIssuesEvent(payload: unknown): NormalizedWebhookEvent | null {
     return {
       kind: "issue.reopened",
       ...sharedIssueFields(p.issue),
+    };
+  }
+
+  if (p.action === "labeled" || p.action === "unlabeled") {
+    return {
+      kind: "issue.labels_changed",
+      externalIssueId: p.issue.node_id,
+      issueNumber: p.issue.number,
+      externalUpdatedAt: Date.parse(p.issue.updated_at),
+      labels: (p.issue.labels ?? []).map((l) => l.name),
     };
   }
 

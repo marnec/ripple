@@ -15,7 +15,10 @@ import { syncTaskTags, normalizeTagList } from "./tagSync";
 import { getAll } from "convex-helpers/server/relationships";
 import type { Doc } from "./_generated/dataModel";
 import { notify } from "./utils/notify";
-import { maybeEnqueueOutboundPush } from "./integrations/core/outboundDispatch";
+import {
+  maybeEnqueueLabelsPush,
+  maybeEnqueueOutboundPush,
+} from "./integrations/core/outboundDispatch";
 
 /**
  * Triage is reserved for externally-ingested issues — only the internal
@@ -948,6 +951,11 @@ export const update = mutation({
     // it's safe to call unconditionally.
     if (statusId !== undefined && statusId !== task.statusId) {
       await maybeEnqueueOutboundPush(ctx, taskId);
+    }
+    // Independent dimension: label edits trigger a separate label push.
+    // Helper handles the unlinked/frozen/echo gates internally.
+    if (labels !== undefined) {
+      await maybeEnqueueLabelsPush(ctx, taskId);
     }
 
     return null;
