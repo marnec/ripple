@@ -67,9 +67,17 @@ export const update = mutation({
     order: v.optional(v.number()),
     setsStartDate: v.optional(v.boolean()),
     isCompleted: v.optional(v.boolean()),
+    // GitHub integration: when the task closes via outbound sync, this drives
+    // the `state_reason` value pushed to GitHub. Null clears the override.
+    externalCloseReason: v.optional(
+      v.union(v.literal("completed"), v.literal("not_planned"), v.null()),
+    ),
   },
   returns: v.null(),
-  handler: async (ctx, { statusId, name, color, order, setsStartDate, isCompleted }) => {
+  handler: async (
+    ctx,
+    { statusId, name, color, order, setsStartDate, isCompleted, externalCloseReason },
+  ) => {
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
 
@@ -78,12 +86,23 @@ export const update = mutation({
     await requireWorkspaceMember(ctx, project.workspaceId);
 
     // Build patch object with only provided fields
-    const patch: { name?: string; color?: string; order?: number; setsStartDate?: boolean; isCompleted?: boolean } = {};
+    const patch: {
+      name?: string;
+      color?: string;
+      order?: number;
+      setsStartDate?: boolean;
+      isCompleted?: boolean;
+      externalCloseReason?: "completed" | "not_planned" | undefined;
+    } = {};
     if (name !== undefined) patch.name = name;
     if (color !== undefined) patch.color = color;
     if (order !== undefined) patch.order = order;
     if (setsStartDate !== undefined) patch.setsStartDate = setsStartDate;
     if (isCompleted !== undefined) patch.isCompleted = isCompleted;
+    if (externalCloseReason !== undefined) {
+      // null on the wire → undefined in the patch → removes the field.
+      patch.externalCloseReason = externalCloseReason ?? undefined;
+    }
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(statusId, patch);

@@ -20,6 +20,7 @@ import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
+import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
 type TaskDetailSheetProps = {
@@ -93,6 +94,7 @@ export function TaskDetailSheet({
                       </span>
                     ) : null;
                   })()}
+                  <TaskSyncIndicator taskId={task._id} />
                   <Button
                     variant="ghost"
                     size="icon-sm"

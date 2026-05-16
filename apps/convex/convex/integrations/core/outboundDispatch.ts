@@ -1,7 +1,8 @@
-import { ActionRetrier } from "@convex-dev/action-retrier";
+import { ActionRetrier, type RunId } from "@convex-dev/action-retrier";
 import { components, internal } from "../../_generated/api";
 import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
+import type { FunctionReference } from "convex/server";
 import {
   deriveDesiredExternalState,
   shouldSkipForEcho,
@@ -62,7 +63,7 @@ export async function maybeEnqueueOutboundPush(
     .unique();
   if (!integration) return;
 
-  await retrier.run(
+  const runId = await retrier.run(
     ctx,
     internal.integrations.github.syncOutAction.pushIssueState,
     {
@@ -77,5 +78,29 @@ export async function maybeEnqueueOutboundPush(
           (task.externalRefs?.[0]?.issueNumber ?? 0)
         : 0,
     },
+    {
+      // Retry-exhaustion handling: the action body records its own outcome
+      // for the 2xx and permanent-fail (4xx) cases, but a chain of throws
+      // that exhausts the retry budget never reaches that recording path.
+      // The callback closes that gap by writing `lastSyncError` + audit log.
+      // Cast bridges the `RunId` brand which static codegen strips off the
+      // generated function reference (the validator handles it at runtime).
+      onComplete: internal.integrations.github.syncOutMutations
+        .onOutboundComplete as unknown as FunctionReference<
+        "mutation",
+        "internal",
+        {
+          runId: RunId;
+          result:
+            | { type: "success"; returnValue: unknown }
+            | { type: "failed"; error: string }
+            | { type: "canceled" };
+        }
+      >,
+    },
   );
+
+  // Map runId → link so the onComplete callback can find this link from the
+  // bare `{ runId, result }` payload action-retrier hands it.
+  await ctx.db.patch(link._id, { outboundRunId: runId });
 }

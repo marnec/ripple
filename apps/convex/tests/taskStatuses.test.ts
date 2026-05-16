@@ -187,3 +187,37 @@ describe("taskStatuses.remove", () => {
     await t.finishAllScheduledFunctions(vi.runAllTimers);
   });
 });
+
+describe("taskStatuses.update — externalCloseReason", () => {
+  it("admin can set a completed status's externalCloseReason to 'not_planned'", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { doneId } = await setupProject(t, { workspaceId, userId });
+
+    await asUser.mutation(api.taskStatuses.update, {
+      statusId: doneId,
+      externalCloseReason: "not_planned",
+    });
+
+    const status = await t.run((ctx) => ctx.db.get(doneId));
+    expect(status?.externalCloseReason).toBe("not_planned");
+  });
+
+  it("passing externalCloseReason=null clears it (admin can revert to default)", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { doneId } = await setupProject(t, { workspaceId, userId });
+
+    await asUser.mutation(api.taskStatuses.update, {
+      statusId: doneId,
+      externalCloseReason: "not_planned",
+    });
+    await asUser.mutation(api.taskStatuses.update, {
+      statusId: doneId,
+      externalCloseReason: null,
+    });
+
+    const status = await t.run((ctx) => ctx.db.get(doneId));
+    expect(status?.externalCloseReason).toBeUndefined();
+  });
+});

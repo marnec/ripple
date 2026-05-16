@@ -29,8 +29,14 @@ export const taskStatusValidator = v.object({
   order: v.number(),
   isDefault: v.boolean(),
   isCompleted: v.boolean(),
+  isTriage: v.optional(v.boolean()),
   setsStartDate: v.optional(v.boolean()),
   pendingDeletion: v.optional(v.boolean()),
+  // GitHub integration: drives `state_reason` on outbound close. Optional
+  // because most projects won't have an integration linked.
+  externalCloseReason: v.optional(
+    v.union(v.literal("completed"), v.literal("not_planned")),
+  ),
 });
 
 export const userValidator = v.object({

@@ -888,11 +888,17 @@ export default defineSchema({
         httpStatus: v.optional(v.number()),
       }),
     ),
+    // RunId for the in-flight action-retrier dispatch, so the retrier's
+    // onComplete callback (which receives only `runId` + `result`) can map
+    // back to this link to record retry-exhaustion failures. Cleared on
+    // completion (success or failure).
+    outboundRunId: v.optional(v.string()),
   })
     // Idempotency / "have we imported this issue?" lookup.
     .index("by_link_externalIssueId", [
       "projectIntegrationLinkId",
       "externalIssueId",
     ])
-    .index("by_task", ["taskId"]),
+    .index("by_task", ["taskId"])
+    .index("by_outboundRunId", ["outboundRunId"]),
 });

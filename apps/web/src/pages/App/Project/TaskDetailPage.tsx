@@ -20,6 +20,7 @@ import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
+import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
 export function TaskDetailPage() {
@@ -109,6 +110,7 @@ function TaskDetailPageContent({
               [ {taskCode} ]
             </span>
           )}
+          <TaskSyncIndicator taskId={taskId} />
           <Input
             ref={titleInputRef}
             value={detail.titleValue}

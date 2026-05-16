@@ -1,0 +1,47 @@
+import { v } from "convex/values";
+import { query } from "../../_generated/server";
+import { requireResourceMember } from "../../authHelpers";
+
+/**
+ * Per-task integration link state, read only by the task-detail surface
+ * (sync chip, future PR badges, future description-sync indicator). Kept
+ * separate from `tasks.get` so kanban subscriptions stay off the high-churn
+ * `taskIntegrationLinks` table — see the PRD's hot-path discipline.
+ */
+export const getByTask = query({
+  args: { taskId: v.id("tasks") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      lastSyncError: v.optional(
+        v.object({
+          occurredAt: v.number(),
+          message: v.string(),
+          httpStatus: v.optional(v.number()),
+        }),
+      ),
+      externalState: v.optional(v.union(v.literal("open"), v.literal("closed"))),
+      externalIssueUrl: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, { taskId }) => {
+    // Auth via the task — readers must be workspace members. Same gate
+    // `tasks.get` uses.
+    await requireResourceMember(ctx, "tasks", taskId);
+
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (!link) return null;
+
+    const task = await ctx.db.get(taskId);
+    const externalIssueUrl = task?.externalRefs?.[0]?.url;
+
+    return {
+      lastSyncError: link.lastSyncError,
+      externalState: link.externalState,
+      externalIssueUrl,
+    };
+  },
+});

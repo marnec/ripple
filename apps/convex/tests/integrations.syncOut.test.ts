@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   classifyResponse,
   deriveDesiredExternalState,
@@ -6,6 +6,15 @@ import {
   shouldSkipForFreeze,
   type OutboundResponse,
 } from "../convex/integrations/core/syncOut";
+import { maybeEnqueueOutboundPush } from "../convex/integrations/core/outboundDispatch";
+import { internal } from "../convex/_generated/api";
+import { auditLog } from "../convex/auditLog";
+import {
+  createTestContext,
+  setupProject,
+  setupWorkspaceWithAdmin,
+} from "./helpers";
+import type { Id } from "../convex/_generated/dataModel";
 
 describe("integrations/core/syncOut.classifyResponse", () => {
   it("returns 'success' for a 2xx response", () => {
@@ -128,5 +137,322 @@ describe("integrations/core/syncOut.deriveDesiredExternalState", () => {
         status: { externalCloseReason: "not_planned" },
       }),
     ).toEqual({ state: "open" });
+  });
+});
+
+describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
+  // The action this dispatcher schedules runs under Node and reads
+  // `process.env.GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY`. We deliberately
+  // unset them so that *if* the dispatcher schedules the action, the action's
+  // missing-creds branch fires and writes `lastSyncError`. That gives us an
+  // observable "did the action run?" signal without needing to mock HTTP.
+  let savedAppId: string | undefined;
+  let savedKey: string | undefined;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    savedAppId = process.env.GITHUB_APP_ID;
+    savedKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    delete process.env.GITHUB_APP_ID;
+    delete process.env.GITHUB_APP_PRIVATE_KEY;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (savedAppId !== undefined) process.env.GITHUB_APP_ID = savedAppId;
+    if (savedKey !== undefined) process.env.GITHUB_APP_PRIVATE_KEY = savedKey;
+  });
+
+  async function setupLinkedTask(
+    t: ReturnType<typeof createTestContext>,
+    opts: {
+      linkStatus?: "configuring" | "active" | "paused" | "disconnected";
+      pausedByBilling?: boolean;
+      taskCompleted?: boolean;
+      externalState?: "open" | "closed";
+    } = {},
+  ) {
+    const {
+      linkStatus = "active",
+      pausedByBilling = false,
+      taskCompleted = true,
+      externalState = "open",
+    } = opts;
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const botUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub", isBot: true }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "github",
+        externalAccountId: "install-1",
+      }),
+    );
+    const projectLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        projectId,
+        workspaceId,
+        status: linkStatus,
+        pausedByBilling,
+        externalRepoId: "R_kg1",
+        externalRepoFullName: "acme/web",
+      }),
+    );
+    const statusId = await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId,
+        name: taskCompleted ? "Done" : "Todo",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: taskCompleted,
+      }),
+    );
+    const taskId = await t.run((ctx) =>
+      ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "Outbound test task",
+        statusId,
+        priority: "medium",
+        completed: taskCompleted,
+        creatorId: botUserId,
+        externalRefs: [
+          {
+            provider: "github",
+            repoFullName: "acme/web",
+            issueNumber: 42,
+            url: "https://github.com/acme/web/issues/42",
+          },
+        ],
+      }),
+    );
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("taskIntegrationLinks", {
+        taskId,
+        projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_kg1",
+        externalUpdatedAt: 1_000,
+        externalAuthor: {
+          login: "octocat",
+          avatarUrl: "https://avatars/octocat.png",
+          url: "https://github.com/octocat",
+        },
+        externalState,
+      }),
+    );
+    return { workspaceId, projectId, taskId, linkId };
+  }
+
+  async function readLastSyncError(
+    t: ReturnType<typeof createTestContext>,
+    linkId: Id<"taskIntegrationLinks">,
+  ) {
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    return link?.lastSyncError;
+  }
+
+  it("active link with mismatched state: action runs (lastSyncError set to missing-creds)", async () => {
+    // Sanity: confirms the test plumbing actually schedules + executes the
+    // action. With env vars unset, the action records a permanent failure —
+    // visible as `lastSyncError`. This is the positive control for the
+    // gate-skips-action tests below.
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      linkStatus: "active",
+      taskCompleted: true,
+      externalState: "open", // desired='closed' ≠ observed='open' → no echo skip
+    });
+
+    await t.run((ctx) => maybeEnqueueOutboundPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const err = await readLastSyncError(t, linkId);
+    expect(err).toBeDefined();
+    expect(err?.message).toMatch(/credentials not configured/i);
+  });
+
+  it("freeze gate: paused link does NOT schedule the action", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      linkStatus: "paused",
+      taskCompleted: true,
+      externalState: "open", // would mismatch if not for the freeze
+    });
+
+    await t.run((ctx) => maybeEnqueueOutboundPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+  });
+
+  it("freeze gate: pausedByBilling=true does NOT schedule the action", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      linkStatus: "active",
+      pausedByBilling: true,
+      taskCompleted: true,
+      externalState: "open",
+    });
+
+    await t.run((ctx) => maybeEnqueueOutboundPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+  });
+
+  it("echo gate: desired state already matches externalState does NOT schedule the action", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      linkStatus: "active",
+      taskCompleted: true,
+      externalState: "closed", // desired='closed' === observed='closed'
+    });
+
+    await t.run((ctx) => maybeEnqueueOutboundPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+  });
+
+  it("retry exhaustion records lastSyncError + integration.sync_failed audit log via onComplete", async () => {
+    // Set credentials to junk values so signAppJwt throws on every attempt,
+    // forcing the retrier to exhaust its budget. The throw chain proves the
+    // onComplete callback fires after the retrier gives up — without that
+    // callback wired through, retry exhaustion would silently drop the
+    // affordance the PRD requires.
+    process.env.GITHUB_APP_ID = "test-app-id";
+    process.env.GITHUB_APP_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\nGARBAGE\n-----END PRIVATE KEY-----\n";
+
+    const t = createTestContext();
+    const { workspaceId, taskId, linkId } = await setupLinkedTask(t, {
+      linkStatus: "active",
+      taskCompleted: true,
+      externalState: "open",
+    });
+
+    await t.run((ctx) => maybeEnqueueOutboundPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const err = await readLastSyncError(t, linkId);
+    expect(err).toBeDefined();
+    expect(err?.message).toMatch(/retry.*exhaust|exhausted|failed/i);
+
+    const logs = await t.run((ctx) =>
+      auditLog.queryByResource(ctx, {
+        resourceType: "tasks",
+        resourceId: taskId,
+      }),
+    );
+    const failed = logs.find(
+      (l: { action: string }) => l.action === "integration.sync_failed",
+    );
+    expect(failed).toBeDefined();
+    expect(failed?.scope).toBe(workspaceId);
+  });
+});
+
+describe("integrations/github/syncOutMutations.recordOutboundFailure", () => {
+  // Audit-log component defers aggregate updates; real timers corrupt
+  // convex-test state. Same pattern as integrations.links.test.ts.
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  async function setupLinkedTask(t: ReturnType<typeof createTestContext>) {
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const botUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub", isBot: true }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "github",
+        externalAccountId: "install-1",
+      }),
+    );
+    const projectLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        projectId,
+        workspaceId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoId: "R_kg1",
+        externalRepoFullName: "acme/web",
+      }),
+    );
+    const statusId = await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Todo",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: false,
+      }),
+    );
+    const taskId = await t.run((ctx) =>
+      ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "Outbound test task",
+        statusId,
+        priority: "medium",
+        completed: false,
+        creatorId: botUserId,
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("taskIntegrationLinks", {
+        taskId,
+        projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_kg1",
+        externalUpdatedAt: 1_000,
+        externalAuthor: {
+          login: "octocat",
+          avatarUrl: "https://avatars/octocat.png",
+          url: "https://github.com/octocat",
+        },
+        externalState: "open",
+      }),
+    );
+
+    return { workspaceId, projectId, taskId, botUserId };
+  }
+
+  it("permanent failure writes an integration.sync_failed audit-log entry scoped to the workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId, taskId, botUserId } = await setupLinkedTask(t);
+
+    await t.mutation(
+      internal.integrations.github.syncOutMutations.recordOutboundFailure,
+      {
+        taskId,
+        message: "Unprocessable Entity",
+        httpStatus: 422,
+      },
+    );
+
+    const logs = await t.run((ctx) =>
+      auditLog.queryByResource(ctx, {
+        resourceType: "tasks",
+        resourceId: taskId,
+      }),
+    );
+    const failed = logs.find(
+      (l: { action: string }) => l.action === "integration.sync_failed",
+    );
+    expect(failed).toBeDefined();
+    expect(failed?.scope).toBe(workspaceId);
+    expect(failed?.actorId).toBe(botUserId);
+    expect(failed?.metadata).toMatchObject({
+      message: "Unprocessable Entity",
+      httpStatus: 422,
+    });
   });
 });

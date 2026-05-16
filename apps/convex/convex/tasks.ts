@@ -1146,3 +1146,29 @@ export const remove = mutation({
     return null;
   },
 });
+
+/**
+ * Re-attempts outbound GitHub sync for a task whose previous push failed.
+ * Clears `lastSyncError` so the UI chip disappears optimistically; the
+ * dispatcher then re-enqueues the retrier-managed action which either
+ * succeeds quietly or rewrites `lastSyncError` if the underlying problem
+ * persists.
+ */
+export const retryOutboundSync = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, { taskId }) => {
+    await requireResourceMember(ctx, "tasks", taskId);
+
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (link?.lastSyncError) {
+      await ctx.db.patch(link._id, { lastSyncError: undefined });
+    }
+
+    await maybeEnqueueOutboundPush(ctx, taskId);
+    return null;
+  },
+});

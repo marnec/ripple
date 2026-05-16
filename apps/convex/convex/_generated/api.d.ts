@@ -1207,6 +1207,22 @@ export declare const api: {
           null
         >;
       };
+      taskLinks: {
+        getByTask: FunctionReference<
+          "query",
+          "public",
+          { taskId: Id<"tasks"> },
+          null | {
+            externalIssueUrl?: string;
+            externalState?: "open" | "closed";
+            lastSyncError?: {
+              httpStatus?: number;
+              message: string;
+              occurredAt: number;
+            };
+          }
+        >;
+      };
     };
   };
   medias: {
@@ -2530,6 +2546,12 @@ export declare const api: {
       { taskId: Id<"tasks"> },
       null
     >;
+    retryOutboundSync: FunctionReference<
+      "mutation",
+      "public",
+      { taskId: Id<"tasks"> },
+      null
+    >;
     update: FunctionReference<
       "mutation",
       "public",
@@ -2601,6 +2623,7 @@ export declare const api: {
       "public",
       {
         color?: string;
+        externalCloseReason?: "completed" | "not_planned" | null;
         isCompleted?: boolean;
         name?: string;
         order?: number;
@@ -3312,6 +3335,18 @@ export declare const internal: {
         >;
       };
       syncOutMutations: {
+        onOutboundComplete: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            result:
+              | { returnValue: any; type: "success" }
+              | { error: string; type: "failed" }
+              | { type: "canceled" };
+            runId: string;
+          },
+          null
+        >;
         recordOutboundFailure: FunctionReference<
           "mutation",
           "internal",

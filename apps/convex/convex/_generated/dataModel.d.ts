@@ -1313,6 +1313,7 @@ export type DataModel = {
         message: string;
         occurredAt: number;
       };
+      outboundRunId?: string;
       projectIntegrationLinkId: Id<"projectIntegrationLinks">;
       taskId: Id<"tasks">;
       _id: Id<"taskIntegrationLinks">;
@@ -1334,6 +1335,7 @@ export type DataModel = {
       | "lastSyncError.httpStatus"
       | "lastSyncError.message"
       | "lastSyncError.occurredAt"
+      | "outboundRunId"
       | "projectIntegrationLinkId"
       | "taskId";
     indexes: {
@@ -1344,6 +1346,7 @@ export type DataModel = {
         "externalIssueId",
         "_creationTime",
       ];
+      by_outboundRunId: ["outboundRunId", "_creationTime"];
       by_task: ["taskId", "_creationTime"];
     };
     searchIndexes: {};
