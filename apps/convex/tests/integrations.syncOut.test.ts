@@ -7,9 +7,11 @@ import {
   type OutboundResponse,
 } from "../convex/integrations/core/syncOut";
 import {
+  maybeEnqueueAssigneesPush,
   maybeEnqueueLabelsPush,
   maybeEnqueueOutboundPush,
 } from "../convex/integrations/core/outboundDispatch";
+import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { internal } from "../convex/_generated/api";
 import { auditLog } from "../convex/auditLog";
 import {
@@ -631,6 +633,164 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     expect(await readLastSyncError(t, linkId)).toBeUndefined();
+  });
+
+  it("schedules the assignee push when the assignee's mapped GitHub login is not in externalAssigneeLogins", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    // alice is a workspace member with a mapped GitHub identity.
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "Alice" });
+      await ctx.db.insert("workspaceMembers", {
+        userId: uid, workspaceId, role: WorkspaceRole.MEMBER,
+      });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId, userId: uid, provider: "github", externalLogin: "alice",
+      });
+      return uid;
+    });
+
+    const { taskId, linkId } = await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", { name: "GitHub", isBot: true });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId, botUserId, provider: "github", externalAccountId: "install-1",
+      });
+      const projectLinkId = await ctx.db.insert("projectIntegrationLinks", {
+        projectId, workspaceId,
+        status: "active", pausedByBilling: false,
+        externalRepoId: "R_kg1", externalRepoFullName: "acme/web",
+      });
+      const statusId = await ctx.db.insert("taskStatuses", {
+        projectId, name: "Todo", color: "bg-gray-500",
+        order: 0, isDefault: true, isCompleted: false,
+      });
+      const taskId = await ctx.db.insert("tasks", {
+        projectId, workspaceId,
+        title: "Outbound assignee tracer",
+        statusId, priority: "medium", completed: false,
+        creatorId: botUserId,
+        assigneeId: aliceUserId,
+        externalRefs: [{
+          provider: "github", repoFullName: "acme/web",
+          issueNumber: 42, url: "https://github.com/acme/web/issues/42",
+        }],
+      });
+      const linkId = await ctx.db.insert("taskIntegrationLinks", {
+        taskId, projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_kg1", externalUpdatedAt: 1_000,
+        externalAuthor: { login: "octocat", avatarUrl: "u", url: "https://github.com/octocat" },
+        externalState: "open",
+        externalAssigneeLogins: [], // GitHub knows no assignees yet
+      });
+      return { taskId, linkId };
+    });
+
+    await t.run((ctx) => maybeEnqueueAssigneesPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const err = await readLastSyncError(t, linkId);
+    // Action ran (and failed on missing creds) → confirms it was scheduled.
+    expect(err).toBeDefined();
+    expect(err?.message).toMatch(/credentials not configured/i);
+  });
+
+  it("echo skip: assigneeId mapping matches externalAssigneeLogins → no action scheduled", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "Alice" });
+      await ctx.db.insert("workspaceMembers", { userId: uid, workspaceId, role: WorkspaceRole.MEMBER });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId, userId: uid, provider: "github", externalLogin: "alice",
+      });
+      return uid;
+    });
+
+    const { taskId, linkId } = await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", { name: "GitHub", isBot: true });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId, botUserId, provider: "github", externalAccountId: "install-1",
+      });
+      const projectLinkId = await ctx.db.insert("projectIntegrationLinks", {
+        projectId, workspaceId, status: "active", pausedByBilling: false,
+        externalRepoId: "R_kg1", externalRepoFullName: "acme/web",
+      });
+      const statusId = await ctx.db.insert("taskStatuses", {
+        projectId, name: "Todo", color: "bg-gray-500",
+        order: 0, isDefault: true, isCompleted: false,
+      });
+      const taskId = await ctx.db.insert("tasks", {
+        projectId, workspaceId,
+        title: "Echo skip", statusId, priority: "medium", completed: false,
+        creatorId: botUserId, assigneeId: aliceUserId,
+        externalRefs: [{ provider: "github", repoFullName: "acme/web", issueNumber: 42, url: "https://github.com/acme/web/issues/42" }],
+      });
+      const linkId = await ctx.db.insert("taskIntegrationLinks", {
+        taskId, projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_kg1", externalUpdatedAt: 1_000,
+        externalAuthor: { login: "octocat", avatarUrl: "u", url: "https://github.com/octocat" },
+        externalState: "open",
+        externalAssigneeLogins: ["alice"], // GitHub already has alice
+      });
+      return { taskId, linkId };
+    });
+
+    await t.run((ctx) => maybeEnqueueAssigneesPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+  });
+
+  it("bot-user assignee contributes no GitHub login → push is a no-op (no clearing)", async () => {
+    // When the inbound bot-user fallback fires, the task ends up assigned to
+    // the integration's bot. We must NOT then push a "clear all assignees"
+    // back to GitHub — that would erase the real external assignees the
+    // shadow chips render. Outbound treats the bot as "nothing to say."
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const { taskId, linkId } = await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", { name: "GitHub", isBot: true });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId, botUserId, provider: "github", externalAccountId: "install-1",
+      });
+      const projectLinkId = await ctx.db.insert("projectIntegrationLinks", {
+        projectId, workspaceId, status: "active", pausedByBilling: false,
+        externalRepoId: "R_kg1", externalRepoFullName: "acme/web",
+      });
+      const statusId = await ctx.db.insert("taskStatuses", {
+        projectId, name: "Todo", color: "bg-gray-500",
+        order: 0, isDefault: true, isCompleted: false,
+      });
+      const taskId = await ctx.db.insert("tasks", {
+        projectId, workspaceId, title: "Bot assignee", statusId,
+        priority: "medium", completed: false, creatorId: botUserId,
+        assigneeId: botUserId, // ← inbound bot fallback assigned the bot
+        externalRefs: [{ provider: "github", repoFullName: "acme/web", issueNumber: 42, url: "https://github.com/acme/web/issues/42" }],
+      });
+      const linkId = await ctx.db.insert("taskIntegrationLinks", {
+        taskId, projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_kg1", externalUpdatedAt: 1_000,
+        externalAuthor: { login: "octocat", avatarUrl: "u", url: "https://github.com/octocat" },
+        externalState: "open",
+        externalAssigneeLogins: ["external1", "external2"], // real GitHub assignees
+      });
+      return { taskId, linkId };
+    });
+
+    await t.run((ctx) => maybeEnqueueAssigneesPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    // No action scheduled → no permanent-fail recorded.
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+    // externalAssigneeLogins preserved (no DELETE was sent).
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.externalAssigneeLogins).toEqual(["external1", "external2"]);
   });
 
   it("recordLabelsSuccess writes nextLabels into externalLabels and clears lastSyncError", async () => {

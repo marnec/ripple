@@ -19,6 +19,7 @@ import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
+import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
@@ -145,6 +146,8 @@ export function TaskDetailSheet({
                   onStartDateChange={detail.handlePlannedStartDateChange}
                   onEstimateChange={detail.handleEstimateChange}
                 />
+
+                <TaskGithubExternalInfo taskId={task._id} />
 
                 <TaskDependencies
                   taskId={taskId}

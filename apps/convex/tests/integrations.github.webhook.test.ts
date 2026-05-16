@@ -197,9 +197,95 @@ describe("integrations/github/webhook.normalize", () => {
     });
   });
 
-  it("returns null for issues actions we don't handle yet (e.g. assigned)", () => {
-    const payload = openedPayload({ action: "assigned" });
-    expect(normalize("issues", payload)).toBeNull();
+  it("maps an issues.assigned payload to a NormalizedIssueAssigneesChangedEvent carrying the full assignee set", () => {
+    // GitHub's `issues.assigned` event ships the single `assignee` that was
+    // just added AND the full current `issue.assignees` array. We normalize
+    // against the full set so reconciliation is delta-insensitive.
+    const payload = {
+      action: "assigned",
+      issue: {
+        id: 12345,
+        node_id: "I_kwDOABC123",
+        number: 42,
+        title: "Issue with assignees",
+        body: "body",
+        state: "open",
+        html_url: "https://github.com/acme/web/issues/42",
+        updated_at: "2026-05-15T15:00:00Z",
+        user: {
+          login: "octocat",
+          avatar_url: "https://avatars.githubusercontent.com/u/1?v=4",
+          html_url: "https://github.com/octocat",
+        },
+        assignees: [
+          {
+            login: "alice",
+            avatar_url: "https://avatars.githubusercontent.com/u/2?v=4",
+            html_url: "https://github.com/alice",
+          },
+          {
+            login: "bob",
+            avatar_url: "https://avatars.githubusercontent.com/u/3?v=4",
+            html_url: "https://github.com/bob",
+          },
+        ],
+      },
+      assignee: {
+        login: "bob",
+        avatar_url: "https://avatars.githubusercontent.com/u/3?v=4",
+        html_url: "https://github.com/bob",
+      },
+    };
+    const event = normalize("issues", payload);
+    expect(event).toEqual({
+      kind: "issue.assignees_changed",
+      externalIssueId: "I_kwDOABC123",
+      issueNumber: 42,
+      externalUpdatedAt: Date.parse("2026-05-15T15:00:00Z"),
+      assignees: [
+        {
+          login: "alice",
+          avatarUrl: "https://avatars.githubusercontent.com/u/2?v=4",
+          url: "https://github.com/alice",
+        },
+        {
+          login: "bob",
+          avatarUrl: "https://avatars.githubusercontent.com/u/3?v=4",
+          url: "https://github.com/bob",
+        },
+      ],
+    });
+  });
+
+  it("maps an issues.unassigned payload to a NormalizedIssueAssigneesChangedEvent carrying the surviving assignees", () => {
+    const payload = {
+      action: "unassigned",
+      issue: {
+        id: 12345,
+        node_id: "I_kwDOABC123",
+        number: 42,
+        title: "Issue with assignees",
+        body: "body",
+        state: "open",
+        html_url: "https://github.com/acme/web/issues/42",
+        updated_at: "2026-05-15T15:30:00Z",
+        user: {
+          login: "octocat",
+          avatar_url: "u",
+          html_url: "https://github.com/octocat",
+        },
+        assignees: [], // both removed
+      },
+      assignee: { login: "bob", avatar_url: "u", html_url: "https://github.com/bob" },
+    };
+    const event = normalize("issues", payload);
+    expect(event).toEqual({
+      kind: "issue.assignees_changed",
+      externalIssueId: "I_kwDOABC123",
+      issueNumber: 42,
+      externalUpdatedAt: Date.parse("2026-05-15T15:30:00Z"),
+      assignees: [],
+    });
   });
 
   it("maps an issues.labeled payload to a NormalizedIssueLabelsChangedEvent carrying the full label set", () => {
@@ -398,6 +484,35 @@ describe("integrations/github/webhook.normalize", () => {
       },
       stateReason: "completed",
     });
+  });
+
+  it("propagates closed_by from an issues.closed payload onto closedBy", () => {
+    const payload = {
+      ...closedPayload("completed"),
+      issue: {
+        ...closedPayload("completed").issue,
+        closed_by: {
+          login: "mergebot",
+          avatar_url: "https://avatars.githubusercontent.com/u/9?v=4",
+          html_url: "https://github.com/mergebot",
+        },
+      },
+    };
+    const event = normalize("issues", payload);
+    expect(event).toMatchObject({
+      kind: "issue.closed",
+      closedBy: {
+        login: "mergebot",
+        avatarUrl: "https://avatars.githubusercontent.com/u/9?v=4",
+        url: "https://github.com/mergebot",
+      },
+    });
+  });
+
+  it("omits closedBy when the issues.closed payload has no closed_by user", () => {
+    const event = normalize("issues", closedPayload("completed"));
+    expect(event).toMatchObject({ kind: "issue.closed" });
+    expect((event as { closedBy?: unknown }).closedBy).toBeUndefined();
   });
 });
 

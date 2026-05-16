@@ -20,6 +20,7 @@ import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
+import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
@@ -168,6 +169,8 @@ function TaskDetailPageContent({
                 onStartDateChange={detail.handlePlannedStartDateChange}
                 onEstimateChange={detail.handleEstimateChange}
               />
+
+              <TaskGithubExternalInfo taskId={taskId} />
 
               <TaskDependencies
                 taskId={taskId}

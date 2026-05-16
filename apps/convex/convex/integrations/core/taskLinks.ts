@@ -22,6 +22,25 @@ export const getByTask = query({
       ),
       externalState: v.optional(v.union(v.literal("open"), v.literal("closed"))),
       externalIssueUrl: v.optional(v.string()),
+      // Display payload for assignees that did NOT win Ripple's single
+      // `assigneeId` slot — rendered as muted shadow chips next to the
+      // primary assignee on task detail.
+      externalAssignees: v.optional(
+        v.array(
+          v.object({
+            login: v.string(),
+            avatarUrl: v.string(),
+            url: v.string(),
+          }),
+        ),
+      ),
+      externalClosedBy: v.optional(
+        v.object({
+          login: v.string(),
+          avatarUrl: v.string(),
+          url: v.string(),
+        }),
+      ),
     }),
   ),
   handler: async (ctx, { taskId }) => {
@@ -42,6 +61,8 @@ export const getByTask = query({
       lastSyncError: link.lastSyncError,
       externalState: link.externalState,
       externalIssueUrl,
+      externalAssignees: link.externalAssignees,
+      externalClosedBy: link.externalClosedBy,
     };
   },
 });

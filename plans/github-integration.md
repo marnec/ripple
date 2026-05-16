@@ -223,6 +223,14 @@ Pull request webhook events scan title, body, and branch name for `<PROJECT_KEY>
 
 **User stories**: 63–66.
 
+**Carried in from Phase 4**: self-service GitHub-username field on the user
+profile / account settings page. Writes a `workspaceMemberExternalIdentity`
+row (provider="github") per workspace the member belongs to. Phase 4 shipped
+the mapping table + matcher; until this UI lands, members are silently
+unmapped (inbound falls back to the bot user, outbound skips). No admin grid
+— defer the discovery surface ("unmapped logins seen on inbound events →
+assign to member") to a follow-up if needed.
+
 ### What to build
 
 Workspace admins can pause a link without disconnecting it — sync stops in both directions and webhooks arriving during a pause are **dropped rather than queued** (so resuming doesn't fire a burst of stale events). Disconnect tears down the link rows but first writes a `tasks.externalRefFrozen` snapshot on each affected task so historical context (provider, repo, issue number, URL, disconnect timestamp) survives. Unlinking does not delete tasks. Reconnecting the same repo to the same project rehydrates by matching `externalIssueId` against `externalRefFrozen.issueId`. `installation.deleted` and `installation_repositories.removed` events from GitHub auto-transition the relevant links to `disconnected` and write the frozen refs first.

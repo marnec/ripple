@@ -49,6 +49,12 @@ interface GithubIssue {
   // Present on issues.labeled / issues.unlabeled (and on the full issue
   // object generally). Carries the current label set after the delta.
   labels?: GithubLabel[];
+  // Present on issues.assigned / issues.unassigned. Carries the current
+  // assignee set after the delta, in GitHub's display order.
+  assignees?: GithubUser[];
+  // Present on issues.closed when the close action carries a user. May
+  // be null/absent on synthetic closes (e.g. PR-merge-driven closes).
+  closed_by?: GithubUser | null;
 }
 
 interface GithubInstallation {
@@ -169,10 +175,20 @@ function normalizeIssuesEvent(payload: unknown): NormalizedWebhookEvent | null {
   }
 
   if (p.action === "closed") {
+    const closedBy = p.issue.closed_by;
     return {
       kind: "issue.closed",
       ...sharedIssueFields(p.issue),
       stateReason: p.issue.state_reason ?? "completed",
+      ...(closedBy
+        ? {
+            closedBy: {
+              login: closedBy.login,
+              avatarUrl: closedBy.avatar_url,
+              url: closedBy.html_url,
+            },
+          }
+        : {}),
     };
   }
 
@@ -190,6 +206,20 @@ function normalizeIssuesEvent(payload: unknown): NormalizedWebhookEvent | null {
       issueNumber: p.issue.number,
       externalUpdatedAt: Date.parse(p.issue.updated_at),
       labels: (p.issue.labels ?? []).map((l) => l.name),
+    };
+  }
+
+  if (p.action === "assigned" || p.action === "unassigned") {
+    return {
+      kind: "issue.assignees_changed",
+      externalIssueId: p.issue.node_id,
+      issueNumber: p.issue.number,
+      externalUpdatedAt: Date.parse(p.issue.updated_at),
+      assignees: (p.issue.assignees ?? []).map((u) => ({
+        login: u.login,
+        avatarUrl: u.avatar_url,
+        url: u.html_url,
+      })),
     };
   }
 

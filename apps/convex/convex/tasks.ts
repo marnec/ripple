@@ -16,6 +16,7 @@ import { getAll } from "convex-helpers/server/relationships";
 import type { Doc } from "./_generated/dataModel";
 import { notify } from "./utils/notify";
 import {
+  maybeEnqueueAssigneesPush,
   maybeEnqueueLabelsPush,
   maybeEnqueueOutboundPush,
 } from "./integrations/core/outboundDispatch";
@@ -956,6 +957,11 @@ export const update = mutation({
     // Helper handles the unlinked/frozen/echo gates internally.
     if (labels !== undefined) {
       await maybeEnqueueLabelsPush(ctx, taskId);
+    }
+    // Independent dimension: assignee changes trigger an assignee push.
+    // Helper handles unlinked/frozen/unmappable-assignee gates internally.
+    if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
+      await maybeEnqueueAssigneesPush(ctx, taskId);
     }
 
     return null;

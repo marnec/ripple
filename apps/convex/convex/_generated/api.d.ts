@@ -1215,6 +1215,16 @@ export declare const api: {
           "public",
           { taskId: Id<"tasks"> },
           null | {
+            externalAssignees?: Array<{
+              avatarUrl: string;
+              login: string;
+              url: string;
+            }>;
+            externalClosedBy?: {
+              avatarUrl: string;
+              login: string;
+              url: string;
+            };
             externalIssueUrl?: string;
             externalState?: "open" | "closed";
             lastSyncError?: {
@@ -3336,6 +3346,20 @@ export declare const internal: {
         >;
       };
       syncOutAction: {
+        pushAssigneeChanges: FunctionReference<
+          "action",
+          "internal",
+          {
+            add: Array<string>;
+            installationId: string;
+            issueNumber: number;
+            nextLogins: Array<string>;
+            remove: Array<string>;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
         pushIssueState: FunctionReference<
           "action",
           "internal",
@@ -3375,6 +3399,12 @@ export declare const internal: {
               | { type: "canceled" };
             runId: string;
           },
+          null
+        >;
+        recordAssigneesSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          { nextLogins: Array<string>; taskId: Id<"tasks"> },
           null
         >;
         recordLabelsSuccess: FunctionReference<

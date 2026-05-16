@@ -11,7 +11,8 @@ export type NormalizedIssueEvent =
   | NormalizedIssueOpenedEvent
   | NormalizedIssueClosedEvent
   | NormalizedIssueReopenedEvent
-  | NormalizedIssueLabelsChangedEvent;
+  | NormalizedIssueLabelsChangedEvent
+  | NormalizedIssueAssigneesChangedEvent;
 
 /**
  * Installation-lifecycle events — distinct from `NormalizedIssueEvent`
@@ -82,6 +83,11 @@ export interface NormalizedIssueClosedEvent {
   /** Provider-specific close reason. GitHub maps directly; other providers
    *  default to "completed". */
   stateReason: "completed" | "not_planned";
+  /** GitHub user who flipped the issue to closed, when present in the
+   *  payload. Renders as "Closed on GitHub by @\<login\>" on task detail
+   *  when this user is not a workspace member. Optional because import
+   *  jobs and some webhook variants don't carry it. */
+  closedBy?: NormalizedExternalAuthor;
 }
 
 export interface NormalizedIssueReopenedEvent {
@@ -110,4 +116,22 @@ export interface NormalizedIssueLabelsChangedEvent {
   issueNumber: number;
   externalUpdatedAt: number;
   labels: string[];
+}
+
+/**
+ * Emitted by the provider adapter for both `issues.assigned` and
+ * `issues.unassigned` events. Carries the **full** new assignee set rather
+ * than a delta so the core reconciler can pick a single Ripple `assigneeId`
+ * + a shadow-chip set in one pass and remain idempotent under retries.
+ */
+export interface NormalizedIssueAssigneesChangedEvent {
+  kind: "issue.assignees_changed";
+  externalIssueId: string;
+  issueNumber: number;
+  externalUpdatedAt: number;
+  assignees: {
+    login: string;
+    avatarUrl: string;
+    url: string;
+  }[];
 }

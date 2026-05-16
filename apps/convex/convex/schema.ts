@@ -827,6 +827,20 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_externalAccount", ["externalAccountId"]),
 
+  // Per-(workspace, member) mapping of internal users to provider-side
+  // identities. Looked up by the inbound integration code to match a GitHub
+  // assignee login to a workspace member; the bot-user fallback covers
+  // unmatched logins. Provider-agnostic so a future GitLab adapter slots in
+  // without a schema migration — just a different `provider` value.
+  workspaceMemberExternalIdentity: defineTable({
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    provider: v.string(), // "github", "gitlab", ...
+    externalLogin: v.string(), // canonical (lowercase) provider username
+  })
+    .index("by_workspace_provider_login", ["workspaceId", "provider", "externalLogin"])
+    .index("by_workspace_user_provider", ["workspaceId", "userId", "provider"]),
+
   // Per repo↔project binding. The `status` state machine is orthogonal to
   // the `pausedByBilling` entitlement flag — both feed `effectiveLinkStatus`.
   // Provider-agnostic field names so a future GitLab adapter slots in
@@ -898,6 +912,35 @@ export default defineSchema({
     // event is a re-delivery of our own outbound push) and the outbound diff
     // (what to POST/DELETE on the GitHub side).
     externalLabels: v.optional(v.array(v.string())),
+    // Mirror of the last-known GitHub assignee logins (full set, preserving
+    // GitHub's order). Drives the inbound echo guard (same set → bounce-back
+    // from our own outbound push) and the outbound diff (which logins to
+    // POST as adds / DELETE as removes on the GitHub side).
+    externalAssigneeLogins: v.optional(v.array(v.string())),
+    // Display payload for assignees that did NOT win the `assigneeId` slot
+    // (either unmatched logins or matched-but-not-first). The task detail
+    // renders these as shadow chips alongside the primary assignee so the
+    // multi-assignee story from GitHub isn't lost in Ripple's single-assignee
+    // model. Always set together with `externalAssigneeLogins`.
+    externalAssignees: v.optional(
+      v.array(
+        v.object({
+          login: v.string(),
+          avatarUrl: v.string(),
+          url: v.string(),
+        }),
+      ),
+    ),
+    // GitHub user who closed the issue (when the close came from outside
+    // Ripple). Renders as "Closed on GitHub by @\<login\>" on task detail.
+    // Cleared on reopen so the badge doesn't outlive its truth.
+    externalClosedBy: v.optional(
+      v.object({
+        login: v.string(),
+        avatarUrl: v.string(),
+        url: v.string(),
+      }),
+    ),
   })
     // Idempotency / "have we imported this issue?" lookup.
     .index("by_link_externalIssueId", [

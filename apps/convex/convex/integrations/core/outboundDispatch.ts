@@ -164,3 +164,88 @@ export async function maybeEnqueueLabelsPush(
     },
   );
 }
+
+/**
+ * Outbound assignee dispatcher. Called by `tasks.update` whenever `assigneeId`
+ * is part of the patch. Resolves the post-patch Ripple assignee to a GitHub
+ * login via `workspaceMemberExternalIdentity` (skipping the bot user and
+ * unmapped members — they have no login to push), diffs the resulting
+ * one-element-or-empty set against `externalAssigneeLogins`, and enqueues a
+ * single retrier-managed action when there's work to do.
+ *
+ * Ripple→GitHub is intentionally 1→1 even though GitHub supports multiple
+ * assignees: Ripple models a single primary owner per task. The shadow-chip
+ * GitHub assignees from inbound are display-only and never round-trip back.
+ */
+export async function maybeEnqueueAssigneesPush(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+): Promise<void> {
+  const task = await ctx.db.get(taskId);
+  if (!task) return;
+
+  const link = await ctx.db
+    .query("taskIntegrationLinks")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .unique();
+  if (!link) return;
+
+  const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
+  if (!projectLink) return;
+  if (shouldSkipForFreeze(projectLink)) return;
+
+  // Resolve the post-patch Ripple assignee → a single GitHub login. The
+  // unmappable cases split two ways:
+  //
+  //  - `assigneeId === undefined` (cleared): nextLogins = []. We then push a
+  //    diff that DELETEs whatever logins GitHub knows about.
+  //  - `assigneeId` set but no mapped identity (bot user, or a member who
+  //    hasn't linked their GitHub account): skip outbound entirely. Pushing
+  //    a clear would erase the real external assignees we're rendering as
+  //    shadow chips — but we also have nothing meaningful to push.
+  let nextLogins: string[] = [];
+  if (task.assigneeId) {
+    const identity = await ctx.db
+      .query("workspaceMemberExternalIdentity")
+      .withIndex("by_workspace_user_provider", (q) =>
+        q
+          .eq("workspaceId", projectLink.workspaceId)
+          .eq("userId", task.assigneeId!)
+          .eq("provider", "github"),
+      )
+      .unique();
+    if (!identity) return; // unmappable assignee — preserve GitHub state.
+    nextLogins = [identity.externalLogin];
+  }
+
+  const prevLogins = link.externalAssigneeLogins ?? [];
+  const prevSet = new Set(prevLogins);
+  const nextSet = new Set(nextLogins);
+  const add = nextLogins.filter((l) => !prevSet.has(l));
+  const remove = prevLogins.filter((l) => !nextSet.has(l));
+
+  // Echo guard: no diff, no PATCH.
+  if (add.length === 0 && remove.length === 0) return;
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) =>
+      q.eq("workspaceId", projectLink.workspaceId),
+    )
+    .unique();
+  if (!integration) return;
+
+  await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushAssigneeChanges,
+    {
+      taskId,
+      add,
+      remove,
+      nextLogins,
+      installationId: integration.externalAccountId,
+      repoFullName: projectLink.externalRepoFullName,
+      issueNumber: task.externalRefs?.[0]?.issueNumber ?? 0,
+    },
+  );
+}

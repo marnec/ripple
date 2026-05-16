@@ -4,11 +4,13 @@ import {
   applyNormalizedEvent,
 } from "../convex/integrations/core/syncIn";
 import type {
+  NormalizedIssueAssigneesChangedEvent,
   NormalizedIssueClosedEvent,
   NormalizedIssueLabelsChangedEvent,
   NormalizedIssueOpenedEvent,
   NormalizedIssueReopenedEvent,
 } from "../convex/integrations/core/types";
+import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 import {
   createTestContext,
@@ -998,6 +1000,340 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.labels_changed
         .unique(),
     );
     expect(linkRow?.externalUpdatedAt).toBe(3_000);
+  });
+});
+
+function makeAssigneesChangedEvent(
+  overrides: Partial<NormalizedIssueAssigneesChangedEvent> = {},
+): NormalizedIssueAssigneesChangedEvent {
+  return {
+    kind: "issue.assignees_changed",
+    externalIssueId: "I_kwDOABC123",
+    issueNumber: 42,
+    externalUpdatedAt: 1_700_000_005_000, // newer than opened
+    assignees: [],
+    ...overrides,
+  };
+}
+
+describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_changed", () => {
+  it("maps a GitHub login to its workspace member via workspaceMemberExternalIdentity and assigns the task", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    // Add a second user to the workspace and link them to GitHub login "alice".
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "Alice", email: "alice@example.com" });
+      await ctx.db.insert("workspaceMembers", {
+        userId: uid,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId,
+        userId: uid,
+        provider: "github",
+        externalLogin: "alice",
+      });
+      return uid;
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          assignees: [
+            {
+              login: "alice",
+              avatarUrl: "https://github.com/alice.png",
+              url: "https://github.com/alice",
+            },
+          ],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.assigneeId).toBe(aliceUserId);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalAssigneeLogins).toEqual(["alice"]);
+  });
+
+  it("with multiple assignees, the first matching workspace member wins and the rest become shadow chips", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    // alice maps to a workspace member; carol does too. bob has no identity row.
+    const { aliceUserId, carolUserId } = await t.run(async (ctx) => {
+      const alice = await ctx.db.insert("users", { name: "Alice" });
+      const carol = await ctx.db.insert("users", { name: "Carol" });
+      await ctx.db.insert("workspaceMembers", { userId: alice, workspaceId, role: WorkspaceRole.MEMBER });
+      await ctx.db.insert("workspaceMembers", { userId: carol, workspaceId, role: WorkspaceRole.MEMBER });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId, userId: alice, provider: "github", externalLogin: "alice",
+      });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId, userId: carol, provider: "github", externalLogin: "carol",
+      });
+      return { aliceUserId: alice, carolUserId: carol };
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          assignees: [
+            // First in GitHub's order — should win even though bob comes
+            // earlier alphabetically. GitHub's order is preserved.
+            { login: "alice", avatarUrl: "https://github.com/alice.png", url: "https://github.com/alice" },
+            { login: "bob",   avatarUrl: "https://github.com/bob.png",   url: "https://github.com/bob" },
+            { login: "carol", avatarUrl: "https://github.com/carol.png", url: "https://github.com/carol" },
+          ],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.assigneeId).toBe(aliceUserId);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    // Full set mirrored for echo guard + outbound diff.
+    expect(linkRow?.externalAssigneeLogins).toEqual(["alice", "bob", "carol"]);
+    // Shadow chips are everyone *other* than the matched assignee — bob (no
+    // member match) and carol (matched but not the winner) both appear here
+    // so the UI can render the full multi-assignee story.
+    expect(linkRow?.externalAssignees).toEqual([
+      { login: "bob",   avatarUrl: "https://github.com/bob.png",   url: "https://github.com/bob" },
+      { login: "carol", avatarUrl: "https://github.com/carol.png", url: "https://github.com/carol" },
+    ]);
+    // Sanity: carol matched too, but as a shadow chip — task assignee is alice.
+    expect(task?.assigneeId).not.toBe(carolUserId);
+  });
+
+  it("falls back to the bot user when no GitHub assignee matches a workspace member", async () => {
+    const t = createTestContext();
+    const { projectId, botUserId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    // No workspaceMemberExternalIdentity rows — every GitHub login misses.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          assignees: [
+            { login: "external1", avatarUrl: "u1", url: "https://github.com/external1" },
+            { login: "external2", avatarUrl: "u2", url: "https://github.com/external2" },
+          ],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    // Bot-user fallback so the task surfaces "GitHub" rather than "Unassigned"
+    // in member pickers and timeline views — the real identities still render
+    // as shadow chips so no information is lost.
+    expect(task?.assigneeId).toBe(botUserId);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalAssigneeLogins).toEqual(["external1", "external2"]);
+    // Full set as shadow chips since no entry won the assigneeId slot.
+    expect(linkRow?.externalAssignees).toEqual([
+      { login: "external1", avatarUrl: "u1", url: "https://github.com/external1" },
+      { login: "external2", avatarUrl: "u2", url: "https://github.com/external2" },
+    ]);
+  });
+
+  it("clearing all assignees on GitHub clears Ripple's assigneeId and the shadow set", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "Alice" });
+      await ctx.db.insert("workspaceMembers", { userId: uid, workspaceId, role: WorkspaceRole.MEMBER });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId, userId: uid, provider: "github", externalLogin: "alice",
+      });
+      return uid;
+    });
+
+    // Assign alice first.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          externalUpdatedAt: 1_700_000_005_000,
+          assignees: [{ login: "alice", avatarUrl: "u", url: "https://github.com/alice" }],
+        }),
+        link,
+      }),
+    );
+    // Then clear (later event).
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          externalUpdatedAt: 1_700_000_006_000,
+          assignees: [],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.assigneeId).toBeUndefined();
+    expect(task?.assigneeId).not.toBe(aliceUserId);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalAssigneeLogins).toEqual([]);
+    expect(linkRow?.externalAssignees).toEqual([]);
+  });
+
+  it("echo skip: inbound assignees matching externalAssigneeLogins does not bump externalUpdatedAt", async () => {
+    // Scenario: a Ripple-side assignee change fires our outbound PATCH;
+    // GitHub accepts it and immediately fires the `issues.assigned` webhook
+    // back at us. The bounced set already matches the mirror — re-applying
+    // would be redundant and would mask staler events that follow.
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({ externalUpdatedAt: 2_000 }),
+        link,
+      }),
+    );
+
+    await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "Alice" });
+      await ctx.db.insert("workspaceMembers", { userId: uid, workspaceId, role: WorkspaceRole.MEMBER });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId, userId: uid, provider: "github", externalLogin: "alice",
+      });
+    });
+
+    // Canonical state lands at t=3000.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          externalUpdatedAt: 3_000,
+          assignees: [{ login: "alice", avatarUrl: "u", url: "https://github.com/alice" }],
+        }),
+        link,
+      }),
+    );
+
+    // Echo — same set arrives at a strictly newer timestamp.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          externalUpdatedAt: 4_000,
+          assignees: [{ login: "alice", avatarUrl: "u", url: "https://github.com/alice" }],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    // Echo guard didn't bump the ordering mirror — proof the second event
+    // short-circuited rather than re-applying.
+    expect(linkRow?.externalUpdatedAt).toBe(3_000);
+  });
+});
+
+describe("integrations/core/syncIn.applyNormalizedEvent — issue.closed with closedBy", () => {
+  it("persists the GitHub user who closed the issue on externalClosedBy", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await insertStatus(t, { projectId, name: "Done", order: 1, isCompleted: true });
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    const closer = {
+      login: "octocat",
+      avatarUrl: "https://github.com/octocat.png",
+      url: "https://github.com/octocat",
+    };
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeClosedEvent({ closedBy: closer }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalClosedBy).toEqual(closer);
   });
 });
 

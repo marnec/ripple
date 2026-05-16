@@ -33,6 +33,29 @@ export const recordLabelsSuccess = internalMutation({
   },
 });
 
+export const recordAssigneesSuccess = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    nextLogins: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .unique();
+    if (!link) return null;
+    await ctx.db.patch(link._id, {
+      externalAssigneeLogins: args.nextLogins,
+      // Bump the ordering guard so the inbound bounce-back of these assignee
+      // changes (issues.assigned/unassigned) compares stale and is dropped.
+      externalUpdatedAt: Date.now(),
+      lastSyncError: undefined,
+    });
+    return null;
+  },
+});
+
 export const recordOutboundSuccess = internalMutation({
   args: {
     taskId: v.id("tasks"),

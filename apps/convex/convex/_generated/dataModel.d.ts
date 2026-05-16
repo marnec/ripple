@@ -1302,7 +1302,14 @@ export type DataModel = {
   };
   taskIntegrationLinks: {
     document: {
+      externalAssigneeLogins?: Array<string>;
+      externalAssignees?: Array<{
+        avatarUrl: string;
+        login: string;
+        url: string;
+      }>;
       externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalClosedBy?: { avatarUrl: string; login: string; url: string };
       externalIssueId: string;
       externalLabels?: Array<string>;
       externalState?: "open" | "closed";
@@ -1323,10 +1330,16 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "externalAssigneeLogins"
+      | "externalAssignees"
       | "externalAuthor"
       | "externalAuthor.avatarUrl"
       | "externalAuthor.login"
       | "externalAuthor.url"
+      | "externalClosedBy"
+      | "externalClosedBy.avatarUrl"
+      | "externalClosedBy.login"
+      | "externalClosedBy.url"
       | "externalIssueId"
       | "externalLabels"
       | "externalState"
@@ -1725,6 +1738,41 @@ export type DataModel = {
         "workspaceId",
         "email",
         "status",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  workspaceMemberExternalIdentity: {
+    document: {
+      externalLogin: string;
+      provider: string;
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"workspaceMemberExternalIdentity">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "externalLogin"
+      | "provider"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace_provider_login: [
+        "workspaceId",
+        "provider",
+        "externalLogin",
+        "_creationTime",
+      ];
+      by_workspace_user_provider: [
+        "workspaceId",
+        "userId",
+        "provider",
         "_creationTime",
       ];
     };

@@ -237,3 +237,116 @@ export const pushLabelChanges = internalAction({
     return null;
   },
 });
+
+/**
+ * Outbound assignee dispatch. Mirrors `pushLabelChanges`: POSTs `add` logins
+ * and DELETEs `remove` logins on the linked GitHub issue. GitHub's API
+ * accepts up to 10 assignees in a single POST/DELETE call but rejects logins
+ * outside the repo's collaborators — those return as 422 here, classified as
+ * permanent failures (a misconfigured identity mapping isn't transient).
+ *
+ * On full success records `nextLogins` as the new `externalAssigneeLogins`
+ * mirror so the inbound echo guard catches GitHub's bounced-back webhook.
+ */
+export const pushAssigneeChanges = internalAction({
+  args: {
+    taskId: v.id("tasks"),
+    add: v.array(v.string()),
+    remove: v.array(v.string()),
+    nextLogins: v.array(v.string()),
+    installationId: v.string(),
+    repoFullName: v.string(),
+    issueNumber: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const appId = process.env.GITHUB_APP_ID;
+    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (!appId || !privateKeyPem) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordOutboundFailure,
+        {
+          taskId: args.taskId,
+          message: "GitHub App credentials not configured",
+          httpStatus: undefined,
+        },
+      );
+      return null;
+    }
+
+    const client = new GithubClient({ appId, privateKeyPem });
+    const token = await client.mintInstallationToken(args.installationId);
+
+    if (args.add.length > 0) {
+      const res = await client.request<unknown>({
+        installationToken: token,
+        method: "POST",
+        path: `/repos/${args.repoFullName}/issues/${args.issueNumber}/assignees`,
+        body: { assignees: args.add },
+      });
+      const decision = classifyResponse({
+        status: res.status as number | null,
+        retryAfterMs: res.retryAfterMs,
+        errorMessage: res.errorMessage,
+      });
+      if (decision === "permanent_fail") {
+        await ctx.runMutation(
+          internal.integrations.github.syncOutMutations.recordOutboundFailure,
+          {
+            taskId: args.taskId,
+            message: res.errorMessage ?? `HTTP ${res.status} on assignee add`,
+            httpStatus: typeof res.status === "number" ? res.status : undefined,
+          },
+        );
+        return null;
+      }
+      if (decision === "retry") {
+        if (res.status === 429 && res.retryAfterMs) {
+          await new Promise((r) => setTimeout(r, res.retryAfterMs));
+        }
+        throw new Error(
+          `GitHub assignee-add transient failure (status=${res.status}); retrier will back off`,
+        );
+      }
+    }
+
+    if (args.remove.length > 0) {
+      const res = await client.request<unknown>({
+        installationToken: token,
+        method: "DELETE",
+        path: `/repos/${args.repoFullName}/issues/${args.issueNumber}/assignees`,
+        body: { assignees: args.remove },
+      });
+      const decision = classifyResponse({
+        status: res.status as number | null,
+        retryAfterMs: res.retryAfterMs,
+        errorMessage: res.errorMessage,
+      });
+      if (decision === "permanent_fail") {
+        await ctx.runMutation(
+          internal.integrations.github.syncOutMutations.recordOutboundFailure,
+          {
+            taskId: args.taskId,
+            message: res.errorMessage ?? `HTTP ${res.status} on assignee remove`,
+            httpStatus: typeof res.status === "number" ? res.status : undefined,
+          },
+        );
+        return null;
+      }
+      if (decision === "retry") {
+        if (res.status === 429 && res.retryAfterMs) {
+          await new Promise((r) => setTimeout(r, res.retryAfterMs));
+        }
+        throw new Error(
+          `GitHub assignee-remove transient failure (status=${res.status}); retrier will back off`,
+        );
+      }
+    }
+
+    await ctx.runMutation(
+      internal.integrations.github.syncOutMutations.recordAssigneesSuccess,
+      { taskId: args.taskId, nextLogins: args.nextLogins },
+    );
+    return null;
+  },
+});

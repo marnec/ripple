@@ -104,6 +104,14 @@ export async function applyNormalizedEvent(
         importContext,
       });
       return;
+
+    case "issue.assignees_changed":
+      // Assignee events arriving for an issue we never imported are dropped —
+      // we don't synthesize an orphan task from an assignee-only event.
+      if (!existingLink) return;
+      if (isStale(event, existingLink)) return;
+      await applyAssigneesChanged(ctx, { event, link, existingLink });
+      return;
   }
 }
 
@@ -117,7 +125,7 @@ async function createTaskFromEvent(
   args: {
     event: Exclude<
       NormalizedIssueEvent,
-      { kind: "issue.labels_changed" }
+      { kind: "issue.labels_changed" | "issue.assignees_changed" }
     >;
     link: Doc<"projectIntegrationLinks">;
     destinationStatus: Doc<"taskStatuses">;
@@ -201,6 +209,7 @@ async function updateExistingOnClose(
     externalUpdatedAt: event.externalUpdatedAt,
     externalState: "closed",
     externalStateReason: event.stateReason,
+    externalClosedBy: event.closedBy,
   });
 }
 
@@ -243,6 +252,84 @@ async function applyLabelsChanged(
     externalLabels: normalized,
     externalUpdatedAt: event.externalUpdatedAt,
   });
+}
+
+/**
+ * Reconcile the task's `assigneeId` against the GitHub assignee set. First
+ * login that maps to a workspace member via `workspaceMemberExternalIdentity`
+ * wins; the rest land on the link's shadow set for display. When no GitHub
+ * login matches a member, `assigneeId` falls back to the integration's bot
+ * user — the full set still mirrors onto the link so the UI can render real
+ * GitHub identities without pretending they're Ripple members.
+ */
+async function applyAssigneesChanged(
+  ctx: MutationCtx,
+  args: {
+    event: Extract<NormalizedIssueEvent, { kind: "issue.assignees_changed" }>;
+    link: Doc<"projectIntegrationLinks">;
+    existingLink: Doc<"taskIntegrationLinks">;
+  },
+): Promise<void> {
+  const { event, link, existingLink } = args;
+
+  const nextLogins = event.assignees.map((a) => a.login.toLowerCase());
+
+  // Echo guard: same set as last-known → bounce-back from our own outbound.
+  if (sameLabelSet(nextLogins, existingLink.externalAssigneeLogins)) return;
+
+  // First-matching-login wins for `assigneeId`. The non-winning entries
+  // (unmatched logins + matched-but-not-first) become the shadow set. If
+  // the GitHub set is non-empty but no login resolves to a workspace member,
+  // fall back to the integration's bot user so the task surfaces a sensible
+  // owner — the real identities still render via the shadow chips.
+  let matchedUserId: Doc<"users">["_id"] | undefined;
+  let winnerIndex = -1;
+  for (let i = 0; i < event.assignees.length; i++) {
+    const a = event.assignees[i];
+    const identity = await ctx.db
+      .query("workspaceMemberExternalIdentity")
+      .withIndex("by_workspace_provider_login", (q) =>
+        q
+          .eq("workspaceId", link.workspaceId)
+          .eq("provider", "github")
+          .eq("externalLogin", a.login.toLowerCase()),
+      )
+      .unique();
+    if (identity) {
+      matchedUserId = identity.userId;
+      winnerIndex = i;
+      break;
+    }
+  }
+
+  let shadowAssignees = event.assignees;
+  if (winnerIndex >= 0) {
+    shadowAssignees = event.assignees.filter((_, i) => i !== winnerIndex);
+  } else if (event.assignees.length > 0) {
+    // No-match fallback: bot user takes the slot; every real identity stays
+    // visible via shadow chips.
+    const integration = await ctx.db
+      .query("workspaceIntegrations")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
+      .unique();
+    if (integration) {
+      matchedUserId = integration.botUserId;
+    }
+  }
+
+  await ctx.db.patch(existingLink._id, {
+    externalAssigneeLogins: nextLogins,
+    externalAssignees: shadowAssignees,
+    externalUpdatedAt: event.externalUpdatedAt,
+  });
+
+  // Only patch the task row when the resolved assignee actually changed —
+  // avoids unnecessary subscription invalidations on the kanban-hot row.
+  const task = await ctx.db.get(existingLink.taskId);
+  if (!task) return;
+  if (task.assigneeId !== matchedUserId) {
+    await ctx.db.patch(task._id, { assigneeId: matchedUserId });
+  }
 }
 
 /** Order-insensitive label-set comparison. Both sides are pre-normalized. */
@@ -291,7 +378,13 @@ async function updateExistingOnReopen(
 function isStale(
   event: Extract<
     NormalizedIssueEvent,
-    { kind: "issue.closed" | "issue.reopened" | "issue.labels_changed" }
+    {
+      kind:
+        | "issue.closed"
+        | "issue.reopened"
+        | "issue.labels_changed"
+        | "issue.assignees_changed";
+    }
   >,
   existingLink: Doc<"taskIntegrationLinks">,
 ): boolean {
