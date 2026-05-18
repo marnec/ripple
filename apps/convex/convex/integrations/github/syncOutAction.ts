@@ -611,3 +611,87 @@ export const pushCommentDelete = internalAction({
     );
   },
 });
+
+/**
+ * Outbound description push. Invoked from the
+ * `tasks.syncDescriptionToGitHub` mutation via the action-retrier component.
+ * The markdown is rendered client-side from the BlockNote editor and passed
+ * in — keeps server-side bundle slim (no BlockNote/JSDOM in the Convex
+ * runtime).
+ *
+ * Classification matches `pushIssueState` exactly:
+ *  - 2xx → stamp `descriptionLastSyncedAt`, clear `lastSyncError`.
+ *  - 4xx non-429 → record `lastSyncError`, return.
+ *  - 5xx / network → throw (retrier backs off).
+ *  - 429 → pre-sleep `Retry-After`, then throw.
+ */
+export const pushDescription = internalAction({
+  args: {
+    taskId: v.id("tasks"),
+    markdown: v.string(),
+    installationId: v.string(),
+    repoFullName: v.string(),
+    issueNumber: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const appId = process.env.GITHUB_APP_ID;
+    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+    if (!appId || !privateKeyPem) {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordOutboundFailure,
+        {
+          taskId: args.taskId,
+          message: "GitHub App credentials not configured",
+          httpStatus: undefined,
+        },
+      );
+      return null;
+    }
+
+    const client = new GithubClient({ appId, privateKeyPem });
+    const token = await client.mintInstallationToken(args.installationId);
+
+    const res = await client.request<unknown>({
+      installationToken: token,
+      method: "PATCH",
+      path: `/repos/${args.repoFullName}/issues/${args.issueNumber}`,
+      body: { body: args.markdown },
+    });
+
+    const normalized: OutboundResponse = {
+      status: res.status as number | null,
+      retryAfterMs: res.retryAfterMs,
+      errorMessage: res.errorMessage,
+    };
+    const decision = classifyResponse(normalized);
+
+    if (decision === "success") {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordDescriptionPushSuccess,
+        { taskId: args.taskId },
+      );
+      return null;
+    }
+
+    if (decision === "permanent_fail") {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordOutboundFailure,
+        {
+          taskId: args.taskId,
+          message: normalized.errorMessage ?? `HTTP ${normalized.status}`,
+          httpStatus:
+            typeof normalized.status === "number" ? normalized.status : undefined,
+        },
+      );
+      return null;
+    }
+
+    if (res.status === 429 && normalized.retryAfterMs) {
+      await new Promise((r) => setTimeout(r, normalized.retryAfterMs));
+    }
+    throw new Error(
+      `GitHub description-push transient failure (status=${normalized.status}); retrier will back off`,
+    );
+  },
+});

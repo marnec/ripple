@@ -56,6 +56,23 @@ export const recordAssigneesSuccess = internalMutation({
   },
 });
 
+export const recordDescriptionPushSuccess = internalMutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .unique();
+    if (!link) return null;
+    await ctx.db.patch(link._id, {
+      descriptionLastSyncedAt: Date.now(),
+      lastSyncError: undefined,
+    });
+    return null;
+  },
+});
+
 export const recordOutboundSuccess = internalMutation({
   args: {
     taskId: v.id("tasks"),

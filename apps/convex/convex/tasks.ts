@@ -19,6 +19,7 @@ import {
   maybeEnqueueAssigneesPush,
   maybeEnqueueLabelsPush,
   maybeEnqueueOutboundPush,
+  enqueueDescriptionPush,
 } from "./integrations/core/outboundDispatch";
 
 /**
@@ -1183,6 +1184,27 @@ export const retryOutboundSync = mutation({
     }
 
     await maybeEnqueueOutboundPush(ctx, taskId);
+    return null;
+  },
+});
+
+/**
+ * Manual Ripple→GitHub description push. Triggered by the "Sync description
+ * to GitHub" button on the task detail. The client renders the current
+ * BlockNote editor to markdown (avoids server-side BlockNote/JSDOM, which
+ * would balloon the Convex bundle past its size limit) and passes it in;
+ * this mutation auth-checks and enqueues the PATCH.
+ *
+ * Ripple is the source of truth for description content: there is no
+ * automatic background sync and no reconciliation. The button is the only
+ * way to publish description changes to GitHub.
+ */
+export const syncDescriptionToGitHub = mutation({
+  args: { taskId: v.id("tasks"), markdown: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { taskId, markdown }) => {
+    await requireResourceMember(ctx, "tasks", taskId);
+    await enqueueDescriptionPush(ctx, { taskId, markdown });
     return null;
   },
 });

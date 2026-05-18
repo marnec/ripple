@@ -952,6 +952,12 @@ export default defineSchema({
         url: v.string(),
       }),
     ),
+    // ms timestamp of the last successful Ripple→GitHub description push
+    // via the manual "Sync description to GitHub" button. Purely
+    // informational — Ripple is the source of truth for description
+    // content, so there is no reconciliation; this exists to render
+    // "Last synced X ago" alongside the sync button.
+    descriptionLastSyncedAt: v.optional(v.number()),
   })
     // Idempotency / "have we imported this issue?" lookup.
     .index("by_link_externalIssueId", [

@@ -179,24 +179,29 @@ Comments sync both ways with plain-text bodies. Edits and deletes propagate. Ext
 
 ---
 
-## Phase 6 — Description creation-seed + manual sync + desync detection
+## Phase 6 — Manual Ripple→GitHub description push ✅
 
-**User stories**: 40–45.
+**User stories**: 41 (Ripple-native → empty GitHub body), 43 (manual push button), 45 (GitHub-side edits don't overwrite Ripple).
 
-### What to build
+**Deviations from the PRD (intentional scope cuts):**
 
-GitHub→Ripple seeds the BlockNote description from the issue body at **creation time only** (markdown → BlockNote → Yjs seed). Ripple→GitHub is **push-only** via a manual "Sync description to GitHub" button. The button only appears when description state is `desynced` or `never-synced` AND the description is non-empty. A synced / desynced / never-synced badge sits near the description; it flips optimistically on first keystroke after a synced state and reconciles to truth when the snapshot saves server-side (markdown hash compare against `lastSyncedMarkdownHash`). GitHub-side description edits after creation are ignored — live Ripple collaboration is never disrupted by external edits.
+- **No GitHub→Ripple description seed.** PRD originally called for converting the issue body to BlockNote/Yjs at task creation time. We dropped this for two reasons: (1) Ripple is the source of truth for description content — propagating GitHub bodies in adds bidirectional-ish semantics that fight the rest of the integration's "Ripple-canonical" stance; (2) doing it server-side requires `@blocknote/server-util` + JSDOM, which together blow the Convex bundle past its 42.92 MiB zipped limit. The `taskIntegrationLinks.initialBodyMarkdown` field is still populated by `syncIn.issue.opened` so a future client-side seed (or admin-triggered import) can use it without a schema change.
+- **No reconciliation, no sync-state machine.** PRD called for `descriptionSyncState` (`never-synced` / `synced` / `desynced`) reconciled on every Yjs snapshot save via markdown-hash compare. Dropped — the reconciliation surface was the most complex piece, and without it the badge can't carry a meaningful state. The button is now always visible when the description is non-empty AND the task is linked; clicking is always safe (idempotent on GitHub's side).
+- **Markdown rendering on the client, not the server.** The "Sync to GitHub" button calls `editor.blocksToMarkdownLossy()` in-browser and passes the markdown to the mutation. Keeps the Convex bundle slim.
+
+### What was built
+
+Ripple→GitHub push only, user-initiated. The task detail surfaces a "Sync description to GitHub" button next to the description header whenever the task has a linked GitHub issue and a non-empty description. Clicking renders the current BlockNote document to markdown client-side, sends it to `tasks.syncDescriptionToGitHub({ taskId, markdown })`, and the standard action-retrier outbound path PATCHes the issue body. On success, `taskIntegrationLinks.descriptionLastSyncedAt` stamps the timestamp and the button surfaces "Last synced X ago" next to it. On permanent failure, `lastSyncError` flows through the existing `TaskSyncIndicator` chip.
 
 ### Acceptance criteria
 
-- [ ] Issue created on GitHub → Ripple task description seeded from issue body (markdown → BlockNote / Yjs)
-- [ ] Ripple-native task → empty GitHub issue body at creation; no automatic content push
-- [ ] Description sync badge shows synced / desynced / never-synced state accurately
-- [ ] "Sync description to GitHub" button is hidden when description is empty or already synced; visible when desynced or never-synced AND non-empty; pushes markdown on click
-- [ ] Editing BlockNote flips badge to `desynced` optimistically; server reconciles on snapshot save by hashing rendered markdown and comparing to `lastSyncedMarkdownHash`
-- [ ] GitHub-side description edits after creation do NOT overwrite the Ripple description
-- [ ] PartyKit's existing Yjs snapshot-push HTTP endpoint is extended to compute markdown hash + update `descriptionSyncState`
-- [ ] Tests: `core/description` markdown-hash stability (same content → same hash); hash differs for material content changes (insertion / deletion / formatting); state machine transitions (`never-synced` → `synced` on first push, `synced` → `desynced` on hash divergence, `desynced` → `synced` on push); reconcile-on-snapshot integration; button visibility rules (hidden when empty / synced; visible when desynced or never-synced + non-empty)
+- [x] Ripple-native task → empty GitHub issue body at creation; no automatic content push
+- [x] "Sync description to GitHub" button is hidden when description is empty OR the task has no linked issue; visible otherwise
+- [x] Click → markdown rendered client-side via BlockNote, sent as mutation arg, PATCHed to GitHub via action-retrier (auth + freeze guards apply)
+- [x] On success, `descriptionLastSyncedAt` updates and renders as "Last synced X ago" next to the button
+- [x] On permanent failure, the existing `lastSyncError` chip surfaces via `TaskSyncIndicator`
+- [x] GitHub-side description edits after creation do NOT overwrite the Ripple description (`syncIn` never touches the task's Yjs snapshot)
+- [x] Tests: `core/description.isSyncDescriptionButtonVisible` 3 cases (no link / empty / both true); `tasks.syncDescriptionToGitHub` 3 cases (linked → action fires; no link → throws; non-member → rejected)
 
 ---
 

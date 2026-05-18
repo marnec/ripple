@@ -19,6 +19,7 @@ import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
+import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
@@ -160,6 +161,12 @@ export function TaskDetailSheet({
                       Description
                     </h3>
                     <div className="flex items-center gap-2 min-h-8">
+                      {detail.editor && (
+                        <TaskDescriptionSyncButton
+                          taskId={taskId}
+                          editor={detail.editor}
+                        />
+                      )}
                       <ConnectionStatus isConnected={detail.isConnected} />
                       {detail.isConnected && (
                         <ActiveUsers

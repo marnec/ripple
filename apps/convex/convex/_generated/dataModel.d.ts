@@ -1353,6 +1353,7 @@ export type DataModel = {
   };
   taskIntegrationLinks: {
     document: {
+      descriptionLastSyncedAt?: number;
       externalAssigneeLogins?: Array<string>;
       externalAssignees?: Array<{
         avatarUrl: string;
@@ -1381,6 +1382,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "descriptionLastSyncedAt"
       | "externalAssigneeLogins"
       | "externalAssignees"
       | "externalAuthor"

@@ -1215,6 +1215,7 @@ export declare const api: {
           "public",
           { taskId: Id<"tasks"> },
           null | {
+            descriptionLastSyncedAt?: number;
             externalAssignees?: Array<{
               avatarUrl: string;
               login: string;
@@ -2577,6 +2578,12 @@ export declare const api: {
       { taskId: Id<"tasks"> },
       null
     >;
+    syncDescriptionToGitHub: FunctionReference<
+      "mutation",
+      "public",
+      { markdown: string; taskId: Id<"tasks"> },
+      null
+    >;
     update: FunctionReference<
       "mutation",
       "public",
@@ -3397,6 +3404,18 @@ export declare const internal: {
           },
           null
         >;
+        pushDescription: FunctionReference<
+          "action",
+          "internal",
+          {
+            installationId: string;
+            issueNumber: number;
+            markdown: string;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
         pushIssueState: FunctionReference<
           "action",
           "internal",
@@ -3489,6 +3508,12 @@ export declare const internal: {
             httpStatus?: number;
             message: string;
           },
+          null
+        >;
+        recordDescriptionPushSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          { taskId: Id<"tasks"> },
           null
         >;
         recordLabelsSuccess: FunctionReference<

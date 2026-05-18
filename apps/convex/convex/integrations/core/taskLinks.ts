@@ -41,6 +41,11 @@ export const getByTask = query({
           url: v.string(),
         }),
       ),
+      // ms timestamp of the last successful Ripple→GitHub description push.
+      // Drives the "Last synced X ago" label next to the manual sync button.
+      // Absent on tasks whose description has never been pushed (Ripple-native)
+      // or whose initial seed predates the push (inbound from GitHub).
+      descriptionLastSyncedAt: v.optional(v.number()),
     }),
   ),
   handler: async (ctx, { taskId }) => {
@@ -63,6 +68,7 @@ export const getByTask = query({
       externalIssueUrl,
       externalAssignees: link.externalAssignees,
       externalClosedBy: link.externalClosedBy,
+      descriptionLastSyncedAt: link.descriptionLastSyncedAt,
     };
   },
 });

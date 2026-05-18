@@ -107,6 +107,76 @@ export async function maybeEnqueueOutboundPush(
 }
 
 /**
+ * Outbound description dispatcher. Called by the public
+ * `tasks.syncDescriptionToGitHub` mutation. The client renders the current
+ * BlockNote description to markdown (no server-side BlockNote needed — keeps
+ * the Convex bundle slim) and passes it in; this dispatcher gates on
+ * link/freeze/credentials and enqueues the retrier-managed PATCH.
+ *
+ * Unlike status/labels/assignees there is no echo guard — the push is
+ * user-initiated (button click), so we always send. Redundant identical
+ * pushes are harmless (GitHub no-ops).
+ */
+export async function enqueueDescriptionPush(
+  ctx: MutationCtx,
+  args: { taskId: Id<"tasks">; markdown: string },
+): Promise<void> {
+  const task = await ctx.db.get(args.taskId);
+  if (!task) throw new Error("Task not found");
+
+  const link = await ctx.db
+    .query("taskIntegrationLinks")
+    .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+    .unique();
+  if (!link) {
+    throw new Error("Task is not linked to a GitHub issue");
+  }
+
+  const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
+  if (!projectLink) throw new Error("Project integration link missing");
+  if (shouldSkipForFreeze(projectLink)) return; // silently no-op while frozen
+
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) =>
+      q.eq("workspaceId", projectLink.workspaceId),
+    )
+    .unique();
+  if (!integration) throw new Error("Workspace integration row missing");
+
+  const issueNumber = task.externalRefs?.[0]?.issueNumber ?? 0;
+  if (!issueNumber) throw new Error("Task has no GitHub issue number");
+
+  const runId = await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushDescription,
+    {
+      taskId: args.taskId,
+      markdown: args.markdown,
+      installationId: integration.externalAccountId,
+      repoFullName: projectLink.externalRepoFullName,
+      issueNumber,
+    },
+    {
+      onComplete: internal.integrations.github.syncOutMutations
+        .onOutboundComplete as unknown as FunctionReference<
+        "mutation",
+        "internal",
+        {
+          runId: RunId;
+          result:
+            | { type: "success"; returnValue: unknown }
+            | { type: "failed"; error: string }
+            | { type: "canceled" };
+        }
+      >,
+    },
+  );
+
+  await ctx.db.patch(link._id, { outboundRunId: runId });
+}
+
+/**
  * Outbound label dispatcher. Called by `tasks.update` whenever the `labels`
  * arg is present, after `syncTaskTags` reconciles the post-patch label set.
  * Computes the (add, remove) diff against the link's `externalLabels` mirror
