@@ -228,6 +228,63 @@ export const resumeLink = mutation({
 });
 
 /**
+ * Force a per-link reconcile of open/close + labels + assignees against
+ * GitHub current truth. The mutation gate enforces admin + sync-active
+ * (disconnected and entitlement-frozen links cannot be resynced — those
+ * have to be restored first). On success it writes an audit log entry
+ * and schedules the actual reconciliation action.
+ *
+ * Force resync is the recovery path for missed webhooks / extended freeze
+ * periods (PRD: ">24 h freeze banner suggests Force resync"). The action
+ * itself fetches current GitHub state per linked issue and applies a
+ * synthesized normalized event so the existing inbound code path drives
+ * the reconciliation.
+ */
+export const forceResync = mutation({
+  args: { linkId: v.id("projectIntegrationLinks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db.get(args.linkId);
+    if (!link) throw new ConvexError("Link not found");
+
+    const { userId } = await requireWorkspaceMember(ctx, link.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    if (link.status === "disconnected") {
+      throw new ConvexError("Cannot force-resync a disconnected link");
+    }
+    if (link.pausedByBilling) {
+      throw new ConvexError(
+        "Cannot force-resync a frozen link — restore the entitlement first",
+      );
+    }
+
+    try {
+      await auditLog.log(ctx, {
+        action: "integration.force_resync",
+        actorId: userId.toString(),
+        resourceType: "projects",
+        resourceId: link.projectId,
+        severity: "info",
+        metadata: { externalRepoFullName: link.externalRepoFullName },
+        scope: link.workspaceId,
+      });
+    } catch (err) {
+      console.error("[auditLog] failed to log integration.force_resync", err);
+    }
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.github.forceResyncAction.runForceResync,
+      { projectIntegrationLinkId: args.linkId },
+    );
+
+    return null;
+  },
+});
+
+/**
  * Mark a link as disconnected. Phase 1 minimum: status patch + audit log.
  * Phase 8 will extend this with the freeze-snapshot + hard-delete of
  * per-task / per-comment / per-PR link rows.
@@ -473,6 +530,7 @@ export const listByWorkspace = query({
         v.literal("disconnected"),
       ),
       pausedByBilling: v.boolean(),
+      frozenAt: v.optional(v.number()),
       externalRepoFullName: v.string(),
       externalRepoId: v.string(),
     }),
@@ -492,6 +550,7 @@ export const listByWorkspace = query({
       projectName: projects[i]?.name ?? "(deleted project)",
       status: l.status,
       pausedByBilling: l.pausedByBilling,
+      frozenAt: l.frozenAt,
       externalRepoFullName: l.externalRepoFullName,
       externalRepoId: l.externalRepoId,
     }));

@@ -6,7 +6,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { GitBranch, Pause, Play, Unplug } from "lucide-react";
+import { GitBranch, Pause, Play, RefreshCw, Unplug } from "lucide-react";
+import { isFrozenOver24h } from "@/lib/integration-utils";
 
 type Props = { workspaceId: Id<"workspaces"> };
 
@@ -27,9 +28,14 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
   const pauseLink = useMutation(api.integrations.core.links.pauseLink);
   const resumeLink = useMutation(api.integrations.core.links.resumeLink);
   const unlinkLink = useMutation(api.integrations.core.links.unlinkLink);
+  const forceResync = useMutation(api.integrations.core.links.forceResync);
   const [pendingId, setPendingId] = useState<
     Id<"projectIntegrationLinks"> | null
   >(null);
+  // Captured once at mount. The banner threshold is 24 h — minute-scale
+  // drift between mount and re-render is irrelevant; reading `Date.now()`
+  // during render trips React Compiler's purity check.
+  const [now] = useState(() => Date.now());
 
   if (!links) return null; // initial load — no skeleton (project convention)
 
@@ -70,89 +76,115 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
               }
             };
 
+            const showRestoreBanner = isFrozenOver24h(link, now);
+
             return (
               <li
                 key={link._id}
                 className={
-                  "flex items-center justify-between gap-3 rounded-md border px-3 py-2 " +
+                  "flex flex-col gap-2 rounded-md border px-3 py-2 " +
                   (isDisconnected ? "opacity-60" : "")
                 }
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <div className="font-mono text-sm truncate">
-                      {link.externalRepoFullName}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {link.projectName}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <div className="font-mono text-sm truncate">
+                        {link.externalRepoFullName}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {link.projectName}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusBadge
-                    status={link.status}
-                    pausedByBilling={isFrozenByBilling}
-                  />
-                  {!isDisconnected && !isFrozenByBilling && (
-                    <>
-                      {isPaused ? (
+                  <div className="flex items-center gap-2">
+                    <StatusBadge
+                      status={link.status}
+                      pausedByBilling={isFrozenByBilling}
+                    />
+                    {!isDisconnected && !isFrozenByBilling && (
+                      <>
+                        {isPaused ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={() =>
+                              void run(
+                                () => resumeLink({ linkId: link._id }),
+                                "Sync resumed",
+                              )
+                            }
+                            className="h-8 gap-1.5"
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                            Resume
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isPending}
+                            onClick={() =>
+                              void run(
+                                () => pauseLink({ linkId: link._id }),
+                                "Sync paused",
+                              )
+                            }
+                            className="h-8 gap-1.5"
+                          >
+                            <Pause className="h-3.5 w-3.5" />
+                            Pause
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
                           disabled={isPending}
                           onClick={() =>
                             void run(
-                              () => resumeLink({ linkId: link._id }),
-                              "Sync resumed",
+                              () => forceResync({ linkId: link._id }),
+                              "Resync started",
                             )
                           }
                           className="h-8 gap-1.5"
                         >
-                          <Play className="h-3.5 w-3.5" />
-                          Resume
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Force resync
                         </Button>
-                      ) : (
                         <Button
                           variant="outline"
                           size="sm"
                           disabled={isPending}
-                          onClick={() =>
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `Disconnect ${link.externalRepoFullName}? Tasks survive but per-task GitHub links are removed. You can reconnect later to rehydrate.`,
+                              )
+                            )
+                              return;
                             void run(
-                              () => pauseLink({ linkId: link._id }),
-                              "Sync paused",
-                            )
-                          }
-                          className="h-8 gap-1.5"
+                              () => unlinkLink({ linkId: link._id }),
+                              "Disconnected",
+                            );
+                          }}
+                          className="h-8 gap-1.5 text-destructive hover:text-destructive"
                         >
-                          <Pause className="h-3.5 w-3.5" />
-                          Pause
+                          <Unplug className="h-3.5 w-3.5" />
+                          Disconnect
                         </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={isPending}
-                        onClick={() => {
-                          if (
-                            !window.confirm(
-                              `Disconnect ${link.externalRepoFullName}? Tasks survive but per-task GitHub links are removed. You can reconnect later to rehydrate.`,
-                            )
-                          )
-                            return;
-                          void run(
-                            () => unlinkLink({ linkId: link._id }),
-                            "Disconnected",
-                          );
-                        }}
-                        className="h-8 gap-1.5 text-destructive hover:text-destructive"
-                      >
-                        <Unplug className="h-3.5 w-3.5" />
-                        Disconnect
-                      </Button>
-                    </>
-                  )}
+                      </>
+                    )}
+                  </div>
                 </div>
+                {showRestoreBanner && (
+                  <div className="rounded-sm bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Frozen for more than 24 hours. Restore the workspace
+                    entitlement, then run Force resync to catch up on changes
+                    GitHub stopped retrying.
+                  </div>
+                )}
               </li>
             );
           })}

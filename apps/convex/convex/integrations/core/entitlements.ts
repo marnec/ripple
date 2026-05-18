@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation } from "../../_generated/server";
+import { mutation, query } from "../../_generated/server";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
@@ -124,7 +124,10 @@ export async function fanoutPauseByBilling(
     .collect();
   for (const link of links) {
     if (link.pausedByBilling === paused) continue;
-    await ctx.db.patch(link._id, { pausedByBilling: paused });
+    await ctx.db.patch(link._id, {
+      pausedByBilling: paused,
+      frozenAt: paused ? Date.now() : undefined,
+    });
   }
 }
 
@@ -141,3 +144,32 @@ export async function hasFeature(
     .unique();
   return row?.enabled === true;
 }
+
+/**
+ * Resolve a provider installation id to its workspace's freeze state.
+ * Used by the inbound webhook HTTP route to drop frozen deliveries before
+ * the receiver component writes its dedup row — so GitHub's own retry
+ * machinery keeps re-delivering until the entitlement is restored.
+ *
+ * Unknown installations resolve to `false` (not frozen) — the webhook
+ * adapter still drops them later, but there's nothing to gain from
+ * suppressing dedup for unknown installs.
+ */
+export const isInstallationFrozen = query({
+  args: { installationId: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const integration = await ctx.db
+      .query("workspaceIntegrations")
+      .withIndex("by_externalAccount", (q) =>
+        q.eq("externalAccountId", args.installationId),
+      )
+      .unique();
+    if (!integration) return false;
+    return !(await hasFeature(
+      ctx,
+      integration.workspaceId,
+      "github_integration",
+    ));
+  },
+});

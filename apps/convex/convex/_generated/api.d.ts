@@ -1164,6 +1164,12 @@ export declare const api: {
   integrations: {
     core: {
       entitlements: {
+        isInstallationFrozen: FunctionReference<
+          "query",
+          "public",
+          { installationId: string },
+          boolean
+        >;
         setWorkspaceFeature: FunctionReference<
           "mutation",
           "public",
@@ -1202,6 +1208,12 @@ export declare const api: {
           },
           Id<"projectIntegrationLinks">
         >;
+        forceResync: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
         listByWorkspace: FunctionReference<
           "query",
           "public",
@@ -1210,6 +1222,7 @@ export declare const api: {
             _id: Id<"projectIntegrationLinks">;
             externalRepoFullName: string;
             externalRepoId: string;
+            frozenAt?: number;
             pausedByBilling: boolean;
             projectId: Id<"projects">;
             projectName: string;
@@ -3340,6 +3353,49 @@ export declare const internal: {
   };
   integrations: {
     core: {
+      forceResync: {
+        applyOneIssueReconciliation: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            issue: {
+              assignees: Array<{
+                avatarUrl: string;
+                login: string;
+                url: string;
+              }>;
+              body: string;
+              externalAuthor: { avatarUrl: string; login: string; url: string };
+              externalIssueId: string;
+              issueNumber: number;
+              labels: Array<string>;
+              state: "open" | "closed";
+              stateReason?: "completed" | "not_planned" | null;
+              title: string;
+              url: string;
+            };
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            rippleCompleted: boolean;
+          },
+          null
+        >;
+      };
+      forceResyncQueries: {
+        getResyncContext: FunctionReference<
+          "query",
+          "internal",
+          { projectIntegrationLinkId: Id<"projectIntegrationLinks"> },
+          null | {
+            installationId: string;
+            items: Array<{
+              completed: boolean;
+              issueNumber: number;
+              taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+            }>;
+            repoFullName: string;
+          }
+        >;
+      };
       links: {
         drainDisconnectBatch: FunctionReference<
           "mutation",
@@ -3359,6 +3415,14 @@ export declare const internal: {
       };
     };
     github: {
+      forceResyncAction: {
+        runForceResync: FunctionReference<
+          "action",
+          "internal",
+          { projectIntegrationLinkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+      };
       importDrain: {
         drainImportBatch: FunctionReference<
           "action",

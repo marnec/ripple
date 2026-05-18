@@ -941,6 +941,7 @@ export type DataModel = {
     document: {
       externalRepoFullName: string;
       externalRepoId: string;
+      frozenAt?: number;
       pausedByBilling: boolean;
       projectId: Id<"projects">;
       status: "configuring" | "active" | "paused" | "disconnected";
@@ -953,6 +954,7 @@ export type DataModel = {
       | "_id"
       | "externalRepoFullName"
       | "externalRepoId"
+      | "frozenAt"
       | "pausedByBilling"
       | "projectId"
       | "status"

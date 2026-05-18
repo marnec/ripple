@@ -1,32 +1,121 @@
-import { httpRouter } from "convex/server";
+import { createFunctionHandle, httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal, components } from "./_generated/api";
+import { api, internal, components } from "./_generated/api";
 import { auth } from "./auth";
-import { WebhookReceiver } from "convex-webhook-receiver";
 
 const http = httpRouter();
 
 auth.addHttpRoutes(http);
 
 /**
+ * Verify a GitHub webhook's `X-Hub-Signature-256` header against the
+ * shared secret. Inline because the receiver component's verifyGitHub is
+ * not separately exported — and we need HMAC validation BEFORE the
+ * freeze pre-check to avoid leaking installation→workspace mapping to
+ * unauthenticated callers.
+ */
+async function verifyGithubSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+): Promise<boolean> {
+  if (!signatureHeader || !secret) return false;
+  const hex = signatureHeader.replace(/^sha256=/, "");
+  if (hex.length !== 64 || /[^0-9a-f]/i.test(hex)) return false;
+  const sigBytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    sigBytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    sigBytes,
+    new TextEncoder().encode(rawBody),
+  );
+}
+
+/**
  * POST /integrations/github/webhook
  *
- * Inbound GitHub webhook endpoint. The `convex-webhook-receiver` component
- * verifies the HMAC-SHA256 signature against `GITHUB_WEBHOOK_SECRET`,
- * dedupes by `X-GitHub-Delivery`, and invokes our bridge action
- * `receiveGithubWebhook` for accepted deliveries.
+ * Inbound GitHub webhook endpoint. Custom handler instead of the receiver
+ * component's `httpHandler` so the freeze pre-check runs BEFORE the
+ * dedup-row write — frozen workspaces return 503, GitHub keeps the
+ * delivery in its retry window, and when the entitlement is restored
+ * the next retry from GitHub lands normally.
+ *
+ * Pipeline:
+ *  1. HMAC verify (rejects unauthenticated callers up-front).
+ *  2. Parse `installation.id`; if its workspace is entitlement-frozen,
+ *     return 503 without touching the receiver component.
+ *  3. Otherwise hand off to `components.webhookReceiver.event.actions.receive`,
+ *     which does its own dedup + delivery to `receiveGithubWebhook`.
  *
  * Set the secret with: npx convex env set GITHUB_WEBHOOK_SECRET <value>
  */
-const webhookReceiver = new WebhookReceiver(components.webhookReceiver);
-
 http.route({
   path: "/integrations/github/webhook",
   method: "POST",
-  handler: webhookReceiver.httpHandler({
-    provider: "github",
-    verifierSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
-    handler: internal.integrations.github.webhook.receiveGithubWebhook,
+  handler: httpAction(async (ctx, request) => {
+    const secret = process.env.GITHUB_WEBHOOK_SECRET ?? "";
+    const rawBody = await request.text();
+    const sigHeader = request.headers.get("x-hub-signature-256");
+    const verified = await verifyGithubSignature(rawBody, sigHeader, secret);
+    if (!verified) return new Response("Unauthorized", { status: 401 });
+
+    // Freeze pre-check. Drops the event before any dedup row is written,
+    // so GitHub's own retry window keeps re-delivering until the
+    // entitlement is restored.
+    try {
+      const body = JSON.parse(rawBody) as
+        | { installation?: { id?: number | string } }
+        | undefined;
+      const rawId = body?.installation?.id;
+      if (rawId !== undefined && rawId !== null) {
+        const installationId = String(rawId);
+        const frozen = await ctx.runQuery(
+          api.integrations.core.entitlements.isInstallationFrozen,
+          { installationId },
+        );
+        if (frozen) {
+          return new Response("Service Unavailable (frozen)", { status: 503 });
+        }
+      }
+    } catch {
+      // Malformed JSON — fall through and let the receiver record the
+      // delivery as failed (HMAC already passed, so this is real traffic).
+    }
+
+    const headers: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    const dedupKey = request.headers.get("x-github-delivery") ?? undefined;
+    const handlerFunctionHandle = await createFunctionHandle(
+      internal.integrations.github.webhook.receiveGithubWebhook,
+    );
+
+    const result = await ctx.runAction(
+      components.webhookReceiver.event.actions.receive,
+      {
+        provider: "github",
+        rawBody,
+        headers,
+        handlerFunctionHandle,
+        maxAttempts: 3,
+        expiresInMs: 30 * 24 * 60 * 60 * 1000,
+        ...(dedupKey ? { dedupKey } : {}),
+      },
+    );
+
+    if (!result.accepted) return new Response("Rejected", { status: 400 });
+    return new Response("OK", { status: 200 });
   }),
 });
 

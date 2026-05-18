@@ -364,6 +364,157 @@ describe("integrations/core/links.pauseLink / resumeLink", () => {
   });
 });
 
+describe("integrations/core/links.forceResync", () => {
+  it("rejects non-admin workspace members", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await asUser.mutation(
+      api.integrations.core.links.createLink,
+      {
+        projectId,
+        workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      },
+    );
+    const { userId: memberId, asUser: asMember } = await setupAuthenticatedUser(
+      t,
+      { name: "Member", email: "fr-member@test.com" },
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+
+    await expect(
+      asMember.mutation(api.integrations.core.links.forceResync, { linkId }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects a frozen link with a clear error", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "active",
+        pausedByBilling: true,
+        frozenAt: Date.UTC(2026, 4, 17, 12, 0, 0),
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.forceResync, { linkId }),
+    ).rejects.toThrow(/froz/i);
+  });
+
+  it("rejects a disconnected link", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "disconnected",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.forceResync, { linkId }),
+    ).rejects.toThrow(/disconnect/i);
+  });
+
+  it("admin on an active link → writes an integration.force_resync audit log entry", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, projectId, asUser } =
+      await setupActivatableProject(t);
+    const linkId = await asUser.mutation(
+      api.integrations.core.links.createLink,
+      {
+        projectId,
+        workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      },
+    );
+
+    await asUser.mutation(api.integrations.core.links.forceResync, { linkId });
+
+    const logs = await t.run((ctx) =>
+      auditLog.queryByResource(ctx, {
+        resourceType: "projects",
+        resourceId: projectId,
+      }),
+    );
+    const entry = logs.find(
+      (l: { action: string }) => l.action === "integration.force_resync",
+    );
+    expect(entry).toBeDefined();
+    expect(entry?.actorId).toBe(userId);
+    expect(entry?.scope).toBe(workspaceId);
+  });
+});
+
+describe("integrations/core/links.listByWorkspace", () => {
+  it("exposes frozenAt for frozen links so the client can render the >24h banner", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "active",
+        pausedByBilling: true,
+        frozenAt: Date.UTC(2026, 4, 17, 12, 0, 0),
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      }),
+    );
+
+    const rows = await asUser.query(
+      api.integrations.core.links.listByWorkspace,
+      { workspaceId },
+    );
+
+    const row = rows.find((r) => r._id === linkId);
+    expect(row?.frozenAt).toBe(Date.UTC(2026, 4, 17, 12, 0, 0));
+  });
+
+  it("returns frozenAt=undefined for unfrozen links", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      }),
+    );
+
+    const rows = await asUser.query(
+      api.integrations.core.links.listByWorkspace,
+      { workspaceId },
+    );
+
+    const row = rows.find((r) => r._id === linkId);
+    expect(row?.frozenAt).toBeUndefined();
+  });
+});
+
 void setupAuthenticatedUser;
 void WorkspaceRole;
 void (null as unknown as Id<"projectIntegrationLinks">);

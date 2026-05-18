@@ -270,6 +270,72 @@ describe("integrations/core/entitlements.fanoutPauseByBilling", () => {
     const link = await t.run((ctx) => ctx.db.get(linkId));
     expect(link?.pausedByBilling).toBe(true);
   });
+
+  it("stamps frozenAt on a link when freezing it for the first time", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+    const linkId = await insertLink(t, {
+      workspaceId,
+      projectId,
+      pausedByBilling: false,
+    });
+    // Pin "now" so we can assert the exact stored value.
+    const now = Date.UTC(2026, 4, 18, 12, 0, 0);
+    vi.setSystemTime(now);
+
+    await t.run((ctx) => fanoutPauseByBilling(ctx, workspaceId, true));
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.frozenAt).toBe(now);
+  });
+
+  it("clears frozenAt on a link when unfreezing it", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "active",
+        pausedByBilling: true,
+        frozenAt: Date.UTC(2026, 4, 17, 12, 0, 0),
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      }),
+    );
+
+    await t.run((ctx) => fanoutPauseByBilling(ctx, workspaceId, false));
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.frozenAt).toBeUndefined();
+  });
+
+  it("does not overwrite frozenAt when an already-frozen link is re-flipped to paused=true", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+    const originalFrozenAt = Date.UTC(2026, 4, 16, 12, 0, 0);
+    const linkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "active",
+        pausedByBilling: true,
+        frozenAt: originalFrozenAt,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      }),
+    );
+    vi.setSystemTime(Date.UTC(2026, 4, 18, 12, 0, 0));
+
+    // No-op flip: pausedByBilling was already true.
+    await t.run((ctx) => fanoutPauseByBilling(ctx, workspaceId, true));
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.frozenAt).toBe(originalFrozenAt);
+  });
 });
 
 describe("integrations/core/entitlements.setWorkspaceFeature", () => {
@@ -457,6 +523,76 @@ describe("integrations/core/entitlements.setWorkspaceFeature", () => {
     // Single row — not a second insert.
     expect(rows).toHaveLength(1);
     expect(rows[0]?.enabled).toBe(false);
+  });
+});
+
+describe("integrations/core/entitlements.isInstallationFrozen", () => {
+  async function setupInstallation(
+    t: ReturnType<typeof createTestContext>,
+    opts: { entitlementEnabled: boolean },
+  ) {
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const botUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub" }),
+    );
+    const installationId = "install-frozen-test";
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "github",
+        externalAccountId: installationId,
+      }),
+    );
+    await asUser.mutation(
+      api.integrations.core.entitlements.setWorkspaceFeature,
+      {
+        workspaceId,
+        featureKey: "github_integration",
+        enabled: opts.entitlementEnabled,
+      },
+    );
+    return { workspaceId, installationId };
+  }
+
+  it("returns true when the installation's workspace entitlement is disabled", async () => {
+    const t = createTestContext();
+    const { installationId } = await setupInstallation(t, {
+      entitlementEnabled: false,
+    });
+
+    const frozen = await t.query(
+      api.integrations.core.entitlements.isInstallationFrozen,
+      { installationId },
+    );
+
+    expect(frozen).toBe(true);
+  });
+
+  it("returns false when the installation's workspace entitlement is enabled", async () => {
+    const t = createTestContext();
+    const { installationId } = await setupInstallation(t, {
+      entitlementEnabled: true,
+    });
+
+    const frozen = await t.query(
+      api.integrations.core.entitlements.isInstallationFrozen,
+      { installationId },
+    );
+
+    expect(frozen).toBe(false);
+  });
+
+  it("returns false for an unknown installation (no workspaceIntegrations row)", async () => {
+    const t = createTestContext();
+    await setupWorkspaceWithAdmin(t);
+
+    const frozen = await t.query(
+      api.integrations.core.entitlements.isInstallationFrozen,
+      { installationId: "install-unknown" },
+    );
+
+    expect(frozen).toBe(false);
   });
 });
 

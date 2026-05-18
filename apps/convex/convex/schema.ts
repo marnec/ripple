@@ -886,6 +886,9 @@ export default defineSchema({
       v.literal("disconnected"),
     ),
     pausedByBilling: v.boolean(),
+    // Set on the entitlement-revoke flip; cleared on entitlement-restore.
+    // Drives the >24 h "Force resync" banner.
+    frozenAt: v.optional(v.number()),
     // Human-readable "owner/repo" — feeds tasks.externalRefs[].repoFullName
     // and the URL for issue links. Updated silently on repo rename events;
     // stable lookups use externalRepoId.
