@@ -269,6 +269,101 @@ describe("integrations/core/links.unlinkLink", () => {
   });
 });
 
+describe("integrations/core/links.pauseLink / resumeLink", () => {
+  async function createActiveLink(t: ReturnType<typeof createTestContext>) {
+    const fixtures = await setupActivatableProject(t);
+    const linkId = await fixtures.asUser.mutation(
+      api.integrations.core.links.createLink,
+      {
+        projectId: fixtures.projectId,
+        workspaceId: fixtures.workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      },
+    );
+    return { ...fixtures, linkId };
+  }
+
+  it("admin pauses an active link → status='paused'; audit log entry written", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, projectId, asUser, linkId } =
+      await createActiveLink(t);
+
+    await asUser.mutation(api.integrations.core.links.pauseLink, { linkId });
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.status).toBe("paused");
+
+    const logs = await t.run((ctx) =>
+      auditLog.queryByResource(ctx, {
+        resourceType: "projects",
+        resourceId: projectId,
+      }),
+    );
+    const paused = logs.find(
+      (l: { action: string }) => l.action === "integration.paused",
+    );
+    expect(paused).toBeDefined();
+    expect(paused?.actorId).toBe(userId);
+    expect(paused?.scope).toBe(workspaceId);
+  });
+
+  it("admin resumes a paused link → status='active'; audit log entry written", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, projectId, asUser, linkId } =
+      await createActiveLink(t);
+    await asUser.mutation(api.integrations.core.links.pauseLink, { linkId });
+
+    await asUser.mutation(api.integrations.core.links.resumeLink, { linkId });
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.status).toBe("active");
+
+    const logs = await t.run((ctx) =>
+      auditLog.queryByResource(ctx, {
+        resourceType: "projects",
+        resourceId: projectId,
+      }),
+    );
+    const resumed = logs.find(
+      (l: { action: string }) => l.action === "integration.resumed",
+    );
+    expect(resumed).toBeDefined();
+    expect(resumed?.actorId).toBe(userId);
+    expect(resumed?.scope).toBe(workspaceId);
+  });
+
+  it("pauseLink rejects non-admin workspace members", async () => {
+    const t = createTestContext();
+    const { workspaceId, linkId } = await createActiveLink(t);
+    const { userId: memberId, asUser: asMember } = await setupAuthenticatedUser(
+      t,
+      { name: "Member", email: "m3@test.com" },
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+    await expect(
+      asMember.mutation(api.integrations.core.links.pauseLink, { linkId }),
+    ).rejects.toThrow();
+  });
+
+  it("resumeLink on a disconnected link is rejected (terminal state)", async () => {
+    const t = createTestContext();
+    const { asUser, linkId } = await createActiveLink(t);
+    await asUser.mutation(api.integrations.core.links.unlinkLink, { linkId });
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.resumeLink, { linkId }),
+    ).rejects.toThrow(/disconnected/i);
+  });
+});
+
 void setupAuthenticatedUser;
 void WorkspaceRole;
 void (null as unknown as Id<"projectIntegrationLinks">);

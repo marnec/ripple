@@ -330,6 +330,26 @@ export default defineSchema({
         }),
       ),
     ),
+    // Frozen denormalized snapshot written by the disconnect cascade BEFORE
+    // hard-deleting the per-task `taskIntegrationLinks` row. Preserves
+    // historical context (provider, repo, issue number/id, URL, when the
+    // disconnect happened) so links to commits, PRs, and external
+    // conversations survive an unlink. Also the rehydration key on
+    // reconnect: the same repo re-linked to the same project matches
+    // existing tasks via `externalRefFrozen.externalIssueId`.
+    externalRefFrozen: v.optional(
+      v.object({
+        provider: v.string(),
+        // Stable provider-side repo identifier. Survives renames; the
+        // reconnect path uses this (not repoFullName) to rehydrate links.
+        externalRepoId: v.string(),
+        repoFullName: v.string(),
+        issueNumber: v.number(),
+        externalIssueId: v.string(),
+        url: v.string(),
+        disconnectedAt: v.number(),
+      }),
+    ),
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
@@ -998,6 +1018,7 @@ export default defineSchema({
     ),
   })
     .index("by_taskComment", ["taskCommentId"])
+    .index("by_taskIntegrationLink", ["taskIntegrationLinkId"])
     .index("by_externalCommentId", ["externalCommentId"])
     .index("by_outboundRunId", ["outboundRunId"]),
 });

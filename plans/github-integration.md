@@ -207,24 +207,36 @@ Ripple→GitHub push only, user-initiated. The task detail surfaces a "Sync desc
 
 ## Phase 7 — Pull request linkage
 
-**User stories**: 46–48.
+**Status: DEFERRED.** Skipped during Phase 6 ship; revisit after Phase 8/9 land or earlier if user evidence pushes for it.
 
-### What to build
+**User stories**: 46–48 (deferred).
 
-Pull request webhook events scan title, body, and branch name for `<PROJECT_KEY>-<NUMBER>` patterns (e.g., `ENG-42`). Each match inserts or updates a `taskPullRequestLinks` row pointing at the referenced task. PR state (open / draft / merged / closed) updates via webhook. Clicking a PR reference on the task detail opens it on GitHub in a new tab. PR references are read-only — there is no Ripple-side PR authoring surface.
+### Why deferred
 
-### Acceptance criteria
+The original plan assumed PR linkage was load-bearing for the integration's value: developers commit against `ENG-42`-keyed branches and project managers want to see the in-flight work without leaving Ripple. But before building the regex-parser path, two open questions need answers we don't yet have:
 
-- [ ] `pull_request` webhook events (opened, edited, closed, reopened) scan title, body, and branch for `<PROJECT_KEY>-<NUMBER>` patterns
-- [ ] Each matched pattern inserts/updates a `taskPullRequestLinks` row
-- [ ] Removing the key from a re-edited PR removes the corresponding row
-- [ ] PR badge on task detail shows current state (open / draft / merged / closed) and links out to GitHub in a new tab
-- [ ] PR state updates via webhook reflect within ~1 s
-- [ ] Tests: regex matching across title / body / branch + multiple keys per PR; insert / update / delete cases driven by edit events; state transitions via webhook fixtures
+1. **What problem does PR linkage actually solve for a Ripple user?** The naïve answer is "see the PR on the task." But a project manager who wants that signal can already click through to GitHub from the task's existing `externalRefs[0].url`. The real value, if any, is *aggregated awareness* — "which tasks have PRs in flight," "which PRs are blocked / merged / draft" — and those are dashboard views we haven't designed. Building parsing + per-task badges before knowing what aggregate view we need risks shipping the plumbing without the destination.
+
+2. **How does this generalize across providers?** The plan assumed regex parsing of `<KEY>-<NUMBER>` in PR title/body/branch. GitHub, GitLab (merge requests), and Bitbucket (pull requests) all support this same convention — but each provider's webhook shape, state model (draft / WIP / approved / merged / closed), and stable IDs differ. The architectural contract ("`core/` never branches on provider") means a normalized PR-event shape needs to fit all three before any one is built. Without that design, we risk a GitHub-shaped event type that GitLab can't fill — leaking provider details into core.
+
+### What to do when revisiting
+
+- Talk to a Ripple user who uses both Ripple and a code host. Ask: "what would you do with a PR list on a task?" If the answer is just "click through to GitHub," the per-task badge isn't worth the parser. If the answer involves filtering tasks by PR state, design the dashboard view first.
+- Design `NormalizedPullRequestEvent` against GitLab MR and Bitbucket PR payloads before writing the regex. Lift draft/WIP semantics, merge detection, and "linked-to-source" stable IDs out of any provider-specific shape. The whole point of the core/provider split is that adding GitLab is three new modules and zero core edits — PR linkage is the first feature where that contract is non-trivial to maintain.
+- Reconsider whether parsing is even the right input signal. GitHub's GraphQL "linked issues" feature, GitLab's "Closes !N / #N" parser, and Bitbucket's branch-naming convention all carry richer structured data than text matching of `<KEY>-<NUMBER>`. The regex was the cross-provider lowest common denominator; we might find a higher-fidelity per-provider source is worth the asymmetry.
+
+### Acceptance criteria (deferred)
+
+- [ ] (Skipped) `pull_request` webhook events (opened, edited, closed, reopened) scan title, body, and branch for `<PROJECT_KEY>-<NUMBER>` patterns
+- [ ] (Skipped) Each matched pattern inserts/updates a `taskPullRequestLinks` row
+- [ ] (Skipped) Removing the key from a re-edited PR removes the corresponding row
+- [ ] (Skipped) PR badge on task detail shows current state (open / draft / merged / closed) and links out to GitHub in a new tab
+- [ ] (Skipped) PR state updates via webhook reflect within ~1 s
+- [ ] (Skipped) Tests: regex matching across title / body / branch + multiple keys per PR; insert / update / delete cases driven by edit events; state transitions via webhook fixtures
 
 ---
 
-## Phase 8 — Pause/resume + disconnect/reconnect
+## Phase 8 — Pause/resume + disconnect/reconnect ✅
 
 **User stories**: 63–66.
 
@@ -242,14 +254,20 @@ Workspace admins can pause a link without disconnecting it — sync stops in bot
 
 ### Acceptance criteria
 
-- [ ] Admin can pause a link from the workspace integrations tab; status → `paused`; sync stops both directions
-- [ ] Webhooks arriving during pause are dropped (no queueing) but the dedup row IS written so retries don't re-enter
-- [ ] Resume restarts sync; tasks created or changed during pause stay where they are (no catch-up)
-- [ ] Disconnect writes `tasks.externalRefFrozen = { provider, repoFullName, issueNumber, issueId, url, disconnectedAt }` per affected task and hard-deletes `taskIntegrationLinks` / `taskCommentIntegrationLinks` / `taskPullRequestLinks` rows for that link
-- [ ] Unlinking does NOT delete tasks; historical context survives on each task
-- [ ] Reconnecting the same repo to the same project rematches existing tasks by `externalIssueId` against `externalRefFrozen.issueId`; new issues get fresh tasks
-- [ ] `installation.deleted` / `installation_repositories.removed` events auto-transition the relevant links to `disconnected` (writing frozen refs first)
-- [ ] Tests: pause drops webhooks but writes dedup row; disconnect-then-reconnect rehydrates link rows on `externalIssueId` match; `installation.deleted` → all links of that installation transition to disconnected with frozen refs
+- [x] Admin can pause a link from the workspace integrations tab; status → `paused`; sync stops both directions
+- [x] Resume restarts sync; tasks created or changed during pause stay where they are (no catch-up)
+- [x] Disconnect writes `tasks.externalRefFrozen = { provider, externalRepoId, repoFullName, issueNumber, externalIssueId, url, disconnectedAt }` per affected task and hard-deletes `taskIntegrationLinks` / `taskCommentIntegrationLinks` rows for that link
+- [x] Unlinking does NOT delete tasks; historical context survives on each task
+- [x] Reconnecting the same repo to the same project rematches existing tasks by `externalIssueId` against `externalRefFrozen.externalIssueId`; matched tasks get fresh `taskIntegrationLinks` rows + restored `externalRefs`; new issues get fresh tasks on next inbound
+- [x] `installation.deleted` / `installation_repositories.removed` events auto-transition the relevant links to `disconnected` AND fire the same freeze cascade as admin-initiated unlink
+- [x] Tests: pause/resume (4 cases), disconnect cascade (6 cases incl. workpool-drain multi-batch + Ripple-native survival + auto-disconnect via installation events), reconnect rehydration (3 cases incl. cross-repo-id no-false-match + multi-batch drain)
+
+### Deviations from the PRD (intentional)
+
+- **`taskPullRequestLinks` cleanup is a TODO**, not a bug. Phase 7 (PR linkage) was deferred, so that table does not exist yet; when PR linkage ships, its cleanup hook drops into the disconnect-cascade per-task loop in `core/links.drainDisconnectBatch`.
+- **Paused-link webhook dedup-row semantics are deferred to Phase 9.** The PRD distinguishes: paused links drop webhooks but DO write the dedup row (so retries don't re-enter on resume); entitlement-frozen links drop without writing dedup rows (so retries land on entitlement restore). The current implementation relies on `@convex-dev/webhook-receiver`'s opaque dedup, which doesn't expose a "drop without recording" hook. Phase 9's "Force resync" button is the recovery path for the entitlement-frozen case; for pause, GitHub's retry window typically exceeds normal pause duration so the practical impact is minor.
+- **Self-service GitHub-username field on user profile (Phase 4 carry-in) is deferred to a follow-up.** Members without a mapped identity fall back to the bot user on inbound and skip outbound, per the existing Phase 4 implementation — this is a UX gap, not a correctness one, and shipping the lifecycle controls (the actual Phase 8 deliverable) is the higher-value move.
+- **Activation wizard / connect-repo UI not shipped.** Phase 1 shipped backend-only; the wizard for installing the GitHub App, picking accounts/repos, and configuring import filters is still a future piece of work. The new `WorkspaceIntegrationsSection` only renders existing links and exposes the lifecycle controls — testing the integration end-to-end requires seeding rows manually until the wizard lands.
 
 ---
 

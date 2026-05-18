@@ -1202,6 +1202,32 @@ export declare const api: {
           },
           Id<"projectIntegrationLinks">
         >;
+        listByWorkspace: FunctionReference<
+          "query",
+          "public",
+          { workspaceId: Id<"workspaces"> },
+          Array<{
+            _id: Id<"projectIntegrationLinks">;
+            externalRepoFullName: string;
+            externalRepoId: string;
+            pausedByBilling: boolean;
+            projectId: Id<"projects">;
+            projectName: string;
+            status: "configuring" | "active" | "paused" | "disconnected";
+          }>
+        >;
+        pauseLink: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        resumeLink: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
         unlinkLink: FunctionReference<
           "mutation",
           "public",
@@ -3313,6 +3339,25 @@ export declare const internal: {
     >;
   };
   integrations: {
+    core: {
+      links: {
+        drainDisconnectBatch: FunctionReference<
+          "mutation",
+          "internal",
+          { projectIntegrationLinkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        drainReconnectBatch: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            cursor: string | null;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+          },
+          null
+        >;
+      };
+    };
     github: {
       importDrain: {
         drainImportBatch: FunctionReference<

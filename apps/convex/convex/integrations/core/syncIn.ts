@@ -1,4 +1,5 @@
 import type { MutationCtx } from "../../_generated/server";
+import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import type {
@@ -568,12 +569,10 @@ async function resolveCompletedStatus(
 /**
  * Apply an installation-lifecycle event. Auto-disconnects affected links
  * when the GitHub App is uninstalled or specific repos are removed from
- * the installation.
- *
- * Phase 1 minimum: status patch only. Phase 8 will extend with the
- * freeze-snapshot (`tasks.externalRefFrozen`) + hard-delete of per-task /
- * per-comment / per-PR link rows; doing the snapshot work later is
- * additive — already-disconnected links stay disconnected.
+ * the installation. Each disconnected link kicks off the standard
+ * disconnect cascade (freeze snapshots + hard-delete of per-task /
+ * per-comment link rows) via the shared workpool drain, identical to the
+ * admin-initiated `unlinkLink` path.
  */
 export async function applyInstallationEvent(
   ctx: MutationCtx,
@@ -599,6 +598,11 @@ export async function applyInstallationEvent(
     for (const link of links) {
       if (link.status === "disconnected") continue;
       await ctx.db.patch(link._id, { status: "disconnected" });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.integrations.core.links.drainDisconnectBatch,
+        { projectIntegrationLinkId: link._id },
+      );
     }
     return;
   }
@@ -614,5 +618,10 @@ export async function applyInstallationEvent(
     if (link.workspaceId !== integration.workspaceId) continue;
     if (link.status === "disconnected") continue;
     await ctx.db.patch(link._id, { status: "disconnected" });
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.core.links.drainDisconnectBatch,
+      { projectIntegrationLinkId: link._id },
+    );
   }
 }

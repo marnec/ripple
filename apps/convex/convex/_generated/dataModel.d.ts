@@ -1270,6 +1270,7 @@ export type DataModel = {
       by_externalCommentId: ["externalCommentId", "_creationTime"];
       by_outboundRunId: ["outboundRunId", "_creationTime"];
       by_taskComment: ["taskCommentId", "_creationTime"];
+      by_taskIntegrationLink: ["taskIntegrationLinkId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1427,6 +1428,15 @@ export type DataModel = {
       creatorId: Id<"users">;
       dueDate?: string;
       estimate?: number;
+      externalRefFrozen?: {
+        disconnectedAt: number;
+        externalIssueId: string;
+        externalRepoId: string;
+        issueNumber: number;
+        provider: string;
+        repoFullName: string;
+        url: string;
+      };
       externalRefs?: Array<{
         issueNumber: number;
         provider: string;
@@ -1457,6 +1467,14 @@ export type DataModel = {
       | "creatorId"
       | "dueDate"
       | "estimate"
+      | "externalRefFrozen"
+      | "externalRefFrozen.disconnectedAt"
+      | "externalRefFrozen.externalIssueId"
+      | "externalRefFrozen.externalRepoId"
+      | "externalRefFrozen.issueNumber"
+      | "externalRefFrozen.provider"
+      | "externalRefFrozen.repoFullName"
+      | "externalRefFrozen.url"
       | "externalRefs"
       | "importJobId"
       | "labels"
