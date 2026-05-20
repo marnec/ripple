@@ -159,6 +159,9 @@ describe("integrations/core/links.createLink — reconnect rehydration", () => {
       expect(newTaskLink).not.toBeNull();
       expect(newTaskLink!.projectIntegrationLinkId).toBe(newLinkId);
       expect(newTaskLink!.externalIssueId).toBe(`I_RECONNECT_${i}`);
+      // Author is preserved through the freeze snapshot — not reset to the
+      // "github" placeholder (no later inbound event would correct it).
+      expect(newTaskLink!.externalAuthor.login).toBe("octocat");
     }
   });
 

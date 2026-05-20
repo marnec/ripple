@@ -19,23 +19,45 @@ interface GithubIssueResponse {
 }
 
 /**
- * Force resync action. Iterates every `taskIntegrationLinks` row under the
- * given project link, fetches the current GitHub issue state per row, and
- * applies a synthesized `NormalizedIssueEvent` so the existing inbound
- * reconciliation path drives open/close + label + assignee convergence.
+ * Issues processed per action invocation. Bounds both wall-clock time and
+ * GitHub API budget burn for one tick — the action self-reschedules to drain
+ * the rest, so a 5000-issue project no longer fires 5000 sequential GETs
+ * inside a single (potentially timing-out) action.
+ */
+const RESYNC_BATCH_SIZE = 25;
+
+/** Fallback pause when a 429 carries no parseable `Retry-After`. */
+const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
+
+/**
+ * Force resync action. Fetches the current GitHub issue state for each
+ * `taskIntegrationLinks` row under the given project link and applies a
+ * synthesized `NormalizedIssueEvent` so the existing inbound reconciliation
+ * path drives open/close + label + assignee convergence.
  *
- * Scheduled by the public `forceResync` mutation. Re-checks the link's
- * resync eligibility — a link that became frozen/disconnected between
- * mutation-time and execution-time is skipped silently.
+ * Scheduled by the public `forceResync` mutation. Drains in bounded batches
+ * of `RESYNC_BATCH_SIZE`, self-rescheduling at `offset + batch` until the
+ * link's items are exhausted (the `drainImportBatch` pattern). Each batch
+ * re-reads `getResyncContext`, which re-checks resync eligibility — a link
+ * that becomes frozen/disconnected mid-drain stops the remaining batches.
  *
- * Per-issue fetch failures are logged and skipped — Force resync is a
- * best-effort recovery path, not a transactional reconciliation. Surfaces
- * that need stronger guarantees should use the audit log to follow up.
+ * Rate limits: on a 429 the batch stops and reschedules from the failing
+ * item's absolute offset after the server's `Retry-After` delay, so one
+ * resync can't hammer the App's hourly budget. Other per-issue fetch
+ * failures are logged and skipped — Force resync is a best-effort recovery
+ * path, not a transaction.
  */
 export const runForceResync = internalAction({
-  args: { projectIntegrationLinkId: v.id("projectIntegrationLinks") },
+  args: {
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+    // Index into `getResyncContext().items` to resume from. Omitted on the
+    // first invocation (the `forceResync` mutation schedules without it).
+    offset: v.optional(v.number()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const offset = args.offset ?? 0;
+
     const appId = process.env.GITHUB_APP_ID;
     const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
     if (!appId || !privateKeyPem) {
@@ -52,12 +74,31 @@ export const runForceResync = internalAction({
     const client = new GithubClient({ appId, privateKeyPem });
     const token = await client.mintInstallationToken(context.installationId);
 
-    for (const item of context.items) {
+    const slice = context.items.slice(offset, offset + RESYNC_BATCH_SIZE);
+    for (let i = 0; i < slice.length; i++) {
+      const item = slice[i];
       const res = await client.request<GithubIssueResponse>({
         installationToken: token,
         method: "GET",
         path: `/repos/${context.repoFullName}/issues/${item.issueNumber}`,
       });
+
+      // Rate-limited: stop the batch and resume this same item on a fresh
+      // invocation after GitHub's cool-off. Items earlier in this slice were
+      // already applied (the apply step is idempotent), so resuming from the
+      // failing absolute index neither double-applies nor skips.
+      if (res.status === 429) {
+        await ctx.scheduler.runAfter(
+          res.retryAfterMs ?? DEFAULT_RATE_LIMIT_PAUSE_MS,
+          internal.integrations.github.forceResyncAction.runForceResync,
+          {
+            projectIntegrationLinkId: args.projectIntegrationLinkId,
+            offset: offset + i,
+          },
+        );
+        return null;
+      }
+
       if (res.status !== 200 || !res.body) {
         console.warn(
           `[forceResync] issue fetch failed (status=${res.status}) for #${item.issueNumber}`,
@@ -91,6 +132,18 @@ export const runForceResync = internalAction({
               url: u.html_url,
             })),
           },
+        },
+      );
+    }
+
+    // More items remain → schedule the next batch from the new offset.
+    if (offset + slice.length < context.items.length) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.integrations.github.forceResyncAction.runForceResync,
+        {
+          projectIntegrationLinkId: args.projectIntegrationLinkId,
+          offset: offset + slice.length,
         },
       );
     }

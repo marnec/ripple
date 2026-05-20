@@ -287,7 +287,20 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_project_order", ["projectId", "order"])
-    .index("by_project_isDefault", ["projectId", "isDefault"]),
+    .index("by_project_isDefault", ["projectId", "isDefault"])
+    // Triage destination lookup (inbound webhook + activation gate). Exactly
+    // one isTriage=true per project, so this resolves to a single row.
+    .index("by_project_isTriage", ["projectId", "isTriage"])
+    // Lowest-`order` completed status — the default inbound-close destination.
+    .index("by_project_isCompleted_order", ["projectId", "isCompleted", "order"])
+    // Lowest-`order` completed status for a given close reason — drives
+    // `state_reason=not_planned` routing without scanning all completed rows.
+    .index("by_project_isCompleted_closeReason_order", [
+      "projectId",
+      "isCompleted",
+      "externalCloseReason",
+      "order",
+    ]),
 
   tasks: defineTable({
     projectId: v.id("projects"),
@@ -348,6 +361,18 @@ export default defineSchema({
         externalIssueId: v.string(),
         url: v.string(),
         disconnectedAt: v.number(),
+        // External author preserved across disconnect so reconnect can
+        // restore the real GitHub identity. No inbound event after task
+        // creation rewrites `taskIntegrationLinks.externalAuthor`, so without
+        // this snapshot a rehydrated link would be stuck on a placeholder.
+        // Optional: rows frozen before this field shipped won't carry it.
+        externalAuthor: v.optional(
+          v.object({
+            login: v.string(),
+            avatarUrl: v.string(),
+            url: v.string(),
+          }),
+        ),
       }),
     ),
   })
@@ -936,11 +961,6 @@ export default defineSchema({
         httpStatus: v.optional(v.number()),
       }),
     ),
-    // RunId for the in-flight action-retrier dispatch, so the retrier's
-    // onComplete callback (which receives only `runId` + `result`) can map
-    // back to this link to record retry-exhaustion failures. Cleared on
-    // completion (success or failure).
-    outboundRunId: v.optional(v.string()),
     // Mirror of the last-known GitHub label set (normalized: lowercased,
     // deduped). Drives the inbound echo guard (if nextLabels matches, the
     // event is a re-delivery of our own outbound push) and the outbound diff
@@ -987,8 +1007,7 @@ export default defineSchema({
       "projectIntegrationLinkId",
       "externalIssueId",
     ])
-    .index("by_task", ["taskId"])
-    .index("by_outboundRunId", ["outboundRunId"]),
+    .index("by_task", ["taskId"]),
 
   // Per-comment integration state. Mirrors the task-level link split: the hot
   // `taskComments` row stays free of webhook-driven churn; this row carries
@@ -1011,7 +1030,6 @@ export default defineSchema({
       avatarUrl: v.string(),
       url: v.string(),
     }),
-    outboundRunId: v.optional(v.string()),
     lastSyncError: v.optional(
       v.object({
         occurredAt: v.number(),
@@ -1022,6 +1040,16 @@ export default defineSchema({
   })
     .index("by_taskComment", ["taskCommentId"])
     .index("by_taskIntegrationLink", ["taskIntegrationLinkId"])
-    .index("by_externalCommentId", ["externalCommentId"])
-    .index("by_outboundRunId", ["outboundRunId"]),
+    .index("by_externalCommentId", ["externalCommentId"]),
+
+  // Maps an in-flight `@convex-dev/action-retrier` runId → the task whose
+  // outbound push it carries. The retrier's `onComplete` callback receives
+  // only `{ runId, result }`, so this side table is how the callback resolves
+  // which task to mark on retry exhaustion. One row per in-flight run (status
+  // OR description push), inserted at dispatch and deleted on completion — so
+  // concurrent pushes on the same task no longer clobber a single link field.
+  integrationOutboundRuns: defineTable({
+    runId: v.string(),
+    taskId: v.id("tasks"),
+  }).index("by_runId", ["runId"]),
 });

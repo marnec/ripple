@@ -65,7 +65,7 @@ export const pushIssueState = internalAction({
       body.state_reason = args.desiredStateReason;
     }
 
-    const res = await client.request<unknown>({
+    const res = await client.request<{ updated_at: string }>({
       installationToken: token,
       method: "PATCH",
       path: `/repos/${args.repoFullName}/issues/${args.issueNumber}`,
@@ -89,6 +89,12 @@ export const pushIssueState = internalAction({
             args.desiredState === "closed"
               ? args.desiredStateReason ?? "completed"
               : undefined,
+          // Record GitHub's own post-PATCH timestamp so the bounce-back webhook
+          // compares equal under `isStale` and drops. Fall back to wall-clock
+          // only if GitHub omitted the field (it shouldn't on a 2xx PATCH).
+          externalUpdatedAt: res.body?.updated_at
+            ? Date.parse(res.body.updated_at)
+            : Date.now(),
         },
       );
       return null;

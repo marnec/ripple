@@ -19,8 +19,9 @@ export async function canActivateIntegration(
 ): Promise<boolean> {
   const triage = await ctx.db
     .query("taskStatuses")
-    .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-    .filter((q) => q.eq(q.field("isTriage"), true))
+    .withIndex("by_project_isTriage", (q) =>
+      q.eq("projectId", args.projectId).eq("isTriage", true),
+    )
     .first();
   return triage !== null;
 }

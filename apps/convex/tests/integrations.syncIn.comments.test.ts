@@ -275,6 +275,38 @@ describe("integrations/core/syncIn comment.deleted", () => {
     expect(comments).toHaveLength(1);
     expect(comments[0]?.deleted).toBe(true);
   });
+
+  it("a second delete on an already-deleted comment advances the mirror without re-flagging the row", async () => {
+    const t = createTestContext();
+    const { link } = await setupInboundWithIssue(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeCommentCreatedEvent(), link }),
+    );
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeCommentDeletedEvent(), link }),
+    );
+
+    // A later delete (e.g. the bounce-back of our own outbound delete) for the
+    // already-deleted comment: the comment stays deleted and the mirror
+    // advances so further redeliveries drop at the staleness guard.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeCommentDeletedEvent({ externalUpdatedAt: 1_700_000_030_000 }),
+        link,
+      }),
+    );
+
+    const comments = await t.run((ctx) =>
+      ctx.db.query("taskComments").collect(),
+    );
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.deleted).toBe(true);
+
+    const commentLink = await t.run((ctx) =>
+      ctx.db.query("taskCommentIntegrationLinks").collect(),
+    );
+    expect(commentLink[0]?.externalUpdatedAt).toBe(1_700_000_030_000);
+  });
 });
 
 describe("integrations/core/syncIn comment events with no parent issue", () => {

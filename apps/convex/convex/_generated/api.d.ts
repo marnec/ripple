@@ -3419,7 +3419,10 @@ export declare const internal: {
         runForceResync: FunctionReference<
           "action",
           "internal",
-          { projectIntegrationLinkId: Id<"projectIntegrationLinks"> },
+          {
+            offset?: number;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+          },
           null
         >;
       };
@@ -3641,6 +3644,7 @@ export declare const internal: {
           "mutation",
           "internal",
           {
+            externalUpdatedAt: number;
             newExternalState: "open" | "closed";
             newExternalStateReason?: "completed" | "not_planned";
             taskId: Id<"tasks">;

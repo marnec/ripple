@@ -4,6 +4,7 @@ import { internal } from "../../_generated/api";
 import { auditLog } from "../../auditLog";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import { getAll } from "convex-helpers/server/relationships";
 import { canActivateIntegration } from "./activationGate";
 
 /**
@@ -387,6 +388,7 @@ export const drainDisconnectBatch = internalMutation({
               externalIssueId: taskLink.externalIssueId,
               url: ref.url,
               disconnectedAt,
+              externalAuthor: taskLink.externalAuthor,
             },
             externalRefs: undefined,
           });
@@ -480,11 +482,11 @@ export const drainReconnectBatch = internalMutation({
         projectIntegrationLinkId: args.projectIntegrationLinkId,
         externalIssueId: frozen.externalIssueId,
         externalUpdatedAt: now,
-        externalAuthor: {
-          // The original author identity is lost when the link was torn
-          // down — we re-seed with a placeholder pointing at GitHub
-          // generally. The next inbound webhook for this issue will
-          // overwrite with the real author payload.
+        // Restore the author preserved in the freeze snapshot. No inbound
+        // event after creation rewrites `externalAuthor`, so the placeholder
+        // fallback (only hit for links frozen before that field shipped)
+        // would otherwise be permanent rather than corrected by a webhook.
+        externalAuthor: frozen.externalAuthor ?? {
           login: "github",
           avatarUrl: "",
           url: "https://github.com",
@@ -541,8 +543,12 @@ export const listByWorkspace = query({
       .query("projectIntegrationLinks")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .collect();
-    const projects = await Promise.all(
-      links.map((l) => ctx.db.get(l.projectId)),
+    // Batched id→doc join (deduped, order-preserving) for the project name.
+    // The link set is bounded by repos-linked-per-workspace, so collecting it
+    // is fine; getAll just tidies the per-row fetch.
+    const projects = await getAll(
+      ctx.db,
+      links.map((l) => l.projectId),
     );
     return links.map((l, i) => ({
       _id: l._id,

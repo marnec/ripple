@@ -24,9 +24,11 @@ export const recordLabelsSuccess = internalMutation({
     if (!link) return null;
     await ctx.db.patch(link._id, {
       externalLabels: args.nextLabels,
-      // Bump the ordering guard so the inevitable webhook bounce-back of
-      // these label changes will compare stale and be dropped by isStale.
-      externalUpdatedAt: Date.now(),
+      // No `externalUpdatedAt` bump: the inbound bounce-back of these label
+      // changes is caught by the set-comparison echo guard (`sameLabelSet`
+      // against `externalLabels`), which is timestamp-independent. Bumping to
+      // `Date.now()` here would instead risk dropping a genuine later label
+      // change at the `isStale` gate if Convex's clock ran ahead of GitHub's.
       lastSyncError: undefined,
     });
     return null;
@@ -47,9 +49,11 @@ export const recordAssigneesSuccess = internalMutation({
     if (!link) return null;
     await ctx.db.patch(link._id, {
       externalAssigneeLogins: args.nextLogins,
-      // Bump the ordering guard so the inbound bounce-back of these assignee
-      // changes (issues.assigned/unassigned) compares stale and is dropped.
-      externalUpdatedAt: Date.now(),
+      // No `externalUpdatedAt` bump: the inbound bounce-back (issues.assigned/
+      // unassigned) is caught by the set-comparison echo guard (`sameLabelSet`
+      // against `externalAssigneeLogins`), which is timestamp-independent.
+      // Bumping to `Date.now()` would risk dropping a genuine later assignee
+      // change at the `isStale` gate under forward clock skew.
       lastSyncError: undefined,
     });
     return null;
@@ -80,6 +84,14 @@ export const recordOutboundSuccess = internalMutation({
     newExternalStateReason: v.optional(
       v.union(v.literal("completed"), v.literal("not_planned")),
     ),
+    // GitHub's authoritative `issue.updated_at` from the PATCH response,
+    // parsed to ms. Recording GitHub's own timestamp (not `Date.now()`) makes
+    // the bounce-back webhook for this same change compare EQUAL under the
+    // inbound `isStale` guard (`<=`) and drop, while a genuine later GitHub
+    // edit carries a strictly-greater timestamp and applies — eliminating the
+    // clock-skew window that `Date.now()` opened (a Convex clock running ahead
+    // of GitHub's could otherwise drop a real subsequent event as "stale").
+    externalUpdatedAt: v.number(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -91,7 +103,7 @@ export const recordOutboundSuccess = internalMutation({
     await ctx.db.patch(link._id, {
       externalState: args.newExternalState,
       externalStateReason: args.newExternalStateReason,
-      externalUpdatedAt: Date.now(),
+      externalUpdatedAt: args.externalUpdatedAt,
       lastSyncError: undefined,
     });
     return null;
@@ -166,18 +178,6 @@ export const recordOutboundFailure = internalMutation({
   },
 });
 
-/**
- * Retrier `onComplete` callback. The retrier only hands us `runId + result`
- * — we map back to the affected link via the `by_outboundRunId` index that
- * `maybeEnqueueOutboundPush` patches at scheduling time.
- *
- *  - result.type === "success": the action recorded its own outcome already
- *    (success or `permanent_fail`). Just clear the in-flight marker.
- *  - result.type === "failed":  retry budget exhausted before the action
- *    returned cleanly. Record the failure here so the "⚠ Sync failed"
- *    affordance surfaces.
- *  - result.type === "canceled": same as success — just clear.
- */
 export const recordCommentCreateSuccess = internalMutation({
   args: {
     commentId: v.id("taskComments"),
@@ -270,22 +270,32 @@ export const recordCommentLinkFailure = internalMutation({
   },
 });
 
+/**
+ * Retrier `onComplete` callback. The retrier only hands us `{ runId, result }`,
+ * so we resolve the affected task via the `integrationOutboundRuns` side table
+ * row that the dispatcher inserts at scheduling time.
+ *
+ *  - result.type === "success": the action recorded its own outcome already
+ *    (success or `permanent_fail`). Just drop the tracking row.
+ *  - result.type === "failed":  retry budget exhausted before the action
+ *    returned cleanly. Record the failure here so the "⚠ Sync failed"
+ *    affordance surfaces.
+ *  - result.type === "canceled": same as success — just drop the row.
+ */
 export const onOutboundComplete = internalMutation({
   args: onCompleteValidator,
   returns: v.null(),
   handler: async (ctx, args) => {
-    const link = await ctx.db
-      .query("taskIntegrationLinks")
-      .withIndex("by_outboundRunId", (q) =>
-        q.eq("outboundRunId", args.runId),
-      )
+    const run = await ctx.db
+      .query("integrationOutboundRuns")
+      .withIndex("by_runId", (q) => q.eq("runId", args.runId))
       .unique();
-    if (!link) return null;
-    await ctx.db.patch(link._id, { outboundRunId: undefined });
+    if (!run) return null;
+    await ctx.db.delete(run._id);
 
     if (args.result.type === "failed") {
       await recordOutboundFailureImpl(ctx, {
-        taskId: link.taskId,
+        taskId: run.taskId,
         message: `Outbound sync retries exhausted: ${args.result.error}`,
       });
     }

@@ -698,6 +698,22 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  integrationOutboundRuns: {
+    document: {
+      runId: string;
+      taskId: Id<"tasks">;
+      _id: Id<"integrationOutboundRuns">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "runId" | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_runId: ["runId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   medias: {
     document: {
       fileName: string;
@@ -1244,7 +1260,6 @@ export type DataModel = {
         message: string;
         occurredAt: number;
       };
-      outboundRunId?: string;
       taskCommentId: Id<"taskComments">;
       taskIntegrationLinkId: Id<"taskIntegrationLinks">;
       _id: Id<"taskCommentIntegrationLinks">;
@@ -1263,14 +1278,12 @@ export type DataModel = {
       | "lastSyncError.httpStatus"
       | "lastSyncError.message"
       | "lastSyncError.occurredAt"
-      | "outboundRunId"
       | "taskCommentId"
       | "taskIntegrationLinkId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_externalCommentId: ["externalCommentId", "_creationTime"];
-      by_outboundRunId: ["outboundRunId", "_creationTime"];
       by_taskComment: ["taskCommentId", "_creationTime"];
       by_taskIntegrationLink: ["taskIntegrationLinkId", "_creationTime"];
     };
@@ -1376,7 +1389,6 @@ export type DataModel = {
         message: string;
         occurredAt: number;
       };
-      outboundRunId?: string;
       projectIntegrationLinkId: Id<"projectIntegrationLinks">;
       taskId: Id<"tasks">;
       _id: Id<"taskIntegrationLinks">;
@@ -1406,7 +1418,6 @@ export type DataModel = {
       | "lastSyncError.httpStatus"
       | "lastSyncError.message"
       | "lastSyncError.occurredAt"
-      | "outboundRunId"
       | "projectIntegrationLinkId"
       | "taskId";
     indexes: {
@@ -1417,7 +1428,6 @@ export type DataModel = {
         "externalIssueId",
         "_creationTime",
       ];
-      by_outboundRunId: ["outboundRunId", "_creationTime"];
       by_task: ["taskId", "_creationTime"];
     };
     searchIndexes: {};
@@ -1432,6 +1442,7 @@ export type DataModel = {
       estimate?: number;
       externalRefFrozen?: {
         disconnectedAt: number;
+        externalAuthor?: { avatarUrl: string; login: string; url: string };
         externalIssueId: string;
         externalRepoId: string;
         issueNumber: number;
@@ -1471,6 +1482,10 @@ export type DataModel = {
       | "estimate"
       | "externalRefFrozen"
       | "externalRefFrozen.disconnectedAt"
+      | "externalRefFrozen.externalAuthor"
+      | "externalRefFrozen.externalAuthor.avatarUrl"
+      | "externalRefFrozen.externalAuthor.login"
+      | "externalRefFrozen.externalAuthor.url"
       | "externalRefFrozen.externalIssueId"
       | "externalRefFrozen.externalRepoId"
       | "externalRefFrozen.issueNumber"
@@ -1598,7 +1613,21 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_project: ["projectId", "_creationTime"];
+      by_project_isCompleted_closeReason_order: [
+        "projectId",
+        "isCompleted",
+        "externalCloseReason",
+        "order",
+        "_creationTime",
+      ];
+      by_project_isCompleted_order: [
+        "projectId",
+        "isCompleted",
+        "order",
+        "_creationTime",
+      ];
       by_project_isDefault: ["projectId", "isDefault", "_creationTime"];
+      by_project_isTriage: ["projectId", "isTriage", "_creationTime"];
       by_project_order: ["projectId", "order", "_creationTime"];
     };
     searchIndexes: {};

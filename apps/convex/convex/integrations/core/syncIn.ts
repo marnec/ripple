@@ -149,7 +149,14 @@ async function applyCommentDeleted(
   if (!commentLink) return;
   if (event.externalUpdatedAt <= commentLink.externalUpdatedAt) return;
 
-  await ctx.db.patch(commentLink.taskCommentId, { deleted: true });
+  // Skip the comment-row write when it's already soft-deleted (e.g. the
+  // bounce-back of our own outbound delete, or a redelivery that cleared the
+  // staleness guard) — re-patching would needlessly invalidate comment
+  // subscriptions. Still advance the mirror so later redeliveries drop.
+  const comment = await ctx.db.get(commentLink.taskCommentId);
+  if (comment && !comment.deleted) {
+    await ctx.db.patch(commentLink.taskCommentId, { deleted: true });
+  }
   await ctx.db.patch(commentLink._id, {
     externalUpdatedAt: event.externalUpdatedAt,
   });
@@ -513,8 +520,9 @@ async function resolveTriageStatus(
 ): Promise<Doc<"taskStatuses">> {
   const triage = await ctx.db
     .query("taskStatuses")
-    .withIndex("by_project", (q) => q.eq("projectId", projectId))
-    .filter((q) => q.eq(q.field("isTriage"), true))
+    .withIndex("by_project_isTriage", (q) =>
+      q.eq("projectId", projectId).eq("isTriage", true),
+    )
     .unique();
   if (!triage) {
     throw new Error(
@@ -541,12 +549,11 @@ async function resolveCompletedStatus(
   if (stateReason === "not_planned") {
     const notPlanned = await ctx.db
       .query("taskStatuses")
-      .withIndex("by_project_order", (q) => q.eq("projectId", projectId))
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("isCompleted"), true),
-          q.eq(q.field("externalCloseReason"), "not_planned"),
-        ),
+      .withIndex("by_project_isCompleted_closeReason_order", (q) =>
+        q
+          .eq("projectId", projectId)
+          .eq("isCompleted", true)
+          .eq("externalCloseReason", "not_planned"),
       )
       .first();
     if (notPlanned) return notPlanned;
@@ -555,8 +562,9 @@ async function resolveCompletedStatus(
 
   const completed = await ctx.db
     .query("taskStatuses")
-    .withIndex("by_project_order", (q) => q.eq("projectId", projectId))
-    .filter((q) => q.eq(q.field("isCompleted"), true))
+    .withIndex("by_project_isCompleted_order", (q) =>
+      q.eq("projectId", projectId).eq("isCompleted", true),
+    )
     .first();
   if (!completed) {
     throw new Error(

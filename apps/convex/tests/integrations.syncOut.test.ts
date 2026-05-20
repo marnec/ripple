@@ -12,6 +12,7 @@ import {
   maybeEnqueueOutboundPush,
 } from "../convex/integrations/core/outboundDispatch";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import type { RunId } from "@convex-dev/action-retrier";
 import { internal } from "../convex/_generated/api";
 import { auditLog } from "../convex/auditLog";
 import {
@@ -357,6 +358,127 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     );
     expect(failed).toBeDefined();
     expect(failed?.scope).toBe(workspaceId);
+  });
+
+  it("concurrent in-flight pushes are tracked independently — a failed run records lastSyncError while another run for the same task stays pending", async () => {
+    // Regression: the dispatcher used to stamp a single `outboundRunId` field
+    // on the link, so two concurrent pushes for the same task (e.g. a status
+    // flip and a description push) clobbered each other — the loser's
+    // onComplete found no link and silently dropped its retry-exhaustion
+    // failure. The `integrationOutboundRuns` side table tracks each run.
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      externalState: "open",
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("integrationOutboundRuns", {
+        runId: "run_A",
+        taskId,
+      });
+      await ctx.db.insert("integrationOutboundRuns", {
+        runId: "run_B",
+        taskId,
+      });
+    });
+
+    await t.mutation(
+      internal.integrations.github.syncOutMutations.onOutboundComplete,
+      {
+        runId: "run_A" as RunId,
+        result: { type: "failed", error: "boom" },
+      },
+    );
+
+    // run_A's failure surfaced on the link...
+    const err = await readLastSyncError(t, linkId);
+    expect(err).toBeDefined();
+    expect(err?.message).toMatch(/exhaust/i);
+
+    // ...and run_B is still tracked (was not clobbered by run_A).
+    const remaining = await t.run((ctx) =>
+      ctx.db.query("integrationOutboundRuns").collect(),
+    );
+    expect(remaining.map((r) => r.runId)).toEqual(["run_B"]);
+  });
+
+  it("onOutboundComplete success drops the tracking row without writing lastSyncError", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      externalState: "open",
+    });
+    await t.run((ctx) =>
+      ctx.db.insert("integrationOutboundRuns", { runId: "run_ok", taskId }),
+    );
+
+    await t.mutation(
+      internal.integrations.github.syncOutMutations.onOutboundComplete,
+      {
+        runId: "run_ok" as RunId,
+        result: { type: "success", returnValue: null },
+      },
+    );
+
+    expect(await readLastSyncError(t, linkId)).toBeUndefined();
+    const remaining = await t.run((ctx) =>
+      ctx.db.query("integrationOutboundRuns").collect(),
+    );
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("recordOutboundSuccess records GitHub's updated_at (not wall-clock) so the bounce-back compares equal under isStale", async () => {
+    // Regression: success used to stamp `Date.now()`. If the Convex clock ran
+    // ahead of GitHub's, a genuine later GitHub edit could carry a timestamp
+    // below the stamped value and be wrongly dropped as stale. We now record
+    // GitHub's own `issue.updated_at` from the PATCH response.
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      externalState: "open",
+    });
+    const githubUpdatedAt = 1_700_000_500_000;
+
+    await t.mutation(
+      internal.integrations.github.syncOutMutations.recordOutboundSuccess,
+      {
+        taskId,
+        newExternalState: "closed",
+        newExternalStateReason: "completed",
+        externalUpdatedAt: githubUpdatedAt,
+      },
+    );
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.externalUpdatedAt).toBe(githubUpdatedAt);
+    expect(link?.externalState).toBe("closed");
+  });
+
+  it("recordLabelsSuccess does NOT bump externalUpdatedAt (echo handled by the set guard; avoids clock-skew drops)", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      externalState: "open",
+    });
+    // setupLinkedTask seeds externalUpdatedAt: 1_000.
+    await t.mutation(
+      internal.integrations.github.syncOutMutations.recordLabelsSuccess,
+      { taskId, nextLabels: ["bug"] },
+    );
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.externalUpdatedAt).toBe(1_000);
+    expect(link?.externalLabels).toEqual(["bug"]);
+  });
+
+  it("recordAssigneesSuccess does NOT bump externalUpdatedAt", async () => {
+    const t = createTestContext();
+    const { taskId, linkId } = await setupLinkedTask(t, {
+      externalState: "open",
+    });
+    await t.mutation(
+      internal.integrations.github.syncOutMutations.recordAssigneesSuccess,
+      { taskId, nextLogins: ["octocat"] },
+    );
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.externalUpdatedAt).toBe(1_000);
+    expect(link?.externalAssigneeLogins).toEqual(["octocat"]);
   });
 });
 

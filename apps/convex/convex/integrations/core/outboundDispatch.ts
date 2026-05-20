@@ -101,9 +101,12 @@ export async function maybeEnqueueOutboundPush(
     },
   );
 
-  // Map runId → link so the onComplete callback can find this link from the
-  // bare `{ runId, result }` payload action-retrier hands it.
-  await ctx.db.patch(link._id, { outboundRunId: runId });
+  // Map runId → task so the onComplete callback can resolve this push from the
+  // bare `{ runId, result }` payload action-retrier hands it. A side-table row
+  // (rather than a single field on the link) keeps concurrent pushes — e.g. a
+  // status flip and a description push racing within the retry window — from
+  // clobbering each other's runId and losing a retry-exhaustion failure.
+  await ctx.db.insert("integrationOutboundRuns", { runId, taskId });
 }
 
 /**
@@ -173,7 +176,10 @@ export async function enqueueDescriptionPush(
     },
   );
 
-  await ctx.db.patch(link._id, { outboundRunId: runId });
+  await ctx.db.insert("integrationOutboundRuns", {
+    runId,
+    taskId: args.taskId,
+  });
 }
 
 /**
