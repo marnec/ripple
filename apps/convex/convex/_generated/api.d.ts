@@ -1221,6 +1221,10 @@ export declare const api: {
           { workspaceId: Id<"workspaces"> },
           Array<{
             _id: Id<"projectIntegrationLinks">;
+            branchStatusMap?: Array<{
+              branch: string;
+              statusId: Id<"taskStatuses">;
+            }>;
             externalRepoFullName: string;
             externalRepoId: string;
             frozenAt?: number;
@@ -1240,6 +1244,15 @@ export declare const api: {
           "mutation",
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        setBranchStatusMap: FunctionReference<
+          "mutation",
+          "public",
+          {
+            entries: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
+            linkId: Id<"projectIntegrationLinks">;
+          },
           null
         >;
         unlinkLink: FunctionReference<
@@ -1290,6 +1303,16 @@ export declare const api: {
               occurredAt: number;
             };
           }
+        >;
+      };
+    };
+    github: {
+      branchesAction: {
+        listRepoBranches: FunctionReference<
+          "action",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          Array<string>
         >;
       };
     };
@@ -3439,6 +3462,14 @@ export declare const internal: {
       };
     };
     github: {
+      branchesAction: {
+        branchFetchContext: FunctionReference<
+          "query",
+          "internal",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null | { externalAccountId: string; owner: string; repo: string }
+        >;
+      };
       forceResyncAction: {
         runForceResync: FunctionReference<
           "action",

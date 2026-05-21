@@ -149,6 +149,45 @@ export const createLink = mutation({
  * Idempotent: pausing an already-paused link is a no-op (no second audit row).
  * Disconnected links cannot be paused — that's a terminal state.
  */
+/**
+ * Replace a link's branch→status automation map. Admin-only. Validates that
+ * every referenced status belongs to the link's project (a foreign status
+ * would silently never fire, or worse, leak across projects). Passing an
+ * empty array clears the map (disables branch automation for the link).
+ */
+export const setBranchStatusMap = mutation({
+  args: {
+    linkId: v.id("projectIntegrationLinks"),
+    entries: v.array(
+      v.object({
+        branch: v.string(),
+        statusId: v.id("taskStatuses"),
+      }),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db.get(args.linkId);
+    if (!link) throw new ConvexError("Link not found");
+
+    await requireWorkspaceMember(ctx, link.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    for (const entry of args.entries) {
+      const status = await ctx.db.get(entry.statusId);
+      if (!status || status.projectId !== link.projectId) {
+        throw new ConvexError(
+          "Branch→status mapping references a status outside this project",
+        );
+      }
+    }
+
+    await ctx.db.patch(args.linkId, { branchStatusMap: args.entries });
+    return null;
+  },
+});
+
 export const pauseLink = mutation({
   args: { linkId: v.id("projectIntegrationLinks") },
   returns: v.null(),
@@ -535,6 +574,11 @@ export const listByWorkspace = query({
       frozenAt: v.optional(v.number()),
       externalRepoFullName: v.string(),
       externalRepoId: v.string(),
+      branchStatusMap: v.optional(
+        v.array(
+          v.object({ branch: v.string(), statusId: v.id("taskStatuses") }),
+        ),
+      ),
     }),
   ),
   handler: async (ctx, args) => {
@@ -559,6 +603,7 @@ export const listByWorkspace = query({
       frozenAt: l.frozenAt,
       externalRepoFullName: l.externalRepoFullName,
       externalRepoId: l.externalRepoId,
+      branchStatusMap: l.branchStatusMap,
     }));
   },
 });

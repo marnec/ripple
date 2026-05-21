@@ -955,6 +955,7 @@ export type DataModel = {
   };
   projectIntegrationLinks: {
     document: {
+      branchStatusMap?: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
       externalRepoFullName: string;
       externalRepoId: string;
       frozenAt?: number;
@@ -968,6 +969,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "branchStatusMap"
       | "externalRepoFullName"
       | "externalRepoId"
       | "frozenAt"

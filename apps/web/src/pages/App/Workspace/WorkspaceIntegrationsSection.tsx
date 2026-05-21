@@ -8,6 +8,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { GitBranch, Pause, Play, RefreshCw, Unplug } from "lucide-react";
 import { isFrozenOver24h } from "@/lib/integration-utils";
+import { BranchStatusMapEditor } from "./BranchStatusMapEditor";
 
 type Props = { workspaceId: Id<"workspaces"> };
 
@@ -184,6 +185,15 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
                     entitlement, then run Force resync to catch up on changes
                     GitHub stopped retrying.
                   </div>
+                )}
+                {!isDisconnected && (
+                  <BranchStatusMapEditor
+                    link={{
+                      _id: link._id,
+                      projectId: link.projectId,
+                      branchStatusMap: link.branchStatusMap,
+                    }}
+                  />
                 )}
               </li>
             );

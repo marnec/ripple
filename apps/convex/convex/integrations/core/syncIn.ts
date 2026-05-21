@@ -3,6 +3,7 @@ import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { getWorkspaceIntegration } from "./integrationLookups";
+import { taskHasBranchRuleMatch } from "./pullRequestAutomation";
 import type {
   NormalizedInstallationEvent,
   NormalizedIssueEvent,
@@ -317,16 +318,27 @@ async function updateExistingOnClose(
 ): Promise<void> {
   const { event, link, existingLink } = args;
 
-  const targetStatus = await resolveCompletedStatus(
+  // Precedence: when a merged PR's target branch matches a branch→status rule,
+  // that transition is authoritative — suppress the generic issue-close
+  // completion (it would downgrade the branch-mapped status). The link mirror
+  // is still advanced so the outbound echo guard and redelivery dedup hold.
+  const branchRuleGoverns = await taskHasBranchRuleMatch(
     ctx,
-    link.projectId,
-    event.stateReason,
+    existingLink.taskId,
   );
 
-  await ctx.db.patch(existingLink.taskId, {
-    statusId: targetStatus._id,
-    completed: targetStatus.isCompleted,
-  });
+  if (!branchRuleGoverns) {
+    const targetStatus = await resolveCompletedStatus(
+      ctx,
+      link.projectId,
+      event.stateReason,
+    );
+    await ctx.db.patch(existingLink.taskId, {
+      statusId: targetStatus._id,
+      completed: targetStatus.isCompleted,
+    });
+  }
+
   await ctx.db.patch(existingLink._id, {
     externalUpdatedAt: event.externalUpdatedAt,
     externalState: "closed",

@@ -1,0 +1,121 @@
+import { describe, expect, it } from "vitest";
+import { api } from "../convex/_generated/api";
+import {
+  createTestContext,
+  setupProject,
+  setupWorkspaceWithAdmin,
+} from "./helpers";
+import type { Id } from "../convex/_generated/dataModel";
+
+async function setup(t: ReturnType<typeof createTestContext>) {
+  const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+  const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+  const { linkId, stagingStatusId, releasedStatusId } = await t.run(
+    async (ctx) => {
+      const stagingStatusId = await ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "On Staging",
+        color: "bg-gray-500",
+        order: 1,
+        isDefault: false,
+        isCompleted: false,
+      });
+      const releasedStatusId = await ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Released",
+        color: "bg-green-500",
+        order: 2,
+        isDefault: false,
+        isCompleted: true,
+      });
+      const linkId = await ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kg1",
+      });
+      return { linkId, stagingStatusId, releasedStatusId };
+    },
+  );
+  return { workspaceId, projectId, linkId, stagingStatusId, releasedStatusId, asUser };
+}
+
+describe("integrations/core/links.setBranchStatusMap", () => {
+  it("persists the branch→status entries on the link", async () => {
+    const t = createTestContext();
+    const { linkId, stagingStatusId, releasedStatusId, asUser } = await setup(t);
+
+    await asUser.mutation(api.integrations.core.links.setBranchStatusMap, {
+      linkId,
+      entries: [
+        { branch: "develop", statusId: stagingStatusId },
+        { branch: "main", statusId: releasedStatusId },
+      ],
+    });
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.branchStatusMap).toEqual([
+      { branch: "develop", statusId: stagingStatusId },
+      { branch: "main", statusId: releasedStatusId },
+    ]);
+  });
+
+  it("replaces the whole map (empty clears it)", async () => {
+    const t = createTestContext();
+    const { linkId, stagingStatusId, asUser } = await setup(t);
+    await asUser.mutation(api.integrations.core.links.setBranchStatusMap, {
+      linkId,
+      entries: [{ branch: "develop", statusId: stagingStatusId }],
+    });
+
+    await asUser.mutation(api.integrations.core.links.setBranchStatusMap, {
+      linkId,
+      entries: [],
+    });
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.branchStatusMap).toEqual([]);
+  });
+
+  it("rejects a status from a different project", async () => {
+    const t = createTestContext();
+    const { linkId, asUser, workspaceId } = await setup(t);
+    const otherProjectId = await setupProject(t, {
+      workspaceId,
+      creatorId: (await setupWorkspaceWithAdmin(t)).userId,
+      name: "Other",
+    });
+    const foreignStatusId: Id<"taskStatuses"> = await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId: otherProjectId,
+        name: "X",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: false,
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.setBranchStatusMap, {
+        linkId,
+        entries: [{ branch: "main", statusId: foreignStatusId }],
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("rejects non-admin callers", async () => {
+    const t = createTestContext();
+    const { linkId, stagingStatusId } = await setup(t);
+    const outsider = t.withIdentity({ subject: "stranger|s", issuer: "test" });
+
+    await expect(
+      outsider.mutation(api.integrations.core.links.setBranchStatusMap, {
+        linkId,
+        entries: [{ branch: "main", statusId: stagingStatusId }],
+      }),
+    ).rejects.toThrow();
+  });
+});

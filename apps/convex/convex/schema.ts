@@ -935,6 +935,18 @@ export default defineSchema({
     // Survives renames; the webhook adapter resolves the link by this
     // before falling back to anything else.
     externalRepoId: v.string(),
+    // Optional branch→status automation: when a PR merges into `branch`, the
+    // linked task(s) advance to `statusId` (forward-only, most-advanced-wins).
+    // Branch ≈ deploy environment. Exact branch-name match. Empty/absent =
+    // no branch automation (completion falls back to the issues.closed path).
+    branchStatusMap: v.optional(
+      v.array(
+        v.object({
+          branch: v.string(),
+          statusId: v.id("taskStatuses"),
+        }),
+      ),
+    ),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_project", ["projectId"])

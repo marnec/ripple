@@ -122,6 +122,25 @@ describe("integrations/github/client.fetchClosingIssueNodeIds", () => {
     expect(fakeFetch.mock.calls[0]?.[0]).toContain("/graphql");
   });
 
+  it("parses branch names from the REST branches endpoint", async () => {
+    const fakeFetch = vi.fn(async () =>
+      new Response(JSON.stringify([{ name: "main" }, { name: "develop" }]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const client = await makeClient(fakeFetch as unknown as typeof fetch);
+
+    const branches = await client.fetchBranches({
+      installationToken: "ghs_x",
+      owner: "acme",
+      repo: "web",
+    });
+
+    expect(branches).toEqual(["main", "develop"]);
+    expect(fakeFetch.mock.calls[0]?.[0]).toContain("/repos/acme/web/branches");
+  });
+
   it("returns [] when the PR has no closing references", async () => {
     const fakeFetch = vi.fn(async () =>
       new Response(

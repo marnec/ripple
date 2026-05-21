@@ -118,6 +118,31 @@ export class GithubClient {
   }
 
   /**
+   * List a repo's branch names (first page, up to 100) for the branch→status
+   * settings dropdown. Pagination beyond 100 is intentionally not handled —
+   * the UI also accepts free-text, so a long-tail branch can still be mapped.
+   */
+  async fetchBranches(args: {
+    installationToken: string;
+    owner: string;
+    repo: string;
+  }): Promise<string[]> {
+    const res = await this.doFetch(
+      `${this.apiBase}/repos/${args.owner}/${args.repo}/branches?per_page=100`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${args.installationToken}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
+    const body = (await res.json()) as { name: string }[];
+    return Array.isArray(body) ? body.map((b) => b.name) : [];
+  }
+
+  /**
    * Issue an authenticated REST call using a pre-minted installation
    * token. Returns the normalized response shape consumed by
    * `core/syncOut.classifyResponse`.
