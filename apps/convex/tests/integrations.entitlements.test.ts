@@ -567,6 +567,75 @@ describe("integrations/core/entitlements.setWorkspaceFeature", () => {
   });
 });
 
+describe("integrations/core/entitlements.getWorkspaceFeature", () => {
+  it("returns enabled=false when no entitlement row exists", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const result = await asUser.query(
+      api.integrations.core.entitlements.getWorkspaceFeature,
+      { workspaceId, featureKey: "github_integration" },
+    );
+
+    expect(result).toEqual({ enabled: false });
+  });
+
+  it("returns enabled=true after the feature is enabled", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    await asUser.mutation(
+      api.integrations.core.entitlements.setWorkspaceFeature,
+      { workspaceId, featureKey: "github_integration", enabled: true },
+    );
+
+    const result = await asUser.query(
+      api.integrations.core.entitlements.getWorkspaceFeature,
+      { workspaceId, featureKey: "github_integration" },
+    );
+
+    expect(result).toEqual({ enabled: true });
+  });
+
+  it("is readable by non-admin members (so they can see 'ask an admin' state)", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { userId: memberId, asUser: asMember } = await setupAuthenticatedUser(
+      t,
+      { name: "Member", email: "gwf-member@test.com" },
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+
+    const result = await asMember.query(
+      api.integrations.core.entitlements.getWorkspaceFeature,
+      { workspaceId, featureKey: "github_integration" },
+    );
+
+    expect(result).toEqual({ enabled: false });
+  });
+
+  it("rejects non-members", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { asUser: asOutsider } = await setupAuthenticatedUser(t, {
+      name: "Outsider",
+      email: "gwf-outsider@test.com",
+    });
+
+    await expect(
+      asOutsider.query(
+        api.integrations.core.entitlements.getWorkspaceFeature,
+        { workspaceId, featureKey: "github_integration" },
+      ),
+    ).rejects.toThrow();
+  });
+});
+
 describe("integrations/core/entitlements.isInstallationFrozen", () => {
   async function setupInstallation(
     t: ReturnType<typeof createTestContext>,

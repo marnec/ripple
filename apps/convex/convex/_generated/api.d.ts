@@ -1165,6 +1165,12 @@ export declare const api: {
   integrations: {
     core: {
       entitlements: {
+        getWorkspaceFeature: FunctionReference<
+          "query",
+          "public",
+          { featureKey: string; workspaceId: Id<"workspaces"> },
+          { enabled: boolean }
+        >;
         isInstallationFrozen: FunctionReference<
           "query",
           "public",

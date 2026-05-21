@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useState } from "react";
@@ -9,8 +10,80 @@ import type { Id } from "@convex/_generated/dataModel";
 import { GitBranch, Pause, Play, RefreshCw, Unplug } from "lucide-react";
 import { isFrozenOver24h } from "@/lib/integration-utils";
 import { BranchStatusMapEditor } from "./BranchStatusMapEditor";
+import { useViewer } from "../UserContext";
+
+const GITHUB_FEATURE_KEY = "github_integration";
 
 type Props = { workspaceId: Id<"workspaces"> };
+
+/**
+ * Workspace-admin toggle for the GitHub-integration capability. v1 is a
+ * manual switch; a future billing flow flips the same `workspaceEntitlements`
+ * row with a non-"manual" source, leaving this surface unchanged (PRD story
+ * 62). Disabling fans `pausedByBilling=true` to every link — the freeze
+ * indicators on the rows below reflect it immediately.
+ *
+ * Non-admins see read-only copy pointing them at an admin.
+ */
+function GithubCapabilityToggle({ workspaceId }: Props) {
+  const viewer = useViewer();
+  const members = useQuery(api.workspaceMembers.membersWithRoles, {
+    workspaceId,
+  });
+  const feature = useQuery(
+    api.integrations.core.entitlements.getWorkspaceFeature,
+    { workspaceId, featureKey: GITHUB_FEATURE_KEY },
+  );
+  const setFeature = useMutation(
+    api.integrations.core.entitlements.setWorkspaceFeature,
+  );
+  const [pending, setPending] = useState(false);
+
+  if (!members || viewer === undefined || feature === undefined) return null;
+
+  const isAdmin =
+    members.find((m) => m.userId === viewer?._id)?.role === "admin";
+  const enabled = feature.enabled;
+
+  const handleToggle = (next: boolean) => {
+    setPending(true);
+    setFeature({ workspaceId, featureKey: GITHUB_FEATURE_KEY, enabled: next })
+      .then(() => {
+        toast.success(next ? "GitHub integration enabled" : "GitHub integration disabled");
+      })
+      .catch((err: unknown) => {
+        toast.error("Could not update capability", {
+          description: err instanceof Error ? err.message : "Please try again",
+        });
+      })
+      .finally(() => setPending(false));
+  };
+
+  return (
+    <div className="mb-4 flex items-start justify-between gap-3 rounded-md border px-3 py-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">GitHub integration capability</div>
+        <p className="text-xs text-muted-foreground">
+          {isAdmin
+            ? "When disabled, all GitHub sync freezes (inbound and outbound) across this workspace."
+            : enabled
+              ? "Enabled for this workspace."
+              : "Disabled. Ask a workspace admin to enable it."}
+        </p>
+      </div>
+      {isAdmin ? (
+        <Switch
+          checked={enabled}
+          disabled={pending}
+          onCheckedChange={handleToggle}
+          aria-label="Toggle GitHub integration capability"
+        />
+      ) : (
+        <Badge variant="outline">{enabled ? "Enabled" : "Disabled"}</Badge>
+      )}
+    </div>
+  );
+}
 
 /**
  * Workspace-settings "Integrations" section. Lists every GitHub link the
@@ -38,15 +111,14 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
   // during render trips React Compiler's purity check.
   const [now] = useState(() => Date.now());
 
-  if (!links) return null; // initial load — no skeleton (project convention)
-
   return (
     <section className="mb-8">
       <h2 className="text-lg font-semibold mb-1">Integrations</h2>
       <p className="text-sm text-muted-foreground mb-4">
         GitHub repositories linked to projects in this workspace.
       </p>
-      {links.length === 0 ? (
+      <GithubCapabilityToggle workspaceId={workspaceId} />
+      {!links ? null : links.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
           No GitHub repositories linked yet. Connect one from a project's
           settings page.

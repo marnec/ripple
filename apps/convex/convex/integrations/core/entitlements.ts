@@ -146,6 +146,21 @@ export async function hasFeature(
 }
 
 /**
+ * Read the current entitlement state for a workspace feature. Member-gated
+ * (not admin-gated) so non-admins can render the "ask an admin" hint — the
+ * write side (`setWorkspaceFeature`) stays admin-only. Drives the
+ * workspace-settings capability toggle.
+ */
+export const getWorkspaceFeature = query({
+  args: { workspaceId: v.id("workspaces"), featureKey: v.string() },
+  returns: v.object({ enabled: v.boolean() }),
+  handler: async (ctx, args) => {
+    await requireWorkspaceMember(ctx, args.workspaceId);
+    return { enabled: await hasFeature(ctx, args.workspaceId, args.featureKey) };
+  },
+});
+
+/**
  * Resolve a provider installation id to its workspace's freeze state.
  * Used by the inbound webhook HTTP route to drop frozen deliveries before
  * the receiver component writes its dedup row — so GitHub's own retry
