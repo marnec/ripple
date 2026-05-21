@@ -41,13 +41,51 @@ export interface NormalizedRepositoriesRemovedEvent {
 }
 
 /**
+ * Pull/merge request events. Distinct from `NormalizedIssueEvent` because a
+ * PR is an attachment on existing task(s), not a task itself. Consumed by
+ * `core/syncInPullRequests.applyPullRequestEvent`.
+ */
+export type NormalizedPullRequestEvent = NormalizedPullRequestOpenedEvent;
+
+/**
+ * A PR/MR was opened. The adapter resolves the host's native closing
+ * references via GraphQL and passes them as `closesExternalIssueIds` so the
+ * core reconciler stays provider-neutral and network-free — it just attaches
+ * the PR to whichever of those issues Ripple already imported.
+ */
+export interface NormalizedPullRequestOpenedEvent {
+  kind: "pullRequest.opened";
+  /** Stable provider-side PR id (GitHub: PR node id). */
+  externalPrId: string;
+  /** Human-facing PR number under the repo. */
+  number: number;
+  /** Provider event mtime, ms since epoch. Drives the ordering guard. */
+  externalUpdatedAt: number;
+  title: string;
+  url: string;
+  /** A PR can be opened directly as a draft. */
+  state: "draft" | "open";
+  /** Source branch. */
+  headRef: string;
+  /** Target branch — drives the Phase 4 branch→status mapping. */
+  baseRef: string;
+  externalAuthor: NormalizedExternalAuthor;
+  /**
+   * Stable issue ids this PR closes (GitHub: issue node ids), resolved by the
+   * adapter. Core attaches the PR only to those that map to an imported task.
+   */
+  closesExternalIssueIds: string[];
+}
+
+/**
  * Discriminated union of every event kind the webhook router can emit.
  * `github/webhook.normalize` returns this; `handleGithubWebhook` switches
  * on `kind` to choose the right `core/syncIn.apply*` function.
  */
 export type NormalizedWebhookEvent =
   | NormalizedIssueEvent
-  | NormalizedInstallationEvent;
+  | NormalizedInstallationEvent
+  | NormalizedPullRequestEvent;
 
 interface NormalizedExternalAuthor {
   login: string;

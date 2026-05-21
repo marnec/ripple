@@ -1042,6 +1042,54 @@ export default defineSchema({
     .index("by_taskIntegrationLink", ["taskIntegrationLinkId"])
     .index("by_externalCommentId", ["externalCommentId"]),
 
+  // One row per external pull/merge request (canonical state). Many-to-many
+  // with tasks via `taskPullRequestLinks` — a PR can close several issues and
+  // a task can have several PRs. Provider-agnostic field names so a GitLab
+  // merge-request adapter slots in without a migration. Inbound, read-only:
+  // Ripple never writes PR state back to the host.
+  pullRequests: defineTable({
+    workspaceId: v.id("workspaces"),
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+    provider: v.string(),
+    // Stable provider-side PR id (GitHub: PR node id). Survives renames.
+    externalPrId: v.string(),
+    // Human-facing PR number under the repo (e.g. 7 for #7).
+    number: v.number(),
+    title: v.string(),
+    url: v.string(),
+    // draft|open are produced on open; merged|closed land in Phase 2.
+    state: v.union(
+      v.literal("draft"),
+      v.literal("open"),
+      v.literal("merged"),
+      v.literal("closed"),
+    ),
+    // Source branch (head) and target branch (base). baseRef drives the
+    // Phase 4 branch→status mapping.
+    headRef: v.string(),
+    baseRef: v.string(),
+    externalAuthor: v.object({
+      login: v.string(),
+      avatarUrl: v.string(),
+      url: v.string(),
+    }),
+    // Provider event mtime, ms since epoch. Drives the ordering guard.
+    externalUpdatedAt: v.number(),
+    // Set on merge (Phase 2).
+    mergedAt: v.optional(v.number()),
+  })
+    .index("by_link_externalPrId", ["projectIntegrationLinkId", "externalPrId"])
+    .index("by_workspace", ["workspaceId"]),
+
+  // Join between a pull request and the task(s) it closes. Resolved from the
+  // host's native closing references ("Closes #N"). Many-to-many.
+  taskPullRequestLinks: defineTable({
+    taskId: v.id("tasks"),
+    pullRequestId: v.id("pullRequests"),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_pullRequest", ["pullRequestId"]),
+
   // Maps an in-flight `@convex-dev/action-retrier` runId → the task whose
   // outbound push it carries. The retrier's `onComplete` callback receives
   // only `{ runId, result }`, so this side table is how the callback resolves

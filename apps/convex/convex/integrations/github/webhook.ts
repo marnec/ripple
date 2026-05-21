@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import {
   internalAction,
   internalMutation,
+  type ActionCtx,
   type MutationCtx,
 } from "../../_generated/server";
 import { internal } from "../../_generated/api";
@@ -10,7 +11,12 @@ import {
   applyInstallationEvent,
   applyNormalizedEvent,
 } from "../core/syncIn";
-import type { NormalizedWebhookEvent } from "../core/types";
+import { GithubClient } from "./client";
+import { normalizePullRequestPayload } from "./pullRequestWebhook";
+import type {
+  NormalizedInstallationEvent,
+  NormalizedIssueEvent,
+} from "../core/types";
 
 /**
  * Provider-specific webhook parsing. Translates a GitHub webhook payload
@@ -155,7 +161,7 @@ interface GithubInstallationPayload {
 export function normalize(
   eventName: string,
   payload: unknown,
-): NormalizedWebhookEvent | null {
+): NormalizedIssueEvent | NormalizedInstallationEvent | null {
   if (eventName === "issues") return normalizeIssuesEvent(payload);
   if (eventName === "issue_comment") {
     return normalizeIssueCommentEvent(payload);
@@ -182,7 +188,7 @@ interface GithubIssueCommentPayload {
 
 function normalizeIssueCommentEvent(
   payload: unknown,
-): NormalizedWebhookEvent | null {
+): NormalizedIssueEvent | null {
   const p = payload as GithubIssueCommentPayload;
   if (p.action === "created") {
     return {
@@ -218,7 +224,7 @@ function normalizeIssueCommentEvent(
   return null;
 }
 
-function normalizeIssuesEvent(payload: unknown): NormalizedWebhookEvent | null {
+function normalizeIssuesEvent(payload: unknown): NormalizedIssueEvent | null {
   const p = payload as GithubIssuesPayload;
 
   if (p.action === "opened") {
@@ -282,7 +288,7 @@ function normalizeIssuesEvent(payload: unknown): NormalizedWebhookEvent | null {
 
 function normalizeInstallationEvent(
   payload: unknown,
-): NormalizedWebhookEvent | null {
+): NormalizedInstallationEvent | null {
   const p = payload as GithubInstallationPayload;
   if (p.action !== "deleted") return null;
   return {
@@ -293,7 +299,7 @@ function normalizeInstallationEvent(
 
 function normalizeInstallationRepositoriesEvent(
   payload: unknown,
-): NormalizedWebhookEvent | null {
+): NormalizedInstallationEvent | null {
   const p = payload as GithubInstallationPayload;
   if (p.action !== "removed") return null;
   return {
@@ -363,6 +369,15 @@ export const receiveGithubWebhook = internalAction({
       return null;
     }
     const payload = JSON.parse(args.rawBody) as unknown;
+
+    // Pull-request deliveries need a GraphQL hop to resolve the issues the PR
+    // closes (the REST payload doesn't carry them) — so they take a separate
+    // path from the pure-mutation issue/comment routing.
+    if (eventName === "pull_request") {
+      await routePullRequestDelivery(ctx, payload);
+      return null;
+    }
+
     await ctx.runMutation(
       internal.integrations.github.webhook.handleGithubWebhookMutation,
       { eventName, payload },
@@ -370,3 +385,65 @@ export const receiveGithubWebhook = internalAction({
     return null;
   },
 });
+
+interface GithubPrDeliveryShape {
+  action: string;
+  pull_request?: { number: number };
+  installation?: { id: number };
+  repository?: {
+    node_id: string;
+    full_name: string;
+    owner?: { login: string };
+    name?: string;
+  };
+}
+
+/**
+ * Resolve a PR delivery's closing references via GraphQL, normalize, and
+ * dispatch. Only `opened` is acted on in Phase 1; other actions short-circuit
+ * before any network call so we don't burn GraphQL quota on events we drop.
+ */
+async function routePullRequestDelivery(
+  ctx: ActionCtx,
+  payload: unknown,
+): Promise<void> {
+  const p = payload as GithubPrDeliveryShape;
+  if (p.action !== "opened") return;
+
+  const installationId = String(p.installation?.id ?? "");
+  const owner = p.repository?.owner?.login;
+  const repo = p.repository?.name;
+  const prNumber = p.pull_request?.number;
+  if (!installationId || !owner || !repo || prNumber === undefined) return;
+
+  const appId = process.env.GITHUB_APP_ID;
+  const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+  if (!appId || !privateKeyPem) return; // credentials missing — drop
+
+  const client = new GithubClient({ appId, privateKeyPem });
+  const token = await client.mintInstallationToken(installationId);
+  const closesExternalIssueIds = await client.fetchClosingIssueNodeIds({
+    installationToken: token,
+    owner,
+    repo,
+    prNumber,
+  });
+
+  const event = normalizePullRequestPayload(
+    "pull_request",
+    payload,
+    closesExternalIssueIds,
+  );
+  if (!event) return;
+
+  await ctx.runMutation(
+    internal.integrations.github.pullRequestWebhook
+      .handlePullRequestWebhookMutation,
+    {
+      event,
+      externalAccountId: installationId,
+      externalRepoId: p.repository?.node_id ?? "",
+      repoFullName: p.repository?.full_name,
+    },
+  );
+}

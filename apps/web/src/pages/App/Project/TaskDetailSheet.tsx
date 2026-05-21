@@ -21,6 +21,7 @@ import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
+import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
@@ -149,6 +150,8 @@ export function TaskDetailSheet({
                 />
 
                 <TaskGithubExternalInfo taskId={task._id} />
+
+                <TaskPullRequests taskId={task._id} />
 
                 <TaskDependencies
                   taskId={taskId}

@@ -66,6 +66,58 @@ export class GithubClient {
   }
 
   /**
+   * Resolve the stable issue node ids a PR closes via GitHub's GraphQL API.
+   * The REST `pull_request` webhook payload does not carry linked issues, so
+   * the PR→issue link (whether from "Closes #N" in the body or GitHub's
+   * Development sidebar) is only authoritatively available through
+   * `closingIssuesReferences`. Returns the node ids, which match the
+   * `externalIssueId` stored on `taskIntegrationLinks`.
+   */
+  async fetchClosingIssueNodeIds(args: {
+    installationToken: string;
+    owner: string;
+    repo: string;
+    prNumber: number;
+  }): Promise<string[]> {
+    const query = `query($owner:String!,$repo:String!,$number:Int!){
+      repository(owner:$owner,name:$repo){
+        pullRequest(number:$number){
+          closingIssuesReferences(first:50){ nodes { id } }
+        }
+      }
+    }`;
+    const res = await this.doFetch(`${this.apiBase}/graphql`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${args.installationToken}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query,
+        variables: {
+          owner: args.owner,
+          repo: args.repo,
+          number: args.prNumber,
+        },
+      }),
+    });
+    const json = (await res.json()) as {
+      data?: {
+        repository?: {
+          pullRequest?: {
+            closingIssuesReferences?: { nodes?: { id: string }[] };
+          } | null;
+        } | null;
+      };
+    };
+    const nodes =
+      json.data?.repository?.pullRequest?.closingIssuesReferences?.nodes ?? [];
+    return nodes.map((n) => n.id);
+  }
+
+  /**
    * Issue an authenticated REST call using a pre-minted installation
    * token. Returns the normalized response shape consumed by
    * `core/syncOut.classifyResponse`.

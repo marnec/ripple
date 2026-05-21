@@ -1248,6 +1248,22 @@ export declare const api: {
           null
         >;
       };
+      pullRequestLinks: {
+        listByTask: FunctionReference<
+          "query",
+          "public",
+          { taskId: Id<"tasks"> },
+          Array<{
+            baseRef: string;
+            externalAuthor: { avatarUrl: string; login: string; url: string };
+            headRef: string;
+            number: number;
+            state: "draft" | "open" | "merged" | "closed";
+            title: string;
+            url: string;
+          }>
+        >;
+      };
       taskLinks: {
         getByTask: FunctionReference<
           "query",
@@ -3462,6 +3478,19 @@ export declare const internal: {
           "mutation",
           "internal",
           { jobId: Id<"taskImportJobs">; message: string },
+          null
+        >;
+      };
+      pullRequestWebhook: {
+        handlePullRequestWebhookMutation: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            event: any;
+            externalAccountId: string;
+            externalRepoId: string;
+            repoFullName?: string;
+          },
           null
         >;
       };

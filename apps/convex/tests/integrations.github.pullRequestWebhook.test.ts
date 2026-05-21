@@ -1,0 +1,257 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  handlePullRequestWebhook,
+  normalizePullRequestPayload,
+} from "../convex/integrations/github/pullRequestWebhook";
+import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
+import { GithubClient } from "../convex/integrations/github/client";
+import {
+  createTestContext,
+  setupProject,
+  setupWorkspaceWithAdmin,
+} from "./helpers";
+
+function openedPrPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    action: "opened",
+    pull_request: {
+      node_id: "PR_kwDO123",
+      number: 7,
+      title: "feat: fix dark mode crash",
+      html_url: "https://github.com/acme/web/pull/7",
+      draft: false,
+      updated_at: "2026-05-20T10:00:00Z",
+      head: { ref: "fix/dark-mode" },
+      base: { ref: "main" },
+      user: {
+        login: "octocat",
+        avatar_url: "https://github.com/octocat.png",
+        html_url: "https://github.com/octocat",
+      },
+    },
+    installation: { id: 999_111 },
+    repository: {
+      node_id: "R_kgDOACME",
+      full_name: "acme/web",
+      owner: { login: "acme" },
+      name: "web",
+    },
+    ...overrides,
+  };
+}
+
+async function setupRouting(t: ReturnType<typeof createTestContext>) {
+  const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+  const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+  const { link } = await t.run(async (ctx) => {
+    await ctx.db.insert("taskStatuses", {
+      projectId,
+      name: "Triage",
+      color: "bg-amber-500",
+      order: 0,
+      isDefault: false,
+      isCompleted: false,
+      isTriage: true,
+    });
+    const botUserId = await ctx.db.insert("users", { name: "GitHub" });
+    await ctx.db.insert("workspaceIntegrations", {
+      workspaceId,
+      botUserId,
+      provider: "github",
+      externalAccountId: "999111",
+    });
+    const linkId = await ctx.db.insert("projectIntegrationLinks", {
+      workspaceId,
+      projectId,
+      status: "active",
+      pausedByBilling: false,
+      externalRepoFullName: "acme/web",
+      externalRepoId: "R_kgDOACME",
+    });
+    return { link: (await ctx.db.get(linkId))! };
+  });
+  return { workspaceId, projectId, link };
+}
+
+async function makeClient(fetchImpl: typeof fetch) {
+  const keypair = await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"],
+  );
+  const pkcs8 = await crypto.subtle.exportKey("pkcs8", keypair.privateKey);
+  let bin = "";
+  const bytes = new Uint8Array(pkcs8);
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const b64 = btoa(bin);
+  const lines: string[] = [];
+  for (let i = 0; i < b64.length; i += 64) lines.push(b64.slice(i, i + 64));
+  const pem = `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
+  return new GithubClient({
+    appId: "1",
+    privateKeyPem: pem,
+    apiBase: "https://test.example",
+    fetchImpl,
+  });
+}
+
+describe("integrations/github/pullRequestWebhook.normalizePullRequestPayload", () => {
+  it("maps an opened payload to a normalized event, carrying resolved closing ids", () => {
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      openedPrPayload(),
+      ["I_kwDOABC123"],
+    );
+    expect(event).toMatchObject({
+      kind: "pullRequest.opened",
+      externalPrId: "PR_kwDO123",
+      number: 7,
+      state: "open",
+      headRef: "fix/dark-mode",
+      baseRef: "main",
+      url: "https://github.com/acme/web/pull/7",
+      closesExternalIssueIds: ["I_kwDOABC123"],
+    });
+  });
+
+  it("maps draft:true to state 'draft'", () => {
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      openedPrPayload({
+        pull_request: { ...openedPrPayload().pull_request, draft: true },
+      }),
+      [],
+    );
+    expect(event?.state).toBe("draft");
+  });
+
+  it("returns null for non-pull_request events", () => {
+    expect(normalizePullRequestPayload("issues", openedPrPayload(), [])).toBeNull();
+  });
+});
+
+describe("integrations/github/pullRequestWebhook.handlePullRequestWebhook (wiring)", () => {
+  it("end-to-end: GraphQL-resolved closing refs flow through to a PR attached to the imported task", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupRouting(t);
+
+    // Import the issue the PR will close.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: {
+          kind: "issue.opened",
+          externalIssueId: "I_kwDOABC123",
+          issueNumber: 42,
+          externalUpdatedAt: 1_700_000_000_000,
+          title: "Dark mode crash",
+          body: "repro",
+          url: "https://github.com/acme/web/issues/42",
+          externalAuthor: {
+            login: "octocat",
+            avatarUrl: "https://github.com/octocat.png",
+            url: "https://github.com/octocat",
+          },
+        },
+        link,
+      }),
+    );
+
+    // Fake GraphQL endpoint returns the closing issue node id.
+    const fakeFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                closingIssuesReferences: { nodes: [{ id: "I_kwDOABC123" }] },
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const client = await makeClient(fakeFetch as unknown as typeof fetch);
+
+    const payload = openedPrPayload();
+    const closesIds = await client.fetchClosingIssueNodeIds({
+      installationToken: "ghs_x",
+      owner: "acme",
+      repo: "web",
+      prNumber: 7,
+    });
+    const event = normalizePullRequestPayload("pull_request", payload, closesIds);
+
+    await t.run((ctx) =>
+      handlePullRequestWebhook(ctx, {
+        event: event!,
+        externalAccountId: "999111",
+        externalRepoId: "R_kgDOACME",
+        repoFullName: "acme/web",
+      }),
+    );
+
+    const prs = await t.run((ctx) => ctx.db.query("pullRequests").collect());
+    expect(prs).toHaveLength(1);
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    const joins = await t.run((ctx) =>
+      ctx.db
+        .query("taskPullRequestLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .collect(),
+    );
+    expect(joins).toHaveLength(1);
+    expect(joins[0]?.pullRequestId).toBe(prs[0]?._id);
+  });
+
+  it("drops the delivery when the installation is unknown (no PR row)", async () => {
+    const t = createTestContext();
+    const { link } = await setupRouting(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: {
+          kind: "issue.opened",
+          externalIssueId: "I_kwDOABC123",
+          issueNumber: 42,
+          externalUpdatedAt: 1_700_000_000_000,
+          title: "x",
+          body: "",
+          url: "https://github.com/acme/web/issues/42",
+          externalAuthor: {
+            login: "octocat",
+            avatarUrl: "https://github.com/octocat.png",
+            url: "https://github.com/octocat",
+          },
+        },
+        link,
+      }),
+    );
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      openedPrPayload(),
+      ["I_kwDOABC123"],
+    );
+
+    await t.run((ctx) =>
+      handlePullRequestWebhook(ctx, {
+        event: event!,
+        externalAccountId: "does-not-exist",
+        externalRepoId: "R_kgDOACME",
+        repoFullName: "acme/web",
+      }),
+    );
+
+    const prs = await t.run((ctx) => ctx.db.query("pullRequests").collect());
+    expect(prs).toHaveLength(0);
+  });
+});

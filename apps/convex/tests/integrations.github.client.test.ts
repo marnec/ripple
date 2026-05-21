@@ -89,3 +89,61 @@ describe("integrations/github/client.request", () => {
     expect(res.errorMessage).toContain("fetch failed");
   });
 });
+
+describe("integrations/github/client.fetchClosingIssueNodeIds", () => {
+  it("parses closingIssuesReferences node ids from a GraphQL response", async () => {
+    const fakeFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                closingIssuesReferences: {
+                  nodes: [{ id: "I_one" }, { id: "I_two" }],
+                },
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const client = await makeClient(fakeFetch as unknown as typeof fetch);
+
+    const ids = await client.fetchClosingIssueNodeIds({
+      installationToken: "ghs_x",
+      owner: "acme",
+      repo: "web",
+      prNumber: 7,
+    });
+
+    expect(ids).toEqual(["I_one", "I_two"]);
+    // GraphQL goes to the /graphql endpoint, not REST.
+    expect(fakeFetch.mock.calls[0]?.[0]).toContain("/graphql");
+  });
+
+  it("returns [] when the PR has no closing references", async () => {
+    const fakeFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: { closingIssuesReferences: { nodes: [] } },
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    const client = await makeClient(fakeFetch as unknown as typeof fetch);
+
+    const ids = await client.fetchClosingIssueNodeIds({
+      installationToken: "ghs_x",
+      owner: "acme",
+      repo: "web",
+      prNumber: 7,
+    });
+
+    expect(ids).toEqual([]);
+  });
+});

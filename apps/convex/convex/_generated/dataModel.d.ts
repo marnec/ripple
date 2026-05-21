@@ -1054,6 +1054,56 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
+  pullRequests: {
+    document: {
+      baseRef: string;
+      externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalPrId: string;
+      externalUpdatedAt: number;
+      headRef: string;
+      mergedAt?: number;
+      number: number;
+      projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+      provider: string;
+      state: "draft" | "open" | "merged" | "closed";
+      title: string;
+      url: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"pullRequests">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "baseRef"
+      | "externalAuthor"
+      | "externalAuthor.avatarUrl"
+      | "externalAuthor.login"
+      | "externalAuthor.url"
+      | "externalPrId"
+      | "externalUpdatedAt"
+      | "headRef"
+      | "mergedAt"
+      | "number"
+      | "projectIntegrationLinkId"
+      | "provider"
+      | "state"
+      | "title"
+      | "url"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_link_externalPrId: [
+        "projectIntegrationLinkId",
+        "externalPrId",
+        "_creationTime",
+      ];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   pushSubscriptions: {
     document: {
       device: string;
@@ -1428,6 +1478,23 @@ export type DataModel = {
         "externalIssueId",
         "_creationTime",
       ];
+      by_task: ["taskId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  taskPullRequestLinks: {
+    document: {
+      pullRequestId: Id<"pullRequests">;
+      taskId: Id<"tasks">;
+      _id: Id<"taskPullRequestLinks">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "pullRequestId" | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_pullRequest: ["pullRequestId", "_creationTime"];
       by_task: ["taskId", "_creationTime"];
     };
     searchIndexes: {};

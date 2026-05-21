@@ -22,6 +22,7 @@ import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskProperties } from "./TaskProperties";
 import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
+import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
@@ -172,6 +173,8 @@ function TaskDetailPageContent({
               />
 
               <TaskGithubExternalInfo taskId={taskId} />
+
+              <TaskPullRequests taskId={taskId} />
 
               <TaskDependencies
                 taskId={taskId}
