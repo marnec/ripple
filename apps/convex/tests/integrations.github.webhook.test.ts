@@ -624,6 +624,91 @@ describe("integrations/github/webhook.handleGithubWebhook", () => {
     expect(tasks[0]?.statusId).toBe(triageStatusId);
   });
 
+  it("one project ↔ N repos: issues from each linked repo route to the same project's triage", async () => {
+    const t = createTestContext();
+    // setupWebhookRouting seeds the project + install + the frontend link.
+    const {
+      workspaceId,
+      projectId,
+      triageStatusId,
+      linkId: frontendLinkId,
+    } = await setupWebhookRouting(t, {
+      externalRepoId: "R_frontend",
+      externalRepoFullName: "acme/web-frontend",
+    });
+    // Add a SECOND repo (backend) under the same project.
+    const backendLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web-backend",
+        externalRepoId: "R_backend",
+      }),
+    );
+
+    const issuePayload = (
+      repoNodeId: string,
+      repoName: string,
+      issueNodeId: string,
+      number: number,
+    ) => ({
+      action: "opened",
+      issue: {
+        id: number,
+        node_id: issueNodeId,
+        number,
+        title: `Issue in ${repoName}`,
+        body: "",
+        state: "open",
+        html_url: `https://github.com/${repoName}/issues/${number}`,
+        updated_at: "2026-05-15T10:00:00Z",
+        user: {
+          login: "octocat",
+          avatar_url: "https://avatars.githubusercontent.com/u/1?v=4",
+          html_url: "https://github.com/octocat",
+        },
+      },
+      installation: { id: 999_111 },
+      repository: { node_id: repoNodeId, full_name: repoName },
+    });
+
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issues",
+        payload: issuePayload("R_frontend", "acme/web-frontend", "I_front", 1),
+      }),
+    );
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issues",
+        payload: issuePayload("R_backend", "acme/web-backend", "I_back", 2),
+      }),
+    );
+
+    // Both issues created tasks in the one project's triage.
+    const tasks = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(tasks).toHaveLength(2);
+    expect(tasks.every((tk) => tk.statusId === triageStatusId)).toBe(true);
+
+    // The by_externalRepo router attributed each task to the repo it came
+    // from — frontend issue → frontend link, backend issue → backend link.
+    const taskLinks = await t.run((ctx) =>
+      ctx.db.query("taskIntegrationLinks").collect(),
+    );
+    const linkByIssue = new Map(
+      taskLinks.map((tl) => [tl.externalIssueId, tl.projectIntegrationLinkId]),
+    );
+    expect(linkByIssue.get("I_front")).toBe(frontendLinkId);
+    expect(linkByIssue.get("I_back")).toBe(backendLinkId);
+  });
+
   it("routes installation.deleted to applyInstallationEvent — all workspace links disconnect end-to-end", async () => {
     const t = createTestContext();
     const { linkId } = await setupWebhookRouting(t, {

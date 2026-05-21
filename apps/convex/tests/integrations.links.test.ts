@@ -135,6 +135,61 @@ describe("integrations/core/links.createLink", () => {
     ).rejects.toThrow(new RegExp(firstProjectId));
   });
 
+  it("one project ↔ N repos: the same project can link multiple distinct repos", async () => {
+    // An "app" project gathering a frontend repo and a backend repo. Each
+    // repo maps to one project (repo→one-project still holds), but a project
+    // accumulates as many repos as you link. Guards against a per-project
+    // uniqueness check ever being added.
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } =
+      await setupActivatableProject(t);
+
+    const frontendLinkId = await asUser.mutation(
+      api.integrations.core.links.createLink,
+      {
+        projectId,
+        workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "R_frontend",
+        externalRepoFullName: "acme/web-frontend",
+      },
+    );
+    const backendLinkId = await asUser.mutation(
+      api.integrations.core.links.createLink,
+      {
+        projectId,
+        workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "R_backend",
+        externalRepoFullName: "acme/web-backend",
+      },
+    );
+
+    const [frontend, backend] = await t.run(async (ctx) => [
+      await ctx.db.get(frontendLinkId),
+      await ctx.db.get(backendLinkId),
+    ]);
+    expect(frontend?.projectId).toBe(projectId);
+    expect(backend?.projectId).toBe(projectId);
+    expect(frontend?.status).toBe("active");
+    expect(backend?.status).toBe("active");
+    expect(frontend?.externalRepoId).not.toBe(backend?.externalRepoId);
+
+    // The workspace view lists both repos under the one project.
+    const links = await asUser.query(
+      api.integrations.core.links.listByWorkspace,
+      { workspaceId },
+    );
+    const reposForProject = links
+      .filter((l) => l.projectId === projectId)
+      .map((l) => l.externalRepoFullName)
+      .sort();
+    expect(reposForProject).toEqual([
+      "acme/web-backend",
+      "acme/web-frontend",
+    ]);
+  });
+
   it("rejects when no workspaceIntegrations row exists for the externalAccountId", async () => {
     const t = createTestContext();
     const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
