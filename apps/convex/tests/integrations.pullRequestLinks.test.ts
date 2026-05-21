@@ -103,7 +103,7 @@ describe("integrations/core/pullRequestLinks.listByTask", () => {
     await t.run((ctx) =>
       applyPullRequestEvent(ctx, {
         event: {
-          kind: "pullRequest.opened",
+          kind: "pullRequest.changed",
           externalPrId: "PR_1",
           number: 7,
           externalUpdatedAt: 2_000,

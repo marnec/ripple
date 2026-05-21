@@ -45,16 +45,20 @@ export interface NormalizedRepositoriesRemovedEvent {
  * PR is an attachment on existing task(s), not a task itself. Consumed by
  * `core/syncInPullRequests.applyPullRequestEvent`.
  */
-export type NormalizedPullRequestEvent = NormalizedPullRequestOpenedEvent;
+export type NormalizedPullRequestEvent = NormalizedPullRequestChangedEvent;
 
 /**
- * A PR/MR was opened. The adapter resolves the host's native closing
- * references via GraphQL and passes them as `closesExternalIssueIds` so the
- * core reconciler stays provider-neutral and network-free — it just attaches
- * the PR to whichever of those issues Ripple already imported.
+ * A PR/MR's current observed state. Every PR webhook the adapter acts on
+ * (opened, edited, closed, reopened, draft toggles) maps to this single
+ * full-state event — like `issue.labels_changed`/`issue.assignees_changed`,
+ * it carries the COMPLETE current state (and full closing-reference set)
+ * rather than a delta, so the core reconciler stays idempotent against
+ * missed or out-of-order deliveries. The adapter resolves the host's native
+ * closing references via GraphQL into `closesExternalIssueIds`, keeping core
+ * provider-neutral and network-free.
  */
-export interface NormalizedPullRequestOpenedEvent {
-  kind: "pullRequest.opened";
+export interface NormalizedPullRequestChangedEvent {
+  kind: "pullRequest.changed";
   /** Stable provider-side PR id (GitHub: PR node id). */
   externalPrId: string;
   /** Human-facing PR number under the repo. */
@@ -63,13 +67,14 @@ export interface NormalizedPullRequestOpenedEvent {
   externalUpdatedAt: number;
   title: string;
   url: string;
-  /** A PR can be opened directly as a draft. */
-  state: "draft" | "open";
+  state: "draft" | "open" | "merged" | "closed";
   /** Source branch. */
   headRef: string;
   /** Target branch — drives the Phase 4 branch→status mapping. */
   baseRef: string;
   externalAuthor: NormalizedExternalAuthor;
+  /** Set when `state === "merged"`. */
+  mergedAt?: number;
   /**
    * Stable issue ids this PR closes (GitHub: issue node ids), resolved by the
    * adapter. Core attaches the PR only to those that map to an imported task.

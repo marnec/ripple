@@ -50,6 +50,7 @@ type KanbanColumnProps = {
     title: string;
     priority: "urgent" | "high" | "medium" | "low";
     labels?: string[];
+    pullRequestState?: "draft" | "open" | "merged" | "closed";
     status: {
       name: string;
       color: string;

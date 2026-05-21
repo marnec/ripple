@@ -1530,6 +1530,7 @@ export type DataModel = {
       position?: string;
       priority: "urgent" | "high" | "medium" | "low";
       projectId: Id<"projects">;
+      pullRequestState?: "draft" | "open" | "merged" | "closed";
       startDate?: string;
       statusId: Id<"taskStatuses">;
       title: string;
@@ -1567,6 +1568,7 @@ export type DataModel = {
       | "position"
       | "priority"
       | "projectId"
+      | "pullRequestState"
       | "startDate"
       | "statusId"
       | "title"

@@ -476,6 +476,30 @@ describe("integrations/github/webhook.normalize", () => {
     ).toBeNull();
   });
 
+  it("drops comments on pull requests (issue.pull_request present)", () => {
+    const payload = {
+      action: "created",
+      issue: {
+        node_id: "PR_kwDOABC999",
+        number: 99,
+        pull_request: { url: "https://api.github.com/repos/acme/web/pulls/99" },
+      },
+      comment: {
+        node_id: "IC_pr_1",
+        body: "LGTM",
+        updated_at: "2026-05-21T10:00:00Z",
+        user: {
+          login: "reviewer",
+          avatar_url: "https://avatars.githubusercontent.com/u/3?v=4",
+          html_url: "https://github.com/reviewer",
+        },
+      },
+      installation: { id: 999_111 },
+      repository: { node_id: "R_kgDOACME", full_name: "acme/web" },
+    };
+    expect(normalize("issue_comment", payload)).toBeNull();
+  });
+
   it("maps an installation.deleted payload to NormalizedInstallationDeletedEvent", () => {
     const event = normalize("installation", installationDeletedPayload(999_111));
     expect(event).toEqual({

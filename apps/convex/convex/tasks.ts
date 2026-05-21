@@ -58,6 +58,16 @@ export const baseTaskFields = {
   }))),
   estimate: v.optional(v.number()),
   importJobId: v.optional(v.id("taskImportJobs")),
+  // Denormalized most-advanced state of the task's linked pull requests,
+  // surfaced on cards. Maintained by the PR sync reconciler.
+  pullRequestState: v.optional(
+    v.union(
+      v.literal("draft"),
+      v.literal("open"),
+      v.literal("merged"),
+      v.literal("closed"),
+    ),
+  ),
 };
 
 export const enrichedTaskValidator = v.object({

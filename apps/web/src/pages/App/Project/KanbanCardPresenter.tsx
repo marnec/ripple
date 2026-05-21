@@ -3,12 +3,30 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
-import { Ban, CalendarIcon } from "lucide-react";
+import {
+  Ban,
+  CalendarIcon,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+const PR_STATE_META: Record<
+  "draft" | "open" | "merged" | "closed",
+  { icon: LucideIcon; label: string; className: string }
+> = {
+  draft: { icon: GitPullRequestDraft, label: "Draft PR", className: "text-muted-foreground" },
+  open: { icon: GitPullRequest, label: "Open PR", className: "text-emerald-600 dark:text-emerald-400" },
+  merged: { icon: GitMerge, label: "Merged PR", className: "text-violet-600 dark:text-violet-400" },
+  closed: { icon: GitPullRequestClosed, label: "Closed PR", className: "text-rose-600 dark:text-rose-400" },
+};
 
 type KanbanCardPresenterProps = {
   task: {
@@ -21,6 +39,7 @@ type KanbanCardPresenterProps = {
     dueDate?: string;
     estimate?: number;
     hasBlockers?: boolean;
+    pullRequestState?: "draft" | "open" | "merged" | "closed";
     status: {
       name: string;
       color: string;
@@ -70,9 +89,25 @@ export function KanbanCardPresenter({
       </CardHeader>
       <CardContent className="py-2 px-3 pt-0">
         <div className="flex items-center justify-between mb-2">
-          {/* Priority Icon */}
-          <div className="shrink-0">
+          {/* Priority Icon + PR indicator */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {getPriorityIcon(task.priority)}
+            {task.pullRequestState &&
+              (() => {
+                const meta = PR_STATE_META[task.pullRequestState];
+                const Icon = meta.icon;
+                return (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<span className="inline-flex" />}
+                      aria-label={meta.label}
+                    >
+                      <Icon className={cn("h-3.5 w-3.5", meta.className)} />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">{meta.label}</TooltipContent>
+                  </Tooltip>
+                );
+              })()}
           </div>
 
           {/* Assignee Avatar — ghost placeholder keeps row height stable */}

@@ -108,7 +108,7 @@ describe("integrations/github/pullRequestWebhook.normalizePullRequestPayload", (
       ["I_kwDOABC123"],
     );
     expect(event).toMatchObject({
-      kind: "pullRequest.opened",
+      kind: "pullRequest.changed",
       externalPrId: "PR_kwDO123",
       number: 7,
       state: "open",
@@ -132,6 +132,79 @@ describe("integrations/github/pullRequestWebhook.normalizePullRequestPayload", (
 
   it("returns null for non-pull_request events", () => {
     expect(normalizePullRequestPayload("issues", openedPrPayload(), [])).toBeNull();
+  });
+
+  function actionPayload(
+    action: string,
+    pr: Record<string, unknown> = {},
+  ) {
+    const base = openedPrPayload();
+    return {
+      ...base,
+      action,
+      pull_request: { ...base.pull_request, ...pr },
+    };
+  }
+
+  it("maps a merged close to state 'merged' with mergedAt", () => {
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      actionPayload("closed", {
+        state: "closed",
+        merged: true,
+        merged_at: "2026-05-21T12:00:00Z",
+      }),
+      [],
+    );
+    expect(event?.state).toBe("merged");
+    expect(event?.mergedAt).toBe(Date.parse("2026-05-21T12:00:00Z"));
+  });
+
+  it("maps a close-without-merge to state 'closed'", () => {
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      actionPayload("closed", { state: "closed", merged: false }),
+      [],
+    );
+    expect(event?.state).toBe("closed");
+    expect(event?.mergedAt).toBeUndefined();
+  });
+
+  it("maps converted_to_draft to 'draft' and ready_for_review to 'open'", () => {
+    expect(
+      normalizePullRequestPayload(
+        "pull_request",
+        actionPayload("converted_to_draft", { draft: true }),
+        [],
+      )?.state,
+    ).toBe("draft");
+    expect(
+      normalizePullRequestPayload(
+        "pull_request",
+        actionPayload("ready_for_review", { draft: false }),
+        [],
+      )?.state,
+    ).toBe("open");
+  });
+
+  it("maps reopened to 'open' and edited to the current state", () => {
+    expect(
+      normalizePullRequestPayload("pull_request", actionPayload("reopened"), [])
+        ?.state,
+    ).toBe("open");
+    expect(
+      normalizePullRequestPayload("pull_request", actionPayload("edited"), [])
+        ?.state,
+    ).toBe("open");
+  });
+
+  it("ignores synchronize (and other unhandled actions)", () => {
+    expect(
+      normalizePullRequestPayload("pull_request", actionPayload("synchronize"), []),
+    ).toBeNull();
+    expect(
+      normalizePullRequestPayload("pull_request", actionPayload("labeled"), []),
+    ).toBeNull();
   });
 });
 

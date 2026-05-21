@@ -665,6 +665,7 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         startDate?: string;
         status: {
           _creationTime: number;
@@ -2233,6 +2234,7 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -2305,6 +2307,7 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -2377,6 +2380,7 @@ export declare const api: {
         } | null;
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -2434,6 +2438,7 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -2479,6 +2484,7 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: { color: string; isCompleted: boolean; name: string } | null;
         statusId: Id<"taskStatuses">;
         title: string;
@@ -2539,6 +2545,7 @@ export declare const api: {
           priority: "urgent" | "high" | "medium" | "low";
           projectId: Id<"projects">;
           projectKey?: string;
+          pullRequestState?: "draft" | "open" | "merged" | "closed";
           status: {
             _creationTime: number;
             _id: Id<"taskStatuses">;
@@ -2594,6 +2601,7 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;

@@ -3,7 +3,7 @@ import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
 import { applyPullRequestEvent } from "../convex/integrations/core/syncInPullRequests";
 import type {
   NormalizedIssueOpenedEvent,
-  NormalizedPullRequestOpenedEvent,
+  NormalizedPullRequestChangedEvent,
 } from "../convex/integrations/core/types";
 import type { Doc } from "../convex/_generated/dataModel";
 import {
@@ -84,11 +84,11 @@ function makeOpenedEvent(
 }
 
 function makePrOpenedEvent(
-  overrides: Partial<NormalizedPullRequestOpenedEvent> = {},
-): NormalizedPullRequestOpenedEvent {
+  overrides: Partial<NormalizedPullRequestChangedEvent> = {},
+): NormalizedPullRequestChangedEvent {
   const number = overrides.number ?? 7;
   return {
-    kind: "pullRequest.opened",
+    kind: "pullRequest.changed",
     externalPrId: "PR_kwDO123",
     number,
     externalUpdatedAt: 1_700_000_005_000,

@@ -12,7 +12,10 @@ import {
   applyNormalizedEvent,
 } from "../core/syncIn";
 import { GithubClient } from "./client";
-import { normalizePullRequestPayload } from "./pullRequestWebhook";
+import {
+  isHandledPullRequestAction,
+  normalizePullRequestPayload,
+} from "./pullRequestWebhook";
 import type {
   NormalizedInstallationEvent,
   NormalizedIssueEvent,
@@ -182,7 +185,7 @@ interface GithubIssueComment {
 
 interface GithubIssueCommentPayload {
   action: string;
-  issue: { node_id: string; number: number };
+  issue: { node_id: string; number: number; pull_request?: unknown };
   comment: GithubIssueComment;
 }
 
@@ -190,6 +193,10 @@ function normalizeIssueCommentEvent(
   payload: unknown,
 ): NormalizedIssueEvent | null {
   const p = payload as GithubIssueCommentPayload;
+  // GitHub delivers PR comments as `issue_comment` events with an
+  // `issue.pull_request` link. PRs are attachments, not comment threads —
+  // drop these explicitly (they'd otherwise fall through the orphan path).
+  if (p.issue?.pull_request) return null;
   if (p.action === "created") {
     return {
       kind: "comment.created",
@@ -400,15 +407,15 @@ interface GithubPrDeliveryShape {
 
 /**
  * Resolve a PR delivery's closing references via GraphQL, normalize, and
- * dispatch. Only `opened` is acted on in Phase 1; other actions short-circuit
- * before any network call so we don't burn GraphQL quota on events we drop.
+ * dispatch. Unhandled actions (e.g. `synchronize`) short-circuit before any
+ * network call so we don't burn GraphQL quota on events we drop.
  */
 async function routePullRequestDelivery(
   ctx: ActionCtx,
   payload: unknown,
 ): Promise<void> {
   const p = payload as GithubPrDeliveryShape;
-  if (p.action !== "opened") return;
+  if (!isHandledPullRequestAction(p.action)) return;
 
   const installationId = String(p.installation?.id ?? "");
   const owner = p.repository?.owner?.login;

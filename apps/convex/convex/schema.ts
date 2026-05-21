@@ -375,6 +375,19 @@ export default defineSchema({
         ),
       }),
     ),
+    // Denormalized "most-advanced state" across the task's linked pull
+    // requests, maintained by the PR sync reconciler. Lets kanban/list cards
+    // show a PR indicator without reading the (webhook-churned)
+    // taskPullRequestLinks/pullRequests tables on the hot path. Absent when
+    // the task has no linked PRs.
+    pullRequestState: v.optional(
+      v.union(
+        v.literal("draft"),
+        v.literal("open"),
+        v.literal("merged"),
+        v.literal("closed"),
+      ),
+    ),
   })
     .index("by_project", ["projectId"])
     .index("by_project_completed", ["projectId", "completed"])
