@@ -288,6 +288,49 @@ describe("auto-disconnect via installation events triggers the same cascade", ()
     }
   });
 
+  it("installation.deleted re-delivery is idempotent: links stay disconnected, frozen refs unchanged, no resurrection", async () => {
+    const t = createTestContext();
+    const { linkId, taskIds, taskLinkIds } = await setupLinkedWorkspace(t, {
+      taskCount: 3,
+    });
+
+    const fire = () =>
+      t.mutation(
+        internal.integrations.github.webhook.handleGithubWebhookMutation,
+        {
+          eventName: "installation",
+          payload: { action: "deleted", installation: { id: "install-1" } },
+        },
+      );
+
+    await fire();
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    // Snapshot the frozen refs the first cascade wrote.
+    const firstFreeze = (await readTasks(t, taskIds)).map(
+      (tk) => tk!.externalRefFrozen,
+    );
+    expect(firstFreeze.every((f) => f !== undefined)).toBe(true);
+
+    // GitHub re-delivers the same event within its retry window. The status
+    // guard short-circuits before scheduling a second cascade.
+    await fire();
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.status).toBe("disconnected");
+    // Task links stay deleted — the second pass resurrects nothing.
+    for (const tlId of taskLinkIds) {
+      expect(await t.run((ctx) => ctx.db.get(tlId))).toBeNull();
+    }
+    // Frozen refs are exactly what the first cascade wrote — no re-freeze or
+    // duplicated work on the redelivery.
+    const secondFreeze = (await readTasks(t, taskIds)).map(
+      (tk) => tk!.externalRefFrozen,
+    );
+    expect(secondFreeze).toEqual(firstFreeze);
+  });
+
   it("installation_repositories.removed → only listed repos disconnect + cascade", async () => {
     const t = createTestContext();
     const { linkId, taskIds, taskLinkIds } = await setupLinkedWorkspace(t, {

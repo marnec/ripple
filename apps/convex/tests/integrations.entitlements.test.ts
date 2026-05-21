@@ -203,6 +203,47 @@ describe("integrations/core/entitlements.fanoutPauseByBilling", () => {
     expect(l2?.pausedByBilling).toBe(true);
   });
 
+  it("flips a large workspace's links in a single mutation (well within the per-mutation write ceiling)", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    // 200 links → 200 patches per fanout. Convex caps a mutation at 4096
+    // document writes, so this documents the headroom: a workspace would need
+    // >4096 active links before a single freeze/restore fanout could break.
+    const LINK_COUNT = 200;
+    const linkIds = await t.run(async (ctx) => {
+      const ids: Id<"projectIntegrationLinks">[] = [];
+      for (let i = 0; i < LINK_COUNT; i++) {
+        ids.push(
+          await ctx.db.insert("projectIntegrationLinks", {
+            workspaceId,
+            projectId,
+            status: "active",
+            pausedByBilling: false,
+            externalRepoFullName: `acme/repo-${i}`,
+            externalRepoId: `R_${i}`,
+          }),
+        );
+      }
+      return ids;
+    });
+
+    // Freeze: one fanout patches all 200.
+    await t.run((ctx) => fanoutPauseByBilling(ctx, workspaceId, true));
+    const frozen = await t.run((ctx) =>
+      Promise.all(linkIds.map((id) => ctx.db.get(id))),
+    );
+    expect(frozen.every((l) => l?.pausedByBilling === true)).toBe(true);
+
+    // Restore: inverse fanout flips all 200 back in one mutation.
+    await t.run((ctx) => fanoutPauseByBilling(ctx, workspaceId, false));
+    const restored = await t.run((ctx) =>
+      Promise.all(linkIds.map((id) => ctx.db.get(id))),
+    );
+    expect(restored.every((l) => l?.pausedByBilling === false)).toBe(true);
+  });
+
   it("does not touch links belonging to other workspaces", async () => {
     const t = createTestContext();
     const { userId: userA, workspaceId: workspaceA } =
