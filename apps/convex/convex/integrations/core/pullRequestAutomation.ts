@@ -1,5 +1,6 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
+import { applyStatusSideEffects } from "../../taskStatusSideEffects";
 
 /**
  * PR-driven task status automation. Forward-only and most-advanced-wins by
@@ -116,22 +117,10 @@ export async function applyPullRequestStatusAutomation(
   const current = await ctx.db.get(task.statusId);
   if (current && current.order >= candidate.order) return; // forward-only
 
-  const patch: Partial<Doc<"tasks">> = {
+  await ctx.db.patch(taskId, {
     statusId: candidate._id,
-    completed: candidate.isCompleted,
-  };
-
-  const periods = task.workPeriods ?? [];
-  const openPeriod = periods.find((p) => p.completedAt === undefined);
-  if (candidate.setsStartDate && !openPeriod) {
-    patch.workPeriods = [...periods, { startedAt: Date.now() }];
-  } else if (candidate.isCompleted && openPeriod) {
-    patch.workPeriods = periods.map((p) =>
-      p.completedAt === undefined ? { ...p, completedAt: Date.now() } : p,
-    );
-  }
-
-  await ctx.db.patch(taskId, patch);
+    ...applyStatusSideEffects(task, candidate),
+  });
 }
 
 /**

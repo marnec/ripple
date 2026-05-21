@@ -4,6 +4,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { getWorkspaceIntegration } from "./integrationLookups";
 import { taskHasBranchRuleMatch } from "./pullRequestAutomation";
+import { applyStatusSideEffects } from "../../taskStatusSideEffects";
 import type {
   NormalizedInstallationEvent,
   NormalizedIssueEvent,
@@ -333,10 +334,15 @@ async function updateExistingOnClose(
       link.projectId,
       event.stateReason,
     );
-    await ctx.db.patch(existingLink.taskId, {
-      statusId: targetStatus._id,
-      completed: targetStatus.isCompleted,
-    });
+    const task = await ctx.db.get(existingLink.taskId);
+    if (task) {
+      // Canonical status side-effects: closes the open work period on an
+      // inbound close, which the hand-rolled patch here used to skip.
+      await ctx.db.patch(existingLink.taskId, {
+        statusId: targetStatus._id,
+        ...applyStatusSideEffects(task, targetStatus),
+      });
+    }
   }
 
   await ctx.db.patch(existingLink._id, {
@@ -489,10 +495,13 @@ async function updateExistingOnReopen(
 
   const triageStatus = await resolveTriageStatus(ctx, link.projectId);
 
-  await ctx.db.patch(existingLink.taskId, {
-    statusId: triageStatus._id,
-    completed: triageStatus.isCompleted,
-  });
+  const task = await ctx.db.get(existingLink.taskId);
+  if (task) {
+    await ctx.db.patch(existingLink.taskId, {
+      statusId: triageStatus._id,
+      ...applyStatusSideEffects(task, triageStatus),
+    });
+  }
   await ctx.db.patch(existingLink._id, {
     externalUpdatedAt: event.externalUpdatedAt,
     externalState: "open",

@@ -214,6 +214,10 @@ export const fetchTasksForStatusBatch = internalMutation({
       )
       .take(limit);
 
+    // Deliberately does NOT apply the canonical status side-effects: deleting
+    // a column and relocating its tasks must PRESERVE their `completed` flag
+    // (and work periods) — re-syncing would resurrect finished work as active
+    // when reassigning a "Done" status into a non-completed one.
     await Promise.all(
       tasks.map((task) =>
         ctx.db.patch(task._id, { statusId: reassignToStatusId })

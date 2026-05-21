@@ -12,6 +12,7 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags, normalizeTagList } from "./tagSync";
+import { applyStatusSideEffects } from "./taskStatusSideEffects";
 import { getAll } from "convex-helpers/server/relationships";
 import type { Doc } from "./_generated/dataModel";
 import { notify } from "./utils/notify";
@@ -834,21 +835,12 @@ export const update = mutation({
       assertNotTriage(newStatus);
 
       patch.statusId = statusId;
-      // Two-way sync: auto-complete when moving TO a completed status,
-      // auto-uncomplete when moving to a non-completed status
-      patch.completed = newStatus.isCompleted;
-
-      const existingPeriods: { startedAt: number; completedAt?: number }[] = task.workPeriods ?? [];
-      const openPeriod = existingPeriods.find((p) => p.completedAt === undefined);
-
-      if (newStatus.setsStartDate && !openPeriod) {
-        // Append a new open work period
-        patch.workPeriods = [...existingPeriods, { startedAt: Date.now() }];
-      } else if (newStatus.isCompleted && openPeriod) {
-        // Close the open work period
-        patch.workPeriods = existingPeriods.map((p) =>
-          p.completedAt === undefined ? { ...p, completedAt: Date.now() } : p
-        );
+      // Canonical status side-effects: two-way `completed` sync + work-period
+      // open/close. Shared with kanban drag, PR automation, and inbound sync.
+      const effects = applyStatusSideEffects(task, newStatus);
+      patch.completed = effects.completed;
+      if (effects.workPeriods !== undefined) {
+        patch.workPeriods = effects.workPeriods;
       }
     }
 
@@ -1047,18 +1039,12 @@ export const updatePosition = mutation({
       statusId,
       position,
     };
-    // Two-way sync: auto-complete/uncomplete based on destination status
-    patchData.completed = newStatus.isCompleted;
-
-    const existingPeriods: { startedAt: number; completedAt?: number }[] = task.workPeriods ?? [];
-    const openPeriod = existingPeriods.find((p) => p.completedAt === undefined);
-
-    if (newStatus.setsStartDate && !openPeriod) {
-      patchData.workPeriods = [...existingPeriods, { startedAt: Date.now() }];
-    } else if (newStatus.isCompleted && openPeriod) {
-      patchData.workPeriods = existingPeriods.map((p: { startedAt: number; completedAt?: number }) =>
-        p.completedAt === undefined ? { ...p, completedAt: Date.now() } : p
-      );
+    // Canonical status side-effects: two-way `completed` sync + work-period
+    // open/close. Shared with task update, PR automation, and inbound sync.
+    const effects = applyStatusSideEffects(task, newStatus);
+    patchData.completed = effects.completed;
+    if (effects.workPeriods !== undefined) {
+      patchData.workPeriods = effects.workPeriods;
     }
 
     await ctx.db.patch(taskId, patchData);

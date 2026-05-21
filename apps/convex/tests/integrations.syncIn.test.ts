@@ -341,6 +341,45 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
     expect(task?.statusId).toBe(doneStatusId);
   });
 
+  it("issue.closed closes the task's open work period (canonical status side-effects applied on inbound close)", async () => {
+    // Regression: inbound close used to sync `completed` but skip work
+    // periods, so a task worked-on then closed via GitHub kept an open period.
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await insertStatus(t, {
+      projectId,
+      name: "Done",
+      order: 1,
+      isCompleted: true,
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    // Simulate the task having been worked on: an open work period.
+    const taskId = await t.run(async (ctx) => {
+      const [task] = await ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect();
+      await ctx.db.patch(task._id, { workPeriods: [{ startedAt: 500 }] });
+      return task._id;
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeClosedEvent({ stateReason: "completed" }),
+        link,
+      }),
+    );
+
+    const task = await t.run((ctx) => ctx.db.get(taskId));
+    expect(task?.completed).toBe(true);
+    expect(task?.workPeriods).toHaveLength(1);
+    expect(task?.workPeriods?.[0]?.completedAt).toBeTypeOf("number");
+  });
+
   it("issue.closed (state_reason='not_planned') routes to the first status with externalCloseReason='not_planned'", async () => {
     const t = createTestContext();
     const { projectId, link } = await setupInboundFixtures(t);
