@@ -2,6 +2,7 @@ import type { MutationCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
+import { getWorkspaceIntegration } from "./integrationLookups";
 import type {
   NormalizedInstallationEvent,
   NormalizedIssueEvent,
@@ -147,7 +148,9 @@ async function applyCommentDeleted(
     )
     .unique();
   if (!commentLink) return;
-  if (event.externalUpdatedAt <= commentLink.externalUpdatedAt) return;
+  if (isStaleUpdate(event.externalUpdatedAt, commentLink.externalUpdatedAt)) {
+    return;
+  }
 
   // Skip the comment-row write when it's already soft-deleted (e.g. the
   // bounce-back of our own outbound delete, or a redelivery that cleared the
@@ -178,7 +181,9 @@ async function applyCommentEdited(
   // Edits for comments we never imported are dropped.
   if (!commentLink) return;
   // Ordering guard: stale edits are dropped.
-  if (event.externalUpdatedAt <= commentLink.externalUpdatedAt) return;
+  if (isStaleUpdate(event.externalUpdatedAt, commentLink.externalUpdatedAt)) {
+    return;
+  }
 
   await ctx.db.patch(commentLink.taskCommentId, { body: event.body });
   await ctx.db.patch(commentLink._id, {
@@ -205,10 +210,7 @@ async function applyCommentCreated(
     .unique();
   if (dupe) return;
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
-    .unique();
+  const integration = await getWorkspaceIntegration(ctx, link.workspaceId);
   if (!integration) {
     throw new Error(
       `applyCommentCreated: workspace ${link.workspaceId} has no integration row`,
@@ -266,10 +268,7 @@ async function createTaskFromEvent(
     importContext,
   } = args;
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
-    .unique();
+  const integration = await getWorkspaceIntegration(ctx, link.workspaceId);
   if (!integration) {
     throw new Error(
       `applyNormalizedEvent: workspace ${link.workspaceId} has no integration row`,
@@ -431,10 +430,7 @@ async function applyAssigneesChanged(
   } else if (event.assignees.length > 0) {
     // No-match fallback: bot user takes the slot; every real identity stays
     // visible via shadow chips.
-    const integration = await ctx.db
-      .query("workspaceIntegrations")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
-      .unique();
+    const integration = await getWorkspaceIntegration(ctx, link.workspaceId);
     if (integration) {
       matchedUserId = integration.botUserId;
     }
@@ -493,10 +489,23 @@ async function updateExistingOnReopen(
 }
 
 /**
- * Ordering guard. Update-kind events (close, reopen, edit …) carrying an
- * `externalUpdatedAt` not strictly newer than the stored value describe
- * stale state and are dropped. Equality is treated as stale to make the
- * guard idempotent against exact retries.
+ * Inbound ordering predicate. An incoming `externalUpdatedAt` not strictly
+ * newer than the stored mirror describes stale state. Equality counts as
+ * stale so the guard is idempotent against exact retries. Shared by every
+ * inbound staleness check (issue update events + comment edit/delete) so the
+ * `<=` semantics live in exactly one place.
+ */
+export function isStaleUpdate(
+  incomingUpdatedAt: number,
+  storedUpdatedAt: number,
+): boolean {
+  return incomingUpdatedAt <= storedUpdatedAt;
+}
+
+/**
+ * Ordering guard for issue update-kind events (close, reopen, labels,
+ * assignees). Thin wrapper over `isStaleUpdate` carrying the event/link
+ * shapes the router works with.
  */
 function isStale(
   event: Extract<
@@ -511,7 +520,7 @@ function isStale(
   >,
   existingLink: Doc<"taskIntegrationLinks">,
 ): boolean {
-  return event.externalUpdatedAt <= existingLink.externalUpdatedAt;
+  return isStaleUpdate(event.externalUpdatedAt, existingLink.externalUpdatedAt);
 }
 
 async function resolveTriageStatus(

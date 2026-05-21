@@ -4,6 +4,7 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import type { FunctionReference } from "convex/server";
 import { normalizeTagList } from "../../tagSync";
+import { getWorkspaceIntegration } from "./integrationLookups";
 import {
   deriveDesiredExternalState,
   shouldSkipForEcho,
@@ -56,12 +57,10 @@ export async function maybeEnqueueOutboundPush(
     return;
   }
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
   if (!integration) return;
 
   const runId = await retrier.run(
@@ -139,12 +138,10 @@ export async function enqueueDescriptionPush(
   if (!projectLink) throw new Error("Project integration link missing");
   if (shouldSkipForFreeze(projectLink)) return; // silently no-op while frozen
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
   if (!integration) throw new Error("Workspace integration row missing");
 
   const issueNumber = task.externalRefs?.[0]?.issueNumber ?? 0;
@@ -218,12 +215,10 @@ export async function maybeEnqueueLabelsPush(
   // Echo guard: no diff, no PATCH.
   if (add.length === 0 && remove.length === 0) return;
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
   if (!integration) return;
 
   await retrier.run(
@@ -303,12 +298,10 @@ export async function maybeEnqueueAssigneesPush(
   // Echo guard: no diff, no PATCH.
   if (add.length === 0 && remove.length === 0) return;
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
   if (!integration) return;
 
   await retrier.run(
@@ -358,12 +351,10 @@ export async function maybeEnqueueCommentCreate(
   const task = await ctx.db.get(comment.taskId);
   if (!task) return;
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
   if (!integration) return;
 
   await retrier.run(
@@ -404,12 +395,10 @@ export async function maybeEnqueueCommentUpdate(
   if (!projectLink) return;
   if (shouldSkipForFreeze(projectLink)) return;
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
   if (!integration) return;
 
   await retrier.run(
@@ -445,12 +434,10 @@ export async function maybeEnqueueCommentDelete(
   if (!projectLink) return;
   if (shouldSkipForFreeze(projectLink)) return;
 
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
   if (!integration) return;
 
   await retrier.run(

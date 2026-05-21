@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyInstallationEvent,
   applyNormalizedEvent,
+  isStaleUpdate,
 } from "../convex/integrations/core/syncIn";
 import type {
   NormalizedIssueAssigneesChangedEvent,
@@ -1507,6 +1508,20 @@ describe("integrations/core/syncIn.applyInstallationEvent", () => {
     ]);
     expect(l1?.status).toBe("disconnected");
     expect(l2?.status).toBe("disconnected");
+  });
+});
+
+describe("integrations/core/syncIn.isStaleUpdate", () => {
+  it("older incoming → stale (dropped)", () => {
+    expect(isStaleUpdate(100, 200)).toBe(true);
+  });
+
+  it("equal incoming → stale (idempotent against exact retries)", () => {
+    expect(isStaleUpdate(200, 200)).toBe(true);
+  });
+
+  it("strictly newer incoming → not stale (applied)", () => {
+    expect(isStaleUpdate(201, 200)).toBe(false);
   });
 });
 
