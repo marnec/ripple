@@ -128,13 +128,17 @@ export async function handleGithubWebhook(
     .unique();
   if (!integration) return; // unknown installation — drop silently
 
-  // Resolve link via stable repo id (survives renames).
-  const link = await ctx.db
+  // Resolve link via stable repo id (survives renames). A repo may have
+  // several rows here — disconnected historical links coexist with the live
+  // one (createLink only forbids *live* duplicates), so pick the single
+  // non-disconnected link rather than assuming uniqueness.
+  const repoLinks = await ctx.db
     .query("projectIntegrationLinks")
     .withIndex("by_externalRepo", (q) =>
       q.eq("externalRepoId", externalRepoId),
     )
-    .unique();
+    .collect();
+  const link = repoLinks.find((l) => l.status !== "disconnected") ?? null;
   if (!link || link.workspaceId !== integration.workspaceId) return;
 
   // Freeze gate.
