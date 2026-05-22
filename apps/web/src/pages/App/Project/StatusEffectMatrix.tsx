@@ -45,6 +45,7 @@ export function StatusEffectMatrix({
 
   const ordered = [...statuses].sort((a, b) => a.order - b.order);
   const hasTriage = ordered.some((s) => s.isTriage);
+  const completed = ordered.filter((s) => s.isCompleted);
 
   const move = (index: number, direction: -1 | 1) => {
     const target = index + direction;
@@ -59,6 +60,7 @@ export function StatusEffectMatrix({
   };
 
   return (
+    <>
     <section className="mb-8 scroll-mt-20" id="status-effects">
       <h2 className="text-lg font-semibold mb-1">Status effects</h2>
       <p className="text-sm text-muted-foreground mb-4">
@@ -75,16 +77,16 @@ export function StatusEffectMatrix({
                 hint="New tasks land here. Exactly one status is the default."
               />
               <EffectHeader
-                label="Completed"
-                hint="Tasks in this status count as done."
+                label="Issue inbox"
+                hint="Imported GitHub issues land here. Required to connect a repo."
               />
               <EffectHeader
                 label="Starts work"
                 hint="Entering this status auto-sets the task's start date."
               />
               <EffectHeader
-                label="Issue inbox"
-                hint="Imported GitHub issues land here. Required to connect a repo."
+                label="Completed"
+                hint="Tasks in this status count as done."
               />
             </tr>
           </thead>
@@ -135,6 +137,88 @@ export function StatusEffectMatrix({
         open={addOpen}
         onOpenChange={setAddOpen}
       />
+    </section>
+
+    {completed.length > 0 && <GithubCloseReasonTable statuses={completed} />}
+    </>
+  );
+}
+
+/**
+ * Separate table — only the project's *completed* statuses — for choosing the
+ * reason GitHub records when a linked task is closed there. Lives below the
+ * effect matrix because it's a downstream consequence of the "Completed"
+ * effect, not an effect you assign per se.
+ */
+function GithubCloseReasonTable({ statuses }: { statuses: Status[] }) {
+  const update = useMutation(api.taskStatuses.update);
+
+  return (
+    <section className="mb-8">
+      <h2 className="text-lg font-semibold mb-1">GitHub close reason</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        When a task linked to a GitHub issue moves into a completed status, the
+        issue is closed on GitHub. Choose the reason recorded for each.
+      </p>
+
+      <div className="rounded-lg border overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30 text-left">
+              <th className="py-2.5 pl-4 pr-2 font-medium">Completed status</th>
+              <th className="px-3 py-2.5 text-right font-medium">
+                Close linked issue as
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {statuses.map((status) => (
+              <tr key={status._id} className="border-b last:border-0">
+                <td className="py-2.5 pl-4 pr-2">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={cn("h-2.5 w-2.5 shrink-0 rounded-full", status.color)}
+                    />
+                    <span className="font-medium">{status.name}</span>
+                  </span>
+                </td>
+                <td className="px-3 py-2.5">
+                  <div className="flex justify-end">
+                    <CloseReasonToggle
+                      value={status.externalCloseReason ?? "completed"}
+                      onChange={(reason) =>
+                        void update({
+                          statusId: status._id,
+                          externalCloseReason: reason,
+                        }).catch((err: unknown) =>
+                          toast.error("Couldn't update close reason", {
+                            description:
+                              err instanceof Error ? err.message : "Please try again",
+                          }),
+                        )
+                      }
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <dl className="mt-3 space-y-1 text-xs text-muted-foreground">
+        <div className="flex gap-1.5">
+          <dt className="font-medium text-foreground">Completed —</dt>
+          <dd>the issue was resolved (GitHub closes it as <em>completed</em>).</dd>
+        </div>
+        <div className="flex gap-1.5">
+          <dt className="font-medium text-foreground">Not planned —</dt>
+          <dd>
+            the issue won&apos;t be addressed (GitHub closes it as{" "}
+            <em>not planned</em>).
+          </dd>
+        </div>
+      </dl>
     </section>
   );
 }
@@ -227,29 +311,7 @@ function StatusRow({
           }
         />
 
-        {/* Completed — checkbox */}
-        <CheckCell
-          checked={status.isCompleted}
-          disabledReason={
-            isTriage
-              ? "The issue inbox can't be completed"
-              : setsStartDate
-                ? "A status can't both start work and complete it"
-                : undefined
-          }
-          onToggle={(v) => run(update({ statusId: status._id, isCompleted: v }))}
-        />
-
-        {/* Starts work — checkbox */}
-        <CheckCell
-          checked={setsStartDate}
-          disabledReason={
-            status.isCompleted ? "A completed status can't also start work" : undefined
-          }
-          onToggle={(v) => run(update({ statusId: status._id, setsStartDate: v }))}
-        />
-
-        {/* Triage — radio, at most one, optional (click selected to clear) */}
+        {/* Issue inbox — radio, at most one, optional (click selected to clear) */}
         <RadioCell
           selected={isTriage}
           disabledReason={
@@ -269,24 +331,29 @@ function StatusRow({
             )
           }
         />
-      </tr>
 
-      {/* GitHub close-reason sub-row — only for completed statuses */}
-      {status.isCompleted && (
-        <tr className="border-b last:border-0 bg-muted/20">
-          <td colSpan={5} className="py-2 pl-10 pr-4">
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span>When a GitHub-linked task closes here, mark it</span>
-              <CloseReasonToggle
-                value={status.externalCloseReason ?? "completed"}
-                onChange={(reason) =>
-                  run(update({ statusId: status._id, externalCloseReason: reason }))
-                }
-              />
-            </div>
-          </td>
-        </tr>
-      )}
+        {/* Starts work — checkbox */}
+        <CheckCell
+          checked={setsStartDate}
+          disabledReason={
+            status.isCompleted ? "A completed status can't also start work" : undefined
+          }
+          onToggle={(v) => run(update({ statusId: status._id, setsStartDate: v }))}
+        />
+
+        {/* Completed — checkbox */}
+        <CheckCell
+          checked={status.isCompleted}
+          disabledReason={
+            isTriage
+              ? "The issue inbox can't be completed"
+              : setsStartDate
+                ? "A status can't both start work and complete it"
+                : undefined
+          }
+          onToggle={(v) => run(update({ statusId: status._id, isCompleted: v }))}
+        />
+      </tr>
     </>
   );
 }
@@ -371,22 +438,23 @@ function CloseReasonToggle({
   onChange: (value: "completed" | "not_planned") => void;
 }) {
   return (
-    <span className="inline-flex overflow-hidden rounded-md border">
+    <span className="mx-auto flex w-fit overflow-hidden rounded-md border">
       {(
         [
           ["completed", "Completed"],
-          ["not_planned", "Won't do"],
+          ["not_planned", "Not planned"],
         ] as const
       ).map(([reason, label]) => (
         <button
           key={reason}
           type="button"
           onClick={() => value !== reason && onChange(reason)}
+          aria-pressed={value === reason}
           className={cn(
-            "px-2 py-0.5 text-xs transition-colors",
+            "px-2 py-0.5 text-xs leading-5 transition-colors",
             value === reason
               ? "bg-primary text-primary-foreground"
-              : "hover:bg-accent",
+              : "text-muted-foreground hover:bg-accent hover:text-foreground",
           )}
         >
           {label}
