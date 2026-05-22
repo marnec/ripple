@@ -287,6 +287,68 @@ describe("integrations/github/pullRequestWebhook.handlePullRequestWebhook (wirin
     expect(joins[0]?.pullRequestId).toBe(prs[0]?._id);
   });
 
+  it("records lastWebhookAt on the link (parity with the issue/comment path)", async () => {
+    const t = createTestContext();
+    const { link } = await setupRouting(t);
+    const before = Date.now();
+
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      openedPrPayload(),
+      [],
+    )!;
+    await t.run((ctx) =>
+      handlePullRequestWebhook(ctx, {
+        event,
+        externalAccountId: "999111",
+        externalRepoId: "R_kgDOACME",
+        repoFullName: "acme/web",
+      }),
+    );
+
+    const updated = await t.run((ctx) => ctx.db.get(link._id));
+    expect(updated?.lastWebhookAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it("routes past a disconnected historical link for the same repo id (regression: shared routing no longer assumes uniqueness)", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupRouting(t);
+
+    // A relink leaves the old row behind: a second, disconnected link for the
+    // SAME externalRepoId. The PR path used to `.unique()` here and throw,
+    // flagging the delivery for retry/DLQ.
+    const staleLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        status: "disconnected",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      }),
+    );
+
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      openedPrPayload(),
+      [],
+    )!;
+    await t.run((ctx) =>
+      handlePullRequestWebhook(ctx, {
+        event,
+        externalAccountId: "999111",
+        externalRepoId: "R_kgDOACME",
+        repoFullName: "acme/web",
+      }),
+    );
+
+    // Routed to the live link (not the disconnected sibling), without throwing.
+    const live = await t.run((ctx) => ctx.db.get(link._id));
+    const stale = await t.run((ctx) => ctx.db.get(staleLinkId));
+    expect(live?.lastWebhookAt).toBeDefined();
+    expect(stale?.lastWebhookAt).toBeUndefined();
+  });
+
   it("drops the delivery when the installation is unknown (no PR row)", async () => {
     const t = createTestContext();
     const { link } = await setupRouting(t);

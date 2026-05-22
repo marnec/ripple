@@ -3,7 +3,7 @@ import {
   internalMutation,
   type MutationCtx,
 } from "../../_generated/server";
-import { effectiveLinkStatus } from "../core/entitlements";
+import { resolveActiveInboundLink } from "../core/inboundRouting";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
 import type { NormalizedPullRequestEvent } from "../core/types";
 import { withTriggers } from "../../dbTriggers";
@@ -128,35 +128,14 @@ export async function handlePullRequestWebhook(
     repoFullName?: string;
   },
 ): Promise<void> {
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_externalAccount", (q) =>
-      q.eq("externalAccountId", args.externalAccountId),
-    )
-    .unique();
-  if (!integration) return; // unknown installation — drop silently
+  const link = await resolveActiveInboundLink(ctx, {
+    externalAccountId: args.externalAccountId,
+    externalRepoId: args.externalRepoId,
+    repoFullName: args.repoFullName,
+  });
+  if (!link) return; // unknown installation/repo, mismatch, or frozen — drop
 
-  const link = await ctx.db
-    .query("projectIntegrationLinks")
-    .withIndex("by_externalRepo", (q) =>
-      q.eq("externalRepoId", args.externalRepoId),
-    )
-    .unique();
-  if (!link || link.workspaceId !== integration.workspaceId) return;
-
-  if (effectiveLinkStatus(link) !== "active") return;
-
-  // Silent rename: keep the human-readable label fresh; stable id keeps the
-  // link intact.
-  let resolvedLink = link;
-  if (args.repoFullName && args.repoFullName !== link.externalRepoFullName) {
-    await ctx.db.patch(link._id, {
-      externalRepoFullName: args.repoFullName,
-    });
-    resolvedLink = { ...link, externalRepoFullName: args.repoFullName };
-  }
-
-  await applyPullRequestEvent(ctx, { event: args.event, link: resolvedLink });
+  await applyPullRequestEvent(ctx, { event: args.event, link });
 }
 
 /**

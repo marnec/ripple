@@ -7,7 +7,7 @@ import {
 } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { withTriggers } from "../../dbTriggers";
-import { effectiveLinkStatus } from "../core/entitlements";
+import { resolveActiveInboundLink } from "../core/inboundRouting";
 import {
   applyInstallationEvent,
   applyNormalizedEvent,
@@ -117,50 +117,14 @@ export async function handleGithubWebhook(
   }
 
   const p = args.payload as GithubIssuesPayload;
-  const externalAccountId = String(p.installation?.id ?? "");
-  const externalRepoId = p.repository?.node_id ?? "";
+  const link = await resolveActiveInboundLink(ctx, {
+    externalAccountId: String(p.installation?.id ?? ""),
+    externalRepoId: p.repository?.node_id ?? "",
+    repoFullName: p.repository?.full_name,
+  });
+  if (!link) return; // unknown installation/repo, mismatch, or frozen — drop
 
-  // Resolve workspace via installation id.
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_externalAccount", (q) =>
-      q.eq("externalAccountId", externalAccountId),
-    )
-    .unique();
-  if (!integration) return; // unknown installation — drop silently
-
-  // Resolve link via stable repo id (survives renames). A repo may have
-  // several rows here — disconnected historical links coexist with the live
-  // one (createLink only forbids *live* duplicates), so pick the single
-  // non-disconnected link rather than assuming uniqueness.
-  const repoLinks = await ctx.db
-    .query("projectIntegrationLinks")
-    .withIndex("by_externalRepo", (q) =>
-      q.eq("externalRepoId", externalRepoId),
-    )
-    .collect();
-  const link = repoLinks.find((l) => l.status !== "disconnected") ?? null;
-  if (!link || link.workspaceId !== integration.workspaceId) return;
-
-  // Freeze gate.
-  if (effectiveLinkStatus(link) !== "active") return;
-
-  // Record receipt for the "Last webhook received" indicator. Written only
-  // for sync-active links (frozen/paused links never reach here), matching
-  // the indicator's intent: "are we still receiving live events?"
-  await ctx.db.patch(link._id, { lastWebhookAt: Date.now() });
-
-  // Silent rename: if the payload's `repository.full_name` differs from
-  // what's stored, patch it. The stable `externalRepoId` keeps the link
-  // intact; only the human-readable label drifts.
-  const incomingFullName = p.repository?.full_name;
-  let resolvedLink = link;
-  if (incomingFullName && incomingFullName !== link.externalRepoFullName) {
-    await ctx.db.patch(link._id, { externalRepoFullName: incomingFullName });
-    resolvedLink = { ...link, externalRepoFullName: incomingFullName };
-  }
-
-  await applyNormalizedEvent(ctx, { event, link: resolvedLink });
+  await applyNormalizedEvent(ctx, { event, link });
 }
 
 interface GithubInstallationPayload {
