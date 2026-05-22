@@ -16,6 +16,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { useState } from "react";
 import { toast } from "sonner";
 import { GitBranch, Inbox, Loader2, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
@@ -42,11 +43,42 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
   const gate = useQuery(api.integrations.core.activationGate.canActivate, {
     projectId,
   });
+  const links = useQuery(api.integrations.core.links.linksForProject, {
+    projectId,
+  });
+  const unlink = useMutation(api.integrations.core.links.unlinkLink);
   const [open, setOpen] = useState(false);
+  const [disconnectingId, setDisconnectingId] =
+    useState<Id<"projectIntegrationLinks"> | null>(null);
 
   if (feature === undefined) return null;
 
   const ready = gate?.canActivate === true;
+  const activeLinks = links ?? [];
+
+  const handleDisconnect = async (
+    linkId: Id<"projectIntegrationLinks">,
+    repo: string,
+  ) => {
+    if (
+      !confirm(
+        `Disconnect ${repo}? Synced issues stay, but new GitHub activity will no longer update this project.`,
+      )
+    ) {
+      return;
+    }
+    setDisconnectingId(linkId);
+    try {
+      await unlink({ linkId });
+      toast.success(`Disconnected ${repo}`);
+    } catch (err) {
+      toast.error("Could not disconnect", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
 
   const scrollToEffects = () => {
     document
@@ -65,6 +97,48 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
         <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
           The GitHub integration is disabled for this workspace. A workspace
           admin can enable it under Workspace Settings → Integrations.
+        </div>
+      ) : activeLinks.length > 0 ? (
+        <div className="space-y-2">
+          {activeLinks.map((link) => (
+            <div
+              key={link._id}
+              className="flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm"
+            >
+              <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="truncate font-mono">
+                {link.externalRepoFullName}
+              </span>
+              <Badge
+                variant={link.status === "active" ? "secondary" : "outline"}
+                className="shrink-0 capitalize"
+              >
+                {link.pausedByBilling
+                  ? "Frozen"
+                  : link.status === "paused"
+                    ? "Paused"
+                    : "Connected"}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto shrink-0 text-destructive hover:text-destructive"
+                disabled={disconnectingId === link._id}
+                onClick={() =>
+                  void handleDisconnect(link._id, link.externalRepoFullName)
+                }
+              >
+                {disconnectingId === link._id && (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                )}
+                Disconnect
+              </Button>
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            Branch automation and resync live under Workspace Settings →
+            Integrations.
+          </p>
         </div>
       ) : !ready ? (
         <div className="space-y-3">

@@ -656,6 +656,12 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalRefs?: Array<{
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -1256,6 +1262,17 @@ export declare const api: {
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
           null
+        >;
+        linksForProject: FunctionReference<
+          "query",
+          "public",
+          { projectId: Id<"projects"> },
+          Array<{
+            _id: Id<"projectIntegrationLinks">;
+            externalRepoFullName: string;
+            pausedByBilling: boolean;
+            status: "configuring" | "active" | "paused";
+          }>
         >;
         listByWorkspace: FunctionReference<
           "query",
@@ -2328,6 +2345,12 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalRefs?: Array<{
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -2401,6 +2424,12 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalRefs?: Array<{
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -2464,6 +2493,12 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalRefs?: Array<{
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
@@ -2532,6 +2567,12 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalRefs?: Array<{
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -2579,6 +2620,12 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalRefs?: Array<{
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
@@ -2639,6 +2686,12 @@ export declare const api: {
           creatorId: Id<"users">;
           dueDate?: string;
           estimate?: number;
+          externalRefs?: Array<{
+            issueNumber: number;
+            provider: string;
+            repoFullName: string;
+            url: string;
+          }>;
           hasBlockers: boolean;
           importJobId?: Id<"taskImportJobs">;
           labels?: Array<string>;
@@ -2695,6 +2748,12 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalRefs?: Array<{
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;

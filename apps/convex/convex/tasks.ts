@@ -69,6 +69,18 @@ export const baseTaskFields = {
       v.literal("closed"),
     ),
   ),
+  // External issue references (e.g. linked GitHub issues). Read by the
+  // kanban / task-list, so the enriched projections must allow it through.
+  externalRefs: v.optional(
+    v.array(
+      v.object({
+        provider: v.string(),
+        repoFullName: v.string(),
+        issueNumber: v.number(),
+        url: v.string(),
+      }),
+    ),
+  ),
 };
 
 export const enrichedTaskValidator = v.object({

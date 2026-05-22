@@ -9,7 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
-import { Inbox, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Inbox, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
@@ -35,15 +35,28 @@ export function StatusEffectMatrix({
   projectId: Id<"projects">;
 }) {
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
+  const reorder = useMutation(api.taskStatuses.reorderColumns);
   const [addOpen, setAddOpen] = useState(false);
 
   if (statuses === undefined) {
     // Reserve space; no skeleton per UX guidelines.
-    return <div className="min-h-[12rem]" id="status-effects" />;
+    return <div className="min-h-48" id="status-effects" />;
   }
 
   const ordered = [...statuses].sort((a, b) => a.order - b.order);
   const hasTriage = ordered.some((s) => s.isTriage);
+
+  const move = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= ordered.length) return;
+    const next = [...ordered];
+    [next[index], next[target]] = [next[target], next[index]];
+    void reorder({ statusIds: next.map((s) => s._id) }).catch((err: unknown) =>
+      toast.error("Couldn't reorder statuses", {
+        description: err instanceof Error ? err.message : "Please try again",
+      }),
+    );
+  };
 
   return (
     <section className="mb-8 scroll-mt-20" id="status-effects">
@@ -76,8 +89,15 @@ export function StatusEffectMatrix({
             </tr>
           </thead>
           <tbody>
-            {ordered.map((status) => (
-              <StatusRow key={status._id} status={status} />
+            {ordered.map((status, i) => (
+              <StatusRow
+                key={status._id}
+                status={status}
+                isFirst={i === 0}
+                isLast={i === ordered.length - 1}
+                onMoveUp={() => move(i, -1)}
+                onMoveDown={() => move(i, 1)}
+              />
             ))}
           </tbody>
         </table>
@@ -131,7 +151,7 @@ function EffectHeader({ label, hint }: { label: string; hint: string }) {
               </span>
             }
           />
-          <TooltipContent className="max-w-[14rem] text-center">
+          <TooltipContent className="max-w-56 text-center">
             {hint}
           </TooltipContent>
         </Tooltip>
@@ -140,7 +160,19 @@ function EffectHeader({ label, hint }: { label: string; hint: string }) {
   );
 }
 
-function StatusRow({ status }: { status: Status }) {
+function StatusRow({
+  status,
+  isFirst,
+  isLast,
+  onMoveUp,
+  onMoveDown,
+}: {
+  status: Status;
+  isFirst: boolean;
+  isLast: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+}) {
   const setSingleton = useMutation(api.taskStatuses.setSingletonEffect);
   const update = useMutation(api.taskStatuses.update);
 
@@ -157,8 +189,28 @@ function StatusRow({ status }: { status: Status }) {
   return (
     <>
       <tr className="border-b last:border-0">
-        <td className="py-2.5 pl-4 pr-2">
+        <td className="py-2.5 pl-3 pr-2">
           <span className="flex items-center gap-2">
+            <span className="flex flex-col text-muted-foreground/60">
+              <button
+                type="button"
+                aria-label={`Move ${status.name} up`}
+                disabled={isFirst}
+                onClick={onMoveUp}
+                className="-mb-0.5 rounded transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-muted-foreground/60"
+              >
+                <ChevronUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Move ${status.name} down`}
+                disabled={isLast}
+                onClick={onMoveDown}
+                className="-mt-0.5 rounded transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-muted-foreground/60"
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </span>
             <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", status.color)} />
             <span className="font-medium">{status.name}</span>
           </span>
@@ -305,7 +357,7 @@ function CellTooltip({ hint, children }: { hint: string; children: React.ReactNo
     <TooltipProvider delay={150}>
       <Tooltip>
         <TooltipTrigger render={<span className="inline-flex">{children}</span>} />
-        <TooltipContent className="max-w-[14rem] text-center">{hint}</TooltipContent>
+        <TooltipContent className="max-w-56 text-center">{hint}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

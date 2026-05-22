@@ -40,6 +40,47 @@ export const RECONNECT_BATCH_SIZE = 50;
  * `status="active"`, `pausedByBilling=false`, and writes an
  * `integration.repo_linked` audit-log entry scoped to the workspace.
  */
+/**
+ * Live integration links for a project (anything not `disconnected`), for the
+ * project-settings GitHub card. Lets the card reflect "already connected"
+ * instead of inviting a duplicate link that `createLink` would reject. Member-
+ * gated read; the heavier management surface stays in workspace settings.
+ */
+export const linksForProject = query({
+  args: { projectId: v.id("projects") },
+  returns: v.array(
+    v.object({
+      _id: v.id("projectIntegrationLinks"),
+      status: v.union(
+        v.literal("configuring"),
+        v.literal("active"),
+        v.literal("paused"),
+      ),
+      externalRepoFullName: v.string(),
+      pausedByBilling: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, { projectId }) => {
+    const project = await ctx.db.get(projectId);
+    if (!project) return [];
+    await requireWorkspaceMember(ctx, project.workspaceId);
+
+    const links = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+
+    return links
+      .filter((l) => l.status !== "disconnected")
+      .map((l) => ({
+        _id: l._id,
+        status: l.status as "configuring" | "active" | "paused",
+        externalRepoFullName: l.externalRepoFullName,
+        pausedByBilling: l.pausedByBilling,
+      }));
+  },
+});
+
 export const createLink = mutation({
   args: {
     projectId: v.id("projects"),
