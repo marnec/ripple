@@ -4,7 +4,7 @@ import { internal } from "../../_generated/api";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getWorkspaceIntegration } from "../core/integrationLookups";
-import { GithubClient } from "./client";
+import { githubClientFromEnv } from "./client";
 
 /**
  * List the linked repo's branch names for the branch→status settings
@@ -22,14 +22,10 @@ export const listRepoBranches = action({
     );
     if (!cfg) return [];
 
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-    if (!appId || !privateKeyPem) return [];
+    const client = githubClientFromEnv();
+    if (!client) return [];
 
-    const client = new GithubClient({ appId, privateKeyPem });
-    const token = await client.mintInstallationToken(cfg.externalAccountId);
-    return client.fetchBranches({
-      installationToken: token,
+    return client.forInstallation(cfg.externalAccountId).fetchBranches({
       owner: cfg.owner,
       repo: cfg.repo,
     });

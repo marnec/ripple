@@ -1,13 +1,23 @@
 import { signAppJwt } from "./app";
 
 /**
- * Thin wrapper around GitHub's REST API. Two responsibilities only:
- *  1. Mint installation tokens via the App JWT.
- *  2. Forward authenticated REST calls and return a normalized response
- *     shape that `core/syncOut.classifyResponse` consumes.
+ * Wrapper around GitHub's REST/GraphQL API. Owns everything an authenticated
+ * GitHub call needs so callers don't re-assemble it:
+ *  1. App-JWT signing + installation-token minting.
+ *  2. Authenticated REST/GraphQL calls returning the normalized response shape
+ *     `core/syncOut.classifyResponse` consumes.
+ *  3. App-level installation metadata lookup.
  *
- * Retry/backoff is NOT this layer's job — the action-retrier component
- * owns that. This client makes exactly one HTTP request per call.
+ * Two entry points:
+ *  - `githubClientFromEnv()` reads the App credentials from the environment
+ *    once (returning `null` when unconfigured), replacing the env-preamble that
+ *    every action used to copy.
+ *  - `client.forInstallation(id)` returns an {@link InstallationClient} that
+ *    mints the installation token lazily (once, cached) and exposes token-free
+ *    methods, so callers stop threading `installationToken` through every call.
+ *
+ * Retry/backoff is NOT this layer's job — the action-retrier component owns
+ * that. Each method makes exactly one HTTP request.
  */
 
 export interface GithubClientConfig {
@@ -33,6 +43,48 @@ export class GithubClient {
   constructor(private cfg: GithubClientConfig) {
     this.apiBase = cfg.apiBase ?? "https://api.github.com";
     this.doFetch = cfg.fetchImpl ?? fetch;
+  }
+
+  /**
+   * Bind an installation id, returning a handle that mints the token lazily
+   * (once, cached) and exposes token-free REST/GraphQL methods. The preferred
+   * way to make installation-scoped calls.
+   */
+  forInstallation(externalAccountId: string): InstallationClient {
+    return new InstallationClient(this, externalAccountId);
+  }
+
+  /**
+   * App-JWT-authenticated lookup of an installation's account (login + type).
+   * Used by the install callback to capture display metadata; best-effort, so
+   * a non-2xx returns `null` rather than throwing.
+   */
+  async fetchInstallationAccount(externalAccountId: string): Promise<{
+    login?: string;
+    type: "organization" | "user";
+  } | null> {
+    const jwt = await signAppJwt({
+      appId: this.cfg.appId,
+      privateKeyPem: this.cfg.privateKeyPem,
+    });
+    const res = await this.doFetch(
+      `${this.apiBase}/app/installations/${encodeURIComponent(externalAccountId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      account?: { login?: string; type?: string };
+    };
+    return {
+      login: body.account?.login,
+      type: body.account?.type === "Organization" ? "organization" : "user",
+    };
   }
 
   /**
@@ -188,6 +240,87 @@ export class GithubClient {
       };
     }
   }
+}
+
+/**
+ * The token-explicit surface an {@link InstallationClient} drives. `GithubClient`
+ * satisfies it structurally; tests inject a fake to exercise the binding/caching
+ * without minting a real JWT.
+ */
+export interface AuthedGithubApi {
+  mintInstallationToken(externalAccountId: string): Promise<string>;
+  request<T = unknown>(args: {
+    installationToken: string;
+    method: "GET" | "POST" | "PATCH" | "DELETE";
+    path: string;
+    body?: unknown;
+  }): Promise<GithubResponse<T>>;
+  fetchBranches(args: {
+    installationToken: string;
+    owner: string;
+    repo: string;
+  }): Promise<string[]>;
+  fetchClosingIssueNodeIds(args: {
+    installationToken: string;
+    owner: string;
+    repo: string;
+    prNumber: number;
+  }): Promise<string[]>;
+}
+
+/**
+ * Installation-scoped handle. Mints the installation token on first use and
+ * caches it for the handle's lifetime, then threads it into the underlying
+ * client so callers express only the call, not the auth.
+ */
+export class InstallationClient {
+  private tokenPromise: Promise<string> | null = null;
+
+  constructor(
+    private readonly api: AuthedGithubApi,
+    private readonly externalAccountId: string,
+  ) {}
+
+  private token(): Promise<string> {
+    return (this.tokenPromise ??= this.api.mintInstallationToken(
+      this.externalAccountId,
+    ));
+  }
+
+  async request<T = unknown>(args: {
+    method: "GET" | "POST" | "PATCH" | "DELETE";
+    path: string;
+    body?: unknown;
+  }): Promise<GithubResponse<T>> {
+    return this.api.request<T>({ installationToken: await this.token(), ...args });
+  }
+
+  async fetchBranches(args: { owner: string; repo: string }): Promise<string[]> {
+    return this.api.fetchBranches({ installationToken: await this.token(), ...args });
+  }
+
+  async fetchClosingIssueNodeIds(args: {
+    owner: string;
+    repo: string;
+    prNumber: number;
+  }): Promise<string[]> {
+    return this.api.fetchClosingIssueNodeIds({
+      installationToken: await this.token(),
+      ...args,
+    });
+  }
+}
+
+/**
+ * Construct a `GithubClient` from the App credentials in the environment.
+ * Returns `null` when unconfigured — the single home for the
+ * `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` check that every action repeated.
+ */
+export function githubClientFromEnv(): GithubClient | null {
+  const appId = process.env.GITHUB_APP_ID;
+  const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
+  if (!appId || !privateKeyPem) return null;
+  return new GithubClient({ appId, privateKeyPem });
 }
 
 function parseRetryAfterMs(raw: string | null): number | undefined {

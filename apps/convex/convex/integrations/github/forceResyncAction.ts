@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { internalAction } from "../../_generated/server";
 import { internal } from "../../_generated/api";
-import { GithubClient } from "./client";
+import { githubClientFromEnv } from "./client";
 
 interface GithubIssueResponse {
   node_id: string;
@@ -58,9 +58,8 @@ export const runForceResync = internalAction({
   handler: async (ctx, args) => {
     const offset = args.offset ?? 0;
 
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-    if (!appId || !privateKeyPem) {
+    const client = githubClientFromEnv();
+    if (!client) {
       console.error("[forceResync] GitHub App credentials not configured");
       return null;
     }
@@ -71,14 +70,12 @@ export const runForceResync = internalAction({
     );
     if (!context) return null;
 
-    const client = new GithubClient({ appId, privateKeyPem });
-    const token = await client.mintInstallationToken(context.installationId);
+    const gh = client.forInstallation(context.installationId);
 
     const slice = context.items.slice(offset, offset + RESYNC_BATCH_SIZE);
     for (let i = 0; i < slice.length; i++) {
       const item = slice[i];
-      const res = await client.request<GithubIssueResponse>({
-        installationToken: token,
+      const res = await gh.request<GithubIssueResponse>({
         method: "GET",
         path: `/repos/${context.repoFullName}/issues/${item.issueNumber}`,
       });

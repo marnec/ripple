@@ -12,7 +12,7 @@ import {
   applyInstallationEvent,
   applyNormalizedEvent,
 } from "../core/syncIn";
-import { GithubClient } from "./client";
+import { githubClientFromEnv } from "./client";
 import {
   isHandledPullRequestAction,
   normalizePullRequestPayload,
@@ -433,18 +433,12 @@ async function routePullRequestDelivery(
   const prNumber = p.pull_request?.number;
   if (!installationId || !owner || !repo || prNumber === undefined) return;
 
-  const appId = process.env.GITHUB_APP_ID;
-  const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-  if (!appId || !privateKeyPem) return; // credentials missing — drop
+  const client = githubClientFromEnv();
+  if (!client) return; // credentials missing — drop
 
-  const client = new GithubClient({ appId, privateKeyPem });
-  const token = await client.mintInstallationToken(installationId);
-  const closesExternalIssueIds = await client.fetchClosingIssueNodeIds({
-    installationToken: token,
-    owner,
-    repo,
-    prNumber,
-  });
+  const closesExternalIssueIds = await client
+    .forInstallation(installationId)
+    .fetchClosingIssueNodeIds({ owner, repo, prNumber });
 
   const event = normalizePullRequestPayload(
     "pull_request",

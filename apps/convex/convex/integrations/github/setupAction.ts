@@ -3,14 +3,7 @@
 import { v } from "convex/values";
 import { internalAction } from "../../_generated/server";
 import { internal } from "../../_generated/api";
-import { signAppJwt } from "./app";
-
-interface GithubInstallationAccount {
-  account?: {
-    login?: string;
-    type?: "Organization" | "User" | string;
-  } | null;
-}
+import { githubClientFromEnv } from "./client";
 
 /**
  * Finalize a GitHub App install from the `/integrations/github/setup`
@@ -33,9 +26,8 @@ export const finalizeInstall = internalAction({
     );
     if (!resolved) return null;
 
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-    if (!appId || !privateKeyPem) {
+    const client = githubClientFromEnv();
+    if (!client) {
       console.error("[setup] GitHub App credentials not configured");
       return null;
     }
@@ -45,22 +37,10 @@ export const finalizeInstall = internalAction({
     let accountLogin: string | undefined;
     let accountType: "organization" | "user" | undefined;
     try {
-      const jwt = await signAppJwt({ appId, privateKeyPem });
-      const res = await fetch(
-        `https://api.github.com/app/installations/${encodeURIComponent(args.installationId)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${jwt}`,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-        },
-      );
-      if (res.ok) {
-        const body = (await res.json()) as GithubInstallationAccount;
-        accountLogin = body.account?.login;
-        accountType =
-          body.account?.type === "Organization" ? "organization" : "user";
+      const account = await client.fetchInstallationAccount(args.installationId);
+      if (account) {
+        accountLogin = account.login;
+        accountType = account.type;
       }
     } catch (err) {
       console.warn("[setup] installation account lookup failed", err);

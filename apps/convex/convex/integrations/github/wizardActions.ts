@@ -3,7 +3,7 @@
 import { v } from "convex/values";
 import { action } from "../../_generated/server";
 import { api } from "../../_generated/api";
-import { GithubClient } from "./client";
+import { githubClientFromEnv } from "./client";
 import { buildIssueSearchQuery, shapeRepos } from "./wizardHelpers";
 
 interface RawRepoListResponse {
@@ -32,19 +32,17 @@ export const listInstallationRepos = action({
       args,
     );
 
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-    if (!appId || !privateKeyPem) {
+    const client = githubClientFromEnv();
+    if (!client) {
       throw new Error("GitHub App credentials not configured");
     }
 
-    const client = new GithubClient({ appId, privateKeyPem });
-    const token = await client.mintInstallationToken(args.externalAccountId);
-    const res = await client.request<RawRepoListResponse>({
-      installationToken: token,
-      method: "GET",
-      path: "/installation/repositories?per_page=100",
-    });
+    const res = await client
+      .forInstallation(args.externalAccountId)
+      .request<RawRepoListResponse>({
+        method: "GET",
+        path: "/installation/repositories?per_page=100",
+      });
     if (res.status !== 200 || !res.body) {
       throw new Error(`GitHub repo list failed (status=${res.status})`);
     }
@@ -72,24 +70,22 @@ export const previewImportCount = action({
       { workspaceId: args.workspaceId, externalAccountId: args.externalAccountId },
     );
 
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-    if (!appId || !privateKeyPem) {
+    const client = githubClientFromEnv();
+    if (!client) {
       throw new Error("GitHub App credentials not configured");
     }
 
-    const client = new GithubClient({ appId, privateKeyPem });
-    const token = await client.mintInstallationToken(args.externalAccountId);
     const q = buildIssueSearchQuery({
       repoFullName: args.repoFullName,
       includeClosed: args.includeClosed,
       labels: args.labels,
     });
-    const res = await client.request<{ total_count?: number }>({
-      installationToken: token,
-      method: "GET",
-      path: `/search/issues?per_page=1&q=${encodeURIComponent(q)}`,
-    });
+    const res = await client
+      .forInstallation(args.externalAccountId)
+      .request<{ total_count?: number }>({
+        method: "GET",
+        path: `/search/issues?per_page=1&q=${encodeURIComponent(q)}`,
+      });
     if (res.status !== 200 || !res.body) {
       throw new Error(`GitHub issue count failed (status=${res.status})`);
     }

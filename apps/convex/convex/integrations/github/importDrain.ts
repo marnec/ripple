@@ -12,7 +12,7 @@ import type {
   NormalizedIssueEvent,
   NormalizedIssueOpenedEvent,
 } from "../core/types";
-import { GithubClient } from "./client";
+import { githubClientFromEnv } from "./client";
 
 /**
  * Raw GitHub issue payload — the subset we read. GitHub's REST list
@@ -94,9 +94,8 @@ export const drainImportBatch = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const appId = process.env.GITHUB_APP_ID;
-    const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-    if (!appId || !privateKeyPem) {
+    const client = githubClientFromEnv();
+    if (!client) {
       console.error("[importDrain] GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY not set");
       await ctx.runMutation(
         internal.integrations.github.importDrainMutations.markFailed,
@@ -107,8 +106,7 @@ export const drainImportBatch = internalAction({
       );
       return null;
     }
-    const client = new GithubClient({ appId, privateKeyPem });
-    const token = await client.mintInstallationToken(args.externalAccountId);
+    const gh = client.forInstallation(args.externalAccountId);
 
     // Paginated list — sorted ascending by updated_at so `since` cursor
     // monotonically advances.
@@ -123,8 +121,7 @@ export const drainImportBatch = internalAction({
       params.set("labels", args.labels.join(","));
     }
 
-    const res = await client.request<RawGithubIssue[]>({
-      installationToken: token,
+    const res = await gh.request<RawGithubIssue[]>({
       method: "GET",
       path: `/repos/${args.repoFullName}/issues?${params.toString()}`,
     });
