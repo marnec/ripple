@@ -11,7 +11,7 @@ import { formatTaskId } from "@/lib/task-utils";
 import { getUserColor } from "@/lib/user-colors";
 import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
 import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
-import { Maximize2, Trash2 } from "lucide-react";
+import { ExternalLink, Maximize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
@@ -87,7 +87,7 @@ export function TaskDetailSheet({
             </div>
           ) : (
             <>
-              <SheetHeader className="shrink-0 pr-20 gap-3">
+              <SheetHeader className="shrink-0 pr-28 gap-3">
                 <div className="flex items-center gap-2">
                   {(() => {
                     const taskIdStr = formatTaskId(task.projectKey, task.number);
@@ -98,6 +98,28 @@ export function TaskDetailSheet({
                     ) : null;
                   })()}
                   <TaskSyncIndicator taskId={task._id} />
+                  {(() => {
+                    const issueUrl = task.externalRefs?.[0]?.url;
+                    return (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="absolute top-3 right-20"
+                        disabled={!issueUrl}
+                        onClick={() =>
+                          issueUrl &&
+                          window.open(issueUrl, "_blank", "noopener,noreferrer")
+                        }
+                        title={
+                          issueUrl
+                            ? "Open linked issue on GitHub"
+                            : "No linked issue"
+                        }
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    );
+                  })()}
                   <Button
                     variant="ghost"
                     size="icon-sm"
