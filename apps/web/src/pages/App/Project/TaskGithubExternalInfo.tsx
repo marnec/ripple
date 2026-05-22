@@ -1,6 +1,4 @@
-import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { useQuery } from "convex/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
@@ -8,6 +6,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useTaskGithubLink } from "./useTaskGithubLink";
 
 type Props = { taskId: Id<"tasks"> };
 
@@ -25,11 +24,7 @@ type Props = { taskId: Id<"tasks"> };
  * Ripple-native tasks pay no UI cost.
  */
 export function TaskGithubExternalInfo({ taskId }: Props) {
-  const link = useQuery(api.integrations.core.taskLinks.getByTask, { taskId });
-  if (!link) return null;
-
-  const shadowAssignees = link.externalAssignees ?? [];
-  const closedBy = link.externalClosedBy;
+  const { shadowAssignees, closedBy } = useTaskGithubLink(taskId);
   if (shadowAssignees.length === 0 && !closedBy) return null;
 
   return (

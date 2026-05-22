@@ -1,6 +1,6 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { AlertTriangle, RotateCw } from "lucide-react";
 import { useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useTaskGithubLink } from "./useTaskGithubLink";
 
 type TaskSyncIndicatorProps = {
   taskId: Id<"tasks">;
@@ -29,20 +30,14 @@ type TaskSyncIndicatorProps = {
  *  - the link has no `lastSyncError` (sync healthy / never tried).
  */
 export function TaskSyncIndicator({ taskId }: TaskSyncIndicatorProps) {
-  const link = useQuery(api.integrations.core.taskLinks.getByTask, { taskId });
+  const { syncError } = useTaskGithubLink(taskId);
   const retry = useMutation(api.tasks.retryOutboundSync);
   const [isRetrying, setIsRetrying] = useState(false);
 
-  if (!link?.lastSyncError) return null;
+  if (!syncError) return null;
 
-  const { message, httpStatus } = link.lastSyncError;
   // Short label for the chip surface; full message lives in the tooltip.
-  const statusLabel =
-    typeof httpStatus === "number"
-      ? `HTTP ${httpStatus}`
-      : message.match(/credentials/i)
-        ? "AUTH"
-        : "NET";
+  const { message, label: statusLabel } = syncError;
 
   const handleRetry = () => {
     if (isRetrying) return;

@@ -1,6 +1,6 @@
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { GitBranch, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useEditorChange } from "@blocknote/react";
@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { isBlocksEmpty } from "@/lib/editor-utils";
+import { useTaskGithubLink } from "./useTaskGithubLink";
 
 type Props = {
   taskId: Id<"tasks">;
@@ -54,7 +55,7 @@ function formatRelative(ts: number): string {
  * push (matches `core/description.isSyncDescriptionButtonVisible`).
  */
 export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
-  const link = useQuery(api.integrations.core.taskLinks.getByTask, { taskId });
+  const { isLinked, descriptionLastSyncedAt } = useTaskGithubLink(taskId);
   const sync = useMutation(api.tasks.syncDescriptionToGitHub);
   const [isPushing, setIsPushing] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
@@ -67,10 +68,10 @@ export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
     setIsEmpty(isBlocksEmpty(e.document));
   }, editor as never);
 
-  if (!link) return null;
+  if (!isLinked) return null;
   if (isEmpty) return null;
 
-  const lastSyncedAt = link.descriptionLastSyncedAt;
+  const lastSyncedAt = descriptionLastSyncedAt;
 
   const handleClick = () => {
     if (isPushing) return;
