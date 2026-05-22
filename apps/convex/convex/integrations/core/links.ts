@@ -6,6 +6,7 @@ import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { canActivateIntegration } from "./activationGate";
+import { withTriggers } from "../../dbTriggers";
 
 /**
  * Per-batch size for the disconnect cascade workpool drain. Each step
@@ -454,12 +455,16 @@ export const drainDisconnectBatch = internalMutation({
     const provider = integration?.provider ?? "github";
     const disconnectedAt = Date.now();
 
+    // Task writes go through triggers so the aggregate/graph stay consistent;
+    // the link-row deletes below target non-triggered tables and stay on ctx.db.
+    const taskWriter = withTriggers(ctx).db;
+
     for (const taskLink of batch) {
       const task = await ctx.db.get(taskLink.taskId);
       if (task) {
         const ref = task.externalRefs?.[0];
         if (ref) {
-          await ctx.db.patch(taskLink.taskId, {
+          await taskWriter.patch(taskLink.taskId, {
             externalRefFrozen: {
               provider,
               externalRepoId: projectLink.externalRepoId,
@@ -532,6 +537,9 @@ export const drainReconnectBatch = internalMutation({
       .paginate({ cursor: args.cursor, numItems: RECONNECT_BATCH_SIZE });
 
     const now = Date.now();
+    // Task patches fire triggers (aggregate/graph); the link insert below
+    // targets a non-triggered table and stays on ctx.db.
+    const taskWriter = withTriggers(ctx).db;
     for (const task of page.page) {
       const frozen = task.externalRefFrozen;
       if (!frozen) continue;
@@ -546,7 +554,7 @@ export const drainReconnectBatch = internalMutation({
         .unique();
       if (existing) continue;
 
-      await ctx.db.patch(task._id, {
+      await taskWriter.patch(task._id, {
         externalRefs: [
           {
             provider: frozen.provider,

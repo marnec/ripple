@@ -6,6 +6,7 @@ import {
 import { effectiveLinkStatus } from "../core/entitlements";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
 import type { NormalizedPullRequestEvent } from "../core/types";
+import { withTriggers } from "../../dbTriggers";
 
 /**
  * Provider-specific parsing for GitHub `pull_request` deliveries. Mirrors
@@ -171,7 +172,7 @@ export const handlePullRequestWebhookMutation = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await handlePullRequestWebhook(ctx, {
+    await handlePullRequestWebhook(withTriggers(ctx), {
       event: args.event as NormalizedPullRequestEvent,
       externalAccountId: args.externalAccountId,
       externalRepoId: args.externalRepoId,

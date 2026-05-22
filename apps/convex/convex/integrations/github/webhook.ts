@@ -6,6 +6,7 @@ import {
   type MutationCtx,
 } from "../../_generated/server";
 import { internal } from "../../_generated/api";
+import { withTriggers } from "../../dbTriggers";
 import { effectiveLinkStatus } from "../core/entitlements";
 import {
   applyInstallationEvent,
@@ -356,7 +357,7 @@ export const handleGithubWebhookMutation = internalMutation({
   args: { eventName: v.string(), payload: v.any() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await handleGithubWebhook(ctx, args);
+    await handleGithubWebhook(withTriggers(ctx), args);
     return null;
   },
 });

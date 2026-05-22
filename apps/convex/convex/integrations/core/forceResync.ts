@@ -3,6 +3,7 @@ import { internalMutation } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { applyNormalizedEvent } from "./syncIn";
 import type { NormalizedIssueEvent } from "./types";
+import { withTriggers } from "../../dbTriggers";
 
 interface ExternalAuthor {
   login: string;
@@ -146,8 +147,9 @@ export const applyOneIssueReconciliation = internalMutation({
       github: args.issue,
     });
 
+    const tctx = withTriggers(ctx);
     for (const event of events) {
-      await applyNormalizedEvent(ctx, { event, link });
+      await applyNormalizedEvent(tctx, { event, link });
     }
     return null;
   },
