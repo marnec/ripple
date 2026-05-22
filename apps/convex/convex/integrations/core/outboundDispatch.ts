@@ -4,6 +4,7 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { FunctionReference } from "convex/server";
 import { normalizeTagList } from "../../tagSync";
+import { diffSet, normalizeLoginList } from "./syncableSet";
 import { getWorkspaceIntegration } from "./integrationLookups";
 import {
   deriveDesiredExternalState,
@@ -254,14 +255,13 @@ export async function maybeEnqueueLabelsPush(
   if (!target) return;
 
   const nextLabels = normalizeTagList(target.task.labels ?? []);
-  const prevLabels = target.link.externalLabels ?? [];
-  const prevSet = new Set(prevLabels);
-  const nextSet = new Set(nextLabels);
-  const add = nextLabels.filter((l) => !prevSet.has(l));
-  const remove = prevLabels.filter((l) => !nextSet.has(l));
+  const { add, remove, changed } = diffSet(
+    nextLabels,
+    target.link.externalLabels ?? [],
+  );
 
   // Echo guard: no diff, no PATCH.
-  if (add.length === 0 && remove.length === 0) return;
+  if (!changed) return;
 
   await retrier.run(
     ctx,
@@ -309,17 +309,16 @@ export async function maybeEnqueueAssigneesPush(
       )
       .unique();
     if (!identity) return; // unmappable assignee — preserve GitHub state.
-    nextLogins = [identity.externalLogin];
+    nextLogins = normalizeLoginList([identity.externalLogin]);
   }
 
-  const prevLogins = target.link.externalAssigneeLogins ?? [];
-  const prevSet = new Set(prevLogins);
-  const nextSet = new Set(nextLogins);
-  const add = nextLogins.filter((l) => !prevSet.has(l));
-  const remove = prevLogins.filter((l) => !nextSet.has(l));
+  const { add, remove, changed } = diffSet(
+    nextLogins,
+    target.link.externalAssigneeLogins ?? [],
+  );
 
   // Echo guard: no diff, no PATCH.
-  if (add.length === 0 && remove.length === 0) return;
+  if (!changed) return;
 
   await retrier.run(
     ctx,

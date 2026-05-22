@@ -2,6 +2,7 @@ import type { MutationCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
+import { diffSet, normalizeLoginList } from "./syncableSet";
 import { getWorkspaceIntegration } from "./integrationLookups";
 import { taskHasBranchRuleMatch } from "./pullRequestAutomation";
 import { applyStatusSideEffects } from "../../taskStatusSideEffects";
@@ -371,7 +372,7 @@ async function applyLabelsChanged(
   // Echo guard: if the inbound set already matches the last-known GitHub
   // set, this event is a bounce-back from our own outbound write. Skip the
   // taskTags reconciliation and externalUpdatedAt bump entirely.
-  if (sameLabelSet(normalized, existingLink.externalLabels)) return;
+  if (!diffSet(normalized, existingLink.externalLabels).changed) return;
 
   // Reconcile the dictionary `tags` + project-scoped `taskTags` join. We then
   // mirror that list into `tasks.labels` (denormalized projection) and into
@@ -412,10 +413,10 @@ async function applyAssigneesChanged(
 ): Promise<void> {
   const { event, link, existingLink } = args;
 
-  const nextLogins = event.assignees.map((a) => a.login.toLowerCase());
+  const nextLogins = normalizeLoginList(event.assignees.map((a) => a.login));
 
   // Echo guard: same set as last-known → bounce-back from our own outbound.
-  if (sameLabelSet(nextLogins, existingLink.externalAssigneeLogins)) return;
+  if (!diffSet(nextLogins, existingLink.externalAssigneeLogins).changed) return;
 
   // First-matching-login wins for `assigneeId`. The non-winning entries
   // (unmatched logins + matched-but-not-first) become the shadow set. If
@@ -467,20 +468,6 @@ async function applyAssigneesChanged(
   if (task.assigneeId !== matchedUserId) {
     await ctx.db.patch(task._id, { assigneeId: matchedUserId });
   }
-}
-
-/** Order-insensitive label-set comparison. Both sides are pre-normalized. */
-function sameLabelSet(
-  next: readonly string[],
-  prev: readonly string[] | undefined,
-): boolean {
-  if (!prev) return false;
-  if (next.length !== prev.length) return false;
-  const prevSet = new Set(prev);
-  for (const n of next) {
-    if (!prevSet.has(n)) return false;
-  }
-  return true;
 }
 
 async function updateExistingOnReopen(
