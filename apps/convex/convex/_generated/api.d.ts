@@ -2278,6 +2278,8 @@ export declare const api: {
         numberRangeStart: number;
         processedRows: number;
         projectId: Id<"projects">;
+        projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
+        sourceType?: "csv" | "github_integration";
         status: "queued" | "running" | "completed" | "failed";
         totalRows: number;
         workspaceId: Id<"workspaces">;
@@ -2297,6 +2299,8 @@ export declare const api: {
         numberRangeStart: number;
         processedRows: number;
         projectId: Id<"projects">;
+        projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
+        sourceType?: "csv" | "github_integration";
         status: "queued" | "running" | "completed" | "failed";
         totalRows: number;
         workspaceId: Id<"workspaces">;
@@ -2812,6 +2816,16 @@ export declare const api: {
       "mutation",
       "public",
       { statusIds: Array<Id<"taskStatuses">> },
+      null
+    >;
+    setSingletonEffect: FunctionReference<
+      "mutation",
+      "public",
+      {
+        effect: "default" | "triage";
+        statusId: Id<"taskStatuses">;
+        value: boolean;
+      },
       null
     >;
     update: FunctionReference<

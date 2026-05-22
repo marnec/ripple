@@ -11,9 +11,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -216,49 +214,6 @@ export function KanbanColumn({
                 Auto-set completed
                 {status.isCompleted && <Check className="h-4 w-4 ml-auto" />}
               </DropdownMenuItem>
-
-              {/* GitHub close-reason picker. Only meaningful when isCompleted=true:
-                  closing a task in this status will push state_reason="not_planned"
-                  to GitHub if "Won't do" is selected, or "completed" otherwise.
-                  Defaults to "completed" semantics when no explicit choice is made. */}
-              {status.isCompleted && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel className="pl-2 pt-2 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
-                      GitHub close as
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onClick={() => void updateStatus({
-                        statusId: status._id,
-                        externalCloseReason: "completed",
-                      })}
-                    >
-                      <span className="font-mono text-[10px] text-muted-foreground mr-2 w-4">
-                        ✓
-                      </span>
-                      Completed
-                      {(status.externalCloseReason ?? "completed") === "completed" && (
-                        <Check className="h-4 w-4 ml-auto" />
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => void updateStatus({
-                        statusId: status._id,
-                        externalCloseReason: "not_planned",
-                      })}
-                    >
-                      <span className="font-mono text-[10px] text-muted-foreground mr-2 w-4">
-                        ⊘
-                      </span>
-                      Won&apos;t do
-                      {status.externalCloseReason === "not_planned" && (
-                        <Check className="h-4 w-4 ml-auto" />
-                      )}
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </>
-              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={openDeleteDialog}

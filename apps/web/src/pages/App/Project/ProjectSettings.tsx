@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { ConnectGithubCard } from "./ConnectGithubWizard";
+import { StatusEffectMatrix } from "./StatusEffectMatrix";
 
 const PROJECT_COLORS = [
   { name: "Blue", class: "bg-blue-500" },
@@ -186,10 +187,11 @@ function ProjectSettingsContent({
         </div>
       </section>
 
-      {/* GitHub integration - creator/admin only */}
+      {/* Status effects + GitHub integration - creator/admin only */}
       {isCreator && (
         <>
           <Separator className="my-6" />
+          <StatusEffectMatrix projectId={projectId} />
           <ConnectGithubCard workspaceId={workspaceId} projectId={projectId} />
         </>
       )}

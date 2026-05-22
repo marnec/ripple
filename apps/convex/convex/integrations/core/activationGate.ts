@@ -29,10 +29,11 @@ export async function canActivateIntegration(
 }
 
 /**
- * Public read for the activation wizard's gate step. Resolves the project's
- * workspace, member-gates the read, and reports whether the project is
- * eligible to connect a repo. The wizard surfaces a "create a triage status
- * first" hint when this is false.
+ * Public read powering the GitHub card's pre-flight gate. Resolves the
+ * project's workspace, member-gates the read, and reports whether the project
+ * is eligible to connect a repo. When false, the card blocks the wizard from
+ * opening and points the user at the Status Effect Matrix to assign a triage
+ * (issue-inbox) status first.
  */
 export const canActivate = query({
   args: { projectId: v.id("projects") },

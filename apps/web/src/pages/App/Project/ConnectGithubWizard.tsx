@@ -10,11 +10,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useState } from "react";
 import { toast } from "sonner";
-import { GitBranch, Loader2 } from "lucide-react";
+import { GitBranch, Inbox, Loader2, Search } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 
@@ -26,18 +27,32 @@ type Props = {
 };
 
 /**
- * Project-settings entry point for connecting a GitHub repo. Capability-gated:
- * when the workspace lacks the `github_integration` entitlement, renders a
- * muted card pointing admins at workspace settings instead of the wizard.
+ * Project-settings entry point for connecting a GitHub repo. Two gates guard
+ * the wizard, both surfaced *before* it opens so users never invest effort
+ * picking a repo only to be blocked:
+ *  - capability: workspace must hold the `github_integration` entitlement.
+ *  - prerequisite: project must have a triage (issue-inbox) status, set via
+ *    the Status Effect Matrix on this same page.
  */
 export function ConnectGithubCard({ workspaceId, projectId }: Props) {
   const feature = useQuery(
     api.integrations.core.entitlements.getWorkspaceFeature,
     { workspaceId, featureKey: GITHUB_FEATURE_KEY },
   );
+  const gate = useQuery(api.integrations.core.activationGate.canActivate, {
+    projectId,
+  });
   const [open, setOpen] = useState(false);
 
   if (feature === undefined) return null;
+
+  const ready = gate?.canActivate === true;
+
+  const scrollToEffects = () => {
+    document
+      .getElementById("status-effects")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <section className="mb-8">
@@ -45,7 +60,38 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
       <p className="text-sm text-muted-foreground mb-4">
         Connect a GitHub repository so issues sync with this project.
       </p>
-      {feature.enabled ? (
+
+      {!feature.enabled ? (
+        <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+          The GitHub integration is disabled for this workspace. A workspace
+          admin can enable it under Workspace Settings → Integrations.
+        </div>
+      ) : !ready ? (
+        <div className="space-y-3">
+          <div className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-950/30">
+            <Inbox className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+            <div className="space-y-2 text-sm text-amber-900 dark:text-amber-200">
+              <p>
+                Before connecting, choose where imported issues should land.
+                GitHub issues import into an <strong>issue-inbox</strong> status,
+                and this project doesn&apos;t have one yet.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-400 bg-transparent hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                onClick={scrollToEffects}
+              >
+                Set up status effects →
+              </Button>
+            </div>
+          </div>
+          <Button variant="outline" className="gap-2" disabled>
+            <GitBranch className="h-4 w-4" />
+            Connect GitHub repo
+          </Button>
+        </div>
+      ) : (
         <>
           <Button variant="outline" onClick={() => setOpen(true)} className="gap-2">
             <GitBranch className="h-4 w-4" />
@@ -58,17 +104,20 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
             onOpenChange={setOpen}
           />
         </>
-      ) : (
-        <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          The GitHub integration is disabled for this workspace. A workspace
-          admin can enable it under Workspace Settings → Integrations.
-        </div>
       )}
     </section>
   );
 }
 
-type Step = "account" | "repo" | "gate" | "filter" | "preview";
+type Step = "account" | "repo" | "filter" | "preview";
+
+const STEP_ORDER: Step[] = ["account", "repo", "filter", "preview"];
+const STEP_LABELS: Record<Step, string> = {
+  account: "Account",
+  repo: "Repository",
+  filter: "Filter",
+  preview: "Review",
+};
 
 type Repo = { externalRepoId: string; fullName: string; private: boolean };
 
@@ -82,8 +131,8 @@ function ConnectGithubWizard({
     api.integrations.core.install.listInstallations,
     open ? { workspaceId } : "skip",
   );
-  const gate = useQuery(
-    api.integrations.core.activationGate.canActivate,
+  const statuses = useQuery(
+    api.taskStatuses.listByProject,
     open ? { projectId } : "skip",
   );
   const beginInstall = useMutation(
@@ -103,21 +152,29 @@ function ConnectGithubWizard({
   const [step, setStep] = useState<Step>("account");
   const [accountId, setAccountId] = useState<string | null>(null);
   const [repos, setRepos] = useState<Repo[] | null>(null);
+  const [repoQuery, setRepoQuery] = useState("");
   const [repo, setRepo] = useState<Repo | null>(null);
   const [includeClosed, setIncludeClosed] = useState(false);
   const [labelsText, setLabelsText] = useState("");
   const [previewTotal, setPreviewTotal] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const triageName = statuses?.find((s) => s.isTriage)?.name ?? "triage";
+
   const labels = labelsText
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const filteredRepos = repos?.filter((r) =>
+    r.fullName.toLowerCase().includes(repoQuery.trim().toLowerCase()),
+  );
+
   const reset = () => {
     setStep("account");
     setAccountId(null);
     setRepos(null);
+    setRepoQuery("");
     setRepo(null);
     setIncludeClosed(false);
     setLabelsText("");
@@ -159,7 +216,7 @@ function ConnectGithubWizard({
 
   const handlePickRepo = (r: Repo) => {
     setRepo(r);
-    setStep(gate?.canActivate ? "filter" : "gate");
+    setStep("filter");
   };
 
   const handlePreview = async () => {
@@ -202,7 +259,7 @@ function ConnectGithubWizard({
         expectedTotal: previewTotal ?? 0,
       });
       toast.success(`Connected ${repo.fullName}`, {
-        description: "Importing issues into triage…",
+        description: `Importing issues into ${triageName}…`,
       });
       handleOpenChange(false);
     } catch (err) {
@@ -221,11 +278,12 @@ function ConnectGithubWizard({
           <DialogDescription>
             {step === "account" && "Choose the GitHub account to import from."}
             {step === "repo" && "Choose a repository to link to this project."}
-            {step === "gate" && "This project isn't ready yet."}
             {step === "filter" && "Choose which issues to import."}
             {step === "preview" && "Review and confirm the import."}
           </DialogDescription>
         </DialogHeader>
+
+        <Stepper current={step} />
 
         {step === "account" && (
           <div className="space-y-2">
@@ -270,36 +328,42 @@ function ConnectGithubWizard({
         )}
 
         {step === "repo" && (
-          <div className="space-y-2 max-h-72 overflow-y-auto">
-            {repos?.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No repositories accessible to this installation.
-              </p>
-            ) : (
-              repos?.map((r) => (
-                <button
-                  key={r.externalRepoId}
-                  type="button"
-                  onClick={() => handlePickRepo(r)}
-                  className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-accent"
-                >
-                  <span className="truncate font-mono">{r.fullName}</span>
-                  {r.private && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      private
-                    </span>
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-        )}
-
-        {step === "gate" && (
-          <div className="rounded-md bg-amber-50 px-3 py-3 text-sm text-amber-900">
-            This project has no <strong>triage</strong> status, which is where
-            imported issues land. Add a triage status to the project board, then
-            reopen this wizard.
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={repoQuery}
+                onChange={(e) => setRepoQuery(e.target.value)}
+                placeholder="Filter repositories…"
+                className="pl-8"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {filteredRepos?.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  {repos?.length === 0
+                    ? "No repositories accessible to this installation."
+                    : "No repositories match your search."}
+                </p>
+              ) : (
+                filteredRepos?.map((r) => (
+                  <button
+                    key={r.externalRepoId}
+                    type="button"
+                    onClick={() => handlePickRepo(r)}
+                    className="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-accent"
+                  >
+                    <span className="truncate font-mono">{r.fullName}</span>
+                    {r.private && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        private
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         )}
 
@@ -327,11 +391,14 @@ function ConnectGithubWizard({
         {step === "preview" && (
           <div className="text-sm">
             <p>
-              About to import{" "}
-              <strong>{previewTotal}</strong>{" "}
-              issue{previewTotal === 1 ? "" : "s"} from{" "}
-              <span className="font-mono">{repo?.fullName}</span> into this
-              project's triage status.
+              About to import <strong>{previewTotal}</strong> issue
+              {previewTotal === 1 ? "" : "s"} from{" "}
+              <span className="font-mono">{repo?.fullName}</span> into{" "}
+              <span className="inline-flex items-center gap-1 font-medium">
+                <Inbox className="h-3.5 w-3.5" />
+                {triageName}
+              </span>
+              .
             </p>
           </div>
         )}
@@ -367,5 +434,41 @@ function ConnectGithubWizard({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Stepper({ current }: { current: Step }) {
+  const currentIndex = STEP_ORDER.indexOf(current);
+  return (
+    <ol className="flex items-center gap-1.5 text-xs">
+      {STEP_ORDER.map((s, i) => {
+        const done = i < currentIndex;
+        const active = i === currentIndex;
+        return (
+          <li key={s} className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-medium transition-colors",
+                active && "border-primary bg-primary text-primary-foreground",
+                done && "border-primary/40 bg-primary/10 text-primary",
+                !active && !done && "border-muted-foreground/30 text-muted-foreground",
+              )}
+            >
+              {i + 1}
+            </span>
+            <span
+              className={cn(
+                active ? "font-medium text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {STEP_LABELS[s]}
+            </span>
+            {i < STEP_ORDER.length - 1 && (
+              <span className="mx-0.5 h-px w-3 bg-border" />
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
