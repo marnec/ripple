@@ -1,5 +1,7 @@
-import type { QueryCtx } from "../../_generated/server";
+import { v } from "convex/values";
+import { query, type QueryCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
+import { requireWorkspaceMember } from "../../authHelpers";
 
 /**
  * True iff the project meets the preconditions for connecting an integration
@@ -25,3 +27,24 @@ export async function canActivateIntegration(
     .first();
   return triage !== null;
 }
+
+/**
+ * Public read for the activation wizard's gate step. Resolves the project's
+ * workspace, member-gates the read, and reports whether the project is
+ * eligible to connect a repo. The wizard surfaces a "create a triage status
+ * first" hint when this is false.
+ */
+export const canActivate = query({
+  args: { projectId: v.id("projects") },
+  returns: v.object({ canActivate: v.boolean() }),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (!project) return { canActivate: false };
+    await requireWorkspaceMember(ctx, project.workspaceId);
+    return {
+      canActivate: await canActivateIntegration(ctx, {
+        projectId: args.projectId,
+      }),
+    };
+  },
+});

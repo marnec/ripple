@@ -844,6 +844,22 @@ describe("integrations/github/webhook.handleGithubWebhook", () => {
     expect(tasks).toHaveLength(0);
   });
 
+  it("records lastWebhookAt on the link when a webhook is processed", async () => {
+    const t = createTestContext();
+    const { linkId } = await setupWebhookRouting(t);
+    const before = Date.now();
+
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issues",
+        payload: openedPayload(),
+      }),
+    );
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.lastWebhookAt).toBeGreaterThanOrEqual(before);
+  });
+
   it("drops the event silently when the link is entitlement-frozen (pausedByBilling=true)", async () => {
     const t = createTestContext();
     const { projectId } = await setupWebhookRouting(t, {

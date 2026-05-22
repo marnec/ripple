@@ -1,9 +1,96 @@
 import { ConvexError, v } from "convex/values";
-import { mutation } from "../../_generated/server";
+import {
+  internalMutation,
+  mutation,
+  query,
+  type MutationCtx,
+} from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
-import { requireWorkspaceMember } from "../../authHelpers";
+import {
+  getWorkspaceMembership,
+  requireWorkspaceMember,
+} from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { hasFeature } from "./entitlements";
+
+/**
+ * Shared install-completion logic. Both the public `completeAppInstallation`
+ * (auth from session) and the internal `completeInstallationFromCallback`
+ * (auth from a consumed install nonce) funnel through here once the actor's
+ * admin role on the workspace has been established by the caller.
+ *
+ * Idempotent on `(workspaceId, externalAccountId)`; gates on the
+ * `<provider>_integration` entitlement; inserts the synthetic bot user and
+ * writes the `integration.activated` audit-log entry.
+ */
+async function doCompleteInstall(
+  ctx: MutationCtx,
+  args: {
+    actorId: Id<"users">;
+    workspaceId: Id<"workspaces">;
+    provider: string;
+    externalAccountId: string;
+    externalAccountType?: "organization" | "user";
+    accountLogin?: string;
+  },
+): Promise<Id<"workspaceIntegrations">> {
+  const existing = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_externalAccount", (q) =>
+      q.eq("externalAccountId", args.externalAccountId),
+    )
+    .unique();
+  if (existing) {
+    if (existing.workspaceId !== args.workspaceId) {
+      throw new ConvexError(
+        `External account ${args.externalAccountId} is already claimed by another workspace`,
+      );
+    }
+    return existing._id;
+  }
+
+  const featureKey = `${args.provider}_integration`;
+  const enabled = await hasFeature(ctx, args.workspaceId, featureKey);
+  if (!enabled) {
+    throw new ConvexError(
+      `Workspace does not have the ${featureKey} feature enabled`,
+    );
+  }
+
+  const botUserId = await ctx.db.insert("users", {
+    name: args.accountLogin
+      ? `${args.provider} (${args.accountLogin})`
+      : args.provider,
+    isBot: true,
+  });
+
+  const integrationId = await ctx.db.insert("workspaceIntegrations", {
+    workspaceId: args.workspaceId,
+    botUserId,
+    provider: args.provider,
+    externalAccountId: args.externalAccountId,
+    externalAccountType: args.externalAccountType,
+    accountLogin: args.accountLogin,
+    installedBy: args.actorId,
+  });
+
+  try {
+    await auditLog.log(ctx, {
+      action: "integration.activated",
+      actorId: args.actorId.toString(),
+      resourceType: "workspaces",
+      resourceId: args.workspaceId,
+      severity: "info",
+      metadata: { provider: args.provider, accountLogin: args.accountLogin },
+      scope: args.workspaceId,
+    });
+  } catch (err) {
+    console.error("[auditLog] failed to log integration.activated", err);
+  }
+
+  return integrationId;
+}
 
 /**
  * Wizard install-completion entry point. Called after the user finishes
@@ -40,69 +127,125 @@ export const completeAppInstallation = mutation({
     const { userId } = await requireWorkspaceMember(ctx, args.workspaceId, {
       role: WorkspaceRole.ADMIN,
     });
+    return doCompleteInstall(ctx, { ...args, actorId: userId });
+  },
+});
 
-    // Idempotency: an installation row may already exist for this
-    // (workspaceId, externalAccountId) pair — return it unchanged.
-    const existing = await ctx.db
-      .query("workspaceIntegrations")
-      .withIndex("by_externalAccount", (q) =>
-        q.eq("externalAccountId", args.externalAccountId),
-      )
-      .unique();
-    if (existing) {
-      if (existing.workspaceId !== args.workspaceId) {
-        throw new ConvexError(
-          `External account ${args.externalAccountId} is already claimed by another workspace`,
-        );
-      }
-      return existing._id;
-    }
-
-    // Entitlement gate. v1 manually toggled; future billing flows still
-    // gate via the same hasFeature chokepoint.
-    const featureKey = `${args.provider}_integration`;
-    const enabled = await hasFeature(ctx, args.workspaceId, featureKey);
-    if (!enabled) {
+/**
+ * Install-completion entry point for the `/integrations/github/setup` HTTP
+ * callback. The callback has no auth session — the actor is resolved from
+ * the one-time install nonce (`installFlow.consumeInstallState`). We
+ * re-verify that the resolved user is still a workspace admin before
+ * trusting it, then funnel through the same `doCompleteInstall` helper.
+ */
+export const completeInstallationFromCallback = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    provider: v.string(),
+    externalAccountId: v.string(),
+    externalAccountType: v.optional(
+      v.union(v.literal("organization"), v.literal("user")),
+    ),
+    accountLogin: v.optional(v.string()),
+  },
+  returns: v.id("workspaceIntegrations"),
+  handler: async (ctx, args) => {
+    const membership = await getWorkspaceMembership(
+      ctx,
+      args.workspaceId,
+      args.userId,
+    );
+    if (membership?.role !== WorkspaceRole.ADMIN) {
       throw new ConvexError(
-        `Workspace does not have the ${featureKey} feature enabled`,
+        "Install callback actor is not a workspace admin",
       );
     }
-
-    // Synthetic bot user — attributing externally-authored tasks/comments.
-    // Filtered out of member pickers / facepiles via users.isBot.
-    const botUserId = await ctx.db.insert("users", {
-      name: args.accountLogin
-        ? `${args.provider} (${args.accountLogin})`
-        : args.provider,
-      isBot: true,
-    });
-
-    const integrationId = await ctx.db.insert("workspaceIntegrations", {
+    return doCompleteInstall(ctx, {
+      actorId: args.userId,
       workspaceId: args.workspaceId,
-      botUserId,
       provider: args.provider,
       externalAccountId: args.externalAccountId,
       externalAccountType: args.externalAccountType,
       accountLogin: args.accountLogin,
     });
+  },
+});
 
-    try {
-      await auditLog.log(ctx, {
-        action: "integration.activated",
-        actorId: userId.toString(),
-        resourceType: "workspaces",
-        resourceId: args.workspaceId,
-        severity: "info",
-        metadata: {
-          provider: args.provider,
-          accountLogin: args.accountLogin,
-        },
-        scope: args.workspaceId,
-      });
-    } catch (err) {
-      console.error("[auditLog] failed to log integration.activated", err);
+/**
+ * Admin-gated access check for the wizard's GitHub-facing actions. Verifies
+ * the caller is a workspace admin and that the installation belongs to the
+ * workspace, returning the `externalAccountId` the action needs to mint a
+ * token. Internal — invoked via `ctx.runQuery` from the wizard actions,
+ * which propagate the caller's identity.
+ */
+export const assertWizardInstallation = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    externalAccountId: v.string(),
+  },
+  returns: v.object({ externalAccountId: v.string() }),
+  handler: async (ctx, args) => {
+    await requireWorkspaceMember(ctx, args.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+    const integration = await ctx.db
+      .query("workspaceIntegrations")
+      .withIndex("by_externalAccount", (q) =>
+        q.eq("externalAccountId", args.externalAccountId),
+      )
+      .unique();
+    if (!integration || integration.workspaceId !== args.workspaceId) {
+      throw new ConvexError("Installation not found in this workspace");
     }
+    return { externalAccountId: integration.externalAccountId };
+  },
+});
 
-    return integrationId;
+/**
+ * List the workspace's provider installations for the workspace-settings
+ * Integrations tab and the activation wizard's account picker. Member-gated
+ * read; admin-only actions check role at their own boundary.
+ *
+ * `installedBy` resolves to the installer's display name where available so
+ * the UI can render "installed by …" without a second round-trip.
+ */
+export const listInstallations = query({
+  args: { workspaceId: v.id("workspaces") },
+  returns: v.array(
+    v.object({
+      _id: v.id("workspaceIntegrations"),
+      provider: v.string(),
+      externalAccountId: v.string(),
+      externalAccountType: v.optional(
+        v.union(v.literal("organization"), v.literal("user")),
+      ),
+      accountLogin: v.optional(v.string()),
+      installedBy: v.optional(v.id("users")),
+      installedByName: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await requireWorkspaceMember(ctx, args.workspaceId);
+    const rows = await ctx.db
+      .query("workspaceIntegrations")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+    return Promise.all(
+      rows.map(async (r) => {
+        const installer = r.installedBy
+          ? await ctx.db.get(r.installedBy)
+          : null;
+        return {
+          _id: r._id,
+          provider: r.provider,
+          externalAccountId: r.externalAccountId,
+          externalAccountType: r.externalAccountType,
+          accountLogin: r.accountLogin,
+          installedBy: r.installedBy,
+          installedByName: installer?.name,
+        };
+      }),
+    );
   },
 });

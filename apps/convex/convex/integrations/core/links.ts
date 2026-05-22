@@ -572,6 +572,7 @@ export const listByWorkspace = query({
       ),
       pausedByBilling: v.boolean(),
       frozenAt: v.optional(v.number()),
+      lastWebhookAt: v.optional(v.number()),
       externalRepoFullName: v.string(),
       externalRepoId: v.string(),
       branchStatusMap: v.optional(
@@ -601,6 +602,7 @@ export const listByWorkspace = query({
       status: l.status,
       pausedByBilling: l.pausedByBilling,
       frozenAt: l.frozenAt,
+      lastWebhookAt: l.lastWebhookAt,
       externalRepoFullName: l.externalRepoFullName,
       externalRepoId: l.externalRepoId,
       branchStatusMap: l.branchStatusMap,

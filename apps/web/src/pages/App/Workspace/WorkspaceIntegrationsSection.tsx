@@ -8,13 +8,53 @@ import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { GitBranch, Pause, Play, RefreshCw, Unplug } from "lucide-react";
-import { isFrozenOver24h } from "@/lib/integration-utils";
+import { formatLastWebhook, isFrozenOver24h } from "@/lib/integration-utils";
 import { BranchStatusMapEditor } from "./BranchStatusMapEditor";
 import { useViewer } from "../UserContext";
 
 const GITHUB_FEATURE_KEY = "github_integration";
 
 type Props = { workspaceId: Id<"workspaces"> };
+
+/**
+ * Read-only list of the workspace's GitHub installations (the accounts the
+ * App is installed on), with installer attribution. Lets admins audit who
+ * connected what. Hidden entirely when there are no installations.
+ */
+function InstallationsList({ workspaceId }: Props) {
+  const installations = useQuery(
+    api.integrations.core.install.listInstallations,
+    { workspaceId },
+  );
+  if (!installations || installations.length === 0) return null;
+
+  return (
+    <div className="mb-4 rounded-md border px-3 py-3">
+      <div className="text-sm font-medium mb-2">Installations</div>
+      <ul className="space-y-1">
+        {installations.map((inst) => (
+          <li
+            key={inst._id}
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+          >
+            <GitBranch className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate text-foreground">
+              {inst.accountLogin ?? inst.externalAccountId}
+            </span>
+            {inst.externalAccountType && (
+              <span className="text-xs">({inst.externalAccountType})</span>
+            )}
+            {inst.installedByName && (
+              <span className="ml-auto text-xs">
+                installed by {inst.installedByName}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * Workspace-admin toggle for the GitHub-integration capability. v1 is a
@@ -118,6 +158,7 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
         GitHub repositories linked to projects in this workspace.
       </p>
       <GithubCapabilityToggle workspaceId={workspaceId} />
+      <InstallationsList workspaceId={workspaceId} />
       {!links ? null : links.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
           No GitHub repositories linked yet. Connect one from a project's
@@ -168,6 +209,14 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
                         {link.projectName}
+                        {!isDisconnected && (
+                          <>
+                            {" · "}
+                            <span>
+                              Last webhook: {formatLastWebhook(link.lastWebhookAt, now)}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import { auditLog } from "../convex/auditLog";
 import {
   createTestContext,
@@ -201,6 +201,124 @@ describe("integrations/core/install.completeAppInstallation", () => {
         .collect(),
     );
     expect(botUsers).toHaveLength(1);
+  });
+});
+
+describe("integrations/core/install.completeAppInstallation installedBy", () => {
+  it("records the installing admin's userId on the integration row", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    await enableGithubFeature(t, { workspaceId, asUser });
+
+    const integrationId = await asUser.mutation(
+      api.integrations.core.install.completeAppInstallation,
+      {
+        workspaceId,
+        provider: "github",
+        externalAccountId: "install-by-test",
+        accountLogin: "acme",
+      },
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(integrationId));
+    expect(row?.installedBy).toBe(userId);
+  });
+});
+
+describe("integrations/core/install.completeInstallationFromCallback", () => {
+  it("creates the integration row for an admin resolved from the install nonce", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    await enableGithubFeature(t, { workspaceId, asUser });
+
+    const integrationId = await t.mutation(
+      internal.integrations.core.install.completeInstallationFromCallback,
+      {
+        workspaceId,
+        userId,
+        provider: "github",
+        externalAccountId: "cb-install-1",
+        externalAccountType: "organization",
+        accountLogin: "acme",
+      },
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(integrationId));
+    expect(row?.externalAccountId).toBe("cb-install-1");
+    expect(row?.installedBy).toBe(userId);
+  });
+
+  it("rejects when the resolved user is not a workspace admin", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    await enableGithubFeature(t, { workspaceId, asUser });
+    const { userId: memberId } = await setupAuthenticatedUser(t, {
+      name: "Member",
+      email: "cb-member@test.com",
+    });
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: memberId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+
+    await expect(
+      t.mutation(
+        internal.integrations.core.install.completeInstallationFromCallback,
+        {
+          workspaceId,
+          userId: memberId,
+          provider: "github",
+          externalAccountId: "cb-install-2",
+        },
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("integrations/core/install.listInstallations", () => {
+  it("lists the workspace's installations with account + installer metadata", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    await enableGithubFeature(t, { workspaceId, asUser });
+    await asUser.mutation(
+      api.integrations.core.install.completeAppInstallation,
+      {
+        workspaceId,
+        provider: "github",
+        externalAccountId: "install-aaa",
+        externalAccountType: "organization",
+        accountLogin: "acme",
+      },
+    );
+
+    const rows = await asUser.query(
+      api.integrations.core.install.listInstallations,
+      { workspaceId },
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.externalAccountId).toBe("install-aaa");
+    expect(rows[0]?.accountLogin).toBe("acme");
+    expect(rows[0]?.externalAccountType).toBe("organization");
+    expect(rows[0]?.installedBy).toBe(userId);
+  });
+
+  it("rejects non-members", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { asUser: asOutsider } = await setupAuthenticatedUser(t, {
+      name: "Outsider",
+      email: "li-outsider@test.com",
+    });
+
+    await expect(
+      asOutsider.query(api.integrations.core.install.listInstallations, {
+        workspaceId,
+      }),
+    ).rejects.toThrow();
   });
 });
 

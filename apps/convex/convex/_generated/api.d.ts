@@ -1164,6 +1164,14 @@ export declare const api: {
   };
   integrations: {
     core: {
+      activationGate: {
+        canActivate: FunctionReference<
+          "query",
+          "public",
+          { projectId: Id<"projects"> },
+          { canActivate: boolean }
+        >;
+      };
       entitlements: {
         getWorkspaceFeature: FunctionReference<
           "query",
@@ -1189,6 +1197,12 @@ export declare const api: {
         >;
       };
       install: {
+        assertWizardInstallation: FunctionReference<
+          "query",
+          "public",
+          { externalAccountId: string; workspaceId: Id<"workspaces"> },
+          { externalAccountId: string }
+        >;
         completeAppInstallation: FunctionReference<
           "mutation",
           "public",
@@ -1200,6 +1214,28 @@ export declare const api: {
             workspaceId: Id<"workspaces">;
           },
           Id<"workspaceIntegrations">
+        >;
+        listInstallations: FunctionReference<
+          "query",
+          "public",
+          { workspaceId: Id<"workspaces"> },
+          Array<{
+            _id: Id<"workspaceIntegrations">;
+            accountLogin?: string;
+            externalAccountId: string;
+            externalAccountType?: "organization" | "user";
+            installedBy?: Id<"users">;
+            installedByName?: string;
+            provider: string;
+          }>
+        >;
+      };
+      installFlow: {
+        beginAppInstall: FunctionReference<
+          "mutation",
+          "public",
+          { workspaceId: Id<"workspaces"> },
+          { url: string }
         >;
       };
       links: {
@@ -1234,6 +1270,7 @@ export declare const api: {
             externalRepoFullName: string;
             externalRepoId: string;
             frozenAt?: number;
+            lastWebhookAt?: number;
             pausedByBilling: boolean;
             projectId: Id<"projects">;
             projectName: string;
@@ -1319,6 +1356,39 @@ export declare const api: {
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
           Array<string>
+        >;
+      };
+      importStart: {
+        startGithubImport: FunctionReference<
+          "mutation",
+          "public",
+          {
+            expectedTotal: number;
+            includeClosed: boolean;
+            labels: Array<string>;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+          },
+          { jobId: Id<"taskImportJobs"> }
+        >;
+      };
+      wizardActions: {
+        listInstallationRepos: FunctionReference<
+          "action",
+          "public",
+          { externalAccountId: string; workspaceId: Id<"workspaces"> },
+          Array<{ externalRepoId: string; fullName: string; private: boolean }>
+        >;
+        previewImportCount: FunctionReference<
+          "action",
+          "public",
+          {
+            externalAccountId: string;
+            includeClosed: boolean;
+            labels: Array<string>;
+            repoFullName: string;
+            workspaceId: Id<"workspaces">;
+          },
+          { count: number }
         >;
       };
     };
@@ -3449,6 +3519,33 @@ export declare const internal: {
           }
         >;
       };
+      install: {
+        completeInstallationFromCallback: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            accountLogin?: string;
+            externalAccountId: string;
+            externalAccountType?: "organization" | "user";
+            provider: string;
+            userId: Id<"users">;
+            workspaceId: Id<"workspaces">;
+          },
+          Id<"workspaceIntegrations">
+        >;
+      };
+      installFlow: {
+        consumeInstallState: FunctionReference<
+          "mutation",
+          "internal",
+          { nonce: string },
+          null | {
+            provider: string;
+            userId: Id<"users">;
+            workspaceId: Id<"workspaces">;
+          }
+        >;
+      };
       links: {
         drainDisconnectBatch: FunctionReference<
           "mutation",
@@ -3496,6 +3593,7 @@ export declare const internal: {
             externalAccountId: string;
             includeClosed: boolean;
             jobId: Id<"taskImportJobs">;
+            labels?: Array<string>;
             repoFullName: string;
             sinceCursor?: string;
           },
@@ -3537,6 +3635,14 @@ export declare const internal: {
             repoFullName?: string;
           },
           null
+        >;
+      };
+      setupAction: {
+        finalizeInstall: FunctionReference<
+          "action",
+          "internal",
+          { installationId: string; nonce: string },
+          null | { workspaceId: Id<"workspaces"> }
         >;
       };
       syncOutAction: {

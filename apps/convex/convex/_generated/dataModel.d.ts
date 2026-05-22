@@ -698,6 +698,32 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  integrationInstallStates: {
+    document: {
+      expiresAt: number;
+      nonce: string;
+      provider: string;
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"integrationInstallStates">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "expiresAt"
+      | "nonce"
+      | "provider"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_nonce: ["nonce", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   integrationOutboundRuns: {
     document: {
       runId: string;
@@ -959,6 +985,7 @@ export type DataModel = {
       externalRepoFullName: string;
       externalRepoId: string;
       frozenAt?: number;
+      lastWebhookAt?: number;
       pausedByBilling: boolean;
       projectId: Id<"projects">;
       status: "configuring" | "active" | "paused" | "disconnected";
@@ -973,6 +1000,7 @@ export type DataModel = {
       | "externalRepoFullName"
       | "externalRepoId"
       | "frozenAt"
+      | "lastWebhookAt"
       | "pausedByBilling"
       | "projectId"
       | "status"
@@ -1862,6 +1890,7 @@ export type DataModel = {
       botUserId: Id<"users">;
       externalAccountId: string;
       externalAccountType?: "organization" | "user";
+      installedBy?: Id<"users">;
       provider: string;
       workspaceId: Id<"workspaces">;
       _id: Id<"workspaceIntegrations">;
@@ -1874,6 +1903,7 @@ export type DataModel = {
       | "botUserId"
       | "externalAccountId"
       | "externalAccountType"
+      | "installedBy"
       | "provider"
       | "workspaceId";
     indexes: {

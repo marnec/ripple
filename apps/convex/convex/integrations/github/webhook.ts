@@ -140,6 +140,11 @@ export async function handleGithubWebhook(
   // Freeze gate.
   if (effectiveLinkStatus(link) !== "active") return;
 
+  // Record receipt for the "Last webhook received" indicator. Written only
+  // for sync-active links (frozen/paused links never reach here), matching
+  // the indicator's intent: "are we still receiving live events?"
+  await ctx.db.patch(link._id, { lastWebhookAt: Date.now() });
+
   // Silent rename: if the payload's `repository.full_name` differs from
   // what's stored, patch it. The stable `externalRepoId` keeps the link
   // intact; only the human-readable label drifts.

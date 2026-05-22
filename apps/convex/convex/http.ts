@@ -120,6 +120,45 @@ http.route({
 });
 
 /**
+ * GET /integrations/github/setup
+ *
+ * GitHub App "Setup URL" callback. After an admin installs the App, GitHub
+ * redirects here with `installation_id`, `state` (our one-time nonce), and
+ * `setup_action`. We resolve the nonce → workspace + actor, fetch the
+ * installation's account metadata, write the `workspaceIntegrations` row,
+ * and redirect the browser back into the app's workspace settings.
+ *
+ * Always redirects (never returns raw JSON) — this is a user-facing browser
+ * navigation. Failures land on `/workspaces` with `?github_install=error`.
+ */
+http.route({
+  path: "/integrations/github/setup",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const siteUrl = process.env.SITE_URL ?? "";
+    const url = new URL(request.url);
+    const installationId = url.searchParams.get("installation_id");
+    const nonce = url.searchParams.get("state");
+
+    const fail = () =>
+      Response.redirect(`${siteUrl}/workspaces?github_install=error`, 302);
+
+    if (!installationId || !nonce) return fail();
+
+    const result = await ctx.runAction(
+      internal.integrations.github.setupAction.finalizeInstall,
+      { installationId, nonce },
+    );
+    if (!result) return fail();
+
+    return Response.redirect(
+      `${siteUrl}/workspaces/${result.workspaceId}/settings?github_install=success`,
+      302,
+    );
+  }),
+});
+
+/**
  * POST /collaboration/snapshot
  *
  * Save a Yjs snapshot from PartyKit to Convex file storage.

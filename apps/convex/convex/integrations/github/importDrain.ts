@@ -88,6 +88,9 @@ export const drainImportBatch = internalAction({
     sinceCursor: v.optional(v.string()),
     batchStartIndex: v.number(),
     includeClosed: v.boolean(),
+    // Optional label filter (names). Threaded to GitHub's `labels=` param so
+    // the import scopes to issues carrying at least one matching label.
+    labels: v.optional(v.array(v.string())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -116,6 +119,9 @@ export const drainImportBatch = internalAction({
       direction: "asc",
     });
     if (args.sinceCursor) params.set("since", args.sinceCursor);
+    if (args.labels && args.labels.length > 0) {
+      params.set("labels", args.labels.join(","));
+    }
 
     const res = await client.request<RawGithubIssue[]>({
       installationToken: token,

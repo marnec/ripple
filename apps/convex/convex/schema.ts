@@ -892,9 +892,25 @@ export default defineSchema({
       v.union(v.literal("organization"), v.literal("user")),
     ),
     accountLogin: v.optional(v.string()),
+    // Workspace admin who completed the install. Surfaced in the
+    // workspace-settings installations list ("installed by …"). Optional
+    // for rows created before this column existed.
+    installedBy: v.optional(v.id("users")),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_externalAccount", ["externalAccountId"]),
+
+  // Short-lived CSRF/state rows for the GitHub App install redirect. The
+  // `beginAppInstall` mutation persists a nonce + the initiating
+  // workspace/user; the `/integrations/github/setup` callback consumes it
+  // (one-time) to resolve which workspace the new installation belongs to.
+  integrationInstallStates: defineTable({
+    nonce: v.string(),
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    provider: v.string(),
+    expiresAt: v.number(),
+  }).index("by_nonce", ["nonce"]),
 
   // Per-(workspace, member) mapping of internal users to provider-side
   // identities. Looked up by the inbound integration code to match a GitHub
@@ -927,6 +943,9 @@ export default defineSchema({
     // Set on the entitlement-revoke flip; cleared on entitlement-restore.
     // Drives the >24 h "Force resync" banner.
     frozenAt: v.optional(v.number()),
+    // Timestamp of the most recent webhook delivery processed for this link.
+    // Drives the "Last webhook received" indicator in workspace settings.
+    lastWebhookAt: v.optional(v.number()),
     // Human-readable "owner/repo" — feeds tasks.externalRefs[].repoFullName
     // and the URL for issue links. Updated silently on repo rename events;
     // stable lookups use externalRepoId.
