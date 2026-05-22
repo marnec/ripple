@@ -3,6 +3,8 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
+- document comments
+- guests can comment (all viewers?)
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding

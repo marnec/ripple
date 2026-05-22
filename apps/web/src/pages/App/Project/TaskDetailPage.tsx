@@ -11,7 +11,7 @@ import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@ripple/shared/types/routes";
-import { Trash2 } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
@@ -123,6 +123,26 @@ function TaskDetailPageContent({
             className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
             placeholder="Task title"
           />
+          {(() => {
+            const issueUrl = detail.task.externalRefs?.[0]?.url;
+            return (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 shrink-0 p-0"
+                disabled={!issueUrl}
+                onClick={() =>
+                  issueUrl &&
+                  window.open(issueUrl, "_blank", "noopener,noreferrer")
+                }
+                title={
+                  issueUrl ? "Open linked issue on GitHub" : "No linked issue"
+                }
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            );
+          })()}
         </div>
       )}
 
