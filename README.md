@@ -4,8 +4,6 @@ NEXT STEPS:
     - recurrent events
 
 
-- initially imported tasks or github-first tasks synced down, should have the description initally downloaded
-
 - document comments
 - guests can comment (all viewers?)
 

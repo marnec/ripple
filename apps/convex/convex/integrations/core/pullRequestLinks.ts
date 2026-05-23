@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "../../_generated/server";
-import { requireResourceMember } from "../../authHelpers";
+import { checkResourceMember } from "../../authHelpers";
 
 /**
  * Pull/merge requests attached to a task, read only by the task-detail
@@ -31,9 +31,11 @@ export const listByTask = query({
     }),
   ),
   handler: async (ctx, { taskId }) => {
-    // Auth via the task — readers must be workspace members. Same gate
-    // `tasks.get` uses.
-    await requireResourceMember(ctx, "tasks", taskId);
+    // Auth via the task — readers must be workspace members. Same soft gate
+    // `tasks.get` uses: return [] if the task is gone (e.g. just deleted while
+    // the detail sheet's subscription is still live) rather than throwing.
+    const access = await checkResourceMember(ctx, "tasks", taskId);
+    if (!access) return [];
 
     const joins = await ctx.db
       .query("taskPullRequestLinks")
