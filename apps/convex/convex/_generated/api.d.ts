@@ -3636,6 +3636,14 @@ export declare const internal: {
           null
         >;
       };
+      seedDescriptionAction: {
+        seedTaskDescription: FunctionReference<
+          "action",
+          "internal",
+          { markdown: string; taskId: Id<"tasks"> },
+          null
+        >;
+      };
     };
     github: {
       branchesAction: {

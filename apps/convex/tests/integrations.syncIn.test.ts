@@ -241,6 +241,44 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
     ]);
   });
 
+  it("schedules a description seed when the issue body is non-empty", async () => {
+    const t = createTestContext();
+    const { link } = await setupInboundFixtures(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.query("_scheduled_functions").collect(),
+    );
+    const seeds = scheduled.filter((r) =>
+      String(r.name ?? "").includes("seedTaskDescription"),
+    );
+    expect(seeds).toHaveLength(1);
+    expect(seeds[0]?.args[0]).toMatchObject({ markdown: makeOpenedEvent().body });
+  });
+
+  it("does not schedule a description seed when the issue body is empty", async () => {
+    const t = createTestContext();
+    const { link } = await setupInboundFixtures(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({ body: "   " }),
+        link,
+      }),
+    );
+
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.query("_scheduled_functions").collect(),
+    );
+    const seeds = scheduled.filter((r) =>
+      String(r.name ?? "").includes("seedTaskDescription"),
+    );
+    expect(seeds).toHaveLength(0);
+  });
+
   it("stores the event body as initialBodyMarkdown on the taskIntegrationLinks row", async () => {
     const t = createTestContext();
     const { link } = await setupInboundFixtures(t);

@@ -4,7 +4,6 @@ NEXT STEPS:
     - recurrent events
 
 
-- fix: in github integration, a task that is created on github and synced on ripple doesn't have a task id
 - initially imported tasks or github-first tasks synced down, should have the description initally downloaded
 
 - document comments

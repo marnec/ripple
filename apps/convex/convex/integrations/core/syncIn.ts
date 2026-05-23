@@ -324,6 +324,18 @@ async function createTaskFromEvent(
     externalState,
     externalStateReason,
   });
+
+  // Seed the task's collaborative description from the issue body. The
+  // description is a Yjs doc (not a column), so the conversion runs in a Node
+  // action that writes the cold-start snapshot. Fire-and-forget: a freshly
+  // created task isn't being viewed yet, and an empty body needs no seed.
+  if (event.body.trim().length > 0) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.core.seedDescriptionAction.seedTaskDescription,
+      { taskId, markdown: event.body },
+    );
+  }
 }
 
 async function updateExistingOnClose(
