@@ -8,6 +8,7 @@ import {
   setupProject,
   setupWorkspaceWithAdmin,
 } from "./helpers";
+import { withTriggers } from "../convex/dbTriggers";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -180,7 +181,7 @@ describe("integrations/core/forceResync.synthesizeReconciliationEvents", () => {
           externalRepoFullName: "acme/web",
           externalRepoId: "R_kgDOACME",
         });
-        const taskId = await ctx.db.insert("tasks", {
+        const taskId = await withTriggers(ctx).db.insert("tasks", {
           projectId,
           workspaceId,
           title: "Drifted task",
@@ -319,7 +320,7 @@ describe("integrations/github/forceResyncAction.runForceResync (batching + rate 
         externalRepoId: "R_kgDOACME",
       });
       for (let n = 1; n <= count; n++) {
-        const taskId = await ctx.db.insert("tasks", {
+        const taskId = await withTriggers(ctx).db.insert("tasks", {
           projectId,
           workspaceId,
           title: `Issue ${n}`,

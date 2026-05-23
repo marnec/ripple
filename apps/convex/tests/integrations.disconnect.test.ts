@@ -7,6 +7,7 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import type { Doc, Id } from "../convex/_generated/dataModel";
+import { withTriggers } from "../convex/dbTriggers";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -73,7 +74,7 @@ async function setupLinkedWorkspace(
         const issueNumber = 100 + i;
         const externalIssueId = `I_kwDOABC${i}`;
         const url = `https://github.com/acme/web/issues/${issueNumber}`;
-        const taskId = await ctx.db.insert("tasks", {
+        const taskId = await withTriggers(ctx).db.insert("tasks", {
           projectId,
           workspaceId,
           title: `task ${i}`,
@@ -238,7 +239,7 @@ describe("integrations/core/links.unlinkLink — disconnect cascade", () => {
           q.eq("workspaceId", link!.workspaceId),
         )
         .unique();
-      return ctx.db.insert("tasks", {
+      return withTriggers(ctx).db.insert("tasks", {
         projectId,
         workspaceId: link!.workspaceId,
         title: "ripple-native",

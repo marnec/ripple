@@ -6,6 +6,7 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
+import { withTriggers } from "../convex/dbTriggers";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -76,7 +77,7 @@ async function setupDisconnectedWorkspace(
     for (let i = 0; i < taskCount; i++) {
       const issueNumber = 200 + i;
       const externalIssueId = `I_RECONNECT_${i}`;
-      const taskId = await ctx.db.insert("tasks", {
+      const taskId = await withTriggers(ctx).db.insert("tasks", {
         projectId,
         workspaceId,
         title: `existing task ${i}`,
