@@ -39,6 +39,15 @@ export const seedTaskDescription = internalAction({
   handler: async (ctx, { taskId, markdown }) => {
     if (markdown.trim().length === 0) return null;
 
+    // Cheap pre-check: if the task already has a description snapshot (a
+    // collaborator edited it, or a previous seed ran), skip the conversion
+    // entirely. The write below is still guarded atomically against the race.
+    const existing = await ctx.runQuery(internal.snapshots.getSnapshot, {
+      resourceType: "task",
+      resourceId: taskId,
+    });
+    if (existing) return null;
+
     // BlockNote's markdown parser walks the DOM, so install a document/window
     // for the duration of the conversion. linkedom would be lighter but jsdom
     // is already pulled by the web app and keeps us well under the limit.
@@ -57,11 +66,12 @@ export const seedTaskDescription = internalAction({
       const update = Y.encodeStateAsUpdate(ydoc);
       // `update` is a Uint8Array, a valid BlobPart at runtime; the cast bridges
       // a lib typing nuance (Uint8Array<ArrayBufferLike> vs BlobPart).
-      const storageId = await ctx.storage.store(new Blob([update as BlobPart]));
+      const storageId = await ctx.storage.store(new Blob([update as BlobPart], { type: "application/octet-stream" }));
 
-      await ctx.runMutation(internal.snapshots.saveSnapshot, {
-        resourceType: "task",
-        resourceId: taskId,
+      // Guarded write: only sets the snapshot if the task still has none, so a
+      // concurrent edit/seed is never clobbered (drops the blob otherwise).
+      await ctx.runMutation(internal.snapshots.seedTaskSnapshotIfAbsent, {
+        taskId,
         storageId,
       });
     } finally {

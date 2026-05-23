@@ -79,6 +79,32 @@ export const saveSnapshot = internalMutation({
 });
 
 /**
+ * Seed a task's description snapshot *only if it has none yet*.
+ *
+ * Used by the GitHub description seed (see
+ * `integrations/core/seedDescriptionAction`). Unlike `saveSnapshot`, this never
+ * overwrites: if the task already has a `yjsSnapshotId` — because a collaborator
+ * edited it, or a seed already ran — the freshly-converted blob is dropped and
+ * the existing description is left intact. This makes the seed safe against the
+ * race where someone opens the task before the (scheduled) seed lands: real
+ * content always wins, and the seed can never clobber it.
+ */
+export const seedTaskSnapshotIfAbsent = internalMutation({
+  args: { taskId: v.id("tasks"), storageId: v.id("_storage") },
+  returns: v.object({ seeded: v.boolean() }),
+  handler: async (ctx, { taskId, storageId }) => {
+    const task = await ctx.db.get(taskId);
+    // Task vanished, or already has a description — drop the orphan blob.
+    if (!task || task.yjsSnapshotId) {
+      await ctx.storage.delete(storageId);
+      return { seeded: false };
+    }
+    await ctx.db.patch(taskId, { yjsSnapshotId: storageId });
+    return { seeded: true };
+  },
+});
+
+/**
  * Get the Yjs snapshot storage ID for a resource.
  *
  * This is called by HTTP endpoints when PartyKit GETs snapshot data for cold-start hydration.

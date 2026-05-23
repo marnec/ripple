@@ -4883,6 +4883,12 @@ export declare const internal: {
       },
       null
     >;
+    seedTaskSnapshotIfAbsent: FunctionReference<
+      "mutation",
+      "internal",
+      { storageId: Id<"_storage">; taskId: Id<"tasks"> },
+      { seeded: boolean }
+    >;
   };
   spreadsheetCellRefs: {
     getReferencedCellRefs: FunctionReference<
