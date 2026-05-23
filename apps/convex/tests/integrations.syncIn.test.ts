@@ -311,6 +311,112 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
     expect(task?.title).toBe("A very specific bug title");
   });
 
+  it("assigns a sequential task number off the project counter (webhook path has no import context)", async () => {
+    // Regression: webhook-created tasks left `number` undefined because the
+    // inbound path only set it from importContext (bulk imports). Without a
+    // number the task has no human-readable id (e.g. ENG-1).
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.number).toBe(1);
+
+    const project = await t.run((ctx) => ctx.db.get(projectId));
+    expect(project?.taskCounter).toBe(1);
+  });
+
+  it("gives each webhook-created task a distinct, monotonically increasing number", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({
+          externalIssueId: "I_first",
+          issueNumber: 1,
+        }),
+        link,
+      }),
+    );
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({
+          externalIssueId: "I_second",
+          issueNumber: 2,
+        }),
+        link,
+      }),
+    );
+
+    const numbers = await t.run(async (ctx) =>
+      (
+        await ctx.db
+          .query("tasks")
+          .withIndex("by_project", (q) => q.eq("projectId", projectId))
+          .collect()
+      )
+        .map((task) => task.number)
+        .sort((a, b) => (a ?? 0) - (b ?? 0)),
+    );
+    expect(numbers).toEqual([1, 2]);
+  });
+
+  it("continues numbering off the project counter set by prior Ripple-side creates", async () => {
+    // A project that already has 5 tasks (counter=5) must keep going from 6
+    // when GitHub opens an issue — webhook and in-app creates share one counter.
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) => ctx.db.patch(projectId, { taskCounter: 5 }));
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.number).toBe(6);
+  });
+
+  it("orphan close/reopen upserts also allocate a task number", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await insertStatus(t, {
+      projectId,
+      name: "Done",
+      order: 1,
+      isCompleted: true,
+    });
+
+    // Close arrives for an issue we've never seen → upsert path.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeClosedEvent({ externalIssueId: "I_orphan" }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.number).toBe(1);
+  });
+
   it("issue.closed (state_reason='completed') moves the task to the project's first isCompleted status by order", async () => {
     const t = createTestContext();
     const { projectId, link } = await setupInboundFixtures(t);

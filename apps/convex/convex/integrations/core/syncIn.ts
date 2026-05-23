@@ -278,6 +278,22 @@ async function createTaskFromEvent(
     );
   }
 
+  // Imports pre-allocate a number range on the project counter (see
+  // importJob.ts), so reuse the supplied taskNumber. For webhook-created
+  // tasks there is no import context, so allocate the next sequential number
+  // off the project counter — same serialization point as tasks.create.
+  let number = importContext?.taskNumber;
+  if (number === undefined) {
+    const project = await ctx.db.get(link.projectId);
+    if (!project) {
+      throw new Error(
+        `createTaskFromEvent: project ${link.projectId} not found`,
+      );
+    }
+    number = (project.taskCounter ?? 0) + 1;
+    await ctx.db.patch(link.projectId, { taskCounter: number });
+  }
+
   const taskId = await ctx.db.insert("tasks", {
     projectId: link.projectId,
     workspaceId: link.workspaceId,
@@ -286,7 +302,7 @@ async function createTaskFromEvent(
     priority: "medium",
     completed: destinationStatus.isCompleted,
     creatorId: integration.botUserId,
-    number: importContext?.taskNumber,
+    number,
     importJobId: importContext?.importJobId,
     externalRefs: [
       {
