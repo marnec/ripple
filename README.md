@@ -7,6 +7,9 @@ NEXT STEPS:
 - visually signal that remote issue was deleted on the task description (maybe also on card)
 - improve assignees mechanism
 
+- consider adoption of https://github.com/TimpiaAI/convex-unread-tracking
+
+- consider adoption of https://github.com/TimpiaAI/convex-invite-links as drop in replacement for workshop invite links and guest links
 
 - document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
 - guests can comment (all viewers?)

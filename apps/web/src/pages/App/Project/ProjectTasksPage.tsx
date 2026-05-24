@@ -14,7 +14,6 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban, Plus } from "lucide-react";
 import { useRef, useState } from "react";
-import { startViewTransition } from "@/hooks/use-view-transition";
 import { useLocation, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -82,19 +81,6 @@ function ProjectTasksContent({
     sortBlockedTimer.current = setTimeout(() => setSortBlocked(false), 2500);
   };
 
-  // The list view animates filter/sort changes via View Transitions; the
-  // board animates them via Framer Motion layout animations (see KanbanCard).
-  // Running a View Transition while the board is active would crossfade the
-  // whole page root (ghosted cards) on top of motion, so gate it to the list.
-  const setFiltersAnimated = (next: TaskFilters) =>
-    effectiveView === "list"
-      ? startViewTransition(() => setFilters(next))
-      : setFilters(next);
-  const setSortAnimated = (next: TaskSort) =>
-    effectiveView === "list"
-      ? startViewTransition(() => setSort(next))
-      : setSort(next);
-
   // Pre-fetch active tasks to gate the page-level loading indicator. The
   // active query is what the default list view needs; kanban / completed
   // views fire their own queries and have their own ready gates.
@@ -153,9 +139,9 @@ function ProjectTasksContent({
         <TaskToolbar
           workspaceId={workspaceId}
           filters={filters}
-          onFiltersChange={setFiltersAnimated}
+          onFiltersChange={setFilters}
           sort={sort}
-          onSortChange={setSortAnimated}
+          onSortChange={setSort}
           members={members ?? []}
           sortBlocked={sortBlocked}
         />
