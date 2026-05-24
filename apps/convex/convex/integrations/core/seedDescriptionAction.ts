@@ -39,44 +39,68 @@ export const seedTaskDescription = internalAction({
   handler: async (ctx, { taskId, markdown }) => {
     if (markdown.trim().length === 0) return null;
 
-    // Cheap pre-check: if the task already has a description snapshot (a
-    // collaborator edited it, or a previous seed ran), skip the conversion
-    // entirely. The write below is still guarded atomically against the race.
-    const existing = await ctx.runQuery(internal.snapshots.getSnapshot, {
-      resourceType: "task",
-      resourceId: taskId,
-    });
-    if (existing) return null;
-
-    // BlockNote's markdown parser walks the DOM, so install a document/window
-    // for the duration of the conversion. linkedom would be lighter but jsdom
-    // is already pulled by the web app and keeps us well under the limit.
-    const dom = new JSDOM("<!DOCTYPE html><html><head></head><body></body></html>");
-    const prevWindow = (globalThis as { window?: unknown }).window;
-    const prevDocument = (globalThis as { document?: unknown }).document;
-    (globalThis as { window?: unknown }).window = dom.window;
-    (globalThis as { document?: unknown }).document = dom.window.document;
-
+    // Every exit below must reach a terminal seed status so the client's gate
+    // stops waiting deterministically (success → seedTaskSnapshot, nothing to
+    // seed → "skipped", thrown → "failed"). The outer catch covers the throw.
     try {
-      const editor = BlockNoteEditor.create();
-      const blocks = await editor.tryParseMarkdownToBlocks(markdown);
-      if (blocks.length === 0) return null;
-
-      const ydoc = blocksToYDoc(editor, blocks, "document-store");
-      const update = Y.encodeStateAsUpdate(ydoc);
-      // `update` is a Uint8Array, a valid BlobPart at runtime; the cast bridges
-      // a lib typing nuance (Uint8Array<ArrayBufferLike> vs BlobPart).
-      const storageId = await ctx.storage.store(new Blob([update as BlobPart], { type: "application/octet-stream" }));
-
-      // Guarded write: overwrites a non-user (e.g. empty auto-saved) snapshot
-      // but never a user-edited description (drops the blob otherwise).
-      await ctx.runMutation(internal.snapshots.seedTaskSnapshot, {
-        taskId,
-        storageId,
+      // Cheap pre-check: if the task already has a description snapshot (a
+      // collaborator edited it, or a previous seed ran), skip the conversion
+      // entirely. The write below is still guarded atomically against the race.
+      const existing = await ctx.runQuery(internal.snapshots.getSnapshot, {
+        resourceType: "task",
+        resourceId: taskId,
       });
-    } finally {
-      (globalThis as { window?: unknown }).window = prevWindow;
-      (globalThis as { document?: unknown }).document = prevDocument;
+      if (existing) {
+        await ctx.runMutation(internal.snapshots.markSeedStatus, {
+          taskId,
+          status: "skipped",
+        });
+        return null;
+      }
+
+      // BlockNote's markdown parser walks the DOM, so install a document/window
+      // for the duration of the conversion. linkedom would be lighter but jsdom
+      // is already pulled by the web app and keeps us well under the limit.
+      const dom = new JSDOM("<!DOCTYPE html><html><head></head><body></body></html>");
+      const prevWindow = (globalThis as { window?: unknown }).window;
+      const prevDocument = (globalThis as { document?: unknown }).document;
+      (globalThis as { window?: unknown }).window = dom.window;
+      (globalThis as { document?: unknown }).document = dom.window.document;
+
+      try {
+        const editor = BlockNoteEditor.create();
+        const blocks = await editor.tryParseMarkdownToBlocks(markdown);
+        if (blocks.length === 0) {
+          await ctx.runMutation(internal.snapshots.markSeedStatus, {
+            taskId,
+            status: "skipped",
+          });
+          return null;
+        }
+
+        const ydoc = blocksToYDoc(editor, blocks, "document-store");
+        const update = Y.encodeStateAsUpdate(ydoc);
+        // `update` is a Uint8Array, a valid BlobPart at runtime; the cast bridges
+        // a lib typing nuance (Uint8Array<ArrayBufferLike> vs BlobPart).
+        const storageId = await ctx.storage.store(new Blob([update as BlobPart], { type: "application/octet-stream" }));
+
+        // Guarded write: overwrites a non-user (e.g. empty auto-saved) snapshot
+        // but never a user-edited description (drops the blob otherwise). Sets
+        // the terminal "seeded"/"skipped" status itself.
+        await ctx.runMutation(internal.snapshots.seedTaskSnapshot, {
+          taskId,
+          storageId,
+        });
+      } finally {
+        (globalThis as { window?: unknown }).window = prevWindow;
+        (globalThis as { document?: unknown }).document = prevDocument;
+      }
+    } catch (error) {
+      await ctx.runMutation(internal.snapshots.markSeedStatus, {
+        taskId,
+        status: "failed",
+      });
+      throw error;
     }
 
     return null;

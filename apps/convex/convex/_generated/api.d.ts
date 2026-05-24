@@ -1365,6 +1365,7 @@ export declare const api: {
               occurredAt: number;
             };
             seedExpected: boolean;
+            seedStatus?: "pending" | "seeded" | "skipped" | "failed";
           }
         >;
       };
@@ -4881,6 +4882,15 @@ export declare const internal: {
         resourceType: "doc" | "diagram" | "task" | "spreadsheet";
       },
       Id<"_storage"> | null
+    >;
+    markSeedStatus: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        status: "pending" | "seeded" | "skipped" | "failed";
+        taskId: Id<"tasks">;
+      },
+      null
     >;
     saveSnapshot: FunctionReference<
       "mutation",

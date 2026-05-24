@@ -1471,6 +1471,7 @@ export type DataModel = {
         occurredAt: number;
       };
       projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+      seedStatus?: "pending" | "seeded" | "skipped" | "failed";
       taskId: Id<"tasks">;
       _id: Id<"taskIntegrationLinks">;
       _creationTime: number;
@@ -1501,6 +1502,7 @@ export type DataModel = {
       | "lastSyncError.message"
       | "lastSyncError.occurredAt"
       | "projectIntegrationLinkId"
+      | "seedStatus"
       | "taskId";
     indexes: {
       by_id: ["_id"];

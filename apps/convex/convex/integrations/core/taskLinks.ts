@@ -60,6 +60,17 @@ export const getByTask = query({
       // boolean wouldn't surface a content change (empty→seeded), so we expose
       // the id itself.
       descriptionSnapshotId: v.union(v.id("_storage"), v.null()),
+      // Reactive seed lifecycle (see schema). The client gate stops waiting on
+      // a terminal "seeded"/"skipped"/"failed" rather than an arbitrary timeout.
+      // Absent for legacy links / tasks that never scheduled a seed.
+      seedStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("seeded"),
+          v.literal("skipped"),
+          v.literal("failed"),
+        ),
+      ),
     }),
   ),
   handler: async (ctx, { taskId }) => {
@@ -88,6 +99,7 @@ export const getByTask = query({
       descriptionEdited: link.descriptionEdited,
       seedExpected: (link.initialBodyMarkdown?.trim().length ?? 0) > 0,
       descriptionSnapshotId: task?.yjsSnapshotId ?? null,
+      seedStatus: link.seedStatus,
     };
   },
 });

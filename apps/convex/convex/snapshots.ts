@@ -109,6 +109,7 @@ export const seedTaskSnapshot = internalMutation({
     if (link?.descriptionEdited) {
       // User already engaged with the description — never overwrite it.
       await ctx.storage.delete(storageId);
+      await ctx.db.patch(link._id, { seedStatus: "skipped" });
       return { seeded: false };
     }
     // Replace any prior (e.g. empty auto-saved) snapshot; clean up its blob.
@@ -120,7 +121,41 @@ export const seedTaskSnapshot = internalMutation({
       }
     }
     await ctx.db.patch(taskId, { yjsSnapshotId: storageId });
+    if (link) await ctx.db.patch(link._id, { seedStatus: "seeded" });
     return { seeded: true };
+  },
+});
+
+/**
+ * Record a terminal seed outcome on a task's integration link, for the seed
+ * paths that don't go through `seedTaskSnapshot` (pre-existing snapshot, empty
+ * conversion, or a thrown action). The client's open-time gate watches this to
+ * stop waiting deterministically instead of relying on a timeout.
+ *
+ * No-ops if the link is gone (task deleted mid-seed), and never demotes a
+ * terminal `"seeded"` — guards against a retried/re-delivered seed action
+ * clobbering a snapshot that already landed.
+ */
+export const markSeedStatus = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("seeded"),
+      v.literal("skipped"),
+      v.literal("failed"),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, { taskId, status }) => {
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (!link) return null;
+    if (link.seedStatus === "seeded") return null;
+    await ctx.db.patch(link._id, { seedStatus: status });
+    return null;
   },
 });
 

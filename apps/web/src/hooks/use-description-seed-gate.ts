@@ -5,10 +5,12 @@ import { extractTextFromXml } from "@ripple/shared/blockRef";
 import { api } from "@convex/_generated/api";
 import { SEED_ORIGIN } from "../lib/yjs-origins";
 
-// How long to block an empty task editor waiting for a GitHub description seed
-// before giving up and opening blank. Covers Node-action cold-start P99; a late
-// seed still merges in afterwards (the doc is still empty → hydration applies).
-export const SEED_WAIT_TIMEOUT_MS = 8000;
+// Backstop only. Readiness is now driven by the reactive `seedStatus` from the
+// server (see useDescriptionSeedGate), so this timer is a last-resort safety net
+// for legacy links lacking that field. Generously long: it should almost never
+// be the thing that unblocks the editor. A late seed still merges afterwards
+// (the doc stays empty → hydration applies).
+export const SEED_WAIT_TIMEOUT_MS = 20000;
 
 /**
  * Task-only signals describing whether a GitHub description seed is pending.
@@ -36,6 +38,14 @@ export interface DescriptionSeed {
    * stays gated rather than flashing empty.
    */
   statusLoading: boolean;
+  /**
+   * Reactive seed lifecycle from the server (`taskIntegrationLinks.seedStatus`).
+   * "pending" while the seed action is in flight; a terminal "seeded" /
+   * "skipped" / "failed" resolves the gate deterministically. `undefined` for
+   * legacy links or tasks that never scheduled a seed — the backstop timer
+   * covers those.
+   */
+  seedStatus?: "pending" | "seeded" | "skipped" | "failed";
 }
 
 export interface DescriptionSeedGate {
@@ -66,14 +76,22 @@ export function useDescriptionSeedGate({
   resourceType,
   documentId,
   yDoc,
-  isConnected,
+  isOffline,
   hasCachedText,
   seed,
 }: {
   resourceType: "doc" | "diagram" | "task";
   documentId: string;
   yDoc: Y.Doc;
-  isConnected: boolean;
+  /**
+   * Provider gave up reaching PartyKit (timeout / browser offline). The seed
+   * blob lives in Convex storage, so hydration no longer needs the PartyKit
+   * connection — a seed can still land while PartyKit is offline. So this only
+   * opens the editor immediately when NO seed is expected (so an offline,
+   * non-seeded task behaves like a document); a pending seed still blocks and
+   * shows the notice until it arrives (or the backstop fires).
+   */
+  isOffline: boolean;
   /** IndexedDB had real (non-blank) text cached — short-circuits the wait. */
   hasCachedText: boolean;
   seed: DescriptionSeed | undefined;
@@ -83,6 +101,7 @@ export function useDescriptionSeedGate({
   const edited = seed?.edited ?? false;
   const statusLoading = seed?.statusLoading ?? false;
   const snapshotId = seed?.snapshotId ?? null;
+  const seedStatus = seed?.seedStatus;
 
   // Recovery for a server snapshot that lands AFTER the room cold-loaded empty —
   // notably the GitHub description seed, whose Node-action conversion can finish
@@ -90,17 +109,26 @@ export function useDescriptionSeedGate({
   // reads the snapshot only once, so without this the seeded description never
   // appears in that session. Reactivity comes from `snapshotId` (the already-open
   // taskLinks.getByTask subscription), so the URL is fetched as a ONE-SHOT — no
-  // standing subscription on the signed storage URL. We merge into the live doc
-  // only once the provider synced AND the doc is still empty, so we never clobber
-  // real content. Tagged SEED_ORIGIN so edit-detection ignores it.
+  // standing subscription on the signed storage URL.
+  //
+  // Deliberately NOT gated on PartyKit `isConnected`: the seed blob lives in
+  // Convex storage (getSnapshotUrl), reachable whenever Convex is — so the seed
+  // hydrates even when PartyKit is down. Applying this same canonical update on
+  // the client and (later) via PartyKit's onLoad is an idempotent Yjs merge, so
+  // the double-apply is a no-op, not duplication. We merge only while the live
+  // doc is still empty, so we never clobber real content. Tagged SEED_ORIGIN so
+  // edit-detection ignores it.
   const [snapshotApplied, setSnapshotApplied] = useState(false);
-  // The snapshot id we last hydrated from, so a *changed* id (seed replacing an
-  // empty auto-save) re-triggers, but the same id never re-fetches.
-  const hydratedIdRef = useRef<string | null>(null);
+  // The (documentId, snapshotId) we last hydrated from, so a *changed* id (seed
+  // replacing an empty auto-save) re-triggers, but the same id never re-fetches.
+  // Keying on documentId too means a task switch never reuses the prior task's
+  // hydration mark — no render-time reset needed (the sheet stays mounted).
+  const hydratedKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (resourceType !== "task" || !snapshotId || !isConnected) return;
-    if (hydratedIdRef.current === snapshotId) return;
-    hydratedIdRef.current = snapshotId;
+    if (resourceType !== "task" || !snapshotId) return;
+    const hydrationKey = `${documentId}:${snapshotId}`;
+    if (hydratedKeyRef.current === hydrationKey) return;
+    hydratedKeyRef.current = hydrationKey;
 
     let cancelled = false;
     void (async () => {
@@ -124,22 +152,52 @@ export function useDescriptionSeedGate({
         }
         // Only unblock once the doc actually has content — an empty snapshot
         // (e.g. a stale empty auto-save before the seed overwrites it) must NOT
-        // unblock; we wait for the seed's id to arrive (or the timeout).
+        // unblock; we wait for the seed's id to arrive (or the backstop).
         if (!cancelled && hasContent()) setSnapshotApplied(true);
       } catch (error) {
         console.error("Failed to hydrate task description from snapshot:", error);
+        // Allow a later render (e.g. Convex reconnects) to retry this same id.
+        if (!cancelled) hydratedKeyRef.current = null;
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [snapshotId, isConnected, yDoc, resourceType, documentId, convex]);
+  }, [snapshotId, yDoc, resourceType, documentId, convex]);
 
-  // Bounded wait: if a seed is expected but never lands with content (e.g. the
-  // seed action errored), unblock the editor empty after a timeout. A late seed
-  // still merges via the hydration effect above (the doc stays empty).
+  // Backstop only: with the reactive `seedStatus` driving readiness below, this
+  // timer matters solely for legacy links whose status is `undefined` (and a
+  // seed is somehow still expected without ever resolving). It is no longer the
+  // primary mechanism, so it's generously long. A late seed still merges via the
+  // hydration effect above (the doc stays empty until it arrives).
   const [seedTimedOut, setSeedTimedOut] = useState(false);
-  const blockingForSeed = expected && !edited && !snapshotApplied && !hasCachedText;
+
+  // The task-detail sheet stays mounted across task switches — only
+  // `documentId` changes (see Tasks.tsx / KanbanBoard.tsx, and the matching
+  // yDoc-recreation note in use-yjs-provider). So this transient per-resource
+  // state would otherwise leak from the previously opened task. A stale
+  // `snapshotApplied` is the dangerous one: it makes a freshly opened task that
+  // is still seeding look ready, so the editor opens empty with no spinner and
+  // the seeded description only pops in later. Reset on resource change using
+  // React's "adjust state while rendering" idiom (as useTaskDetail does for the
+  // title), so the very first render of the new task already sees cleared state.
+  // `hydratedIdRef` doesn't need resetting here — its key includes documentId.
+  const [seededForDocId, setSeededForDocId] = useState(documentId);
+  if (seededForDocId !== documentId) {
+    setSeededForDocId(documentId);
+    if (snapshotApplied) setSnapshotApplied(false);
+    if (seedTimedOut) setSeedTimedOut(false);
+  }
+
+  // NOT dropped when PartyKit is offline: the seed is fetched from Convex
+  // storage (see the hydration effect above), which is reachable even when
+  // PartyKit isn't — so a seed can still land, and bypassing the wait would
+  // flash an empty editor and then pop the seed in (no spinner shown). We keep
+  // blocking + showing the "seeding…" notice; the backstop is the escape if the
+  // seed truly never arrives (e.g. Convex is also unreachable).
+  const seedTerminalNotSeeded = seedStatus === "skipped" || seedStatus === "failed";
+  const blockingForSeed =
+    expected && !edited && !snapshotApplied && !hasCachedText && !seedTerminalNotSeeded;
   useEffect(() => {
     if (!blockingForSeed) return;
     const timer = setTimeout(() => setSeedTimedOut(true), SEED_WAIT_TIMEOUT_MS);
@@ -149,21 +207,33 @@ export function useDescriptionSeedGate({
   // Ready as soon as we're sure no seed will fill the editor. Positive "we have
   // content / no wait" signals short-circuit immediately (cached or edited tasks
   // open instantly): real text cached locally (a blank paragraph does NOT
-  // count), a prior user edit, the seed's content applied, or we gave up
-  // waiting. Otherwise we may only declare ready once the GitHub-link query has
-  // resolved AND reports no seed — while it's still loading we hold back rather
-  // than flash an empty editor (which would also plant the blank paragraph that
-  // defeats the cache check).
+  // count), a prior user edit, the seed's content applied, the server reported a
+  // terminal non-seeded outcome (skipped/failed → nothing is coming), offline,
+  // or the backstop fired. Otherwise we may only declare ready once the
+  // GitHub-link query has resolved AND reports no seed — while it's still loading
+  // we hold back rather than flash an empty editor (which would also plant the
+  // blank paragraph that defeats the cache check).
   const seedStatusResolved = !(resourceType === "task" && statusLoading);
   const descriptionReady =
     hasCachedText ||
     edited ||
     snapshotApplied ||
+    seedTerminalNotSeeded ||
     seedTimedOut ||
+    // Offline only short-circuits when NO seed is expected — otherwise we wait
+    // for the Convex-delivered seed (above). Fully-offline non-seed tasks (where
+    // the link query can't even resolve) still open immediately here.
+    (isOffline && !expected) ||
     (seedStatusResolved && !expected);
 
   return {
     descriptionReady,
-    awaitingSeed: blockingForSeed && !seedTimedOut,
+    // Show the "seeding…" notice only while the seed is genuinely in flight:
+    // server says pending (or hasn't reported yet on a legacy link) and we're
+    // still blocking. Terminal statuses and the backstop drop it.
+    awaitingSeed:
+      blockingForSeed &&
+      (seedStatus === "pending" || seedStatus === undefined) &&
+      !seedTimedOut,
   };
 }

@@ -1051,6 +1051,20 @@ export default defineSchema({
     // as a pushable change. Persistent, so reopening an edited task still shows
     // the button.
     descriptionEdited: v.optional(v.boolean()),
+    // Lifecycle of the GitHub creation-time description seed. Drives the
+    // client's open-time gate reactively so the editor no longer relies on an
+    // arbitrary timeout: "pending" while the seed action is in flight, then a
+    // terminal "seeded" / "skipped" / "failed". Absent = legacy link or a task
+    // that never scheduled a seed (empty issue body) — the client backstop
+    // timer covers those. See seedDescriptionAction + use-description-seed-gate.
+    seedStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("seeded"),
+        v.literal("skipped"),
+        v.literal("failed"),
+      ),
+    ),
   })
     // Idempotency / "have we imported this issue?" lookup.
     .index("by_link_externalIssueId", [

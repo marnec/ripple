@@ -19,6 +19,7 @@ describe("integrations/taskLinks.getByTask", () => {
       body?: string;
       snapshot?: boolean;
       edited?: boolean;
+      seedStatus?: "pending" | "seeded" | "skipped" | "failed";
     } = { withLink: true },
   ) {
     const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
@@ -103,6 +104,7 @@ describe("integrations/taskLinks.getByTask", () => {
           externalState: "open",
           initialBodyMarkdown: opts.body,
           descriptionEdited: opts.edited,
+          seedStatus: opts.seedStatus,
           ...(opts.withError && {
             lastSyncError: {
               occurredAt: 9_999,
@@ -202,6 +204,24 @@ describe("integrations/taskLinks.getByTask", () => {
 
     expect(r1?.descriptionEdited).toBe(true);
     expect(r2?.descriptionEdited).toBeFalsy();
+  });
+
+  it("passes through seedStatus from the link (including undefined)", async () => {
+    const t = createTestContext();
+    const pending = await setupLinkedTask(t, { withLink: true, body: "b", seedStatus: "pending" });
+    const seeded = await setupLinkedTask(t, { withLink: true, body: "b", seedStatus: "seeded" });
+    const skipped = await setupLinkedTask(t, { withLink: true, body: "b", seedStatus: "skipped" });
+    const failed = await setupLinkedTask(t, { withLink: true, body: "b", seedStatus: "failed" });
+    const legacy = await setupLinkedTask(t, { withLink: true, body: "b" });
+
+    const get = (s: Awaited<ReturnType<typeof setupLinkedTask>>) =>
+      s.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: s.taskId });
+
+    expect((await get(pending))?.seedStatus).toBe("pending");
+    expect((await get(seeded))?.seedStatus).toBe("seeded");
+    expect((await get(skipped))?.seedStatus).toBe("skipped");
+    expect((await get(failed))?.seedStatus).toBe("failed");
+    expect((await get(legacy))?.seedStatus).toBeUndefined();
   });
 });
 

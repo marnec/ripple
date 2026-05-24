@@ -257,6 +257,20 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
     );
     expect(seeds).toHaveLength(1);
     expect(seeds[0]?.args[0]).toMatchObject({ markdown: makeOpenedEvent().body });
+
+    // The link is marked pending so the client gate waits on the reactive
+    // status rather than an arbitrary timeout.
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_link_externalIssueId", (q) =>
+          q
+            .eq("projectIntegrationLinkId", link._id)
+            .eq("externalIssueId", makeOpenedEvent().externalIssueId),
+        )
+        .unique(),
+    );
+    expect(linkRow?.seedStatus).toBe("pending");
   });
 
   it("does not schedule a description seed when the issue body is empty", async () => {
@@ -277,6 +291,20 @@ describe("integrations/core/syncIn.applyNormalizedEvent", () => {
       String(r.name ?? "").includes("seedTaskDescription"),
     );
     expect(seeds).toHaveLength(0);
+
+    // No seed scheduled → seedStatus left undefined (seedExpected is false, so
+    // the client gate opens via its no-seed path).
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_link_externalIssueId", (q) =>
+          q
+            .eq("projectIntegrationLinkId", link._id)
+            .eq("externalIssueId", makeOpenedEvent().externalIssueId),
+        )
+        .unique(),
+    );
+    expect(linkRow?.seedStatus).toBeUndefined();
   });
 
   it("stores the event body as initialBodyMarkdown on the taskIntegrationLinks row", async () => {

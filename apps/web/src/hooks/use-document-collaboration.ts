@@ -185,7 +185,7 @@ export function useDocumentCollaboration<
     resourceType,
     documentId,
     yDoc,
-    isConnected,
+    isOffline,
     hasCachedText: cachedTextReady,
     seed,
   });

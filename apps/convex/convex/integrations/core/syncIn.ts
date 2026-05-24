@@ -323,6 +323,10 @@ async function createTaskFromEvent(
     initialBodyMarkdown: event.body,
     externalState,
     externalStateReason,
+    // "pending" iff we're about to schedule the seed below; the action drives
+    // it to a terminal state. Left undefined for empty bodies (no seed) so the
+    // client gate opens immediately via its `!seedExpected` path.
+    seedStatus: event.body.trim().length > 0 ? "pending" : undefined,
   });
 
   // Seed the task's collaborative description from the issue body. The

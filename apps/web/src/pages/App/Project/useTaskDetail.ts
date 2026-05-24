@@ -162,6 +162,7 @@ export function useTaskDetail({
       snapshotId,
       edited: descriptionEdited,
       statusLoading: seedStatusLoading,
+      seedStatus: githubLink?.seedStatus,
     },
   });
 

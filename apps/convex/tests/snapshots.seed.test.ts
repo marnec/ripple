@@ -54,7 +54,7 @@ async function storeBlob(
 async function linkTask(
   t: ReturnType<typeof createTestContext>,
   taskId: Id<"tasks">,
-  opts: { edited?: boolean } = {},
+  opts: { edited?: boolean; seedStatus?: "pending" | "seeded" | "skipped" | "failed" } = {},
 ): Promise<void> {
   await t.run(async (ctx) => {
     const task = (await ctx.db.get(taskId))!;
@@ -73,7 +73,22 @@ async function linkTask(
       externalUpdatedAt: 1_000,
       externalAuthor: { login: "o", avatarUrl: "a", url: "u" },
       descriptionEdited: opts.edited,
+      seedStatus: opts.seedStatus,
     });
+  });
+}
+
+/** Read the seedStatus off a task's integration link (if any). */
+async function getLinkStatus(
+  t: ReturnType<typeof createTestContext>,
+  taskId: Id<"tasks">,
+): Promise<string | undefined> {
+  return t.run(async (ctx) => {
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    return link?.seedStatus;
   });
 }
 
@@ -105,6 +120,8 @@ describe("snapshots.seedTaskSnapshot", () => {
     expect(task?.yjsSnapshotId).toBe(incoming);
     // the replaced (stale) blob is cleaned up
     expect(await t.run((ctx) => ctx.storage.get(stale))).toBeNull();
+    // terminal status recorded for the client gate
+    expect(await getLinkStatus(t, taskId)).toBe("seeded");
   });
 
   it("never overwrites a user-edited description and drops the incoming blob", async () => {
@@ -121,6 +138,8 @@ describe("snapshots.seedTaskSnapshot", () => {
     const task = await t.run((ctx) => ctx.db.get(taskId));
     expect(task?.yjsSnapshotId).toBe(original);
     expect(await t.run((ctx) => ctx.storage.get(incoming))).toBeNull();
+    // user-edited → terminal "skipped"
+    expect(await getLinkStatus(t, taskId)).toBe("skipped");
   });
 
   it("drops the blob when the task no longer exists", async () => {
@@ -133,5 +152,36 @@ describe("snapshots.seedTaskSnapshot", () => {
 
     expect(res.seeded).toBe(false);
     expect(await t.run((ctx) => ctx.storage.get(storageId))).toBeNull();
+  });
+});
+
+describe("snapshots.markSeedStatus", () => {
+  it("records a terminal status on the link", async () => {
+    const t = createTestContext();
+    const taskId = await makeTask(t);
+    await linkTask(t, taskId, { seedStatus: "pending" });
+
+    await t.mutation(internal.snapshots.markSeedStatus, { taskId, status: "failed" });
+
+    expect(await getLinkStatus(t, taskId)).toBe("failed");
+  });
+
+  it("never demotes a terminal 'seeded' (retry/re-delivery safety)", async () => {
+    const t = createTestContext();
+    const taskId = await makeTask(t);
+    await linkTask(t, taskId, { seedStatus: "seeded" });
+
+    await t.mutation(internal.snapshots.markSeedStatus, { taskId, status: "skipped" });
+
+    expect(await getLinkStatus(t, taskId)).toBe("seeded");
+  });
+
+  it("no-ops when the task has no integration link", async () => {
+    const t = createTestContext();
+    const taskId = await makeTask(t); // no link
+
+    await expect(
+      t.mutation(internal.snapshots.markSeedStatus, { taskId, status: "skipped" }),
+    ).resolves.toBeNull();
   });
 });
