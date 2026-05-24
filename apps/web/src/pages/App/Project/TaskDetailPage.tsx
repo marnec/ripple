@@ -265,12 +265,13 @@ function TaskDetailPageContent({
       <TaskDeleteDialog
         open={detail.showDeleteDialog}
         onOpenChange={detail.setShowDeleteDialog}
-        onConfirm={() =>
+        isGithubLinked={detail.isGithubLinked}
+        onConfirm={(closeGithubIssue) =>
           detail.handleDelete(() => {
             void navigate(
               `/workspaces/${workspaceId}/projects/${projectId}`
             );
-          })
+          }, closeGithubIssue)
         }
       />
     </div>

@@ -153,6 +153,35 @@ export function commentEditSink(
   };
 }
 
+/**
+ * Issue-close sink (close the linked issue when its task is deleted). The task
+ * and its link row are already gone (cascade-deleted before this op was
+ * enqueued), so success has nothing to record and a permanent failure can only
+ * be surfaced in the workspace audit log — there's no task row left to carry a
+ * `lastSyncError` chip.
+ */
+export function issueCloseSink(
+  ctx: ActionCtx,
+  args: { workspaceId: Id<"workspaces">; issueNumber: number },
+): OutboundRecorderSink {
+  return {
+    recordSuccess: async () => {
+      // Nothing to mirror — the task (and its link) is gone.
+    },
+    recordPermanentFailure: async (message, httpStatus) => {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordIssueCloseFailure,
+        {
+          workspaceId: args.workspaceId,
+          issueNumber: args.issueNumber,
+          message,
+          httpStatus,
+        },
+      );
+    },
+  };
+}
+
 export function commentDeleteSink(
   ctx: ActionCtx,
   commentLinkId: Id<"taskCommentIntegrationLinks">,

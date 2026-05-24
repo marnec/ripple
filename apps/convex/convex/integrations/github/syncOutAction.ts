@@ -8,6 +8,7 @@ import {
   commentCreateSink,
   commentDeleteSink,
   commentEditSink,
+  issueCloseSink,
   taskAssigneesSink,
   taskDescriptionSink,
   taskLabelsSink,
@@ -221,6 +222,39 @@ export const pushCommentEdit = internalAction({
           repoFullName: args.repoFullName,
           externalCommentId: args.externalCommentId,
           body: args.body,
+        }),
+      sink,
+    );
+    return null;
+  },
+});
+
+export const pushIssueClose = internalAction({
+  args: {
+    repoFullName: v.string(),
+    issueNumber: v.number(),
+    /** For the audit-log failure trace; the task itself is already deleted. */
+    workspaceId: v.id("workspaces"),
+    installationId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const sink = issueCloseSink(ctx, {
+      workspaceId: args.workspaceId,
+      issueNumber: args.issueNumber,
+    });
+    const gateway = makeGithubGateway(args.installationId);
+    if (!gateway) {
+      await sink.recordPermanentFailure(CREDS_MISSING);
+      return null;
+    }
+    await runOutboundOp(
+      () =>
+        gateway.setIssueState({
+          repoFullName: args.repoFullName,
+          issueNumber: args.issueNumber,
+          state: "closed",
+          stateReason: "completed",
         }),
       sink,
     );

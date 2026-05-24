@@ -243,7 +243,10 @@ export function TaskDetailSheet({
         <TaskDeleteDialog
           open={detail.showDeleteDialog}
           onOpenChange={detail.setShowDeleteDialog}
-          onConfirm={() => detail.handleDelete(() => onOpenChange(false))}
+          isGithubLinked={detail.isGithubLinked}
+          onConfirm={(closeGithubIssue) =>
+            detail.handleDelete(() => onOpenChange(false), closeGithubIssue)
+          }
         />
       )}
     </>

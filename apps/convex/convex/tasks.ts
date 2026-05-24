@@ -21,6 +21,7 @@ import {
   maybeEnqueueLabelsPush,
   maybeEnqueueOutboundPush,
   enqueueDescriptionPush,
+  enqueueIssueClose,
 } from "./integrations/core/outboundDispatch";
 
 /**
@@ -1151,15 +1152,28 @@ export const listUnscheduled = query({
 });
 
 export const remove = mutation({
-  args: { taskId: v.id("tasks") },
+  args: {
+    taskId: v.id("tasks"),
+    // When the task is linked to a GitHub issue, also close that issue
+    // (state=closed). Opt-in per deletion from the confirm dialog; a no-op for
+    // unlinked tasks. (GitHub Apps can't delete issues — no such permission —
+    // so the "delete the issue too" intent is realized as a close.)
+    closeGithubIssue: v.optional(v.boolean()),
+  },
   returns: v.null(),
-  handler: async (ctx, { taskId }) => {
+  handler: async (ctx, { taskId, closeGithubIssue }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
 
     await logTaskActivity(ctx, {
       taskId, userId, workspaceId: task.workspaceId,
       taskTitle: task.title, type: "deleted",
     });
+
+    // Enqueue the GitHub issue close BEFORE the cascade — it reads the
+    // taskIntegrationLinks row that the cascade is about to remove.
+    if (closeGithubIssue) {
+      await enqueueIssueClose(ctx, taskId);
+    }
 
     await cascadeDelete.deleteWithCascade(ctx, "tasks", taskId, {
       onComplete: logCascadeSummary({

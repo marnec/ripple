@@ -418,9 +418,9 @@ export function useTaskDetail({
     if (taskId) void updateTask({ taskId, estimate: value });
   };
 
-  const handleDelete = (onDeleted: () => void) => {
+  const handleDelete = (onDeleted: () => void, closeGithubIssue = false) => {
     if (taskId) {
-      void removeTask({ taskId }).then(() => {
+      void removeTask({ taskId, closeGithubIssue }).then(() => {
         setShowDeleteDialog(false);
         onDeleted();
       });
@@ -456,6 +456,7 @@ export function useTaskDetail({
     showDeleteDialog,
     setShowDeleteDialog,
     handleDelete,
+    isGithubLinked,
     handleDueDateChange,
     handlePlannedStartDateChange,
     handleEstimateChange,

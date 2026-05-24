@@ -7,6 +7,7 @@ import {
   type OutboundResponse,
 } from "../convex/integrations/core/syncOut";
 import {
+  enqueueIssueClose,
   maybeEnqueueAssigneesPush,
   maybeEnqueueLabelsPush,
   maybeEnqueueOutboundPush,
@@ -940,5 +941,171 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
     const link = await t.run((ctx) => ctx.db.get(linkId));
     expect(link?.externalLabels).toEqual(["bug", "good first issue"]);
     expect(link?.lastSyncError).toBeUndefined();
+  });
+});
+
+describe("integrations/core/outboundDispatch.enqueueIssueClose", () => {
+  // Same env-unset trick as maybeEnqueueOutboundPush: with creds missing, a
+  // scheduled action records a permanent failure. But the task/link are gone
+  // by then, so the observable signal is the workspace-scoped
+  // `integration.issue_close_failed` audit-log entry written by the sink.
+  let savedAppId: string | undefined;
+  let savedKey: string | undefined;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    savedAppId = process.env.GITHUB_APP_ID;
+    savedKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    delete process.env.GITHUB_APP_ID;
+    delete process.env.GITHUB_APP_PRIVATE_KEY;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (savedAppId !== undefined) process.env.GITHUB_APP_ID = savedAppId;
+    if (savedKey !== undefined) process.env.GITHUB_APP_PRIVATE_KEY = savedKey;
+  });
+
+  async function setupLinkedTask(
+    t: ReturnType<typeof createTestContext>,
+    opts: { linkStatus?: "active" | "paused"; issueNumber?: number } = {},
+  ) {
+    const { linkStatus = "active", issueNumber = 42 } = opts;
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+    const botUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub", isBot: true }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "github",
+        externalAccountId: "install-1",
+      }),
+    );
+    const projectLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        projectId,
+        workspaceId,
+        status: linkStatus,
+        pausedByBilling: false,
+        externalRepoId: "R_kg1",
+        externalRepoFullName: "acme/web",
+      }),
+    );
+    const statusId = await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Todo",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: false,
+      }),
+    );
+    const taskId = await t.run((ctx) =>
+      ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "Linked task",
+        statusId,
+        priority: "medium",
+        completed: false,
+        creatorId: botUserId,
+        externalRefs: [
+          {
+            provider: "github",
+            repoFullName: "acme/web",
+            issueNumber,
+            url: `https://github.com/acme/web/issues/${issueNumber}`,
+          },
+        ],
+      }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("taskIntegrationLinks", {
+        taskId,
+        projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_node1",
+        externalUpdatedAt: 1_000,
+        externalAuthor: {
+          login: "octocat",
+          avatarUrl: "https://avatars/octocat.png",
+          url: "https://github.com/octocat",
+        },
+      }),
+    );
+    return { workspaceId, taskId };
+  }
+
+  async function issueCloseFailures(
+    t: ReturnType<typeof createTestContext>,
+    workspaceId: Id<"workspaces">,
+  ) {
+    const logs = await t.run((ctx) =>
+      auditLog.queryByResource(ctx, {
+        resourceType: "tasks",
+        resourceId: "issue-42",
+      }),
+    );
+    return logs.filter(
+      (l: { action: string; scope?: string }) =>
+        l.action === "integration.issue_close_failed" &&
+        l.scope === workspaceId,
+    );
+  }
+
+  it("active link: schedules the close action (records issue_close_failed on missing creds)", async () => {
+    const t = createTestContext();
+    const { workspaceId, taskId } = await setupLinkedTask(t);
+
+    await t.run((ctx) => enqueueIssueClose(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await issueCloseFailures(t, workspaceId)).toHaveLength(1);
+  });
+
+  it("freeze gate: paused link does NOT schedule the action", async () => {
+    const t = createTestContext();
+    const { workspaceId, taskId } = await setupLinkedTask(t, {
+      linkStatus: "paused",
+    });
+
+    await t.run((ctx) => enqueueIssueClose(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await issueCloseFailures(t, workspaceId)).toHaveLength(0);
+  });
+
+  it("unlinked task: no-op (no action scheduled)", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+    const statusId = await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Todo",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: false,
+      }),
+    );
+    const taskId = await t.run((ctx) =>
+      ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "Native task",
+        statusId,
+        priority: "medium",
+        completed: false,
+        creatorId: userId,
+      }),
+    );
+
+    await t.run((ctx) => enqueueIssueClose(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await issueCloseFailures(t, workspaceId)).toHaveLength(0);
   });
 });

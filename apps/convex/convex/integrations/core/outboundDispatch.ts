@@ -391,6 +391,44 @@ export async function maybeEnqueueCommentUpdate(
   );
 }
 
+/**
+ * Issue-close push. Closes the linked GitHub issue (state=closed,
+ * reason=completed) when the user opts in while deleting the task. GitHub App
+ * installation tokens can't *delete* issues — there's no such permission — so
+ * "delete the issue too" is realized as a close, which the `Issues: write`
+ * grant fully supports.
+ *
+ * MUST be called *before* the task's cascade delete runs — it reads the
+ * `taskIntegrationLinks` row to capture the repo and installation, which the
+ * cascade then removes. Skips silently for an unlinked task or a frozen/paused
+ * integration (a frozen link means "don't touch GitHub").
+ *
+ * Unlike the other task pushes this schedules *without* an `onComplete`
+ * callback or an `integrationOutboundRuns` row: those resolve the affected task
+ * to write `lastSyncError`, but here the task is about to be gone. Retryable
+ * failures still retry; a permanent failure is recorded in the workspace audit
+ * log by the action's sink.
+ */
+export async function enqueueIssueClose(
+  ctx: MutationCtx,
+  taskId: Id<"tasks">,
+): Promise<void> {
+  const target = await resolveTaskTarget(ctx, taskId);
+  if (!target) return;
+  if (!target.issueNumber) return; // no issue number → nothing to close
+
+  await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushIssueClose,
+    {
+      repoFullName: target.repoFullName,
+      issueNumber: target.issueNumber,
+      workspaceId: target.projectLink.workspaceId,
+      installationId: target.installationId,
+    },
+  );
+}
+
 /** Comment-delete push. Skipped when no comment-link row exists. */
 export async function maybeEnqueueCommentDelete(
   ctx: MutationCtx,

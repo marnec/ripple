@@ -178,6 +178,52 @@ export const recordOutboundFailure = internalMutation({
   },
 });
 
+/**
+ * Records a permanent failure of the "close the GitHub issue on task delete"
+ * op. Unlike every other outbound failure, the task (and its
+ * `taskIntegrationLinks` row) is already gone by the time this runs, so there's
+ * no row to mark `lastSyncError` on — the only durable trace is a
+ * workspace-scoped audit entry, which is also the only place an admin could see
+ * that an explicit "close the issue too" request didn't land.
+ */
+export const recordIssueCloseFailure = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    issueNumber: v.number(),
+    message: v.string(),
+    httpStatus: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const integration = await ctx.db
+      .query("workspaceIntegrations")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .unique();
+    if (!integration) return null;
+    try {
+      await auditLog.log(ctx, {
+        action: "integration.issue_close_failed",
+        actorId: integration.botUserId.toString(),
+        resourceType: "tasks",
+        resourceId: `issue-${args.issueNumber}`,
+        severity: "warning",
+        metadata: {
+          issueNumber: args.issueNumber,
+          message: args.message,
+          httpStatus: args.httpStatus,
+        },
+        scope: args.workspaceId,
+      });
+    } catch (err) {
+      console.error(
+        "[auditLog] failed to log integration.issue_close_failed",
+        err,
+      );
+    }
+    return null;
+  },
+});
+
 export const recordCommentCreateSuccess = internalMutation({
   args: {
     commentId: v.id("taskComments"),

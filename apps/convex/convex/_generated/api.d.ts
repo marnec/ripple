@@ -2804,7 +2804,7 @@ export declare const api: {
     remove: FunctionReference<
       "mutation",
       "public",
-      { taskId: Id<"tasks"> },
+      { closeGithubIssue?: boolean; taskId: Id<"tasks"> },
       null
     >;
     retryOutboundSync: FunctionReference<
@@ -3799,6 +3799,17 @@ export declare const internal: {
           },
           null
         >;
+        pushIssueClose: FunctionReference<
+          "action",
+          "internal",
+          {
+            installationId: string;
+            issueNumber: number;
+            repoFullName: string;
+            workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
         pushIssueState: FunctionReference<
           "action",
           "internal",
@@ -3897,6 +3908,17 @@ export declare const internal: {
           "mutation",
           "internal",
           { taskId: Id<"tasks"> },
+          null
+        >;
+        recordIssueCloseFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            httpStatus?: number;
+            issueNumber: number;
+            message: string;
+            workspaceId: Id<"workspaces">;
+          },
           null
         >;
         recordLabelsSuccess: FunctionReference<
