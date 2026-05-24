@@ -62,8 +62,17 @@ function ProjectDetailsContent({
     sortBlockedTimer.current = setTimeout(() => setSortBlocked(false), 2500);
   };
 
-  const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
-  const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
+  // Only the list view animates filter/sort via View Transitions; the board
+  // uses Framer Motion layout animations, so a root-level VT there would
+  // crossfade the whole page (ghosted cards) on top of motion.
+  const setFiltersAnimated = (next: TaskFilters) =>
+    view === "list"
+      ? startViewTransition(() => setFilters(next))
+      : setFilters(next);
+  const setSortAnimated = (next: TaskSort) =>
+    view === "list"
+      ? startViewTransition(() => setSort(next))
+      : setSort(next);
   const project = useQuery(api.projects.get, { id: projectId });
   // Pre-fetch tasks to show a loading indicator beside the tabs
   const tasks = useEagerProjectTasks(projectId);

@@ -82,8 +82,18 @@ function ProjectTasksContent({
     sortBlockedTimer.current = setTimeout(() => setSortBlocked(false), 2500);
   };
 
-  const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
-  const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
+  // The list view animates filter/sort changes via View Transitions; the
+  // board animates them via Framer Motion layout animations (see KanbanCard).
+  // Running a View Transition while the board is active would crossfade the
+  // whole page root (ghosted cards) on top of motion, so gate it to the list.
+  const setFiltersAnimated = (next: TaskFilters) =>
+    effectiveView === "list"
+      ? startViewTransition(() => setFilters(next))
+      : setFilters(next);
+  const setSortAnimated = (next: TaskSort) =>
+    effectiveView === "list"
+      ? startViewTransition(() => setSort(next))
+      : setSort(next);
 
   // Pre-fetch active tasks to gate the page-level loading indicator. The
   // active query is what the default list view needs; kanban / completed

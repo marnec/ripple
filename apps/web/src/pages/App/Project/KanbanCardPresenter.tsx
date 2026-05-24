@@ -61,12 +61,6 @@ export function KanbanCardPresenter({
   return (
     <Card
       onClick={onClick}
-      style={{
-        // DragOverlay renders a second KanbanCardPresenter with isDragging —
-        // exclude it from view transitions to avoid duplicate names.
-        viewTransitionName: isDragging ? "none" : `--task-${task._id}`,
-        viewTransitionClass: isDragging ? undefined : "task-card",
-      }}
       className={cn(
         "cursor-grab active:cursor-grabbing py-0 gap-0 border shadow ring-0 dark:bg-stone-950 bg-stone-100",
         isDragging && "shadow-lg rotate-2"

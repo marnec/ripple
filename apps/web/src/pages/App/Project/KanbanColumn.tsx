@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { CalendarClock, Check, ChevronLeft, ChevronRight, CircleCheck, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
@@ -69,6 +70,9 @@ type KanbanColumnProps = {
   isFirst: boolean;
   isLast: boolean;
   canDelete: boolean;
+  /** Passed to each card: when false (drag/drop settle) motion layout
+   *  animation is suppressed so it doesn't fight dnd-kit transforms. */
+  layoutEnabled: boolean;
   /** Optional content rendered at the bottom of the task list. Used for the
    *  per-column completed-overflow pill on the kanban. */
   footer?: ReactNode;
@@ -86,6 +90,7 @@ export function KanbanColumn({
   isFirst,
   isLast,
   canDelete,
+  layoutEnabled,
   footer,
 }: KanbanColumnProps) {
   const [isRenaming, setIsRenaming] = useState(false);
@@ -242,13 +247,16 @@ export function KanbanColumn({
               Drop tasks here
             </div>
           ) : (
-            tasks.map((task) => (
-              <KanbanCard
-                key={task._id}
-                task={task}
-                onClick={() => onTaskClick(task._id)}
-              />
-            ))
+            <AnimatePresence initial={false}>
+              {tasks.map((task) => (
+                <KanbanCard
+                  key={task._id}
+                  task={task}
+                  onClick={() => onTaskClick(task._id)}
+                  layoutEnabled={layoutEnabled}
+                />
+              ))}
+            </AnimatePresence>
           )}
         </SortableContext>
         {footer}
