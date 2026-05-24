@@ -13,7 +13,13 @@ describe("integrations/taskLinks.getByTask", () => {
 
   async function setupLinkedTask(
     t: ReturnType<typeof createTestContext>,
-    opts: { withLink: boolean; withError?: boolean } = { withLink: true },
+    opts: {
+      withLink: boolean;
+      withError?: boolean;
+      body?: string;
+      snapshot?: boolean;
+      edited?: boolean;
+    } = { withLink: true },
   ) {
     const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const projectId = await setupProject(t, { workspaceId, creatorId: userId });
@@ -28,6 +34,15 @@ describe("integrations/taskLinks.getByTask", () => {
         isCompleted: false,
       }),
     );
+    const snapshotId = opts.snapshot
+      ? await t.run((ctx) =>
+          ctx.storage.store(
+            new Blob([new Uint8Array([1, 2, 3])], {
+              type: "application/octet-stream",
+            }),
+          ),
+        )
+      : undefined;
     const taskId = await t.run((ctx) =>
       ctx.db.insert("tasks", {
         projectId,
@@ -37,6 +52,7 @@ describe("integrations/taskLinks.getByTask", () => {
         priority: "medium",
         completed: false,
         creatorId: userId,
+        yjsSnapshotId: snapshotId,
         externalRefs: opts.withLink
           ? [
               {
@@ -85,6 +101,8 @@ describe("integrations/taskLinks.getByTask", () => {
             url: "https://github.com/octocat",
           },
           externalState: "open",
+          initialBodyMarkdown: opts.body,
+          descriptionEdited: opts.edited,
           ...(opts.withError && {
             lastSyncError: {
               occurredAt: 9_999,
@@ -131,7 +149,7 @@ describe("integrations/taskLinks.getByTask", () => {
     );
   });
 
-  it("rejects non-workspace members", async () => {
+  it("returns null for non-workspace members (soft gate, no data leak)", async () => {
     const t = createTestContext();
     const { taskId } = await setupLinkedTask(t, { withLink: true });
     // Different identity, not a member of the workspace.
@@ -142,8 +160,122 @@ describe("integrations/taskLinks.getByTask", () => {
       email: "stranger@example.com",
     });
 
+    expect(
+      await outsider.query(api.integrations.core.taskLinks.getByTask, { taskId }),
+    ).toBeNull();
+  });
+
+  it("reports seedExpected only when a non-empty body was captured", async () => {
+    const t = createTestContext();
+    const withBody = await setupLinkedTask(t, { withLink: true, body: "Hello body" });
+    const blankBody = await setupLinkedTask(t, { withLink: true, body: "   " });
+    const noBody = await setupLinkedTask(t, { withLink: true });
+
+    const r1 = await withBody.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: withBody.taskId });
+    const r2 = await blankBody.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: blankBody.taskId });
+    const r3 = await noBody.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: noBody.taskId });
+
+    expect(r1?.seedExpected).toBe(true);
+    expect(r2?.seedExpected).toBe(false);
+    expect(r3?.seedExpected).toBe(false);
+  });
+
+  it("reports descriptionSnapshotId from the task's yjsSnapshotId", async () => {
+    const t = createTestContext();
+    const seeded = await setupLinkedTask(t, { withLink: true, body: "b", snapshot: true });
+    const unseeded = await setupLinkedTask(t, { withLink: true, body: "b" });
+
+    const r1 = await seeded.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: seeded.taskId });
+    const r2 = await unseeded.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: unseeded.taskId });
+
+    expect(r1?.descriptionSnapshotId).toBeTruthy();
+    expect(r2?.descriptionSnapshotId).toBeNull();
+  });
+
+  it("surfaces descriptionEdited from the link", async () => {
+    const t = createTestContext();
+    const edited = await setupLinkedTask(t, { withLink: true, edited: true });
+    const unedited = await setupLinkedTask(t, { withLink: true });
+
+    const r1 = await edited.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: edited.taskId });
+    const r2 = await unedited.asUser.query(api.integrations.core.taskLinks.getByTask, { taskId: unedited.taskId });
+
+    expect(r1?.descriptionEdited).toBe(true);
+    expect(r2?.descriptionEdited).toBeFalsy();
+  });
+});
+
+describe("tasks.markDescriptionEdited", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  async function setup(t: ReturnType<typeof createTestContext>, withLink: boolean) {
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+    const statusId = await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId, name: "Todo", color: "bg-gray-500", order: 0, isDefault: true, isCompleted: false,
+      }),
+    );
+    const taskId = await t.run((ctx) =>
+      ctx.db.insert("tasks", {
+        projectId, workspaceId, title: "T", statusId, priority: "medium", completed: false, creatorId: userId,
+      }),
+    );
+    let linkId: Id<"taskIntegrationLinks"> | undefined;
+    if (withLink) {
+      const projectLinkId = await t.run((ctx) =>
+        ctx.db.insert("projectIntegrationLinks", {
+          projectId, workspaceId, status: "active", pausedByBilling: false,
+          externalRepoId: "R_kg1", externalRepoFullName: "acme/web",
+        }),
+      );
+      linkId = await t.run((ctx) =>
+        ctx.db.insert("taskIntegrationLinks", {
+          taskId, projectIntegrationLinkId: projectLinkId, externalIssueId: "I_kg1",
+          externalUpdatedAt: 1_000,
+          externalAuthor: { login: "octocat", avatarUrl: "https://a/o.png", url: "https://github.com/octocat" },
+        }),
+      );
+    }
+    return { taskId, linkId, asUser };
+  }
+
+  it("sets descriptionEdited true on the link", async () => {
+    const t = createTestContext();
+    const { taskId, linkId, asUser } = await setup(t, true);
+    await asUser.mutation(api.tasks.markDescriptionEdited, { taskId });
+    const link = await t.run((ctx) => ctx.db.get(linkId!));
+    expect(link?.descriptionEdited).toBe(true);
+  });
+
+  it("is idempotent (no write) once already set", async () => {
+    const t = createTestContext();
+    const { taskId, linkId, asUser } = await setup(t, true);
+    await asUser.mutation(api.tasks.markDescriptionEdited, { taskId });
+    const before = (await t.run((ctx) => ctx.db.get(linkId!)))!._creationTime;
+    await asUser.mutation(api.tasks.markDescriptionEdited, { taskId });
+    const after = await t.run((ctx) => ctx.db.get(linkId!));
+    expect(after?.descriptionEdited).toBe(true);
+    expect(after?._creationTime).toBe(before); // same row, no churn
+  });
+
+  it("no-ops for a Ripple-native task (no link)", async () => {
+    const t = createTestContext();
+    const { taskId, asUser } = await setup(t, false);
     await expect(
-      outsider.query(api.integrations.core.taskLinks.getByTask, { taskId }),
+      asUser.mutation(api.tasks.markDescriptionEdited, { taskId }),
+    ).resolves.toBeNull();
+  });
+
+  it("rejects non-workspace members", async () => {
+    const t = createTestContext();
+    const { taskId } = await setup(t, true);
+    const outsider = t.withIdentity({
+      subject: "stranger|s", issuer: "test", name: "S", email: "s@e.com",
+    });
+    await expect(
+      outsider.mutation(api.tasks.markDescriptionEdited, { taskId }),
     ).rejects.toThrow();
   });
 });

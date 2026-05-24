@@ -1344,7 +1344,9 @@ export declare const api: {
           "public",
           { taskId: Id<"tasks"> },
           null | {
+            descriptionEdited?: boolean;
             descriptionLastSyncedAt?: number;
+            descriptionSnapshotId: Id<"_storage"> | null;
             externalAssignees?: Array<{
               avatarUrl: string;
               login: string;
@@ -1362,6 +1364,7 @@ export declare const api: {
               message: string;
               occurredAt: number;
             };
+            seedExpected: boolean;
           }
         >;
       };
@@ -2784,6 +2787,12 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>
+    >;
+    markDescriptionEdited: FunctionReference<
+      "mutation",
+      "public",
+      { taskId: Id<"tasks"> },
+      null
     >;
     notifyDescriptionMentions: FunctionReference<
       "mutation",
@@ -4883,7 +4892,7 @@ export declare const internal: {
       },
       null
     >;
-    seedTaskSnapshotIfAbsent: FunctionReference<
+    seedTaskSnapshot: FunctionReference<
       "mutation",
       "internal",
       { storageId: Id<"_storage">; taskId: Id<"tasks"> },

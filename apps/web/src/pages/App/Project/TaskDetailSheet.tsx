@@ -19,6 +19,7 @@ import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
+import { SeedingDescriptionNotice } from "./SeedingDescriptionNotice";
 import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskPullRequests } from "./TaskPullRequests";
@@ -186,6 +187,7 @@ export function TaskDetailSheet({
                       Description
                     </h3>
                     <div className="flex items-center gap-2 min-h-8">
+                      {detail.awaitingSeed && <SeedingDescriptionNotice />}
                       {detail.editor && (
                         <TaskDescriptionSyncButton
                           taskId={taskId}
@@ -217,6 +219,7 @@ export function TaskDetailSheet({
                     workspaceId={workspaceId}
                     className="min-h-50"
                     hideLabel
+                    loading={!detail.descriptionReady}
                   />
                 </div>
 

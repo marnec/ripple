@@ -28,6 +28,15 @@ describe("deriveSyncErrorLabel", () => {
   });
 });
 
+type Link = NonNullable<Parameters<typeof deriveTaskGithubView>[0]>;
+// getByTask always returns these two booleans; fill them so partial fixtures
+// satisfy the type while each test sets only the fields it cares about.
+const mkLink = (partial: Partial<Link> = {}): Link => ({
+  seedExpected: false,
+  descriptionSnapshotId: null,
+  ...partial,
+});
+
 describe("deriveTaskGithubView", () => {
   it("undefined (loading) → not linked, everything empty", () => {
     expect(deriveTaskGithubView(undefined)).toEqual({
@@ -36,6 +45,7 @@ describe("deriveTaskGithubView", () => {
       shadowAssignees: [],
       closedBy: null,
       descriptionLastSyncedAt: null,
+      descriptionEdited: false,
     });
   });
 
@@ -44,18 +54,19 @@ describe("deriveTaskGithubView", () => {
   });
 
   it("a healthy link → linked with no sync error and defaulted collections", () => {
-    const view = deriveTaskGithubView({});
+    const view = deriveTaskGithubView(mkLink());
     expect(view.isLinked).toBe(true);
     expect(view.syncError).toBeNull();
     expect(view.shadowAssignees).toEqual([]);
     expect(view.closedBy).toBeNull();
     expect(view.descriptionLastSyncedAt).toBeNull();
+    expect(view.descriptionEdited).toBe(false);
   });
 
   it("a failed link → shapes the sync error with a derived label", () => {
-    const view = deriveTaskGithubView({
-      lastSyncError: { occurredAt: 1, message: "Not Found", httpStatus: 404 },
-    });
+    const view = deriveTaskGithubView(
+      mkLink({ lastSyncError: { occurredAt: 1, message: "Not Found", httpStatus: 404 } }),
+    );
     expect(view.syncError).toEqual({
       message: "Not Found",
       httpStatus: 404,
@@ -63,16 +74,20 @@ describe("deriveTaskGithubView", () => {
     });
   });
 
-  it("passes shadow assignees, closer, and last-synced through", () => {
+  it("passes shadow assignees, closer, last-synced, and descriptionEdited through", () => {
     const closedBy = { login: "octo", avatarUrl: "a", url: "u" };
     const shadow = [{ login: "alice", avatarUrl: "a2", url: "u2" }];
-    const view = deriveTaskGithubView({
-      externalAssignees: shadow,
-      externalClosedBy: closedBy,
-      descriptionLastSyncedAt: 1_700_000_000_000,
-    });
+    const view = deriveTaskGithubView(
+      mkLink({
+        externalAssignees: shadow,
+        externalClosedBy: closedBy,
+        descriptionLastSyncedAt: 1_700_000_000_000,
+        descriptionEdited: true,
+      }),
+    );
     expect(view.shadowAssignees).toBe(shadow);
     expect(view.closedBy).toBe(closedBy);
     expect(view.descriptionLastSyncedAt).toBe(1_700_000_000_000);
+    expect(view.descriptionEdited).toBe(true);
   });
 });

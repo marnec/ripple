@@ -3,9 +3,14 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
+- decide a better behaviour when seed wait timeout has passed and still no seed
+- task description should be editable offline exactly like documents
+- 
 
-- document comments
+
+- document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
 - guests can comment (all viewers?)
+
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding

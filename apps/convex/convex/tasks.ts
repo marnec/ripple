@@ -1216,3 +1216,27 @@ export const syncDescriptionToGitHub = mutation({
     return null;
   },
 });
+
+/**
+ * Mark a task's description as edited by a user. Called by the task-detail
+ * editor on the first genuine local Yjs edit (the GitHub creation-time seed
+ * and remote collaborator updates are excluded client-side). Gates the "Sync
+ * description to GitHub" button so seed-only content is never offered for push.
+ *
+ * Idempotent: a no-op (and crucially, no write) once already set, to avoid
+ * OCC churn on the link row. Native tasks (no link) silently no-op.
+ */
+export const markDescriptionEdited = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, { taskId }) => {
+    await requireResourceMember(ctx, "tasks", taskId);
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (!link || link.descriptionEdited) return null;
+    await ctx.db.patch(link._id, { descriptionEdited: true });
+    return null;
+  },
+});

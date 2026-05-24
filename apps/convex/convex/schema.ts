@@ -1045,6 +1045,12 @@ export default defineSchema({
     // content, so there is no reconciliation; this exists to render
     // "Last synced X ago" alongside the sync button.
     descriptionLastSyncedAt: v.optional(v.number()),
+    // True once a genuine USER edit has touched the Yjs description in Ripple.
+    // The GitHub creation-time seed must NEVER set this — it gates the manual
+    // "Sync description to GitHub" button so seed-only content is not treated
+    // as a pushable change. Persistent, so reopening an edited task still shows
+    // the button.
+    descriptionEdited: v.optional(v.boolean()),
   })
     // Idempotency / "have we imported this issue?" lookup.
     .index("by_link_externalIssueId", [

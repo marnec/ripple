@@ -55,7 +55,7 @@ function formatRelative(ts: number): string {
  * push (matches `core/description.isSyncDescriptionButtonVisible`).
  */
 export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
-  const { isLinked, descriptionLastSyncedAt } = useTaskGithubLink(taskId);
+  const { isLinked, descriptionLastSyncedAt, descriptionEdited } = useTaskGithubLink(taskId);
   const sync = useMutation(api.tasks.syncDescriptionToGitHub);
   const [isPushing, setIsPushing] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
@@ -69,6 +69,8 @@ export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
   }, editor as never);
 
   if (!isLinked) return null;
+  // Only after a genuine user edit — never for the unedited GitHub seed.
+  if (!descriptionEdited) return null;
   if (isEmpty) return null;
 
   const lastSyncedAt = descriptionLastSyncedAt;

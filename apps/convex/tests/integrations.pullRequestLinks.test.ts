@@ -134,7 +134,7 @@ describe("integrations/core/pullRequestLinks.listByTask", () => {
     });
   });
 
-  it("rejects non-workspace members", async () => {
+  it("returns empty for non-workspace members (soft gate, no data leak)", async () => {
     const t = createTestContext();
     const { projectId, link } = await setup(t);
     await importIssue(t, link, "I_1", 1);
@@ -149,10 +149,10 @@ describe("integrations/core/pullRequestLinks.listByTask", () => {
       issuer: "test",
     });
 
-    await expect(
-      outsider.query(api.integrations.core.pullRequestLinks.listByTask, {
+    expect(
+      await outsider.query(api.integrations.core.pullRequestLinks.listByTask, {
         taskId: task!._id,
       }),
-    ).rejects.toThrow();
+    ).toEqual([]);
   });
 });

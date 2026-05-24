@@ -46,6 +46,20 @@ export const getByTask = query({
       // Absent on tasks whose description has never been pushed (Ripple-native)
       // or whose initial seed predates the push (inbound from GitHub).
       descriptionLastSyncedAt: v.optional(v.number()),
+      // True once a genuine USER edit has touched the Yjs description. The
+      // GitHub creation-time seed never sets this — so the sync button stays
+      // hidden for seed-only content and appears only after a real edit.
+      descriptionEdited: v.optional(v.boolean()),
+      // Whether a GitHub body was captured at creation (a seed is/was expected).
+      // Drives the open-time "block until the seed loads" gate on the client.
+      seedExpected: v.boolean(),
+      // The task's current description snapshot storage id, or null. Changes
+      // (null→id, and id→id when the seed overwrites an empty auto-save) push
+      // reactively because this query reads the task doc — the client watches
+      // it as the trigger to (re-)hydrate the live doc from the seed. A plain
+      // boolean wouldn't surface a content change (empty→seeded), so we expose
+      // the id itself.
+      descriptionSnapshotId: v.union(v.id("_storage"), v.null()),
     }),
   ),
   handler: async (ctx, { taskId }) => {
@@ -71,6 +85,9 @@ export const getByTask = query({
       externalAssignees: link.externalAssignees,
       externalClosedBy: link.externalClosedBy,
       descriptionLastSyncedAt: link.descriptionLastSyncedAt,
+      descriptionEdited: link.descriptionEdited,
+      seedExpected: (link.initialBodyMarkdown?.trim().length ?? 0) > 0,
+      descriptionSnapshotId: task?.yjsSnapshotId ?? null,
     };
   },
 });

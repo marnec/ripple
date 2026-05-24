@@ -9,6 +9,12 @@ import type { Id } from "@convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+import { SEED_ORIGIN } from "@/lib/yjs-origins";
+
+// Delay before edit-detection arms, so BlockNote's mount-time default-paragraph
+// insert and any post-seed normalization (both local Yjs transactions) don't
+// get mistaken for a user edit.
+const DESCRIPTION_EDIT_SETTLE_MS = 400;
 
 const taskDescriptionDictionary = {
   ...bnEn,
@@ -126,8 +132,23 @@ export function useTaskDetail({
 
   const fileUpload = useUploadFile(workspaceId);
 
+  // GitHub link state — drives the description-seed gate and edit tracking.
+  // Same subscription the sync button uses (Convex collapses it at the cache).
+  const githubLink = useQuery(
+    api.integrations.core.taskLinks.getByTask,
+    taskId ? { taskId } : "skip",
+  );
+  const seedExpected = githubLink?.seedExpected ?? false;
+  const snapshotId = githubLink?.descriptionSnapshotId ?? null;
+  const descriptionEdited = githubLink?.descriptionEdited ?? false;
+  const isGithubLinked = !!githubLink;
+  // `undefined` while the link query is in flight — gate the editor until we
+  // know whether a seed is coming (only matters for taskId present).
+  const seedStatusLoading = !!taskId && githubLink === undefined;
+  const markDescriptionEdited = useMutation(api.tasks.markDescriptionEdited);
+
   // Collaborative editor - Yjs handles sync automatically
-  const { editor, isLoading: editorLoading, isConnected, isOffline, provider } = useDocumentCollaboration({
+  const { editor, isLoading: editorLoading, isConnected, isOffline, provider, yDoc, descriptionReady, awaitingSeed } = useDocumentCollaboration({
     documentId: taskId ?? "",
     userName: currentUser?.name ?? "Anonymous",
     userId: currentUser?._id ?? "anonymous",
@@ -136,7 +157,48 @@ export function useTaskDetail({
     enabled: !!taskId && collaborationEnabled,
     uploadFile: fileUpload?.uploadFile,
     dictionary: taskDescriptionDictionary,
+    seed: {
+      expected: seedExpected,
+      snapshotId,
+      edited: descriptionEdited,
+      statusLoading: seedStatusLoading,
+    },
   });
+
+  // Mark the description as user-edited (persisted on the link) the first time
+  // a GENUINE local edit lands, so the "Sync to GitHub" button appears only
+  // after a real edit — never for the seed itself. Guards:
+  //  - only for linked, not-yet-edited tasks once the editor is ready,
+  //  - a settle window so mount/normalization transactions don't count,
+  //  - tr.local excludes the seed (applyUpdate) and remote collaborators,
+  //  - SEED_ORIGIN is belt-and-suspenders for our own snapshot apply,
+  //  - tr.changed.size>0 skips selection-only transactions.
+  useEffect(() => {
+    if (!yDoc || !taskId) return;
+    if (!isGithubLinked || descriptionEdited || !descriptionReady) return;
+
+    let armed = false;
+    const armTimer = setTimeout(() => {
+      armed = true;
+    }, DESCRIPTION_EDIT_SETTLE_MS);
+
+    const onAfterTransaction = (tr: {
+      local: boolean;
+      origin: unknown;
+      changed: { size: number };
+    }) => {
+      if (!armed) return;
+      if (!tr.local || tr.origin === SEED_ORIGIN || tr.changed.size === 0) return;
+      yDoc.off("afterTransaction", onAfterTransaction);
+      void markDescriptionEdited({ taskId });
+    };
+
+    yDoc.on("afterTransaction", onAfterTransaction);
+    return () => {
+      clearTimeout(armTimer);
+      yDoc.off("afterTransaction", onAfterTransaction);
+    };
+  }, [yDoc, taskId, isGithubLinked, descriptionEdited, descriptionReady, markDescriptionEdited]);
 
   const { remoteUsers } = useCursorAwareness(provider?.awareness ?? null);
 
@@ -374,6 +436,8 @@ export function useTaskDetail({
     currentUser,
     editor,
     editorLoading,
+    descriptionReady,
+    awaitingSeed,
     isConnected,
     isOffline,
     provider,

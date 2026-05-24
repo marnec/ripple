@@ -79,25 +79,45 @@ export const saveSnapshot = internalMutation({
 });
 
 /**
- * Seed a task's description snapshot *only if it has none yet*.
+ * Seed a task's description snapshot *unless the user has already edited it*.
  *
  * Used by the GitHub description seed (see
- * `integrations/core/seedDescriptionAction`). Unlike `saveSnapshot`, this never
- * overwrites: if the task already has a `yjsSnapshotId` — because a collaborator
- * edited it, or a seed already ran — the freshly-converted blob is dropped and
- * the existing description is left intact. This makes the seed safe against the
- * race where someone opens the task before the (scheduled) seed lands: real
- * content always wins, and the seed can never clobber it.
+ * `integrations/core/seedDescriptionAction`). Guarded by the link's
+ * `descriptionEdited` flag rather than "snapshot absent": if you open the task
+ * before the (scheduled, Node-cold-start) seed lands, the empty PartyKit room
+ * may auto-save an *empty* snapshot first. An "if absent" guard would then drop
+ * the seed forever. Because an empty auto-save never sets `descriptionEdited`
+ * (only a genuine user edit does), this overwrites that empty snapshot with the
+ * real seed — while still never clobbering a description the user has touched.
+ *
+ * Overwriting replaces `yjsSnapshotId` with a *new* storage id, which the client
+ * watches (via `taskLinks.getByTask`) to re-hydrate the live doc.
  */
-export const seedTaskSnapshotIfAbsent = internalMutation({
+export const seedTaskSnapshot = internalMutation({
   args: { taskId: v.id("tasks"), storageId: v.id("_storage") },
   returns: v.object({ seeded: v.boolean() }),
   handler: async (ctx, { taskId, storageId }) => {
     const task = await ctx.db.get(taskId);
-    // Task vanished, or already has a description — drop the orphan blob.
-    if (!task || task.yjsSnapshotId) {
+    if (!task) {
       await ctx.storage.delete(storageId);
       return { seeded: false };
+    }
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (link?.descriptionEdited) {
+      // User already engaged with the description — never overwrite it.
+      await ctx.storage.delete(storageId);
+      return { seeded: false };
+    }
+    // Replace any prior (e.g. empty auto-saved) snapshot; clean up its blob.
+    if (task.yjsSnapshotId) {
+      try {
+        await ctx.storage.delete(task.yjsSnapshotId);
+      } catch {
+        // Best-effort cleanup; proceed with the new snapshot regardless.
+      }
     }
     await ctx.db.patch(taskId, { yjsSnapshotId: storageId });
     return { seeded: true };

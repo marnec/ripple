@@ -68,9 +68,9 @@ export const seedTaskDescription = internalAction({
       // a lib typing nuance (Uint8Array<ArrayBufferLike> vs BlobPart).
       const storageId = await ctx.storage.store(new Blob([update as BlobPart], { type: "application/octet-stream" }));
 
-      // Guarded write: only sets the snapshot if the task still has none, so a
-      // concurrent edit/seed is never clobbered (drops the blob otherwise).
-      await ctx.runMutation(internal.snapshots.seedTaskSnapshotIfAbsent, {
+      // Guarded write: overwrites a non-user (e.g. empty auto-saved) snapshot
+      // but never a user-edited description (drops the blob otherwise).
+      await ctx.runMutation(internal.snapshots.seedTaskSnapshot, {
         taskId,
         storageId,
       });

@@ -45,6 +45,8 @@ export interface TaskGithubView {
   closedBy: ExternalGithubUser | null;
   /** ms timestamp of the last successful Ripple→GitHub description push. */
   descriptionLastSyncedAt: number | null;
+  /** True once a genuine user edit touched the description (gates the sync button). */
+  descriptionEdited: boolean;
 }
 
 /**
@@ -76,6 +78,7 @@ export function deriveTaskGithubView(
       shadowAssignees: [],
       closedBy: null,
       descriptionLastSyncedAt: null,
+      descriptionEdited: false,
     };
   }
   return {
@@ -93,6 +96,7 @@ export function deriveTaskGithubView(
     shadowAssignees: link.externalAssignees ?? [],
     closedBy: link.externalClosedBy ?? null,
     descriptionLastSyncedAt: link.descriptionLastSyncedAt ?? null,
+    descriptionEdited: link.descriptionEdited ?? false,
   };
 }
 

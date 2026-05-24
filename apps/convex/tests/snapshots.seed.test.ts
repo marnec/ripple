@@ -50,40 +50,77 @@ async function storeBlob(
   );
 }
 
-describe("snapshots.seedTaskSnapshotIfAbsent", () => {
+/** Attach a taskIntegrationLink to an existing task (optionally user-edited). */
+async function linkTask(
+  t: ReturnType<typeof createTestContext>,
+  taskId: Id<"tasks">,
+  opts: { edited?: boolean } = {},
+): Promise<void> {
+  await t.run(async (ctx) => {
+    const task = (await ctx.db.get(taskId))!;
+    const projectLinkId = await ctx.db.insert("projectIntegrationLinks", {
+      projectId: task.projectId,
+      workspaceId: task.workspaceId,
+      status: "active",
+      pausedByBilling: false,
+      externalRepoId: "R_kg1",
+      externalRepoFullName: "acme/web",
+    });
+    await ctx.db.insert("taskIntegrationLinks", {
+      taskId,
+      projectIntegrationLinkId: projectLinkId,
+      externalIssueId: "I_kg1",
+      externalUpdatedAt: 1_000,
+      externalAuthor: { login: "o", avatarUrl: "a", url: "u" },
+      descriptionEdited: opts.edited,
+    });
+  });
+}
+
+describe("snapshots.seedTaskSnapshot", () => {
   it("sets the snapshot when the task has none", async () => {
     const t = createTestContext();
     const taskId = await makeTask(t);
     const storageId = await storeBlob(t);
 
-    const res = await t.mutation(internal.snapshots.seedTaskSnapshotIfAbsent, {
-      taskId,
-      storageId,
-    });
+    const res = await t.mutation(internal.snapshots.seedTaskSnapshot, { taskId, storageId });
 
     expect(res.seeded).toBe(true);
     const task = await t.run((ctx) => ctx.db.get(taskId));
     expect(task?.yjsSnapshotId).toBe(storageId);
   });
 
-  it("never clobbers an existing snapshot and drops the orphan blob", async () => {
+  it("overwrites a non-user (e.g. empty auto-saved) snapshot and deletes the old blob", async () => {
     const t = createTestContext();
     const taskId = await makeTask(t);
+    await linkTask(t, taskId); // linked, NOT edited
+    const stale = await storeBlob(t);
+    await t.run((ctx) => ctx.db.patch(taskId, { yjsSnapshotId: stale }));
+
+    const incoming = await storeBlob(t);
+    const res = await t.mutation(internal.snapshots.seedTaskSnapshot, { taskId, storageId: incoming });
+
+    expect(res.seeded).toBe(true);
+    const task = await t.run((ctx) => ctx.db.get(taskId));
+    expect(task?.yjsSnapshotId).toBe(incoming);
+    // the replaced (stale) blob is cleaned up
+    expect(await t.run((ctx) => ctx.storage.get(stale))).toBeNull();
+  });
+
+  it("never overwrites a user-edited description and drops the incoming blob", async () => {
+    const t = createTestContext();
+    const taskId = await makeTask(t);
+    await linkTask(t, taskId, { edited: true });
     const original = await storeBlob(t);
     await t.run((ctx) => ctx.db.patch(taskId, { yjsSnapshotId: original }));
 
     const incoming = await storeBlob(t);
-    const res = await t.mutation(internal.snapshots.seedTaskSnapshotIfAbsent, {
-      taskId,
-      storageId: incoming,
-    });
+    const res = await t.mutation(internal.snapshots.seedTaskSnapshot, { taskId, storageId: incoming });
 
     expect(res.seeded).toBe(false);
     const task = await t.run((ctx) => ctx.db.get(taskId));
     expect(task?.yjsSnapshotId).toBe(original);
-    // the rejected blob is cleaned up, not leaked
-    const incomingBlob = await t.run((ctx) => ctx.storage.get(incoming));
-    expect(incomingBlob).toBeNull();
+    expect(await t.run((ctx) => ctx.storage.get(incoming))).toBeNull();
   });
 
   it("drops the blob when the task no longer exists", async () => {
@@ -92,13 +129,9 @@ describe("snapshots.seedTaskSnapshotIfAbsent", () => {
     await t.run((ctx) => ctx.db.delete(taskId));
     const storageId = await storeBlob(t);
 
-    const res = await t.mutation(internal.snapshots.seedTaskSnapshotIfAbsent, {
-      taskId,
-      storageId,
-    });
+    const res = await t.mutation(internal.snapshots.seedTaskSnapshot, { taskId, storageId });
 
     expect(res.seeded).toBe(false);
-    const blob = await t.run((ctx) => ctx.storage.get(storageId));
-    expect(blob).toBeNull();
+    expect(await t.run((ctx) => ctx.storage.get(storageId))).toBeNull();
   });
 });
