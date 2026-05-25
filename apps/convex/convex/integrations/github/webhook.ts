@@ -240,6 +240,15 @@ function normalizeIssuesEvent(payload: unknown): NormalizedIssueEvent | null {
     };
   }
 
+  if (p.action === "deleted") {
+    return {
+      kind: "issue.deleted",
+      externalIssueId: p.issue.node_id,
+      issueNumber: p.issue.number,
+      externalUpdatedAt: Date.parse(p.issue.updated_at),
+    };
+  }
+
   if (p.action === "labeled" || p.action === "unlabeled") {
     return {
       kind: "issue.labels_changed",

@@ -11,6 +11,7 @@ export type NormalizedIssueEvent =
   | NormalizedIssueOpenedEvent
   | NormalizedIssueClosedEvent
   | NormalizedIssueReopenedEvent
+  | NormalizedIssueDeletedEvent
   | NormalizedIssueLabelsChangedEvent
   | NormalizedIssueAssigneesChangedEvent
   | NormalizedCommentCreatedEvent
@@ -145,6 +146,20 @@ export interface NormalizedIssueReopenedEvent {
   body: string;
   url: string;
   externalAuthor: NormalizedExternalAuthor;
+}
+
+/**
+ * Issue permanently deleted on the provider side (GitHub `issues.deleted`).
+ * Terminal: the external issue no longer exists, so there is nothing to
+ * reconcile beyond marking the link orphaned. Carries no full-issue payload
+ * (no orphan-task synthesis from a delete) — only enough to locate the link
+ * and order the write. The Ripple task is kept; the link is flagged.
+ */
+export interface NormalizedIssueDeletedEvent {
+  kind: "issue.deleted";
+  externalIssueId: string;
+  issueNumber: number;
+  externalUpdatedAt: number;
 }
 
 /**

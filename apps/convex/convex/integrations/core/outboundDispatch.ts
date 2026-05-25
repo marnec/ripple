@@ -83,6 +83,9 @@ async function resolveTaskTarget(
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
     .unique();
   if (!link) return null; // Ripple-native task; nothing to push.
+  // Issue deleted upstream — the GitHub issue is gone, so any PATCH would 404.
+  // Skip silently rather than spamming `lastSyncError` on every Ripple edit.
+  if (link.externalDeletedAt !== undefined) return null;
 
   const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
   if (!projectLink) return null;
@@ -123,6 +126,7 @@ async function resolveCommentLinkTarget(
 
   const taskLink = await ctx.db.get(commentLink.taskIntegrationLinkId);
   if (!taskLink) return null;
+  if (taskLink.externalDeletedAt !== undefined) return null; // issue gone upstream
   const projectLink = await ctx.db.get(taskLink.projectIntegrationLinkId);
   if (!projectLink) return null;
   if (shouldSkipForFreeze(projectLink)) return null;
@@ -208,6 +212,7 @@ export async function enqueueDescriptionPush(
     .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
     .unique();
   if (!link) throw new Error("Task is not linked to a GitHub issue");
+  if (link.externalDeletedAt !== undefined) return; // issue gone upstream — no-op
 
   const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
   if (!projectLink) throw new Error("Project integration link missing");

@@ -21,6 +21,9 @@ export const getByTask = query({
         }),
       ),
       externalState: v.optional(v.union(v.literal("open"), v.literal("closed"))),
+      // ms timestamp of the upstream issue deletion, when the GitHub issue was
+      // deleted. Drives the "issue deleted on GitHub" badge on task detail.
+      externalDeletedAt: v.optional(v.number()),
       externalIssueUrl: v.optional(v.string()),
       // Display payload for assignees that did NOT win Ripple's single
       // `assigneeId` slot — rendered as muted shadow chips next to the
@@ -92,6 +95,7 @@ export const getByTask = query({
     return {
       lastSyncError: link.lastSyncError,
       externalState: link.externalState,
+      externalDeletedAt: link.externalDeletedAt,
       externalIssueUrl,
       externalAssignees: link.externalAssignees,
       externalClosedBy: link.externalClosedBy,

@@ -79,6 +79,9 @@ export const baseTaskFields = {
         repoFullName: v.string(),
         issueNumber: v.number(),
         url: v.string(),
+        // Set when the linked external issue is deleted upstream — drives the
+        // card's "deleted on GitHub" indicator. See schema.ts.
+        deleted: v.optional(v.boolean()),
       }),
     ),
   ),

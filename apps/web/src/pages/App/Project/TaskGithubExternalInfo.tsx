@@ -20,6 +20,9 @@ type Props = { taskId: Id<"tasks"> };
  *  - "Closed on GitHub by @login": when an externally-closed issue was
  *    flipped by a non-member, we surface who did it.
  *
+ * The "issue deleted on GitHub" signal lives in the header
+ * (`TaskGithubDeletedIndicator`), not here.
+ *
  * Renders nothing when the task has no link or neither datum is present —
  * Ripple-native tasks pay no UI cost.
  */
@@ -29,6 +32,7 @@ export function TaskGithubExternalInfo({ taskId }: Props) {
 
   return (
     <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+
       {shadowAssignees.length > 0 && (
         <div className="flex items-center gap-2">
           <span className="shrink-0">Also assigned on GitHub:</span>

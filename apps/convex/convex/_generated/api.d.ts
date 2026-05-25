@@ -657,6 +657,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         externalRefs?: Array<{
+          deleted?: boolean;
           issueNumber: number;
           provider: string;
           repoFullName: string;
@@ -1357,6 +1358,7 @@ export declare const api: {
               login: string;
               url: string;
             };
+            externalDeletedAt?: number;
             externalIssueUrl?: string;
             externalState?: "open" | "closed";
             lastSyncError?: {
@@ -2350,6 +2352,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         externalRefs?: Array<{
+          deleted?: boolean;
           issueNumber: number;
           provider: string;
           repoFullName: string;
@@ -2429,6 +2432,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         externalRefs?: Array<{
+          deleted?: boolean;
           issueNumber: number;
           provider: string;
           repoFullName: string;
@@ -2498,6 +2502,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         externalRefs?: Array<{
+          deleted?: boolean;
           issueNumber: number;
           provider: string;
           repoFullName: string;
@@ -2572,6 +2577,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         externalRefs?: Array<{
+          deleted?: boolean;
           issueNumber: number;
           provider: string;
           repoFullName: string;
@@ -2625,6 +2631,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         externalRefs?: Array<{
+          deleted?: boolean;
           issueNumber: number;
           provider: string;
           repoFullName: string;
@@ -2691,6 +2698,7 @@ export declare const api: {
           dueDate?: string;
           estimate?: number;
           externalRefs?: Array<{
+            deleted?: boolean;
             issueNumber: number;
             provider: string;
             repoFullName: string;
@@ -2753,6 +2761,7 @@ export declare const api: {
         dueDate?: string;
         estimate?: number;
         externalRefs?: Array<{
+          deleted?: boolean;
           issueNumber: number;
           provider: string;
           repoFullName: string;

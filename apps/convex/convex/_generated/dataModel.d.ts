@@ -1459,6 +1459,7 @@ export type DataModel = {
       }>;
       externalAuthor: { avatarUrl: string; login: string; url: string };
       externalClosedBy?: { avatarUrl: string; login: string; url: string };
+      externalDeletedAt?: number;
       externalIssueId: string;
       externalLabels?: Array<string>;
       externalState?: "open" | "closed";
@@ -1491,6 +1492,7 @@ export type DataModel = {
       | "externalClosedBy.avatarUrl"
       | "externalClosedBy.login"
       | "externalClosedBy.url"
+      | "externalDeletedAt"
       | "externalIssueId"
       | "externalLabels"
       | "externalState"
@@ -1552,6 +1554,7 @@ export type DataModel = {
         url: string;
       };
       externalRefs?: Array<{
+        deleted?: boolean;
         issueNumber: number;
         provider: string;
         repoFullName: string;

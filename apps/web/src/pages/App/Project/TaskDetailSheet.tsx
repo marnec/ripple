@@ -21,6 +21,7 @@ import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { SeedingDescriptionNotice } from "./SeedingDescriptionNotice";
 import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
+import { TaskGithubDeletedIndicator } from "./TaskGithubDeletedIndicator";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskProperties } from "./TaskProperties";
@@ -99,6 +100,10 @@ export function TaskDetailSheet({
                     ) : null;
                   })()}
                   <TaskSyncIndicator taskId={task._id} />
+                  <TaskGithubDeletedIndicator
+                    taskId={task._id}
+                    className="absolute top-5 right-28"
+                  />
                   {(() => {
                     const issueUrl = task.externalRefs?.[0]?.url;
                     return (

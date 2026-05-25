@@ -10,6 +10,7 @@ type KanbanCardProps = {
     priority: "urgent" | "high" | "medium" | "low";
     labels?: string[];
     pullRequestState?: "draft" | "open" | "merged" | "closed";
+    externalRefs?: Array<{ deleted?: boolean }>;
     status: {
       name: string;
       color: string;

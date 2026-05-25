@@ -340,6 +340,13 @@ export default defineSchema({
           repoFullName: v.string(),
           issueNumber: v.number(),
           url: v.string(),
+          // True once the linked external issue is deleted on the provider
+          // side (GitHub `issues.deleted` webhook). Denormalized here — off
+          // the high-churn `taskIntegrationLinks` row — so kanban/list cards
+          // can show a "deleted upstream" indicator without subscribing to
+          // the link table. Source of truth is
+          // `taskIntegrationLinks.externalDeletedAt`.
+          deleted: v.optional(v.boolean()),
         }),
       ),
     ),
@@ -995,6 +1002,14 @@ export default defineSchema({
     externalStateReason: v.optional(
       v.union(v.literal("completed"), v.literal("not_planned")),
     ),
+    // ms timestamp of the provider-side issue deletion (GitHub `issues.deleted`
+    // webhook). Orthogonal to `externalState` (an open OR closed issue can be
+    // deleted) — kept as a distinct field so the outbound echo guard, which
+    // reads `externalState`, is untouched. Once set, outbound pushes are
+    // skipped (the issue is gone; a PATCH would 404) and the task detail
+    // surfaces an "issue deleted on GitHub" badge. The Ripple task itself is
+    // preserved — deletion only orphans the link.
+    externalDeletedAt: v.optional(v.number()),
     // Permanent-failure marker. Set when outbound dispatch hits a 4xx
     // (non-429) response; surfaces the "⚠ Sync failed — Retry" affordance
     // on the affected task. Cleared on next successful outbound.

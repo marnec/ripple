@@ -197,6 +197,17 @@ describe("integrations/github/webhook.normalize", () => {
     });
   });
 
+  it("maps an issues.deleted payload to a NormalizedIssueDeletedEvent", () => {
+    const event = normalize("issues", openedPayload({ action: "deleted" }));
+
+    expect(event).toEqual({
+      kind: "issue.deleted",
+      externalIssueId: "I_kwDOABC123",
+      issueNumber: 42,
+      externalUpdatedAt: Date.parse("2026-05-15T10:00:00Z"),
+    });
+  });
+
   it("maps an issues.assigned payload to a NormalizedIssueAssigneesChangedEvent carrying the full assignee set", () => {
     // GitHub's `issues.assigned` event ships the single `assignee` that was
     // just added AND the full current `issue.assignees` array. We normalize

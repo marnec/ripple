@@ -43,6 +43,9 @@ export interface TaskGithubView {
   shadowAssignees: ExternalGithubUser[];
   /** Who closed the issue on GitHub, when an external actor did. */
   closedBy: ExternalGithubUser | null;
+  /** True once the linked GitHub issue has been deleted upstream. The link is
+   *  orphaned (outbound sync stops) but the Ripple task is preserved. */
+  issueDeleted: boolean;
   /** ms timestamp of the last successful Ripple→GitHub description push. */
   descriptionLastSyncedAt: number | null;
   /** True once a genuine user edit touched the description (gates the sync button). */
@@ -77,6 +80,7 @@ export function deriveTaskGithubView(
       syncError: null,
       shadowAssignees: [],
       closedBy: null,
+      issueDeleted: false,
       descriptionLastSyncedAt: null,
       descriptionEdited: false,
     };
@@ -95,6 +99,7 @@ export function deriveTaskGithubView(
       : null,
     shadowAssignees: link.externalAssignees ?? [],
     closedBy: link.externalClosedBy ?? null,
+    issueDeleted: link.externalDeletedAt !== undefined,
     descriptionLastSyncedAt: link.descriptionLastSyncedAt ?? null,
     descriptionEdited: link.descriptionEdited ?? false,
   };

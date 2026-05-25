@@ -85,6 +85,12 @@ export async function applyNormalizedEvent(
       });
       return;
 
+    case "issue.deleted":
+      // Deletes for an issue we never imported are dropped — nothing to orphan.
+      if (!existingLink) return;
+      await applyIssueDeleted(ctx, { existingLink });
+      return;
+
     case "issue.labels_changed":
       // Label events arriving for an issue we never imported are dropped —
       // we don't synthesize an orphan task from a labels-only event.
@@ -248,6 +254,7 @@ async function createTaskFromEvent(
       NormalizedIssueEvent,
       {
         kind:
+          | "issue.deleted"
           | "issue.labels_changed"
           | "issue.assignees_changed"
           | "comment.created"
@@ -383,6 +390,35 @@ async function updateExistingOnClose(
     externalState: "closed",
     externalStateReason: event.stateReason,
     externalClosedBy: event.closedBy,
+  });
+}
+
+/**
+ * Mark an imported task's link as orphaned because its external issue was
+ * deleted on the provider side. Terminal and idempotent — the Ripple task and
+ * its history are preserved; we only (1) stamp `externalDeletedAt` on the link
+ * (source of truth, gates outbound + drives the detail badge) and (2)
+ * denormalize a `deleted` flag onto the matching `tasks.externalRefs` entry so
+ * kanban/list cards can show the indicator without reading the link table.
+ *
+ * Re-delivery guard: once `externalDeletedAt` is set we no-op, so redelivered
+ * deletes don't churn subscriptions.
+ */
+async function applyIssueDeleted(
+  ctx: MutationCtx,
+  args: { existingLink: Doc<"taskIntegrationLinks"> },
+): Promise<void> {
+  const { existingLink } = args;
+  if (existingLink.externalDeletedAt !== undefined) return;
+
+  await ctx.db.patch(existingLink._id, { externalDeletedAt: Date.now() });
+
+  // A task carries exactly one integration link / external issue, so flag
+  // every ref. (`externalRefs` is conventionally a single-entry array.)
+  const task = await ctx.db.get(existingLink.taskId);
+  if (!task?.externalRefs) return;
+  await ctx.db.patch(task._id, {
+    externalRefs: task.externalRefs.map((ref) => ({ ...ref, deleted: true })),
   });
 }
 

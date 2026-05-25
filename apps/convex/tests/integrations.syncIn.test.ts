@@ -7,6 +7,7 @@ import {
 import type {
   NormalizedIssueAssigneesChangedEvent,
   NormalizedIssueClosedEvent,
+  NormalizedIssueDeletedEvent,
   NormalizedIssueLabelsChangedEvent,
   NormalizedIssueOpenedEvent,
   NormalizedIssueReopenedEvent,
@@ -124,6 +125,18 @@ function makeLabelsChangedEvent(
     issueNumber: 42,
     externalUpdatedAt: 1_700_000_003_000, // newer than opened
     labels: [],
+    ...overrides,
+  };
+}
+
+function makeDeletedEvent(
+  overrides: Partial<NormalizedIssueDeletedEvent> = {},
+): NormalizedIssueDeletedEvent {
+  return {
+    kind: "issue.deleted",
+    externalIssueId: "I_kwDOABC123",
+    issueNumber: 42,
+    externalUpdatedAt: 1_700_000_004_000, // newer than opened
     ...overrides,
   };
 }
@@ -1719,6 +1732,94 @@ describe("integrations/core/syncIn.applyInstallationEvent", () => {
     ]);
     expect(l1?.status).toBe("disconnected");
     expect(l2?.status).toBe("disconnected");
+  });
+});
+
+describe("integrations/core/syncIn issue.deleted", () => {
+  it("marks the link orphaned and flags externalRefs without deleting the task", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    // Open first so a task + link row exist.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeDeletedEvent(), link }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    // Task is preserved (keep-and-orphan), with its ref flagged deleted.
+    expect(task).toBeDefined();
+    expect(task?.externalRefs?.[0]?.deleted).toBe(true);
+
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique(),
+    );
+    expect(linkRow?.externalDeletedAt).toBeTypeOf("number");
+  });
+
+  it("is a no-op for an issue we never imported (no orphan task synthesis)", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeDeletedEvent(), link }),
+    );
+
+    const tasks = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(tasks).toHaveLength(0);
+  });
+
+  it("is idempotent — a redelivered delete does not overwrite externalDeletedAt", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeDeletedEvent(), link }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    const firstStamp = await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique();
+      return row?.externalDeletedAt;
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeDeletedEvent(), link }),
+    );
+
+    const secondStamp = await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .unique();
+      return row?.externalDeletedAt;
+    });
+    expect(secondStamp).toBe(firstStamp);
   });
 });
 

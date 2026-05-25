@@ -22,6 +22,7 @@ import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { SeedingDescriptionNotice } from "./SeedingDescriptionNotice";
 import { TaskProperties } from "./TaskProperties";
 import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
+import { TaskGithubDeletedIndicator } from "./TaskGithubDeletedIndicator";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
@@ -124,6 +125,7 @@ function TaskDetailPageContent({
             className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
             placeholder="Task title"
           />
+          <TaskGithubDeletedIndicator taskId={taskId} className="shrink-0" />
           {(() => {
             const issueUrl = detail.task.externalRefs?.[0]?.url;
             return (

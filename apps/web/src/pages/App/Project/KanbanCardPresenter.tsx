@@ -10,6 +10,7 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  Unlink,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -40,6 +41,7 @@ type KanbanCardPresenterProps = {
     estimate?: number;
     hasBlockers?: boolean;
     pullRequestState?: "draft" | "open" | "merged" | "closed";
+    externalRefs?: Array<{ deleted?: boolean }>;
     status: {
       name: string;
       color: string;
@@ -77,6 +79,18 @@ export function KanbanCardPresenter({
             </span>
           ) : (
             <span className="text-xs invisible" aria-hidden>&#8203;</span>
+          )}
+          {task.externalRefs?.some((r) => r.deleted) && (
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="ml-auto inline-flex shrink-0" />}
+                aria-label="GitHub issue deleted"
+              >
+                {/* h-4 matches the row's min-h-4 so the icon never grows the line */}
+                <Unlink className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+              </TooltipTrigger>
+              <TooltipContent side="top">GitHub issue deleted</TooltipContent>
+            </Tooltip>
           )}
         </div>
         <h3 className="text-sm font-medium truncate">{task.title}</h3>
