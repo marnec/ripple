@@ -35,7 +35,8 @@ export type SidebarChannel = Doc<"channels"> & { isHidden: boolean };
 export interface ChannelSelectorItemProps {
   channel: SidebarChannel;
   channelId: Id<"channels"> | undefined;
-  unreadCount: number;
+  /** Boolean "something new" signal — we deliberately don't show a count. */
+  hasUnread: boolean;
   onChannelSelect: (id: string | null) => void;
   onManageChannel: (id: Id<"channels">) => void;
   onStartCall: (id: Id<"channels">) => void;
@@ -51,7 +52,7 @@ export interface ChannelSelectorItemProps {
 export function ChannelSelectorItem({
   channelId,
   channel,
-  unreadCount,
+  hasUnread,
   onChannelSelect,
   onManageChannel,
   onStartCall,
@@ -108,13 +109,14 @@ export function ChannelSelectorItem({
           </div>
           <span className={cn(
             "truncate",
-            unreadCount > 0 && "font-semibold",
+            hasUnread && "font-semibold",
             channel.isHidden && "italic text-muted-foreground",
           )}>{channel.name}</span>
-          {unreadCount > 0 && (
-            <span className="ml-auto shrink-0 rounded-full bg-primary px-1.5 text-[10px] font-medium text-primary-foreground">
-              {unreadCount}
-            </span>
+          {hasUnread && (
+            <span
+              className="ml-auto size-2 shrink-0 rounded-full bg-primary"
+              aria-label="Unread messages"
+            />
           )}
       </SidebarMenuSubButton>
       <ResponsiveDropdownMenu>

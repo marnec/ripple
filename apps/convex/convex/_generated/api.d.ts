@@ -365,11 +365,11 @@ export declare const api: {
     >;
   };
   channelReads: {
-    getUnreadCounts: FunctionReference<
+    getUnreadStatus: FunctionReference<
       "query",
       "public",
       { channelIds: Array<Id<"channels">> },
-      Array<{ channelId: Id<"channels">; count: number }>
+      Array<{ channelId: Id<"channels">; hasUnread: boolean }>
     >;
     markRead: FunctionReference<
       "mutation",
