@@ -17,6 +17,14 @@ import { GitMerge, Plus, X } from "lucide-react";
 
 type Entry = { branch: string; statusId: Id<"taskStatuses"> };
 
+// Editable rows carry a stable client id so React keys survive insert/remove
+// without mis-associating input state (index keys corrupt the typed value of
+// sibling rows when one is deleted). The id is stripped before saving.
+type Row = Entry & { id: string };
+
+const toRows = (entries: Entry[]): Row[] =>
+  entries.map((e) => ({ ...e, id: crypto.randomUUID() }));
+
 type Props = {
   link: {
     _id: Id<"projectIntegrationLinks">;
@@ -41,7 +49,7 @@ export function BranchStatusMapEditor({ link }: Props) {
   );
 
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState<Entry[]>(link.branchStatusMap ?? []);
+  const [rows, setRows] = useState<Row[]>(() => toRows(link.branchStatusMap ?? []));
   const [branchOptions, setBranchOptions] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const listId = useId();
@@ -68,7 +76,9 @@ export function BranchStatusMapEditor({ link }: Props) {
     try {
       await setMap({
         linkId: link._id,
-        entries: rows.filter((r) => r.branch.trim() !== ""),
+        entries: rows
+          .filter((r) => r.branch.trim() !== "")
+          .map((r) => ({ branch: r.branch, statusId: r.statusId })),
       });
       toast.success("Branch automation saved");
     } catch (err) {
@@ -111,16 +121,16 @@ export function BranchStatusMapEditor({ link }: Props) {
       </datalist>
 
       <ul className="space-y-1.5">
-        {rows.map((row, i) => (
-          <li key={i} className="flex items-center gap-2">
+        {rows.map((row) => (
+          <li key={row.id} className="flex items-center gap-2">
             <Input
               list={listId}
               value={row.branch}
               placeholder="branch (e.g. main)"
               onChange={(e) =>
                 setRows((rs) =>
-                  rs.map((r, j) =>
-                    j === i ? { ...r, branch: e.target.value } : r,
+                  rs.map((r) =>
+                    r.id === row.id ? { ...r, branch: e.target.value } : r,
                   ),
                 )
               }
@@ -131,8 +141,8 @@ export function BranchStatusMapEditor({ link }: Props) {
               value={row.statusId}
               onValueChange={(value) =>
                 setRows((rs) =>
-                  rs.map((r, j) =>
-                    j === i
+                  rs.map((r) =>
+                    r.id === row.id
                       ? { ...r, statusId: value as Id<"taskStatuses"> }
                       : r,
                   ),
@@ -152,8 +162,8 @@ export function BranchStatusMapEditor({ link }: Props) {
             </Select>
             <button
               aria-label="Remove mapping"
-              onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-              className="text-muted-foreground hover:text-destructive"
+              onClick={() => setRows((rs) => rs.filter((r) => r.id !== row.id))}
+              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="h-4 w-4" />
             </button>
@@ -170,7 +180,10 @@ export function BranchStatusMapEditor({ link }: Props) {
           onClick={() => {
             const first = mappable[0];
             if (!first) return;
-            setRows((rs) => [...rs, { branch: "", statusId: first._id }]);
+            setRows((rs) => [
+              ...rs,
+              { id: crypto.randomUUID(), branch: "", statusId: first._id },
+            ]);
           }}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -182,7 +195,7 @@ export function BranchStatusMapEditor({ link }: Props) {
             size="sm"
             className="h-7 text-xs"
             onClick={() => {
-              setRows(link.branchStatusMap ?? []);
+              setRows(toRows(link.branchStatusMap ?? []));
               setOpen(false);
             }}
           >

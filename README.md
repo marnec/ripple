@@ -3,24 +3,9 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- unread channels: DECIDED — boolean "something new" badge (dot + bold name), no numeric count.
-    - Rationale: exact per-channel counts conflict with the "only essential information" UX
-      principle (a number is noise; "there's something new" is the signal — cf. Discord/Slack,
-      which show numbers only for DMs/mentions). A count also costs either a per-message scan or
-      a maintained aggregate (extra writes + per-channel root contention on `messages`, our
-      highest-write-rate table). A boolean needs neither.
-    - Impl: `channelReads.getUnreadStatus` — one `.first()` on the `undeleted_by_channel` index
-      per channel, compared against a baseline. Baseline = `userChannelState.lastReadAt`, else
-      (never visited) the user's join time: workspace-join (`workspaceMembers._creationTime`) for
-      OPEN channels, channel-join (`channelMembers._creationTime`) for closed/dm. Zero extra write
-      cost per message; correct under soft-deletes (reads live rows).
-    - GOTCHA: open channels have NO `channelMembers` rows (access is via workspace membership), so
-      `markRead` must branch on channel type to write a read marker for them — otherwise open
-      channels (the common kind) never get a `lastReadAt` and can never badge. This was the
-      original reason the badge appeared to do nothing.
-    - Rejected: https://github.com/TimpiaAI/convex-unread-tracking (per-message registration we
-      don't need) and `@convex-dev/aggregate` for counts (only worth it if exact counts ever
-      become a hard requirement — revisit then, scoped to DMs/mentions where volume is low).
+- I don't really know how to handle unread messages, they kind of work right now but god save me
+
+- branch related stuff
 
 - document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
 - guests can comment (all viewers?)

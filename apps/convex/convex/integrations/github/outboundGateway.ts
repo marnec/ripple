@@ -4,26 +4,30 @@ import type {
   OutboundOutcome,
   OutboundSuccessMeta,
 } from "../core/outboundPort";
-import { GithubClient, type GithubResponse } from "./client";
+import { githubClientFromEnv, type GithubResponse } from "./client";
 
 /**
  * GitHub implementation of the outbound `OutboundGateway` port.
  *
- * `buildGithubGateway` depends only on the minimal `OutboundHttpClient`
- * surface (which `GithubClient` satisfies), so tests inject a fake client that
+ * `buildGithubGateway` depends only on the token-free `InstallationRequester`
+ * surface (which `InstallationClient` satisfies), so tests inject a fake that
  * returns canned `GithubResponse`s — exercising the fan-out / 404-benign /
- * classify rules with no token minting, no env, and no real HTTP.
+ * classify rules with no token minting, no env, and no real HTTP. Token
+ * minting/caching is owned once by `InstallationClient`, not re-implemented
+ * here.
  *
- * `makeGithubGateway` is the production entry: it reads the App credentials
- * from the environment (returning `null` when unconfigured so the caller can
- * record a permanent failure) and wires up a real `GithubClient`.
+ * `makeGithubGateway` is the production entry: it builds a client from the App
+ * credentials in the environment (returning `null` when unconfigured so the
+ * caller can record a permanent failure) and binds it to the installation.
  */
 
-/** The slice of `GithubClient` the gateway needs — the test seam. */
-export interface OutboundHttpClient {
-  mintInstallationToken(externalAccountId: string): Promise<string>;
+/**
+ * The token-free request surface the gateway drives — the test seam.
+ * `InstallationClient` satisfies it structurally and owns the installation
+ * token, so gateway methods express only the call, not the auth.
+ */
+export interface InstallationRequester {
   request<T = unknown>(args: {
-    installationToken: string;
     method: "GET" | "POST" | "PATCH" | "DELETE";
     path: string;
     body?: unknown;
@@ -65,22 +69,12 @@ async function foldResponse<T>(
   return { kind: "retryable", message: res.errorMessage ?? `HTTP ${res.status}` };
 }
 
-export function buildGithubGateway(
-  client: OutboundHttpClient,
-  installationId: string,
-): OutboundGateway {
-  // Mint once, lazily, and reuse across the (possibly multiple) requests a
-  // single op makes.
-  let tokenPromise: Promise<string> | null = null;
-  const token = () =>
-    (tokenPromise ??= client.mintInstallationToken(installationId));
-
+export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
   return {
     async setIssueState({ repoFullName, issueNumber, state, stateReason }) {
       const body: Record<string, string> = { state };
       if (state === "closed" && stateReason) body.state_reason = stateReason;
-      const res = await client.request<{ updated_at: string }>({
-        installationToken: await token(),
+      const res = await gh.request<{ updated_at: string }>({
         method: "PATCH",
         path: `/repos/${repoFullName}/issues/${issueNumber}`,
         body,
@@ -91,8 +85,7 @@ export function buildGithubGateway(
     },
 
     async setDescription({ repoFullName, issueNumber, markdown }) {
-      const res = await client.request<unknown>({
-        installationToken: await token(),
+      const res = await gh.request<unknown>({
         method: "PATCH",
         path: `/repos/${repoFullName}/issues/${issueNumber}`,
         body: { body: markdown },
@@ -101,11 +94,9 @@ export function buildGithubGateway(
     },
 
     async setLabels({ repoFullName, issueNumber, add, remove }) {
-      const tok = await token();
       // POST /labels auto-creates labels missing on the repo.
       if (add.length > 0) {
-        const res = await client.request<unknown>({
-          installationToken: tok,
+        const res = await gh.request<unknown>({
           method: "POST",
           path: `/repos/${repoFullName}/issues/${issueNumber}/labels`,
           body: { labels: add },
@@ -114,8 +105,7 @@ export function buildGithubGateway(
         if (outcome.kind !== "success") return outcome;
       }
       for (const name of remove) {
-        const res = await client.request<unknown>({
-          installationToken: tok,
+        const res = await gh.request<unknown>({
           method: "DELETE",
           path: `/repos/${repoFullName}/issues/${issueNumber}/labels/${encodeURIComponent(name)}`,
         });
@@ -130,10 +120,8 @@ export function buildGithubGateway(
     },
 
     async setAssignees({ repoFullName, issueNumber, add, remove }) {
-      const tok = await token();
       if (add.length > 0) {
-        const res = await client.request<unknown>({
-          installationToken: tok,
+        const res = await gh.request<unknown>({
           method: "POST",
           path: `/repos/${repoFullName}/issues/${issueNumber}/assignees`,
           body: { assignees: add },
@@ -142,8 +130,7 @@ export function buildGithubGateway(
         if (outcome.kind !== "success") return outcome;
       }
       if (remove.length > 0) {
-        const res = await client.request<unknown>({
-          installationToken: tok,
+        const res = await gh.request<unknown>({
           method: "DELETE",
           path: `/repos/${repoFullName}/issues/${issueNumber}/assignees`,
           body: { assignees: remove },
@@ -155,13 +142,12 @@ export function buildGithubGateway(
     },
 
     async createComment({ repoFullName, issueNumber, body }) {
-      const res = await client.request<{
+      const res = await gh.request<{
         id: number;
         node_id: string;
         updated_at: string;
         user: { login: string; avatar_url: string; html_url: string };
       }>({
-        installationToken: await token(),
         method: "POST",
         path: `/repos/${repoFullName}/issues/${issueNumber}/comments`,
         body: { body },
@@ -190,8 +176,7 @@ export function buildGithubGateway(
     },
 
     async editComment({ repoFullName, externalCommentId, body }) {
-      const res = await client.request<{ updated_at: string }>({
-        installationToken: await token(),
+      const res = await gh.request<{ updated_at: string }>({
         method: "PATCH",
         path: `/repos/${repoFullName}/issues/comments/${externalCommentId}`,
         body: { body },
@@ -210,8 +195,7 @@ export function buildGithubGateway(
     },
 
     async deleteComment({ repoFullName, externalCommentId }) {
-      const res = await client.request<unknown>({
-        installationToken: await token(),
+      const res = await gh.request<unknown>({
         method: "DELETE",
         path: `/repos/${repoFullName}/issues/comments/${externalCommentId}`,
       });
@@ -236,11 +220,7 @@ export function buildGithubGateway(
 export function makeGithubGateway(
   installationId: string,
 ): OutboundGateway | null {
-  const appId = process.env.GITHUB_APP_ID;
-  const privateKeyPem = process.env.GITHUB_APP_PRIVATE_KEY;
-  if (!appId || !privateKeyPem) return null;
-  return buildGithubGateway(
-    new GithubClient({ appId, privateKeyPem }),
-    installationId,
-  );
+  const client = githubClientFromEnv();
+  if (!client) return null;
+  return buildGithubGateway(client.forInstallation(installationId));
 }

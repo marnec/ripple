@@ -301,7 +301,7 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
                   </div>
                 </div>
                 {showRestoreBanner && (
-                  <div className="rounded-sm bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <div className="rounded-sm bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                     Frozen for more than 24 hours. Restore the workspace
                     entitlement, then run Force resync to catch up on changes
                     GitHub stopped retrying.
@@ -325,6 +325,33 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
   );
 }
 
+// Single source of truth for link-status badge appearance. Each entry pairs a
+// light and dark variant so badges stay legible in both themes (sibling
+// surfaces — ConnectGithubWizard, StatusEffectMatrix — follow the same palette).
+const STATUS_BADGE: Record<string, { label: string; className?: string }> = {
+  revoked: {
+    label: "Entitlement revoked",
+    className:
+      "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  },
+  active: {
+    label: "Active",
+    className:
+      "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  },
+  paused: {
+    label: "Paused",
+    className:
+      "bg-yellow-50 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300",
+  },
+  disconnected: {
+    label: "Disconnected",
+    className:
+      "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  },
+  configuring: { label: "Configuring" },
+};
+
 function StatusBadge({
   status,
   pausedByBilling,
@@ -332,33 +359,10 @@ function StatusBadge({
   status: "configuring" | "active" | "paused" | "disconnected";
   pausedByBilling: boolean;
 }) {
-  if (pausedByBilling) {
-    return (
-      <Badge variant="outline" className="bg-amber-50 text-amber-800">
-        Entitlement revoked
-      </Badge>
-    );
-  }
-  switch (status) {
-    case "active":
-      return (
-        <Badge variant="outline" className="bg-emerald-50 text-emerald-800">
-          Active
-        </Badge>
-      );
-    case "paused":
-      return (
-        <Badge variant="outline" className="bg-yellow-50 text-yellow-800">
-          Paused
-        </Badge>
-      );
-    case "disconnected":
-      return (
-        <Badge variant="outline" className="bg-gray-100 text-gray-700">
-          Disconnected
-        </Badge>
-      );
-    case "configuring":
-      return <Badge variant="outline">Configuring</Badge>;
-  }
+  const meta = STATUS_BADGE[pausedByBilling ? "revoked" : status];
+  return (
+    <Badge variant="outline" className={meta.className}>
+      {meta.label}
+    </Badge>
+  );
 }

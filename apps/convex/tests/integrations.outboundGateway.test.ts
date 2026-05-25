@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { buildGithubGateway } from "../convex/integrations/github/outboundGateway";
-import type { OutboundHttpClient } from "../convex/integrations/github/outboundGateway";
+import type { InstallationRequester } from "../convex/integrations/github/outboundGateway";
 import type { GithubResponse } from "../convex/integrations/github/client";
 
 /**
  * Gateway-level tests for the GitHub HTTP semantics — classification, the
  * multi-request fan-out (labels = POST adds + DELETE removes), the
  * 404-on-DELETE-is-benign rule, and success-meta extraction. A fake
- * `OutboundHttpClient` returns canned responses, so these run with no token
+ * `InstallationRequester` returns canned responses, so these run with no token
  * minting, no env, and no real HTTP.
  */
 
 type RequestArgs = {
-  installationToken: string;
   method: "GET" | "POST" | "PATCH" | "DELETE";
   path: string;
   body?: unknown;
@@ -22,8 +21,7 @@ function fakeClient(
   responder: (args: RequestArgs) => GithubResponse<unknown>,
 ) {
   const calls: RequestArgs[] = [];
-  const client: OutboundHttpClient = {
-    mintInstallationToken: async () => "tok",
+  const client: InstallationRequester = {
     request: async <T,>(args: RequestArgs) => {
       calls.push(args);
       return responder(args) as GithubResponse<T>;
@@ -32,7 +30,7 @@ function fakeClient(
   return { client, calls };
 }
 
-const gw = (client: OutboundHttpClient) => buildGithubGateway(client, "install-1");
+const gw = (client: InstallationRequester) => buildGithubGateway(client);
 
 describe("buildGithubGateway.setIssueState", () => {
   it("success extracts GitHub's updated_at from the 2xx body", async () => {
