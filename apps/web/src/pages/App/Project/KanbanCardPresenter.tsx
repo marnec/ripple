@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
+import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
 import {
   Ban,
   CalendarIcon,
@@ -42,6 +43,7 @@ type KanbanCardPresenterProps = {
     hasBlockers?: boolean;
     pullRequestState?: "draft" | "open" | "merged" | "closed";
     externalRefs?: Array<{ deleted?: boolean }>;
+    externalAssignees?: ExternalAssignee[];
     status: {
       name: string;
       color: string;
@@ -117,6 +119,10 @@ export function KanbanCardPresenter({
                 );
               })()}
           </div>
+
+          {/* External (GitHub) assignees — left of the internal assignee,
+              separated by a GitHub mark. */}
+          <ExternalAssigneeAvatars assignees={task.externalAssignees} side="left" />
 
           {/* Assignee Avatar — ghost placeholder keeps row height stable */}
           {task.assignee ? (

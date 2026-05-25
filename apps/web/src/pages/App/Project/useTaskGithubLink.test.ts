@@ -44,6 +44,7 @@ describe("deriveTaskGithubView", () => {
       syncError: null,
       shadowAssignees: [],
       closedBy: null,
+      issueDeleted: false,
       descriptionLastSyncedAt: null,
       descriptionEdited: false,
     });

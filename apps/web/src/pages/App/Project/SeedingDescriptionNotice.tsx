@@ -1,5 +1,4 @@
 import { GitBranch } from "lucide-react";
-import { RippleSpinner } from "@/components/RippleSpinner";
 
 /**
  * Disclaimer shown next to the description editor while a task's description is

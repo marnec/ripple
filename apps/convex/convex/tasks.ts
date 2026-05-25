@@ -85,6 +85,18 @@ export const baseTaskFields = {
       }),
     ),
   ),
+  // GitHub assignees that didn't win the single `assigneeId` slot. Denormalized
+  // off `taskIntegrationLinks` so the kanban / task-list render them beside the
+  // internal assignee. See schema.ts for the churn rationale.
+  externalAssignees: v.optional(
+    v.array(
+      v.object({
+        login: v.string(),
+        avatarUrl: v.string(),
+        url: v.string(),
+      }),
+    ),
+  ),
 };
 
 export const enrichedTaskValidator = v.object({

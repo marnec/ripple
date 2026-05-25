@@ -1,70 +1,29 @@
 import type { Id } from "@convex/_generated/dataModel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 
 type Props = { taskId: Id<"tasks"> };
 
 /**
- * GitHub-specific assignee + closer display on the task detail surface.
+ * GitHub-specific "closed by" display on the task detail surface.
  *
- *  - Shadow chips: when a GitHub issue had multiple assignees, only one wins
- *    Ripple's single `assigneeId` slot. The remainder render here as muted
- *    avatar chips linking to their GitHub profile, so the multi-assignee
- *    story isn't lost.
  *  - "Closed on GitHub by @login": when an externally-closed issue was
  *    flipped by a non-member, we surface who did it.
  *
- * The "issue deleted on GitHub" signal lives in the header
- * (`TaskGithubDeletedIndicator`), not here.
+ * External assignees that didn't win Ripple's single slot render beside the
+ * internal assignee in the Assignee property row (`ExternalAssigneeAvatars`),
+ * not here. The "issue deleted on GitHub" signal lives in the header
+ * (`TaskGithubDeletedIndicator`).
  *
- * Renders nothing when the task has no link or neither datum is present —
+ * Renders nothing when the task has no link or wasn't externally closed —
  * Ripple-native tasks pay no UI cost.
  */
 export function TaskGithubExternalInfo({ taskId }: Props) {
-  const { shadowAssignees, closedBy } = useTaskGithubLink(taskId);
-  if (shadowAssignees.length === 0 && !closedBy) return null;
+  const { closedBy } = useTaskGithubLink(taskId);
+  if (!closedBy) return null;
 
   return (
     <div className="flex flex-col gap-2 text-xs text-muted-foreground">
-
-      {shadowAssignees.length > 0 && (
-        <div className="flex items-center gap-2">
-          <span className="shrink-0">Also assigned on GitHub:</span>
-          <TooltipProvider delay={120}>
-            <div className="flex flex-wrap items-center gap-1">
-              {shadowAssignees.map((a) => (
-                <Tooltip key={a.login}>
-                  <TooltipTrigger
-                    render={
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        aria-label={`Open @${a.login} on GitHub`}
-                        className="inline-flex"
-                      />
-                    }
-                  >
-                    <Avatar className="h-5 w-5 ring-1 ring-border opacity-80 hover:opacity-100 transition-opacity">
-                      <AvatarImage src={a.avatarUrl} alt={`@${a.login}`} />
-                      <AvatarFallback className="text-[10px]">
-                        {a.login.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">@{a.login}</TooltipContent>
-                </Tooltip>
-              ))}
-            </div>
-          </TooltipProvider>
-        </div>
-      )}
 
       {closedBy && (
         <div className="flex items-center gap-1.5">

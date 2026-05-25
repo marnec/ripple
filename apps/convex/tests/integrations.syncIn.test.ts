@@ -1360,11 +1360,17 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_chan
     ]);
     // Sanity: carol matched too, but as a shadow chip — task assignee is alice.
     expect(task?.assigneeId).not.toBe(carolUserId);
+    // Denormalized onto the task row (off the high-churn link) for the kanban /
+    // list — mirrors the link's shadow set.
+    expect(task?.externalAssignees).toEqual([
+      { login: "bob",   avatarUrl: "https://github.com/bob.png",   url: "https://github.com/bob" },
+      { login: "carol", avatarUrl: "https://github.com/carol.png", url: "https://github.com/carol" },
+    ]);
   });
 
-  it("falls back to the bot user when no GitHub assignee matches a workspace member", async () => {
+  it("leaves the task unassigned (no bot fallback) when no GitHub assignee matches a workspace member", async () => {
     const t = createTestContext();
-    const { projectId, botUserId, link } = await setupInboundFixtures(t);
+    const { projectId, link } = await setupInboundFixtures(t);
     await t.run((ctx) =>
       applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
     );
@@ -1388,10 +1394,15 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_chan
         .withIndex("by_project", (q) => q.eq("projectId", projectId))
         .collect(),
     );
-    // Bot-user fallback so the task surfaces "GitHub" rather than "Unassigned"
-    // in member pickers and timeline views — the real identities still render
-    // as shadow chips so no information is lost.
-    expect(task?.assigneeId).toBe(botUserId);
+    // No bot fallback: the slot stays empty (a triage prompt). The real GitHub
+    // identities surface as external-assignee chips, so no information is lost.
+    expect(task?.assigneeId).toBeUndefined();
+    // Denormalized onto the task row for the kanban / list — full set, since no
+    // entry won the internal slot.
+    expect(task?.externalAssignees).toEqual([
+      { login: "external1", avatarUrl: "u1", url: "https://github.com/external1" },
+      { login: "external2", avatarUrl: "u2", url: "https://github.com/external2" },
+    ]);
 
     const linkRow = await t.run((ctx) =>
       ctx.db
@@ -1452,6 +1463,9 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_chan
     );
     expect(task?.assigneeId).toBeUndefined();
     expect(task?.assigneeId).not.toBe(aliceUserId);
+    // Denormalized task-row copy clears too (undefined, not []) so the card
+    // shows no external chips.
+    expect(task?.externalAssignees).toBeUndefined();
 
     const linkRow = await t.run((ctx) =>
       ctx.db

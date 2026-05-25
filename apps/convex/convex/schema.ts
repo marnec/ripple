@@ -350,6 +350,23 @@ export default defineSchema({
         }),
       ),
     ),
+    // GitHub assignees that did NOT win Ripple's single `assigneeId` slot —
+    // unmatched external logins plus matched-but-not-first members. Denormalized
+    // here (off the high-churn `taskIntegrationLinks` row) so the kanban / task
+    // list can render them beside the internal assignee without subscribing to
+    // the link table. Written in lockstep with `assigneeId` by
+    // `applyAssigneesChanged`; changes at the same low frequency as the internal
+    // assignee, so it doesn't destabilize the card row. Source of truth is
+    // `taskIntegrationLinks.externalAssignees`. Absent when there are none.
+    externalAssignees: v.optional(
+      v.array(
+        v.object({
+          login: v.string(),
+          avatarUrl: v.string(),
+          url: v.string(),
+        }),
+      ),
+    ),
     // Frozen denormalized snapshot written by the disconnect cascade BEFORE
     // hard-deleting the per-task `taskIntegrationLinks` row. Preserves
     // historical context (provider, repo, issue number/id, URL, when the

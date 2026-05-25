@@ -1543,6 +1543,11 @@ export type DataModel = {
       creatorId: Id<"users">;
       dueDate?: string;
       estimate?: number;
+      externalAssignees?: Array<{
+        avatarUrl: string;
+        login: string;
+        url: string;
+      }>;
       externalRefFrozen?: {
         disconnectedAt: number;
         externalAuthor?: { avatarUrl: string; login: string; url: string };
@@ -1585,6 +1590,7 @@ export type DataModel = {
       | "creatorId"
       | "dueDate"
       | "estimate"
+      | "externalAssignees"
       | "externalRefFrozen"
       | "externalRefFrozen.disconnectedAt"
       | "externalRefFrozen.externalAuthor"

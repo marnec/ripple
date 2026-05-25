@@ -656,6 +656,11 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2351,6 +2356,11 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2431,6 +2441,11 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2501,6 +2516,11 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2576,6 +2596,11 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2630,6 +2655,11 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2697,6 +2727,11 @@ export declare const api: {
           creatorId: Id<"users">;
           dueDate?: string;
           estimate?: number;
+          externalAssignees?: Array<{
+            avatarUrl: string;
+            login: string;
+            url: string;
+          }>;
           externalRefs?: Array<{
             deleted?: boolean;
             issueNumber: number;
@@ -2760,6 +2795,11 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
