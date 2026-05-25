@@ -14,8 +14,7 @@ export function SeedingDescriptionNotice() {
   return (
     <div className="flex items-center gap-1.5 text-xs text-muted-foreground animate-fade-in">
       <GitBranch className="h-3.5 w-3.5 shrink-0" />
-      <span>Seeding description from GitHub issue…</span>
-      <RippleSpinner size={14} />
+      <span className="mr-3">Seeding description from GitHub issue…</span>
     </div>
   );
 }

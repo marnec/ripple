@@ -3,7 +3,6 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- visually signal that remote issue was deleted on the task description (maybe also on card)
 - improve assignees mechanism
 
 - consider adoption of https://github.com/TimpiaAI/convex-unread-tracking
