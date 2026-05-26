@@ -102,6 +102,8 @@ export const branchCreateContext = internalQuery({
       title: v.string(),
       linkId: v.id("taskIntegrationLinks"),
       existingBranchName: v.union(v.string(), v.null()),
+      // Project-configured default base, or null to fall back to repo default.
+      defaultBaseBranch: v.union(v.string(), v.null()),
     }),
   ),
   handler: async (ctx, { taskId }) => {
@@ -134,22 +136,25 @@ export const branchCreateContext = internalQuery({
       title: task.title,
       linkId: link._id,
       existingBranchName: link.branchName ?? null,
+      defaultBaseBranch: projectLink.defaultBaseBranch ?? null,
     };
   },
 });
 
-/** Persist the created branch name on the task's link (drives the UI chip). */
+/** Persist the created branch name + base on the task's link (drives the UI
+ * chip and the prefilled compare URL's base). */
 export const recordTaskBranchName = internalMutation({
   args: {
     linkId: v.id("taskIntegrationLinks"),
     taskId: v.id("tasks"),
     branchName: v.string(),
+    baseBranch: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, { linkId, taskId, branchName }) => {
+  handler: async (ctx, { linkId, taskId, branchName, baseBranch }) => {
     const link = await ctx.db.get(linkId);
     if (!link) return null;
-    await ctx.db.patch(linkId, { branchName });
+    await ctx.db.patch(linkId, { branchName, branchBaseRef: baseBranch });
     await logTaskIntegrationActivity(ctx, {
       taskId,
       type: "branch_created",
@@ -160,22 +165,66 @@ export const recordTaskBranchName = internalMutation({
 });
 
 /**
- * Create a git branch for a task's linked GitHub issue, off the repo's default
- * branch, named `<issueNumber>-<slug>`. User-initiated, so it runs
- * synchronously (not via the retrier) and throws a `ConvexError` the UI can
- * surface. Idempotent: a pre-recorded branch is returned as-is, and a
+ * Branch sources for a task's "Create branch" picker: the repo's branch names
+ * plus its default branch (to label/preselect). Task-membership gated (via
+ * `branchCreateContext`), unlike the admin-only `listRepoBranches` used by the
+ * project-settings editor. Returns empty/null on any resolution failure so the
+ * picker degrades to free choice.
+ */
+export const listTaskRepoBranches = action({
+  args: { taskId: v.id("tasks") },
+  returns: v.object({
+    branches: v.array(v.string()),
+    defaultBranch: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, { taskId }) => {
+    const cfg = await ctx.runQuery(
+      internal.integrations.github.branchesAction.branchCreateContext,
+      { taskId },
+    );
+    if (!cfg) return { branches: [], defaultBranch: null };
+
+    const client = githubClientFromEnv();
+    if (!client) return { branches: [], defaultBranch: null };
+    const gh = client.forInstallation(cfg.externalAccountId);
+
+    const branches = await gh.fetchBranches({ owner: cfg.owner, repo: cfg.repo });
+    const repoRes = await gh.request<{ default_branch: string }>({
+      method: "GET",
+      path: `/repos/${cfg.owner}/${cfg.repo}`,
+    });
+    return {
+      branches,
+      defaultBranch: repoRes.body?.default_branch ?? null,
+    };
+  },
+});
+
+/**
+ * Create a git branch for a task's linked GitHub issue, named
+ * `<issueNumber>-<slug>`. The base it's cut from is resolved in priority order:
+ * an explicit `baseBranch` arg (the task picker's per-creation choice) → the
+ * project link's `defaultBaseBranch` → the repo's default branch. User-initiated,
+ * so it runs synchronously (not via the retrier) and throws a `ConvexError` the
+ * UI can surface. Idempotent: a pre-recorded branch is returned as-is, and a
  * "reference already exists" on GitHub is adopted rather than failing.
  *
  * Requires the App's `Contents: write` permission — a 403 maps to a clear
  * "accept the updated permission" message.
  */
 export const createBranchForTask = action({
-  args: { taskId: v.id("tasks") },
+  args: {
+    taskId: v.id("tasks"),
+    // Explicit base to branch from; falls back to the project default, then the
+    // repo default. An unknown branch surfaces as a clear "couldn't read head".
+    baseBranch: v.optional(v.string()),
+  },
   returns: v.object({
     branchName: v.string(),
+    baseBranch: v.string(),
     alreadyExisted: v.boolean(),
   }),
-  handler: async (ctx, { taskId }) => {
+  handler: async (ctx, { taskId, baseBranch }) => {
     const cfg = await ctx.runQuery(
       internal.integrations.github.branchesAction.branchCreateContext,
       { taskId },
@@ -183,24 +232,37 @@ export const createBranchForTask = action({
     if (!cfg) {
       throw new ConvexError("This task isn't linked to a GitHub issue");
     }
-    if (cfg.existingBranchName) {
-      return { branchName: cfg.existingBranchName, alreadyExisted: true };
-    }
 
     const client = githubClientFromEnv();
     if (!client) throw new ConvexError("GitHub App credentials not configured");
     const gh = client.forInstallation(cfg.externalAccountId);
     const branchName = branchNameForIssue(cfg.issueNumber, cfg.title);
 
-    // Base the branch on the repo's default branch head.
-    const repoRes = await gh.request<{ default_branch: string }>({
-      method: "GET",
-      path: `/repos/${cfg.owner}/${cfg.repo}`,
-    });
-    const base = repoRes.body?.default_branch;
-    if (repoRes.status !== 200 || !base) {
-      throw new ConvexError("Couldn't resolve the repository's default branch");
+    // Resolve the base: explicit arg → project default → repo default.
+    let base = baseBranch ?? cfg.defaultBaseBranch ?? undefined;
+    if (!base) {
+      const repoRes = await gh.request<{ default_branch: string }>({
+        method: "GET",
+        path: `/repos/${cfg.owner}/${cfg.repo}`,
+      });
+      base = repoRes.body?.default_branch;
+      if (repoRes.status !== 200 || !base) {
+        throw new ConvexError(
+          "Couldn't resolve the repository's default branch",
+        );
+      }
     }
+
+    // A pre-recorded branch short-circuits — but only after `base` is resolved
+    // so the return type's `baseBranch` is always a concrete string.
+    if (cfg.existingBranchName) {
+      return {
+        branchName: cfg.existingBranchName,
+        baseBranch: base,
+        alreadyExisted: true,
+      };
+    }
+
     const refRes = await gh.request<{ object: { sha: string } }>({
       method: "GET",
       path: `/repos/${cfg.owner}/${cfg.repo}/git/ref/heads/${base}`,
@@ -237,8 +299,8 @@ export const createBranchForTask = action({
 
     await ctx.runMutation(
       internal.integrations.github.branchesAction.recordTaskBranchName,
-      { linkId: cfg.linkId, taskId, branchName },
+      { linkId: cfg.linkId, taskId, branchName, baseBranch: base },
     );
-    return { branchName, alreadyExisted };
+    return { branchName, baseBranch: base, alreadyExisted };
   },
 });

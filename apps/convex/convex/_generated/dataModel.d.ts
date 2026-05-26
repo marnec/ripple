@@ -981,7 +981,9 @@ export type DataModel = {
   };
   projectIntegrationLinks: {
     document: {
+      askBranchSourceEachTime?: boolean;
       branchStatusMap?: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
+      defaultBaseBranch?: string;
       externalRepoFullName: string;
       externalRepoId: string;
       frozenAt?: number;
@@ -996,7 +998,9 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "askBranchSourceEachTime"
       | "branchStatusMap"
+      | "defaultBaseBranch"
       | "externalRepoFullName"
       | "externalRepoId"
       | "frozenAt"
@@ -1449,6 +1453,7 @@ export type DataModel = {
   };
   taskIntegrationLinks: {
     document: {
+      branchBaseRef?: string;
       branchName?: string;
       descriptionEdited?: boolean;
       descriptionLastSyncedAt?: number;
@@ -1481,6 +1486,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "branchBaseRef"
       | "branchName"
       | "descriptionEdited"
       | "descriptionLastSyncedAt"

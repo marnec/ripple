@@ -119,3 +119,54 @@ describe("integrations/core/links.setBranchStatusMap", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("integrations/core/links.setBranchSourceDefaults", () => {
+  it("persists the default base branch and ask-each-time flag", async () => {
+    const t = createTestContext();
+    const { linkId, asUser } = await setup(t);
+
+    await asUser.mutation(api.integrations.core.links.setBranchSourceDefaults, {
+      linkId,
+      defaultBaseBranch: "develop",
+      askEachTime: false,
+    });
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.defaultBaseBranch).toBe("develop");
+    expect(link?.askBranchSourceEachTime).toBe(false);
+  });
+
+  it("clears the default base branch when given null or blank", async () => {
+    const t = createTestContext();
+    const { linkId, asUser } = await setup(t);
+    await asUser.mutation(api.integrations.core.links.setBranchSourceDefaults, {
+      linkId,
+      defaultBaseBranch: "develop",
+      askEachTime: false,
+    });
+
+    await asUser.mutation(api.integrations.core.links.setBranchSourceDefaults, {
+      linkId,
+      defaultBaseBranch: "   ",
+      askEachTime: true,
+    });
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.defaultBaseBranch).toBeUndefined();
+    expect(link?.askBranchSourceEachTime).toBe(true);
+  });
+
+  it("rejects non-admin callers", async () => {
+    const t = createTestContext();
+    const { linkId } = await setup(t);
+    const outsider = t.withIdentity({ subject: "stranger|s", issuer: "test" });
+
+    await expect(
+      outsider.mutation(api.integrations.core.links.setBranchSourceDefaults, {
+        linkId,
+        defaultBaseBranch: "develop",
+        askEachTime: false,
+      }),
+    ).rejects.toThrow();
+  });
+});

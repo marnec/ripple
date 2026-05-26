@@ -64,6 +64,8 @@ export const linksForProject = query({
           v.object({ branch: v.string(), statusId: v.id("taskStatuses") }),
         ),
       ),
+      defaultBaseBranch: v.optional(v.string()),
+      askBranchSourceEachTime: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx, { projectId }) => {
@@ -84,6 +86,8 @@ export const linksForProject = query({
         externalRepoFullName: l.externalRepoFullName,
         pausedByBilling: l.pausedByBilling,
         branchStatusMap: l.branchStatusMap,
+        defaultBaseBranch: l.defaultBaseBranch,
+        askBranchSourceEachTime: l.askBranchSourceEachTime,
       }));
   },
 });
@@ -232,6 +236,38 @@ export const setBranchStatusMap = mutation({
     }
 
     await ctx.db.patch(args.linkId, { branchStatusMap: args.entries });
+    return null;
+  },
+});
+
+/**
+ * Set the task "Create branch" source defaults for a link. Admin-only (a
+ * project-wide setting, like `setBranchStatusMap`). `defaultBaseBranch` is
+ * stored verbatim or cleared when null/empty (falls back to the repo default at
+ * creation time — no GitHub round-trip here to validate it). `askEachTime`
+ * toggles the per-creation base-branch picker; the picker's "Don't ask again"
+ * calls this with the chosen branch and `askEachTime: false`.
+ */
+export const setBranchSourceDefaults = mutation({
+  args: {
+    linkId: v.id("projectIntegrationLinks"),
+    defaultBaseBranch: v.union(v.string(), v.null()),
+    askEachTime: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db.get(args.linkId);
+    if (!link) throw new ConvexError("Link not found");
+
+    await requireWorkspaceMember(ctx, link.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    const trimmed = args.defaultBaseBranch?.trim();
+    await ctx.db.patch(args.linkId, {
+      defaultBaseBranch: trimmed ? trimmed : undefined,
+      askBranchSourceEachTime: args.askEachTime,
+    });
     return null;
   },
 });

@@ -34,6 +34,7 @@ type Link = NonNullable<Parameters<typeof deriveTaskGithubView>[0]>;
 const mkLink = (partial: Partial<Link> = {}): Link => ({
   seedExpected: false,
   descriptionSnapshotId: null,
+  branchSource: null,
   ...partial,
 });
 
@@ -45,6 +46,9 @@ describe("deriveTaskGithubView", () => {
       shadowAssignees: [],
       closedBy: null,
       issueDeleted: false,
+      branchName: null,
+      branchBaseRef: null,
+      branchSource: null,
       descriptionLastSyncedAt: null,
       descriptionEdited: false,
       seed: {

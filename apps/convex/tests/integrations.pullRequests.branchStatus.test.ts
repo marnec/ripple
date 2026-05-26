@@ -277,6 +277,83 @@ describe("integrations PR branch→status automation", () => {
     expect(await statusOf(t, taskId)).toBe(releasedStatusId);
   });
 
+  it("a glob rule matches a versioned branch (release/* ← release/2026.05)", async () => {
+    const t = createTestContext();
+    const { link, stagingStatusId } = await setup(t);
+    // Add a glob rule onto the existing exact-match map.
+    await t.run((ctx) =>
+      ctx.db.patch(link._id, {
+        branchStatusMap: [
+          ...(link.branchStatusMap ?? []),
+          { branch: "release/*", statusId: stagingStatusId },
+        ],
+      }),
+    );
+    const freshLink = (await t.run((ctx) =>
+      ctx.db.get(link._id),
+    ))! as Doc<"projectIntegrationLinks">;
+    const taskId = await importIssue(t, freshLink, "I_1", 1);
+
+    await t.run((ctx) =>
+      applyPullRequestEvent(ctx, {
+        event: mergeEvent("release/2026.05"),
+        link: freshLink,
+      }),
+    );
+
+    expect(await statusOf(t, taskId)).toBe(stagingStatusId);
+  });
+
+  it("most-specific rule wins: a literal beats an overlapping glob", async () => {
+    const t = createTestContext();
+    const { link, stagingStatusId, releasedStatusId } = await setup(t);
+    // `release/*` → On Staging, but the exact `release/2026.05` → Released.
+    await t.run((ctx) =>
+      ctx.db.patch(link._id, {
+        branchStatusMap: [
+          { branch: "release/*", statusId: stagingStatusId },
+          { branch: "release/2026.05", statusId: releasedStatusId },
+        ],
+      }),
+    );
+    const freshLink = (await t.run((ctx) =>
+      ctx.db.get(link._id),
+    ))! as Doc<"projectIntegrationLinks">;
+    const taskId = await importIssue(t, freshLink, "I_1", 1);
+
+    await t.run((ctx) =>
+      applyPullRequestEvent(ctx, {
+        event: mergeEvent("release/2026.05"),
+        link: freshLink,
+      }),
+    );
+
+    expect(await statusOf(t, taskId)).toBe(releasedStatusId);
+  });
+
+  it("a glob that doesn't match produces no branch-driven move", async () => {
+    const t = createTestContext();
+    const { link, stagingStatusId, triageStatusId } = await setup(t);
+    await t.run((ctx) =>
+      ctx.db.patch(link._id, {
+        branchStatusMap: [{ branch: "release/*", statusId: stagingStatusId }],
+      }),
+    );
+    const freshLink = (await t.run((ctx) =>
+      ctx.db.get(link._id),
+    ))! as Doc<"projectIntegrationLinks">;
+    const taskId = await importIssue(t, freshLink, "I_1", 1);
+
+    await t.run((ctx) =>
+      applyPullRequestEvent(ctx, {
+        event: mergeEvent("feature/login"),
+        link: freshLink,
+      }),
+    );
+
+    expect(await statusOf(t, taskId)).toBe(triageStatusId);
+  });
+
   it("a merge into a branch mapped to a completed status marks the task completed", async () => {
     const t = createTestContext();
     const { link } = await setup(t);

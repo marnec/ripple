@@ -234,18 +234,49 @@ async function taskHasBranchRuleMatch(
 }
 
 /**
+ * Score how specifically a `branchStatusMap` pattern matches a concrete branch
+ * ref, or `null` for no match. Higher = more specific. A pattern with no `*` is
+ * an exact match (scores highest, backward-compatible with literal entries);
+ * among wildcard patterns, the one with more literal (non-`*`) characters wins —
+ * so `release/2026.05` beats `release/*` beats `*`.
+ */
+function branchMatchScore(pattern: string, ref: string): number | null {
+  if (!pattern.includes("*")) {
+    return pattern === ref ? Number.MAX_SAFE_INTEGER : null;
+  }
+  // Glob → anchored regex: escape regex metachars, then `*` → `.*`.
+  const rx = new RegExp(
+    "^" +
+      pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") +
+      "$",
+  );
+  if (!rx.test(ref)) return null;
+  return pattern.replace(/\*/g, "").length;
+}
+
+/**
  * The status a merged PR's target branch maps to under its link's
- * `branchStatusMap`, or `undefined` when the branch isn't mapped (or the mapped
- * status no longer exists). Exact branch-name match.
+ * `branchStatusMap`, or `undefined` when no rule matches (or the mapped status
+ * no longer exists). Patterns may use `*` globs; the most-specific matching rule
+ * wins (deterministic, independent of status order — `maxByOrder` still
+ * arbitrates across multiple PRs).
  */
 async function resolveBranchStatus(
   ctx: MutationCtx,
   pr: Doc<"pullRequests">,
 ): Promise<Doc<"taskStatuses"> | undefined> {
   const link = await ctx.db.get(pr.projectIntegrationLinkId);
-  const entry = link?.branchStatusMap?.find((e) => e.branch === pr.baseRef);
-  if (!entry) return undefined;
-  return (await ctx.db.get(entry.statusId)) ?? undefined;
+  if (!link?.branchStatusMap) return undefined;
+
+  let best: { score: number; statusId: Id<"taskStatuses"> } | undefined;
+  for (const e of link.branchStatusMap) {
+    const score = branchMatchScore(e.branch, pr.baseRef);
+    if (score !== null && (!best || score > best.score)) {
+      best = { score, statusId: e.statusId };
+    }
+  }
+  if (!best) return undefined;
+  return (await ctx.db.get(best.statusId)) ?? undefined;
 }
 
 /**

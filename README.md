@@ -10,9 +10,9 @@ NEXT STEPS:
 
 - surface error to users when tying to manually set triage status
 
-- allow somehow users to disable github issues auto sync
-
+- allow somehow admins to disable github issues auto sync
 - add confirmation dialog with disclaimer on resync btn at workspace lvl 
+- add to tak header github linked issue (github lgo separator)
 
 - split settings in tabs (workspace and projects)
 

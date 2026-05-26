@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { BranchStatusMapEditor } from "../Workspace/BranchStatusMapEditor";
+import { BranchSourceDefaultsEditor } from "../Workspace/BranchSourceDefaultsEditor";
 
 const GITHUB_FEATURE_KEY = "github_integration";
 
@@ -141,6 +142,13 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
                   _id: link._id,
                   projectId,
                   branchStatusMap: link.branchStatusMap,
+                }}
+              />
+              <BranchSourceDefaultsEditor
+                link={{
+                  _id: link._id,
+                  defaultBaseBranch: link.defaultBaseBranch,
+                  askBranchSourceEachTime: link.askBranchSourceEachTime,
                 }}
               />
             </div>

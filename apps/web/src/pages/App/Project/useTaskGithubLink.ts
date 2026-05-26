@@ -62,6 +62,16 @@ export interface TaskGithubView {
   issueDeleted: boolean;
   /** The branch Ripple created for this issue, or null if none yet. */
   branchName: string | null;
+  /** The base `branchName` was cut from (targets the PR compare base), or null. */
+  branchBaseRef: string | null;
+  /** Source-branch controls for the "Create branch" button, or null if the
+   *  project link can't be resolved. Drives picker vs. one-click + admin gate. */
+  branchSource: {
+    projectLinkId: Id<"projectIntegrationLinks">;
+    askEachTime: boolean;
+    configuredDefault: string | null;
+    canManageDefault: boolean;
+  } | null;
   /** ms timestamp of the last successful Ripple→GitHub description push. */
   descriptionLastSyncedAt: number | null;
   /** True once a genuine user edit touched the description (gates the sync button). */
@@ -101,6 +111,8 @@ export function deriveTaskGithubView(
       closedBy: null,
       issueDeleted: false,
       branchName: null,
+      branchBaseRef: null,
+      branchSource: null,
       descriptionLastSyncedAt: null,
       descriptionEdited: false,
       seed: {
@@ -127,6 +139,8 @@ export function deriveTaskGithubView(
     closedBy: link.externalClosedBy ?? null,
     issueDeleted: link.externalDeletedAt !== undefined,
     branchName: link.branchName ?? null,
+    branchBaseRef: link.branchBaseRef ?? null,
+    branchSource: link.branchSource,
     descriptionLastSyncedAt: link.descriptionLastSyncedAt ?? null,
     descriptionEdited: link.descriptionEdited ?? false,
     // A resolved link is never "loading" — the seed gate keys off seedStatus.

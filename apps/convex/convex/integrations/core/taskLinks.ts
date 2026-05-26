@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query } from "../../_generated/server";
 import { checkResourceMember } from "../../authHelpers";
+import { WorkspaceRole } from "@ripple/shared/enums/roles";
 
 /**
  * Per-task integration link state, read only by the task-detail surface
@@ -28,6 +29,22 @@ export const getByTask = query({
       // The branch Ripple created for this issue, when one exists. Drives the
       // task-detail branch chip + the prefilled "Create pull request" link.
       branchName: v.optional(v.string()),
+      // The base `branchName` was cut from — targets the compare URL's base so
+      // a Git Flow feature PR opens against `develop`, not the repo default.
+      branchBaseRef: v.optional(v.string()),
+      // Drives the "Create branch" button's behavior: whether to open the
+      // base-branch picker (`askEachTime`), what to default it to
+      // (`configuredDefault`, null = repo default), and whether the viewer may
+      // change the project-wide default via the picker ("Don't ask again").
+      branchSource: v.union(
+        v.null(),
+        v.object({
+          projectLinkId: v.id("projectIntegrationLinks"),
+          askEachTime: v.boolean(),
+          configuredDefault: v.union(v.string(), v.null()),
+          canManageDefault: v.boolean(),
+        }),
+      ),
       // Display payload for assignees that did NOT win Ripple's single
       // `assigneeId` slot — rendered as muted shadow chips next to the
       // primary assignee on task detail.
@@ -95,12 +112,25 @@ export const getByTask = query({
     const task = await ctx.db.get(taskId);
     const externalIssueUrl = task?.externalRefs?.[0]?.url;
 
+    const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
+    const branchSource = projectLink
+      ? {
+          projectLinkId: projectLink._id,
+          // Absent setting = ask (the safe default before anyone configures it).
+          askEachTime: projectLink.askBranchSourceEachTime ?? true,
+          configuredDefault: projectLink.defaultBaseBranch ?? null,
+          canManageDefault: access.membership.role === WorkspaceRole.ADMIN,
+        }
+      : null;
+
     return {
       lastSyncError: link.lastSyncError,
       externalState: link.externalState,
       externalDeletedAt: link.externalDeletedAt,
       externalIssueUrl,
       branchName: link.branchName,
+      branchBaseRef: link.branchBaseRef,
+      branchSource,
       externalAssignees: link.externalAssignees,
       externalClosedBy: link.externalClosedBy,
       descriptionLastSyncedAt: link.descriptionLastSyncedAt,

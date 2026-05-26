@@ -1275,10 +1275,12 @@ export declare const api: {
           { projectId: Id<"projects"> },
           Array<{
             _id: Id<"projectIntegrationLinks">;
+            askBranchSourceEachTime?: boolean;
             branchStatusMap?: Array<{
               branch: string;
               statusId: Id<"taskStatuses">;
             }>;
+            defaultBaseBranch?: string;
             externalRepoFullName: string;
             pausedByBilling: boolean;
             status: "configuring" | "active" | "paused";
@@ -1314,6 +1316,16 @@ export declare const api: {
           "mutation",
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        setBranchSourceDefaults: FunctionReference<
+          "mutation",
+          "public",
+          {
+            askEachTime: boolean;
+            defaultBaseBranch: string | null;
+            linkId: Id<"projectIntegrationLinks">;
+          },
           null
         >;
         setBranchStatusMap: FunctionReference<
@@ -1354,7 +1366,14 @@ export declare const api: {
           "public",
           { taskId: Id<"tasks"> },
           null | {
+            branchBaseRef?: string;
             branchName?: string;
+            branchSource: null | {
+              askEachTime: boolean;
+              canManageDefault: boolean;
+              configuredDefault: string | null;
+              projectLinkId: Id<"projectIntegrationLinks">;
+            };
             descriptionEdited?: boolean;
             descriptionLastSyncedAt?: number;
             descriptionSnapshotId: Id<"_storage"> | null;
@@ -1387,14 +1406,20 @@ export declare const api: {
         createBranchForTask: FunctionReference<
           "action",
           "public",
-          { taskId: Id<"tasks"> },
-          { alreadyExisted: boolean; branchName: string }
+          { baseBranch?: string; taskId: Id<"tasks"> },
+          { alreadyExisted: boolean; baseBranch: string; branchName: string }
         >;
         listRepoBranches: FunctionReference<
           "action",
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
           Array<string>
+        >;
+        listTaskRepoBranches: FunctionReference<
+          "action",
+          "public",
+          { taskId: Id<"tasks"> },
+          { branches: Array<string>; defaultBranch: string | null }
         >;
       };
       importStart: {
@@ -3735,6 +3760,7 @@ export declare const internal: {
           "internal",
           { taskId: Id<"tasks"> },
           null | {
+            defaultBaseBranch: string | null;
             existingBranchName: string | null;
             externalAccountId: string;
             issueNumber: number;
@@ -3754,6 +3780,7 @@ export declare const internal: {
           "mutation",
           "internal",
           {
+            baseBranch: string;
             branchName: string;
             linkId: Id<"taskIntegrationLinks">;
             taskId: Id<"tasks">;

@@ -980,8 +980,10 @@ export default defineSchema({
     externalRepoId: v.string(),
     // Optional branch→status automation: when a PR merges into `branch`, the
     // linked task(s) advance to `statusId` (forward-only, most-advanced-wins).
-    // Branch ≈ deploy environment. Exact branch-name match. Empty/absent =
-    // no branch automation (completion falls back to the issues.closed path).
+    // Branch ≈ deploy environment. `branch` is a glob pattern (`*` wildcard,
+    // e.g. `release/*`); a literal name is an exact match. On a merge the
+    // most-specific matching rule wins. Empty/absent = no branch automation
+    // (completion falls back to the issues.closed path).
     branchStatusMap: v.optional(
       v.array(
         v.object({
@@ -990,6 +992,14 @@ export default defineSchema({
         }),
       ),
     ),
+    // Default base branch for the task "Create branch" action. Absent = the
+    // repo's default branch (resolved live from GitHub at creation time). Set
+    // this to `develop` for Git Flow so feature branches cut from the right base.
+    defaultBaseBranch: v.optional(v.string()),
+    // Whether the task "Create branch" button prompts for the source branch
+    // each time (opening the base-branch picker). Absent = true (prompt). Flips
+    // to false via the picker's admin-only "Don't ask again" or project settings.
+    askBranchSourceEachTime: v.optional(v.boolean()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_project", ["projectId"])
@@ -1033,6 +1043,11 @@ export default defineSchema({
     // is created from Ripple (a PR opened by hand still links via the
     // issue-number-in-branch convention without this being set).
     branchName: v.optional(v.string()),
+    // The base branch `branchName` was cut from. Drives the "Create pull
+    // request" compare URL so the PR targets the right base (e.g. `develop`
+    // for a Git Flow feature) rather than always the repo default. Absent for
+    // legacy branches created before this was recorded (falls back to default).
+    branchBaseRef: v.optional(v.string()),
     // Permanent-failure marker. Set when outbound dispatch hits a 4xx
     // (non-429) response; surfaces the "⚠ Sync failed — Retry" affordance
     // on the affected task. Cleared on next successful outbound.
