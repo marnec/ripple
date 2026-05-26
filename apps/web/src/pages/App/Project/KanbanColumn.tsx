@@ -74,6 +74,9 @@ type KanbanColumnProps = {
   /** Passed to each card: when false (drag/drop settle) motion layout
    *  animation is suppressed so it doesn't fight dnd-kit transforms. */
   layoutEnabled: boolean;
+  /** Task ids whose card should render invisibly because a board-level flying
+   *  ghost is currently animating them into this column. */
+  hiddenTaskIds: Set<string>;
   /** Optional content rendered at the bottom of the task list. Used for the
    *  per-column completed-overflow pill on the kanban. */
   footer?: ReactNode;
@@ -92,6 +95,7 @@ export function KanbanColumn({
   isLast,
   canDelete,
   layoutEnabled,
+  hiddenTaskIds,
   footer,
 }: KanbanColumnProps) {
   const [isRenaming, setIsRenaming] = useState(false);
@@ -255,6 +259,7 @@ export function KanbanColumn({
                   task={task}
                   onClick={() => onTaskClick(task._id)}
                   layoutEnabled={layoutEnabled}
+                  isHidden={hiddenTaskIds.has(task._id)}
                 />
               ))}
             </AnimatePresence>

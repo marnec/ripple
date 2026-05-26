@@ -14,11 +14,13 @@ import {
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
+import { m } from "framer-motion";
 import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -26,6 +28,7 @@ import { AddColumnDialog } from "./AddColumnDialog";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { KanbanColumn } from "./KanbanColumn";
 import { KanbanCompletedOverflow } from "./KanbanCompletedOverflow";
+import { KanbanFlyProvider, type RegisterCardNode } from "./kanbanFly";
 
 const LazyTaskDetailSheet = React.lazy(() =>
   import("./TaskDetailSheet").then((m) => ({ default: m.TaskDetailSheet })),
@@ -35,6 +38,18 @@ import { useFilteredTasks } from "./useTaskFilters";
 
 const ANIMATION_DURATION_MS = 80;
 const KANBAN_COMPLETED_CAP = 20;
+/** Duration of the cross-column flying-card animation. */
+const FLY_DURATION_S = 0.32;
+
+/** One in-flight cross-column card animation: a ghost rendered in a viewport
+ *  portal that travels from the task's old column rect to its new one. */
+type Flight = {
+  key: string;
+  taskId: string;
+  task: React.ComponentProps<typeof KanbanCardPresenter>["task"];
+  src: DOMRect;
+  dst: DOMRect;
+};
 
 type KanbanBoardProps = {
   projectId: Id<"projects">;
@@ -64,6 +79,44 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   // auto-cleared after the post-drop optimistic update applies — so motion
   // doesn't fight dnd-kit's drag transforms.
   const [dndSuppressed, setDndSuppressed] = useState(false);
+
+  // --- Cross-column flying-card animation ---------------------------------
+  // Cards live in per-column scroll containers that clip overflow, so a card
+  // can't visually slide between columns in-flow. Instead, when a *remote*
+  // change moves a task to another column, we render a ghost in a viewport
+  // portal (above the columns, outside their clip boxes) and tween it from the
+  // task's old on-screen rect to its new one. The real destination card stays
+  // mounted but invisible until the ghost lands.
+  const cardNodesRef = useRef(new Map<string, HTMLElement>());
+  const prevRectsRef = useRef(new Map<string, DOMRect>());
+  const prevStatusRef = useRef(new Map<string, string>());
+  // Tasks moved by *this* client's drag — skip flying them (the drag gesture +
+  // DragOverlay already gave the user positional feedback).
+  const locallyMovedRef = useRef(new Set<string>());
+  // Single state so the effect commits the new ghosts and their hidden-card
+  // ids in one update (keeps it atomic and to one setState call).
+  const [fly, setFly] = useState<{ flights: Flight[]; hidden: Set<string> }>({
+    flights: [],
+    hidden: new Set(),
+  });
+
+  const registerCardNode: RegisterCardNode = (taskId, el) => {
+    if (el) cardNodesRef.current.set(taskId, el);
+    // Intentionally NO delete on null. During a cross-column move the source
+    // card unmounts (el=null) in the same commit the destination card mounts
+    // under the same task id; depending on which subtree React commits first,
+    // a delete here can wipe the freshly-registered destination node, so the
+    // flight's destination rect goes missing and the animation is skipped.
+    // Detached nodes are pruned lazily in the measurement loop instead.
+  };
+
+  const completeFlight = (key: string, taskId: string) => {
+    setFly((current) => {
+      const hidden = new Set(current.hidden);
+      hidden.delete(taskId);
+      return { flights: current.flights.filter((f) => f.key !== key), hidden };
+    });
+  };
 
   // Active tasks: full list. Completed: capped at KANBAN_COMPLETED_CAP+1 so we
   // can detect overflow via the +1 trick. Beyond the cap, the kanban surfaces
@@ -174,6 +227,68 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
     return counts;
   })();
 
+  // After every commit: measure current card rects, diff each task's statusId
+  // against the previous commit, and launch a flight for any task that changed
+  // column remotely. Runs before paint so the destination card is hidden and
+  // the ghost mounted without a flash. dndSuppressed is excluded as a dep on
+  // purpose — we read refs, not reactive values.
+  useLayoutEffect(() => {
+    if (!tasks) return;
+
+    const currentRects = new Map<string, DOMRect>();
+    for (const [id, el] of cardNodesRef.current) {
+      // Prune detached nodes left behind by unmounts (see registerCardNode).
+      if (!el.isConnected) {
+        cardNodesRef.current.delete(id);
+        continue;
+      }
+      currentRects.set(id, el.getBoundingClientRect());
+    }
+
+    const newFlights: Flight[] = [];
+    for (const task of tasks) {
+      const prevStatus = prevStatusRef.current.get(task._id);
+      const moved = prevStatus && prevStatus !== task.statusId;
+      if (!moved || locallyMovedRef.current.has(task._id)) continue;
+
+      const src = prevRectsRef.current.get(task._id);
+      const dst = currentRects.get(task._id);
+      // Skip if either endpoint is unmeasurable (e.g. card off-screen / behind
+      // the completed-overflow pill) or the move didn't actually shift pixels.
+      if (!src || !dst) continue;
+      if (Math.abs(src.left - dst.left) < 1 && Math.abs(src.top - dst.top) < 1) {
+        continue;
+      }
+      newFlights.push({
+        key: `${task._id}:${performance.now()}`,
+        taskId: task._id,
+        task,
+        src,
+        dst,
+      });
+    }
+
+    // Roll refs forward for the next diff.
+    prevRectsRef.current = currentRects;
+    const nextStatus = new Map<string, string>();
+    for (const task of tasks) nextStatus.set(task._id, task.statusId);
+    prevStatusRef.current = nextStatus;
+    locallyMovedRef.current.clear();
+
+    if (newFlights.length > 0) {
+      // FLIP requires measuring rects in a layout effect, then committing the
+      // ghosts before paint — setState here is intentional, not a sync bug.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFly((current) => ({
+        flights: [...current.flights, ...newFlights],
+        hidden: new Set([
+          ...current.hidden,
+          ...newFlights.map((flight) => flight.taskId),
+        ]),
+      }));
+    }
+  }, [tasks]);
+
   const handleDragStart = (event: DragStartEvent) => {
     setDndSuppressed(true);
     setActiveDragId(event.active.id as Id<"tasks">);
@@ -241,6 +356,10 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       afterTask?.position ?? null
     );
 
+    // This client moved the task by hand — exclude it from the flying-card
+    // animation (the drag + DragOverlay already showed it travelling).
+    locallyMovedRef.current.add(activeTaskId);
+
     // Update position — dndSuppressed stays true through this render cycle
     // so the optimistic update applies without a view transition.
     // Re-enable after the server confirms + React processes the update.
@@ -299,6 +418,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   }
 
   return (
+    <KanbanFlyProvider value={registerCardNode}>
     <div className="flex flex-col flex-1 min-h-0 animate-fade-in">
       {/* Kanban Board */}
       <DndContext
@@ -335,6 +455,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
               isLast={index === statuses.length - 1}
               canDelete={!status.isDefault}
               layoutEnabled={!dndSuppressed}
+              hiddenTaskIds={fly.hidden}
               footer={
                 completedTruncated && status.isCompleted ? (
                   <KanbanCompletedOverflow
@@ -390,5 +511,37 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
         onOpenChange={setShowAddColumn}
       />
     </div>
+
+    {/* Flying-card overlay — ghosts that travel between columns for remote
+        cross-column moves. Rendered to <body> so they escape each column's
+        overflow clip box. The fixed full-viewport layer lets children use
+        viewport (getBoundingClientRect) coordinates directly. */}
+    {fly.flights.length > 0 &&
+      createPortal(
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          {fly.flights.map((flight) => (
+            <m.div
+              key={flight.key}
+              className="absolute"
+              style={{
+                top: flight.src.top,
+                left: flight.src.left,
+                width: flight.src.width,
+              }}
+              initial={{ x: 0, y: 0 }}
+              animate={{
+                x: flight.dst.left - flight.src.left,
+                y: flight.dst.top - flight.src.top,
+              }}
+              transition={{ duration: FLY_DURATION_S, ease: [0.16, 1, 0.3, 1] }}
+              onAnimationComplete={() => completeFlight(flight.key, flight.taskId)}
+            >
+              <KanbanCardPresenter task={flight.task} onClick={() => {}} />
+            </m.div>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </KanbanFlyProvider>
   );
 }

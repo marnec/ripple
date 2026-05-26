@@ -2,6 +2,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { m } from "framer-motion";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
+import { useRegisterCardNode } from "./kanbanFly";
 
 type KanbanCardProps = {
   task: {
@@ -24,9 +25,14 @@ type KanbanCardProps = {
   /** When false (during a drag/drop settle), motion layout animation is
    *  disabled so it doesn't fight dnd-kit's transforms. */
   layoutEnabled: boolean;
+  /** True while a board-level "flying card" ghost animates this task from its
+   *  old column to here. The real card stays mounted (so it reserves its slot)
+   *  but renders invisibly until the ghost lands. */
+  isHidden?: boolean;
 };
 
-export function KanbanCard({ task, onClick, layoutEnabled }: KanbanCardProps) {
+export function KanbanCard({ task, onClick, layoutEnabled, isHidden }: KanbanCardProps) {
+  const registerCardNode = useRegisterCardNode();
   const {
     attributes,
     listeners,
@@ -49,14 +55,20 @@ export function KanbanCard({ task, onClick, layoutEnabled }: KanbanCardProps) {
 
   return (
     <m.div
+      // Register the slot's DOM node so the board can measure it for the
+      // cross-column flying-card animation.
+      ref={(el) => registerCardNode(task._id, el)}
       // "position" animates the card's translation only — never its size — so
       // the whole card slides to its new slot instead of motion scaling the box
       // (which distorts the border and makes the content appear to drift).
       layout={layoutEnabled ? "position" : false}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      // No exit fade: a card that moves columns must vanish from its old column
+      // instantly, otherwise it ghost-trails alongside the flying overlay.
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      // Reserve the slot but stay invisible while the flying ghost is in transit.
+      style={isHidden ? { visibility: "hidden" } : undefined}
     >
       <div
         ref={setNodeRef}

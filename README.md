@@ -12,6 +12,8 @@ NEXT STEPS:
 
 - allow somehow users to disable github issues auto sync
 
+- add confirmation dialog with disclaimer on resync btn at workspace lvl 
+
 - split settings in tabs (workspace and projects)
 
 - restyle graph https://d3js.org/d3-force
