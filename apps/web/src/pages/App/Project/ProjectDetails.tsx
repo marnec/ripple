@@ -13,7 +13,6 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban } from "lucide-react";
 import { useRef, useState } from "react";
-import { startViewTransition } from "@/hooks/use-view-transition";
 import { useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -62,8 +61,6 @@ function ProjectDetailsContent({
     sortBlockedTimer.current = setTimeout(() => setSortBlocked(false), 2500);
   };
 
-  const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
-  const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
   const project = useQuery(api.projects.get, { id: projectId });
   // Pre-fetch tasks to show a loading indicator beside the tabs
   const tasks = useEagerProjectTasks(projectId);
@@ -128,9 +125,9 @@ function ProjectDetailsContent({
         <TaskToolbar
           workspaceId={workspaceId}
           filters={filters}
-          onFiltersChange={setFiltersAnimated}
+          onFiltersChange={setFilters}
           sort={sort}
-          onSortChange={setSortAnimated}
+          onSortChange={setSort}
           members={members ?? []}
           sortBlocked={sortBlocked}
         />

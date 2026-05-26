@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useRef, useState } from "react";
+import { AnimatePresence, m } from "framer-motion";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
-import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMutation, usePaginatedQuery } from "convex/react";
@@ -71,11 +71,16 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
         ? undefined
         : (completedPag.results as typeof activeRaw))
     : activeRaw;
-  const allTasks = useAnimatedQuery(
-    liveTasks,
-    isPositionOnlyChange,
-    sheetOpen,
-  );
+  // Hold the last loaded list while a query reloads (e.g. switching to the
+  // completed view, whose first page loads asynchronously) so rows persist
+  // and animate via motion instead of flashing through the empty state.
+  // setState-during-render is React's derived-state pattern; the Object.is
+  // guard prevents a loop, and an undefined `liveTasks` is intentionally not
+  // written so the previous list stays visible until fresh data arrives.
+  const [allTasks, setAllTasks] = useState(liveTasks);
+  if (liveTasks !== undefined && !Object.is(liveTasks, allTasks)) {
+    setAllTasks(liveTasks);
+  }
   // useFilteredTasks applies assignee/priority/tag/sort over the active set.
   // For the completed view the backend already returned the right rows, so
   // we render `allTasks` directly without re-filtering client-side.
@@ -139,58 +144,64 @@ export function Tasks({ projectId, workspaceId, filters, sort }: TasksProps) {
         </div>
       ) : (
         <div ref={listRef} className="flex flex-col gap-1.5">
-          {tasks.map((task) => {
-            const nextStatus = getNextStatus(task.statusId);
-            return (
-              <SwipeToReveal
-                key={task._id}
-                enabled={isMobile}
-                open={swipeOpenId === task._id}
-                onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
-                onSwipeStart={closeAllSwipes}
-                style={isMobile ? {
-                  viewTransitionName: `--task-${task._id}`,
-                  viewTransitionClass: "task-card",
-                } : undefined}
-                action={
-                  nextStatus ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        advanceStatus(task._id, task.statusId);
-                      }}
-                      className={cn(
-                        "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
-                        nextStatus.color,
-                      )}
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      <span className="text-[10px] font-medium leading-tight text-center truncate w-full">
-                        {nextStatus.name}
-                      </span>
-                    </button>
-                  ) : null
-                }
-              >
-                <TaskRow
-                  task={task}
-                  statuses={statuses ?? undefined}
-                  hideStatusMenu={isMobile}
-                  flush={isMobile}
-                  onStatusChange={(statusId) => {
-                    void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
-                  }}
-                  onClick={() => {
-                    if (isMobile) {
-                      void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
-                    } else {
-                      setSelectedTaskId(task._id);
+          <AnimatePresence initial={false}>
+            {tasks.map((task) => {
+              const nextStatus = getNextStatus(task.statusId);
+              return (
+                <m.div
+                  key={task._id}
+                  layout="position"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <SwipeToReveal
+                    enabled={isMobile}
+                    open={swipeOpenId === task._id}
+                    onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
+                    onSwipeStart={closeAllSwipes}
+                    action={
+                      nextStatus ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            advanceStatus(task._id, task.statusId);
+                          }}
+                          className={cn(
+                            "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
+                            nextStatus.color,
+                          )}
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          <span className="text-[10px] font-medium leading-tight text-center truncate w-full">
+                            {nextStatus.name}
+                          </span>
+                        </button>
+                      ) : null
                     }
-                  }}
-                />
-              </SwipeToReveal>
-            );
-          })}
+                  >
+                    <TaskRow
+                      task={task}
+                      statuses={statuses ?? undefined}
+                      hideStatusMenu={isMobile}
+                      flush={isMobile}
+                      onStatusChange={(statusId) => {
+                        void updateTask({ taskId: task._id, statusId: statusId as Id<"taskStatuses"> });
+                      }}
+                      onClick={() => {
+                        if (isMobile) {
+                          void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${task._id}`);
+                        } else {
+                          setSelectedTaskId(task._id);
+                        }
+                      }}
+                    />
+                  </SwipeToReveal>
+                </m.div>
+              );
+            })}
+          </AnimatePresence>
           {(showLoadMore || loadingMore) && (
             <button
               type="button"

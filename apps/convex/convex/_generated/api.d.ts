@@ -365,11 +365,11 @@ export declare const api: {
     >;
   };
   channelReads: {
-    getUnreadCounts: FunctionReference<
+    getUnreadStatus: FunctionReference<
       "query",
       "public",
       { channelIds: Array<Id<"channels">> },
-      Array<{ channelId: Id<"channels">; count: number }>
+      Array<{ channelId: Id<"channels">; hasUnread: boolean }>
     >;
     markRead: FunctionReference<
       "mutation",
@@ -648,6 +648,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -655,6 +656,18 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -664,13 +677,16 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         startDate?: string;
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -1157,6 +1173,257 @@ export declare const api: {
         }>;
       }
     >;
+  };
+  integrations: {
+    core: {
+      activationGate: {
+        canActivate: FunctionReference<
+          "query",
+          "public",
+          { projectId: Id<"projects"> },
+          { canActivate: boolean }
+        >;
+      };
+      entitlements: {
+        getWorkspaceFeature: FunctionReference<
+          "query",
+          "public",
+          { featureKey: string; workspaceId: Id<"workspaces"> },
+          { enabled: boolean }
+        >;
+        isInstallationFrozen: FunctionReference<
+          "query",
+          "public",
+          { installationId: string },
+          boolean
+        >;
+        setWorkspaceFeature: FunctionReference<
+          "mutation",
+          "public",
+          {
+            enabled: boolean;
+            featureKey: string;
+            workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
+      };
+      install: {
+        assertWizardInstallation: FunctionReference<
+          "query",
+          "public",
+          { externalAccountId: string; workspaceId: Id<"workspaces"> },
+          { externalAccountId: string }
+        >;
+        completeAppInstallation: FunctionReference<
+          "mutation",
+          "public",
+          {
+            accountLogin?: string;
+            externalAccountId: string;
+            externalAccountType?: "organization" | "user";
+            provider: string;
+            workspaceId: Id<"workspaces">;
+          },
+          Id<"workspaceIntegrations">
+        >;
+        listInstallations: FunctionReference<
+          "query",
+          "public",
+          { workspaceId: Id<"workspaces"> },
+          Array<{
+            _id: Id<"workspaceIntegrations">;
+            accountLogin?: string;
+            externalAccountId: string;
+            externalAccountType?: "organization" | "user";
+            installedBy?: Id<"users">;
+            installedByName?: string;
+            provider: string;
+          }>
+        >;
+      };
+      installFlow: {
+        beginAppInstall: FunctionReference<
+          "mutation",
+          "public",
+          { workspaceId: Id<"workspaces"> },
+          { url: string }
+        >;
+      };
+      links: {
+        createLink: FunctionReference<
+          "mutation",
+          "public",
+          {
+            externalAccountId: string;
+            externalRepoFullName: string;
+            externalRepoId: string;
+            projectId: Id<"projects">;
+            workspaceId: Id<"workspaces">;
+          },
+          Id<"projectIntegrationLinks">
+        >;
+        forceResync: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        linksForProject: FunctionReference<
+          "query",
+          "public",
+          { projectId: Id<"projects"> },
+          Array<{
+            _id: Id<"projectIntegrationLinks">;
+            branchStatusMap?: Array<{
+              branch: string;
+              statusId: Id<"taskStatuses">;
+            }>;
+            externalRepoFullName: string;
+            pausedByBilling: boolean;
+            status: "configuring" | "active" | "paused";
+          }>
+        >;
+        listByWorkspace: FunctionReference<
+          "query",
+          "public",
+          { workspaceId: Id<"workspaces"> },
+          Array<{
+            _id: Id<"projectIntegrationLinks">;
+            branchStatusMap?: Array<{
+              branch: string;
+              statusId: Id<"taskStatuses">;
+            }>;
+            externalRepoFullName: string;
+            externalRepoId: string;
+            frozenAt?: number;
+            lastWebhookAt?: number;
+            pausedByBilling: boolean;
+            projectId: Id<"projects">;
+            projectName: string;
+            status: "configuring" | "active" | "paused" | "disconnected";
+          }>
+        >;
+        pauseLink: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        resumeLink: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        setBranchStatusMap: FunctionReference<
+          "mutation",
+          "public",
+          {
+            entries: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
+            linkId: Id<"projectIntegrationLinks">;
+          },
+          null
+        >;
+        unlinkLink: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+      };
+      pullRequestLinks: {
+        listByTask: FunctionReference<
+          "query",
+          "public",
+          { taskId: Id<"tasks"> },
+          Array<{
+            baseRef: string;
+            externalAuthor: { avatarUrl: string; login: string; url: string };
+            headRef: string;
+            number: number;
+            state: "draft" | "open" | "merged" | "closed";
+            title: string;
+            url: string;
+          }>
+        >;
+      };
+      taskLinks: {
+        getByTask: FunctionReference<
+          "query",
+          "public",
+          { taskId: Id<"tasks"> },
+          null | {
+            descriptionEdited?: boolean;
+            descriptionLastSyncedAt?: number;
+            descriptionSnapshotId: Id<"_storage"> | null;
+            externalAssignees?: Array<{
+              avatarUrl: string;
+              login: string;
+              url: string;
+            }>;
+            externalClosedBy?: {
+              avatarUrl: string;
+              login: string;
+              url: string;
+            };
+            externalDeletedAt?: number;
+            externalIssueUrl?: string;
+            externalState?: "open" | "closed";
+            lastSyncError?: {
+              httpStatus?: number;
+              message: string;
+              occurredAt: number;
+            };
+            seedExpected: boolean;
+            seedStatus?: "pending" | "seeded" | "skipped" | "failed";
+          }
+        >;
+      };
+    };
+    github: {
+      branchesAction: {
+        listRepoBranches: FunctionReference<
+          "action",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          Array<string>
+        >;
+      };
+      importStart: {
+        startGithubImport: FunctionReference<
+          "mutation",
+          "public",
+          {
+            expectedTotal: number;
+            includeClosed: boolean;
+            labels: Array<string>;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+          },
+          { jobId: Id<"taskImportJobs"> }
+        >;
+      };
+      wizardActions: {
+        listInstallationRepos: FunctionReference<
+          "action",
+          "public",
+          { externalAccountId: string; workspaceId: Id<"workspaces"> },
+          Array<{ externalRepoId: string; fullName: string; private: boolean }>
+        >;
+        previewImportCount: FunctionReference<
+          "action",
+          "public",
+          {
+            externalAccountId: string;
+            includeClosed: boolean;
+            labels: Array<string>;
+            repoFullName: string;
+            workspaceId: Id<"workspaces">;
+          },
+          { count: number }
+        >;
+      };
+    };
   };
   medias: {
     generateUploadUrl: FunctionReference<"mutation", "public", {}, string>;
@@ -1999,6 +2266,7 @@ export declare const api: {
         author: string;
         body: string;
         deleted: boolean;
+        externalAuthor?: { avatarUrl: string; login: string; url: string };
         image?: string;
         taskId: Id<"tasks">;
         userId: Id<"users">;
@@ -2042,6 +2310,8 @@ export declare const api: {
         numberRangeStart: number;
         processedRows: number;
         projectId: Id<"projects">;
+        projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
+        sourceType?: "csv" | "github_integration";
         status: "queued" | "running" | "completed" | "failed";
         totalRows: number;
         workspaceId: Id<"workspaces">;
@@ -2061,6 +2331,8 @@ export declare const api: {
         numberRangeStart: number;
         processedRows: number;
         projectId: Id<"projects">;
+        projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
+        sourceType?: "csv" | "github_integration";
         status: "queued" | "running" | "completed" | "failed";
         totalRows: number;
         workspaceId: Id<"workspaces">;
@@ -2080,6 +2352,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2087,6 +2360,18 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -2096,12 +2381,15 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2149,6 +2437,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2156,6 +2445,18 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -2165,12 +2466,15 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2208,6 +2512,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2215,6 +2520,18 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
@@ -2234,12 +2551,15 @@ export declare const api: {
         } | null;
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2272,6 +2592,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2279,6 +2600,18 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -2288,12 +2621,15 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2323,6 +2659,18 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
         number?: number;
@@ -2331,6 +2679,7 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: { color: string; isCompleted: boolean; name: string } | null;
         statusId: Id<"taskStatuses">;
         title: string;
@@ -2374,6 +2723,7 @@ export declare const api: {
             emailVerificationTime?: number;
             image?: string;
             isAnonymous?: boolean;
+            isBot?: boolean;
             name?: string;
           } | null;
           assigneeId?: Id<"users">;
@@ -2381,6 +2731,18 @@ export declare const api: {
           creatorId: Id<"users">;
           dueDate?: string;
           estimate?: number;
+          externalAssignees?: Array<{
+            avatarUrl: string;
+            login: string;
+            url: string;
+          }>;
+          externalRefs?: Array<{
+            deleted?: boolean;
+            issueNumber: number;
+            provider: string;
+            repoFullName: string;
+            url: string;
+          }>;
           hasBlockers: boolean;
           importJobId?: Id<"taskImportJobs">;
           labels?: Array<string>;
@@ -2390,12 +2752,15 @@ export declare const api: {
           priority: "urgent" | "high" | "medium" | "low";
           projectId: Id<"projects">;
           projectKey?: string;
+          pullRequestState?: "draft" | "open" | "merged" | "closed";
           status: {
             _creationTime: number;
             _id: Id<"taskStatuses">;
             color: string;
+            externalCloseReason?: "completed" | "not_planned";
             isCompleted: boolean;
             isDefault: boolean;
+            isTriage?: boolean;
             name: string;
             order: number;
             pendingDeletion?: boolean;
@@ -2426,6 +2791,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2433,6 +2799,18 @@ export declare const api: {
         creatorId: Id<"users">;
         dueDate?: string;
         estimate?: number;
+        externalAssignees?: Array<{
+          avatarUrl: string;
+          login: string;
+          url: string;
+        }>;
+        externalRefs?: Array<{
+          deleted?: boolean;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        }>;
         hasBlockers: boolean;
         importJobId?: Id<"taskImportJobs">;
         labels?: Array<string>;
@@ -2442,12 +2820,15 @@ export declare const api: {
         priority: "urgent" | "high" | "medium" | "low";
         projectId: Id<"projects">;
         projectKey?: string;
+        pullRequestState?: "draft" | "open" | "merged" | "closed";
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
           color: string;
+          externalCloseReason?: "completed" | "not_planned";
           isCompleted: boolean;
           isDefault: boolean;
+          isTriage?: boolean;
           name: string;
           order: number;
           pendingDeletion?: boolean;
@@ -2461,6 +2842,12 @@ export declare const api: {
         yjsSnapshotId?: Id<"_storage">;
       }>
     >;
+    markDescriptionEdited: FunctionReference<
+      "mutation",
+      "public",
+      { taskId: Id<"tasks"> },
+      null
+    >;
     notifyDescriptionMentions: FunctionReference<
       "mutation",
       "public",
@@ -2470,7 +2857,19 @@ export declare const api: {
     remove: FunctionReference<
       "mutation",
       "public",
+      { closeGithubIssue?: boolean; taskId: Id<"tasks"> },
+      null
+    >;
+    retryOutboundSync: FunctionReference<
+      "mutation",
+      "public",
       { taskId: Id<"tasks"> },
+      null
+    >;
+    syncDescriptionToGitHub: FunctionReference<
+      "mutation",
+      "public",
+      { markdown: string; taskId: Id<"tasks"> },
       null
     >;
     update: FunctionReference<
@@ -2518,8 +2917,10 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"taskStatuses">;
         color: string;
+        externalCloseReason?: "completed" | "not_planned";
         isCompleted: boolean;
         isDefault: boolean;
+        isTriage?: boolean;
         name: string;
         order: number;
         pendingDeletion?: boolean;
@@ -2539,11 +2940,22 @@ export declare const api: {
       { statusIds: Array<Id<"taskStatuses">> },
       null
     >;
+    setSingletonEffect: FunctionReference<
+      "mutation",
+      "public",
+      {
+        effect: "default" | "triage";
+        statusId: Id<"taskStatuses">;
+        value: boolean;
+      },
+      null
+    >;
     update: FunctionReference<
       "mutation",
       "public",
       {
         color?: string;
+        externalCloseReason?: "completed" | "not_planned" | null;
         isCompleted?: boolean;
         name?: string;
         order?: number;
@@ -2565,6 +2977,7 @@ export declare const api: {
         emailVerificationTime?: number;
         image?: string;
         isAnonymous?: boolean;
+        isBot?: boolean;
         name?: string;
       } | null
     >;
@@ -2581,6 +2994,7 @@ export declare const api: {
           emailVerificationTime?: number;
           image?: string;
           isAnonymous?: boolean;
+          isBot?: boolean;
           name?: string;
         }
       >
@@ -2602,6 +3016,7 @@ export declare const api: {
         emailVerificationTime?: number;
         image?: string;
         isAnonymous?: boolean;
+        isBot?: boolean;
         name?: string;
       } | null
     >;
@@ -2691,6 +3106,7 @@ export declare const api: {
         emailVerificationTime?: number;
         image?: string;
         isAnonymous?: boolean;
+        isBot?: boolean;
         name?: string;
       }>
     >;
@@ -3193,6 +3609,403 @@ export declare const internal: {
       },
       null
     >;
+  };
+  integrations: {
+    core: {
+      forceResync: {
+        applyOneIssueReconciliation: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            issue: {
+              assignees: Array<{
+                avatarUrl: string;
+                login: string;
+                url: string;
+              }>;
+              body: string;
+              externalAuthor: { avatarUrl: string; login: string; url: string };
+              externalIssueId: string;
+              issueNumber: number;
+              labels: Array<string>;
+              state: "open" | "closed";
+              stateReason?: "completed" | "not_planned" | null;
+              title: string;
+              url: string;
+            };
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            rippleCompleted: boolean;
+          },
+          null
+        >;
+      };
+      forceResyncQueries: {
+        getResyncContext: FunctionReference<
+          "query",
+          "internal",
+          { projectIntegrationLinkId: Id<"projectIntegrationLinks"> },
+          null | {
+            installationId: string;
+            items: Array<{
+              completed: boolean;
+              issueNumber: number;
+              taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+            }>;
+            repoFullName: string;
+          }
+        >;
+      };
+      install: {
+        completeInstallationFromCallback: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            accountLogin?: string;
+            externalAccountId: string;
+            externalAccountType?: "organization" | "user";
+            provider: string;
+            userId: Id<"users">;
+            workspaceId: Id<"workspaces">;
+          },
+          Id<"workspaceIntegrations">
+        >;
+      };
+      installFlow: {
+        consumeInstallState: FunctionReference<
+          "mutation",
+          "internal",
+          { nonce: string },
+          null | {
+            provider: string;
+            userId: Id<"users">;
+            workspaceId: Id<"workspaces">;
+          }
+        >;
+      };
+      links: {
+        drainDisconnectBatch: FunctionReference<
+          "mutation",
+          "internal",
+          { projectIntegrationLinkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        drainReconnectBatch: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            cursor: string | null;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+          },
+          null
+        >;
+      };
+      seedDescriptionAction: {
+        seedTaskDescription: FunctionReference<
+          "action",
+          "internal",
+          { markdown: string; taskId: Id<"tasks"> },
+          null
+        >;
+      };
+    };
+    github: {
+      branchesAction: {
+        branchFetchContext: FunctionReference<
+          "query",
+          "internal",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null | { externalAccountId: string; owner: string; repo: string }
+        >;
+      };
+      forceResyncAction: {
+        runForceResync: FunctionReference<
+          "action",
+          "internal",
+          {
+            offset?: number;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+          },
+          null
+        >;
+      };
+      importDrain: {
+        drainImportBatch: FunctionReference<
+          "action",
+          "internal",
+          {
+            batchStartIndex: number;
+            externalAccountId: string;
+            includeClosed: boolean;
+            jobId: Id<"taskImportJobs">;
+            labels?: Array<string>;
+            repoFullName: string;
+            sinceCursor?: string;
+          },
+          null
+        >;
+      };
+      importDrainMutations: {
+        applyBatch: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            batchStartIndex: number;
+            events: Array<any>;
+            jobId: Id<"taskImportJobs">;
+          },
+          null
+        >;
+        markCompleted: FunctionReference<
+          "mutation",
+          "internal",
+          { jobId: Id<"taskImportJobs"> },
+          null
+        >;
+        markFailed: FunctionReference<
+          "mutation",
+          "internal",
+          { jobId: Id<"taskImportJobs">; message: string },
+          null
+        >;
+      };
+      pullRequestWebhook: {
+        handlePullRequestWebhookMutation: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            event: any;
+            externalAccountId: string;
+            externalRepoId: string;
+            repoFullName?: string;
+          },
+          null
+        >;
+      };
+      setupAction: {
+        finalizeInstall: FunctionReference<
+          "action",
+          "internal",
+          { installationId: string; nonce: string },
+          null | { workspaceId: Id<"workspaces"> }
+        >;
+      };
+      syncOutAction: {
+        pushAssigneeChanges: FunctionReference<
+          "action",
+          "internal",
+          {
+            add: Array<string>;
+            installationId: string;
+            issueNumber: number;
+            nextLogins: Array<string>;
+            remove: Array<string>;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        pushCommentCreate: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            commentId: Id<"taskComments">;
+            installationId: string;
+            issueNumber: number;
+            repoFullName: string;
+            taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+          },
+          null
+        >;
+        pushCommentDelete: FunctionReference<
+          "action",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            externalCommentId: string;
+            installationId: string;
+            repoFullName: string;
+          },
+          null
+        >;
+        pushCommentEdit: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            externalCommentId: string;
+            installationId: string;
+            repoFullName: string;
+          },
+          null
+        >;
+        pushDescription: FunctionReference<
+          "action",
+          "internal",
+          {
+            installationId: string;
+            issueNumber: number;
+            markdown: string;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        pushIssueClose: FunctionReference<
+          "action",
+          "internal",
+          {
+            installationId: string;
+            issueNumber: number;
+            repoFullName: string;
+            workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
+        pushIssueState: FunctionReference<
+          "action",
+          "internal",
+          {
+            desiredState: "open" | "closed";
+            desiredStateReason?: "completed" | "not_planned";
+            installationId: string;
+            issueNumber: number;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        pushLabelChanges: FunctionReference<
+          "action",
+          "internal",
+          {
+            add: Array<string>;
+            installationId: string;
+            issueNumber: number;
+            nextLabels: Array<string>;
+            remove: Array<string>;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+      };
+      syncOutMutations: {
+        onOutboundComplete: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            result:
+              | { returnValue: any; type: "success" }
+              | { error: string; type: "failed" }
+              | { type: "canceled" };
+            runId: string;
+          },
+          null
+        >;
+        recordCommentCreateFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentId: Id<"taskComments">;
+            httpStatus?: number;
+            message: string;
+          },
+          null
+        >;
+        recordCommentCreateSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentId: Id<"taskComments">;
+            externalAuthor: { avatarUrl: string; login: string; url: string };
+            externalCommentId: string;
+            externalUpdatedAt: number;
+            taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+          },
+          null
+        >;
+        recordCommentDeleteSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          { commentLinkId: Id<"taskCommentIntegrationLinks"> },
+          null
+        >;
+        recordCommentEditSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            externalUpdatedAt: number;
+          },
+          null
+        >;
+        recordCommentLinkFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            httpStatus?: number;
+            message: string;
+          },
+          null
+        >;
+        recordIssueCloseFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            httpStatus?: number;
+            issueNumber: number;
+            message: string;
+            workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
+        recordOutboundFailure: FunctionReference<
+          "mutation",
+          "internal",
+          { httpStatus?: number; message: string; taskId: Id<"tasks"> },
+          null
+        >;
+        recordTaskOutboundResult: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            result:
+              | { nextLabels: Array<string>; op: "labels" }
+              | { nextLogins: Array<string>; op: "assignees" }
+              | { op: "description" }
+              | {
+                  externalUpdatedAt: number;
+                  op: "state";
+                  state: "open" | "closed";
+                  stateReason?: "completed" | "not_planned";
+                };
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+      };
+      webhook: {
+        handleGithubWebhookMutation: FunctionReference<
+          "mutation",
+          "internal",
+          { eventName: string; payload: any },
+          null
+        >;
+        receiveGithubWebhook: FunctionReference<
+          "action",
+          "internal",
+          {
+            headers: Record<string, string>;
+            provider: string;
+            rawBody: string;
+          },
+          null
+        >;
+      };
+    };
   };
   migrations: {
     backfillAuditScope: FunctionReference<
@@ -4134,6 +4947,15 @@ export declare const internal: {
       },
       Id<"_storage"> | null
     >;
+    markSeedStatus: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        status: "pending" | "seeded" | "skipped" | "failed";
+        taskId: Id<"tasks">;
+      },
+      null
+    >;
     saveSnapshot: FunctionReference<
       "mutation",
       "internal",
@@ -4143,6 +4965,12 @@ export declare const internal: {
         storageId: Id<"_storage">;
       },
       null
+    >;
+    seedTaskSnapshot: FunctionReference<
+      "mutation",
+      "internal",
+      { storageId: Id<"_storage">; taskId: Id<"tasks"> },
+      { seeded: boolean }
     >;
   };
   spreadsheetCellRefs: {
@@ -4289,10 +5117,12 @@ export declare const internal: {
 };
 
 export declare const components: {
+  actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
   auditLog: import("convex-audit-log/_generated/component.js").ComponentApi<"auditLog">;
   convexCascadingDelete: import("convex-cascading-delete/_generated/component.js").ComponentApi<"convexCascadingDelete">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+  webhookReceiver: import("convex-webhook-receiver/_generated/component.js").ComponentApi<"webhookReceiver">;
   notificationPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"notificationPool">;
   taskReassignPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskReassignPool">;
   taskImportPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskImportPool">;

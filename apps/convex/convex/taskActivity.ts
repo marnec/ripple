@@ -4,7 +4,7 @@ import { getAll } from "convex-helpers/server/relationships";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import type { Id } from "./_generated/dataModel";
 import { auditLog } from "./auditLog";
-import { requireResourceMember } from "./authHelpers";
+import { checkResourceMember } from "./authHelpers";
 
 type AuditEntry = {
   _id: string;
@@ -44,7 +44,11 @@ export const timeline = query({
   args: { taskId: v.id("tasks") },
   returns: v.array(timelineItemValidator),
   handler: async (ctx, { taskId }) => {
-    await requireResourceMember(ctx, "tasks", taskId);
+    // Soft gate (same as `tasks.get`): return [] if the task is gone — e.g.
+    // just deleted while the detail sheet's subscription is still live —
+    // rather than throwing "task not found".
+    const access = await checkResourceMember(ctx, "tasks", taskId);
+    if (!access) return [];
 
     // Fetch activity entries from audit log component
     const auditEntries: AuditEntry[] = await auditLog.queryByResource(ctx, {

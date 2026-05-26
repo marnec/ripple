@@ -6,6 +6,11 @@ import { getUserDisplayName } from "@ripple/shared/displayName";
 import { logTaskActivity } from "./auditLog";
 import { requireResourceMember, requireUser } from "./authHelpers";
 import { notify } from "./utils/notify";
+import {
+  maybeEnqueueCommentCreate,
+  maybeEnqueueCommentDelete,
+  maybeEnqueueCommentUpdate,
+} from "./integrations/core/outboundDispatch";
 
 export const list = query({
   args: { taskId: v.id("tasks") },
@@ -18,6 +23,15 @@ export const list = query({
     deleted: v.boolean(),
     author: v.string(),
     image: v.optional(v.string()),
+    // GitHub-side identity for comments inserted by the integration's
+    // inbound sync. Absent for Ripple-native comments. Rendered as a chip
+    // alongside the bot-user avatar so external contributors are visible
+    // without pretending they are Ripple members.
+    externalAuthor: v.optional(v.object({
+      login: v.string(),
+      avatarUrl: v.string(),
+      url: v.string(),
+    })),
   })),
   handler: async (ctx, { taskId }) => {
     await requireResourceMember(ctx, "tasks", taskId);
@@ -36,6 +50,20 @@ export const list = query({
     const users = await getAll(ctx.db, userIds);
     const userMap = new Map(users.map((u, i) => [userIds[i], u]));
 
+    // Per-comment integration link lookup for the external author chip.
+    // The link table is small per-task; a query-per-comment is fine.
+    const externalAuthorByComment = new Map<
+      typeof comments[number]["_id"],
+      { login: string; avatarUrl: string; url: string }
+    >();
+    for (const c of comments) {
+      const link = await ctx.db
+        .query("taskCommentIntegrationLinks")
+        .withIndex("by_taskComment", (q) => q.eq("taskCommentId", c._id))
+        .unique();
+      if (link) externalAuthorByComment.set(c._id, link.externalAuthor);
+    }
+
     // Enrich comments with author info
     const enrichedComments = comments.map((comment) => {
       const user = userMap.get(comment.userId);
@@ -43,6 +71,7 @@ export const list = query({
         ...comment,
         author: getUserDisplayName(user),
         image: user?.image,
+        externalAuthor: externalAuthorByComment.get(comment._id),
       };
     });
 
@@ -108,6 +137,8 @@ export const create = mutation({
       });
     }
 
+    await maybeEnqueueCommentCreate(ctx, commentId);
+
     return commentId;
   },
 });
@@ -132,6 +163,8 @@ export const update = mutation({
 
     // Update body with trimmed value
     await ctx.db.patch(id, { body: body.trim() });
+
+    await maybeEnqueueCommentUpdate(ctx, id);
 
     // Log comment edit activity
     const taskDoc = await ctx.db.get(comment.taskId);
@@ -177,6 +210,8 @@ export const remove = mutation({
 
     // Soft delete
     await ctx.db.patch(id, { deleted: true });
+
+    await maybeEnqueueCommentDelete(ctx, id);
 
     // Log comment delete activity
     const taskForScope = await ctx.db.get(comment.taskId);
