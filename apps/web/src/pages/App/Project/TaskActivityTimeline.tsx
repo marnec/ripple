@@ -40,7 +40,6 @@ import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
 import { GithubMark } from "@/components/GithubMark";
-import { TaskPullRequests } from "./TaskPullRequests";
 import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
 
 type TimelineFilter = "all" | "comments" | "integration";

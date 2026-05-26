@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   handlePullRequestWebhook,
   normalizePullRequestPayload,
@@ -313,6 +313,17 @@ describe("integrations/github/pullRequestWebhook.normalizePullRequestPayload", (
 });
 
 describe("integrations/github/pullRequestWebhook.handlePullRequestWebhook (wiring)", () => {
+  // The webhook flow schedules follow-up work (notification fanout). Fake timers
+  // let each test drain it via `finishAllScheduledFunctions` so a scheduled fn
+  // can't fire after the test's convex-test context is torn down (which surfaced
+  // as a flaky "Patch on non-existent scheduled_functions" uncaught error).
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("end-to-end: GraphQL-resolved closing refs flow through to a PR attached to the imported task", async () => {
     const t = createTestContext();
     const { projectId, link } = await setupRouting(t);
@@ -372,6 +383,7 @@ describe("integrations/github/pullRequestWebhook.handlePullRequestWebhook (wirin
         repoFullName: "acme/web",
       }),
     );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     const prs = await t.run((ctx) => ctx.db.query("pullRequests").collect());
     expect(prs).toHaveLength(1);
@@ -409,6 +421,7 @@ describe("integrations/github/pullRequestWebhook.handlePullRequestWebhook (wirin
         repoFullName: "acme/web",
       }),
     );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     const updated = await t.run((ctx) => ctx.db.get(link._id));
     expect(updated?.lastWebhookAt).toBeGreaterThanOrEqual(before);
@@ -445,6 +458,7 @@ describe("integrations/github/pullRequestWebhook.handlePullRequestWebhook (wirin
         repoFullName: "acme/web",
       }),
     );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     // Routed to the live link (not the disconnected sibling), without throwing.
     const live = await t.run((ctx) => ctx.db.get(link._id));
@@ -489,6 +503,7 @@ describe("integrations/github/pullRequestWebhook.handlePullRequestWebhook (wirin
         repoFullName: "acme/web",
       }),
     );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     const prs = await t.run((ctx) => ctx.db.query("pullRequests").collect());
     expect(prs).toHaveLength(0);
