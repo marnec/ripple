@@ -4,8 +4,11 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
 import { getWorkspaceIntegration } from "./integrationLookups";
-import { taskHasBranchRuleMatch } from "./pullRequestAutomation";
-import { applyStatusSideEffects } from "../../taskStatusSideEffects";
+import {
+  reconcileTaskStatus,
+  resolveCompletedStatus,
+  resolveTriageStatus,
+} from "./statusReconciliation";
 import type {
   NormalizedInstallationEvent,
   NormalizedIssueEvent,
@@ -357,33 +360,16 @@ async function updateExistingOnClose(
     existingLink: Doc<"taskIntegrationLinks">;
   },
 ): Promise<void> {
-  const { event, link, existingLink } = args;
+  const { event, existingLink } = args;
 
-  // Precedence: when a merged PR's target branch matches a branch→status rule,
-  // that transition is authoritative — suppress the generic issue-close
-  // completion (it would downgrade the branch-mapped status). The link mirror
-  // is still advanced so the outbound echo guard and redelivery dedup hold.
-  const branchRuleGoverns = await taskHasBranchRuleMatch(
-    ctx,
-    existingLink.taskId,
-  );
-
-  if (!branchRuleGoverns) {
-    const targetStatus = await resolveCompletedStatus(
-      ctx,
-      link.projectId,
-      event.stateReason,
-    );
-    const task = await ctx.db.get(existingLink.taskId);
-    if (task) {
-      // Canonical status side-effects: closes the open work period on an
-      // inbound close, which the hand-rolled patch here used to skip.
-      await ctx.db.patch(existingLink.taskId, {
-        statusId: targetStatus._id,
-        ...applyStatusSideEffects(task, targetStatus),
-      });
-    }
-  }
+  // The arbiter owns the status decision: it resolves the completed status and
+  // suppresses it when a merged PR's branch rule governs the task. The link
+  // mirror is still advanced afterward so the outbound echo guard and
+  // redelivery dedup hold.
+  await reconcileTaskStatus(ctx, existingLink.taskId, {
+    kind: "issue.closed",
+    stateReason: event.stateReason,
+  });
 
   await ctx.db.patch(existingLink._id, {
     externalUpdatedAt: event.externalUpdatedAt,
@@ -558,17 +544,10 @@ async function updateExistingOnReopen(
     existingLink: Doc<"taskIntegrationLinks">;
   },
 ): Promise<void> {
-  const { event, link, existingLink } = args;
+  const { event, existingLink } = args;
 
-  const triageStatus = await resolveTriageStatus(ctx, link.projectId);
+  await reconcileTaskStatus(ctx, existingLink.taskId, { kind: "issue.reopened" });
 
-  const task = await ctx.db.get(existingLink.taskId);
-  if (task) {
-    await ctx.db.patch(existingLink.taskId, {
-      statusId: triageStatus._id,
-      ...applyStatusSideEffects(task, triageStatus),
-    });
-  }
   await ctx.db.patch(existingLink._id, {
     externalUpdatedAt: event.externalUpdatedAt,
     externalState: "open",
@@ -609,66 +588,6 @@ function isStale(
   existingLink: Doc<"taskIntegrationLinks">,
 ): boolean {
   return isStaleUpdate(event.externalUpdatedAt, existingLink.externalUpdatedAt);
-}
-
-async function resolveTriageStatus(
-  ctx: MutationCtx,
-  projectId: Doc<"projectIntegrationLinks">["projectId"],
-): Promise<Doc<"taskStatuses">> {
-  const triage = await ctx.db
-    .query("taskStatuses")
-    .withIndex("by_project_isTriage", (q) =>
-      q.eq("projectId", projectId).eq("isTriage", true),
-    )
-    .unique();
-  if (!triage) {
-    throw new Error(
-      `applyNormalizedEvent: project ${projectId} has no triage status`,
-    );
-  }
-  return triage;
-}
-
-/**
- * Pick the destination completed status for an inbound `issue.closed` event.
- *
- *  - state_reason='not_planned' → first status with `isCompleted=true` and
- *    `externalCloseReason='not_planned'`, ordered by `order`. Falls back to
- *    the default-completed routing when none is configured.
- *  - state_reason='completed' (or any other) → first `isCompleted=true`
- *    status by `order`.
- */
-async function resolveCompletedStatus(
-  ctx: MutationCtx,
-  projectId: Doc<"projectIntegrationLinks">["projectId"],
-  stateReason: "completed" | "not_planned",
-): Promise<Doc<"taskStatuses">> {
-  if (stateReason === "not_planned") {
-    const notPlanned = await ctx.db
-      .query("taskStatuses")
-      .withIndex("by_project_isCompleted_closeReason_order", (q) =>
-        q
-          .eq("projectId", projectId)
-          .eq("isCompleted", true)
-          .eq("externalCloseReason", "not_planned"),
-      )
-      .first();
-    if (notPlanned) return notPlanned;
-    // Fall through to the default-completed routing.
-  }
-
-  const completed = await ctx.db
-    .query("taskStatuses")
-    .withIndex("by_project_isCompleted_order", (q) =>
-      q.eq("projectId", projectId).eq("isCompleted", true),
-    )
-    .first();
-  if (!completed) {
-    throw new Error(
-      `applyNormalizedEvent: project ${projectId} has no completed status`,
-    );
-  }
-  return completed;
 }
 
 /**

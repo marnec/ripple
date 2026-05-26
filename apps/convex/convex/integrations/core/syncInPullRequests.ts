@@ -1,7 +1,7 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { getWorkspaceIntegration } from "./integrationLookups";
-import { applyPullRequestStatusAutomation } from "./pullRequestAutomation";
+import { reconcileTaskStatus } from "./statusReconciliation";
 import type { NormalizedPullRequestEvent } from "./types";
 
 /**
@@ -66,7 +66,7 @@ export async function applyPullRequestEvent(
     for (const taskId of taskIds) {
       await ctx.db.insert("taskPullRequestLinks", { taskId, pullRequestId });
       await recomputePullRequestState(ctx, taskId);
-      await applyPullRequestStatusAutomation(ctx, taskId);
+      await reconcileTaskStatus(ctx, taskId, { kind: "pr.changed" });
     }
     return;
   }
@@ -115,7 +115,7 @@ export async function applyPullRequestEvent(
   ]);
   for (const taskId of affected) {
     await recomputePullRequestState(ctx, taskId);
-    await applyPullRequestStatusAutomation(ctx, taskId);
+    await reconcileTaskStatus(ctx, taskId, { kind: "pr.changed" });
   }
 }
 

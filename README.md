@@ -7,6 +7,8 @@ NEXT STEPS:
 
 - branch related stuff
 
+- surface error to users when tying to manually set triage status
+
 - document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
 - guests can comment (all viewers?)
 
