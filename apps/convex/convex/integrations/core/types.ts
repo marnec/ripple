@@ -78,9 +78,23 @@ export interface NormalizedPullRequestChangedEvent {
   mergedAt?: number;
   /**
    * Stable issue ids this PR closes (GitHub: issue node ids), resolved by the
-   * adapter. Core attaches the PR only to those that map to an imported task.
+   * adapter via the host's native closing graph. Core attaches the PR to those
+   * that map to an imported task.
+   *
+   * NOTE: GitHub only populates its closing graph when the PR targets the
+   * repo's DEFAULT branch — so for a PR merged into any other branch this is
+   * empty even with "Closes #N" in the body. `closesIssueNumbers` (parsed from
+   * the PR text) is the branch-independent fallback that keeps branch→status
+   * automation working for non-default targets.
    */
   closesExternalIssueIds: string[];
+  /**
+   * Issue numbers parsed from the PR title/body closing keywords
+   * (`closes/fixes/resolves #N`), independent of the base branch. Core resolves
+   * these against `tasks.externalRefs` so a merge into a non-default branch
+   * still links the PR.
+   */
+  closesIssueNumbers: number[];
 }
 
 /**

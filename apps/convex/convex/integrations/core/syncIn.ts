@@ -26,6 +26,20 @@ export interface ImportContext {
 }
 
 /**
+ * True when an issue event was authored by this deployment's own GitHub App
+ * bot (`<slug>[bot]`) — i.e. it's the echo of an outbound "create issue from
+ * task" op rather than human/3rd-party activity. Returns false when the slug
+ * is unconfigured (tests, local) so the guard is inert there.
+ */
+function isSelfAuthoredIssue(event: {
+  externalAuthor?: { login: string };
+}): boolean {
+  const slug = process.env.GITHUB_APP_SLUG;
+  if (!slug) return false;
+  return event.externalAuthor?.login === `${slug}[bot]`;
+}
+
+/**
  * Apply a provider-neutral inbound event to Ripple state. Called from a
  * provider webhook adapter after signature verification, delivery dedup,
  * workspace/link resolution, and the freeze gate have already run — so
@@ -57,6 +71,12 @@ export async function applyNormalizedEvent(
     case "issue.opened":
       // Idempotency guard: redelivered open → no-op.
       if (existingLink) return;
+      // Echo guard: a live `issues.opened` authored by our own App bot is the
+      // bounce-back from an outbound "create issue from task" op. The outbound
+      // recorder owns that task↔issue link; creating a task here would
+      // duplicate it (and land it in triage). Suppressed only for live webhooks
+      // — bulk import (importContext present) still ingests bot-authored issues.
+      if (!importContext && isSelfAuthoredIssue(event)) return;
       await createTaskFromEvent(ctx, {
         event,
         link,

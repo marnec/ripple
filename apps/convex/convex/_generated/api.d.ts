@@ -2423,6 +2423,17 @@ export declare const api: {
       },
       Id<"tasks">
     >;
+    createGithubIssue: FunctionReference<
+      "mutation",
+      "public",
+      {
+        body: string;
+        projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+        taskId: Id<"tasks">;
+        title: string;
+      },
+      null
+    >;
     get: FunctionReference<
       "query",
       "public",
@@ -3840,6 +3851,19 @@ export declare const internal: {
           },
           null
         >;
+        pushCreateIssue: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            installationId: string;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            repoFullName: string;
+            taskId: Id<"tasks">;
+            title: string;
+          },
+          null
+        >;
         pushDescription: FunctionReference<
           "action",
           "internal",
@@ -3959,6 +3983,30 @@ export declare const internal: {
             issueNumber: number;
             message: string;
             workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
+        recordIssueCreateFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            httpStatus?: number;
+            message: string;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        recordIssueCreateSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            externalAuthor: { avatarUrl: string; login: string; url: string };
+            externalIssueId: string;
+            externalUpdatedAt: number;
+            issueNumber: number;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            taskId: Id<"tasks">;
           },
           null
         >;

@@ -71,6 +71,41 @@ async function foldResponse<T>(
 
 export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
   return {
+    async createIssue({ repoFullName, title, body }) {
+      const res = await gh.request<{
+        node_id: string;
+        number: number;
+        updated_at: string;
+        user: { login: string; avatar_url: string; html_url: string };
+      }>({
+        method: "POST",
+        path: `/repos/${repoFullName}/issues`,
+        body: { title, body },
+      });
+      const decision = classifyResponse(toResponse(res));
+      if (decision === "success") {
+        // A 2xx create with no parseable body can't be linked back to a task;
+        // treat as transient rather than recording a half-formed link.
+        if (!res.body) {
+          return { kind: "retryable", message: "issue-create succeeded without a body" };
+        }
+        return {
+          kind: "success",
+          meta: {
+            externalIssueId: res.body.node_id,
+            issueNumber: res.body.number,
+            externalUpdatedAt: Date.parse(res.body.updated_at),
+            externalAuthor: {
+              login: res.body.user.login,
+              avatarUrl: res.body.user.avatar_url,
+              url: res.body.user.html_url,
+            },
+          },
+        };
+      }
+      return foldResponse(res); // permanent_fail / retryable (incl. 429 sleep)
+    },
+
     async setIssueState({ repoFullName, issueNumber, state, stateReason }) {
       const body: Record<string, string> = { state };
       if (state === "closed" && stateReason) body.state_reason = stateReason;

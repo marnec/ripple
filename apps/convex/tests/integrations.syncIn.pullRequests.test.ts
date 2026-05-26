@@ -99,6 +99,7 @@ function makePrOpenedEvent(
     baseRef: "main",
     externalAuthor: defaultAuthor,
     closesExternalIssueIds: ["I_kwDOABC123"],
+    closesIssueNumbers: [],
     ...overrides,
   };
 }
@@ -143,6 +144,43 @@ describe("integrations/core/syncInPullRequests.applyPullRequestEvent", () => {
     );
     expect(joins).toHaveLength(1);
     expect(joins[0]?.pullRequestId).toBe(prs[0]?._id);
+  });
+
+  it("links via parsed closesIssueNumbers when GitHub's closing graph is empty (non-default base branch)", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+
+    // Imported issue #42 → a task with externalRefs.issueNumber 42.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+
+    // PR merged into `develop` (non-default): GitHub returns no closing refs,
+    // but "closes #42" was parsed into closesIssueNumbers.
+    await t.run((ctx) =>
+      applyPullRequestEvent(ctx, {
+        event: makePrOpenedEvent({
+          baseRef: "develop",
+          closesExternalIssueIds: [],
+          closesIssueNumbers: [42],
+        }),
+        link,
+      }),
+    );
+
+    const joins = await t.run((ctx) =>
+      ctx.db
+        .query("taskPullRequestLinks")
+        .withIndex("by_task", (q) => q.eq("taskId", task!._id))
+        .collect(),
+    );
+    expect(joins).toHaveLength(1);
   });
 
   it("a PR closing two imported issues attaches to both tasks", async () => {

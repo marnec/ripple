@@ -9,6 +9,7 @@ import {
   commentDeleteSink,
   commentEditSink,
   issueCloseSink,
+  issueCreateSink,
   taskAssigneesSink,
   taskDescriptionSink,
   taskLabelsSink,
@@ -28,6 +29,39 @@ import {
  */
 
 const CREDS_MISSING = "GitHub App credentials not configured";
+
+export const pushCreateIssue = internalAction({
+  args: {
+    taskId: v.id("tasks"),
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+    title: v.string(),
+    body: v.string(),
+    installationId: v.string(),
+    repoFullName: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const sink = issueCreateSink(ctx, {
+      taskId: args.taskId,
+      projectIntegrationLinkId: args.projectIntegrationLinkId,
+    });
+    const gateway = makeGithubGateway(args.installationId);
+    if (!gateway) {
+      await sink.recordPermanentFailure(CREDS_MISSING);
+      return null;
+    }
+    await runOutboundOp(
+      () =>
+        gateway.createIssue({
+          repoFullName: args.repoFullName,
+          title: args.title,
+          body: args.body,
+        }),
+      sink,
+    );
+    return null;
+  },
+});
 
 export const pushIssueState = internalAction({
   args: {

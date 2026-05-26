@@ -28,8 +28,15 @@ export interface OutboundSuccessMeta {
   externalUpdatedAt?: number;
   /** comment-create only: the numeric REST id the provider assigned, as a string. */
   externalCommentId?: string;
-  /** comment-create only: the resolved author chip. */
+  /** comment-create / issue-create: the resolved author chip (the App bot). */
   externalAuthor?: { login: string; avatarUrl: string; url: string };
+  /** issue-create only: the issue's stable GraphQL node id (matches the
+   *  inbound `externalIssueId`, so the bounce-back `issues.opened` webhook
+   *  dedups against the link this op writes). */
+  externalIssueId?: string;
+  /** issue-create only: the human issue number GitHub assigned (REST needs it
+   *  for every later push; mirrored onto `tasks.externalRefs`). */
+  issueNumber?: number;
 }
 
 /**
@@ -48,6 +55,14 @@ export type OutboundOutcome =
   | { kind: "retryable"; message: string };
 
 export interface OutboundGateway {
+  /** Creates a new issue (task → GitHub). Success meta carries the node id,
+   *  number, author and `updated_at` needed to write the task↔issue link. */
+  createIssue(a: {
+    repoFullName: string;
+    title: string;
+    body: string;
+  }): Promise<OutboundOutcome>;
+
   setIssueState(a: {
     repoFullName: string;
     issueNumber: number;

@@ -20,6 +20,7 @@ import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskProperties } from "./TaskProperties";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
+import { TaskCreateGithubIssueAction } from "./TaskCreateGithubIssueAction";
 import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
@@ -120,6 +121,14 @@ function TaskDetailPageContent({
             onKeyDown={detail.handleTitleKeyDown}
             className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
             placeholder="Task title"
+          />
+          <TaskCreateGithubIssueAction
+            taskId={taskId}
+            taskTitle={detail.task.title}
+            projectId={projectId}
+            workspaceId={workspaceId}
+            isLinked={Boolean(detail.task.externalRefs?.[0])}
+            completed={detail.task.completed}
           />
           <TaskGithubHeaderActions
             taskId={taskId}

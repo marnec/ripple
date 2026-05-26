@@ -101,6 +101,48 @@ export function taskAssigneesSink(
   };
 }
 
+/**
+ * Issue-create sink (task → new GitHub issue). On success the recorder writes
+ * the task↔issue link + mirrors the issue ref onto the task; on permanent
+ * failure there's no link yet, so the recorder leaves only an audit-log trace.
+ */
+export function issueCreateSink(
+  ctx: ActionCtx,
+  args: {
+    taskId: Id<"tasks">;
+    projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+  },
+): OutboundRecorderSink {
+  return {
+    recordSuccess: async (meta) => {
+      // The gateway only returns success for create with a full body, so these
+      // fields are present.
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordIssueCreateSuccess,
+        {
+          taskId: args.taskId,
+          projectIntegrationLinkId: args.projectIntegrationLinkId,
+          externalIssueId: meta.externalIssueId!,
+          issueNumber: meta.issueNumber!,
+          externalUpdatedAt: meta.externalUpdatedAt!,
+          externalAuthor: meta.externalAuthor!,
+        },
+      );
+    },
+    recordPermanentFailure: async (message, httpStatus) => {
+      await ctx.runMutation(
+        internal.integrations.github.syncOutMutations.recordIssueCreateFailure,
+        {
+          taskId: args.taskId,
+          projectIntegrationLinkId: args.projectIntegrationLinkId,
+          message,
+          httpStatus,
+        },
+      );
+    },
+  };
+}
+
 export function commentCreateSink(
   ctx: ActionCtx,
   args: {

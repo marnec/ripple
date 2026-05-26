@@ -25,6 +25,7 @@ interface GithubPullRequest {
   node_id: string;
   number: number;
   title: string;
+  body?: string | null;
   html_url: string;
   draft: boolean;
   merged?: boolean;
@@ -33,6 +34,31 @@ interface GithubPullRequest {
   head: { ref: string };
   base: { ref: string };
   user: GithubPrUser;
+}
+
+/**
+ * GitHub's issue-closing keywords. Matched against the PR title + body so we
+ * link a PR to its task regardless of base branch — GitHub's own closing graph
+ * (`closingIssuesReferences`) only resolves when the PR targets the repo's
+ * default branch, which would silently break branch→status automation for
+ * every non-default target (e.g. `develop`).
+ */
+const CLOSING_KEYWORD_RE =
+  /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s+#(\d+)/gi;
+
+/**
+ * Parse same-repo closing references (`closes #27`, `fixes: #4`, …) out of PR
+ * text into issue numbers. Deduped; cross-repo (`owner/repo#N`) and URL forms
+ * are intentionally out of scope (the common case is same-repo `#N`).
+ */
+export function parseClosingIssueNumbers(text: string | null | undefined): number[] {
+  if (!text) return [];
+  const found = new Set<number>();
+  for (const m of text.matchAll(CLOSING_KEYWORD_RE)) {
+    const n = Number(m[1]);
+    if (Number.isInteger(n) && n > 0) found.add(n);
+  }
+  return [...found];
 }
 
 interface GithubPullRequestPayload {
@@ -111,6 +137,9 @@ export function normalizePullRequestPayload(
     },
     mergedAt,
     closesExternalIssueIds,
+    closesIssueNumbers: parseClosingIssueNumbers(
+      `${pr.title}\n${pr.body ?? ""}`,
+    ),
   };
 }
 

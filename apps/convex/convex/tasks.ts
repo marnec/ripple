@@ -22,6 +22,7 @@ import {
   maybeEnqueueOutboundPush,
   enqueueDescriptionPush,
   enqueueIssueClose,
+  enqueueIssueCreate,
 } from "./integrations/core/outboundDispatch";
 
 /**
@@ -1242,6 +1243,46 @@ export const syncDescriptionToGitHub = mutation({
   handler: async (ctx, { taskId, markdown }) => {
     await requireResourceMember(ctx, "tasks", taskId);
     await enqueueDescriptionPush(ctx, { taskId, markdown });
+    return null;
+  },
+});
+
+/**
+ * Create a GitHub issue from an existing Ripple task and link the two. The
+ * issue is created asynchronously (retrier-managed POST); on success the
+ * `taskIntegrationLinks` row + `tasks.externalRefs` are written by the recorder
+ * and the link surfaces reactively. Enqueue-time guards (uncompleted, not
+ * already linked, repo belongs to the project and is active) throw so the
+ * caller can surface the error immediately.
+ */
+/**
+ * Seed body for a task-originated issue when the caller sends no body (the
+ * v1 flow). The task's real description is a collaborative Yjs doc that isn't
+ * pushed at creation time; this note tells GitHub readers where the canonical
+ * text lives and how it gets here (the existing "Sync description to GitHub"
+ * button, once a description exists in Ripple).
+ */
+const GITHUB_ISSUE_SEED_BODY =
+  '_Created from a Ripple task. Add a description in Ripple, then use "Sync description to GitHub" to populate this issue._';
+
+export const createGithubIssue = mutation({
+  args: {
+    taskId: v.id("tasks"),
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+    title: v.string(),
+    body: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireResourceMember(ctx, "tasks", args.taskId);
+    const title = args.title.trim();
+    if (title.length === 0) throw new Error("Issue title is required");
+    await enqueueIssueCreate(ctx, {
+      taskId: args.taskId,
+      projectIntegrationLinkId: args.projectIntegrationLinkId,
+      title,
+      body: args.body.trim().length > 0 ? args.body : GITHUB_ISSUE_SEED_BODY,
+    });
     return null;
   },
 });

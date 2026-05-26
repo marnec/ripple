@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   handlePullRequestWebhook,
   normalizePullRequestPayload,
+  parseClosingIssueNumbers,
 } from "../convex/integrations/github/pullRequestWebhook";
 import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
 import { GithubClient } from "../convex/integrations/github/client";
@@ -10,6 +11,40 @@ import {
   setupProject,
   setupWorkspaceWithAdmin,
 } from "./helpers";
+
+describe("parseClosingIssueNumbers", () => {
+  it("matches each closing keyword form, case-insensitively", () => {
+    for (const kw of [
+      "close",
+      "closes",
+      "closed",
+      "fix",
+      "fixes",
+      "fixed",
+      "resolve",
+      "resolves",
+      "resolved",
+      "CLOSES",
+      "Fixes",
+    ]) {
+      expect(parseClosingIssueNumbers(`${kw} #27`)).toEqual([27]);
+    }
+  });
+
+  it("handles the colon form and dedupes across title+body", () => {
+    expect(parseClosingIssueNumbers("fixes: #4")).toEqual([4]);
+    expect(
+      parseClosingIssueNumbers("Closes #2 and resolves #3, also closes #2"),
+    ).toEqual([2, 3]);
+  });
+
+  it("ignores bare mentions and empty input", () => {
+    expect(parseClosingIssueNumbers("see #27 for context")).toEqual([]);
+    expect(parseClosingIssueNumbers("closes#27")).toEqual([]); // needs a space
+    expect(parseClosingIssueNumbers(null)).toEqual([]);
+    expect(parseClosingIssueNumbers(undefined)).toEqual([]);
+  });
+});
 
 function openedPrPayload(overrides: Record<string, unknown> = {}) {
   return {

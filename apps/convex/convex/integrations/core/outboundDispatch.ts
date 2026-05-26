@@ -145,6 +145,71 @@ async function resolveCommentLinkTarget(
 }
 
 /**
+ * Issue-create push (task → new GitHub issue). User-initiated, so it throws on
+ * a bad request rather than silently no-opping. Guards: the task must exist,
+ * be uncompleted, and not already be linked; the chosen repo link must belong
+ * to the task's project and be sync-active. The action POSTs the issue and (on
+ * success) writes the task↔issue link + mirrors the ref onto the task.
+ *
+ * Like `enqueueIssueClose`, this schedules without an `onComplete` /
+ * `integrationOutboundRuns` row: there's no link yet to carry a
+ * `lastSyncError`, so a permanent failure is recorded only in the workspace
+ * audit log by the action's sink.
+ */
+export async function enqueueIssueCreate(
+  ctx: MutationCtx,
+  args: {
+    taskId: Id<"tasks">;
+    projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+    title: string;
+    body: string;
+  },
+): Promise<void> {
+  const task = await ctx.db.get(args.taskId);
+  if (!task) throw new Error("Task not found");
+  if (task.completed) {
+    throw new Error("Cannot create a GitHub issue for a completed task");
+  }
+
+  const existing = await ctx.db
+    .query("taskIntegrationLinks")
+    .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+    .unique();
+  if (existing) throw new Error("Task is already linked to a GitHub issue");
+
+  const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
+  if (!projectLink) throw new Error("Repository link not found");
+  if (projectLink.projectId !== task.projectId) {
+    throw new Error("Repository is not connected to this task's project");
+  }
+  if (projectLink.status !== "active") {
+    throw new Error("Repository sync is not active");
+  }
+  if (shouldSkipForFreeze(projectLink)) {
+    throw new Error("GitHub integration is frozen for this workspace");
+  }
+
+  const integration = await getWorkspaceIntegration(
+    ctx,
+    projectLink.workspaceId,
+  );
+  if (!integration) throw new Error("Workspace integration row missing");
+
+  await retrier.run(
+    ctx,
+    internal.integrations.github.syncOutAction.pushCreateIssue,
+    {
+      taskId: args.taskId,
+      projectIntegrationLinkId: args.projectIntegrationLinkId,
+      title: args.title,
+      body: args.body,
+      installationId: integration.externalAccountId,
+      repoFullName: projectLink.externalRepoFullName,
+    },
+  );
+}
+
+/**
  * Status push. Derives the desired open/closed state from `tasks.completed`
  * and the destination status's `externalCloseReason`, and skips when it
  * already matches the mirror (the dominant reason a status change produces no

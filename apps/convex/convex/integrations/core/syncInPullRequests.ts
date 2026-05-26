@@ -35,7 +35,14 @@ export async function applyPullRequestEvent(
     )
     .unique();
 
-  const taskIds = await resolveTaskIds(ctx, link, event.closesExternalIssueIds);
+  const taskIds = await resolveTaskIds(
+    ctx,
+    link,
+    event.closesExternalIssueIds,
+    // Tolerate events from before this field existed (in-flight redeliveries)
+    // or any `v.any()` passthrough that omits it.
+    event.closesIssueNumbers ?? [],
+  );
 
   if (!existing) {
     // Don't store a PR that attaches to nothing Ripple imported.
@@ -160,8 +167,13 @@ async function resolveTaskIds(
   ctx: MutationCtx,
   link: Doc<"projectIntegrationLinks">,
   closesExternalIssueIds: string[],
+  closesIssueNumbers: number[],
 ): Promise<Doc<"tasks">["_id"][]> {
-  const taskIds: Doc<"tasks">["_id"][] = [];
+  const taskIds = new Set<Doc<"tasks">["_id"]>();
+
+  // Node-id path: GitHub's resolved closing graph. Populated only for PRs
+  // targeting the repo's default branch, but keyed on the stable id so it's
+  // exact when present.
   for (const externalIssueId of closesExternalIssueIds) {
     const taskLink = await ctx.db
       .query("taskIntegrationLinks")
@@ -171,7 +183,29 @@ async function resolveTaskIds(
           .eq("externalIssueId", externalIssueId),
       )
       .unique();
-    if (taskLink) taskIds.push(taskLink.taskId);
+    if (taskLink) taskIds.add(taskLink.taskId);
   }
-  return taskIds;
+
+  // Number path: keywords parsed from the PR text, branch-independent. Match
+  // against `tasks.externalRefs` (issue number can't be indexed — it lives in
+  // a nested array — so scan the project's tasks, which is bounded). This is
+  // what keeps branch→status automation working when a PR merges into a
+  // non-default branch like `develop`.
+  if (closesIssueNumbers.length > 0) {
+    const wanted = new Set(closesIssueNumbers);
+    const tasks = await ctx.db
+      .query("tasks")
+      .withIndex("by_project", (q) => q.eq("projectId", link.projectId))
+      .collect();
+    for (const task of tasks) {
+      const matches = (task.externalRefs ?? []).some(
+        (r) =>
+          r.repoFullName === link.externalRepoFullName &&
+          wanted.has(r.issueNumber),
+      );
+      if (matches) taskIds.add(task._id);
+    }
+  }
+
+  return [...taskIds];
 }

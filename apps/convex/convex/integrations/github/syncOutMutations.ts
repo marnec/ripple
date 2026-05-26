@@ -3,6 +3,7 @@ import { internalMutation } from "../../_generated/server";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
+import { getWorkspaceIntegration } from "../core/integrationLookups";
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 
 /**
@@ -192,6 +193,124 @@ export const recordIssueCloseFailure = internalMutation({
     } catch (err) {
       console.error(
         "[auditLog] failed to log integration.issue_close_failed",
+        err,
+      );
+    }
+    return null;
+  },
+});
+
+/**
+ * Records a successful "create GitHub issue from task" op: writes the
+ * `taskIntegrationLinks` row (the task↔issue link that every later inbound and
+ * outbound op keys on) and mirrors the issue number/url onto
+ * `tasks.externalRefs` (where the outbound dispatchers read `issueNumber`).
+ *
+ * Idempotent against the bounce-back `issues.opened` webhook racing the
+ * recorder: if a link already exists for this issue or task (the webhook beat
+ * us, or a double-submit), this no-ops rather than creating a duplicate.
+ */
+export const recordIssueCreateSuccess = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+    externalIssueId: v.string(),
+    issueNumber: v.number(),
+    externalUpdatedAt: v.number(),
+    externalAuthor: v.object({
+      login: v.string(),
+      avatarUrl: v.string(),
+      url: v.string(),
+    }),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task) return null;
+
+    const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
+    if (!projectLink) return null;
+    const integration = await getWorkspaceIntegration(
+      ctx,
+      projectLink.workspaceId,
+    );
+    if (!integration) return null;
+
+    // Echo-race guard: an inbound `issues.opened` for the issue we just created
+    // may have landed first and built the link itself. Don't double-insert.
+    const byIssue = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_link_externalIssueId", (q) =>
+        q
+          .eq("projectIntegrationLinkId", args.projectIntegrationLinkId)
+          .eq("externalIssueId", args.externalIssueId),
+      )
+      .unique();
+    if (byIssue) return null;
+    // Double-submit guard: the task already acquired a link some other way.
+    const byTask = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+      .unique();
+    if (byTask) return null;
+
+    await ctx.db.insert("taskIntegrationLinks", {
+      taskId: args.taskId,
+      projectIntegrationLinkId: args.projectIntegrationLinkId,
+      externalIssueId: args.externalIssueId,
+      externalUpdatedAt: args.externalUpdatedAt,
+      externalAuthor: args.externalAuthor,
+      externalState: "open",
+    });
+
+    await ctx.db.patch(args.taskId, {
+      externalRefs: [
+        {
+          provider: integration.provider,
+          repoFullName: projectLink.externalRepoFullName,
+          issueNumber: args.issueNumber,
+          url: `https://github.com/${projectLink.externalRepoFullName}/issues/${args.issueNumber}`,
+        },
+      ],
+    });
+    return null;
+  },
+});
+
+/**
+ * Records a permanent failure of "create GitHub issue from task". There's no
+ * link row yet (creation is what failed), so — like the issue-close failure —
+ * the only durable trace is a workspace-scoped audit entry scoped to the task.
+ */
+export const recordIssueCreateFailure = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+    message: v.string(),
+    httpStatus: v.optional(v.number()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
+    if (!projectLink) return null;
+    const integration = await getWorkspaceIntegration(
+      ctx,
+      projectLink.workspaceId,
+    );
+    if (!integration) return null;
+    try {
+      await auditLog.log(ctx, {
+        action: "integration.issue_create_failed",
+        actorId: integration.botUserId.toString(),
+        resourceType: "tasks",
+        resourceId: args.taskId,
+        severity: "warning",
+        metadata: { message: args.message, httpStatus: args.httpStatus },
+        scope: projectLink.workspaceId,
+      });
+    } catch (err) {
+      console.error(
+        "[auditLog] failed to log integration.issue_create_failed",
         err,
       );
     }
