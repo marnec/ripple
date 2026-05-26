@@ -444,7 +444,7 @@ function CustomEventContent({ calendarEvent }: { calendarEvent: any }) {
         if (!v) setMenuOpen(false);
       }}
     >
-      <ResponsiveDropdownMenuTrigger render={eventInner} />
+      <ResponsiveDropdownMenuTrigger nativeButton={false} render={eventInner} />
       <ResponsiveDropdownMenuContent className="w-auto">
         <ResponsiveDropdownMenuItem onSelect={() => callbacks.onNavigate(meta.taskId)}>
           View task details

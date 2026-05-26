@@ -41,6 +41,7 @@ export const membersByWorkspace = query({
     emailVerificationTime: v.optional(v.number()),
     image: v.optional(v.string()),
     isAnonymous: v.optional(v.boolean()),
+    isBot: v.optional(v.boolean()),
   })),
   handler: async (ctx, { workspaceId }) => {
     await requireWorkspaceMember(ctx, workspaceId);
@@ -50,8 +51,14 @@ export const membersByWorkspace = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .collect();
 
-    return Promise.all(members.map(({ userId }) => ctx.db.get(userId))).then((users) =>
-      users.filter((u) => u !== null),
+    const users = await Promise.all(
+      members.map(({ userId }) => ctx.db.get(userId)),
+    );
+    // Defensive: bot users (synthetic identities for integrations) must
+    // never appear in member pickers / facepiles, even if a future bug
+    // accidentally inserts a workspaceMembers row pointing at one.
+    return users.filter(
+      (u): u is NonNullable<typeof u> => u !== null && u.isBot !== true,
     );
   },
 });
@@ -78,7 +85,8 @@ export const membersWithRoles = query({
     const results = await Promise.all(
       members.map(async (m) => {
         const user = await ctx.db.get(m.userId);
-        if (!user) return null;
+        // Defensive: bot users must never appear in member-management UIs.
+        if (!user || user.isBot === true) return null;
         return {
           membershipId: m._id,
           userId: m.userId,

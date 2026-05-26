@@ -59,14 +59,16 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
     | undefined;
 
   const channelIds = channels?.map((c) => c._id).slice(0, 50) ?? [];
-  const unreadCounts = useQuery(
-    api.channelReads.getUnreadCounts,
+  const unreadStatus = useQuery(
+    api.channelReads.getUnreadStatus,
     channelIds.length > 0 ? { channelIds } : "skip",
   );
-  const unreadMap = (() => {
-    const m = new Map<string, number>();
-    unreadCounts?.forEach(({ channelId, count }) => m.set(channelId, count));
-    return m;
+  const unreadSet = (() => {
+    const s = new Set<string>();
+    unreadStatus?.forEach(({ channelId, hasUnread }) => {
+      if (hasUnread) s.add(channelId);
+    });
+    return s;
   })();
 
   const channelEntries = channels?.map((c) => ({ id: c._id, name: c.name }));
@@ -197,7 +199,7 @@ export const ChannelSelectorList = memo(function ChannelSelectorList({
                       style={{ animationDelay: `${idx * SIDEBAR_ELEMENT_FADEIN_DELAY}ms`, animationFillMode: "backwards" }}
                       channel={channel}
                       channelId={channelId}
-                      unreadCount={unreadMap.get(channel._id) ?? 0}
+                      hasUnread={unreadSet.has(channel._id)}
                       onChannelSelect={(id) => {
                         if (id) {
                           const ch = channelMap.get(id);

@@ -698,6 +698,48 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  integrationInstallStates: {
+    document: {
+      expiresAt: number;
+      nonce: string;
+      provider: string;
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"integrationInstallStates">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "expiresAt"
+      | "nonce"
+      | "provider"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_nonce: ["nonce", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  integrationOutboundRuns: {
+    document: {
+      runId: string;
+      taskId: Id<"tasks">;
+      _id: Id<"integrationOutboundRuns">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "runId" | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_runId: ["runId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   medias: {
     document: {
       fileName: string;
@@ -937,6 +979,42 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  projectIntegrationLinks: {
+    document: {
+      branchStatusMap?: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
+      externalRepoFullName: string;
+      externalRepoId: string;
+      frozenAt?: number;
+      lastWebhookAt?: number;
+      pausedByBilling: boolean;
+      projectId: Id<"projects">;
+      status: "configuring" | "active" | "paused" | "disconnected";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"projectIntegrationLinks">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "branchStatusMap"
+      | "externalRepoFullName"
+      | "externalRepoId"
+      | "frozenAt"
+      | "lastWebhookAt"
+      | "pausedByBilling"
+      | "projectId"
+      | "status"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_externalRepo: ["externalRepoId", "_creationTime"];
+      by_project: ["projectId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   projectNotificationPreferences: {
     document: {
       projectId: Id<"projects">;
@@ -1004,6 +1082,56 @@ export type DataModel = {
         filterFields: "workspaceId";
       };
     };
+    vectorIndexes: {};
+  };
+  pullRequests: {
+    document: {
+      baseRef: string;
+      externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalPrId: string;
+      externalUpdatedAt: number;
+      headRef: string;
+      mergedAt?: number;
+      number: number;
+      projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+      provider: string;
+      state: "draft" | "open" | "merged" | "closed";
+      title: string;
+      url: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"pullRequests">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "baseRef"
+      | "externalAuthor"
+      | "externalAuthor.avatarUrl"
+      | "externalAuthor.login"
+      | "externalAuthor.url"
+      | "externalPrId"
+      | "externalUpdatedAt"
+      | "headRef"
+      | "mergedAt"
+      | "number"
+      | "projectIntegrationLinkId"
+      | "provider"
+      | "state"
+      | "title"
+      | "url"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_link_externalPrId: [
+        "projectIntegrationLinkId",
+        "externalPrId",
+        "_creationTime",
+      ];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
     vectorIndexes: {};
   };
   pushSubscriptions: {
@@ -1202,10 +1330,55 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
+  taskCommentIntegrationLinks: {
+    document: {
+      externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalCommentId: string;
+      externalUpdatedAt: number;
+      lastSyncError?: {
+        httpStatus?: number;
+        message: string;
+        occurredAt: number;
+      };
+      taskCommentId: Id<"taskComments">;
+      taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+      _id: Id<"taskCommentIntegrationLinks">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "externalAuthor"
+      | "externalAuthor.avatarUrl"
+      | "externalAuthor.login"
+      | "externalAuthor.url"
+      | "externalCommentId"
+      | "externalUpdatedAt"
+      | "lastSyncError"
+      | "lastSyncError.httpStatus"
+      | "lastSyncError.message"
+      | "lastSyncError.occurredAt"
+      | "taskCommentId"
+      | "taskIntegrationLinkId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_externalCommentId: ["externalCommentId", "_creationTime"];
+      by_taskComment: ["taskCommentId", "_creationTime"];
+      by_taskIntegrationLink: ["taskIntegrationLinkId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   taskComments: {
     document: {
       body: string;
       deleted: boolean;
+      lastSyncError?: {
+        httpStatus?: number;
+        message: string;
+        occurredAt: number;
+      };
       taskId: Id<"tasks">;
       userId: Id<"users">;
       _id: Id<"taskComments">;
@@ -1216,6 +1389,10 @@ export type DataModel = {
       | "_id"
       | "body"
       | "deleted"
+      | "lastSyncError"
+      | "lastSyncError.httpStatus"
+      | "lastSyncError.message"
+      | "lastSyncError.occurredAt"
       | "taskId"
       | "userId";
     indexes: {
@@ -1236,7 +1413,9 @@ export type DataModel = {
       numberRangeStart: number;
       processedRows: number;
       projectId: Id<"projects">;
+      projectIntegrationLinkId?: Id<"projectIntegrationLinks">;
       rows: Array<any>;
+      sourceType?: "csv" | "github_integration";
       status: "queued" | "running" | "completed" | "failed";
       totalRows: number;
       workspaceId: Id<"workspaces">;
@@ -1253,7 +1432,9 @@ export type DataModel = {
       | "numberRangeStart"
       | "processedRows"
       | "projectId"
+      | "projectIntegrationLinkId"
       | "rows"
+      | "sourceType"
       | "status"
       | "totalRows"
       | "workspaceId";
@@ -1266,6 +1447,95 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  taskIntegrationLinks: {
+    document: {
+      descriptionEdited?: boolean;
+      descriptionLastSyncedAt?: number;
+      externalAssigneeLogins?: Array<string>;
+      externalAssignees?: Array<{
+        avatarUrl: string;
+        login: string;
+        url: string;
+      }>;
+      externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalClosedBy?: { avatarUrl: string; login: string; url: string };
+      externalDeletedAt?: number;
+      externalIssueId: string;
+      externalLabels?: Array<string>;
+      externalState?: "open" | "closed";
+      externalStateReason?: "completed" | "not_planned";
+      externalUpdatedAt: number;
+      initialBodyMarkdown?: string;
+      lastSyncError?: {
+        httpStatus?: number;
+        message: string;
+        occurredAt: number;
+      };
+      projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+      seedStatus?: "pending" | "seeded" | "skipped" | "failed";
+      taskId: Id<"tasks">;
+      _id: Id<"taskIntegrationLinks">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "descriptionEdited"
+      | "descriptionLastSyncedAt"
+      | "externalAssigneeLogins"
+      | "externalAssignees"
+      | "externalAuthor"
+      | "externalAuthor.avatarUrl"
+      | "externalAuthor.login"
+      | "externalAuthor.url"
+      | "externalClosedBy"
+      | "externalClosedBy.avatarUrl"
+      | "externalClosedBy.login"
+      | "externalClosedBy.url"
+      | "externalDeletedAt"
+      | "externalIssueId"
+      | "externalLabels"
+      | "externalState"
+      | "externalStateReason"
+      | "externalUpdatedAt"
+      | "initialBodyMarkdown"
+      | "lastSyncError"
+      | "lastSyncError.httpStatus"
+      | "lastSyncError.message"
+      | "lastSyncError.occurredAt"
+      | "projectIntegrationLinkId"
+      | "seedStatus"
+      | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_link_externalIssueId: [
+        "projectIntegrationLinkId",
+        "externalIssueId",
+        "_creationTime",
+      ];
+      by_task: ["taskId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  taskPullRequestLinks: {
+    document: {
+      pullRequestId: Id<"pullRequests">;
+      taskId: Id<"tasks">;
+      _id: Id<"taskPullRequestLinks">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "pullRequestId" | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_pullRequest: ["pullRequestId", "_creationTime"];
+      by_task: ["taskId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   tasks: {
     document: {
       assigneeId?: Id<"users">;
@@ -1273,6 +1543,28 @@ export type DataModel = {
       creatorId: Id<"users">;
       dueDate?: string;
       estimate?: number;
+      externalAssignees?: Array<{
+        avatarUrl: string;
+        login: string;
+        url: string;
+      }>;
+      externalRefFrozen?: {
+        disconnectedAt: number;
+        externalAuthor?: { avatarUrl: string; login: string; url: string };
+        externalIssueId: string;
+        externalRepoId: string;
+        issueNumber: number;
+        provider: string;
+        repoFullName: string;
+        url: string;
+      };
+      externalRefs?: Array<{
+        deleted?: boolean;
+        issueNumber: number;
+        provider: string;
+        repoFullName: string;
+        url: string;
+      }>;
       importJobId?: Id<"taskImportJobs">;
       labels?: Array<string>;
       number?: number;
@@ -1280,6 +1572,7 @@ export type DataModel = {
       position?: string;
       priority: "urgent" | "high" | "medium" | "low";
       projectId: Id<"projects">;
+      pullRequestState?: "draft" | "open" | "merged" | "closed";
       startDate?: string;
       statusId: Id<"taskStatuses">;
       title: string;
@@ -1297,6 +1590,20 @@ export type DataModel = {
       | "creatorId"
       | "dueDate"
       | "estimate"
+      | "externalAssignees"
+      | "externalRefFrozen"
+      | "externalRefFrozen.disconnectedAt"
+      | "externalRefFrozen.externalAuthor"
+      | "externalRefFrozen.externalAuthor.avatarUrl"
+      | "externalRefFrozen.externalAuthor.login"
+      | "externalRefFrozen.externalAuthor.url"
+      | "externalRefFrozen.externalIssueId"
+      | "externalRefFrozen.externalRepoId"
+      | "externalRefFrozen.issueNumber"
+      | "externalRefFrozen.provider"
+      | "externalRefFrozen.repoFullName"
+      | "externalRefFrozen.url"
+      | "externalRefs"
       | "importJobId"
       | "labels"
       | "number"
@@ -1304,6 +1611,7 @@ export type DataModel = {
       | "position"
       | "priority"
       | "projectId"
+      | "pullRequestState"
       | "startDate"
       | "statusId"
       | "title"
@@ -1388,8 +1696,10 @@ export type DataModel = {
   taskStatuses: {
     document: {
       color: string;
+      externalCloseReason?: "completed" | "not_planned";
       isCompleted: boolean;
       isDefault: boolean;
+      isTriage?: boolean;
       name: string;
       order: number;
       pendingDeletion?: boolean;
@@ -1402,8 +1712,10 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "color"
+      | "externalCloseReason"
       | "isCompleted"
       | "isDefault"
+      | "isTriage"
       | "name"
       | "order"
       | "pendingDeletion"
@@ -1413,7 +1725,21 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_project: ["projectId", "_creationTime"];
+      by_project_isCompleted_closeReason_order: [
+        "projectId",
+        "isCompleted",
+        "externalCloseReason",
+        "order",
+        "_creationTime",
+      ];
+      by_project_isCompleted_order: [
+        "projectId",
+        "isCompleted",
+        "order",
+        "_creationTime",
+      ];
       by_project_isDefault: ["projectId", "isDefault", "_creationTime"];
+      by_project_isTriage: ["projectId", "isTriage", "_creationTime"];
       by_project_order: ["projectId", "order", "_creationTime"];
     };
     searchIndexes: {};
@@ -1520,6 +1846,7 @@ export type DataModel = {
       emailVerificationTime?: number;
       image?: string;
       isAnonymous?: boolean;
+      isBot?: boolean;
       name?: string;
       phone?: string;
       phoneVerificationTime?: number;
@@ -1533,6 +1860,7 @@ export type DataModel = {
       | "emailVerificationTime"
       | "image"
       | "isAnonymous"
+      | "isBot"
       | "name"
       | "phone"
       | "phoneVerificationTime";
@@ -1541,6 +1869,61 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       email: ["email", "_creationTime"];
       phone: ["phone", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  workspaceEntitlements: {
+    document: {
+      enabled: boolean;
+      featureKey: string;
+      source?: "manual" | "tier" | "plugin";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"workspaceEntitlements">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "enabled"
+      | "featureKey"
+      | "source"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace_feature: ["workspaceId", "featureKey", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  workspaceIntegrations: {
+    document: {
+      accountLogin?: string;
+      botUserId: Id<"users">;
+      externalAccountId: string;
+      externalAccountType?: "organization" | "user";
+      installedBy?: Id<"users">;
+      provider: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"workspaceIntegrations">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "accountLogin"
+      | "botUserId"
+      | "externalAccountId"
+      | "externalAccountType"
+      | "installedBy"
+      | "provider"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_externalAccount: ["externalAccountId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1571,6 +1954,41 @@ export type DataModel = {
         "workspaceId",
         "email",
         "status",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  workspaceMemberExternalIdentity: {
+    document: {
+      externalLogin: string;
+      provider: string;
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"workspaceMemberExternalIdentity">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "externalLogin"
+      | "provider"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace_provider_login: [
+        "workspaceId",
+        "provider",
+        "externalLogin",
+        "_creationTime",
+      ];
+      by_workspace_user_provider: [
+        "workspaceId",
+        "userId",
+        "provider",
         "_creationTime",
       ];
     };

@@ -14,7 +14,6 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban, Plus } from "lucide-react";
 import { useRef, useState } from "react";
-import { startViewTransition } from "@/hooks/use-view-transition";
 import { useLocation, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -82,9 +81,6 @@ function ProjectTasksContent({
     sortBlockedTimer.current = setTimeout(() => setSortBlocked(false), 2500);
   };
 
-  const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
-  const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
-
   // Pre-fetch active tasks to gate the page-level loading indicator. The
   // active query is what the default list view needs; kanban / completed
   // views fire their own queries and have their own ready gates.
@@ -143,9 +139,9 @@ function ProjectTasksContent({
         <TaskToolbar
           workspaceId={workspaceId}
           filters={filters}
-          onFiltersChange={setFiltersAnimated}
+          onFiltersChange={setFilters}
           sort={sort}
-          onSortChange={setSortAnimated}
+          onSortChange={setSort}
           members={members ?? []}
           sortBlocked={sortBlocked}
         />

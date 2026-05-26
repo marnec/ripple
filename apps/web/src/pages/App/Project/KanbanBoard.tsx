@@ -19,7 +19,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import React, { Suspense, useState } from "react";
-import { useAnimatedQuery, isPositionOnlyChange } from "@/hooks/use-animated-query";
 import { useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -61,10 +60,10 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const [showAddColumn, setShowAddColumn] = useState(false);
   const isSorting = sort !== null;
 
-  // Suppress view transitions during DnD — set in handleDragStart,
-  // auto-cleared after the post-drop optimistic update applies.
+  // Suppress motion layout animations during DnD — set in handleDragStart,
+  // auto-cleared after the post-drop optimistic update applies — so motion
+  // doesn't fight dnd-kit's drag transforms.
   const [dndSuppressed, setDndSuppressed] = useState(false);
-  const sheetOpen = selectedTaskId !== null;
 
   // Active tasks: full list. Completed: capped at KANBAN_COMPLETED_CAP+1 so we
   // can detect overflow via the +1 trick. Beyond the cap, the kanban surfaces
@@ -83,14 +82,13 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
   const liveTasks =
     activeTasks && completedTasks ? [...activeTasks, ...completedTasks] : undefined;
 
-  // Buffer remote updates through View Transitions so cards animate.
-  // When sorting is active, absorb position-only reorders from other users
-  // since the sort override makes them invisible.
-  const allTasks = useAnimatedQuery(
-    liveTasks,
-    isSorting ? isPositionOnlyChange : undefined,
-    dndSuppressed || sheetOpen,
-  );
+  // Cards animate via Framer Motion layout animations (see KanbanCard), so we
+  // render live query data directly — no View Transition buffering needed.
+  // Motion animates only real layout changes, so data updates that don't move
+  // a card (e.g. the description-seed sync when a TaskDetailSheet closes)
+  // produce no animation, and because the animation is an in-flow transform it
+  // stays clipped by the column's scroll container instead of flashing on top.
+  const allTasks = liveTasks;
 
   // Apply assignee/priority filters + optional sort
   const tasks = useFilteredTasks(allTasks, filters, sort);
@@ -336,6 +334,7 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
               isFirst={index === 0}
               isLast={index === statuses.length - 1}
               canDelete={!status.isDefault}
+              layoutEnabled={!dndSuppressed}
               footer={
                 completedTruncated && status.isCompleted ? (
                   <KanbanCompletedOverflow

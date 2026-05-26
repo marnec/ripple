@@ -52,6 +52,13 @@ const importJobValidator = v.object({
   numberRangeStart: v.number(),
   errorMessage: v.optional(v.string()),
   completedAt: v.optional(v.number()),
+  // Integration-import metadata. Absent on CSV jobs; present once a GitHub
+  // import writes them. `projectActiveJob` only strips the heavy `rows` blob,
+  // so these pass through and must be allowed by the projection validator.
+  sourceType: v.optional(
+    v.union(v.literal("csv"), v.literal("github_integration")),
+  ),
+  projectIntegrationLinkId: v.optional(v.id("projectIntegrationLinks")),
 });
 
 // ── Queries ─────────────────────────────────────────────────────────────

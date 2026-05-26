@@ -57,6 +57,12 @@ export default class CollaborationServer extends YServer {
 
   private permissionCheckScheduled = false;
 
+  // Whether a snapshot already backs this room — true if onLoad hydrated from
+  // one, or once we've persisted real content. Used to avoid letting an idle,
+  // never-edited session write an *empty* first snapshot that would clobber a
+  // server-seeded description (see integrations/core/seedDescriptionAction).
+  private snapshotExists = false;
+
   // Cell reference observer state (spreadsheet rooms only)
   private cellRefObserver: ((events: Y.YEvent<any>[], tx: Y.Transaction) => void) | null = null;
   private formulaValuesObserver: ((event: Y.YMapEvent<string>) => void) | null = null;
@@ -132,6 +138,7 @@ export default class CollaborationServer extends YServer {
       const buffer = await response.arrayBuffer();
       const bytes = new Uint8Array(buffer);
       Y.applyUpdate(this.document, bytes);
+      this.snapshotExists = true;
       console.log(`Loaded snapshot for room ${roomId}`);
     } catch (error) {
       console.error(`Error loading snapshot for room ${roomId}:`, error);
@@ -151,6 +158,21 @@ export default class CollaborationServer extends YServer {
 
       if (update.length === 0) {
         console.log(`Skipping save for room ${roomId}: empty document`);
+        return;
+      }
+
+      // Don't let a never-edited session write the *first* snapshot for a task
+      // room when the description has no real content: a GitHub-seeded snapshot
+      // may be landing concurrently (the seed is scheduled at task creation),
+      // and an empty first save would clobber it. Once a snapshot exists —
+      // hydrated on load, or written here from real content — empty saves are
+      // allowed again so genuine "delete everything" edits still persist.
+      if (
+        !this.snapshotExists &&
+        roomId.startsWith("task-") &&
+        !this.hasTaskContent()
+      ) {
+        console.log(`Skipping first save for room ${roomId}: empty task description`);
         return;
       }
 
@@ -183,10 +205,23 @@ export default class CollaborationServer extends YServer {
         return;
       }
 
+      this.snapshotExists = true;
       console.log(`Snapshot saved for room ${roomId}`);
     } catch (error) {
       console.error(`Error saving snapshot for room ${roomId}:`, error);
     }
+  }
+
+  /**
+   * Whether the task description fragment holds any real (non-whitespace) text.
+   * BlockNote seeds an empty editor with a blank paragraph, so child count
+   * alone isn't a reliable emptiness signal — check for actual text content.
+   */
+  private hasTaskContent(): boolean {
+    const fragment = this.document.getXmlFragment("document-store");
+    if (fragment.length === 0) return false;
+    const text = fragment.toString().replace(/<[^>]*>/g, "");
+    return text.trim().length > 0;
   }
 
   // ---------------------------------------------------------------------------
