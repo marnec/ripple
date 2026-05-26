@@ -6,7 +6,7 @@ NEXT STEPS:
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding
-
+-test
 
 - external ticketing system??: 
     - connected to project
