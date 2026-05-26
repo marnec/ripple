@@ -107,11 +107,32 @@ describe("channelReads", () => {
       expect(rows[0].lastReadAt!).toBeGreaterThan(1);
     });
 
-    it("is a no-op when the user has no channelMembers row", async () => {
+    it("marks an open channel read for a workspace member (no channelMembers row)", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      // Open channels have no channelMembers rows — access is via workspace
+      // membership, so markRead must still record a read marker.
+      const channelId = await t.run(async (ctx) =>
+        ctx.db.insert("channels", { name: "open-channel", workspaceId, type: "open" as const }),
+      );
+
+      await asUser.mutation(api.channelReads.markRead, { channelId });
+
+      const state = await t.run(async (ctx) => {
+        return ctx.db
+          .query("userChannelState")
+          .withIndex("by_channel_user", (q) => q.eq("channelId", channelId).eq("userId", userId))
+          .unique();
+      });
+      expect(state?.lastReadAt).toBeDefined();
+      expect(state!.lastReadAt!).toBeGreaterThan(0);
+    });
+
+    it("is a no-op on a closed channel the user hasn't joined", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await t.run(async (ctx) =>
-        ctx.db.insert("channels", { name: "open-channel", workspaceId, type: "open" as const }),
+        ctx.db.insert("channels", { name: "closed-channel", workspaceId, type: "closed" as const }),
       );
 
       await asUser.mutation(api.channelReads.markRead, { channelId });
@@ -136,19 +157,74 @@ describe("channelReads", () => {
     });
   });
 
-  describe("getUnreadCounts", () => {
-    it("returns 0 when lastReadAt is undefined (new member)", async () => {
+  describe("getUnreadStatus", () => {
+    it("uses join time as baseline when never visited: messages after joining are unread", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      // Membership is created first, then a message arrives — no lastReadAt yet.
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
 
       await insertMessage(t, { channelId, userId });
 
-      const counts = await asUser.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] });
-      expect(counts).toEqual([{ channelId, count: 0 }]);
+      const status = await asUser.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] });
+      expect(status).toEqual([{ channelId, hasUnread: true }]);
     });
 
-    it("returns correct count for messages after lastReadAt", async () => {
+    it("does not count messages sent before the user joined", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+      // Channel + a message exist first; the user joins afterwards (later
+      // _creationTime), so the pre-existing message is not "unread".
+      const channelId = await t.run(async (ctx) =>
+        ctx.db.insert("channels", { name: "pre-join", workspaceId, type: "closed" as const }),
+      );
+      await insertMessage(t, { channelId, userId });
+      await t.run(async (ctx) =>
+        ctx.db.insert("channelMembers", {
+          channelId,
+          workspaceId,
+          userId,
+          role: ChannelRole.MEMBER,
+        }),
+      );
+
+      const status = await asUser.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] });
+      expect(status).toEqual([{ channelId, hasUnread: false }]);
+    });
+
+    it("open channel: workspace-join time is the baseline when never visited", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      // Open channel, no channelMembers row, no lastReadAt. The user is a
+      // workspace member (joined before the channel existed), so a later
+      // message should register as unread off the workspace-join baseline.
+      const channelId = await t.run(async (ctx) =>
+        ctx.db.insert("channels", { name: "open-channel", workspaceId, type: "open" as const }),
+      );
+
+      await insertMessage(t, { channelId, userId });
+
+      const status = await asUser.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] });
+      expect(status).toEqual([{ channelId, hasUnread: true }]);
+    });
+
+    it("open channel: lastReadAt clears the badge once read", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await t.run(async (ctx) =>
+        ctx.db.insert("channels", { name: "open-channel", workspaceId, type: "open" as const }),
+      );
+
+      await insertMessage(t, { channelId, userId });
+      // Reading the channel records a lastReadAt newer than the message.
+      await asUser.mutation(api.channelReads.markRead, { channelId });
+
+      const status = await asUser.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] });
+      expect(status).toEqual([{ channelId, hasUnread: false }]);
+    });
+
+    it("returns true when there are messages after lastReadAt", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
@@ -158,11 +234,11 @@ describe("channelReads", () => {
       await insertMessage(t, { channelId, userId });
       await insertMessage(t, { channelId, userId });
 
-      const counts = await asUser.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] });
-      expect(counts).toEqual([{ channelId, count: 2 }]);
+      const status = await asUser.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] });
+      expect(status).toEqual([{ channelId, hasUnread: true }]);
     });
 
-    it("returns 0 when no messages after lastReadAt", async () => {
+    it("returns false when no messages after lastReadAt", async () => {
       const t = createTestContext();
       const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
@@ -171,8 +247,23 @@ describe("channelReads", () => {
 
       await seedLastReadAt(t, { workspaceId, channelId, userId, at: Date.now() + 100000 });
 
-      const counts = await asUser.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] });
-      expect(counts).toEqual([{ channelId, count: 0 }]);
+      const status = await asUser.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] });
+      expect(status).toEqual([{ channelId, hasUnread: false }]);
+    });
+
+    it("ignores soft-deleted messages after lastReadAt", async () => {
+      const t = createTestContext();
+      const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+      const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
+
+      await seedLastReadAt(t, { workspaceId, channelId, userId, at: Date.now() - 10000 });
+
+      // The only message after lastReadAt is deleted → nothing live to read.
+      const messageId = await insertMessage(t, { channelId, userId });
+      await t.run(async (ctx) => ctx.db.patch(messageId, { deleted: true }));
+
+      const status = await asUser.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] });
+      expect(status).toEqual([{ channelId, hasUnread: false }]);
     });
 
     it("returns results for multiple channels", async () => {
@@ -185,17 +276,16 @@ describe("channelReads", () => {
       await seedLastReadAt(t, { workspaceId, channelId: channelId1, userId, at: seedAt });
       await seedLastReadAt(t, { workspaceId, channelId: channelId2, userId, at: seedAt });
 
-      // 2 messages in channel1, 1 in channel2
+      // Messages in channel1, none in channel2.
       await insertMessage(t, { channelId: channelId1, userId });
       await insertMessage(t, { channelId: channelId1, userId });
-      await insertMessage(t, { channelId: channelId2, userId });
 
-      const counts = await asUser.query(api.channelReads.getUnreadCounts, {
+      const status = await asUser.query(api.channelReads.getUnreadStatus, {
         channelIds: [channelId1, channelId2],
       });
-      expect(counts).toHaveLength(2);
-      expect(counts.find((c) => c.channelId === channelId1)?.count).toBe(2);
-      expect(counts.find((c) => c.channelId === channelId2)?.count).toBe(1);
+      expect(status).toHaveLength(2);
+      expect(status.find((c) => c.channelId === channelId1)?.hasUnread).toBe(true);
+      expect(status.find((c) => c.channelId === channelId2)?.hasUnread).toBe(false);
     });
 
     it("rejects unauthenticated calls", async () => {
@@ -204,7 +294,7 @@ describe("channelReads", () => {
       const channelId = await setupChannelWithMembership(t, { workspaceId, userId });
 
       await expect(
-        t.query(api.channelReads.getUnreadCounts, { channelIds: [channelId] }),
+        t.query(api.channelReads.getUnreadStatus, { channelIds: [channelId] }),
       ).rejects.toThrow("Not authenticated");
     });
   });

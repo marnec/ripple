@@ -976,3 +976,91 @@ describe("listByAssignee — tagNames filter", () => {
     expect(doneTagged.map((task) => task._id)).toEqual([done]);
   });
 });
+
+/**
+ * Triage is reserved for internal sync paths (`applyNormalizedEvent` and the
+ * orphan upsert paths in `core/syncIn`). User-facing mutations must refuse
+ * to write a task into an `isTriage=true` status so external-issue work
+ * cannot be impersonated from the client.
+ */
+async function setupProjectWithTriage(
+  t: ReturnType<typeof createTestContext>,
+  opts: { workspaceId: Id<"workspaces">; userId: Id<"users"> },
+) {
+  const seeded = await setupProjectWithStatuses(t, opts);
+  const triageId = await t.run((ctx) =>
+    ctx.db.insert("taskStatuses", {
+      projectId: seeded.projectId,
+      name: "Triage",
+      color: "bg-amber-500",
+      order: 3,
+      isDefault: false,
+      isCompleted: false,
+      isTriage: true,
+    }),
+  );
+  return { ...seeded, triageId };
+}
+
+describe("tasks triage-status guard", () => {
+  it("tasks.create rejects an explicit triage statusId", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, triageId } = await setupProjectWithTriage(t, {
+      workspaceId,
+      userId,
+    });
+
+    await expect(
+      asUser.mutation(api.tasks.create, {
+        projectId,
+        workspaceId,
+        title: "Sneaky triage write",
+        statusId: triageId,
+      }),
+    ).rejects.toThrow(/triage/i);
+  });
+
+  it("tasks.updatePosition rejects dragging a task into a triage column", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, triageId } = await setupProjectWithTriage(t, {
+      workspaceId,
+      userId,
+    });
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Live task",
+    });
+
+    await expect(
+      asUser.mutation(api.tasks.updatePosition, {
+        taskId,
+        statusId: triageId,
+        position: "a0",
+      }),
+    ).rejects.toThrow(/triage/i);
+  });
+
+  it("tasks.update rejects moving a task into a triage status", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, triageId } = await setupProjectWithTriage(t, {
+      workspaceId,
+      userId,
+    });
+    const taskId = await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Live task",
+    });
+
+    await expect(
+      asUser.mutation(api.tasks.update, {
+        taskId,
+        statusId: triageId,
+      }),
+    ).rejects.toThrow(/triage/i);
+  });
+});

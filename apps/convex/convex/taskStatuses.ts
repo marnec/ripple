@@ -67,9 +67,17 @@ export const update = mutation({
     order: v.optional(v.number()),
     setsStartDate: v.optional(v.boolean()),
     isCompleted: v.optional(v.boolean()),
+    // GitHub integration: when the task closes via outbound sync, this drives
+    // the `state_reason` value pushed to GitHub. Null clears the override.
+    externalCloseReason: v.optional(
+      v.union(v.literal("completed"), v.literal("not_planned"), v.null()),
+    ),
   },
   returns: v.null(),
-  handler: async (ctx, { statusId, name, color, order, setsStartDate, isCompleted }) => {
+  handler: async (
+    ctx,
+    { statusId, name, color, order, setsStartDate, isCompleted, externalCloseReason },
+  ) => {
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
 
@@ -77,13 +85,30 @@ export const update = mutation({
     if (!project) throw new ConvexError("Project not found");
     await requireWorkspaceMember(ctx, project.workspaceId);
 
+    // A triage inbox holds freshly-imported (open) issues — it can't double as
+    // a "completed" bucket. The matrix disables this client-side; guard here too.
+    if (isCompleted === true && status.isTriage) {
+      throw new ConvexError("The triage inbox can't be marked completed");
+    }
+
     // Build patch object with only provided fields
-    const patch: { name?: string; color?: string; order?: number; setsStartDate?: boolean; isCompleted?: boolean } = {};
+    const patch: {
+      name?: string;
+      color?: string;
+      order?: number;
+      setsStartDate?: boolean;
+      isCompleted?: boolean;
+      externalCloseReason?: "completed" | "not_planned" | undefined;
+    } = {};
     if (name !== undefined) patch.name = name;
     if (color !== undefined) patch.color = color;
     if (order !== undefined) patch.order = order;
     if (setsStartDate !== undefined) patch.setsStartDate = setsStartDate;
     if (isCompleted !== undefined) patch.isCompleted = isCompleted;
+    if (externalCloseReason !== undefined) {
+      // null on the wire → undefined in the patch → removes the field.
+      patch.externalCloseReason = externalCloseReason ?? undefined;
+    }
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(statusId, patch);
@@ -102,6 +127,90 @@ export const update = mutation({
       );
     }
 
+    return null;
+  },
+});
+
+/**
+ * Assign a "singleton" status effect — one that at most one status per project
+ * may hold. `default` is the landing status for new tasks (exactly one,
+ * required); `triage` is the inbox for externally-ingested issues (at most
+ * one, optional). Setting an effect clears the previous holder in the same
+ * mutation so the UI never has to remove the old one first.
+ *
+ * This is the user-facing writer for `isTriage`; the integration layer remains
+ * the only writer that *places tasks* into a triage status, but designating
+ * which status serves as triage now happens here (via the Status Effect
+ * Matrix in project settings).
+ */
+export const setSingletonEffect = mutation({
+  args: {
+    statusId: v.id("taskStatuses"),
+    effect: v.union(v.literal("default"), v.literal("triage")),
+    value: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { statusId, effect, value }) => {
+    const status = await ctx.db.get(statusId);
+    if (!status) throw new ConvexError("Status not found");
+
+    const project = await ctx.db.get(status.projectId);
+    if (!project) throw new ConvexError("Project not found");
+    await requireWorkspaceMember(ctx, project.workspaceId);
+
+    if (effect === "default") {
+      if (!value) {
+        throw new ConvexError("A project must always have a default status");
+      }
+      if (status.isTriage) {
+        throw new ConvexError(
+          "The triage inbox can't also be the default status",
+        );
+      }
+      if (status.isDefault) return null; // already the default
+
+      const current = await ctx.db
+        .query("taskStatuses")
+        .withIndex("by_project_isDefault", (q) =>
+          q.eq("projectId", status.projectId).eq("isDefault", true),
+        )
+        .collect();
+      await Promise.all(
+        current
+          .filter((s) => s._id !== statusId)
+          .map((s) => ctx.db.patch(s._id, { isDefault: false })),
+      );
+      await ctx.db.patch(statusId, { isDefault: true });
+      return null;
+    }
+
+    // effect === "triage"
+    if (!value) {
+      await ctx.db.patch(statusId, { isTriage: false });
+      return null;
+    }
+    if (status.isDefault) {
+      throw new ConvexError(
+        "The default status can't also be the triage inbox",
+      );
+    }
+    if (status.isCompleted) {
+      throw new ConvexError(
+        "A completed status can't be the triage inbox",
+      );
+    }
+    const currentTriage = await ctx.db
+      .query("taskStatuses")
+      .withIndex("by_project_isTriage", (q) =>
+        q.eq("projectId", status.projectId).eq("isTriage", true),
+      )
+      .collect();
+    await Promise.all(
+      currentTriage
+        .filter((s) => s._id !== statusId)
+        .map((s) => ctx.db.patch(s._id, { isTriage: false })),
+    );
+    await ctx.db.patch(statusId, { isTriage: true });
     return null;
   },
 });
@@ -195,6 +304,10 @@ export const fetchTasksForStatusBatch = internalMutation({
       )
       .take(limit);
 
+    // Deliberately does NOT apply the canonical status side-effects: deleting
+    // a column and relocating its tasks must PRESERVE their `completed` flag
+    // (and work periods) — re-syncing would resurrect finished work as active
+    // when reassigning a "Done" status into a non-completed one.
     await Promise.all(
       tasks.map((task) =>
         ctx.db.patch(task._id, { statusId: reassignToStatusId })

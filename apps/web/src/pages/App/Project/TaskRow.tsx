@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/item";
 import { cn } from "@/lib/utils";
 import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
+import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
 import { Ban } from "lucide-react";
 
 type TaskRowProps = {
@@ -27,6 +28,7 @@ type TaskRowProps = {
     dueDate?: string;
     estimate?: number;
     hasBlockers?: boolean;
+    externalAssignees?: ExternalAssignee[];
     status: {
       name: string;
       color: string;
@@ -53,10 +55,6 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
   return (
     <Item
       onClick={onClick}
-      style={!flush ? {
-        viewTransitionName: `--task-${task._id}`,
-        viewTransitionClass: "task-card",
-      } : undefined}
       className={cn("cursor-pointer hover:bg-accent transition-colors", flush ? "rounded-none border-transparent!" : "border-transparent! md:border-input!")}
     >
       <ItemMedia>
@@ -133,6 +131,10 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
             </span>
           )
         ) : null}
+
+        {!hideAssignee && (
+          <ExternalAssigneeAvatars assignees={task.externalAssignees} side="left" />
+        )}
 
         {!hideAssignee && task.assignee && (
           <Avatar className="h-6 w-6">
