@@ -79,6 +79,87 @@ export const saveSnapshot = internalMutation({
 });
 
 /**
+ * Seed a task's description snapshot *unless the user has already edited it*.
+ *
+ * Used by the GitHub description seed (see
+ * `integrations/core/seedDescriptionAction`). Guarded by the link's
+ * `descriptionEdited` flag rather than "snapshot absent": if you open the task
+ * before the (scheduled, Node-cold-start) seed lands, the empty PartyKit room
+ * may auto-save an *empty* snapshot first. An "if absent" guard would then drop
+ * the seed forever. Because an empty auto-save never sets `descriptionEdited`
+ * (only a genuine user edit does), this overwrites that empty snapshot with the
+ * real seed — while still never clobbering a description the user has touched.
+ *
+ * Overwriting replaces `yjsSnapshotId` with a *new* storage id, which the client
+ * watches (via `taskLinks.getByTask`) to re-hydrate the live doc.
+ */
+export const seedTaskSnapshot = internalMutation({
+  args: { taskId: v.id("tasks"), storageId: v.id("_storage") },
+  returns: v.object({ seeded: v.boolean() }),
+  handler: async (ctx, { taskId, storageId }) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) {
+      await ctx.storage.delete(storageId);
+      return { seeded: false };
+    }
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (link?.descriptionEdited) {
+      // User already engaged with the description — never overwrite it.
+      await ctx.storage.delete(storageId);
+      await ctx.db.patch(link._id, { seedStatus: "skipped" });
+      return { seeded: false };
+    }
+    // Replace any prior (e.g. empty auto-saved) snapshot; clean up its blob.
+    if (task.yjsSnapshotId) {
+      try {
+        await ctx.storage.delete(task.yjsSnapshotId);
+      } catch {
+        // Best-effort cleanup; proceed with the new snapshot regardless.
+      }
+    }
+    await ctx.db.patch(taskId, { yjsSnapshotId: storageId });
+    if (link) await ctx.db.patch(link._id, { seedStatus: "seeded" });
+    return { seeded: true };
+  },
+});
+
+/**
+ * Record a terminal seed outcome on a task's integration link, for the seed
+ * paths that don't go through `seedTaskSnapshot` (pre-existing snapshot, empty
+ * conversion, or a thrown action). The client's open-time gate watches this to
+ * stop waiting deterministically instead of relying on a timeout.
+ *
+ * No-ops if the link is gone (task deleted mid-seed), and never demotes a
+ * terminal `"seeded"` — guards against a retried/re-delivered seed action
+ * clobbering a snapshot that already landed.
+ */
+export const markSeedStatus = internalMutation({
+  args: {
+    taskId: v.id("tasks"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("seeded"),
+      v.literal("skipped"),
+      v.literal("failed"),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, { taskId, status }) => {
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (!link) return null;
+    if (link.seedStatus === "seeded") return null;
+    await ctx.db.patch(link._id, { seedStatus: status });
+    return null;
+  },
+});
+
+/**
  * Get the Yjs snapshot storage ID for a resource.
  *
  * This is called by HTTP endpoints when PartyKit GETs snapshot data for cold-start hydration.

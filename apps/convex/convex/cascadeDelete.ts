@@ -42,6 +42,7 @@ export const cascadeRules = defineCascadeRules({
   tasks: [
     { to: "cycleTasks", via: "by_task", field: "taskId" },
     { to: "taskComments", via: "by_task", field: "taskId" },
+    { to: "taskPullRequestLinks", via: "by_task", field: "taskId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },

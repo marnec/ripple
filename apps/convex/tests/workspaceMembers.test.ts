@@ -364,3 +364,56 @@ describe("workspaceMembers.remove", () => {
     expect(userIds).not.toContain(originalId);
   });
 });
+
+/**
+ * Bot users (synthetic identities for the GitHub integration etc.) are
+ * normally NOT inserted into workspaceMembers — but a future bug or
+ * migration could accidentally add one. The member-listing queries
+ * defensively filter them out so they never appear in pickers/facepiles.
+ */
+describe("workspaceMembers bot-user filtering", () => {
+  it("membersByWorkspace excludes users with isBot=true", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    // Insert a bot "user" and add it as a workspaceMembers row.
+    const botUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub", isBot: true }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: botUserId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+
+    const members = await asUser.query(api.workspaceMembers.membersByWorkspace, {
+      workspaceId,
+    });
+    const ids = members.map((m) => m._id);
+    expect(ids).toContain(userId);
+    expect(ids).not.toContain(botUserId);
+  });
+
+  it("membersWithRoles excludes users with isBot=true", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const botUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "GitHub", isBot: true }),
+    );
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMembers", {
+        userId: botUserId,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      }),
+    );
+
+    const members = await asUser.query(api.workspaceMembers.membersWithRoles, {
+      workspaceId,
+    });
+    const ids = members.map((m) => m.userId);
+    expect(ids).toContain(userId);
+    expect(ids).not.toContain(botUserId);
+  });
+});

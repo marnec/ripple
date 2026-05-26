@@ -5,9 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getUserColor } from "@/lib/user-colors";
-import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
-import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@ripple/shared/types/routes";
@@ -19,7 +16,12 @@ import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
+import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskProperties } from "./TaskProperties";
+import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
+import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
+import { TaskPullRequests } from "./TaskPullRequests";
+import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
 export function TaskDetailPage() {
@@ -109,6 +111,7 @@ function TaskDetailPageContent({
               [ {taskCode} ]
             </span>
           )}
+          <TaskSyncIndicator taskId={taskId} />
           <Input
             ref={titleInputRef}
             value={detail.titleValue}
@@ -117,6 +120,10 @@ function TaskDetailPageContent({
             onKeyDown={detail.handleTitleKeyDown}
             className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
             placeholder="Task title"
+          />
+          <TaskGithubHeaderActions
+            taskId={taskId}
+            issueUrl={detail.task.externalRefs?.[0]?.url}
           />
         </div>
       )}
@@ -167,6 +174,10 @@ function TaskDetailPageContent({
                 onEstimateChange={detail.handleEstimateChange}
               />
 
+              <TaskGithubExternalInfo taskId={taskId} />
+
+              <TaskPullRequests taskId={taskId} />
+
               <TaskDependencies
                 taskId={taskId}
                 workspaceId={workspaceId}
@@ -179,22 +190,14 @@ function TaskDetailPageContent({
                   <h3 className="text-sm font-semibold text-muted-foreground">
                     Description
                   </h3>
-                  <div className="flex items-center gap-2 min-h-8">
-                    <ConnectionStatus isConnected={detail.isConnected} />
-                    {detail.isConnected && (
-                      <ActiveUsers
-                        remoteUsers={detail.remoteUsers}
-                        currentUser={
-                          detail.currentUser
-                            ? {
-                              name: detail.currentUser.name,
-                              color: getUserColor(detail.currentUser._id),
-                            }
-                            : undefined
-                        }
-                      />
-                    )}
-                  </div>
+                  <TaskDescriptionToolbar
+                    taskId={taskId}
+                    awaitingSeed={detail.awaitingSeed}
+                    editor={detail.editor}
+                    isConnected={detail.isConnected}
+                    remoteUsers={detail.remoteUsers}
+                    currentUser={detail.currentUser}
+                  />
                 </div>
                 <TaskDescriptionEditor
                   editor={detail.editor}
@@ -205,6 +208,7 @@ function TaskDetailPageContent({
                   workspaceId={workspaceId}
                   className="min-h-50 md:min-h-75 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
                   hideLabel
+                  loading={!detail.descriptionReady}
                 />
               </div>
             </div>
@@ -227,12 +231,13 @@ function TaskDetailPageContent({
       <TaskDeleteDialog
         open={detail.showDeleteDialog}
         onOpenChange={detail.setShowDeleteDialog}
-        onConfirm={() =>
+        isGithubLinked={detail.isGithubLinked}
+        onConfirm={(closeGithubIssue) =>
           detail.handleDelete(() => {
             void navigate(
               `/workspaces/${workspaceId}/projects/${projectId}`
             );
-          })
+          }, closeGithubIssue)
         }
       />
     </div>

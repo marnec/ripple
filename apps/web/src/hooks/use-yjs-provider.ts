@@ -41,8 +41,14 @@ export function useYjsProvider(opts: {
   const lastConnectTimeRef = useRef(0);
   const rapidDisconnectsRef = useRef<number[]>([]);
 
-  // Create stable Y.Doc per resourceId
-  const yDoc = useMemo(() => new Y.Doc(), []);
+  // A fresh Y.Doc per resource. MUST depend on resourceType/resourceId: the
+  // task detail sheet stays mounted across task switches (only the taskId prop
+  // changes, no remount), so a doc memoized with `[]` would be reused for every
+  // task and connected to each new room in turn — bleeding one description
+  // across all tasks. Keying on the resource recreates (and the effect below
+  // destroys) the doc whenever the open resource changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are an intentional recreation key, not values read by the factory
+  const yDoc = useMemo(() => new Y.Doc(), [resourceType, resourceId]);
 
   useEffect(() => {
     if (!enabled || !isAuthenticated) {

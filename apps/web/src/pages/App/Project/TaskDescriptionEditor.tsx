@@ -5,6 +5,7 @@ import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { FileText, PenTool, Table } from "lucide-react";
+import { RippleSpinner } from "@/components/RippleSpinner";
 import { useAction, useMutation } from "convex/react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
@@ -25,6 +26,12 @@ type TaskDescriptionEditorProps = {
   workspaceId?: Id<"workspaces">;
   className?: string;
   hideLabel?: boolean;
+  /**
+   * Hold the editor back behind a spinner while a GitHub description seed is
+   * still loading, so the user can't type into a doc that's about to be filled.
+   * Distinct from the plain "no editor yet" empty state.
+   */
+  loading?: boolean;
 };
 
 export function TaskDescriptionEditor({
@@ -36,6 +43,7 @@ export function TaskDescriptionEditor({
   workspaceId,
   className,
   hideLabel,
+  loading,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
@@ -136,6 +144,22 @@ export function TaskDescriptionEditor({
     };
 
   if (!editor) {
+    // Blocking wait for a GitHub description seed: reserved space + spinner
+    // (no skeletons, per the design rules). Plain empty space otherwise.
+    if (loading) {
+      return (
+        <div
+          className={cn(
+            "task-description-editor border rounded-md p-2 flex items-center justify-center min-h-24 text-muted-foreground",
+            className,
+          )}
+          role="status"
+          aria-label="Loading description"
+        >
+          <RippleSpinner size={32} />
+        </div>
+      );
+    }
     return <div className={className} />;
   }
 

@@ -3,5 +3,8 @@
   "codegen": {
     "staticApi": true,
     "staticDataModel": true
+  },
+  "node": {
+    "externalPackages": ["@blocknote/core", "jsdom", "yjs"]
   }
 }
