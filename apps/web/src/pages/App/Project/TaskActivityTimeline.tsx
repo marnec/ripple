@@ -35,6 +35,7 @@ import "@blocknote/shadcn/style.css";
 import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
+import { GithubMark } from "@/components/GithubMark";
 import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
 
 type TaskActivityTimelineProps = {
@@ -61,6 +62,7 @@ type TimelineItem = {
   // comment fields
   commentId?: string;
   body?: string;
+  externalAuthor?: { login: string; avatarUrl: string; url: string };
 };
 
 
@@ -372,12 +374,21 @@ function CommentItem({
 
   return (
     <div className="group relative flex gap-2 py-1">
-      {/* Avatar — same 6x6 size as activity dots */}
+      {/* Avatar — same 6x6 size as activity dots. GitHub-synced comments show
+          the GitHub logo; Ripple-native comments show the author image/initials. */}
       <Avatar className="h-6 w-6 shrink-0 ring-2 ring-background z-10">
-        {item.userImage && <AvatarImage src={item.userImage} alt={item.userName} />}
-        <AvatarFallback className="text-[10px]">
-          {item.userName.slice(0, 2).toUpperCase()}
-        </AvatarFallback>
+        {item.externalAuthor ? (
+          <AvatarFallback className="bg-foreground text-background">
+            <GithubMark className="h-3 w-3" />
+          </AvatarFallback>
+        ) : (
+          <>
+            {item.userImage && <AvatarImage src={item.userImage} alt={item.userName} />}
+            <AvatarFallback className="text-[10px]">
+              {item.userName.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </>
+        )}
       </Avatar>
 
       <div className="flex-1 min-w-0">

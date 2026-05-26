@@ -37,6 +37,14 @@ const timelineItemValidator = v.union(
     userImage: v.optional(v.string()),
     commentId: v.id("taskComments"),
     body: v.string(),
+    // GitHub-side identity for comments inserted by the integration's inbound
+    // sync. Absent for Ripple-native comments. Lets the timeline render the
+    // GitHub logo + external author instead of the bot user's initials.
+    externalAuthor: v.optional(v.object({
+      login: v.string(),
+      avatarUrl: v.string(),
+      url: v.string(),
+    })),
   }),
 );
 
@@ -101,8 +109,14 @@ export const timeline = query({
       }];
     });
 
-    const commentItems = comments.map((c) => {
+    // Per-comment integration link lookup for the external author chip/avatar.
+    // The link table is small per-task; a query-per-comment is fine.
+    const commentItems = await Promise.all(comments.map(async (c) => {
       const user = userMap.get(String(c.userId));
+      const link = await ctx.db
+        .query("taskCommentIntegrationLinks")
+        .withIndex("by_taskComment", (q) => q.eq("taskCommentId", c._id))
+        .unique();
       return {
         kind: "comment" as const,
         _id: c._id,
@@ -112,8 +126,9 @@ export const timeline = query({
         userImage: user?.image,
         commentId: c._id,
         body: c.body,
+        externalAuthor: link?.externalAuthor,
       };
-    });
+    }));
 
     // Merge and sort by creation time
     const timeline = [...activityItems, ...commentItems].sort(

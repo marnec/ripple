@@ -2241,6 +2241,7 @@ export declare const api: {
             _id: Id<"taskComments">;
             body: string;
             commentId: Id<"taskComments">;
+            externalAuthor?: { avatarUrl: string; login: string; url: string };
             kind: "comment";
             userId: Id<"users">;
             userImage?: string;

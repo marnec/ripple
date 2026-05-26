@@ -36,12 +36,24 @@ export function editorClear(editor: BlockNoteEditor<any, any, any>): void {
   editor.removeBlocks(editor.document.map((b) => b.id));
 }
 
-/** Parse comment body JSON, with backwards-compatible plain text fallback. */
+/** Parse comment body JSON, with backwards-compatible plain text fallback.
+ *
+ * The fallback wraps the raw string as a single text inline node — not as a
+ * bare string on `content`. BlockNoteRenderer only renders `content` when it's
+ * an array of inline nodes, so a bare string renders as nothing. This path is
+ * hit by legacy plain-text comments and by GitHub-synced comments, whose body
+ * is plain markdown text rather than BlockNote JSON. */
 export function parseCommentBody(body: string): any[] {
   try {
     return JSON.parse(body);
   } catch {
-    return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
+    return [
+      {
+        id: crypto.randomUUID(),
+        type: "paragraph",
+        content: [{ type: "text", text: body, styles: {} }],
+      },
+    ];
   }
 }
 
