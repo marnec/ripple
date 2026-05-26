@@ -1275,6 +1275,10 @@ export declare const api: {
           { projectId: Id<"projects"> },
           Array<{
             _id: Id<"projectIntegrationLinks">;
+            branchStatusMap?: Array<{
+              branch: string;
+              statusId: Id<"taskStatuses">;
+            }>;
             externalRepoFullName: string;
             pausedByBilling: boolean;
             status: "configuring" | "active" | "paused";

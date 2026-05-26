@@ -19,6 +19,7 @@ import { GitBranch, Inbox, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { BranchStatusMapEditor } from "../Workspace/BranchStatusMapEditor";
 
 const GITHUB_FEATURE_KEY = "github_integration";
 
@@ -103,41 +104,49 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
           {activeLinks.map((link) => (
             <div
               key={link._id}
-              className="flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm"
+              className="space-y-2 rounded-md border px-3 py-2.5"
             >
-              <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate font-mono">
-                {link.externalRepoFullName}
-              </span>
-              <Badge
-                variant={link.status === "active" ? "secondary" : "outline"}
-                className="shrink-0 capitalize"
-              >
-                {link.pausedByBilling
-                  ? "Frozen"
-                  : link.status === "paused"
-                    ? "Paused"
-                    : "Connected"}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto shrink-0 text-destructive hover:text-destructive"
-                disabled={disconnectingId === link._id}
-                onClick={() =>
-                  void handleDisconnect(link._id, link.externalRepoFullName)
-                }
-              >
-                {disconnectingId === link._id && (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                )}
-                Disconnect
-              </Button>
+              <div className="flex items-center gap-3 text-sm">
+                <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="truncate font-mono">
+                  {link.externalRepoFullName}
+                </span>
+                <Badge
+                  variant={link.status === "active" ? "secondary" : "outline"}
+                  className="shrink-0 capitalize"
+                >
+                  {link.pausedByBilling
+                    ? "Frozen"
+                    : link.status === "paused"
+                      ? "Paused"
+                      : "Connected"}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto shrink-0 text-destructive hover:text-destructive"
+                  disabled={disconnectingId === link._id}
+                  onClick={() =>
+                    void handleDisconnect(link._id, link.externalRepoFullName)
+                  }
+                >
+                  {disconnectingId === link._id && (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
+              <BranchStatusMapEditor
+                link={{
+                  _id: link._id,
+                  projectId,
+                  branchStatusMap: link.branchStatusMap,
+                }}
+              />
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            Branch automation and resync live under Workspace Settings →
-            Integrations.
+            Resync lives under Workspace Settings → Integrations.
           </p>
         </div>
       ) : !ready ? (

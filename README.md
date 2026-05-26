@@ -1,4 +1,5 @@
 NEXT STEPS:
+
 - calendar; plan calls; invite guests
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
@@ -9,15 +10,17 @@ NEXT STEPS:
 
 - surface error to users when tying to manually set triage status
 
+- split settings in tabs (workspace and projects)
+
+- restyle graph https://d3js.org/d3-force
+
 - on "@ripple/convex:dev: 5/26/2026, 9:54:29 AM [CONVEX M(auth:store)] [INFO] '`auth:store` type: refreshSession'" the whole app seems to reload
 
 - document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
 - guests can comment (all viewers?)
 
-
 - knowledge-graph
     - explore pdf reading, annotation and embedding
-
 
 - external ticketing system??: 
     - connected to project

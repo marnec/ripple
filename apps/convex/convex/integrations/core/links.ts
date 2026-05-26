@@ -59,6 +59,11 @@ export const linksForProject = query({
       ),
       externalRepoFullName: v.string(),
       pausedByBilling: v.boolean(),
+      branchStatusMap: v.optional(
+        v.array(
+          v.object({ branch: v.string(), statusId: v.id("taskStatuses") }),
+        ),
+      ),
     }),
   ),
   handler: async (ctx, { projectId }) => {
@@ -78,6 +83,7 @@ export const linksForProject = query({
         status: l.status as "configuring" | "active" | "paused",
         externalRepoFullName: l.externalRepoFullName,
         pausedByBilling: l.pausedByBilling,
+        branchStatusMap: l.branchStatusMap,
       }));
   },
 });
