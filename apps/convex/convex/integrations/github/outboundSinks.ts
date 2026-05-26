@@ -38,15 +38,17 @@ export function taskStateSink(
   return {
     recordSuccess: async (meta) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordOutboundSuccess,
+        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
         {
           taskId: args.taskId,
-          newExternalState: args.state,
-          newExternalStateReason:
-            args.state === "closed" ? args.stateReason ?? "completed" : undefined,
-          // Fall back to wall-clock only if the provider omitted updated_at
-          // (it shouldn't on a 2xx PATCH).
-          externalUpdatedAt: meta.externalUpdatedAt ?? Date.now(),
+          result: {
+            op: "state",
+            state: args.state,
+            stateReason: args.stateReason,
+            // Fall back to wall-clock only if the provider omitted updated_at
+            // (it shouldn't on a 2xx PATCH).
+            externalUpdatedAt: meta.externalUpdatedAt ?? Date.now(),
+          },
         },
       );
     },
@@ -61,9 +63,8 @@ export function taskDescriptionSink(
   return {
     recordSuccess: async () => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations
-          .recordDescriptionPushSuccess,
-        { taskId },
+        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+        { taskId, result: { op: "description" } },
       );
     },
     recordPermanentFailure: taskFailure(ctx, taskId),
@@ -77,8 +78,8 @@ export function taskLabelsSink(
   return {
     recordSuccess: async () => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordLabelsSuccess,
-        { taskId: args.taskId, nextLabels: args.nextLabels },
+        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+        { taskId: args.taskId, result: { op: "labels", nextLabels: args.nextLabels } },
       );
     },
     recordPermanentFailure: taskFailure(ctx, args.taskId),
@@ -92,8 +93,8 @@ export function taskAssigneesSink(
   return {
     recordSuccess: async () => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordAssigneesSuccess,
-        { taskId: args.taskId, nextLogins: args.nextLogins },
+        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+        { taskId: args.taskId, result: { op: "assignees", nextLogins: args.nextLogins } },
       );
     },
     recordPermanentFailure: taskFailure(ctx, args.taskId),

@@ -1,7 +1,7 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internalMutation } from "../../_generated/server";
 import type { MutationCtx } from "../../_generated/server";
-import type { Id } from "../../_generated/dataModel";
+import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 
@@ -10,89 +10,66 @@ import { onCompleteValidator } from "@convex-dev/action-retrier";
  * Co-located so future Phase 9 "Force resync" wiring drops in here too.
  */
 
-export const recordLabelsSuccess = internalMutation({
-  args: {
-    taskId: v.id("tasks"),
-    nextLabels: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const link = await ctx.db
-      .query("taskIntegrationLinks")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .unique();
-    if (!link) return null;
-    await ctx.db.patch(link._id, {
-      externalLabels: args.nextLabels,
-      // No `externalUpdatedAt` bump: the inbound bounce-back of these label
-      // changes is caught by the set-comparison echo guard (`sameLabelSet`
-      // against `externalLabels`), which is timestamp-independent. Bumping to
-      // `Date.now()` here would instead risk dropping a genuine later label
-      // change at the `isStale` gate if Convex's clock ran ahead of GitHub's.
-      lastSyncError: undefined,
-    });
-    return null;
-  },
-});
-
-export const recordAssigneesSuccess = internalMutation({
-  args: {
-    taskId: v.id("tasks"),
-    nextLogins: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const link = await ctx.db
-      .query("taskIntegrationLinks")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .unique();
-    if (!link) return null;
-    await ctx.db.patch(link._id, {
-      externalAssigneeLogins: args.nextLogins,
-      // No `externalUpdatedAt` bump: the inbound bounce-back (issues.assigned/
-      // unassigned) is caught by the set-comparison echo guard (`sameLabelSet`
-      // against `externalAssigneeLogins`), which is timestamp-independent.
-      // Bumping to `Date.now()` would risk dropping a genuine later assignee
-      // change at the `isStale` gate under forward clock skew.
-      lastSyncError: undefined,
-    });
-    return null;
-  },
-});
-
-export const recordDescriptionPushSuccess = internalMutation({
-  args: { taskId: v.id("tasks") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const link = await ctx.db
-      .query("taskIntegrationLinks")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .unique();
-    if (!link) return null;
-    await ctx.db.patch(link._id, {
-      descriptionLastSyncedAt: Date.now(),
-      lastSyncError: undefined,
-    });
-    return null;
-  },
-});
-
-export const recordOutboundSuccess = internalMutation({
-  args: {
-    taskId: v.id("tasks"),
-    newExternalState: v.union(v.literal("open"), v.literal("closed")),
-    newExternalStateReason: v.optional(
+/**
+ * A successful task-keyed outbound op, discriminated by which field it mirrors.
+ * The shared write path (`recordTaskOutboundResult`) does the `by_task` lookup
+ * and the `lastSyncError` clear once; `mirrorFor` is the only per-op variation.
+ */
+const outboundResultValidator = v.union(
+  v.object({ op: v.literal("labels"), nextLabels: v.array(v.string()) }),
+  v.object({ op: v.literal("assignees"), nextLogins: v.array(v.string()) }),
+  v.object({ op: v.literal("description") }),
+  v.object({
+    op: v.literal("state"),
+    state: v.union(v.literal("open"), v.literal("closed")),
+    stateReason: v.optional(
       v.union(v.literal("completed"), v.literal("not_planned")),
     ),
-    // GitHub's authoritative `issue.updated_at` from the PATCH response,
-    // parsed to ms. Recording GitHub's own timestamp (not `Date.now()`) makes
-    // the bounce-back webhook for this same change compare EQUAL under the
-    // inbound `isStale` guard (`<=`) and drop, while a genuine later GitHub
-    // edit carries a strictly-greater timestamp and applies — eliminating the
-    // clock-skew window that `Date.now()` opened (a Convex clock running ahead
-    // of GitHub's could otherwise drop a real subsequent event as "stale").
+    // GitHub's authoritative `issue.updated_at` from the PATCH response, ms.
     externalUpdatedAt: v.number(),
-  },
+  }),
+);
+
+export type OutboundResult = Infer<typeof outboundResultValidator>;
+
+/**
+ * The mirror patch a successful op writes onto the link. Pure and run *inside*
+ * the mutation handler — so the state-reason `undefined` (which clears a stale
+ * reason on reopen) survives, where a serialized `undefined` arg would not.
+ *
+ * Notes on what each op deliberately does NOT touch:
+ *  - labels / assignees do not bump `externalUpdatedAt`: the inbound
+ *    bounce-back is caught by the set-comparison echo guard (timestamp-
+ *    independent), and bumping to wall-clock would risk dropping a genuine
+ *    later change at the `isStale` gate under forward clock skew.
+ *  - state records GitHub's own `updated_at` (not wall-clock) so the
+ *    bounce-back compares EQUAL under `isStale` (`<=`) and drops.
+ */
+export function mirrorFor(result: OutboundResult): Partial<Doc<"taskIntegrationLinks">> {
+  switch (result.op) {
+    case "labels":
+      return { externalLabels: result.nextLabels };
+    case "assignees":
+      return { externalAssigneeLogins: result.nextLogins };
+    case "description":
+      return { descriptionLastSyncedAt: Date.now() };
+    case "state":
+      return {
+        externalState: result.state,
+        externalStateReason:
+          result.state === "closed" ? result.stateReason ?? "completed" : undefined,
+        externalUpdatedAt: result.externalUpdatedAt,
+      };
+  }
+}
+
+/**
+ * Single write path for a successful task-keyed outbound op: resolve the link,
+ * apply the op's mirror, and clear any prior `lastSyncError`. Replaces the four
+ * near-identical `record*Success` mutations.
+ */
+export const recordTaskOutboundResult = internalMutation({
+  args: { taskId: v.id("tasks"), result: outboundResultValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const link = await ctx.db
@@ -101,9 +78,7 @@ export const recordOutboundSuccess = internalMutation({
       .unique();
     if (!link) return null;
     await ctx.db.patch(link._id, {
-      externalState: args.newExternalState,
-      externalStateReason: args.newExternalStateReason,
-      externalUpdatedAt: args.externalUpdatedAt,
+      ...mirrorFor(args.result),
       lastSyncError: undefined,
     });
     return null;

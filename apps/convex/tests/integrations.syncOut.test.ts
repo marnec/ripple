@@ -439,12 +439,15 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     const githubUpdatedAt = 1_700_000_500_000;
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordOutboundSuccess,
+      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
       {
         taskId,
-        newExternalState: "closed",
-        newExternalStateReason: "completed",
-        externalUpdatedAt: githubUpdatedAt,
+        result: {
+          op: "state",
+          state: "closed",
+          stateReason: "completed",
+          externalUpdatedAt: githubUpdatedAt,
+        },
       },
     );
 
@@ -460,8 +463,8 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     });
     // setupLinkedTask seeds externalUpdatedAt: 1_000.
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordLabelsSuccess,
-      { taskId, nextLabels: ["bug"] },
+      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+      { taskId, result: { op: "labels", nextLabels: ["bug"] } },
     );
     const link = await t.run((ctx) => ctx.db.get(linkId));
     expect(link?.externalUpdatedAt).toBe(1_000);
@@ -474,8 +477,8 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
       externalState: "open",
     });
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordAssigneesSuccess,
-      { taskId, nextLogins: ["octocat"] },
+      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+      { taskId, result: { op: "assignees", nextLogins: ["octocat"] } },
     );
     const link = await t.run((ctx) => ctx.db.get(linkId));
     expect(link?.externalUpdatedAt).toBe(1_000);
@@ -934,8 +937,8 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
     );
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordLabelsSuccess,
-      { taskId, nextLabels: ["bug", "good first issue"] },
+      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+      { taskId, result: { op: "labels", nextLabels: ["bug", "good first issue"] } },
     );
 
     const link = await t.run((ctx) => ctx.db.get(linkId));

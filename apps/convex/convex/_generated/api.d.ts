@@ -3900,12 +3900,6 @@ export declare const internal: {
           },
           null
         >;
-        recordAssigneesSuccess: FunctionReference<
-          "mutation",
-          "internal",
-          { nextLogins: Array<string>; taskId: Id<"tasks"> },
-          null
-        >;
         recordCommentCreateFailure: FunctionReference<
           "mutation",
           "internal",
@@ -3953,12 +3947,6 @@ export declare const internal: {
           },
           null
         >;
-        recordDescriptionPushSuccess: FunctionReference<
-          "mutation",
-          "internal",
-          { taskId: Id<"tasks"> },
-          null
-        >;
         recordIssueCloseFailure: FunctionReference<
           "mutation",
           "internal",
@@ -3970,25 +3958,26 @@ export declare const internal: {
           },
           null
         >;
-        recordLabelsSuccess: FunctionReference<
-          "mutation",
-          "internal",
-          { nextLabels: Array<string>; taskId: Id<"tasks"> },
-          null
-        >;
         recordOutboundFailure: FunctionReference<
           "mutation",
           "internal",
           { httpStatus?: number; message: string; taskId: Id<"tasks"> },
           null
         >;
-        recordOutboundSuccess: FunctionReference<
+        recordTaskOutboundResult: FunctionReference<
           "mutation",
           "internal",
           {
-            externalUpdatedAt: number;
-            newExternalState: "open" | "closed";
-            newExternalStateReason?: "completed" | "not_planned";
+            result:
+              | { nextLabels: Array<string>; op: "labels" }
+              | { nextLogins: Array<string>; op: "assignees" }
+              | { op: "description" }
+              | {
+                  externalUpdatedAt: number;
+                  op: "state";
+                  state: "open" | "closed";
+                  stateReason?: "completed" | "not_planned";
+                };
             taskId: Id<"tasks">;
           },
           null
