@@ -3,12 +3,32 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
-import { Ban, CalendarIcon } from "lucide-react";
+import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
+import {
+  Ban,
+  CalendarIcon,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
+  Unlink,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+const PR_STATE_META: Record<
+  "draft" | "open" | "merged" | "closed",
+  { icon: LucideIcon; label: string; className: string }
+> = {
+  draft: { icon: GitPullRequestDraft, label: "Draft PR", className: "text-muted-foreground" },
+  open: { icon: GitPullRequest, label: "Open PR", className: "text-emerald-600 dark:text-emerald-400" },
+  merged: { icon: GitMerge, label: "Merged PR", className: "text-violet-600 dark:text-violet-400" },
+  closed: { icon: GitPullRequestClosed, label: "Closed PR", className: "text-rose-600 dark:text-rose-400" },
+};
 
 type KanbanCardPresenterProps = {
   task: {
@@ -21,6 +41,9 @@ type KanbanCardPresenterProps = {
     dueDate?: string;
     estimate?: number;
     hasBlockers?: boolean;
+    pullRequestState?: "draft" | "open" | "merged" | "closed";
+    externalRefs?: Array<{ deleted?: boolean }>;
+    externalAssignees?: ExternalAssignee[];
     status: {
       name: string;
       color: string;
@@ -42,12 +65,6 @@ export function KanbanCardPresenter({
   return (
     <Card
       onClick={onClick}
-      style={{
-        // DragOverlay renders a second KanbanCardPresenter with isDragging —
-        // exclude it from view transitions to avoid duplicate names.
-        viewTransitionName: isDragging ? "none" : `--task-${task._id}`,
-        viewTransitionClass: isDragging ? undefined : "task-card",
-      }}
       className={cn(
         "cursor-grab active:cursor-grabbing py-0 gap-0 border shadow ring-0 dark:bg-stone-950 bg-stone-100",
         isDragging && "shadow-lg rotate-2"
@@ -65,15 +82,47 @@ export function KanbanCardPresenter({
           ) : (
             <span className="text-xs invisible" aria-hidden>&#8203;</span>
           )}
+          {task.externalRefs?.some((r) => r.deleted) && (
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="ml-auto inline-flex shrink-0" />}
+                aria-label="GitHub issue deleted"
+              >
+                {/* h-4 matches the row's min-h-4 so the icon never grows the line */}
+                <Unlink className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+              </TooltipTrigger>
+              <TooltipContent side="top">GitHub issue deleted</TooltipContent>
+            </Tooltip>
+          )}
         </div>
         <h3 className="text-sm font-medium truncate">{task.title}</h3>
       </CardHeader>
       <CardContent className="py-2 px-3 pt-0">
         <div className="flex items-center justify-between mb-2">
-          {/* Priority Icon */}
-          <div className="shrink-0">
+          {/* Priority Icon + PR indicator */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {getPriorityIcon(task.priority)}
+            {task.pullRequestState &&
+              (() => {
+                const meta = PR_STATE_META[task.pullRequestState];
+                const Icon = meta.icon;
+                return (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<span className="inline-flex" />}
+                      aria-label={meta.label}
+                    >
+                      <Icon className={cn("h-3.5 w-3.5", meta.className)} />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">{meta.label}</TooltipContent>
+                  </Tooltip>
+                );
+              })()}
           </div>
+
+          {/* External (GitHub) assignees — left of the internal assignee,
+              separated by a GitHub mark. */}
+          <ExternalAssigneeAvatars assignees={task.externalAssignees} side="left" />
 
           {/* Assignee Avatar — ghost placeholder keeps row height stable */}
           {task.assignee ? (

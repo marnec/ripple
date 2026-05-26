@@ -3,7 +3,7 @@ import { RippleSpinner } from "@/components/RippleSpinner";
 import { ProjectColorTag } from "@/components/ProjectColorTag";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { startViewTransition } from "@/hooks/use-view-transition";
+import { AnimatePresence, m } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
@@ -83,60 +83,63 @@ function ProjectGroupTasks({
 
   return (
     <div className="divide-y divide-border">
-      {group.tasks.map((task) => {
-        const nextStatus = getNextStatus(task.statusId);
-        return (
-          <div
-            key={task._id}
-            style={{
-              viewTransitionName: `--task-${task._id}`,
-              viewTransitionClass: "task-card",
-            }}
-          >
-            <SwipeToReveal
-              enabled={isMobile}
-              className="rounded-none"
-              open={swipeOpenId === task._id}
-              onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
-              onSwipeStart={() => setSwipeOpenId(null)}
-              action={
-                nextStatus ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      advanceStatus(task._id, task.statusId);
-                    }}
-                    className={cn(
-                      "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
-                      nextStatus.color
-                    )}
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                    <span className="text-[10px] font-medium leading-tight text-center truncate w-full">
-                      {nextStatus.name}
-                    </span>
-                  </button>
-                ) : null
-              }
+      <AnimatePresence initial={false}>
+        {group.tasks.map((task) => {
+          const nextStatus = getNextStatus(task.statusId);
+          return (
+            <m.div
+              key={task._id}
+              layout="position"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             >
-              <TaskRow
-                task={task}
-                statuses={isMobile ? undefined : (statuses ?? undefined)}
-                hideStatusMenu={isMobile}
-                hideAssignee
-                flush
-                onStatusChange={(statusId) => {
-                  void updateTask({
-                    taskId: task._id as Id<"tasks">,
-                    statusId: statusId as Id<"taskStatuses">,
-                  });
-                }}
-                onClick={() => onTaskClick(task._id, group.projectId)}
-              />
-            </SwipeToReveal>
-          </div>
-        );
-      })}
+              <SwipeToReveal
+                enabled={isMobile}
+                className="rounded-none"
+                open={swipeOpenId === task._id}
+                onOpenChange={(open) => setSwipeOpenId(open ? task._id : null)}
+                onSwipeStart={() => setSwipeOpenId(null)}
+                action={
+                  nextStatus ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        advanceStatus(task._id, task.statusId);
+                      }}
+                      className={cn(
+                        "flex flex-col items-center justify-center w-full h-full gap-0.5 text-white px-1",
+                        nextStatus.color
+                      )}
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                      <span className="text-[10px] font-medium leading-tight text-center truncate w-full">
+                        {nextStatus.name}
+                      </span>
+                    </button>
+                  ) : null
+                }
+              >
+                <TaskRow
+                  task={task}
+                  statuses={isMobile ? undefined : (statuses ?? undefined)}
+                  hideStatusMenu={isMobile}
+                  hideAssignee
+                  flush
+                  onStatusChange={(statusId) => {
+                    void updateTask({
+                      taskId: task._id as Id<"tasks">,
+                      statusId: statusId as Id<"taskStatuses">,
+                    });
+                  }}
+                  onClick={() => onTaskClick(task._id, group.projectId)}
+                />
+              </SwipeToReveal>
+            </m.div>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }
@@ -173,9 +176,6 @@ export function MyTasks() {
     document.addEventListener("click", onTap, { passive: true });
     return () => document.removeEventListener("click", onTap);
   }, [swipeOpenId]);
-
-  const setFiltersAnimated = (next: TaskFilters) => startViewTransition(() => setFilters(next));
-  const setSortAnimated = (next: TaskSort) => startViewTransition(() => setSort(next));
 
   const filteredTasks = useFilteredTasks(tasks, filters, sort);
 
@@ -234,9 +234,9 @@ export function MyTasks() {
           <TaskToolbar
             workspaceId={workspaceId as Id<"workspaces">}
             filters={filters}
-            onFiltersChange={setFiltersAnimated}
+            onFiltersChange={setFilters}
             sort={sort}
-            onSortChange={setSortAnimated}
+            onSortChange={setSort}
             members={[]}
             hideAssigneeFilter
           />
@@ -258,15 +258,17 @@ export function MyTasks() {
         </div>
       ) : (
         <div className="space-y-3" ref={listRef}>
+          <AnimatePresence initial={false}>
           {groupedTasks.map((group) => {
             const isOpen = !closedGroups.has(group.projectId);
             return (
-              <div
+              <m.div
                 key={group.projectId}
-                style={{
-                  viewTransitionName: `--project-group-${group.projectId}`,
-                  viewTransitionClass: "task-card",
-                }}
+                layout="position"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               >
                 <Collapsible
                   open={isOpen}
@@ -303,9 +305,10 @@ export function MyTasks() {
                     </CollapsibleContent>
                   </div>
                 </Collapsible>
-              </div>
+              </m.div>
             );
           })}
+          </AnimatePresence>
         </div>
       )}
 

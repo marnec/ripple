@@ -8,6 +8,32 @@ import {
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 
 describe("projects.create", () => {
+  it("seeds a Triage status so the integration activation gate has a destination", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const projectId = await asUser.mutation(api.projects.create, {
+      name: "Engineering",
+      color: "bg-blue-500",
+      workspaceId,
+    });
+
+    const statuses = await t.run(async (ctx) =>
+      ctx.db
+        .query("taskStatuses")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    const triage = statuses.find((s) => s.isTriage === true);
+    expect(triage).toBeDefined();
+    // Triage is the inbox for externally-ingested issues — leftmost.
+    expect(triage?.order).toBe(0);
+    // Triage and isDefault are mutually exclusive: Todo stays the default
+    // destination for user-created tasks.
+    expect(triage?.isDefault).toBe(false);
+    expect(triage?.isCompleted).toBe(false);
+  });
+
   it("creates a project with seeded statuses and auto-generated key", async () => {
     const t = createTestContext();
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
@@ -31,15 +57,15 @@ describe("projects.create", () => {
       taskCounter: 0,
     });
 
-    // Verify 3 default statuses were seeded
+    // Verify default statuses were seeded in expected order.
     const statuses = await t.run(async (ctx) => {
       return await ctx.db
         .query("taskStatuses")
-        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .withIndex("by_project_order", (q) => q.eq("projectId", projectId))
         .collect();
     });
-    expect(statuses).toHaveLength(3);
     expect(statuses.map((s) => s.name)).toEqual([
+      "Triage",
       "Todo",
       "In Progress",
       "Done",

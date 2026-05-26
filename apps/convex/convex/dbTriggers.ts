@@ -3,7 +3,8 @@ import { ConvexError } from "convex/values";
 import type { DataModel } from "./_generated/dataModel";
 import { Id } from "./_generated/dataModel";
 import { components, internal } from "./_generated/api";
-import { Triggers } from "convex-helpers/server/triggers";
+import { Triggers, writerWithTriggers } from "convex-helpers/server/triggers";
+import type { GenericMutationCtx } from "convex/server";
 import { extractMessageTargets } from "./utils/blocknote";
 import {
   onChannelMemberInsert,
@@ -109,6 +110,20 @@ export const tagsByWorkspace = new TableAggregate<{
 // Multiple registrations per table stack — all handlers are called in sequence.
 
 export const triggers = new Triggers<DataModel>();
+
+/**
+ * Wrap a mutation ctx so every `ctx.db` write fires the registered triggers
+ * (aggregates + denormalization). Apply at the entry of mutations that write
+ * through shared helpers using raw `ctx.db` — notably the GitHub inbound sync
+ * path (import / webhook / resync). Without it, inserted tasks never enter the
+ * `tasksByWorkspace` aggregate, and the next trigger-aware update crashes with
+ * the aggregate's DELETE_MISSING_KEY.
+ */
+export function withTriggers(
+  ctx: GenericMutationCtx<DataModel>,
+): GenericMutationCtx<DataModel> {
+  return { ...ctx, db: writerWithTriggers(ctx, ctx.db, triggers) };
+}
 
 // Aggregate triggers
 triggers.register("documents", documentsByWorkspace.trigger());

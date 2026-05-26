@@ -54,12 +54,27 @@ export const create = mutation({
       taskCounter: 0,
     });
 
-    // Seed default task statuses for this project
+    // Seed default task statuses for this project. Triage sits leftmost
+    // as the inbox for externally-ingested issues (GitHub etc.); it lets
+    // an admin activate the integration immediately without manual setup.
+    // `isTriage` and `isDefault` are mutually exclusive — Todo stays the
+    // destination for user-created tasks.
+    await ctx.db.insert("taskStatuses", {
+      projectId,
+      name: "Triage",
+      color: "bg-amber-500",
+      order: 0,
+      isDefault: false,
+      isCompleted: false,
+      isTriage: true,
+      setsStartDate: false,
+    });
+
     await ctx.db.insert("taskStatuses", {
       projectId,
       name: "Todo",
       color: "bg-gray-500",
-      order: 0,
+      order: 1,
       isDefault: true,
       isCompleted: false,
       setsStartDate: false,
@@ -69,7 +84,7 @@ export const create = mutation({
       projectId,
       name: "In Progress",
       color: "bg-blue-500",
-      order: 1,
+      order: 2,
       isDefault: false,
       isCompleted: false,
       setsStartDate: true,
@@ -79,7 +94,7 @@ export const create = mutation({
       projectId,
       name: "Done",
       color: "bg-green-500",
-      order: 2,
+      order: 3,
       isDefault: false,
       isCompleted: true,
       setsStartDate: false,
