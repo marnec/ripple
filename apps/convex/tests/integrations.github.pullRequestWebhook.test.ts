@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   handlePullRequestWebhook,
   normalizePullRequestPayload,
+  parseBranchIssueNumber,
   parseClosingIssueNumbers,
 } from "../convex/integrations/github/pullRequestWebhook";
+import { branchNameForIssue } from "../convex/integrations/github/branchesAction";
 import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
 import { GithubClient } from "../convex/integrations/github/client";
 import {
@@ -43,6 +45,73 @@ describe("parseClosingIssueNumbers", () => {
     expect(parseClosingIssueNumbers("closes#27")).toEqual([]); // needs a space
     expect(parseClosingIssueNumbers(null)).toEqual([]);
     expect(parseClosingIssueNumbers(undefined)).toEqual([]);
+  });
+});
+
+describe("parseBranchIssueNumber", () => {
+  it("extracts the leading issue number from the convention", () => {
+    expect(parseBranchIssueNumber("27-fix-login")).toBe(27);
+    expect(parseBranchIssueNumber("4")).toBe(4);
+    expect(parseBranchIssueNumber("marco/12-thing")).toBeNull(); // not leading
+    expect(parseBranchIssueNumber("fix-27")).toBeNull();
+    expect(parseBranchIssueNumber("release-2024")).toBeNull();
+    expect(parseBranchIssueNumber(null)).toBeNull();
+  });
+});
+
+describe("branchNameForIssue", () => {
+  it("builds <number>-<slug>, lowercased and kebabbed", () => {
+    expect(branchNameForIssue(27, "Fix login bug")).toBe("27-fix-login-bug");
+    expect(branchNameForIssue(3, "  Trailing/Punc!!  ")).toBe("3-trailing-punc");
+  });
+  it("falls back to the bare number for an empty slug", () => {
+    expect(branchNameForIssue(9, "!!!")).toBe("9");
+  });
+});
+
+describe("normalizePullRequestPayload — branch-name linking", () => {
+  it("adds the leading branch issue number to closesIssueNumbers", () => {
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      openedPrPayload({
+        pull_request: {
+          node_id: "PR_x",
+          number: 8,
+          title: "no keyword here",
+          body: "",
+          html_url: "https://github.com/acme/web/pull/8",
+          draft: false,
+          updated_at: "2026-05-20T10:00:00Z",
+          head: { ref: "42-some-work" },
+          base: { ref: "develop" },
+          user: { login: "octocat", avatar_url: "", html_url: "" },
+        },
+      }),
+      [],
+    );
+    expect(event?.closesIssueNumbers).toEqual([42]);
+  });
+
+  it("unions branch number with body closing keywords, deduped", () => {
+    const event = normalizePullRequestPayload(
+      "pull_request",
+      openedPrPayload({
+        pull_request: {
+          node_id: "PR_y",
+          number: 9,
+          title: "feat",
+          body: "closes #42 and fixes #7",
+          html_url: "https://github.com/acme/web/pull/9",
+          draft: false,
+          updated_at: "2026-05-20T10:00:00Z",
+          head: { ref: "42-some-work" },
+          base: { ref: "develop" },
+          user: { login: "octocat", avatar_url: "", html_url: "" },
+        },
+      }),
+      [],
+    );
+    expect(new Set(event?.closesIssueNumbers)).toEqual(new Set([42, 7]));
   });
 });
 

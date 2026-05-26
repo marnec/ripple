@@ -1449,6 +1449,7 @@ export type DataModel = {
   };
   taskIntegrationLinks: {
     document: {
+      branchName?: string;
       descriptionEdited?: boolean;
       descriptionLastSyncedAt?: number;
       externalAssigneeLogins?: Array<string>;
@@ -1480,6 +1481,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "branchName"
       | "descriptionEdited"
       | "descriptionLastSyncedAt"
       | "externalAssigneeLogins"

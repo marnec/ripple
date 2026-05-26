@@ -89,10 +89,11 @@ export interface NormalizedPullRequestChangedEvent {
    */
   closesExternalIssueIds: string[];
   /**
-   * Issue numbers parsed from the PR title/body closing keywords
-   * (`closes/fixes/resolves #N`), independent of the base branch. Core resolves
-   * these against `tasks.externalRefs` so a merge into a non-default branch
-   * still links the PR.
+   * Issue numbers this PR references for linking — closing keywords in the
+   * title/body (`closes/fixes/resolves #N`) PLUS the leading number of a
+   * conventional source branch (`<issueNumber>-…`). Both are independent of the
+   * base branch; core resolves them against `tasks.externalRefs` so a PR linked
+   * either way drives branch→status automation even on a non-default target.
    */
   closesIssueNumbers: number[];
 }

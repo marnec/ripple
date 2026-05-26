@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GitBranch } from "lucide-react";
+import { SquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Id } from "@convex/_generated/dataModel";
 import { useGithubIssueEligibility } from "./useGithubIssueEligibility";
@@ -43,7 +43,7 @@ export function TaskCreateGithubIssueAction({
         onClick={() => setOpen(true)}
         title="Create GitHub issue from this task"
       >
-        <GitBranch className="h-4 w-4" />
+        <SquarePlus className="h-4 w-4" />
       </Button>
       <CreateGithubIssueDialog
         taskId={taskId}

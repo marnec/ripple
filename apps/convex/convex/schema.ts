@@ -1027,6 +1027,12 @@ export default defineSchema({
     // surfaces an "issue deleted on GitHub" badge. The Ripple task itself is
     // preserved — deletion only orphans the link.
     externalDeletedAt: v.optional(v.number()),
+    // The git branch Ripple created for this issue (`<issueNumber>-<slug>`),
+    // set by the "Create branch" action. Drives the task-detail branch chip +
+    // the prefilled "Create pull request" compare link. Absent until a branch
+    // is created from Ripple (a PR opened by hand still links via the
+    // issue-number-in-branch convention without this being set).
+    branchName: v.optional(v.string()),
     // Permanent-failure marker. Set when outbound dispatch hits a 4xx
     // (non-429) response; surfaces the "⚠ Sync failed — Retry" affordance
     // on the affected task. Cleared on next successful outbound.

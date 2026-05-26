@@ -61,6 +61,23 @@ export function parseClosingIssueNumbers(text: string | null | undefined): numbe
   return [...found];
 }
 
+/**
+ * Extract the leading issue number from a branch following the
+ * `<issueNumber>-<slug>` convention (what Ripple's "Create branch" and
+ * GitHub's native "create branch for issue" produce). Lets a PR auto-link to
+ * its task by source branch, with no `Closes #N` keyword. Returns null for
+ * branches that don't start with `<digits>-` (or bare `<digits>`).
+ */
+export function parseBranchIssueNumber(
+  headRef: string | null | undefined,
+): number | null {
+  if (!headRef) return null;
+  const m = /^(\d+)(?:-|$)/.exec(headRef);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 interface GithubPullRequestPayload {
   action: string;
   pull_request: GithubPullRequest;
@@ -137,10 +154,23 @@ export function normalizePullRequestPayload(
     },
     mergedAt,
     closesExternalIssueIds,
-    closesIssueNumbers: parseClosingIssueNumbers(
-      `${pr.title}\n${pr.body ?? ""}`,
-    ),
+    closesIssueNumbers: resolveReferencedIssueNumbers(pr),
   };
+}
+
+/**
+ * Issue numbers this PR references for linking: closing keywords in the
+ * title/body PLUS the leading number of a conventional source branch
+ * (`<issueNumber>-…`). Both are branch-independent, so a PR linked either way
+ * drives branch→status automation even when it targets a non-default branch.
+ */
+function resolveReferencedIssueNumbers(pr: GithubPullRequest): number[] {
+  const numbers = new Set(
+    parseClosingIssueNumbers(`${pr.title}\n${pr.body ?? ""}`),
+  );
+  const fromBranch = parseBranchIssueNumber(pr.head.ref);
+  if (fromBranch !== null) numbers.add(fromBranch);
+  return [...numbers];
 }
 
 /**

@@ -1354,6 +1354,7 @@ export declare const api: {
           "public",
           { taskId: Id<"tasks"> },
           null | {
+            branchName?: string;
             descriptionEdited?: boolean;
             descriptionLastSyncedAt?: number;
             descriptionSnapshotId: Id<"_storage"> | null;
@@ -1383,6 +1384,12 @@ export declare const api: {
     };
     github: {
       branchesAction: {
+        createBranchForTask: FunctionReference<
+          "action",
+          "public",
+          { taskId: Id<"tasks"> },
+          { alreadyExisted: boolean; branchName: string }
+        >;
         listRepoBranches: FunctionReference<
           "action",
           "public",
@@ -3722,11 +3729,31 @@ export declare const internal: {
     };
     github: {
       branchesAction: {
+        branchCreateContext: FunctionReference<
+          "query",
+          "internal",
+          { taskId: Id<"tasks"> },
+          null | {
+            existingBranchName: string | null;
+            externalAccountId: string;
+            issueNumber: number;
+            linkId: Id<"taskIntegrationLinks">;
+            owner: string;
+            repo: string;
+            title: string;
+          }
+        >;
         branchFetchContext: FunctionReference<
           "query",
           "internal",
           { linkId: Id<"projectIntegrationLinks"> },
           null | { externalAccountId: string; owner: string; repo: string }
+        >;
+        recordTaskBranchName: FunctionReference<
+          "mutation",
+          "internal",
+          { branchName: string; linkId: Id<"taskIntegrationLinks"> },
+          null
         >;
       };
       forceResyncAction: {

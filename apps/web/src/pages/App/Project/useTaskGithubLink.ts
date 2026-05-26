@@ -60,6 +60,8 @@ export interface TaskGithubView {
   /** True once the linked GitHub issue has been deleted upstream. The link is
    *  orphaned (outbound sync stops) but the Ripple task is preserved. */
   issueDeleted: boolean;
+  /** The branch Ripple created for this issue, or null if none yet. */
+  branchName: string | null;
   /** ms timestamp of the last successful Ripple→GitHub description push. */
   descriptionLastSyncedAt: number | null;
   /** True once a genuine user edit touched the description (gates the sync button). */
@@ -98,6 +100,7 @@ export function deriveTaskGithubView(
       shadowAssignees: [],
       closedBy: null,
       issueDeleted: false,
+      branchName: null,
       descriptionLastSyncedAt: null,
       descriptionEdited: false,
       seed: {
@@ -123,6 +126,7 @@ export function deriveTaskGithubView(
     shadowAssignees: link.externalAssignees ?? [],
     closedBy: link.externalClosedBy ?? null,
     issueDeleted: link.externalDeletedAt !== undefined,
+    branchName: link.branchName ?? null,
     descriptionLastSyncedAt: link.descriptionLastSyncedAt ?? null,
     descriptionEdited: link.descriptionEdited ?? false,
     // A resolved link is never "loading" — the seed gate keys off seedStatus.

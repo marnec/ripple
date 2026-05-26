@@ -20,6 +20,7 @@ import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
 import { TaskCreateGithubIssueAction } from "./TaskCreateGithubIssueAction";
+import { TaskGithubBranchActions } from "./TaskGithubBranchActions";
 import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
@@ -108,6 +109,12 @@ export function TaskDetailSheet({
                       workspaceId={workspaceId}
                       isLinked={Boolean(task.externalRefs?.[0])}
                       completed={task.completed}
+                    />
+                    <TaskGithubBranchActions
+                      taskId={task._id}
+                      repoFullName={task.externalRefs?.[0]?.repoFullName}
+                      issueNumber={task.externalRefs?.[0]?.issueNumber}
+                      taskTitle={task.title}
                     />
                     <TaskGithubHeaderActions
                       taskId={task._id}

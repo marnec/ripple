@@ -25,6 +25,9 @@ export const getByTask = query({
       // deleted. Drives the "issue deleted on GitHub" badge on task detail.
       externalDeletedAt: v.optional(v.number()),
       externalIssueUrl: v.optional(v.string()),
+      // The branch Ripple created for this issue, when one exists. Drives the
+      // task-detail branch chip + the prefilled "Create pull request" link.
+      branchName: v.optional(v.string()),
       // Display payload for assignees that did NOT win Ripple's single
       // `assigneeId` slot — rendered as muted shadow chips next to the
       // primary assignee on task detail.
@@ -97,6 +100,7 @@ export const getByTask = query({
       externalState: link.externalState,
       externalDeletedAt: link.externalDeletedAt,
       externalIssueUrl,
+      branchName: link.branchName,
       externalAssignees: link.externalAssignees,
       externalClosedBy: link.externalClosedBy,
       descriptionLastSyncedAt: link.descriptionLastSyncedAt,

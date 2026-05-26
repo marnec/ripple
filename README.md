@@ -6,7 +6,7 @@ NEXT STEPS:
 
 - I don't really know how to handle unread messages, they kind of work right now but god save me
 
-- branch related stuff
+- Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
 
 - surface error to users when tying to manually set triage status
 
