@@ -3,7 +3,7 @@ NEXT STEPS:
 - calendar; plan calls; invite guests
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
-
+-test 
 - I don't really know how to handle unread messages, they kind of work right now but god save me
 
 - branch related stuff
