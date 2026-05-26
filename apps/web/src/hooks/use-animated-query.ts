@@ -143,37 +143,3 @@ export function useAnimatedQuery<T>(
 
   return rendered;
 }
-
-/**
- * Returns `true` when the only difference between two task arrays is the
- * `position` field (and consequently the array order, since the server
- * sorts by position). Matches tasks by `_id` across both arrays so that
- * a reorder doesn't look like a structural change.
- */
-export function isPositionOnlyChange(
-  prev: Array<Record<string, unknown>>,
-  next: Array<Record<string, unknown>>,
-): boolean {
-  if (prev.length !== next.length) return false;
-
-  const prevById = new Map<unknown, Record<string, unknown>>();
-  for (const t of prev) prevById.set(t._id, t);
-
-  for (const n of next) {
-    const p = prevById.get(n._id);
-    if (!p) return false; // task added or ID mismatch
-    for (const key of Object.keys(n)) {
-      if (key === "position") continue;
-      if (Object.is(p[key], n[key])) continue;
-      // Enriched objects (status, assignee) get new references on every
-      // Convex query re-run even when content is identical — deep compare.
-      if (
-        typeof n[key] === "object" && n[key] !== null &&
-        typeof p[key] === "object" && p[key] !== null &&
-        JSON.stringify(p[key]) === JSON.stringify(n[key])
-      ) continue;
-      return false;
-    }
-  }
-  return true;
-}

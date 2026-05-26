@@ -327,7 +327,6 @@ body {
 /* ─── View Transitions — card animations ─────────────────────────── */
 
 /* Shared: smooth position/size interpolation for all card types */
-::view-transition-group(.task-card),
 ::view-transition-group(.resource-card) {
   animation-duration: 250ms;
   animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
@@ -341,28 +340,23 @@ body {
  * below have higher specificity (0,2,0 vs 0,1,0), so enter/exit
  * animations still apply for cards that are added or removed.
  */
-::view-transition-image-pair(.task-card),
 ::view-transition-image-pair(.resource-card) {
   isolation: auto;
 }
-::view-transition-old(.task-card),
 ::view-transition-old(.resource-card) {
   display: none;
 }
-::view-transition-new(.task-card),
 ::view-transition-new(.resource-card) {
   animation: none;
 }
 
 /* Cards removed from view: shrink out */
-::view-transition-old(.task-card):only-child,
 ::view-transition-old(.resource-card):only-child {
   display: block;
   animation: vt-shrink 200ms ease forwards;
 }
 
 /* Cards entering view: grow in */
-::view-transition-new(.task-card):only-child,
 ::view-transition-new(.resource-card):only-child {
   animation: vt-grow 200ms ease;
 }
@@ -432,9 +426,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(.task-card),
-  ::view-transition-old(.task-card),
-  ::view-transition-new(.task-card),
   ::view-transition-group(.resource-card),
   ::view-transition-old(.resource-card),
   ::view-transition-new(.resource-card),
