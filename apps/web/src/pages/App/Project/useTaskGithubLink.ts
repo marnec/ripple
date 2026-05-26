@@ -34,6 +34,20 @@ export interface TaskSyncError {
   label: string;
 }
 
+/**
+ * GitHub description-seed inputs for the editor gate. Mirrors the link's
+ * one-shot seed lifecycle; `statusLoading` is true only while the link query
+ * is in flight for a present task (so the editor stays gated until we know
+ * whether a seed is coming). `edited` lives on the view model proper
+ * (`descriptionEdited`), not here.
+ */
+export interface TaskGithubSeed {
+  expected: boolean;
+  snapshotId: string | null;
+  seedStatus?: "pending" | "seeded" | "skipped" | "failed";
+  statusLoading: boolean;
+}
+
 export interface TaskGithubView {
   /** Whether the task is linked to a GitHub issue (false while loading too). */
   isLinked: boolean;
@@ -50,6 +64,8 @@ export interface TaskGithubView {
   descriptionLastSyncedAt: number | null;
   /** True once a genuine user edit touched the description (gates the sync button). */
   descriptionEdited: boolean;
+  /** Description-seed inputs for the editor gate. */
+  seed: TaskGithubSeed;
 }
 
 /**
@@ -73,6 +89,7 @@ export function deriveSyncErrorLabel(
  */
 export function deriveTaskGithubView(
   link: TaskGithubLink | null | undefined,
+  opts: { loading?: boolean } = {},
 ): TaskGithubView {
   if (!link) {
     return {
@@ -83,6 +100,12 @@ export function deriveTaskGithubView(
       issueDeleted: false,
       descriptionLastSyncedAt: null,
       descriptionEdited: false,
+      seed: {
+        expected: false,
+        snapshotId: null,
+        seedStatus: undefined,
+        statusLoading: opts.loading ?? false,
+      },
     };
   }
   return {
@@ -102,10 +125,29 @@ export function deriveTaskGithubView(
     issueDeleted: link.externalDeletedAt !== undefined,
     descriptionLastSyncedAt: link.descriptionLastSyncedAt ?? null,
     descriptionEdited: link.descriptionEdited ?? false,
+    // A resolved link is never "loading" — the seed gate keys off seedStatus.
+    seed: {
+      expected: link.seedExpected,
+      snapshotId: link.descriptionSnapshotId,
+      seedStatus: link.seedStatus,
+      statusLoading: false,
+    },
   };
 }
 
-export function useTaskGithubLink(taskId: Id<"tasks">): TaskGithubView {
-  const link = useQuery(api.integrations.core.taskLinks.getByTask, { taskId });
-  return deriveTaskGithubView(link);
+/**
+ * Subscribe to a task's GitHub link and shape it. Accepts a null `taskId`
+ * (skips the query) so callers like `useTaskDetail` that may have no task can
+ * consume the same single boundary instead of re-querying `getByTask`.
+ */
+export function useTaskGithubLink(
+  taskId: Id<"tasks"> | null,
+): TaskGithubView {
+  const link = useQuery(
+    api.integrations.core.taskLinks.getByTask,
+    taskId ? { taskId } : "skip",
+  );
+  return deriveTaskGithubView(link, {
+    loading: taskId !== null && link === undefined,
+  });
 }

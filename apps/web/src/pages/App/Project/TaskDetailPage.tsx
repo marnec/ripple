@@ -5,13 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { getUserColor } from "@/lib/user-colors";
-import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
-import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@ripple/shared/types/routes";
-import { ExternalLink, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
@@ -19,11 +16,10 @@ import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
-import { SeedingDescriptionNotice } from "./SeedingDescriptionNotice";
+import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskProperties } from "./TaskProperties";
-import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
-import { TaskGithubDeletedIndicator } from "./TaskGithubDeletedIndicator";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
+import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
 import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
@@ -125,27 +121,10 @@ function TaskDetailPageContent({
             className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
             placeholder="Task title"
           />
-          <TaskGithubDeletedIndicator taskId={taskId} className="shrink-0" />
-          {(() => {
-            const issueUrl = detail.task.externalRefs?.[0]?.url;
-            return (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 shrink-0 p-0"
-                disabled={!issueUrl}
-                onClick={() =>
-                  issueUrl &&
-                  window.open(issueUrl, "_blank", "noopener,noreferrer")
-                }
-                title={
-                  issueUrl ? "Open linked issue on GitHub" : "No linked issue"
-                }
-              >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            );
-          })()}
+          <TaskGithubHeaderActions
+            taskId={taskId}
+            issueUrl={detail.task.externalRefs?.[0]?.url}
+          />
         </div>
       )}
 
@@ -211,29 +190,14 @@ function TaskDetailPageContent({
                   <h3 className="text-sm font-semibold text-muted-foreground">
                     Description
                   </h3>
-                  <div className="flex items-center gap-2 min-h-8">
-                    {detail.awaitingSeed && <SeedingDescriptionNotice />}
-                    {detail.editor && (
-                      <TaskDescriptionSyncButton
-                        taskId={taskId}
-                        editor={detail.editor}
-                      />
-                    )}
-                    <ConnectionStatus isConnected={detail.isConnected} />
-                    {detail.isConnected && (
-                      <ActiveUsers
-                        remoteUsers={detail.remoteUsers}
-                        currentUser={
-                          detail.currentUser
-                            ? {
-                              name: detail.currentUser.name,
-                              color: getUserColor(detail.currentUser._id),
-                            }
-                            : undefined
-                        }
-                      />
-                    )}
-                  </div>
+                  <TaskDescriptionToolbar
+                    taskId={taskId}
+                    awaitingSeed={detail.awaitingSeed}
+                    editor={detail.editor}
+                    isConnected={detail.isConnected}
+                    remoteUsers={detail.remoteUsers}
+                    currentUser={detail.currentUser}
+                  />
                 </div>
                 <TaskDescriptionEditor
                   editor={detail.editor}

@@ -8,10 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { formatTaskId } from "@/lib/task-utils";
-import { getUserColor } from "@/lib/user-colors";
-import { ActiveUsers } from "@/pages/App/Document/ActiveUsers";
-import { ConnectionStatus } from "@/pages/App/Document/ConnectionStatus";
-import { ExternalLink, Maximize2, Trash2 } from "lucide-react";
+import { Maximize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
@@ -19,10 +16,9 @@ import { TaskActivityTimeline } from "./TaskActivityTimeline";
 import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
-import { SeedingDescriptionNotice } from "./SeedingDescriptionNotice";
-import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
-import { TaskGithubDeletedIndicator } from "./TaskGithubDeletedIndicator";
+import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
+import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
 import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
@@ -100,45 +96,27 @@ export function TaskDetailSheet({
                     ) : null;
                   })()}
                   <TaskSyncIndicator taskId={task._id} />
-                  <TaskGithubDeletedIndicator
-                    taskId={task._id}
-                    className="absolute top-5 right-28"
-                  />
-                  {(() => {
-                    const issueUrl = task.externalRefs?.[0]?.url;
-                    return (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="absolute top-3 right-20"
-                        disabled={!issueUrl}
-                        onClick={() =>
-                          issueUrl &&
-                          window.open(issueUrl, "_blank", "noopener,noreferrer")
-                        }
-                        title={
-                          issueUrl
-                            ? "Open linked issue on GitHub"
-                            : "No linked issue"
-                        }
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    );
-                  })()}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="absolute top-3 right-12"
-                    onClick={() =>
-                      void navigate(
-                        `/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`
-                      )
-                    }
-                    title="Expand to full page"
-                  >
-                    <Maximize2 className="h-4 w-4" />
-                  </Button>
+                  {/* Right-aligned action cluster, anchored clear of the
+                      sheet's built-in close button. Flex so gaps close when the
+                      GitHub affordances are absent (the common, native case). */}
+                  <div className="absolute top-3 right-12 flex items-center gap-1">
+                    <TaskGithubHeaderActions
+                      taskId={task._id}
+                      issueUrl={task.externalRefs?.[0]?.url}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() =>
+                        void navigate(
+                          `/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`
+                        )
+                      }
+                      title="Expand to full page"
+                    >
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 h-7">
                   <Button
@@ -191,29 +169,14 @@ export function TaskDetailSheet({
                     <h3 className="text-sm font-semibold text-muted-foreground">
                       Description
                     </h3>
-                    <div className="flex items-center gap-2 min-h-8">
-                      {detail.awaitingSeed && <SeedingDescriptionNotice />}
-                      {detail.editor && (
-                        <TaskDescriptionSyncButton
-                          taskId={taskId}
-                          editor={detail.editor}
-                        />
-                      )}
-                      <ConnectionStatus isConnected={detail.isConnected} />
-                      {detail.isConnected && (
-                        <ActiveUsers
-                          remoteUsers={detail.remoteUsers}
-                          currentUser={
-                            detail.currentUser
-                              ? {
-                                  name: detail.currentUser.name,
-                                  color: getUserColor(detail.currentUser._id),
-                                }
-                              : undefined
-                          }
-                        />
-                      )}
-                    </div>
+                    <TaskDescriptionToolbar
+                      taskId={taskId}
+                      awaitingSeed={detail.awaitingSeed}
+                      editor={detail.editor}
+                      isConnected={detail.isConnected}
+                      remoteUsers={detail.remoteUsers}
+                      currentUser={detail.currentUser}
+                    />
                   </div>
                   <TaskDescriptionEditor
                     editor={detail.editor}

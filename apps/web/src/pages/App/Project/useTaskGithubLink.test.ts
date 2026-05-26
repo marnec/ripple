@@ -47,11 +47,42 @@ describe("deriveTaskGithubView", () => {
       issueDeleted: false,
       descriptionLastSyncedAt: null,
       descriptionEdited: false,
+      seed: {
+        expected: false,
+        snapshotId: null,
+        seedStatus: undefined,
+        statusLoading: false,
+      },
     });
   });
 
   it("null (Ripple-native task) → not linked", () => {
     expect(deriveTaskGithubView(null).isLinked).toBe(false);
+  });
+
+  it("exposes the seed sub-object from the link", () => {
+    const view = deriveTaskGithubView(
+      mkLink({
+        seedExpected: true,
+        descriptionSnapshotId: "snap1" as Link["descriptionSnapshotId"],
+        seedStatus: "pending",
+      }),
+    );
+    expect(view.seed).toEqual({
+      expected: true,
+      snapshotId: "snap1",
+      seedStatus: "pending",
+      statusLoading: false,
+    });
+  });
+
+  it("seed.statusLoading reflects the in-flight flag, not the link itself", () => {
+    expect(deriveTaskGithubView(undefined, { loading: true }).seed.statusLoading).toBe(
+      true,
+    );
+    expect(deriveTaskGithubView(undefined).seed.statusLoading).toBe(false);
+    // A resolved link is never "loading" regardless of the flag default.
+    expect(deriveTaskGithubView(mkLink()).seed.statusLoading).toBe(false);
   });
 
   it("a healthy link → linked with no sync error and defaulted collections", () => {
