@@ -4,6 +4,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
 import { getWorkspaceIntegration } from "./integrationLookups";
+import { logTaskIntegrationActivity } from "./integrationActivity";
 import {
   reconcileTaskStatus,
   resolveCompletedStatus,
@@ -357,6 +358,15 @@ async function createTaskFromEvent(
     // it to a terminal state. Left undefined for empty bodies (no seed) so the
     // client gate opens immediately via its `!seedExpected` path.
     seedStatus: event.body.trim().length > 0 ? "pending" : undefined,
+  });
+
+  // Mark the task↔issue linkage on the timeline. Integration-created tasks
+  // don't pass through `tasks.create`, so this also stands in for the "created"
+  // event that a native task would log.
+  await logTaskIntegrationActivity(ctx, {
+    taskId,
+    type: "issue_linked",
+    newValue: `#${event.issueNumber}`,
   });
 
   // Seed the task's collaborative description from the issue body. The

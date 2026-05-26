@@ -1,6 +1,7 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { applyStatusSideEffects } from "../../taskStatusSideEffects";
+import { logTaskIntegrationActivity } from "./integrationActivity";
 
 /**
  * Single arbiter for GitHub-driven task status changes. Every inbound signal
@@ -83,13 +84,23 @@ async function applyResolvedStatus(
   forwardOnly: boolean,
 ): Promise<void> {
   if (target._id === task.statusId) return;
+  const current = await ctx.db.get(task.statusId);
   if (forwardOnly) {
-    const current = await ctx.db.get(task.statusId);
     if (current && current.order >= target.order) return;
   }
   await ctx.db.patch(task._id, {
     statusId: target._id,
     ...applyStatusSideEffects(task, target),
+  });
+
+  // Record the integration-driven status move on the task timeline — this is
+  // the high-value event: a status change with no Ripple actor (a merged PR or
+  // a closed issue moved it), which would otherwise be invisible in history.
+  await logTaskIntegrationActivity(ctx, {
+    taskId: task._id,
+    type: "status_synced",
+    oldValue: current?.name,
+    newValue: target.name,
   });
 }
 

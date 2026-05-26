@@ -2238,6 +2238,7 @@ export declare const api: {
             kind: "activity";
             newValue?: string;
             oldValue?: string;
+            source: "local" | "integration";
             type: string;
             userId: string;
             userImage?: string;
@@ -3752,7 +3753,11 @@ export declare const internal: {
         recordTaskBranchName: FunctionReference<
           "mutation",
           "internal",
-          { branchName: string; linkId: Id<"taskIntegrationLinks"> },
+          {
+            branchName: string;
+            linkId: Id<"taskIntegrationLinks">;
+            taskId: Id<"tasks">;
+          },
           null
         >;
       };

@@ -66,6 +66,10 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 - Server code lives in `partykit/` directory: `worker.ts` (entry point), `server.ts` (YServer for Yjs collab), `presence-server.ts` (Server for workspace presence)
 - Dev config: `wrangler-partykit.jsonc` (DOs only, port 1999). Prod config: `wrangler.jsonc` (DOs + static assets)
 
+### GitHub Integration — PR ↔ task linking
+- A PR links to a task via three signals, resolved in `resolveTaskIds` (`convex/integrations/core/syncInPullRequests.ts`): GitHub's native closing graph (node ids, **default-branch only**), `Closes/Fixes/Resolves #N` keywords parsed from the PR title/body (any branch), and the leading issue number of a conventional source branch (`<issueNumber>-…`, any branch). Keep all three — keyword parsing is NOT redundant with branch-name linking (it's the only signal for an arbitrarily-named branch on a non-default base).
+- **Union, by design**: when signals reference *different* issues (e.g. branch `42-foo` but body `Closes #99`), the PR links to **both** tasks and both advance on merge — there is no precedence between signals. This matches GitHub's own multi-issue-close semantics. Scoped to same-repo/same-project, and status moves are forward-only, which bounds the blast radius of a stray reference. Do not add precedence/dedup-to-one — it would break legitimate multi-issue PRs.
+
 ### Path Aliases
 - `@/*` → `./src/*`
 - `@shared/*` → `./shared/*`

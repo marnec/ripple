@@ -11,6 +11,7 @@ import {
 } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getWorkspaceIntegration } from "../core/integrationLookups";
+import { logTaskIntegrationActivity } from "../core/integrationActivity";
 import { githubClientFromEnv } from "./client";
 
 /**
@@ -139,12 +140,21 @@ export const branchCreateContext = internalQuery({
 
 /** Persist the created branch name on the task's link (drives the UI chip). */
 export const recordTaskBranchName = internalMutation({
-  args: { linkId: v.id("taskIntegrationLinks"), branchName: v.string() },
+  args: {
+    linkId: v.id("taskIntegrationLinks"),
+    taskId: v.id("tasks"),
+    branchName: v.string(),
+  },
   returns: v.null(),
-  handler: async (ctx, { linkId, branchName }) => {
+  handler: async (ctx, { linkId, taskId, branchName }) => {
     const link = await ctx.db.get(linkId);
     if (!link) return null;
     await ctx.db.patch(linkId, { branchName });
+    await logTaskIntegrationActivity(ctx, {
+      taskId,
+      type: "branch_created",
+      newValue: branchName,
+    });
     return null;
   },
 });
@@ -227,7 +237,7 @@ export const createBranchForTask = action({
 
     await ctx.runMutation(
       internal.integrations.github.branchesAction.recordTaskBranchName,
-      { linkId: cfg.linkId, branchName },
+      { linkId: cfg.linkId, taskId, branchName },
     );
     return { branchName, alreadyExisted };
   },

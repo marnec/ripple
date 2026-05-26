@@ -1,8 +1,14 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { getWorkspaceIntegration } from "./integrationLookups";
+import { logTaskIntegrationActivity } from "./integrationActivity";
 import { reconcileTaskStatus } from "./statusReconciliation";
 import type { NormalizedPullRequestEvent } from "./types";
+
+/** Human-readable PR label for activity entries, e.g. `#7 Fix login`. */
+function prLabel(number: number, title: string): string {
+  return `#${number} ${title}`;
+}
 
 /**
  * Apply a provider-neutral pull-request event to Ripple state. Called from a
@@ -72,6 +78,11 @@ export async function applyPullRequestEvent(
     });
     for (const taskId of taskIds) {
       await ctx.db.insert("taskPullRequestLinks", { taskId, pullRequestId });
+      await logTaskIntegrationActivity(ctx, {
+        taskId,
+        type: "pr_linked",
+        newValue: prLabel(event.number, event.title),
+      });
       await recomputePullRequestState(ctx, taskId);
       await reconcileTaskStatus(ctx, taskId, { kind: "pr.changed" });
     }
@@ -81,6 +92,8 @@ export async function applyPullRequestEvent(
   // Ordering guard: an event not strictly newer than what we've recorded is a
   // stale or redelivered payload — drop it (idempotent).
   if (event.externalUpdatedAt <= existing.externalUpdatedAt) return;
+
+  const stateChanged = existing.state !== event.state;
 
   await ctx.db.patch(existing._id, {
     title: event.title,
@@ -102,13 +115,40 @@ export async function applyPullRequestEvent(
   const nextTaskIds = new Set(taskIds);
 
   for (const join of currentJoins) {
-    if (!nextTaskIds.has(join.taskId)) await ctx.db.delete(join._id);
+    if (!nextTaskIds.has(join.taskId)) {
+      await ctx.db.delete(join._id);
+      await logTaskIntegrationActivity(ctx, {
+        taskId: join.taskId,
+        type: "pr_unlinked",
+        oldValue: prLabel(existing.number, event.title),
+      });
+    }
   }
   for (const taskId of nextTaskIds) {
     if (!currentTaskIds.has(taskId)) {
       await ctx.db.insert("taskPullRequestLinks", {
         taskId,
         pullRequestId: existing._id,
+      });
+      await logTaskIntegrationActivity(ctx, {
+        taskId,
+        type: "pr_linked",
+        newValue: prLabel(event.number, event.title),
+      });
+    }
+  }
+
+  // Log the notable terminal transitions (merge / close) once per still-linked
+  // task. Draft↔open churn is intentionally not logged — it's noise, and the
+  // folded PR summary already shows the live state.
+  if (stateChanged && (event.state === "merged" || event.state === "closed")) {
+    const transitionType =
+      event.state === "merged" ? "pr_merged" : "pr_closed";
+    for (const taskId of nextTaskIds) {
+      await logTaskIntegrationActivity(ctx, {
+        taskId,
+        type: transitionType,
+        newValue: prLabel(event.number, event.title),
       });
     }
   }

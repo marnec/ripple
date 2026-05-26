@@ -22,7 +22,6 @@ import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
 import { TaskCreateGithubIssueAction } from "./TaskCreateGithubIssueAction";
 import { TaskGithubBranchActions } from "./TaskGithubBranchActions";
-import { TaskPullRequests } from "./TaskPullRequests";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
@@ -191,8 +190,6 @@ function TaskDetailPageContent({
               />
 
               <TaskGithubExternalInfo taskId={taskId} />
-
-              <TaskPullRequests taskId={taskId} />
 
               <TaskDependencies
                 taskId={taskId}

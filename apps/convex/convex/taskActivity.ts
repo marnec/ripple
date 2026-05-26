@@ -27,6 +27,10 @@ const timelineItemValidator = v.union(
     type: v.string(),
     oldValue: v.optional(v.string()),
     newValue: v.optional(v.string()),
+    // Origin of the event: "integration" for GitHub-driven changes (inbound
+    // webhooks + Ripple-initiated outbound ops), "local" for a user's own edit.
+    // Powers the timeline's Integration tab filter.
+    source: v.union(v.literal("local"), v.literal("integration")),
   }),
   v.object({
     kind: v.literal("comment"),
@@ -95,7 +99,11 @@ export const timeline = query({
       const type = entry.action.startsWith("tasks.") ? entry.action.slice(6) : entry.action;
       if (type === "comment_create") return [];
       const user = entry.actorId ? userMap.get(entry.actorId) : undefined;
-      const meta = (entry.metadata ?? {}) as { oldValue?: string; newValue?: string };
+      const meta = (entry.metadata ?? {}) as {
+        oldValue?: string;
+        newValue?: string;
+        source?: "local" | "integration";
+      };
       return [{
         kind: "activity" as const,
         _id: entry._id,
@@ -106,6 +114,10 @@ export const timeline = query({
         type,
         oldValue: meta.oldValue,
         newValue: meta.newValue,
+        // Default to "local" for entries written before `source` existed.
+        source: (meta.source === "integration"
+          ? "integration"
+          : "local") as "local" | "integration",
       }];
     });
 

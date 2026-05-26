@@ -4,6 +4,7 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import { getWorkspaceIntegration } from "../core/integrationLookups";
+import { logTaskIntegrationActivity } from "../core/integrationActivity";
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 
 /**
@@ -272,6 +273,12 @@ export const recordIssueCreateSuccess = internalMutation({
           url: `https://github.com/${projectLink.externalRepoFullName}/issues/${args.issueNumber}`,
         },
       ],
+    });
+
+    await logTaskIntegrationActivity(ctx, {
+      taskId: args.taskId,
+      type: "issue_created",
+      newValue: `#${args.issueNumber}`,
     });
     return null;
   },

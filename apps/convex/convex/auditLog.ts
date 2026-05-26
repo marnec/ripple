@@ -30,6 +30,16 @@ export async function logActivity(
     oldValue?: string;
     newValue?: string;
     scope?: string;
+    /**
+     * Origin of the change. `"integration"` marks an event driven by an
+     * external integration (GitHub inbound webhooks, or a Ripple-initiated
+     * outbound op like "create issue"/"create branch"); absent/`"local"` is a
+     * Ripple user's own action. The task timeline reads this to power its
+     * Integration tab. Lives in metadata so neither the audit component's fixed
+     * field set nor the workspace timeline (which only reads old/newValue) needs
+     * to change.
+     */
+    source?: "local" | "integration";
   },
 ) {
   // Failure isolation: audit logging must never abort a user-facing
@@ -48,6 +58,7 @@ export async function logActivity(
         resourceName: args.resourceName,
         oldValue: args.oldValue,
         newValue: args.newValue,
+        source: args.source,
       },
       scope: args.scope,
     });

@@ -8,6 +8,10 @@ import { useQuery } from "convex-helpers/react/cache";;
 import {
   ArrowRight,
   CircleDot,
+  GitBranch,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
   Link2,
   MessageSquare,
   Pencil,
@@ -36,7 +40,10 @@ import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
 import { GithubMark } from "@/components/GithubMark";
+import { TaskPullRequests } from "./TaskPullRequests";
 import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
+
+type TimelineFilter = "all" | "comments" | "integration";
 
 type TaskActivityTimelineProps = {
   taskId: Id<"tasks">;
@@ -59,6 +66,8 @@ type TimelineItem = {
   type?: string;
   oldValue?: string;
   newValue?: string;
+  /** "integration" for GitHub-driven events; absent/"local" for user actions. */
+  source?: "local" | "integration";
   // comment fields
   commentId?: string;
   body?: string;
@@ -102,6 +111,15 @@ function getActivityIcon(type: string) {
     case "dependency_remove": return <Link2 className="h-3 w-3" />;
     case "comment_edit": return <Pencil className="h-3 w-3" />;
     case "comment_delete": return <Trash2 className="h-3 w-3" />;
+    // Integration events
+    case "pr_linked": return <GitPullRequest className="h-3 w-3" />;
+    case "pr_unlinked": return <GitPullRequest className="h-3 w-3" />;
+    case "pr_merged": return <GitMerge className="h-3 w-3" />;
+    case "pr_closed": return <GitPullRequestClosed className="h-3 w-3" />;
+    case "branch_created": return <GitBranch className="h-3 w-3" />;
+    case "status_synced": return <CircleDot className="h-3 w-3" />;
+    case "issue_linked": return <GithubMark className="h-3 w-3" />;
+    case "issue_created": return <GithubMark className="h-3 w-3" />;
     default: return <Minus className="h-3 w-3" />;
   }
 }
@@ -149,6 +167,24 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
       return <><span className="font-medium">{userName}</span> edited a comment</>;
     case "comment_delete":
       return <><span className="font-medium">{userName}</span> deleted a comment</>;
+    // Integration events — passive voice: the actor is the integration bot, not
+    // a Ripple user, so attributing a name would be misleading.
+    case "issue_linked":
+      return <>Imported from GitHub issue <span className="font-medium">{newValue}</span></>;
+    case "issue_created":
+      return <>Created GitHub issue <span className="font-medium">{newValue}</span></>;
+    case "branch_created":
+      return <>Created branch <span className="font-medium">{newValue}</span></>;
+    case "pr_linked":
+      return <>Linked pull request <span className="font-medium">{newValue}</span></>;
+    case "pr_unlinked":
+      return <>Unlinked pull request <span className="font-medium">{oldValue}</span></>;
+    case "pr_merged":
+      return <>Merged pull request <span className="font-medium">{newValue}</span></>;
+    case "pr_closed":
+      return <>Closed pull request <span className="font-medium">{newValue}</span></>;
+    case "status_synced":
+      return <>Status synced from <span className="font-medium">{oldValue}</span> <ArrowRight className="inline h-3 w-3 mx-0.5" /> <span className="font-medium">{newValue}</span></>;
     default:
       return <><span className="font-medium">{userName}</span> made a change</>;
   }
@@ -166,7 +202,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
   const fileUpload = useUploadFile(workspaceId);
   const uploadFile = fileUpload?.uploadFile;
 
-  const [filter, setFilter] = useState<"all" | "comments">("comments");
+  const [filter, setFilter] = useState<TimelineFilter>("comments");
   const [editingCommentId, setEditingCommentId] = useState<Id<"taskComments"> | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
 
@@ -206,7 +242,12 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     ? []
     : filter === "comments"
       ? timeline.filter((item: TimelineItem) => item.kind === "comment")
-      : timeline;
+      : filter === "integration"
+        ? timeline.filter(
+            (item: TimelineItem) =>
+              item.kind === "activity" && item.source === "integration",
+          )
+        : timeline;
 
   const listRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -237,9 +278,10 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
         }
       >
         <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "comments")}>
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as TimelineFilter)}>
           <TabsList className="h-7">
             <TabsTrigger value="comments" className="text-xs px-2 py-0.5">Comments</TabsTrigger>
+            <TabsTrigger value="integration" className="text-xs px-2 py-0.5">Integration</TabsTrigger>
             <TabsTrigger value="all" className="text-xs px-2 py-0.5">All</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -254,6 +296,13 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
             : ""
         }
       >
+        {/* Integration tab leads with a live PR summary (renders nothing when
+            the task has no linked PRs), then the chronological event log. */}
+        {/* {filter === "integration" && (
+          <div className="mb-3">
+            <TaskPullRequests taskId={taskId} />
+          </div>
+        )} */}
         <div className="relative">
           {/* Vertical connector line — sits inside the content box so it spans full scroll height. */}
           {filteredItems.length > 1 && (
@@ -261,9 +310,13 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
           )}
           <div className="space-y-1">
             {filteredItems.length === 0 ? (
-              filter === "all" ? (
-                <p className="text-sm text-muted-foreground">No activity yet</p>
-              ) : null
+              filter === "comments" ? null : (
+                <p className="text-sm text-muted-foreground">
+                  {filter === "integration"
+                    ? "No integration activity yet"
+                    : "No activity yet"}
+                </p>
+              )
             ) : (
               filteredItems.map((item: TimelineItem) =>
                 item.kind === "comment" ? (
