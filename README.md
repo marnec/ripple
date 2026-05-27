@@ -8,9 +8,6 @@ NEXT STEPS:
 
 - Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
 
-- surface error to users when tying to manually set triage status
-
-
 - split settings in tabs (workspace and projects)
 
 - restyle graph https://d3js.org/d3-force
