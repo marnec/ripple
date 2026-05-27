@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SquarePlus } from "lucide-react";
+import { CircleDot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Id } from "@convex/_generated/dataModel";
 import { useGithubIssueEligibility } from "./useGithubIssueEligibility";
@@ -17,10 +17,12 @@ type Props = {
 };
 
 /**
- * Header affordance to create a GitHub issue from an existing task. Self-gates:
- * renders nothing unless the workspace has the integration, the project has a
- * connected repo, and the task is neither already linked nor completed — so it
- * collapses to nothing for the common native-task case and occupies no space.
+ * Header affordance to create a GitHub issue from an existing task. Renders
+ * nothing unless the workspace has the integration and the project has a
+ * connected repo — so it collapses to nothing for the common native-task case.
+ * Once eligible it stays in place and disables (rather than disappearing) when
+ * there's nothing to create — already linked, or completed — mirroring the
+ * create-branch button, so the header doesn't reflow as the task links.
  */
 export function TaskCreateGithubIssueAction({
   taskId,
@@ -33,17 +35,25 @@ export function TaskCreateGithubIssueAction({
   const { eligible } = useGithubIssueEligibility(projectId, workspaceId);
   const [open, setOpen] = useState(false);
 
-  if (!eligible || isLinked || completed) return null;
+  if (!eligible) return null;
+
+  const disabled = isLinked || completed;
+  const title = isLinked
+    ? "Already linked to a GitHub issue"
+    : completed
+      ? "Completed tasks can't create an issue"
+      : "Create GitHub issue from this task";
 
   return (
     <>
       <Button
         variant="ghost"
         size="icon-sm"
+        disabled={disabled}
         onClick={() => setOpen(true)}
-        title="Create GitHub issue from this task"
+        title={title}
       >
-        <SquarePlus className="h-4 w-4" />
+        <CircleDot className="h-4 w-4" />
       </Button>
       <CreateGithubIssueDialog
         taskId={taskId}

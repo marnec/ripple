@@ -29,8 +29,19 @@ export function TaskGithubActions({
   workspaceId: Id<"workspaces">;
 }) {
   const ref = task.externalRefs?.[0];
+  // Fixed left-to-right order: createPR, createBranch (both inside
+  // TaskGithubBranchActions), then createIssue. The host header appends its own
+  // [close]/[expand] after this fragment. The deleted indicator leads but
+  // usually renders nothing, so it doesn't shift the visible order.
   return (
     <>
+      <TaskGithubHeaderActions taskId={task._id} />
+      <TaskGithubBranchActions
+        taskId={task._id}
+        repoFullName={ref?.repoFullName}
+        issueNumber={ref?.issueNumber}
+        taskTitle={task.title}
+      />
       <TaskCreateGithubIssueAction
         taskId={task._id}
         taskTitle={task.title}
@@ -39,13 +50,6 @@ export function TaskGithubActions({
         isLinked={Boolean(ref)}
         completed={task.completed}
       />
-      <TaskGithubBranchActions
-        taskId={task._id}
-        repoFullName={ref?.repoFullName}
-        issueNumber={ref?.issueNumber}
-        taskTitle={task.title}
-      />
-      <TaskGithubHeaderActions taskId={task._id} issueUrl={ref?.url} />
     </>
   );
 }
