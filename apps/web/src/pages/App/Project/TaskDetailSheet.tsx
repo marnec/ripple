@@ -8,7 +8,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Maximize2, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ChevronRight, Maximize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
@@ -59,6 +60,10 @@ export function TaskDetailSheet({
   });
   const navigate = useNavigate();
 
+  // Description and Activity share the remaining vertical space; exactly one is
+  // expanded at a time (both benefit from height and aren't read together).
+  const [openPanel, setOpenPanel] = useState<"description" | "activity">("description");
+
   // Defer activity timeline one frame after the editor
   const [showActivity, setShowActivity] = useState(false);
   useEffect(() => {
@@ -74,7 +79,7 @@ export function TaskDetailSheet({
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
-          className="w-full overflow-hidden scrollbar-stable outline-none"
+          className="w-full overflow-hidden outline-none"
           style={{ maxWidth: "44rem" }}
           finalFocus={false}
         >
@@ -141,65 +146,118 @@ export function TaskDetailSheet({
                 </div>
               </SheetHeader>
 
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-5 px-4 pb-4">
-                <TaskProperties
-                  task={task}
-                  statuses={detail.statuses!}
-                  members={detail.members!}
-                  onStatusChange={detail.handleStatusChange}
-                  onPriorityChange={detail.handlePriorityChange}
-                  onAssigneeChange={detail.handleAssigneeChange}
-                  onSetTags={detail.handleSetTags}
-                  onRemoveTag={detail.handleRemoveTag}
-                  onDueDateChange={detail.handleDueDateChange}
-                  onStartDateChange={detail.handlePlannedStartDateChange}
-                  onEstimateChange={detail.handleEstimateChange}
-                />
+              <div className="flex-1 min-h-0 flex flex-col gap-4 px-4 pb-4">
+                {/* Fixed top region — task properties + GitHub info never scroll. */}
+                <div className="shrink-0 space-y-5">
+                  <TaskProperties
+                    task={task}
+                    statuses={detail.statuses!}
+                    members={detail.members!}
+                    onStatusChange={detail.handleStatusChange}
+                    onPriorityChange={detail.handlePriorityChange}
+                    onAssigneeChange={detail.handleAssigneeChange}
+                    onSetTags={detail.handleSetTags}
+                    onRemoveTag={detail.handleRemoveTag}
+                    onDueDateChange={detail.handleDueDateChange}
+                    onStartDateChange={detail.handlePlannedStartDateChange}
+                    onEstimateChange={detail.handleEstimateChange}
+                  />
 
-                <TaskGithubExternalInfo taskId={task._id} />
+                  <TaskGithubExternalInfo taskId={task._id} />
+                </div>
 
-                <TaskDependencies
-                  taskId={taskId}
-                  workspaceId={workspaceId}
-                />
-
-                <div className="space-y-2 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-muted-foreground">
-                      Description
-                    </h3>
-                    <TaskDescriptionToolbar
-                      taskId={taskId}
-                      awaitingSeed={detail.awaitingSeed}
-                      editor={detail.editor}
-                      isConnected={detail.isConnected}
-                      remoteUsers={detail.remoteUsers}
-                      currentUser={detail.currentUser}
-                    />
-                  </div>
-                  <TaskDescriptionEditor
-                    editor={detail.editor}
-                    documents={detail.documents}
-                    diagrams={detail.diagrams}
-                    spreadsheets={detail.spreadsheets}
-                    members={detail.members}
+                {/* Dependencies — collapsed by default to free vertical space. */}
+                <div className="shrink-0">
+                  <TaskDependencies
+                    taskId={taskId}
                     workspaceId={workspaceId}
-                    className="min-h-50"
-                    hideLabel
-                    loading={!detail.descriptionReady}
+                    collapsible
                   />
                 </div>
 
-                {detail.currentUser && showActivity && (
-                  <div className="space-y-2 animate-fade-in">
-                    <TaskActivityTimeline
-                      taskId={taskId}
-                      currentUserId={detail.currentUser._id}
-                      workspaceId={workspaceId}
+                {/* Description / Activity arena — they fight for the remaining
+                    height; opening one collapses the other. Only the open
+                    panel's body scrolls. */}
+                <div className="flex-1 min-h-0 flex flex-col gap-3">
+                  <div
+                    className={cn(
+                      "flex flex-col gap-2 min-w-0",
+                      openPanel === "description" ? "flex-1 min-h-0" : "shrink-0",
+                    )}
+                  >
+                    <div className="flex items-center justify-between shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenPanel((p) =>
+                            p === "description" ? "activity" : "description",
+                          )
+                        }
+                        className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
+                      >
+                        <ChevronRight
+                          className={cn(
+                            "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                            openPanel === "description" && "rotate-90",
+                          )}
+                        />
+                        <h3 className="text-sm font-semibold text-muted-foreground">
+                          Description
+                        </h3>
+                      </button>
+                      {openPanel === "description" && (
+                        <TaskDescriptionToolbar
+                          taskId={taskId}
+                          awaitingSeed={detail.awaitingSeed}
+                          editor={detail.editor}
+                          isConnected={detail.isConnected}
+                          remoteUsers={detail.remoteUsers}
+                          currentUser={detail.currentUser}
+                        />
+                      )}
+                    </div>
+                    {/* Editor stays mounted while collapsed so Yjs sync keeps
+                        running; only its view is hidden. */}
+                    <TaskDescriptionEditor
+                      editor={detail.editor}
+                      documents={detail.documents}
+                      diagrams={detail.diagrams}
+                      spreadsheets={detail.spreadsheets}
                       members={detail.members}
+                      workspaceId={workspaceId}
+                      className={cn(
+                        openPanel === "description"
+                          ? "flex-1 min-h-0 overflow-y-auto"
+                          : "hidden",
+                      )}
+                      hideLabel
+                      loading={!detail.descriptionReady}
                     />
                   </div>
-                )}
+
+                  {detail.currentUser && showActivity && (
+                    <div
+                      className={cn(
+                        "flex flex-col min-w-0",
+                        openPanel === "activity" ? "flex-1 min-h-0" : "shrink-0",
+                      )}
+                    >
+                      <TaskActivityTimeline
+                        taskId={taskId}
+                        currentUserId={detail.currentUser._id}
+                        workspaceId={workspaceId}
+                        members={detail.members}
+                        fillHeight
+                        collapsed={openPanel !== "activity"}
+                        onToggle={() =>
+                          setOpenPanel((p) =>
+                            p === "activity" ? "description" : "activity",
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </>
           )}

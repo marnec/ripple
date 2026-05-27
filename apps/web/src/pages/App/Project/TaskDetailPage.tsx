@@ -179,6 +179,7 @@ function TaskDetailPageContent({
               <TaskDependencies
                 taskId={taskId}
                 workspaceId={workspaceId}
+                collapsible
               />
 
               <BacklinksDrawerTrigger resourceId={taskId} workspaceId={workspaceId} />

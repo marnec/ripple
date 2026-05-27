@@ -7,6 +7,7 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import {
   ArrowRight,
+  ChevronRight,
   CircleDot,
   GitBranch,
   GitMerge,
@@ -40,6 +41,7 @@ import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
 import { GithubMark } from "@/components/GithubMark";
+import { cn } from "@/lib/utils";
 import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
 
 type TimelineFilter = "all" | "comments" | "integration";
@@ -52,6 +54,10 @@ type TaskActivityTimelineProps = {
   members?: WorkspaceMemberSummary[];
   /** On lg+, pin header & composer and scroll only the list. Requires a parent with a defined height. */
   fillHeight?: boolean;
+  /** When set, the header becomes a collapse toggle (chevron) and `collapsed` hides the body. */
+  onToggle?: () => void;
+  /** Whether the timeline body is collapsed to just its header. Only meaningful with `onToggle`. */
+  collapsed?: boolean;
 };
 
 type TimelineItem = {
@@ -189,7 +195,7 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
   }
 }
 
-export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, fillHeight = false }: TaskActivityTimelineProps) {
+export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, fillHeight = false, onToggle, collapsed = false }: TaskActivityTimelineProps) {
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
   // Use pre-fetched members when available; fall back to workspace context
   const contextMembers = useWorkspaceMembers();
@@ -270,22 +276,42 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
     >
       {/* Header with filter */}
       <div
-        className={
-          fillHeight
-            ? "flex items-center justify-between lg:mb-3 lg:shrink-0 lg:border-b lg:pb-3"
-            : "flex items-center justify-between"
-        }
+        className={cn(
+          "flex items-center justify-between",
+          fillHeight && "lg:mb-3 lg:shrink-0",
+          fillHeight && !collapsed && "lg:border-b lg:pb-3",
+        )}
       >
-        <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as TimelineFilter)}>
-          <TabsList className="h-7">
-            <TabsTrigger value="comments" className="text-xs px-2 py-0.5">Comments</TabsTrigger>
-            <TabsTrigger value="integration" className="text-xs px-2 py-0.5">Integration</TabsTrigger>
-            <TabsTrigger value="all" className="text-xs px-2 py-0.5">All</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        {onToggle ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
+          >
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                !collapsed && "rotate-90",
+              )}
+            />
+            <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
+          </button>
+        ) : (
+          <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
+        )}
+        {!collapsed && (
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as TimelineFilter)}>
+            <TabsList className="h-7">
+              <TabsTrigger value="comments" className="text-xs px-2 py-0.5">Comments</TabsTrigger>
+              <TabsTrigger value="integration" className="text-xs px-2 py-0.5">Integration</TabsTrigger>
+              <TabsTrigger value="all" className="text-xs px-2 py-0.5">All</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
       </div>
 
+      {!collapsed && (
+        <>
       {/* Timeline items with connector line */}
       <div
         ref={listRef}
@@ -373,6 +399,8 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
           Comment
         </Button>
       </div>
+        </>
+      )}
     </div>
   );
 }

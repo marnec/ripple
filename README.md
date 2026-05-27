@@ -10,8 +10,6 @@ NEXT STEPS:
 
 - add sync description action to integration activity when manually pressing btn to sync desc towards github
 
-- investigate failed seeded desc sync opening and closing a tasks multiple times during the seeding process
-
 - fix taskdetailsheet vertical overflow and bound description size. There's always a scrollbar visible along the whole height of taskdetailsheet but actually the overflowing container is a child that doesn't include the header and task name. Since taskdetailsheet is a desktop-only view, I might decide to move overflow to only deps, desc and activity and have the container take the full height. But it's nice to have a lot of space to read long descs, so I'm not sure about the best layout. Probably the deps should be collapsible and collapsde by default, and activity and description should be mutually exclusive collapsible that fight for the same vertical space. Because they both benfit from big vertical space and probably you don't read them at the same time.
 
 - split settings in tabs (workspace and projects)

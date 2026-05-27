@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { Ban, Link2, Plus, X } from "lucide-react";
+import { Ban, ChevronRight, Link2, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -32,6 +32,8 @@ import type { Id } from "@convex/_generated/dataModel";
 type TaskDependenciesProps = {
   taskId: Id<"tasks">;
   workspaceId: Id<"workspaces">;
+  /** Render the section as a collapse toggle, collapsed by default (used in the narrow detail sheet). */
+  collapsible?: boolean;
 };
 
 type DependencyItem = {
@@ -45,17 +47,20 @@ type DependencyItem = {
   };
 };
 
-export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps) {
+export function TaskDependencies({ taskId, workspaceId, collapsible = false }: TaskDependenciesProps) {
   const deps = useQuery(api.edges.listByTask, { taskId });
   const createDep = useMutation(api.edges.createEdge);
   const removeDep = useMutation(api.edges.removeEdge);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const { blocks, blockedBy, relatesTo } = (deps ?? { blocks: [], blockedBy: [], relatesTo: [] });
 
   const totalCount = blocks.length + blockedBy.length + relatesTo.length;
   const hasDeps = totalCount > 0;
+  // Non-collapsible (full page) always shows its body; the sheet starts collapsed.
+  const expanded = !collapsible || open;
 
   const handleRemove = (edgeId: Id<"edges">) => {
     void removeDep({ edgeId });
@@ -80,16 +85,40 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-muted-foreground">
-            Dependencies
-          </h3>
-          {totalCount > 0 && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-mono tabular-nums">
-              {totalCount}
-            </Badge>
-          )}
-        </div>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
+          >
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 text-muted-foreground transition-transform",
+                expanded && "rotate-90",
+              )}
+            />
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Dependencies
+            </h3>
+            {totalCount > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-mono tabular-nums">
+                {totalCount}
+              </Badge>
+            )}
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Dependencies
+            </h3>
+            {totalCount > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-mono tabular-nums">
+                {totalCount}
+              </Badge>
+            )}
+          </div>
+        )}
+        {expanded && (
         <AddDependencyPopover
           open={addOpen}
           onOpenChange={setAddOpen}
@@ -102,8 +131,10 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
           ])}
           onAdd={handleAdd}
         />
+        )}
       </div>
 
+      {expanded && (
       <ScrollArea className="h-28">
         <div className={cn("space-y-3 pr-3", deps !== undefined && "animate-fade-in")}>
           {deps !== undefined && !hasDeps && (
@@ -138,6 +169,7 @@ export function TaskDependencies({ taskId, workspaceId }: TaskDependenciesProps)
           )}
         </div>
       </ScrollArea>
+      )}
     </div>
   );
 }
