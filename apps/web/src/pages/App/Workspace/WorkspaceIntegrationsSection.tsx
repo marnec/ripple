@@ -1,6 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogBody,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useState } from "react";
@@ -145,6 +154,29 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
   const [pendingId, setPendingId] = useState<
     Id<"projectIntegrationLinks"> | null
   >(null);
+  // The link awaiting Force-resync confirmation (null = dialog closed). Held at
+  // section level so a single dialog serves every row.
+  const [resyncTarget, setResyncTarget] = useState<{
+    linkId: Id<"projectIntegrationLinks">;
+    repoFullName: string;
+  } | null>(null);
+
+  const confirmResync = async () => {
+    if (!resyncTarget) return;
+    const { linkId } = resyncTarget;
+    setResyncTarget(null);
+    setPendingId(linkId);
+    try {
+      await forceResync({ linkId });
+      toast.success("Resync started");
+    } catch (err) {
+      toast.error("Operation failed", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    } finally {
+      setPendingId(null);
+    }
+  };
   // Captured once at mount. The banner threshold is 24 h — minute-scale
   // drift between mount and re-render is irrelevant; reading `Date.now()`
   // during render trips React Compiler's purity check.
@@ -264,10 +296,10 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
                           size="sm"
                           disabled={isPending}
                           onClick={() =>
-                            void run(
-                              () => forceResync({ linkId: link._id }),
-                              "Resync started",
-                            )
+                            setResyncTarget({
+                              linkId: link._id,
+                              repoFullName: link.externalRepoFullName,
+                            })
                           }
                           className="h-8 gap-1.5"
                         >
@@ -311,6 +343,47 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
           })}
         </ul>
       )}
+
+      <ResponsiveDialog
+        open={resyncTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setResyncTarget(null);
+        }}
+      >
+        <ResponsiveDialogContent className="max-w-md">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>
+              Force resync from GitHub?
+            </ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              {resyncTarget && (
+                <>
+                  Re-fetches the current GitHub state for every linked issue in{" "}
+                  <span className="font-mono">{resyncTarget.repoFullName}</span>{" "}
+                  and applies it.
+                </>
+              )}
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogBody>
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200">
+              <strong>GitHub is treated as the source of truth.</strong> Any
+              local divergence on linked tasks — status, labels, assignees — is
+              overwritten to match GitHub. This is a best-effort recovery action
+              and may take a while for large repositories.
+            </div>
+          </ResponsiveDialogBody>
+          <ResponsiveDialogFooter>
+            <Button variant="ghost" onClick={() => setResyncTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void confirmResync()}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Force resync
+            </Button>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </section>
   );
 }
