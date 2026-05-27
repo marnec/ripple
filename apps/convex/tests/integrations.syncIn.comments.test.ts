@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
 import type {
   NormalizedCommentCreatedEvent,
@@ -191,6 +191,61 @@ describe("integrations/core/syncIn comment.created", () => {
     expect(commentLink?.taskCommentId).toBe(comment[0]?._id);
     expect(commentLink?.externalUpdatedAt).toBe(1_700_000_005_000);
     expect(commentLink?.externalAuthor).toEqual(defaultCommenter);
+  });
+});
+
+describe("integrations/core/syncIn comment.created echo guard (self-authored)", () => {
+  beforeEach(() => {
+    process.env.GITHUB_APP_SLUG = "ripple-app-dev";
+  });
+  afterEach(() => {
+    delete process.env.GITHUB_APP_SLUG;
+  });
+
+  // Regression: a Ripple comment pushed to GitHub bounces back as a
+  // `comment.created` webhook authored by our own App bot. Without the
+  // authorship guard the dupe-by-id check loses the race (the webhook beats
+  // the outbound recorder), inserting a duplicate comment under the bot
+  // identity. The guard must drop the echo so no comment row is created here.
+  it("suppresses a bot-authored comment.created (the outbound bounce-back)", async () => {
+    const t = createTestContext();
+    const { link } = await setupInboundWithIssue(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeCommentCreatedEvent({
+          externalAuthor: {
+            login: "ripple-app-dev[bot]",
+            avatarUrl: "",
+            url: "",
+          },
+        }),
+        link,
+      }),
+    );
+
+    const comments = await t.run((ctx) =>
+      ctx.db.query("taskComments").collect(),
+    );
+    const links = await t.run((ctx) =>
+      ctx.db.query("taskCommentIntegrationLinks").collect(),
+    );
+    expect(comments).toHaveLength(0);
+    expect(links).toHaveLength(0);
+  });
+
+  it("does not suppress a human-authored comment.created", async () => {
+    const t = createTestContext();
+    const { link } = await setupInboundWithIssue(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeCommentCreatedEvent(), link }),
+    );
+
+    const comments = await t.run((ctx) =>
+      ctx.db.query("taskComments").collect(),
+    );
+    expect(comments).toHaveLength(1);
   });
 });
 

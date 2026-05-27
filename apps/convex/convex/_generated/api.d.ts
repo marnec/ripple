@@ -4021,7 +4021,6 @@ export declare const internal: {
           "internal",
           {
             commentId: Id<"taskComments">;
-            externalAuthor: { avatarUrl: string; login: string; url: string };
             externalCommentId: string;
             externalUpdatedAt: number;
             taskIntegrationLinkId: Id<"taskIntegrationLinks">;

@@ -32,12 +32,13 @@ export interface ImportContext {
 }
 
 /**
- * True when an issue event was authored by this deployment's own GitHub App
- * bot (`<slug>[bot]`) — i.e. it's the echo of an outbound "create issue from
- * task" op rather than human/3rd-party activity. Returns false when the slug
- * is unconfigured (tests, local) so the guard is inert there.
+ * True when an inbound event was authored by this deployment's own GitHub App
+ * bot (`<slug>[bot]`) — i.e. it's the echo of one of our own outbound ops
+ * (create-issue or create-comment) rather than human/3rd-party activity.
+ * Returns false when the slug is unconfigured (tests, local) so the guard is
+ * inert there.
  */
-function isSelfAuthoredIssue(event: {
+function isSelfAuthored(event: {
   externalAuthor?: { login: string };
 }): boolean {
   const slug = process.env.GITHUB_APP_SLUG;
@@ -82,7 +83,7 @@ export async function applyNormalizedEvent(
       // recorder owns that task↔issue link; creating a task here would
       // duplicate it (and land it in triage). Suppressed only for live webhooks
       // — bulk import (importContext present) still ingests bot-authored issues.
-      if (!importContext && isSelfAuthoredIssue(event)) return;
+      if (!importContext && isSelfAuthored(event)) return;
       await createTaskFromEvent(ctx, {
         event,
         link,
@@ -157,6 +158,13 @@ export async function applyNormalizedEvent(
       // Comments on issues we never imported are dropped — no orphan task
       // synthesis from a comment-only event.
       if (!existingLink) return;
+      // Echo guard: a `comment.created` authored by our own App bot is the
+      // bounce-back from an outbound "push Ripple comment to GitHub" op. The
+      // outbound recorder owns that comment↔link row; re-applying here would
+      // duplicate the comment under the bot identity. The dupe-by-id guard in
+      // `applyCommentCreated` only catches this once the recorder has landed,
+      // but the webhook routinely arrives first — so suppress by authorship.
+      if (isSelfAuthored(event)) return;
       await applyCommentCreated(ctx, { event, link, existingLink });
       return;
 

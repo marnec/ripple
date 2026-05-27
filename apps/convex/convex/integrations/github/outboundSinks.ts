@@ -162,7 +162,6 @@ export function commentCreateSink(
           taskIntegrationLinkId: args.taskIntegrationLinkId,
           externalCommentId: meta.externalCommentId!,
           externalUpdatedAt: meta.externalUpdatedAt!,
-          externalAuthor: meta.externalAuthor!,
         },
       );
     },

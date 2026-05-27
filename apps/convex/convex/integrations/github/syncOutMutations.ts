@@ -326,20 +326,19 @@ export const recordCommentCreateSuccess = internalMutation({
     taskIntegrationLinkId: v.id("taskIntegrationLinks"),
     externalCommentId: v.string(),
     externalUpdatedAt: v.number(),
-    externalAuthor: v.object({
-      login: v.string(),
-      avatarUrl: v.string(),
-      url: v.string(),
-    }),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // No `externalAuthor`: this comment originated in Ripple and already has a
+    // real `userId`/avatar. The GitHub API returns our App bot as the comment
+    // author, but writing that here would make the `list` query render the bot
+    // chip and override the human's avatar. The link row still exists so
+    // inbound edit/delete echoes resolve by `externalCommentId`.
     await ctx.db.insert("taskCommentIntegrationLinks", {
       taskCommentId: args.commentId,
       taskIntegrationLinkId: args.taskIntegrationLinkId,
       externalCommentId: args.externalCommentId,
       externalUpdatedAt: args.externalUpdatedAt,
-      externalAuthor: args.externalAuthor,
     });
     // Clear any prior failure marker so the UI's "⚠ Sync failed" affordance
     // goes away.

@@ -1187,12 +1187,16 @@ export default defineSchema({
     // GitHub already shows).
     externalUpdatedAt: v.number(),
     // GitHub identity for display — rendered as the small chip next to the
-    // bot-user avatar on external-authored comments.
-    externalAuthor: v.object({
-      login: v.string(),
-      avatarUrl: v.string(),
-      url: v.string(),
-    }),
+    // bot-user avatar on external-authored (inbound) comments. ABSENT for
+    // Ripple-originated comments pushed out to GitHub: those keep their real
+    // author's avatar, so stamping our own App bot here would override it.
+    externalAuthor: v.optional(
+      v.object({
+        login: v.string(),
+        avatarUrl: v.string(),
+        url: v.string(),
+      }),
+    ),
     lastSyncError: v.optional(
       v.object({
         occurredAt: v.number(),

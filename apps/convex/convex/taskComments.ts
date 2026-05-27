@@ -61,7 +61,11 @@ export const list = query({
         .query("taskCommentIntegrationLinks")
         .withIndex("by_taskComment", (q) => q.eq("taskCommentId", c._id))
         .unique();
-      if (link) externalAuthorByComment.set(c._id, link.externalAuthor);
+      // Only inbound (external-authored) comments carry an `externalAuthor`.
+      // Ripple-originated comments have a link row but no external author, so
+      // they keep their real author's avatar instead of the bot chip.
+      if (link?.externalAuthor)
+        externalAuthorByComment.set(c._id, link.externalAuthor);
     }
 
     // Enrich comments with author info

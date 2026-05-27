@@ -1340,7 +1340,7 @@ export type DataModel = {
   };
   taskCommentIntegrationLinks: {
     document: {
-      externalAuthor: { avatarUrl: string; login: string; url: string };
+      externalAuthor?: { avatarUrl: string; login: string; url: string };
       externalCommentId: string;
       externalUpdatedAt: number;
       lastSyncError?: {
