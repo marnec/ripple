@@ -12,9 +12,30 @@ import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags, normalizeTagList } from "./tagSync";
+import { applyStatusSideEffects } from "./taskStatusSideEffects";
 import { getAll } from "convex-helpers/server/relationships";
 import type { Doc } from "./_generated/dataModel";
 import { notify } from "./utils/notify";
+import {
+  maybeEnqueueAssigneesPush,
+  maybeEnqueueLabelsPush,
+  maybeEnqueueOutboundPush,
+  enqueueDescriptionPush,
+  enqueueIssueClose,
+} from "./integrations/core/outboundDispatch";
+
+/**
+ * Triage is reserved for externally-ingested issues — only the internal
+ * sync paths in `core/syncIn` may place a task there. Every user-facing
+ * mutation that writes `statusId` runs this guard.
+ */
+function assertNotTriage(status: Doc<"taskStatuses">): void {
+  if (status.isTriage) {
+    throw new ConvexError(
+      "Cannot place a task into a triage status from user mutations",
+    );
+  }
+}
 
 export const baseTaskFields = {
   _id: v.id("tasks"),
@@ -39,6 +60,43 @@ export const baseTaskFields = {
   }))),
   estimate: v.optional(v.number()),
   importJobId: v.optional(v.id("taskImportJobs")),
+  // Denormalized most-advanced state of the task's linked pull requests,
+  // surfaced on cards. Maintained by the PR sync reconciler.
+  pullRequestState: v.optional(
+    v.union(
+      v.literal("draft"),
+      v.literal("open"),
+      v.literal("merged"),
+      v.literal("closed"),
+    ),
+  ),
+  // External issue references (e.g. linked GitHub issues). Read by the
+  // kanban / task-list, so the enriched projections must allow it through.
+  externalRefs: v.optional(
+    v.array(
+      v.object({
+        provider: v.string(),
+        repoFullName: v.string(),
+        issueNumber: v.number(),
+        url: v.string(),
+        // Set when the linked external issue is deleted upstream — drives the
+        // card's "deleted on GitHub" indicator. See schema.ts.
+        deleted: v.optional(v.boolean()),
+      }),
+    ),
+  ),
+  // GitHub assignees that didn't win the single `assigneeId` slot. Denormalized
+  // off `taskIntegrationLinks` so the kanban / task-list render them beside the
+  // internal assignee. See schema.ts for the churn rationale.
+  externalAssignees: v.optional(
+    v.array(
+      v.object({
+        login: v.string(),
+        avatarUrl: v.string(),
+        url: v.string(),
+      }),
+    ),
+  ),
 };
 
 export const enrichedTaskValidator = v.object({
@@ -97,6 +155,7 @@ export const create = mutation({
     // Get status to check if it marks task as completed
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
+    assertNotTriage(status);
 
     // Calculate position if not provided
     let position = args.position;
@@ -801,23 +860,15 @@ export const update = mutation({
     if (statusId !== undefined) {
       const newStatus = await ctx.db.get(statusId);
       if (!newStatus) throw new ConvexError("Status not found");
+      assertNotTriage(newStatus);
 
       patch.statusId = statusId;
-      // Two-way sync: auto-complete when moving TO a completed status,
-      // auto-uncomplete when moving to a non-completed status
-      patch.completed = newStatus.isCompleted;
-
-      const existingPeriods: { startedAt: number; completedAt?: number }[] = task.workPeriods ?? [];
-      const openPeriod = existingPeriods.find((p) => p.completedAt === undefined);
-
-      if (newStatus.setsStartDate && !openPeriod) {
-        // Append a new open work period
-        patch.workPeriods = [...existingPeriods, { startedAt: Date.now() }];
-      } else if (newStatus.isCompleted && openPeriod) {
-        // Close the open work period
-        patch.workPeriods = existingPeriods.map((p) =>
-          p.completedAt === undefined ? { ...p, completedAt: Date.now() } : p
-        );
+      // Canonical status side-effects: two-way `completed` sync + work-period
+      // open/close. Shared with kanban drag, PR automation, and inbound sync.
+      const effects = applyStatusSideEffects(task, newStatus);
+      patch.completed = effects.completed;
+      if (effects.workPeriods !== undefined) {
+        patch.workPeriods = effects.workPeriods;
       }
     }
 
@@ -926,6 +977,24 @@ export const update = mutation({
       });
     }
 
+    // Outbound integration push — fires only when the task is linked to an
+    // external issue AND the desired external state differs. The helper
+    // itself returns silently for unlinked / frozen / no-change cases, so
+    // it's safe to call unconditionally.
+    if (statusId !== undefined && statusId !== task.statusId) {
+      await maybeEnqueueOutboundPush(ctx, taskId);
+    }
+    // Independent dimension: label edits trigger a separate label push.
+    // Helper handles the unlinked/frozen/echo gates internally.
+    if (labels !== undefined) {
+      await maybeEnqueueLabelsPush(ctx, taskId);
+    }
+    // Independent dimension: assignee changes trigger an assignee push.
+    // Helper handles unlinked/frozen/unmappable-assignee gates internally.
+    if (assigneeId !== undefined && assigneeId !== task.assigneeId) {
+      await maybeEnqueueAssigneesPush(ctx, taskId);
+    }
+
     return null;
   },
 });
@@ -992,23 +1061,18 @@ export const updatePosition = mutation({
     // Look up status to sync completed field both ways
     const newStatus = await ctx.db.get(statusId);
     if (!newStatus) throw new ConvexError("Status not found");
+    assertNotTriage(newStatus);
 
     const patchData: Record<string, any> = {
       statusId,
       position,
     };
-    // Two-way sync: auto-complete/uncomplete based on destination status
-    patchData.completed = newStatus.isCompleted;
-
-    const existingPeriods: { startedAt: number; completedAt?: number }[] = task.workPeriods ?? [];
-    const openPeriod = existingPeriods.find((p) => p.completedAt === undefined);
-
-    if (newStatus.setsStartDate && !openPeriod) {
-      patchData.workPeriods = [...existingPeriods, { startedAt: Date.now() }];
-    } else if (newStatus.isCompleted && openPeriod) {
-      patchData.workPeriods = existingPeriods.map((p: { startedAt: number; completedAt?: number }) =>
-        p.completedAt === undefined ? { ...p, completedAt: Date.now() } : p
-      );
+    // Canonical status side-effects: two-way `completed` sync + work-period
+    // open/close. Shared with task update, PR automation, and inbound sync.
+    const effects = applyStatusSideEffects(task, newStatus);
+    patchData.completed = effects.completed;
+    if (effects.workPeriods !== undefined) {
+      patchData.workPeriods = effects.workPeriods;
     }
 
     await ctx.db.patch(taskId, patchData);
@@ -1036,6 +1100,10 @@ export const updatePosition = mutation({
           url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
         });
       }
+
+      // Outbound integration push on kanban drag — fires only for linked
+      // tasks with a state change. Silent no-op otherwise.
+      await maybeEnqueueOutboundPush(ctx, taskId);
     }
 
     return null;
@@ -1099,9 +1167,16 @@ export const listUnscheduled = query({
 });
 
 export const remove = mutation({
-  args: { taskId: v.id("tasks") },
+  args: {
+    taskId: v.id("tasks"),
+    // When the task is linked to a GitHub issue, also close that issue
+    // (state=closed). Opt-in per deletion from the confirm dialog; a no-op for
+    // unlinked tasks. (GitHub Apps can't delete issues — no such permission —
+    // so the "delete the issue too" intent is realized as a close.)
+    closeGithubIssue: v.optional(v.boolean()),
+  },
   returns: v.null(),
-  handler: async (ctx, { taskId }) => {
+  handler: async (ctx, { taskId, closeGithubIssue }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
 
     await logTaskActivity(ctx, {
@@ -1109,11 +1184,88 @@ export const remove = mutation({
       taskTitle: task.title, type: "deleted",
     });
 
+    // Enqueue the GitHub issue close BEFORE the cascade — it reads the
+    // taskIntegrationLinks row that the cascade is about to remove.
+    if (closeGithubIssue) {
+      await enqueueIssueClose(ctx, taskId);
+    }
+
     await cascadeDelete.deleteWithCascade(ctx, "tasks", taskId, {
       onComplete: logCascadeSummary({
         userId, resourceType: "tasks", resourceId: taskId, scope: task.workspaceId,
       }),
     });
+    return null;
+  },
+});
+
+/**
+ * Re-attempts outbound GitHub sync for a task whose previous push failed.
+ * Clears `lastSyncError` so the UI chip disappears optimistically; the
+ * dispatcher then re-enqueues the retrier-managed action which either
+ * succeeds quietly or rewrites `lastSyncError` if the underlying problem
+ * persists.
+ */
+export const retryOutboundSync = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, { taskId }) => {
+    await requireResourceMember(ctx, "tasks", taskId);
+
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (link?.lastSyncError) {
+      await ctx.db.patch(link._id, { lastSyncError: undefined });
+    }
+
+    await maybeEnqueueOutboundPush(ctx, taskId);
+    return null;
+  },
+});
+
+/**
+ * Manual Ripple→GitHub description push. Triggered by the "Sync description
+ * to GitHub" button on the task detail. The client renders the current
+ * BlockNote editor to markdown (avoids server-side BlockNote/JSDOM, which
+ * would balloon the Convex bundle past its size limit) and passes it in;
+ * this mutation auth-checks and enqueues the PATCH.
+ *
+ * Ripple is the source of truth for description content: there is no
+ * automatic background sync and no reconciliation. The button is the only
+ * way to publish description changes to GitHub.
+ */
+export const syncDescriptionToGitHub = mutation({
+  args: { taskId: v.id("tasks"), markdown: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { taskId, markdown }) => {
+    await requireResourceMember(ctx, "tasks", taskId);
+    await enqueueDescriptionPush(ctx, { taskId, markdown });
+    return null;
+  },
+});
+
+/**
+ * Mark a task's description as edited by a user. Called by the task-detail
+ * editor on the first genuine local Yjs edit (the GitHub creation-time seed
+ * and remote collaborator updates are excluded client-side). Gates the "Sync
+ * description to GitHub" button so seed-only content is never offered for push.
+ *
+ * Idempotent: a no-op (and crucially, no write) once already set, to avoid
+ * OCC churn on the link row. Native tasks (no link) silently no-op.
+ */
+export const markDescriptionEdited = mutation({
+  args: { taskId: v.id("tasks") },
+  returns: v.null(),
+  handler: async (ctx, { taskId }) => {
+    await requireResourceMember(ctx, "tasks", taskId);
+    const link = await ctx.db
+      .query("taskIntegrationLinks")
+      .withIndex("by_task", (q) => q.eq("taskId", taskId))
+      .unique();
+    if (!link || link.descriptionEdited) return null;
+    await ctx.db.patch(link._id, { descriptionEdited: true });
     return null;
   },
 });

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { TagPickerButton } from "@/components/TagPickerButton";
+import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ type TaskPropertiesProps = {
     priority: string;
     assigneeId?: Id<"users"> | null;
     assignee: { name?: string | null; image?: string } | null;
+    externalAssignees?: ExternalAssignee[];
     labels?: string[];
     dueDate?: string;
     plannedStartDate?: string;
@@ -197,6 +199,8 @@ export function TaskProperties({
 
       {/* Assignee */}
       <PropertyRow label="Assignee">
+        <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
         <Select
           value={task.assigneeId || "unassigned"}
           onValueChange={(v) => { if (v !== null) onAssigneeChange(v); }}
@@ -247,6 +251,14 @@ export function TaskProperties({
             ))}
           </SelectContent>
         </Select>
+        </div>
+        <ExternalAssigneeAvatars
+          assignees={task.externalAssignees}
+          side="right"
+          size="sm"
+          className="shrink-0"
+        />
+        </div>
       </PropertyRow>
 
       {/* Due Date */}

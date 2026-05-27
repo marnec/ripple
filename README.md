@@ -1,12 +1,26 @@
 NEXT STEPS:
+
 - calendar; plan calls; invite guests
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
--test
+
+- I don't really know how to handle unread messages, they kind of work right now but god save me
+
+- branch related stuff
+
+- surface error to users when tying to manually set triage status
+
+- split settings in tabs (workspace and projects)
+
+- restyle graph https://d3js.org/d3-force
+
+- on "@ripple/convex:dev: 5/26/2026, 9:54:29 AM [CONVEX M(auth:store)] [INFO] '`auth:store` type: refreshSession'" the whole app seems to reload
+
+- document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
+- guests can comment (all viewers?)
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding
-
 
 - external ticketing system??: 
     - connected to project
@@ -52,3 +66,6 @@ keyboard accessiblity
             - [ ] priority sync via configurable label template (e.g. `priority/high`)
             - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
     - [ ] add sentry
+
+- identity model refactor
+    - [ ] split `users` (auth-only) from a new `profiles` table that can host synthetic / bot identities (integration bots, system actors); `creatorId`/`assigneeId`/`userId` refs point at `profiles`. Lets integrations create non-auth identities without polluting the auth surface.

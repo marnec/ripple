@@ -4,8 +4,12 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { useEffect, useMemo, useState } from "react";
 import { Awareness } from "y-protocols/awareness";
 import { IndexeddbPersistence } from "y-indexeddb";
+import { extractTextFromXml } from "@ripple/shared/blockRef";
 import { getUserColor } from "../lib/user-colors";
+import { useDescriptionSeedGate, type DescriptionSeed } from "./use-description-seed-gate";
 import { useYjsProvider } from "./use-yjs-provider";
+
+export type { DescriptionSeed } from "./use-description-seed-gate";
 
 export interface UseDocumentCollaborationOptions<
   BSchema extends BlockSchema,
@@ -21,6 +25,12 @@ export interface UseDocumentCollaborationOptions<
   uploadFile?: (file: File) => Promise<string>;
   /** Optional BlockNote dictionary override (used for placeholder customization). */
   dictionary?: typeof en;
+  /**
+   * Task-only: GitHub description-seed signals. When present, the editor is held
+   * back behind a spinner until the seed lands (or times out) so the user can't
+   * type into a doc that's about to be filled. Omit for docs/diagrams.
+   */
+  seed?: DescriptionSeed;
 }
 
 export interface UseDocumentCollaborationResult<
@@ -34,6 +44,19 @@ export interface UseDocumentCollaborationResult<
   isOffline: boolean;
   provider: ReturnType<typeof useYjsProvider>["provider"];
   yDoc: ReturnType<typeof useYjsProvider>["yDoc"];
+  /**
+   * False only while a task editor is intentionally held back waiting for a
+   * GitHub description seed to load. `true` for all other cases (no seed
+   * expected, cache present, snapshot loaded, or timed out). Drives the
+   * "blocking spinner" state in the task description editor.
+   */
+  descriptionReady: boolean;
+  /**
+   * True while the editor is specifically held back waiting for a GitHub
+   * description seed (not generic provider loading). Drives the "seeding from
+   * GitHub" disclaimer; false once the seed lands or the wait times out.
+   */
+  awaitingSeed: boolean;
 }
 
 export function useDocumentCollaboration<
@@ -49,6 +72,7 @@ export function useDocumentCollaboration<
   enabled = true,
   uploadFile,
   dictionary,
+  seed,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
   const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
     resourceType,
@@ -57,10 +81,15 @@ export function useDocumentCollaboration<
   });
 
   const [indexedDbSynced, setIndexedDbSynced] = useState(false);
-  // True when IndexedDB loaded AND the Yjs fragment has actual cached content.
-  // This avoids showing an empty editor on first visit (no cache) — we wait
-  // for the provider to sync authoritative content instead.
+  // True when IndexedDB loaded AND the Yjs fragment has cached blocks (any
+  // block count). Used to show the editor from cache without waiting for the
+  // provider — valid for docs/diagrams whose content may be non-text.
   const [cachedContentReady, setCachedContentReady] = useState(false);
+  // Like above but requires actual TEXT. The seed gate must use this: BlockNote
+  // seeds an empty doc with a blank paragraph (block count 1, no text), so the
+  // plain count would falsely report "cached content" and unblock the editor
+  // before the GitHub seed lands.
+  const [cachedTextReady, setCachedTextReady] = useState(false);
 
   // Set up IndexedDB persistence for offline cache
   // CRITICAL: Decouple from provider - IndexedDB initializes independently
@@ -73,8 +102,12 @@ export function useDocumentCollaboration<
 
     persistence.on("synced", () => {
       setIndexedDbSynced(true);
-      if (yDoc.getXmlFragment("document-store").length > 0) {
+      const fragment = yDoc.getXmlFragment("document-store");
+      if (fragment.length > 0) {
         setCachedContentReady(true);
+      }
+      if (extractTextFromXml(fragment).trim().length > 0) {
+        setCachedTextReady(true);
       }
     });
 
@@ -83,6 +116,7 @@ export function useDocumentCollaboration<
       void persistence.destroy();
       setIndexedDbSynced(false);
       setCachedContentReady(false);
+      setCachedTextReady(false);
     };
   }, [documentId, resourceType, yDoc, enabled]);
 
@@ -144,6 +178,18 @@ export function useDocumentCollaboration<
     };
   }, [editor, yDoc]);
 
+  // Task-only GitHub description-seed gate: holds the editor back until a seed
+  // lands (or times out) and exposes the disclaimer state. Inert (always ready)
+  // for docs/diagrams, which pass no `seed`.
+  const { descriptionReady, awaitingSeed } = useDescriptionSeedGate({
+    resourceType,
+    documentId,
+    yDoc,
+    isOffline,
+    hasCachedText: cachedTextReady,
+    seed,
+  });
+
   // Loading completes when EITHER provider syncs OR IndexedDB syncs
   const isLoading = providerLoading && !indexedDbSynced;
 
@@ -153,11 +199,18 @@ export function useDocumentCollaboration<
     // - isOffline: timeout fallback, show whatever we have
     // - cachedContentReady && provider: IndexedDB had real content AND editor
     //   already recreated with real provider awareness (no second flash)
-    editor: (isConnected || isOffline || (cachedContentReady && !!provider)) ? editor : null,
+    // ...AND descriptionReady, so a task expecting a seed stays gated until the
+    // seed loads (or times out). Non-task callers always have descriptionReady.
+    editor:
+      (isConnected || isOffline || (cachedContentReady && !!provider)) && descriptionReady
+        ? editor
+        : null,
     isLoading,
     isConnected,
     isOffline,
     provider,
     yDoc,
+    descriptionReady,
+    awaitingSeed,
   };
 }
