@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
@@ -151,6 +152,10 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
                   askBranchSourceEachTime: link.askBranchSourceEachTime,
                 }}
               />
+              <InboundIssueSyncToggle
+                linkId={link._id}
+                disabled={link.inboundIssueSyncDisabled ?? false}
+              />
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
@@ -197,6 +202,36 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Admin toggle for inbound issue/comment auto-sync (GitHub → Ripple). When off,
+ * the project stops auto-pulling issue changes; PR sync and outbound push keep
+ * working. The Switch reflects the link state reactively.
+ */
+function InboundIssueSyncToggle({
+  linkId,
+  disabled,
+}: {
+  linkId: Id<"projectIntegrationLinks">;
+  disabled: boolean;
+}) {
+  const setSync = useMutation(api.integrations.core.links.setInboundIssueSync);
+  const onToggle = (enabled: boolean) => {
+    void setSync({ linkId, enabled }).catch((err: unknown) => {
+      toast.error("Couldn't update sync setting", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    });
+  };
+  return (
+    <label className="flex items-center justify-between gap-2 text-xs">
+      <span className="text-muted-foreground">
+        Pull issue changes from GitHub
+      </span>
+      <Switch checked={!disabled} onCheckedChange={onToggle} />
+    </label>
   );
 }
 

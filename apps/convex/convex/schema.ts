@@ -1000,6 +1000,12 @@ export default defineSchema({
     // each time (opening the base-branch picker). Absent = true (prompt). Flips
     // to false via the picker's admin-only "Don't ask again" or project settings.
     askBranchSourceEachTime: v.optional(v.boolean()),
+    // When true, inbound issue + issue-comment webhooks (GitHub → Ripple) are
+    // dropped for this link — the project stops auto-pulling issue changes.
+    // Absent/false = sync (the default). Orthogonal to `status: "paused"` (which
+    // halts BOTH directions) and to PR sync / outbound push / explicit import,
+    // all of which keep working. Gated in `handleGithubWebhook`.
+    inboundIssueSyncDisabled: v.optional(v.boolean()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_project", ["projectId"])

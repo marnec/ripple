@@ -66,6 +66,7 @@ export const linksForProject = query({
       ),
       defaultBaseBranch: v.optional(v.string()),
       askBranchSourceEachTime: v.optional(v.boolean()),
+      inboundIssueSyncDisabled: v.optional(v.boolean()),
     }),
   ),
   handler: async (ctx, { projectId }) => {
@@ -88,6 +89,7 @@ export const linksForProject = query({
         branchStatusMap: l.branchStatusMap,
         defaultBaseBranch: l.defaultBaseBranch,
         askBranchSourceEachTime: l.askBranchSourceEachTime,
+        inboundIssueSyncDisabled: l.inboundIssueSyncDisabled,
       }));
   },
 });
@@ -267,6 +269,34 @@ export const setBranchSourceDefaults = mutation({
     await ctx.db.patch(args.linkId, {
       defaultBaseBranch: trimmed ? trimmed : undefined,
       askBranchSourceEachTime: args.askEachTime,
+    });
+    return null;
+  },
+});
+
+/**
+ * Toggle inbound issue/comment auto-sync (GitHub → Ripple) for a link.
+ * Admin-only. When disabled, the webhook gate in `handleGithubWebhook` drops
+ * inbound issue/comment events; PR sync, outbound push, and explicit import are
+ * unaffected. Distinct from `pauseLink` (which halts both directions).
+ */
+export const setInboundIssueSync = mutation({
+  args: {
+    linkId: v.id("projectIntegrationLinks"),
+    enabled: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db.get(args.linkId);
+    if (!link) throw new ConvexError("Link not found");
+
+    await requireWorkspaceMember(ctx, link.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    // Store the negative ("disabled") so the default (absent) is "syncing".
+    await ctx.db.patch(args.linkId, {
+      inboundIssueSyncDisabled: args.enabled ? undefined : true,
     });
     return null;
   },

@@ -170,3 +170,39 @@ describe("integrations/core/links.setBranchSourceDefaults", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("integrations/core/links.setInboundIssueSync", () => {
+  it("disabling sets the flag; re-enabling clears it (absent = syncing)", async () => {
+    const t = createTestContext();
+    const { linkId, asUser } = await setup(t);
+
+    await asUser.mutation(api.integrations.core.links.setInboundIssueSync, {
+      linkId,
+      enabled: false,
+    });
+    expect(
+      (await t.run((ctx) => ctx.db.get(linkId)))?.inboundIssueSyncDisabled,
+    ).toBe(true);
+
+    await asUser.mutation(api.integrations.core.links.setInboundIssueSync, {
+      linkId,
+      enabled: true,
+    });
+    expect(
+      (await t.run((ctx) => ctx.db.get(linkId)))?.inboundIssueSyncDisabled,
+    ).toBeUndefined();
+  });
+
+  it("rejects non-admin callers", async () => {
+    const t = createTestContext();
+    const { linkId } = await setup(t);
+    const outsider = t.withIdentity({ subject: "stranger|s", issuer: "test" });
+
+    await expect(
+      outsider.mutation(api.integrations.core.links.setInboundIssueSync, {
+        linkId,
+        enabled: false,
+      }),
+    ).rejects.toThrow();
+  });
+});

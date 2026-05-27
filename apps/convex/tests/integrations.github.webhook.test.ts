@@ -659,6 +659,32 @@ describe("integrations/github/webhook.handleGithubWebhook", () => {
     expect(tasks[0]?.statusId).toBe(triageStatusId);
   });
 
+  it("drops inbound issue events when the link has inbound issue sync disabled", async () => {
+    const t = createTestContext();
+    const { projectId, linkId } = await setupWebhookRouting(t);
+    await t.run((ctx) =>
+      ctx.db.patch(linkId, { inboundIssueSyncDisabled: true }),
+    );
+
+    await t.run((ctx) =>
+      handleGithubWebhook(ctx, {
+        eventName: "issues",
+        payload: openedPayload(),
+      }),
+    );
+
+    const tasks = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(tasks).toHaveLength(0);
+    // The delivery is still acknowledged on the link (we received it).
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.lastWebhookAt).toBeDefined();
+  });
+
   it("one project ↔ N repos: issues from each linked repo route to the same project's triage", async () => {
     const t = createTestContext();
     // setupWebhookRouting seeds the project + install + the frontend link.

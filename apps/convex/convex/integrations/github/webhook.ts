@@ -124,6 +124,11 @@ export async function handleGithubWebhook(
   });
   if (!link) return; // unknown installation/repo, mismatch, or frozen — drop
 
+  // Per-link opt-out: stop auto-pulling issue/comment changes from GitHub. The
+  // delivery is still acknowledged (lastWebhookAt updated in link resolution) —
+  // we just don't apply it. PR sync and outbound push are unaffected.
+  if (link.inboundIssueSyncDisabled) return;
+
   await applyNormalizedEvent(ctx, { event, link });
 }
 

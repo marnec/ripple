@@ -987,6 +987,7 @@ export type DataModel = {
       externalRepoFullName: string;
       externalRepoId: string;
       frozenAt?: number;
+      inboundIssueSyncDisabled?: boolean;
       lastWebhookAt?: number;
       pausedByBilling: boolean;
       projectId: Id<"projects">;
@@ -1004,6 +1005,7 @@ export type DataModel = {
       | "externalRepoFullName"
       | "externalRepoId"
       | "frozenAt"
+      | "inboundIssueSyncDisabled"
       | "lastWebhookAt"
       | "pausedByBilling"
       | "projectId"

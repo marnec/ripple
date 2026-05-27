@@ -1282,6 +1282,7 @@ export declare const api: {
             }>;
             defaultBaseBranch?: string;
             externalRepoFullName: string;
+            inboundIssueSyncDisabled?: boolean;
             pausedByBilling: boolean;
             status: "configuring" | "active" | "paused";
           }>
@@ -1335,6 +1336,12 @@ export declare const api: {
             entries: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
             linkId: Id<"projectIntegrationLinks">;
           },
+          null
+        >;
+        setInboundIssueSync: FunctionReference<
+          "mutation",
+          "public",
+          { enabled: boolean; linkId: Id<"projectIntegrationLinks"> },
           null
         >;
         unlinkLink: FunctionReference<
