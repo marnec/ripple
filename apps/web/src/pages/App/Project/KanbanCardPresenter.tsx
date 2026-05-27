@@ -68,6 +68,8 @@ export function KanbanCardPresenter({
   onClick,
   isDragging = false,
 }: KanbanCardPresenterProps) {
+  const hasExternalAssignees = (task.externalAssignees?.length ?? 0) > 0;
+
   return (
     <Card
       onClick={onClick}
@@ -124,23 +126,30 @@ export function KanbanCardPresenter({
               })()}
           </div>
 
-          {/* External (GitHub) assignees — left of the internal assignee,
-              separated by a GitHub mark. */}
-          <ExternalAssigneeAvatars assignees={task.externalAssignees} side="left" />
+          {/* Right cluster: remote (GitHub) facepile, then the internal
+              assignee. The GitHub mark sits on the left of the remote group
+              (side="right"); a small vertical rule divides the remote facepile
+              from the local one — shown only when both exist. */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <ExternalAssigneeAvatars assignees={task.externalAssignees} side="right" />
+            {hasExternalAssignees && task.assignee && (
+              <div className="h-4 w-px bg-border" aria-hidden />
+            )}
 
-          {/* Assignee Avatar — ghost placeholder keeps row height stable */}
-          {task.assignee ? (
-            <Avatar className="h-6 w-6">
-              {task.assignee.image && (
-                <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
-              )}
-              <AvatarFallback className="text-xs">
-                {task.assignee.name?.slice(0, 2).toUpperCase() ?? "?"}
-              </AvatarFallback>
-            </Avatar>
-          ) : (
-            <div className="h-6 w-6" aria-hidden />
-          )}
+            {/* Assignee Avatar — ghost placeholder keeps row height stable */}
+            {task.assignee ? (
+              <Avatar className="h-6 w-6">
+                {task.assignee.image && (
+                  <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
+                )}
+                <AvatarFallback className="text-xs">
+                  {task.assignee.name?.slice(0, 2).toUpperCase() ?? "?"}
+                </AvatarFallback>
+              </Avatar>
+            ) : (
+              <div className="h-6 w-6" aria-hidden />
+            )}
+          </div>
         </div>
 
         {/* Tags — fixed height, single row with fade + tooltip */}
