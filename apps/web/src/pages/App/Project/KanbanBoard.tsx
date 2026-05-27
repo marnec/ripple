@@ -18,6 +18,7 @@ import { m } from "framer-motion";
 import { generateKeyBetween } from "fractional-indexing";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 import { Plus } from "lucide-react";
 import React, { Suspense, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -367,11 +368,17 @@ export function KanbanBoard({ projectId, workspaceId, filters, sort, onSortBlock
       taskId: activeTaskId,
       statusId: destinationStatusId,
       position: newPosition,
-    }).finally(() => {
-      requestAnimationFrame(() => {
-        setDndSuppressed(false);
+    })
+      .catch((err: unknown) => {
+        toast.error("Couldn't move task", {
+          description: getErrorMessage(err),
+        });
+      })
+      .finally(() => {
+        requestAnimationFrame(() => {
+          setDndSuppressed(false);
+        });
       });
-    });
   };
 
   // Get active task for drag overlay

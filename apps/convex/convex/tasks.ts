@@ -33,7 +33,7 @@ import {
 function assertNotTriage(status: Doc<"taskStatuses">): void {
   if (status.isTriage) {
     throw new ConvexError(
-      "Cannot place a task into a triage status from user mutations",
+      `"${status.name}" is a triage status, reserved for incoming issues from integrations. Tasks can't be moved there manually.`,
     );
   }
 }

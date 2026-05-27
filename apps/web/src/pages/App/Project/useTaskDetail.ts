@@ -1,5 +1,7 @@
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { taskLabelsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { useViewer } from "../UserContext";
@@ -123,7 +125,12 @@ export function useTaskDetail({
   };
 
   const handleStatusChange = (statusId: Id<"taskStatuses">) => {
-    if (taskId) void updateTask({ taskId, statusId });
+    if (taskId)
+      void updateTask({ taskId, statusId }).catch((err: unknown) => {
+        toast.error("Couldn't change status", {
+          description: getErrorMessage(err),
+        });
+      });
   };
 
   const handlePriorityChange = (
