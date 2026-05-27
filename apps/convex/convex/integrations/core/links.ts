@@ -7,7 +7,10 @@ import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { canActivateIntegration } from "./activationGate";
 import { withTriggers } from "../../dbTriggers";
-import { reconcileTaskExternalRefs } from "./taskExternalRefsSync";
+import {
+  clearTaskExternalLink,
+  setTaskExternalLink,
+} from "./taskExternalLink";
 import { getIntegrationForLink } from "./integrationLookups";
 
 /**
@@ -561,26 +564,25 @@ export const drainDisconnectBatch = internalMutation({
       if (task) {
         const ref = task.externalRefs?.[0];
         if (ref) {
-          await taskWriter.patch(taskLink.taskId, {
-            externalRefFrozen: {
-              provider,
-              externalRepoId: projectLink.externalRepoId,
-              repoFullName: ref.repoFullName,
-              issueNumber: ref.issueNumber,
-              externalIssueId: taskLink.externalIssueId,
-              url: ref.url,
-              disconnectedAt,
-              externalAuthor: taskLink.externalAuthor,
+          // Clears externalRefs + the lookup; snapshots the frozen ref in the
+          // same task write. Task write routes through triggers; the lookup
+          // delete inside stays on raw ctx.db.
+          await clearTaskExternalLink(ctx, {
+            taskId: taskLink.taskId,
+            writer: taskWriter,
+            alsoPatch: {
+              externalRefFrozen: {
+                provider,
+                externalRepoId: projectLink.externalRepoId,
+                repoFullName: ref.repoFullName,
+                issueNumber: ref.issueNumber,
+                externalIssueId: taskLink.externalIssueId,
+                url: ref.url,
+                disconnectedAt,
+                externalAuthor: taskLink.externalAuthor,
+              },
             },
-            externalRefs: undefined,
           });
-          // Drop the issue-number lookup rows for this now-unlinked task.
-          await reconcileTaskExternalRefs(
-            ctx,
-            taskLink.taskId,
-            task.projectId,
-            undefined,
-          );
         }
       }
 
@@ -658,25 +660,20 @@ export const drainReconnectBatch = internalMutation({
         .unique();
       if (existing) continue;
 
-      const externalRefs = [
-        {
+      // Restore externalRefs + the lookup from the frozen snapshot and clear
+      // the snapshot in the same (triggered) task write.
+      await setTaskExternalLink(ctx, {
+        taskId: task._id,
+        projectId: projectLink.projectId,
+        writer: taskWriter,
+        alsoPatch: { externalRefFrozen: undefined },
+        ref: {
           provider: frozen.provider,
           repoFullName: projectLink.externalRepoFullName,
           issueNumber: frozen.issueNumber,
           url: frozen.url,
         },
-      ];
-      await taskWriter.patch(task._id, {
-        externalRefs,
-        externalRefFrozen: undefined,
       });
-      // Restore the issue-number lookup rows for the rehydrated task.
-      await reconcileTaskExternalRefs(
-        ctx,
-        task._id,
-        projectLink.projectId,
-        externalRefs,
-      );
       await ctx.db.insert("taskIntegrationLinks", {
         taskId: task._id,
         projectIntegrationLinkId: args.projectIntegrationLinkId,

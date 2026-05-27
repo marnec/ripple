@@ -440,10 +440,11 @@ export default defineSchema({
     .index("by_importJob", ["importJobId"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"]),
 
-  // Denormalized lookup of `tasks.externalRefs`, kept in sync by explicit
-  // `reconcileTaskExternalRefs` calls at every externalRefs write site (NOT a
-  // dbTriggers hook — the integration write paths run below the trigger
-  // boundary; see taskExternalRefsSync.ts for why). Deletion is cascaded via
+  // Denormalized lookup of `tasks.externalRefs`, kept in sync by the single
+  // writer module taskExternalLink.ts — every externalRefs write goes through
+  // its verbs, which reconcile the lookup in the same call (NOT a dbTriggers
+  // hook — the integration write paths run below the trigger boundary; see
+  // taskExternalLink.ts for why). Deletion is cascaded via
   // cascadeDelete.ts. Exists only so the PR-sync reconciler can answer "which
   // task carries issue #N in repo X" with a point
   // index lookup instead of scanning every task in the project on each

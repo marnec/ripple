@@ -5,7 +5,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import { getIntegrationForLink } from "../core/integrationLookups";
 import { logTaskIntegrationActivity } from "../core/integrationActivity";
-import { reconcileTaskExternalRefs } from "../core/taskExternalRefsSync";
+import { setTaskExternalLink } from "../core/taskExternalLink";
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 
 /**
@@ -262,22 +262,16 @@ export const recordIssueCreateSuccess = internalMutation({
       externalState: "open",
     });
 
-    const externalRefs = [
-      {
+    await setTaskExternalLink(ctx, {
+      taskId: args.taskId,
+      projectId: task.projectId,
+      ref: {
         provider: integration.provider,
         repoFullName: projectLink.externalRepoFullName,
         issueNumber: args.issueNumber,
         url: `https://github.com/${projectLink.externalRepoFullName}/issues/${args.issueNumber}`,
       },
-    ];
-    await ctx.db.patch(args.taskId, { externalRefs });
-    // Keep the issue-number lookup in step with the refs we just wrote.
-    await reconcileTaskExternalRefs(
-      ctx,
-      args.taskId,
-      task.projectId,
-      externalRefs,
-    );
+    });
 
     await logTaskIntegrationActivity(ctx, {
       taskId: args.taskId,

@@ -230,7 +230,7 @@ async function resolveTaskIds(
   // what keeps branch→status automation working when a PR merges into a
   // non-default branch like `develop`. Resolved via the `taskExternalRefs`
   // lookup table (a denormalized projection of `tasks.externalRefs`, kept in
-  // sync by explicit reconcileTaskExternalRefs calls — see taskExternalRefsSync.ts)
+  // sync by the single writer module taskExternalLink.ts)
   // so it's a point index lookup per referenced
   // issue rather than a scan of every task in the project on each webhook —
   // the issue number can't be indexed on `tasks` itself (nested array).

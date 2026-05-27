@@ -6,7 +6,10 @@ import { diffSet, normalizeLoginList } from "./syncableSet";
 import { githubLoginToMember } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
-import { reconcileTaskExternalRefs } from "./taskExternalRefsSync";
+import {
+  insertTaskWithExternalLink,
+  markTaskExternalLinkDeleted,
+} from "./taskExternalLink";
 import {
   reconcileTaskStatus,
   resolveCompletedStatus,
@@ -327,28 +330,25 @@ async function createTaskFromEvent(
     await ctx.db.patch(link.projectId, { taskCounter: number });
   }
 
-  const externalRefs = [
-    {
+  const taskId = await insertTaskWithExternalLink(ctx, {
+    task: {
+      projectId: link.projectId,
+      workspaceId: link.workspaceId,
+      title: event.title,
+      statusId: destinationStatus._id,
+      priority: "medium",
+      completed: destinationStatus.isCompleted,
+      creatorId: integration.botUserId,
+      number,
+      importJobId: importContext?.importJobId,
+    },
+    ref: {
       provider: integration.provider,
       repoFullName: link.externalRepoFullName,
       issueNumber: event.issueNumber,
       url: event.url,
     },
-  ];
-  const taskId = await ctx.db.insert("tasks", {
-    projectId: link.projectId,
-    workspaceId: link.workspaceId,
-    title: event.title,
-    statusId: destinationStatus._id,
-    priority: "medium",
-    completed: destinationStatus.isCompleted,
-    creatorId: integration.botUserId,
-    number,
-    importJobId: importContext?.importJobId,
-    externalRefs,
   });
-  // Mirror the ref into the issue-number lookup the PR resolver reads.
-  await reconcileTaskExternalRefs(ctx, taskId, link.projectId, externalRefs);
 
   await ctx.db.insert("taskIntegrationLinks", {
     taskId,
@@ -434,20 +434,8 @@ async function applyIssueDeleted(
 
   await ctx.db.patch(existingLink._id, { externalDeletedAt: Date.now() });
 
-  // A task carries exactly one integration link / external issue, so flag
-  // every ref. (`externalRefs` is conventionally a single-entry array.)
-  const task = await ctx.db.get(existingLink.taskId);
-  if (!task?.externalRefs) return;
-  const externalRefs = task.externalRefs.map((ref) => ({
-    ...ref,
-    deleted: true,
-  }));
-  await ctx.db.patch(task._id, { externalRefs });
-  // Hold the invariant: every `tasks.externalRefs` write reconciles the lookup.
-  // A no-op in practice (only the `deleted` flag changes, not the repo#issue
-  // keys), but keeping the call here means no write site is an exception — the
-  // PR resolver still finds a task whose issue was deleted upstream.
-  await reconcileTaskExternalRefs(ctx, task._id, task.projectId, externalRefs);
+  // Flag the ref deleted (lookup row deliberately survives — see the verb).
+  await markTaskExternalLinkDeleted(ctx, { taskId: existingLink.taskId });
 }
 
 async function applyLabelsChanged(
