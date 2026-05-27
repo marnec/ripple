@@ -440,9 +440,12 @@ export default defineSchema({
     .index("by_importJob", ["importJobId"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"]),
 
-  // Denormalized lookup of `tasks.externalRefs`, kept in sync by a dbTriggers
-  // hook on the tasks table (see dbTriggers.ts). Exists only so the PR-sync
-  // reconciler can answer "which task carries issue #N in repo X" with a point
+  // Denormalized lookup of `tasks.externalRefs`, kept in sync by explicit
+  // `reconcileTaskExternalRefs` calls at every externalRefs write site (NOT a
+  // dbTriggers hook — the integration write paths run below the trigger
+  // boundary; see taskExternalRefsSync.ts for why). Deletion is cascaded via
+  // cascadeDelete.ts. Exists only so the PR-sync reconciler can answer "which
+  // task carries issue #N in repo X" with a point
   // index lookup instead of scanning every task in the project on each
   // pull_request webhook — the issue number can't be indexed on `tasks` itself
   // because it lives in a nested array. Same Convex-can't-index-nested-fields

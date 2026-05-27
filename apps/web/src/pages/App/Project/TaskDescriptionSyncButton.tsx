@@ -50,9 +50,9 @@ function formatRelative(ts: number): string {
  * renders the current Yjs description to markdown server-side and PATCHes
  * the linked GitHub issue body.
  *
- * Rendered only when the task has a linked GitHub issue and a non-empty
- * description. Hidden when the task is not linked or there is nothing to
- * push (matches `core/description.isSyncDescriptionButtonVisible`).
+ * Rendered only when the task has a linked GitHub issue, the description has
+ * been edited (never for the unedited GitHub seed), and it is non-empty. The
+ * gate lives entirely in this component (see the early returns below).
  */
 export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
   const { isLinked, descriptionLastSyncedAt, descriptionEdited } = useTaskGithubLink(taskId);

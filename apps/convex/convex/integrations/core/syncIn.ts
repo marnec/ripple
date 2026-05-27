@@ -438,9 +438,16 @@ async function applyIssueDeleted(
   // every ref. (`externalRefs` is conventionally a single-entry array.)
   const task = await ctx.db.get(existingLink.taskId);
   if (!task?.externalRefs) return;
-  await ctx.db.patch(task._id, {
-    externalRefs: task.externalRefs.map((ref) => ({ ...ref, deleted: true })),
-  });
+  const externalRefs = task.externalRefs.map((ref) => ({
+    ...ref,
+    deleted: true,
+  }));
+  await ctx.db.patch(task._id, { externalRefs });
+  // Hold the invariant: every `tasks.externalRefs` write reconciles the lookup.
+  // A no-op in practice (only the `deleted` flag changes, not the repo#issue
+  // keys), but keeping the call here means no write site is an exception — the
+  // PR resolver still finds a task whose issue was deleted upstream.
+  await reconcileTaskExternalRefs(ctx, task._id, task.projectId, externalRefs);
 }
 
 async function applyLabelsChanged(
