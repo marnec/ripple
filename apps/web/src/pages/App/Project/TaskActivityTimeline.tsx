@@ -24,6 +24,7 @@ import {
   Calendar,
   Clock,
   Gauge,
+  FileText,
   Minus,
 } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
@@ -123,6 +124,7 @@ function getActivityIcon(type: string) {
     case "pr_closed": return <GitPullRequestClosed className="h-3 w-3" />;
     case "branch_created": return <GitBranch className="h-3 w-3" />;
     case "status_synced": return <CircleDot className="h-3 w-3" />;
+    case "description_synced": return <FileText className="h-3 w-3" />;
     case "issue_linked": return <GithubMark className="h-3 w-3" />;
     case "issue_created": return <GithubMark className="h-3 w-3" />;
     default: return <Minus className="h-3 w-3" />;
@@ -190,6 +192,8 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
       return <>Closed pull request <span className="font-medium">{newValue}</span></>;
     case "status_synced":
       return <>Status synced from <span className="font-medium">{oldValue}</span> <ArrowRight className="inline h-3 w-3 mx-0.5" /> <span className="font-medium">{newValue}</span></>;
+    case "description_synced":
+      return <>Synced description to GitHub</>;
     default:
       return <><span className="font-medium">{userName}</span> made a change</>;
   }

@@ -84,6 +84,16 @@ export const recordTaskOutboundResult = internalMutation({
       ...mirrorFor(args.result),
       lastSyncError: undefined,
     });
+    // Description push is the one outbound op with no inbound counterpart and no
+    // other UI trace beyond the button's "Last synced" label, so surface it on
+    // the task timeline. The other ops (labels/assignees/state) already mirror a
+    // user edit that's logged locally, so logging them here would double up.
+    if (args.result.op === "description") {
+      await logTaskIntegrationActivity(ctx, {
+        taskId: args.taskId,
+        type: "description_synced",
+      });
+    }
     return null;
   },
 });

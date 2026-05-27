@@ -8,8 +8,6 @@ NEXT STEPS:
 
 - Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
 
-- add sync description action to integration activity when manually pressing btn to sync desc towards github
-
 - split settings in tabs (workspace and projects)
 
 - restyle graph https://d3js.org/d3-force
@@ -62,6 +60,7 @@ keyboard accessiblity
 - [ ] External integrations
     - [ ] github issues
         - v1 deferrals (revisit after first ship):
+            - [ ] migration: clear `taskCommentIntegrationLinks.externalAuthor` on Ripple-originated comment links written before the avatar-override fix (those still render the bot chip over the real author's avatar). Inbound/external-authored links must keep their `externalAuthor`. Not yet deployed to prod, so safe to defer until first ship.
             - [ ] milestone ↔ cycle sync (opt-in, name-paired via stored `externalMilestoneId`)
             - [ ] priority sync via configurable label template (e.g. `priority/high`)
             - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)

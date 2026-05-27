@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import {
   createTestContext,
   setupAuthenticatedUser,
@@ -149,6 +149,23 @@ describe("tasks.syncDescriptionToGitHub (outbound description push)", () => {
         markdown: SAMPLE_MARKDOWN,
       }),
     ).rejects.toThrow(/not linked|no.*link/i);
+  });
+
+  it("recording a successful description push logs a description_synced activity", async () => {
+    const t = createTestContext();
+    const { asUser, taskId } = await setupTask(t);
+
+    await t.mutation(internal.integrations.github.syncOutMutations.recordTaskOutboundResult, {
+      taskId,
+      result: { op: "description" },
+    });
+
+    const timeline = await asUser.query(api.taskActivity.timeline, { taskId });
+    const synced = timeline.find(
+      (i) => i.kind === "activity" && i.type === "description_synced",
+    );
+    expect(synced).toBeDefined();
+    expect(synced?.source).toBe("integration");
   });
 
   it("non-workspace-member calling sync → rejected", async () => {
