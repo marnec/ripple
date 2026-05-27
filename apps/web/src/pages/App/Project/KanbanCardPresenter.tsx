@@ -1,8 +1,10 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { TaskCode } from "@/components/TaskCode";
+import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
 import { cn } from "@/lib/utils";
-import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
+import { formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
 import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
 import {
   Ban,
@@ -11,7 +13,6 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
-  Unlink,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -42,7 +43,12 @@ type KanbanCardPresenterProps = {
     estimate?: number;
     hasBlockers?: boolean;
     pullRequestState?: "draft" | "open" | "merged" | "closed";
-    externalRefs?: Array<{ deleted?: boolean }>;
+    externalRefs?: Array<{
+      repoFullName?: string;
+      issueNumber?: number;
+      url?: string;
+      deleted?: boolean;
+    }>;
     externalAssignees?: ExternalAssignee[];
     status: {
       name: string;
@@ -75,25 +81,23 @@ export function KanbanCardPresenter({
           {task.hasBlockers && (
             <span title="Blocked"><Ban className="h-3 w-3 text-red-500 shrink-0" /></span>
           )}
-          {formatTaskId(task.projectKey, task.number) ? (
-            <span className="text-xs text-muted-foreground font-mono">
-              {formatTaskId(task.projectKey, task.number)}
-            </span>
-          ) : (
-            <span className="text-xs invisible" aria-hidden>&#8203;</span>
-          )}
-          {task.externalRefs?.some((r) => r.deleted) && (
-            <Tooltip>
-              <TooltipTrigger
-                render={<span className="ml-auto inline-flex shrink-0" />}
-                aria-label="GitHub issue deleted"
-              >
-                {/* h-4 matches the row's min-h-4 so the icon never grows the line */}
-                <Unlink className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-              </TooltipTrigger>
-              <TooltipContent side="top">GitHub issue deleted</TooltipContent>
-            </Tooltip>
-          )}
+          <TaskCode
+            task={task}
+            fallback={
+              <span className="text-xs invisible" aria-hidden>
+                &#8203;
+              </span>
+            }
+          />
+          {/* Linked GitHub issue: same chip as the task-detail surfaces. It
+              carries the strike-through "deleted upstream" state, so the card
+              uses one visual language instead of a separate unlink icon. */}
+          <TaskGithubIssueRef
+            repoFullName={task.externalRefs?.[0]?.repoFullName}
+            issueNumber={task.externalRefs?.[0]?.issueNumber}
+            url={task.externalRefs?.[0]?.url}
+            deleted={task.externalRefs?.[0]?.deleted}
+          />
         </div>
         <h3 className="text-sm font-medium truncate">{task.title}</h3>
       </CardHeader>

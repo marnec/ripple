@@ -12,8 +12,9 @@ import {
   ItemTitle,
   ItemActions,
 } from "@/components/ui/item";
+import { TaskCode } from "@/components/TaskCode";
 import { cn } from "@/lib/utils";
-import { formatTaskId, formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
+import { formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
 import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
 import { Ban } from "lucide-react";
 
@@ -50,8 +51,6 @@ type TaskRowProps = {
 };
 
 export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMenu, flush, hideAssignee }: TaskRowProps) {
-  const taskId = formatTaskId(task.projectKey, task.number);
-
   return (
     <Item
       onClick={onClick}
@@ -66,17 +65,13 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
 
       <ItemContent className="md:flex-1 md:min-w-0 basis-full md:basis-auto order-last md:order-0 pl-6.5 md:pl-0">
         <ItemTitle className={cn(task.completed && "line-through text-muted-foreground")}>
-          {taskId && (
-            <span className="text-xs text-muted-foreground font-mono shrink-0 hidden md:inline">{taskId}</span>
-          )}
+          <TaskCode task={task} className="shrink-0 hidden md:inline" />
           <span className="truncate">{task.title}</span>
         </ItemTitle>
       </ItemContent>
 
       {/* Top-row metadata on mobile: task ID + spacer to push actions right */}
-      {taskId && (
-        <span className="text-xs text-muted-foreground font-mono shrink-0 md:hidden">{taskId}</span>
-      )}
+      <TaskCode task={task} className="shrink-0 md:hidden" />
       <span className="flex-1 md:hidden" />
 
       <ItemActions>

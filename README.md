@@ -11,8 +11,6 @@ NEXT STEPS:
 - surface error to users when tying to manually set triage status
 
 
-- add to tak header github linked issue (github lgo separator)
-
 - split settings in tabs (workspace and projects)
 
 - restyle graph https://d3js.org/d3-force

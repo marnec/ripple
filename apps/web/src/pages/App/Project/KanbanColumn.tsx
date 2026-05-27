@@ -51,7 +51,12 @@ type KanbanColumnProps = {
     priority: "urgent" | "high" | "medium" | "low";
     labels?: string[];
     pullRequestState?: "draft" | "open" | "merged" | "closed";
-    externalRefs?: Array<{ deleted?: boolean }>;
+    externalRefs?: Array<{
+      repoFullName?: string;
+      issueNumber?: number;
+      url?: string;
+      deleted?: boolean;
+    }>;
     status: {
       name: string;
       color: string;

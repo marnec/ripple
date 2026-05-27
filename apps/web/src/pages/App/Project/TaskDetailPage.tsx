@@ -1,6 +1,7 @@
 import { BacklinksDrawerTrigger } from "@/components/BacklinksDrawer";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { TagPickerButton } from "@/components/TagPickerButton";
+import { TaskCode } from "@/components/TaskCode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
@@ -20,6 +21,7 @@ import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskProperties } from "./TaskProperties";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
+import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
 import { TaskCreateGithubIssueAction } from "./TaskCreateGithubIssueAction";
 import { TaskGithubBranchActions } from "./TaskGithubBranchActions";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
@@ -82,11 +84,6 @@ function TaskDetailPageContent({
     return <ResourceDeleted resourceType="task" />;
   }
 
-  const taskCode =
-    detail.task.projectKey && detail.task.number !== undefined
-      ? `${detail.task.projectKey}-${detail.task.number}`
-      : null;
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Task toolbar — desktop only. On mobile, the breadcrumb shows
@@ -107,11 +104,14 @@ function TaskDetailPageContent({
             value={detail.task.labels ?? []}
             onChange={detail.handleSetTags}
           />
-          {taskCode && (
-            <span className="shrink-0 text-sm text-muted-foreground">
-              [ {taskCode} ]
-            </span>
-          )}
+          <TaskCode task={detail.task} className="shrink-0 text-sm" />
+          <TaskGithubIssueRef
+            repoFullName={detail.task.externalRefs?.[0]?.repoFullName}
+            issueNumber={detail.task.externalRefs?.[0]?.issueNumber}
+            url={detail.task.externalRefs?.[0]?.url}
+            deleted={detail.task.externalRefs?.[0]?.deleted}
+            className="text-sm"
+          />
           <TaskSyncIndicator taskId={taskId} />
           <Input
             ref={titleInputRef}

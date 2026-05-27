@@ -1,4 +1,5 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
+import { TaskCode } from "@/components/TaskCode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -7,7 +8,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { formatTaskId } from "@/lib/task-utils";
 import { Maximize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -21,6 +21,7 @@ import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
 import { TaskCreateGithubIssueAction } from "./TaskCreateGithubIssueAction";
 import { TaskGithubBranchActions } from "./TaskGithubBranchActions";
+import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
@@ -88,14 +89,14 @@ export function TaskDetailSheet({
             <>
               <SheetHeader className="shrink-0 pr-28 gap-3">
                 <div className="flex items-center gap-2">
-                  {(() => {
-                    const taskIdStr = formatTaskId(task.projectKey, task.number);
-                    return taskIdStr ? (
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {taskIdStr}
-                      </span>
-                    ) : null;
-                  })()}
+                  <TaskCode task={task} className="text-sm"/>
+                  <TaskGithubIssueRef
+                    className="text-sm"
+                    repoFullName={task.externalRefs?.[0]?.repoFullName}
+                    issueNumber={task.externalRefs?.[0]?.issueNumber}
+                    url={task.externalRefs?.[0]?.url}
+                    deleted={task.externalRefs?.[0]?.deleted}
+                  />
                   <TaskSyncIndicator taskId={task._id} />
                   {/* Right-aligned action cluster, anchored clear of the
                       sheet's built-in close button. Flex so gaps close when the
