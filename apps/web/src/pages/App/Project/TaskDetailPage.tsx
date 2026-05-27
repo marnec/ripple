@@ -20,10 +20,8 @@ import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskProperties } from "./TaskProperties";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
-import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
+import { TaskGithubActions } from "./TaskGithubActions";
 import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
-import { TaskCreateGithubIssueAction } from "./TaskCreateGithubIssueAction";
-import { TaskGithubBranchActions } from "./TaskGithubBranchActions";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
@@ -122,23 +120,10 @@ function TaskDetailPageContent({
             className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
             placeholder="Task title"
           />
-          <TaskCreateGithubIssueAction
-            taskId={taskId}
-            taskTitle={detail.task.title}
+          <TaskGithubActions
+            task={detail.task}
             projectId={projectId}
             workspaceId={workspaceId}
-            isLinked={Boolean(detail.task.externalRefs?.[0])}
-            completed={detail.task.completed}
-          />
-          <TaskGithubBranchActions
-            taskId={taskId}
-            repoFullName={detail.task.externalRefs?.[0]?.repoFullName}
-            issueNumber={detail.task.externalRefs?.[0]?.issueNumber}
-            taskTitle={detail.task.title}
-          />
-          <TaskGithubHeaderActions
-            taskId={taskId}
-            issueUrl={detail.task.externalRefs?.[0]?.url}
           />
         </div>
       )}

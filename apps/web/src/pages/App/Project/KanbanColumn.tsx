@@ -33,6 +33,7 @@ import { useState, type ReactNode } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { KanbanCard } from "./KanbanCard";
+import type { KanbanTask } from "./kanban-types";
 
 type KanbanColumnProps = {
   status: {
@@ -45,27 +46,7 @@ type KanbanColumnProps = {
     setsStartDate?: boolean;
     externalCloseReason?: "completed" | "not_planned";
   };
-  tasks: Array<{
-    _id: string;
-    title: string;
-    priority: "urgent" | "high" | "medium" | "low";
-    labels?: string[];
-    pullRequestState?: "draft" | "open" | "merged" | "closed";
-    externalRefs?: Array<{
-      repoFullName?: string;
-      issueNumber?: number;
-      url?: string;
-      deleted?: boolean;
-    }>;
-    status: {
-      name: string;
-      color: string;
-    } | null;
-    assignee: {
-      name?: string;
-      image?: string;
-    } | null;
-  }>;
+  tasks: KanbanTask[];
   totalCount?: number;
   onTaskClick: (taskId: string) => void;
   onMoveLeft?: () => void;

@@ -993,6 +993,7 @@ export type DataModel = {
       projectId: Id<"projects">;
       status: "configuring" | "active" | "paused" | "disconnected";
       workspaceId: Id<"workspaces">;
+      workspaceIntegrationId?: Id<"workspaceIntegrations">;
       _id: Id<"projectIntegrationLinks">;
       _creationTime: number;
     };
@@ -1010,7 +1011,8 @@ export type DataModel = {
       | "pausedByBilling"
       | "projectId"
       | "status"
-      | "workspaceId";
+      | "workspaceId"
+      | "workspaceIntegrationId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -1406,6 +1408,36 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_task: ["taskId", "_creationTime"];
       undeleted_by_task: ["taskId", "deleted", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  taskExternalRefs: {
+    document: {
+      issueNumber: number;
+      projectId: Id<"projects">;
+      repoFullName: string;
+      taskId: Id<"tasks">;
+      _id: Id<"taskExternalRefs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "issueNumber"
+      | "projectId"
+      | "repoFullName"
+      | "taskId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_project_repo_issue: [
+        "projectId",
+        "repoFullName",
+        "issueNumber",
+        "_creationTime",
+      ];
+      by_task: ["taskId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

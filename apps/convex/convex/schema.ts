@@ -440,6 +440,26 @@ export default defineSchema({
     .index("by_importJob", ["importJobId"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"]),
 
+  // Denormalized lookup of `tasks.externalRefs`, kept in sync by a dbTriggers
+  // hook on the tasks table (see dbTriggers.ts). Exists only so the PR-sync
+  // reconciler can answer "which task carries issue #N in repo X" with a point
+  // index lookup instead of scanning every task in the project on each
+  // pull_request webhook — the issue number can't be indexed on `tasks` itself
+  // because it lives in a nested array. Same Convex-can't-index-nested-fields
+  // rationale as `taskTags`. One row per (task, repo, issueNumber) ref.
+  taskExternalRefs: defineTable({
+    taskId: v.id("tasks"),
+    projectId: v.id("projects"),
+    repoFullName: v.string(),
+    issueNumber: v.number(),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_project_repo_issue", [
+      "projectId",
+      "repoFullName",
+      "issueNumber",
+    ]),
+
   // CSV-driven bulk-task import jobs. One per project at a time (enforced in
   // taskImports.createImportJob). Rows are stored opaquely (v.any()) — the
   // strict shape lives in @shared/taskImportSchema and is enforced on both
@@ -964,6 +984,15 @@ export default defineSchema({
   projectIntegrationLinks: defineTable({
     workspaceId: v.id("workspaces"),
     projectId: v.id("projects"),
+    // The specific workspace integration (account + provider) this link was
+    // created through. A workspace may hold several integrations (e.g. a GitHub
+    // org + personal install, or GitHub + GitLab), so the bot user / provider /
+    // account for a link's webhooks and outbound auth must be resolved from
+    // THIS row — not workspace-wide (which isn't unique). Optional only for
+    // rows created before this column shipped; backfilled by
+    // migrations.backfillLinkWorkspaceIntegration. A project has at most one
+    // active link (enforced in createLink).
+    workspaceIntegrationId: v.optional(v.id("workspaceIntegrations")),
     status: v.union(
       v.literal("configuring"),
       v.literal("active"),

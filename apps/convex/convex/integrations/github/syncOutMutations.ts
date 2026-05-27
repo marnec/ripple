@@ -3,8 +3,9 @@ import { internalMutation } from "../../_generated/server";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
-import { getWorkspaceIntegration } from "../core/integrationLookups";
+import { getIntegrationForLink } from "../core/integrationLookups";
 import { logTaskIntegrationActivity } from "../core/integrationActivity";
+import { reconcileTaskExternalRefs } from "../core/taskExternalRefsSync";
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 
 /**
@@ -231,10 +232,7 @@ export const recordIssueCreateSuccess = internalMutation({
 
     const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
     if (!projectLink) return null;
-    const integration = await getWorkspaceIntegration(
-      ctx,
-      projectLink.workspaceId,
-    );
+    const integration = await getIntegrationForLink(ctx, projectLink);
     if (!integration) return null;
 
     // Echo-race guard: an inbound `issues.opened` for the issue we just created
@@ -264,16 +262,22 @@ export const recordIssueCreateSuccess = internalMutation({
       externalState: "open",
     });
 
-    await ctx.db.patch(args.taskId, {
-      externalRefs: [
-        {
-          provider: integration.provider,
-          repoFullName: projectLink.externalRepoFullName,
-          issueNumber: args.issueNumber,
-          url: `https://github.com/${projectLink.externalRepoFullName}/issues/${args.issueNumber}`,
-        },
-      ],
-    });
+    const externalRefs = [
+      {
+        provider: integration.provider,
+        repoFullName: projectLink.externalRepoFullName,
+        issueNumber: args.issueNumber,
+        url: `https://github.com/${projectLink.externalRepoFullName}/issues/${args.issueNumber}`,
+      },
+    ];
+    await ctx.db.patch(args.taskId, { externalRefs });
+    // Keep the issue-number lookup in step with the refs we just wrote.
+    await reconcileTaskExternalRefs(
+      ctx,
+      args.taskId,
+      task.projectId,
+      externalRefs,
+    );
 
     await logTaskIntegrationActivity(ctx, {
       taskId: args.taskId,
@@ -300,10 +304,7 @@ export const recordIssueCreateFailure = internalMutation({
   handler: async (ctx, args) => {
     const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
     if (!projectLink) return null;
-    const integration = await getWorkspaceIntegration(
-      ctx,
-      projectLink.workspaceId,
-    );
+    const integration = await getIntegrationForLink(ctx, projectLink);
     if (!integration) return null;
     try {
       await auditLog.log(ctx, {

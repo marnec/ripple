@@ -1,6 +1,6 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
-import { getWorkspaceIntegration } from "./integrationLookups";
+import { getIntegrationForLink } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
 import { reconcileTaskStatus } from "./statusReconciliation";
 import type { NormalizedPullRequestEvent } from "./types";
@@ -54,7 +54,7 @@ export async function applyPullRequestEvent(
     // Don't store a PR that attaches to nothing Ripple imported.
     if (taskIds.length === 0) return;
 
-    const integration = await getWorkspaceIntegration(ctx, link.workspaceId);
+    const integration = await getIntegrationForLink(ctx, link);
     if (!integration) {
       throw new Error(
         `applyPullRequestEvent: workspace ${link.workspaceId} has no integration row`,
@@ -226,25 +226,24 @@ async function resolveTaskIds(
     if (taskLink) taskIds.add(taskLink.taskId);
   }
 
-  // Number path: keywords parsed from the PR text, branch-independent. Match
-  // against `tasks.externalRefs` (issue number can't be indexed — it lives in
-  // a nested array — so scan the project's tasks, which is bounded). This is
+  // Number path: keywords parsed from the PR text, branch-independent. This is
   // what keeps branch→status automation working when a PR merges into a
-  // non-default branch like `develop`.
-  if (closesIssueNumbers.length > 0) {
-    const wanted = new Set(closesIssueNumbers);
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_project", (q) => q.eq("projectId", link.projectId))
+  // non-default branch like `develop`. Resolved via the `taskExternalRefs`
+  // lookup table (a denormalized projection of `tasks.externalRefs`, kept in
+  // sync by a dbTriggers hook) so it's a point index lookup per referenced
+  // issue rather than a scan of every task in the project on each webhook —
+  // the issue number can't be indexed on `tasks` itself (nested array).
+  for (const issueNumber of new Set(closesIssueNumbers)) {
+    const refs = await ctx.db
+      .query("taskExternalRefs")
+      .withIndex("by_project_repo_issue", (q) =>
+        q
+          .eq("projectId", link.projectId)
+          .eq("repoFullName", link.externalRepoFullName)
+          .eq("issueNumber", issueNumber),
+      )
       .collect();
-    for (const task of tasks) {
-      const matches = (task.externalRefs ?? []).some(
-        (r) =>
-          r.repoFullName === link.externalRepoFullName &&
-          wanted.has(r.issueNumber),
-      );
-      if (matches) taskIds.add(task._id);
-    }
+    for (const ref of refs) taskIds.add(ref.taskId);
   }
 
   return [...taskIds];

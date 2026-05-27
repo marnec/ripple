@@ -139,6 +139,8 @@ export const runAll = migrations.runner([
   internal.migrations.backfillTaskTagsAssigneeId,
   internal.migrations.cleanupProjectTagsField,
   internal.migrations.cleanupProjectEntityTags,
+  internal.migrations.backfillTaskExternalRefs,
+  internal.migrations.backfillLinkWorkspaceIntegration,
 ]);
 
 /**
@@ -1077,6 +1079,64 @@ export const backfillTaskTagsAssigneeId = migrations.define({
     if (row.assigneeId !== task.assigneeId) {
       await ctx.db.patch(row._id, { assigneeId: task.assigneeId });
     }
+  },
+});
+
+/**
+ * Backfill the `taskExternalRefs` lookup table from each task's
+ * `externalRefs`. The dbTriggers hook keeps it in sync for new writes; this
+ * covers tasks linked before the lookup table existed.
+ *
+ * Idempotent — inserts only the (repo, issueNumber) pairs not already present
+ * for the task. Run via `runAll` or directly:
+ *   npx convex run migrations:run '{"fn":"migrations:backfillTaskExternalRefs"}'
+ */
+export const backfillTaskExternalRefs = migrations.define({
+  table: "tasks",
+  migrateOne: async (ctx, task) => {
+    if (!task.externalRefs?.length) return;
+    const existing = await ctx.db
+      .query("taskExternalRefs")
+      .withIndex("by_task", (q) => q.eq("taskId", task._id))
+      .collect();
+    const have = new Set(
+      existing.map((r) => `${r.repoFullName} ${r.issueNumber}`),
+    );
+    for (const ref of task.externalRefs) {
+      if (have.has(`${ref.repoFullName} ${ref.issueNumber}`)) continue;
+      await ctx.db.insert("taskExternalRefs", {
+        taskId: task._id,
+        projectId: task.projectId,
+        repoFullName: ref.repoFullName,
+        issueNumber: ref.issueNumber,
+      });
+    }
+  },
+});
+
+/**
+ * Backfill `workspaceIntegrationId` on existing projectIntegrationLinks. The
+ * FK lets each link resolve its own integration (bot/provider/account) without
+ * the workspace-wide lookup that breaks once a workspace holds more than one
+ * integration. Legacy links predate multi-install, so a workspace has exactly
+ * one integration here — set it. Skips links already backfilled or whose
+ * workspace has 0 or >1 integrations (can't disambiguate without the account,
+ * which legacy links don't store).
+ *
+ * Run via `runAll` or: npx convex run migrations:run '{"fn":"migrations:backfillLinkWorkspaceIntegration"}'
+ */
+export const backfillLinkWorkspaceIntegration = migrations.define({
+  table: "projectIntegrationLinks",
+  migrateOne: async (ctx, link) => {
+    if (link.workspaceIntegrationId) return;
+    const integrations = await ctx.db
+      .query("workspaceIntegrations")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
+      .collect();
+    if (integrations.length !== 1) return;
+    await ctx.db.patch(link._id, {
+      workspaceIntegrationId: integrations[0]._id,
+    });
   },
 });
 

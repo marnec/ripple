@@ -5,7 +5,8 @@ import { TaskCode } from "@/components/TaskCode";
 import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
 import { cn } from "@/lib/utils";
 import { formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
-import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
+import { ExternalAssigneeAvatars } from "./ExternalAssignees";
+import type { KanbanTask } from "./kanban-types";
 import {
   Ban,
   CalendarIcon,
@@ -32,33 +33,7 @@ const PR_STATE_META: Record<
 };
 
 type KanbanCardPresenterProps = {
-  task: {
-    _id: string;
-    title: string;
-    priority: "urgent" | "high" | "medium" | "low";
-    labels?: string[];
-    number?: number;
-    projectKey?: string;
-    dueDate?: string;
-    estimate?: number;
-    hasBlockers?: boolean;
-    pullRequestState?: "draft" | "open" | "merged" | "closed";
-    externalRefs?: Array<{
-      repoFullName?: string;
-      issueNumber?: number;
-      url?: string;
-      deleted?: boolean;
-    }>;
-    externalAssignees?: ExternalAssignee[];
-    status: {
-      name: string;
-      color: string;
-    } | null;
-    assignee: {
-      name?: string;
-      image?: string;
-    } | null;
-  };
+  task: KanbanTask;
   onClick: () => void;
   isDragging?: boolean;
 };

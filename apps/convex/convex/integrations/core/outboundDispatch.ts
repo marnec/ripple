@@ -6,7 +6,7 @@ import type { FunctionReference } from "convex/server";
 import { normalizeTagList } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
 import { memberToGithubLogin } from "./identity";
-import { getWorkspaceIntegration } from "./integrationLookups";
+import { getIntegrationForLink } from "./integrationLookups";
 import {
   deriveDesiredExternalState,
   shouldSkipForEcho,
@@ -92,10 +92,7 @@ async function resolveTaskTarget(
   if (!projectLink) return null;
   if (shouldSkipForFreeze(projectLink)) return null;
 
-  const integration = await getWorkspaceIntegration(
-    ctx,
-    projectLink.workspaceId,
-  );
+  const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) return null;
 
   return {
@@ -132,10 +129,7 @@ async function resolveCommentLinkTarget(
   if (!projectLink) return null;
   if (shouldSkipForFreeze(projectLink)) return null;
 
-  const integration = await getWorkspaceIntegration(
-    ctx,
-    projectLink.workspaceId,
-  );
+  const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) return null;
 
   return {
@@ -190,10 +184,7 @@ export async function enqueueIssueCreate(
     throw new Error("GitHub integration is frozen for this workspace");
   }
 
-  const integration = await getWorkspaceIntegration(
-    ctx,
-    projectLink.workspaceId,
-  );
+  const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) throw new Error("Workspace integration row missing");
 
   await retrier.run(
@@ -284,10 +275,7 @@ export async function enqueueDescriptionPush(
   if (!projectLink) throw new Error("Project integration link missing");
   if (shouldSkipForFreeze(projectLink)) return; // silently no-op while frozen
 
-  const integration = await getWorkspaceIntegration(
-    ctx,
-    projectLink.workspaceId,
-  );
+  const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) throw new Error("Workspace integration row missing");
 
   const issueNumber = task.externalRefs?.[0]?.issueNumber ?? 0;

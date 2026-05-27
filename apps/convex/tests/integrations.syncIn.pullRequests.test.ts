@@ -161,6 +161,22 @@ describe("integrations/core/syncInPullRequests.applyPullRequestEvent", () => {
         .collect(),
     );
 
+    // The issue-number lookup the resolver reads must be populated by the
+    // import path (reconcileTaskExternalRefs), keyed on (project, repo, issue).
+    const lookup = await t.run((ctx) =>
+      ctx.db
+        .query("taskExternalRefs")
+        .withIndex("by_project_repo_issue", (q) =>
+          q
+            .eq("projectId", projectId)
+            .eq("repoFullName", link.externalRepoFullName)
+            .eq("issueNumber", 42),
+        )
+        .collect(),
+    );
+    expect(lookup).toHaveLength(1);
+    expect(lookup[0]?.taskId).toBe(task!._id);
+
     // PR merged into `develop` (non-default): GitHub returns no closing refs,
     // but "closes #42" was parsed into closesIssueNumbers.
     await t.run((ctx) =>

@@ -29,5 +29,24 @@ export async function getWorkspaceIntegration(
   return ctx.db
     .query("workspaceIntegrations")
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .unique();
+    .first();
+}
+
+/**
+ * Resolve the integration a project link belongs to. This is the correct
+ * resolver for any caller that has a `projectIntegrationLinks` row, because a
+ * workspace may hold several integrations (multi-account / multi-provider) and
+ * `getWorkspaceIntegration` only returns *one* of them. Reads the link's
+ * `workspaceIntegrationId` FK; falls back to the workspace lookup only for
+ * legacy links written before the FK existed (single-install era, so the
+ * fallback is unambiguous there).
+ */
+export async function getIntegrationForLink(
+  ctx: QueryCtx,
+  link: Doc<"projectIntegrationLinks">,
+): Promise<Doc<"workspaceIntegrations"> | null> {
+  if (link.workspaceIntegrationId) {
+    return ctx.db.get(link.workspaceIntegrationId);
+  }
+  return getWorkspaceIntegration(ctx, link.workspaceId);
 }

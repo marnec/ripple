@@ -10,7 +10,7 @@ import { Temporal as _Temporal } from "temporal-polyfill";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexQueryCacheProvider } from "convex-helpers/react/cache/provider";
 import { ConvexReactClient } from "convex/react";
-import { LazyMotion, domMax } from "framer-motion";
+import { LazyMotion, MotionConfig, domMax } from "framer-motion";
 import { ThemeProvider } from "next-themes";
 import React from "react";
 import ReactDOM from "react-dom/client";
@@ -36,7 +36,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <ConvexAuthProvider client={convex}>
             <ConvexQueryCacheProvider>
               <LazyMotion features={domMax} strict>
-                <RouterProvider router={router} />
+                {/* `reducedMotion="user"` makes every `m.*` component honor the
+                    OS "reduce motion" setting: transform/layout animations are
+                    snapped instantly while opacity/color fades are kept. This
+                    covers the kanban cross-column fly ghost and card reorder
+                    without per-component `useReducedMotion()` wiring. */}
+                <MotionConfig reducedMotion="user">
+                  <RouterProvider router={router} />
+                </MotionConfig>
               </LazyMotion>
             </ConvexQueryCacheProvider>
           </ConvexAuthProvider>

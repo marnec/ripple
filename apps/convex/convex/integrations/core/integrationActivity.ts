@@ -1,7 +1,10 @@
 import type { MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { logActivity } from "../../auditLog";
-import { getWorkspaceIntegration } from "./integrationLookups";
+import {
+  getIntegrationForLink,
+  getWorkspaceIntegration,
+} from "./integrationLookups";
 
 /**
  * Append an integration-sourced entry to a task's activity timeline. Unlike
@@ -29,7 +32,19 @@ export async function logTaskIntegrationActivity(
 ): Promise<void> {
   const task = await ctx.db.get(args.taskId);
   if (!task) return;
-  const integration = await getWorkspaceIntegration(ctx, task.workspaceId);
+  // Attribute to the bot of the integration this task is linked through (a
+  // workspace can hold several). Resolve via the task's link; fall back to the
+  // workspace lookup for the rare unlinked case.
+  const taskLink = await ctx.db
+    .query("taskIntegrationLinks")
+    .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
+    .unique();
+  const projectLink = taskLink
+    ? await ctx.db.get(taskLink.projectIntegrationLinkId)
+    : null;
+  const integration = projectLink
+    ? await getIntegrationForLink(ctx, projectLink)
+    : await getWorkspaceIntegration(ctx, task.workspaceId);
   if (!integration) return;
 
   await logActivity(ctx, {

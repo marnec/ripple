@@ -10,7 +10,7 @@ import {
   requireWorkspaceMember,
 } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
-import { getWorkspaceIntegration } from "../core/integrationLookups";
+import { getIntegrationForLink } from "../core/integrationLookups";
 import { logTaskIntegrationActivity } from "../core/integrationActivity";
 import { githubClientFromEnv } from "./client";
 
@@ -77,7 +77,7 @@ export const branchFetchContext = internalQuery({
     await requireWorkspaceMember(ctx, link.workspaceId, {
       role: WorkspaceRole.ADMIN,
     });
-    const integration = await getWorkspaceIntegration(ctx, link.workspaceId);
+    const integration = await getIntegrationForLink(ctx, link);
     if (!integration) return null;
     const [owner, repo] = link.externalRepoFullName.split("/");
     if (!owner || !repo) return null;
@@ -115,10 +115,7 @@ export const branchCreateContext = internalQuery({
     if (!link || link.externalDeletedAt !== undefined) return null;
     const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
     if (!projectLink) return null;
-    const integration = await getWorkspaceIntegration(
-      ctx,
-      projectLink.workspaceId,
-    );
+    const integration = await getIntegrationForLink(ctx, projectLink);
     if (!integration) return null;
     const task = await ctx.db.get(taskId);
     if (!task) return null;

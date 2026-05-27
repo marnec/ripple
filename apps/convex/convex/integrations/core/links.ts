@@ -7,6 +7,8 @@ import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { canActivateIntegration } from "./activationGate";
 import { withTriggers } from "../../dbTriggers";
+import { reconcileTaskExternalRefs } from "./taskExternalRefsSync";
+import { getIntegrationForLink } from "./integrationLookups";
 
 /**
  * Per-batch size for the disconnect cascade workpool drain. Each step
@@ -129,6 +131,28 @@ export const createLink = mutation({
       );
     }
 
+    // One provider TYPE per project: a project may gather many repos (1→N), but
+    // they must all be the same provider — mixing GitHub and GitLab repos on a
+    // single project isn't supported (status reconciliation, branch automation,
+    // and the task's external refs assume a single provider's semantics).
+    // Disconnected rows are historical and don't constrain a fresh link.
+    const projectLinks = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+    for (const existing of projectLinks) {
+      if (existing.status === "disconnected") continue;
+      const existingIntegration = await getIntegrationForLink(ctx, existing);
+      if (
+        existingIntegration &&
+        existingIntegration.provider !== integration.provider
+      ) {
+        throw new ConvexError(
+          `This project is already connected to a ${existingIntegration.provider} repository; a project can't mix ${existingIntegration.provider} and ${integration.provider} repositories.`,
+        );
+      }
+    }
+
     // Globally unique externalRepoId — a repo can be linked to at most one
     // ACTIVE/PAUSED project at a time. Disconnected rows are historical and
     // never block a fresh link (in fact reconnecting the same repo to the
@@ -153,6 +177,7 @@ export const createLink = mutation({
     const linkId = await ctx.db.insert("projectIntegrationLinks", {
       projectId: args.projectId,
       workspaceId: args.workspaceId,
+      workspaceIntegrationId: integration._id,
       status: "active",
       pausedByBilling: false,
       externalRepoId: args.externalRepoId,
@@ -549,6 +574,13 @@ export const drainDisconnectBatch = internalMutation({
             },
             externalRefs: undefined,
           });
+          // Drop the issue-number lookup rows for this now-unlinked task.
+          await reconcileTaskExternalRefs(
+            ctx,
+            taskLink.taskId,
+            task.projectId,
+            undefined,
+          );
         }
       }
 
@@ -626,17 +658,25 @@ export const drainReconnectBatch = internalMutation({
         .unique();
       if (existing) continue;
 
+      const externalRefs = [
+        {
+          provider: frozen.provider,
+          repoFullName: projectLink.externalRepoFullName,
+          issueNumber: frozen.issueNumber,
+          url: frozen.url,
+        },
+      ];
       await taskWriter.patch(task._id, {
-        externalRefs: [
-          {
-            provider: frozen.provider,
-            repoFullName: projectLink.externalRepoFullName,
-            issueNumber: frozen.issueNumber,
-            url: frozen.url,
-          },
-        ],
+        externalRefs,
         externalRefFrozen: undefined,
       });
+      // Restore the issue-number lookup rows for the rehydrated task.
+      await reconcileTaskExternalRefs(
+        ctx,
+        task._id,
+        projectLink.projectId,
+        externalRefs,
+      );
       await ctx.db.insert("taskIntegrationLinks", {
         taskId: task._id,
         projectIntegrationLinkId: args.projectIntegrationLinkId,

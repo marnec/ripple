@@ -4,8 +4,9 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
 import { githubLoginToMember } from "./identity";
-import { getWorkspaceIntegration } from "./integrationLookups";
+import { getIntegrationForLink } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
+import { reconcileTaskExternalRefs } from "./taskExternalRefsSync";
 import {
   reconcileTaskStatus,
   resolveCompletedStatus,
@@ -244,7 +245,7 @@ async function applyCommentCreated(
     .unique();
   if (dupe) return;
 
-  const integration = await getWorkspaceIntegration(ctx, link.workspaceId);
+  const integration = await getIntegrationForLink(ctx, link);
   if (!integration) {
     throw new Error(
       `applyCommentCreated: workspace ${link.workspaceId} has no integration row`,
@@ -303,7 +304,7 @@ async function createTaskFromEvent(
     importContext,
   } = args;
 
-  const integration = await getWorkspaceIntegration(ctx, link.workspaceId);
+  const integration = await getIntegrationForLink(ctx, link);
   if (!integration) {
     throw new Error(
       `applyNormalizedEvent: workspace ${link.workspaceId} has no integration row`,
@@ -326,6 +327,14 @@ async function createTaskFromEvent(
     await ctx.db.patch(link.projectId, { taskCounter: number });
   }
 
+  const externalRefs = [
+    {
+      provider: integration.provider,
+      repoFullName: link.externalRepoFullName,
+      issueNumber: event.issueNumber,
+      url: event.url,
+    },
+  ];
   const taskId = await ctx.db.insert("tasks", {
     projectId: link.projectId,
     workspaceId: link.workspaceId,
@@ -336,15 +345,10 @@ async function createTaskFromEvent(
     creatorId: integration.botUserId,
     number,
     importJobId: importContext?.importJobId,
-    externalRefs: [
-      {
-        provider: integration.provider,
-        repoFullName: link.externalRepoFullName,
-        issueNumber: event.issueNumber,
-        url: event.url,
-      },
-    ],
+    externalRefs,
   });
+  // Mirror the ref into the issue-number lookup the PR resolver reads.
+  await reconcileTaskExternalRefs(ctx, taskId, link.projectId, externalRefs);
 
   await ctx.db.insert("taskIntegrationLinks", {
     taskId,

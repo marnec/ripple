@@ -4327,6 +4327,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillLinkWorkspaceIntegration: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillMemberAggregates: FunctionReference<
       "mutation",
       "internal",
@@ -4468,6 +4482,20 @@ export declare const internal: {
       any
     >;
     backfillTaskBelongsToEdges: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    backfillTaskExternalRefs: FunctionReference<
       "mutation",
       "internal",
       {

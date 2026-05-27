@@ -18,9 +18,7 @@ import { TaskDependencies } from "./TaskDependencies";
 import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
-import { TaskGithubHeaderActions } from "./TaskGithubHeaderActions";
-import { TaskCreateGithubIssueAction } from "./TaskCreateGithubIssueAction";
-import { TaskGithubBranchActions } from "./TaskGithubBranchActions";
+import { TaskGithubActions } from "./TaskGithubActions";
 import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
@@ -102,23 +100,10 @@ export function TaskDetailSheet({
                       sheet's built-in close button. Flex so gaps close when the
                       GitHub affordances are absent (the common, native case). */}
                   <div className="absolute top-3 right-12 flex items-center gap-1">
-                    <TaskCreateGithubIssueAction
-                      taskId={task._id}
-                      taskTitle={task.title}
+                    <TaskGithubActions
+                      task={task}
                       projectId={projectId}
                       workspaceId={workspaceId}
-                      isLinked={Boolean(task.externalRefs?.[0])}
-                      completed={task.completed}
-                    />
-                    <TaskGithubBranchActions
-                      taskId={task._id}
-                      repoFullName={task.externalRefs?.[0]?.repoFullName}
-                      issueNumber={task.externalRefs?.[0]?.issueNumber}
-                      taskTitle={task.title}
-                    />
-                    <TaskGithubHeaderActions
-                      taskId={task._id}
-                      issueUrl={task.externalRefs?.[0]?.url}
                     />
                     <Button
                       variant="ghost"

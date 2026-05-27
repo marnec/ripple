@@ -8,9 +8,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { IntegrationWarning } from "@/components/IntegrationWarning";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
@@ -53,23 +62,21 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
   const [open, setOpen] = useState(false);
   const [disconnectingId, setDisconnectingId] =
     useState<Id<"projectIntegrationLinks"> | null>(null);
+  // The link awaiting Disconnect confirmation (null = dialog closed).
+  const [disconnectTarget, setDisconnectTarget] = useState<{
+    linkId: Id<"projectIntegrationLinks">;
+    repo: string;
+  } | null>(null);
 
   if (feature === undefined) return null;
 
   const ready = gate?.canActivate === true;
   const activeLinks = links ?? [];
 
-  const handleDisconnect = async (
-    linkId: Id<"projectIntegrationLinks">,
-    repo: string,
-  ) => {
-    if (
-      !confirm(
-        `Disconnect ${repo}? Synced issues stay, but new GitHub activity will no longer update this project.`,
-      )
-    ) {
-      return;
-    }
+  const confirmDisconnect = async () => {
+    if (!disconnectTarget) return;
+    const { linkId, repo } = disconnectTarget;
+    setDisconnectTarget(null);
     setDisconnectingId(linkId);
     try {
       await unlink({ linkId });
@@ -129,7 +136,10 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
                   className="ml-auto shrink-0 text-destructive hover:text-destructive"
                   disabled={disconnectingId === link._id}
                   onClick={() =>
-                    void handleDisconnect(link._id, link.externalRepoFullName)
+                    setDisconnectTarget({
+                      linkId: link._id,
+                      repo: link.externalRepoFullName,
+                    })
                   }
                 >
                   {disconnectingId === link._id && (
@@ -164,24 +174,21 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
         </div>
       ) : !ready ? (
         <div className="space-y-3">
-          <div className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 dark:border-amber-800/60 dark:bg-amber-950/30">
-            <Inbox className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
-            <div className="space-y-2 text-sm text-amber-900 dark:text-amber-200">
-              <p>
-                Before connecting, choose where imported issues should land.
-                GitHub issues import into an <strong>issue-inbox</strong> status,
-                and this project doesn&apos;t have one yet.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="border-amber-400 bg-transparent hover:bg-amber-100 dark:hover:bg-amber-900/40"
-                onClick={scrollToEffects}
-              >
-                Set up status effects →
-              </Button>
-            </div>
-          </div>
+          <IntegrationWarning icon={Inbox} className="p-4">
+            <p>
+              Before connecting, choose where imported issues should land.
+              GitHub issues import into an <strong>issue-inbox</strong> status,
+              and this project doesn&apos;t have one yet.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-400 bg-transparent hover:bg-amber-100 dark:hover:bg-amber-900/40"
+              onClick={scrollToEffects}
+            >
+              Set up status effects →
+            </Button>
+          </IntegrationWarning>
           <Button variant="outline" className="gap-2" disabled>
             <GitBranch className="h-4 w-4" />
             Connect GitHub repo
@@ -201,6 +208,40 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
           />
         </>
       )}
+
+      <ResponsiveDialog
+        open={disconnectTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setDisconnectTarget(null);
+        }}
+      >
+        <ResponsiveDialogContent className="max-w-md">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Disconnect repository?</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              {disconnectTarget && (
+                <>
+                  Disconnect{" "}
+                  <span className="font-mono">{disconnectTarget.repo}</span>?
+                  Synced issues stay, but new GitHub activity will no longer
+                  update this project.
+                </>
+              )}
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogFooter>
+            <Button variant="ghost" onClick={() => setDisconnectTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void confirmDisconnect()}
+            >
+              Disconnect
+            </Button>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </section>
   );
 }

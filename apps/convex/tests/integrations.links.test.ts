@@ -135,11 +135,11 @@ describe("integrations/core/links.createLink", () => {
     ).rejects.toThrow(new RegExp(firstProjectId));
   });
 
-  it("one project ↔ N repos: the same project can link multiple distinct repos", async () => {
+  it("one project ↔ N repos: the same project can link multiple distinct repos of the same provider", async () => {
     // An "app" project gathering a frontend repo and a backend repo. Each
     // repo maps to one project (repo→one-project still holds), but a project
-    // accumulates as many repos as you link. Guards against a per-project
-    // uniqueness check ever being added.
+    // accumulates as many repos as you link — as long as they're the same
+    // provider type (no mixing GitHub + GitLab on one project).
     const t = createTestContext();
     const { workspaceId, projectId, asUser } =
       await setupActivatableProject(t);
@@ -174,6 +174,11 @@ describe("integrations/core/links.createLink", () => {
     expect(frontend?.status).toBe("active");
     expect(backend?.status).toBe("active");
     expect(frontend?.externalRepoId).not.toBe(backend?.externalRepoId);
+    // Each link records which workspace integration it came through.
+    expect(frontend?.workspaceIntegrationId).toBeDefined();
+    expect(backend?.workspaceIntegrationId).toBe(
+      frontend?.workspaceIntegrationId,
+    );
 
     // The workspace view lists both repos under the one project.
     const links = await asUser.query(
@@ -188,6 +193,44 @@ describe("integrations/core/links.createLink", () => {
       "acme/web-backend",
       "acme/web-frontend",
     ]);
+  });
+
+  it("one provider type per project: a second-provider repo is rejected", async () => {
+    // Project already linked to a GitHub repo. Linking a GitLab repo (a second
+    // workspace integration of a different provider) to the SAME project is
+    // rejected — providers can't be mixed on one project.
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } =
+      await setupActivatableProject(t);
+
+    await asUser.mutation(api.integrations.core.links.createLink, {
+      projectId,
+      workspaceId,
+      externalAccountId: "install-999",
+      externalRepoId: "R_github",
+      externalRepoFullName: "acme/web",
+    });
+
+    // Seed a GitLab integration in the same workspace.
+    await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", { name: "GitLab" });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "gitlab",
+        externalAccountId: "gl-group-1",
+      });
+    });
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.createLink, {
+        projectId,
+        workspaceId,
+        externalAccountId: "gl-group-1",
+        externalRepoId: "GL_proj_1",
+        externalRepoFullName: "acme/web-gl",
+      }),
+    ).rejects.toThrow(/mix github and gitlab|already connected to a github/i);
   });
 
   it("rejects when no workspaceIntegrations row exists for the externalAccountId", async () => {

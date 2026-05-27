@@ -3,29 +3,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { m } from "framer-motion";
 import { KanbanCardPresenter } from "./KanbanCardPresenter";
 import { useRegisterCardNode } from "./kanbanFly";
+import type { KanbanTask } from "./kanban-types";
 
 type KanbanCardProps = {
-  task: {
-    _id: string;
-    title: string;
-    priority: "urgent" | "high" | "medium" | "low";
-    labels?: string[];
-    pullRequestState?: "draft" | "open" | "merged" | "closed";
-    externalRefs?: Array<{
-      repoFullName?: string;
-      issueNumber?: number;
-      url?: string;
-      deleted?: boolean;
-    }>;
-    status: {
-      name: string;
-      color: string;
-    } | null;
-    assignee: {
-      name?: string;
-      image?: string;
-    } | null;
-  };
+  task: KanbanTask;
   onClick: () => void;
   /** When false (during a drag/drop settle), motion layout animation is
    *  disabled so it doesn't fight dnd-kit's transforms. */
