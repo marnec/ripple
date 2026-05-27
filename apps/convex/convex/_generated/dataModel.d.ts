@@ -1854,6 +1854,7 @@ export type DataModel = {
     document: {
       email?: string;
       emailVerificationTime?: number;
+      githubLogin?: string;
       image?: string;
       isAnonymous?: boolean;
       isBot?: boolean;
@@ -1868,6 +1869,7 @@ export type DataModel = {
       | "_id"
       | "email"
       | "emailVerificationTime"
+      | "githubLogin"
       | "image"
       | "isAnonymous"
       | "isBot"
@@ -1877,6 +1879,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_github_login: ["githubLogin", "_creationTime"];
       email: ["email", "_creationTime"];
       phone: ["phone", "_creationTime"];
     };

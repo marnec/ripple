@@ -51,6 +51,10 @@ export const userValidator = v.object({
   // frontend can render external-author identity instead of bot identity
   // on task creators / comment authors / facepiles.
   isBot: v.optional(v.boolean()),
+  // Canonical (lowercase) GitHub login, captured at OAuth sign-in. Present on
+  // the user doc, so it must be allowed through anywhere a full user row is
+  // returned (e.g. users.viewer, task/cycle assignee).
+  githubLogin: v.optional(v.string()),
 });
 
 export const referenceValidator = v.object({

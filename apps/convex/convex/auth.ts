@@ -96,7 +96,25 @@ async function findVerifiedPhoneUser(ctx: QueryCtx, phone: string) {
 
 export const { auth, signIn, signOut, store } = convexAuth({
   providers: [
-    GitHub,
+    // Customize the profile map to retain the GitHub `login`. The default
+    // provider drops it (it only feeds `name`), but we persist it as
+    // `users.githubLogin` so inbound GitHub assignees can resolve to this
+    // Ripple user. Stored lowercase to match the canonical form used by the
+    // assignee matcher (`normalizeLoginList`).
+    GitHub({
+      profile(profile) {
+        return {
+          id: String(profile.id),
+          name: profile.name ?? profile.login,
+          email: profile.email,
+          image: profile.avatar_url,
+          githubLogin:
+            typeof profile.login === "string"
+              ? profile.login.toLowerCase()
+              : undefined,
+        };
+      },
+    }),
     Resend({ from: `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>` }),
     Password({ reset: ResendOTPPasswordReset, verify: ResendOTP }),
   ],

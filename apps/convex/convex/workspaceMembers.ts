@@ -42,6 +42,7 @@ export const membersByWorkspace = query({
     image: v.optional(v.string()),
     isAnonymous: v.optional(v.boolean()),
     isBot: v.optional(v.boolean()),
+    githubLogin: v.optional(v.string()),
   })),
   handler: async (ctx, { workspaceId }) => {
     await requireWorkspaceMember(ctx, workspaceId);

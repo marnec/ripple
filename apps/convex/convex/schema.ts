@@ -31,9 +31,16 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     isBot: v.optional(v.boolean()),
+    // Canonical (lowercase) GitHub login, captured at OAuth sign-in (see
+    // auth.ts). Lets inbound GitHub assignees resolve to this user without a
+    // per-workspace `workspaceMemberExternalIdentity` row — that table stays
+    // the provider-generic override (and the home for non-OAuth providers /
+    // manual linking). Absent for users who never signed in via GitHub.
+    githubLogin: v.optional(v.string()),
   })
     .index("email", ["email"])
-    .index("phone", ["phone"]),
+    .index("phone", ["phone"])
+    .index("by_github_login", ["githubLogin"]),
 
   messages: defineTable({
     userId: v.id("users"),

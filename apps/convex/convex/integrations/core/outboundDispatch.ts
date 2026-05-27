@@ -5,6 +5,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import type { FunctionReference } from "convex/server";
 import { normalizeTagList } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
+import { memberToGithubLogin } from "./identity";
 import { getWorkspaceIntegration } from "./integrationLookups";
 import {
   deriveDesiredExternalState,
@@ -369,17 +370,13 @@ export async function maybeEnqueueAssigneesPush(
 
   let nextLogins: string[] = [];
   if (task.assigneeId) {
-    const identity = await ctx.db
-      .query("workspaceMemberExternalIdentity")
-      .withIndex("by_workspace_user_provider", (q) =>
-        q
-          .eq("workspaceId", projectLink.workspaceId)
-          .eq("userId", task.assigneeId!)
-          .eq("provider", "github"),
-      )
-      .unique();
-    if (!identity) return; // unmappable assignee — preserve GitHub state.
-    nextLogins = normalizeLoginList([identity.externalLogin]);
+    const login = await memberToGithubLogin(
+      ctx,
+      projectLink.workspaceId,
+      task.assigneeId,
+    );
+    if (!login) return; // unmappable assignee — preserve GitHub state.
+    nextLogins = normalizeLoginList([login]);
   }
 
   const { add, remove, changed } = diffSet(

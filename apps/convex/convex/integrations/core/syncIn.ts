@@ -3,6 +3,7 @@ import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
+import { githubLoginToMember } from "./identity";
 import { getWorkspaceIntegration } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
 import {
@@ -483,11 +484,16 @@ async function applyLabelsChanged(
  * Reconcile the task's `assigneeId` against the GitHub assignee set. First
  * login that maps to a workspace member via `workspaceMemberExternalIdentity`
  * wins the single Ripple slot; the rest land on the shadow set for display.
- * When no GitHub login matches a member, `assigneeId` stays unset (the task
- * reads as "Unassigned") and the full set becomes the shadow set — we never
- * borrow the bot user for the slot. The shadow set is written both to the link
- * (source of truth) and denormalized onto the task row so the kanban / list can
- * render external assignees beside the internal one without subscribing to the
+ *
+ * An inbound GitHub assignee change only ever *promotes* a matched member into
+ * the slot — it never empties it. When no GitHub login resolves to a member
+ * (an external-only assignment, or GitHub clearing all assignees) we PRESERVE
+ * any existing local assignee instead of blanking it: a remote assignment that
+ * maps to nobody in Ripple must not wipe a human-set owner. The unmatched
+ * GitHub identities still surface via the shadow set. We never borrow the bot
+ * user for the slot. The shadow set is written both to the link (source of
+ * truth) and denormalized onto the task row so the kanban / list can render
+ * external assignees beside the internal one without subscribing to the
  * high-churn link table.
  */
 async function applyAssigneesChanged(
@@ -507,26 +513,20 @@ async function applyAssigneesChanged(
 
   // First-matching-login wins for `assigneeId`. The non-winning entries
   // (unmatched logins + matched-but-not-first) become the shadow set. When no
-  // login resolves to a workspace member, `assigneeId` stays unset — the task
-  // reads as "Unassigned" (a triage prompt) while the real GitHub identities
-  // render via the denormalized shadow set. We do NOT borrow the bot user for
-  // the slot: it would pollute assignee facets and mask that the task needs a
-  // Ripple owner.
+  // login resolves to a workspace member we leave `matchedUserId` unset and
+  // preserve the task's existing assignee below (see the patch) rather than
+  // blanking it. We do NOT borrow the bot user for the slot: it would pollute
+  // assignee facets and mask that the task needs a Ripple owner.
   let matchedUserId: Doc<"users">["_id"] | undefined;
   let winnerIndex = -1;
   for (let i = 0; i < event.assignees.length; i++) {
-    const a = event.assignees[i];
-    const identity = await ctx.db
-      .query("workspaceMemberExternalIdentity")
-      .withIndex("by_workspace_provider_login", (q) =>
-        q
-          .eq("workspaceId", link.workspaceId)
-          .eq("provider", "github")
-          .eq("externalLogin", a.login.toLowerCase()),
-      )
-      .unique();
-    if (identity) {
-      matchedUserId = identity.userId;
+    const userId = await githubLoginToMember(
+      ctx,
+      link.workspaceId,
+      event.assignees[i].login,
+    );
+    if (userId) {
+      matchedUserId = userId;
       winnerIndex = i;
       break;
     }
@@ -553,14 +553,17 @@ async function applyAssigneesChanged(
   // external assignee added while the matched member stays).
   const task = await ctx.db.get(existingLink.taskId);
   if (!task) return;
-  const assigneeChanged = task.assigneeId !== matchedUserId;
+  // A matched member takes the slot; otherwise keep whoever Ripple already has
+  // (preserve, don't blank — an unmatched/cleared GitHub set can't own this).
+  const nextAssigneeId = matchedUserId ?? task.assigneeId;
+  const assigneeChanged = task.assigneeId !== nextAssigneeId;
   const externalChanged = diffSet(
     shadowAssignees.map((a) => a.login),
     (task.externalAssignees ?? []).map((a) => a.login),
   ).changed;
   if (assigneeChanged || externalChanged) {
     await ctx.db.patch(task._id, {
-      assigneeId: matchedUserId,
+      assigneeId: nextAssigneeId,
       externalAssignees: nextExternal,
     });
   }

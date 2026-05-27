@@ -822,6 +822,66 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
     expect(err?.message).toMatch(/credentials not configured/i);
   });
 
+  it("resolves the assignee's GitHub login via users.githubLogin (OAuth capture, no override row)", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    // alice is a workspace member whose GitHub login was captured at OAuth —
+    // there is NO workspaceMemberExternalIdentity override row.
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "Alice", githubLogin: "alice" });
+      await ctx.db.insert("workspaceMembers", {
+        userId: uid, workspaceId, role: WorkspaceRole.MEMBER,
+      });
+      return uid;
+    });
+
+    const { taskId, linkId } = await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", { name: "GitHub", isBot: true });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId, botUserId, provider: "github", externalAccountId: "install-1",
+      });
+      const projectLinkId = await ctx.db.insert("projectIntegrationLinks", {
+        projectId, workspaceId,
+        status: "active", pausedByBilling: false,
+        externalRepoId: "R_kg1", externalRepoFullName: "acme/web",
+      });
+      const statusId = await ctx.db.insert("taskStatuses", {
+        projectId, name: "Todo", color: "bg-gray-500",
+        order: 0, isDefault: true, isCompleted: false,
+      });
+      const taskId = await ctx.db.insert("tasks", {
+        projectId, workspaceId,
+        title: "Outbound assignee via githubLogin",
+        statusId, priority: "medium", completed: false,
+        creatorId: botUserId,
+        assigneeId: aliceUserId,
+        externalRefs: [{
+          provider: "github", repoFullName: "acme/web",
+          issueNumber: 42, url: "https://github.com/acme/web/issues/42",
+        }],
+      });
+      const linkId = await ctx.db.insert("taskIntegrationLinks", {
+        taskId, projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "I_kg1", externalUpdatedAt: 1_000,
+        externalAuthor: { login: "octocat", avatarUrl: "u", url: "https://github.com/octocat" },
+        externalState: "open",
+        externalAssigneeLogins: [], // GitHub knows no assignees yet
+      });
+      return { taskId, linkId };
+    });
+
+    await t.run((ctx) => maybeEnqueueAssigneesPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const err = await readLastSyncError(t, linkId);
+    // Action ran (and failed on missing creds) → confirms it was scheduled,
+    // i.e. the login resolved via users.githubLogin.
+    expect(err).toBeDefined();
+    expect(err?.message).toMatch(/credentials not configured/i);
+  });
+
   it("echo skip: assigneeId mapping matches externalAssigneeLogins → no action scheduled", async () => {
     const t = createTestContext();
     const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);

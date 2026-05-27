@@ -1298,6 +1298,90 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_chan
     expect(linkRow?.externalAssigneeLogins).toEqual(["alice"]);
   });
 
+  it("maps a GitHub login to its workspace member via users.githubLogin (OAuth capture, no override row)", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    // Alice signed into Ripple via GitHub, so her login is captured on the user
+    // row — but no per-workspace `workspaceMemberExternalIdentity` override
+    // exists. The matcher must still resolve her through users.githubLogin.
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", {
+        name: "Alice",
+        githubLogin: "alice",
+      });
+      await ctx.db.insert("workspaceMembers", {
+        userId: uid,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+      return uid;
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          // GitHub sends the login in its original casing; the matcher
+          // canonicalizes to lowercase to meet the stored form.
+          assignees: [
+            { login: "Alice", avatarUrl: "u", url: "https://github.com/alice" },
+          ],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.assigneeId).toBe(aliceUserId);
+    // She won the slot, so she is NOT a shadow chip.
+    expect(task?.externalAssignees).toBeUndefined();
+  });
+
+  it("does not match users.githubLogin for someone who isn't a member of this workspace", async () => {
+    const t = createTestContext();
+    const { projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    // A user with a matching GitHub login exists, but is NOT a member of this
+    // workspace — the membership check must reject them (the slot stays empty).
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", { name: "Outsider", githubLogin: "outsider" });
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          assignees: [
+            { login: "outsider", avatarUrl: "u", url: "https://github.com/outsider" },
+          ],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.assigneeId).toBeUndefined();
+    // Surfaces as a shadow chip instead — no information lost.
+    expect(task?.externalAssignees).toEqual([
+      { login: "outsider", avatarUrl: "u", url: "https://github.com/outsider" },
+    ]);
+  });
+
   it("with multiple assignees, the first matching workspace member wins and the rest become shadow chips", async () => {
     const t = createTestContext();
     const { workspaceId, projectId, link } = await setupInboundFixtures(t);
@@ -1418,7 +1502,54 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_chan
     ]);
   });
 
-  it("clearing all assignees on GitHub clears Ripple's assigneeId and the shadow set", async () => {
+  it("preserves an existing local assignee when a non-matching GitHub assignee arrives", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link } = await setupInboundFixtures(t);
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link }),
+    );
+
+    // A human set Alice as the local owner in Ripple. She has no GitHub
+    // identity mapping, so no inbound GitHub login will ever resolve to her.
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", { name: "Alice" });
+      await ctx.db.insert("workspaceMembers", { userId: uid, workspaceId, role: WorkspaceRole.MEMBER });
+      const [task] = await ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect();
+      await ctx.db.patch(task!._id, { assigneeId: uid });
+      return uid;
+    });
+
+    // Someone assigns an external GitHub profile that matches no Ripple member.
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          assignees: [
+            { login: "external1", avatarUrl: "u1", url: "https://github.com/external1" },
+          ],
+        }),
+        link,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    // The bug: Alice used to get blanked here. She must be preserved — the
+    // unmatched GitHub identity can't own Ripple's slot.
+    expect(task?.assigneeId).toBe(aliceUserId);
+    // The external profile still surfaces as a shadow chip beside Alice.
+    expect(task?.externalAssignees).toEqual([
+      { login: "external1", avatarUrl: "u1", url: "https://github.com/external1" },
+    ]);
+  });
+
+  it("clearing all assignees on GitHub preserves Ripple's assigneeId but clears the shadow set", async () => {
     const t = createTestContext();
     const { workspaceId, projectId, link } = await setupInboundFixtures(t);
     await t.run((ctx) =>
@@ -1461,10 +1592,12 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_chan
         .withIndex("by_project", (q) => q.eq("projectId", projectId))
         .collect(),
     );
-    expect(task?.assigneeId).toBeUndefined();
-    expect(task?.assigneeId).not.toBe(aliceUserId);
-    // Denormalized task-row copy clears too (undefined, not []) so the card
-    // shows no external chips.
+    // Clearing on GitHub does NOT blank the Ripple slot — alice stays the
+    // internal assignee. Inbound assignee events only ever promote a matched
+    // member into the slot; they never empty it.
+    expect(task?.assigneeId).toBe(aliceUserId);
+    // The shadow set still clears (undefined, not []) so the card shows no
+    // external chips.
     expect(task?.externalAssignees).toBeUndefined();
 
     const linkRow = await t.run((ctx) =>
