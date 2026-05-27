@@ -2,7 +2,7 @@ NEXT STEPS:
 - calendar; plan calls; invite guests
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
-
+-test
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding
