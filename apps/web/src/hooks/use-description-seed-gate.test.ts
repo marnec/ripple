@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import * as Y from "yjs";
 import { useDescriptionSeedGate, type DescriptionSeed } from "./use-description-seed-gate";
 
@@ -70,8 +70,7 @@ describe("useDescriptionSeedGate", () => {
   });
 
   it("opens immediately when the server reports a terminal non-seeded status", () => {
-    // "skipped"/"failed" mean nothing is coming — unblock without waiting out
-    // the backstop timer.
+    // "skipped"/"failed" mean nothing is coming — unblock immediately.
     for (const seedStatus of ["skipped", "failed"] as const) {
       const { result } = gate({
         seed: { expected: true, snapshotId: null, seedStatus },
@@ -95,67 +94,64 @@ describe("useDescriptionSeedGate", () => {
     expect(result.current.descriptionReady).toBe(true);
   });
 
-  it("falls back to the backstop timer for a legacy link with no seedStatus", () => {
-    vi.useFakeTimers();
-    try {
-      const { result, rerender } = gate({
-        // Legacy: seed expected, link query resolved, but the status field is
-        // absent and no snapshot ever arrives. Only the backstop unblocks.
-        seed: { expected: true, snapshotId: null, statusLoading: false, seedStatus: undefined },
-      });
-      expect(result.current.descriptionReady).toBe(false);
-      expect(result.current.awaitingSeed).toBe(true);
-
-      vi.advanceTimersByTime(20_000);
-      rerender();
-
-      expect(result.current.descriptionReady).toBe(true);
-      expect(result.current.awaitingSeed).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
+  it("opens immediately for a legacy link with no seedStatus (nothing in flight)", () => {
+    // A real in-flight seed is born "pending" atomically with the link, so an
+    // absent status can only be a legacy link predating the field — nothing is
+    // coming, so don't wait (no timeout backstop).
+    const { result } = gate({
+      seed: { expected: true, snapshotId: null, statusLoading: false, seedStatus: undefined },
+    });
+    expect(result.current.descriptionReady).toBe(true);
+    expect(result.current.awaitingSeed).toBe(false);
   });
 
-  it("resets transient seed state when the open task changes (regression)", () => {
-    // The detail sheet stays mounted across task switches (only documentId
-    // changes). Without a per-resource reset, a `seedTimedOut`/`snapshotApplied`
-    // left over from the previous task would make a freshly opened, still-seeding
-    // task look ready → editor opens empty with no spinner. Here: task A times
-    // out (ready), then switching to task B (still pending) must block again.
-    vi.useFakeTimers();
-    try {
-      const seed: DescriptionSeed = {
-        expected: true,
-        snapshotId: null,
-        edited: false,
-        statusLoading: false,
-        seedStatus: "pending",
-      };
-      const { result, rerender } = renderHook(
-        ({ documentId }: { documentId: string }) =>
-          useDescriptionSeedGate({
-            resourceType: "task",
-            documentId,
-            yDoc: new Y.Doc(),
-            isOffline: false,
-            hasCachedText: false,
-            seed,
-          }),
-        { initialProps: { documentId: "task-A" } },
-      );
+  it("resets snapshotApplied when the open task changes (regression)", async () => {
+    // The detail sheet stays mounted across task switches and close/reopen (only
+    // documentId changes). Without a per-resource reset, `snapshotApplied` from
+    // the previous task would make a freshly opened, still-seeding task look
+    // ready → editor opens empty with no spinner. Task A hydrates its seeded
+    // snapshot (ready); switching to task B (still pending, empty) must block.
+    const docA = new Y.Doc();
+    const xmlText = new Y.XmlText();
+    xmlText.insert(0, "seeded body");
+    docA.getXmlFragment("document-store").push([xmlText]);
 
-      // Task A: backstop fires → ready.
-      vi.advanceTimersByTime(20_000);
-      rerender({ documentId: "task-A" });
-      expect(result.current.descriptionReady).toBe(true);
+    const seedA: DescriptionSeed = {
+      expected: true,
+      snapshotId: "snap-A",
+      edited: false,
+      statusLoading: false,
+      seedStatus: "seeded",
+    };
+    const seedB: DescriptionSeed = {
+      expected: true,
+      snapshotId: null,
+      edited: false,
+      statusLoading: false,
+      seedStatus: "pending",
+    };
 
-      // Switch to task B (still pending): the leaked seedTimedOut must be reset,
-      // so the gate blocks again and shows the notice.
-      rerender({ documentId: "task-B" });
-      expect(result.current.descriptionReady).toBe(false);
-      expect(result.current.awaitingSeed).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
+    const { result, rerender } = renderHook(
+      (props: { documentId: string; yDoc: Y.Doc; seed: DescriptionSeed }) =>
+        useDescriptionSeedGate({
+          resourceType: "task",
+          documentId: props.documentId,
+          yDoc: props.yDoc,
+          isOffline: false,
+          hasCachedText: false,
+          seed: props.seed,
+        }),
+      { initialProps: { documentId: "task-A", yDoc: docA, seed: seedA } },
+    );
+
+    // Task A: the seeded snapshot's content is already in the doc → the
+    // hydration effect marks snapshotApplied → ready.
+    await waitFor(() => expect(result.current.descriptionReady).toBe(true));
+
+    // Switch to task B (still pending, empty doc): snapshotApplied must reset so
+    // the gate blocks again and shows the notice.
+    rerender({ documentId: "task-B", yDoc: new Y.Doc(), seed: seedB });
+    expect(result.current.descriptionReady).toBe(false);
+    expect(result.current.awaitingSeed).toBe(true);
   });
 });
