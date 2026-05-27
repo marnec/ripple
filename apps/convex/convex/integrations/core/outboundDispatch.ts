@@ -394,10 +394,16 @@ export async function maybeEnqueueAssigneesPush(
  * Comment-create push. The action POSTs to GitHub and (on success) writes a
  * `taskCommentIntegrationLinks` row carrying the returned comment id; failures
  * land on `taskComments.lastSyncError` (no link row yet).
+ *
+ * `bodyMarkdown` is the client-rendered markdown of the comment (the stored
+ * `taskComments.body` is BlockNote JSON, which GitHub would render as literal
+ * text). The conversion is lossy and done client-side for the same reasons as
+ * the description push.
  */
 export async function maybeEnqueueCommentCreate(
   ctx: MutationCtx,
   commentId: Id<"taskComments">,
+  bodyMarkdown: string,
 ): Promise<void> {
   const comment = await ctx.db.get(commentId);
   if (!comment) return;
@@ -410,7 +416,7 @@ export async function maybeEnqueueCommentCreate(
     internal.integrations.github.syncOutAction.pushCommentCreate,
     {
       commentId,
-      body: comment.body,
+      body: bodyMarkdown,
       taskIntegrationLinkId: target.link._id,
       installationId: target.installationId,
       repoFullName: target.repoFullName,
@@ -422,10 +428,12 @@ export async function maybeEnqueueCommentCreate(
 /**
  * Comment-update push. Skipped when no comment-link row exists yet (the create
  * POST is still in flight, never ran, or the comment is Ripple-native).
+ * `bodyMarkdown` carries the markdown rendering — see `maybeEnqueueCommentCreate`.
  */
 export async function maybeEnqueueCommentUpdate(
   ctx: MutationCtx,
   commentId: Id<"taskComments">,
+  bodyMarkdown: string,
 ): Promise<void> {
   const comment = await ctx.db.get(commentId);
   if (!comment) return;
@@ -439,7 +447,7 @@ export async function maybeEnqueueCommentUpdate(
     {
       commentLinkId: target.commentLink._id,
       externalCommentId: target.commentLink.externalCommentId,
-      body: comment.body,
+      body: bodyMarkdown,
       installationId: target.installationId,
       repoFullName: target.repoFullName,
     },

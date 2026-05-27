@@ -155,6 +155,7 @@ describe("taskComments.create outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "Ripple-side comment",
+      bodyMarkdown: "Ripple-side comment",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -174,6 +175,7 @@ describe("taskComments.create outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "Ripple-native comment",
+      bodyMarkdown: "Ripple-native comment",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -189,6 +191,7 @@ describe("taskComments.create outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "x",
+      bodyMarkdown: "x",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -204,6 +207,7 @@ describe("taskComments.create outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "x",
+      bodyMarkdown: "x",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -283,6 +287,7 @@ describe("taskComments.update outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "original",
+      bodyMarkdown: "original",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -310,6 +315,7 @@ describe("taskComments.update outbound dispatch", () => {
     await asUser.mutation(api.taskComments.update, {
       id: commentId,
       body: "edited",
+      bodyMarkdown: "edited",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -332,10 +338,12 @@ describe("taskComments.update outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "x",
+      bodyMarkdown: "x",
     });
     await asUser.mutation(api.taskComments.update, {
       id: commentId,
       body: "y",
+      bodyMarkdown: "y",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -366,6 +374,7 @@ describe("taskComments.remove outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "original",
+      bodyMarkdown: "original",
     });
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
@@ -409,6 +418,7 @@ describe("taskComments.remove outbound dispatch", () => {
     const commentId = await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "x",
+      bodyMarkdown: "x",
     });
     await asUser.mutation(api.taskComments.remove, { id: commentId });
     await t.finishAllScheduledFunctions(vi.runAllTimers);

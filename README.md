@@ -64,6 +64,7 @@ keyboard accessiblity
             - [ ] milestone ↔ cycle sync (opt-in, name-paired via stored `externalMilestoneId`)
             - [ ] priority sync via configurable label template (e.g. `priority/high`)
             - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
+            - [ ] comment/description @mention fidelity on outbound markdown: `userMention`/`eventMention` inline content has no markdown serialization, so `blocksToMarkdownLossy` drops them to empty when pushing to GitHub. To render `@login` we'd need a userId→GitHub-login map at render time (same lossiness affects description sync)
     - [ ] add sentry
 
 - identity model refactor

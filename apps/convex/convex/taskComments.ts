@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
@@ -68,11 +68,19 @@ export const list = query({
         externalAuthorByComment.set(c._id, link.externalAuthor);
     }
 
-    // Enrich comments with author info
+    // Enrich comments with author info. Pick fields explicitly rather than
+    // spreading `comment` so internal columns (e.g. `lastSyncError`, which the
+    // outbound push may set) don't leak past the return validator — the client
+    // reads comment sync state from the task link, not from each comment row.
     const enrichedComments = comments.map((comment) => {
       const user = userMap.get(comment.userId);
       return {
-        ...comment,
+        _id: comment._id,
+        _creationTime: comment._creationTime,
+        taskId: comment.taskId,
+        userId: comment.userId,
+        body: comment.body,
+        deleted: comment.deleted,
         author: getUserDisplayName(user),
         image: user?.image,
         externalAuthor: externalAuthorByComment.get(comment._id),
@@ -86,10 +94,19 @@ export const list = query({
 export const create = mutation({
   args: {
     taskId: v.id("tasks"),
+    /** BlockNote JSON — Ripple's canonical representation, stored and rendered. */
     body: v.string(),
+    /**
+     * The same content rendered to markdown by the client editor, for the
+     * outbound GitHub push. BlockNote→markdown is lossy for Ripple-only inline
+     * content (mentions), matching the description-sync contract; we render it
+     * client-side because Convex can't carry the BlockNote/JSDOM bundle. Not
+     * stored — only threaded to the outbound dispatcher.
+     */
+    bodyMarkdown: v.string(),
   },
   returns: v.id("taskComments"),
-  handler: async (ctx, { taskId, body }) => {
+  handler: async (ctx, { taskId, body, bodyMarkdown }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
 
     // Insert comment
@@ -141,7 +158,7 @@ export const create = mutation({
       });
     }
 
-    await maybeEnqueueCommentCreate(ctx, commentId);
+    await maybeEnqueueCommentCreate(ctx, commentId, bodyMarkdown);
 
     return commentId;
   },
@@ -150,10 +167,13 @@ export const create = mutation({
 export const update = mutation({
   args: {
     id: v.id("taskComments"),
+    /** BlockNote JSON — see `create`. */
     body: v.string(),
+    /** Markdown rendering for the outbound GitHub push — see `create`. */
+    bodyMarkdown: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, { id, body }) => {
+  handler: async (ctx, { id, body, bodyMarkdown }) => {
     const userId = await requireUser(ctx);
 
     // Get comment
@@ -168,7 +188,7 @@ export const update = mutation({
     // Update body with trimmed value
     await ctx.db.patch(id, { body: body.trim() });
 
-    await maybeEnqueueCommentUpdate(ctx, id);
+    await maybeEnqueueCommentUpdate(ctx, id, bodyMarkdown);
 
     // Log comment edit activity
     const taskDoc = await ctx.db.get(comment.taskId);
@@ -221,6 +241,33 @@ export const remove = mutation({
     const taskForScope = await ctx.db.get(comment.taskId);
     await logTaskActivity(ctx, { taskId: comment.taskId, userId, workspaceId: taskForScope!.workspaceId, type: "comment_delete", taskTitle: taskForScope!.title });
 
+    return null;
+  },
+});
+
+/**
+ * Replace an inbound comment's raw markdown body with its BlockNote JSON
+ * rendering. Called by `integrations/core/commentSeedAction.seedCommentBody`
+ * after the headless markdown→blocks conversion.
+ *
+ * Guarded against clobbering a newer state: the patch only lands if `body` is
+ * still the exact markdown we converted. A subsequent inbound edit/delete (or a
+ * redelivery) replaces `body` and schedules its own conversion, so a stale
+ * conversion that resolves late simply no-ops. Idempotent for the same reason —
+ * once `body` is the JSON, it no longer equals `sourceMarkdown`.
+ */
+export const setBodyFromMarkdown = internalMutation({
+  args: {
+    commentId: v.id("taskComments"),
+    json: v.string(),
+    sourceMarkdown: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { commentId, json, sourceMarkdown }) => {
+    const comment = await ctx.db.get(commentId);
+    if (!comment) return null;
+    if (comment.body !== sourceMarkdown) return null;
+    await ctx.db.patch(commentId, { body: json });
     return null;
   },
 });

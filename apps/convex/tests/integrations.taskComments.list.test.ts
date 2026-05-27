@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
 import { api } from "../convex/_generated/api";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
@@ -91,6 +91,25 @@ async function setupTaskWithLink(t: ReturnType<typeof createTestContext>) {
 }
 
 describe("taskComments.list with external author", () => {
+  // Inbound comments schedule a `seedCommentBody` Node action and Ripple-native
+  // comments on a linked task schedule the outbound push; both must be drained.
+  // GitHub creds are unset so the outbound push takes the inert missing-creds
+  // branch rather than attempting a real HTTP call.
+  let savedAppId: string | undefined;
+  let savedKey: string | undefined;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    savedAppId = process.env.GITHUB_APP_ID;
+    savedKey = process.env.GITHUB_APP_PRIVATE_KEY;
+    delete process.env.GITHUB_APP_ID;
+    delete process.env.GITHUB_APP_PRIVATE_KEY;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    if (savedAppId !== undefined) process.env.GITHUB_APP_ID = savedAppId;
+    if (savedKey !== undefined) process.env.GITHUB_APP_PRIVATE_KEY = savedKey;
+  });
+
   it("surfaces externalAuthor on comments inserted by inbound sync", async () => {
     const t = createTestContext();
     const { asUser, link, taskId } = await setupTaskWithLink(t);
@@ -110,10 +129,13 @@ describe("taskComments.list with external author", () => {
       externalAuthor,
     };
     await t.run((ctx) => applyNormalizedEvent(ctx, { event, link }));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     const comments = await asUser.query(api.taskComments.list, { taskId });
     expect(comments).toHaveLength(1);
-    expect(comments[0]?.body).toBe("From GitHub");
+    // Body is re-rendered to BlockNote JSON; the markdown text survives inside it.
+    expect(comments[0]?.body).toContain("From GitHub");
+    expect(() => JSON.parse(comments[0]!.body)).not.toThrow();
     expect(comments[0]?.externalAuthor).toEqual(externalAuthor);
   });
 
@@ -124,7 +146,9 @@ describe("taskComments.list with external author", () => {
     await asUser.mutation(api.taskComments.create, {
       taskId,
       body: "From Ripple",
+      bodyMarkdown: "From Ripple",
     });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     const comments = await asUser.query(api.taskComments.list, { taskId });
     expect(comments).toHaveLength(1);

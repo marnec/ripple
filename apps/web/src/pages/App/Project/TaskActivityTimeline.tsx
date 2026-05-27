@@ -230,7 +230,10 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
   const handleSubmit = () => {
     if (isBlocksEmpty(editor.document)) return;
     const body = JSON.stringify(editor.document);
-    void createComment({ taskId, body }).then(() => {
+    // Render to markdown for the GitHub push (lossy for mentions, like the
+    // description sync). Stored body stays BlockNote JSON for Ripple rendering.
+    const bodyMarkdown = editor.blocksToMarkdownLossy(editor.document);
+    void createComment({ taskId, body, bodyMarkdown }).then(() => {
       editor.replaceBlocks(editor.document, [{ id: crypto.randomUUID(), type: "paragraph", content: "" }]);
       setIsEmpty(true);
     });
@@ -359,8 +362,8 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
                     uploadFile={uploadFile}
                     onEdit={setEditingCommentId}
                     onDelete={handleDelete}
-                    onSave={(id, body) => {
-                      void updateComment({ id, body }).then(() => {
+                    onSave={(id, body, bodyMarkdown) => {
+                      void updateComment({ id, body, bodyMarkdown }).then(() => {
                         setEditingCommentId(null);
                       });
                     }}
@@ -450,7 +453,7 @@ function CommentItem({
   uploadFile?: (file: File) => Promise<string>;
   onEdit: (id: Id<"taskComments"> | null) => void;
   onDelete: (id: Id<"taskComments">) => void;
-  onSave: (id: Id<"taskComments">, body: string) => void;
+  onSave: (id: Id<"taskComments">, body: string, bodyMarkdown: string) => void;
   onCancelEdit: () => void;
 }) {
   const commentId = item.commentId as Id<"taskComments">;
@@ -560,7 +563,8 @@ function EditCommentEditor({
   const handleSave = () => {
     if (isBlocksEmpty(editEditor.document)) return;
     const body = JSON.stringify(editEditor.document);
-    onSave(commentId, body);
+    const bodyMarkdown = editEditor.blocksToMarkdownLossy(editEditor.document);
+    onSave(commentId, body, bodyMarkdown);
   };
 
   return (

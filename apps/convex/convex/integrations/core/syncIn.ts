@@ -235,6 +235,15 @@ async function applyCommentEdited(
   await ctx.db.patch(commentLink._id, {
     externalUpdatedAt: event.externalUpdatedAt,
   });
+
+  // Re-render the edited markdown to BlockNote JSON (see applyCommentCreated).
+  if (event.body.trim().length > 0) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.core.commentSeedAction.seedCommentBody,
+      { commentId: commentLink.taskCommentId, markdown: event.body },
+    );
+  }
 }
 
 async function applyCommentCreated(
@@ -277,6 +286,18 @@ async function applyCommentCreated(
     externalUpdatedAt: event.externalUpdatedAt,
     externalAuthor: event.externalAuthor,
   });
+
+  // The body arrives as GitHub markdown; Ripple stores/renders BlockNote JSON.
+  // Re-render it in a Node action (the same headless-editor strategy as the
+  // description seed). The raw markdown above renders as plain text via the
+  // client fallback until the conversion lands. Empty bodies need no seed.
+  if (event.body.trim().length > 0) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.core.commentSeedAction.seedCommentBody,
+      { commentId, markdown: event.body },
+    );
+  }
 }
 
 /**

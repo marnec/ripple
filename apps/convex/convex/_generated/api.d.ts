@@ -2295,7 +2295,7 @@ export declare const api: {
     create: FunctionReference<
       "mutation",
       "public",
-      { body: string; taskId: Id<"tasks"> },
+      { body: string; bodyMarkdown: string; taskId: Id<"tasks"> },
       Id<"taskComments">
     >;
     list: FunctionReference<
@@ -2323,7 +2323,7 @@ export declare const api: {
     update: FunctionReference<
       "mutation",
       "public",
-      { body: string; id: Id<"taskComments"> },
+      { body: string; bodyMarkdown: string; id: Id<"taskComments"> },
       null
     >;
   };
@@ -3675,6 +3675,14 @@ export declare const internal: {
   };
   integrations: {
     core: {
+      commentSeedAction: {
+        seedCommentBody: FunctionReference<
+          "action",
+          "internal",
+          { commentId: Id<"taskComments">; markdown: string },
+          null
+        >;
+      };
       forceResync: {
         applyOneIssueReconciliation: FunctionReference<
           "mutation",
@@ -5179,6 +5187,14 @@ export declare const internal: {
         totalScanned?: number;
         workspaceCounts?: string;
       },
+      null
+    >;
+  };
+  taskComments: {
+    setBodyFromMarkdown: FunctionReference<
+      "mutation",
+      "internal",
+      { commentId: Id<"taskComments">; json: string; sourceMarkdown: string },
       null
     >;
   };
