@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { TaskCode } from "@/components/TaskCode";
-import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
+import { TaskIssueRef } from "./TaskIssueRef";
 import { cn } from "@/lib/utils";
 import { formatDueDate, formatEstimate, isOverdue, getPriorityIcon } from "@/lib/task-utils";
 import { ExternalAssigneeAvatars } from "./ExternalAssignees";
@@ -69,7 +69,7 @@ export function KanbanCardPresenter({
           {/* Linked GitHub issue: same chip as the task-detail surfaces. It
               carries the strike-through "deleted upstream" state, so the card
               uses one visual language instead of a separate unlink icon. */}
-          <TaskGithubIssueRef
+          <TaskIssueRef
             repoFullName={task.externalRefs?.[0]?.repoFullName}
             issueNumber={task.externalRefs?.[0]?.issueNumber}
             url={task.externalRefs?.[0]?.url}

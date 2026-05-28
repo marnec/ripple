@@ -20,7 +20,7 @@ import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
 import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskGithubActions } from "./TaskGithubActions";
-import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
+import { TaskIssueRef } from "./TaskIssueRef";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
@@ -93,7 +93,7 @@ export function TaskDetailSheet({
               <SheetHeader className="shrink-0 pr-28 gap-3">
                 <div className="flex items-center gap-2">
                   <TaskCode task={task} className="text-sm"/>
-                  <TaskGithubIssueRef
+                  <TaskIssueRef
                     className="text-sm"
                     repoFullName={task.externalRefs?.[0]?.repoFullName}
                     issueNumber={task.externalRefs?.[0]?.issueNumber}

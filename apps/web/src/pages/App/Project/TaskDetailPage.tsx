@@ -21,7 +21,7 @@ import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
 import { TaskProperties } from "./TaskProperties";
 import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
 import { TaskGithubActions } from "./TaskGithubActions";
-import { TaskGithubIssueRef } from "./TaskGithubIssueRef";
+import { TaskIssueRef } from "./TaskIssueRef";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
 
@@ -103,7 +103,7 @@ function TaskDetailPageContent({
             onChange={detail.handleSetTags}
           />
           <TaskCode task={detail.task} className="shrink-0 text-sm" />
-          <TaskGithubIssueRef
+          <TaskIssueRef
             repoFullName={detail.task.externalRefs?.[0]?.repoFullName}
             issueNumber={detail.task.externalRefs?.[0]?.issueNumber}
             url={detail.task.externalRefs?.[0]?.url}

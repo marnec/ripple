@@ -37,7 +37,7 @@ const PROVIDER_LABEL: Record<string, string> = {
  * deleted the chip stays — the Ripple task is preserved — but drops its href
  * and dims with a strike.
  */
-export function TaskGithubIssueRef({
+export function TaskIssueRef({
   repoFullName,
   issueNumber,
   url,
