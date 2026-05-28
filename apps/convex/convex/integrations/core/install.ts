@@ -33,6 +33,10 @@ async function doCompleteInstall(
     externalAccountId: string;
     externalAccountType?: "organization" | "user";
     accountLogin?: string;
+    externalBotLogin?: string;
+    credentialToken?: string;
+    oauthRefreshToken?: string;
+    oauthExpiresAt?: number;
   },
 ): Promise<Id<"workspaceIntegrations">> {
   const existing = await ctx.db
@@ -46,6 +50,26 @@ async function doCompleteInstall(
       throw new ConvexError(
         `External account ${args.externalAccountId} is already claimed by another workspace`,
       );
+    }
+    // Re-running the OAuth flow refreshes the stored credentials (the user just
+    // re-consented), without re-inserting the bot user or re-firing the audit
+    // log. PAT re-paste hits the same path. Other display fields (login, type)
+    // are also refreshed in case they changed (e.g. username rename).
+    if (
+      args.credentialToken !== undefined ||
+      args.oauthRefreshToken !== undefined
+    ) {
+      await ctx.db.patch(existing._id, {
+        credentialToken: args.credentialToken ?? existing.credentialToken,
+        oauthRefreshToken:
+          args.oauthRefreshToken ?? existing.oauthRefreshToken,
+        oauthExpiresAt: args.oauthExpiresAt ?? existing.oauthExpiresAt,
+        accountLogin: args.accountLogin ?? existing.accountLogin,
+        externalAccountType:
+          args.externalAccountType ?? existing.externalAccountType,
+        externalBotLogin:
+          args.externalBotLogin ?? existing.externalBotLogin,
+      });
     }
     return existing._id;
   }
@@ -72,6 +96,10 @@ async function doCompleteInstall(
     externalAccountId: args.externalAccountId,
     externalAccountType: args.externalAccountType,
     accountLogin: args.accountLogin,
+    externalBotLogin: args.externalBotLogin,
+    credentialToken: args.credentialToken,
+    oauthRefreshToken: args.oauthRefreshToken,
+    oauthExpiresAt: args.oauthExpiresAt,
     installedBy: args.actorId,
   });
 
@@ -121,6 +149,8 @@ export const completeAppInstallation = mutation({
       v.union(v.literal("organization"), v.literal("user")),
     ),
     accountLogin: v.optional(v.string()),
+    externalBotLogin: v.optional(v.string()),
+    credentialToken: v.optional(v.string()),
   },
   returns: v.id("workspaceIntegrations"),
   handler: async (ctx, args) => {
@@ -148,6 +178,10 @@ export const completeInstallationFromCallback = internalMutation({
       v.union(v.literal("organization"), v.literal("user")),
     ),
     accountLogin: v.optional(v.string()),
+    externalBotLogin: v.optional(v.string()),
+    credentialToken: v.optional(v.string()),
+    oauthRefreshToken: v.optional(v.string()),
+    oauthExpiresAt: v.optional(v.number()),
   },
   returns: v.id("workspaceIntegrations"),
   handler: async (ctx, args) => {
@@ -168,6 +202,10 @@ export const completeInstallationFromCallback = internalMutation({
       externalAccountId: args.externalAccountId,
       externalAccountType: args.externalAccountType,
       accountLogin: args.accountLogin,
+      externalBotLogin: args.externalBotLogin,
+      credentialToken: args.credentialToken,
+      oauthRefreshToken: args.oauthRefreshToken,
+      oauthExpiresAt: args.oauthExpiresAt,
     });
   },
 });

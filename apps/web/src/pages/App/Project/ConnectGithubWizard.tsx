@@ -72,6 +72,11 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
 
   const ready = gate?.canActivate === true;
   const activeLinks = links ?? [];
+  // Mirror the GitLab card: a project may carry at most one provider type.
+  // Detect a non-github link to surface a friendly banner instead of letting
+  // `createLink` throw mid-wizard.
+  const githubLinks = activeLinks.filter((l) => l.provider === "github");
+  const conflictingLink = activeLinks.find((l) => l.provider !== "github");
 
   const confirmDisconnect = async () => {
     if (!disconnectTarget) return;
@@ -103,14 +108,24 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
         Connect a GitHub repository so issues sync with this project.
       </p>
 
-      {!feature.enabled ? (
+      {conflictingLink ? (
+        <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+          This project is already connected to a{" "}
+          <span className="font-medium capitalize">
+            {conflictingLink.provider}
+          </span>{" "}
+          repository ({conflictingLink.externalRepoFullName}). A project can be
+          linked to one provider at a time — disconnect that link first to
+          connect a GitHub repository here.
+        </div>
+      ) : !feature.enabled ? (
         <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
           The GitHub integration is disabled for this workspace. A workspace
           admin can enable it under Workspace Settings → Integrations.
         </div>
-      ) : activeLinks.length > 0 ? (
+      ) : githubLinks.length > 0 ? (
         <div className="space-y-2">
-          {activeLinks.map((link) => (
+          {githubLinks.map((link) => (
             <div
               key={link._id}
               className="space-y-2 rounded-md border px-3 py-2.5"

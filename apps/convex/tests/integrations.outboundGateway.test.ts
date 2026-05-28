@@ -41,8 +41,8 @@ describe("buildGithubGateway.setIssueState", () => {
     }));
 
     const outcome = await gw(client).setIssueState({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       state: "closed",
       stateReason: "completed",
     });
@@ -65,8 +65,8 @@ describe("buildGithubGateway.setIssueState", () => {
     }));
 
     const outcome = await gw(client).setIssueState({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       state: "open",
     });
 
@@ -80,8 +80,8 @@ describe("buildGithubGateway.setIssueState", () => {
   it("5xx maps to retryable", async () => {
     const { client } = fakeClient(() => ({ status: 503 }));
     const outcome = await gw(client).setIssueState({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       state: "open",
     });
     expect(outcome.kind).toBe("retryable");
@@ -93,8 +93,8 @@ describe("buildGithubGateway.setLabels", () => {
     const { client, calls } = fakeClient(() => ({ status: 200 }));
 
     const outcome = await gw(client).setLabels({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       add: ["bug"],
       remove: ["wontfix"],
     });
@@ -112,8 +112,8 @@ describe("buildGithubGateway.setLabels", () => {
     );
 
     const outcome = await gw(client).setLabels({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       add: [],
       remove: ["already-gone", "also-gone"],
     });
@@ -129,8 +129,8 @@ describe("buildGithubGateway.setLabels", () => {
     }));
 
     const outcome = await gw(client).setLabels({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       add: ["bug"],
       remove: ["wontfix"],
     });
@@ -158,8 +158,8 @@ describe("buildGithubGateway.createComment", () => {
     }));
 
     const outcome = await gw(client).createComment({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       body: "hello",
     });
 
@@ -180,8 +180,8 @@ describe("buildGithubGateway.createComment", () => {
   it("a 2xx with no body is retryable (never records a bogus link row)", async () => {
     const { client } = fakeClient(() => ({ status: 201 }));
     const outcome = await gw(client).createComment({
-      repoFullName: "acme/web",
-      issueNumber: 42,
+      projectRef: "acme/web",
+      issueRef: 42,
       body: "hello",
     });
     expect(outcome.kind).toBe("retryable");
@@ -192,7 +192,7 @@ describe("buildGithubGateway.deleteComment", () => {
   it("treats a 404 as success (comment already gone)", async () => {
     const { client } = fakeClient(() => ({ status: 404 }));
     const outcome = await gw(client).deleteComment({
-      repoFullName: "acme/web",
+      projectRef: "acme/web",
       externalCommentId: "9001",
     });
     expect(outcome).toEqual({ kind: "success", meta: {} });
@@ -201,7 +201,7 @@ describe("buildGithubGateway.deleteComment", () => {
   it("treats a 204 as success", async () => {
     const { client } = fakeClient(() => ({ status: 204 }));
     const outcome = await gw(client).deleteComment({
-      repoFullName: "acme/web",
+      projectRef: "acme/web",
       externalCommentId: "9001",
     });
     expect(outcome).toEqual({ kind: "success", meta: {} });

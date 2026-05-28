@@ -50,6 +50,46 @@ async function setupActivatableProject(
 }
 
 describe("integrations/core/links.createLink", () => {
+  it("generates a per-link webhookSecret for a GitLab integration", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Triage",
+        color: "bg-amber-500",
+        order: 0,
+        isDefault: false,
+        isCompleted: false,
+        isTriage: true,
+      });
+      const botUserId = await ctx.db.insert("users", { name: "GitLab" });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "gitlab",
+        externalAccountId: "gl-acct",
+        credentialToken: "glpat-x",
+      });
+    });
+
+    const linkId = await asUser.mutation(
+      api.integrations.core.links.createLink,
+      {
+        projectId,
+        workspaceId,
+        externalAccountId: "gl-acct",
+        externalRepoId: "42",
+        externalRepoFullName: "acme/web",
+      },
+    );
+
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(typeof link?.webhookSecret).toBe("string");
+    expect(link?.webhookSecret?.length ?? 0).toBeGreaterThan(0);
+  });
+
   it("happy path: admin creates a link → row with status=active, pausedByBilling=false; audit log entry written", async () => {
     const t = createTestContext();
     const { userId, workspaceId, projectId, asUser } =

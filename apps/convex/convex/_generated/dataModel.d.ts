@@ -700,6 +700,7 @@ export type DataModel = {
   };
   integrationInstallStates: {
     document: {
+      codeVerifier?: string;
       expiresAt: number;
       nonce: string;
       provider: string;
@@ -711,6 +712,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "codeVerifier"
       | "expiresAt"
       | "nonce"
       | "provider"
@@ -992,6 +994,7 @@ export type DataModel = {
       pausedByBilling: boolean;
       projectId: Id<"projects">;
       status: "configuring" | "active" | "paused" | "disconnected";
+      webhookSecret?: string;
       workspaceId: Id<"workspaces">;
       workspaceIntegrationId?: Id<"workspaceIntegrations">;
       _id: Id<"projectIntegrationLinks">;
@@ -1011,6 +1014,7 @@ export type DataModel = {
       | "pausedByBilling"
       | "projectId"
       | "status"
+      | "webhookSecret"
       | "workspaceId"
       | "workspaceIntegrationId";
     indexes: {
@@ -1946,9 +1950,13 @@ export type DataModel = {
     document: {
       accountLogin?: string;
       botUserId: Id<"users">;
+      credentialToken?: string;
       externalAccountId: string;
       externalAccountType?: "organization" | "user";
+      externalBotLogin?: string;
       installedBy?: Id<"users">;
+      oauthExpiresAt?: number;
+      oauthRefreshToken?: string;
       provider: string;
       workspaceId: Id<"workspaces">;
       _id: Id<"workspaceIntegrations">;
@@ -1959,9 +1967,13 @@ export type DataModel = {
       | "_id"
       | "accountLogin"
       | "botUserId"
+      | "credentialToken"
       | "externalAccountId"
       | "externalAccountType"
+      | "externalBotLogin"
       | "installedBy"
+      | "oauthExpiresAt"
+      | "oauthRefreshToken"
       | "provider"
       | "workspaceId";
     indexes: {
@@ -2008,6 +2020,7 @@ export type DataModel = {
   workspaceMemberExternalIdentity: {
     document: {
       externalLogin: string;
+      externalUserId?: string;
       provider: string;
       userId: Id<"users">;
       workspaceId: Id<"workspaces">;
@@ -2018,6 +2031,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "externalLogin"
+      | "externalUserId"
       | "provider"
       | "userId"
       | "workspaceId";
@@ -2028,6 +2042,12 @@ export type DataModel = {
         "workspaceId",
         "provider",
         "externalLogin",
+        "_creationTime",
+      ];
+      by_workspace_provider_userId: [
+        "workspaceId",
+        "provider",
+        "externalUserId",
         "_creationTime",
       ];
       by_workspace_user_provider: [

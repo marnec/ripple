@@ -1221,8 +1221,10 @@ export declare const api: {
           "public",
           {
             accountLogin?: string;
+            credentialToken?: string;
             externalAccountId: string;
             externalAccountType?: "organization" | "user";
+            externalBotLogin?: string;
             provider: string;
             workspaceId: Id<"workspaces">;
           },
@@ -1260,6 +1262,7 @@ export declare const api: {
             externalRepoFullName: string;
             externalRepoId: string;
             projectId: Id<"projects">;
+            webhookSecret?: string;
             workspaceId: Id<"workspaces">;
           },
           Id<"projectIntegrationLinks">
@@ -1269,6 +1272,12 @@ export declare const api: {
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
           null
+        >;
+        getLinkWebhookConfig: FunctionReference<
+          "query",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          { provider: string; webhookSecret?: string; webhookUrl: string }
         >;
         linksForProject: FunctionReference<
           "query",
@@ -1285,6 +1294,7 @@ export declare const api: {
             externalRepoFullName: string;
             inboundIssueSyncDisabled?: boolean;
             pausedByBilling: boolean;
+            provider: string;
             status: "configuring" | "active" | "paused";
           }>
         >;
@@ -1461,6 +1471,48 @@ export declare const api: {
             workspaceId: Id<"workspaces">;
           },
           { count: number }
+        >;
+      };
+    };
+    gitlab: {
+      oauthAction: {
+        beginOAuth: FunctionReference<
+          "action",
+          "public",
+          { workspaceId: Id<"workspaces"> },
+          { url: string }
+        >;
+      };
+      registerProjectAction: {
+        isOAuthConfigured: FunctionReference<"query", "public", {}, boolean>;
+        listMyProjects: FunctionReference<
+          "action",
+          "public",
+          {
+            externalAccountId: string;
+            page?: number;
+            perPage?: number;
+            search?: string;
+            workspaceId: Id<"workspaces">;
+          },
+          Array<{
+            defaultBranch: string | null;
+            id: number;
+            pathWithNamespace: string;
+            webUrl: string;
+          }>
+        >;
+        registerProject: FunctionReference<
+          "action",
+          "public",
+          {
+            externalAccountId: string;
+            gitlabProjectId: number;
+            pathWithNamespace: string;
+            projectId: Id<"projects">;
+            workspaceId: Id<"workspaces">;
+          },
+          Id<"projectIntegrationLinks">
         >;
       };
     };
@@ -3732,8 +3784,12 @@ export declare const internal: {
           "internal",
           {
             accountLogin?: string;
+            credentialToken?: string;
             externalAccountId: string;
             externalAccountType?: "organization" | "user";
+            externalBotLogin?: string;
+            oauthExpiresAt?: number;
+            oauthRefreshToken?: string;
             provider: string;
             userId: Id<"users">;
             workspaceId: Id<"workspaces">;
@@ -3747,10 +3803,24 @@ export declare const internal: {
           "internal",
           { nonce: string },
           null | {
+            codeVerifier?: string;
             provider: string;
             userId: Id<"users">;
             workspaceId: Id<"workspaces">;
           }
+        >;
+        persistInstallState: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            codeVerifier?: string;
+            expiresAt: number;
+            nonce: string;
+            provider: string;
+            userId: Id<"users">;
+            workspaceId: Id<"workspaces">;
+          },
+          null
         >;
       };
       links: {
@@ -3892,11 +3962,11 @@ export declare const internal: {
           "internal",
           {
             add: Array<string>;
-            installationId: string;
-            issueNumber: number;
+            credentialRef: string;
+            issueRef: number;
             nextLogins: Array<string>;
+            projectRef: string;
             remove: Array<string>;
-            repoFullName: string;
             taskId: Id<"tasks">;
           },
           null
@@ -3907,9 +3977,9 @@ export declare const internal: {
           {
             body: string;
             commentId: Id<"taskComments">;
-            installationId: string;
-            issueNumber: number;
-            repoFullName: string;
+            credentialRef: string;
+            issueRef: number;
+            projectRef: string;
             taskIntegrationLinkId: Id<"taskIntegrationLinks">;
           },
           null
@@ -3919,9 +3989,10 @@ export declare const internal: {
           "internal",
           {
             commentLinkId: Id<"taskCommentIntegrationLinks">;
+            credentialRef: string;
             externalCommentId: string;
-            installationId: string;
-            repoFullName: string;
+            issueRef?: number;
+            projectRef: string;
           },
           null
         >;
@@ -3931,9 +4002,10 @@ export declare const internal: {
           {
             body: string;
             commentLinkId: Id<"taskCommentIntegrationLinks">;
+            credentialRef: string;
             externalCommentId: string;
-            installationId: string;
-            repoFullName: string;
+            issueRef?: number;
+            projectRef: string;
           },
           null
         >;
@@ -3942,9 +4014,9 @@ export declare const internal: {
           "internal",
           {
             body: string;
-            installationId: string;
+            credentialRef: string;
             projectIntegrationLinkId: Id<"projectIntegrationLinks">;
-            repoFullName: string;
+            projectRef: string;
             taskId: Id<"tasks">;
             title: string;
           },
@@ -3954,10 +4026,10 @@ export declare const internal: {
           "action",
           "internal",
           {
-            installationId: string;
-            issueNumber: number;
+            credentialRef: string;
+            issueRef: number;
             markdown: string;
-            repoFullName: string;
+            projectRef: string;
             taskId: Id<"tasks">;
           },
           null
@@ -3966,9 +4038,9 @@ export declare const internal: {
           "action",
           "internal",
           {
-            installationId: string;
-            issueNumber: number;
-            repoFullName: string;
+            credentialRef: string;
+            issueRef: number;
+            projectRef: string;
             workspaceId: Id<"workspaces">;
           },
           null
@@ -3977,11 +4049,11 @@ export declare const internal: {
           "action",
           "internal",
           {
+            credentialRef: string;
             desiredState: "open" | "closed";
             desiredStateReason?: "completed" | "not_planned";
-            installationId: string;
-            issueNumber: number;
-            repoFullName: string;
+            issueRef: number;
+            projectRef: string;
             taskId: Id<"tasks">;
           },
           null
@@ -3991,11 +4063,11 @@ export declare const internal: {
           "internal",
           {
             add: Array<string>;
-            installationId: string;
-            issueNumber: number;
+            credentialRef: string;
+            issueRef: number;
             nextLabels: Array<string>;
+            projectRef: string;
             remove: Array<string>;
-            repoFullName: string;
             taskId: Id<"tasks">;
           },
           null
@@ -4128,6 +4200,194 @@ export declare const internal: {
           null
         >;
         receiveGithubWebhook: FunctionReference<
+          "action",
+          "internal",
+          {
+            headers: Record<string, string>;
+            provider: string;
+            rawBody: string;
+          },
+          null
+        >;
+      };
+    };
+    gitlab: {
+      credentials: {
+        getCredentialBundle: FunctionReference<
+          "query",
+          "internal",
+          { credentialRef: string },
+          null | {
+            accessToken: string | null;
+            expiresAt?: number;
+            refreshToken?: string;
+          }
+        >;
+        getCredentialToken: FunctionReference<
+          "query",
+          "internal",
+          { credentialRef: string },
+          string | null
+        >;
+        storeRefreshedBundle: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            accessToken: string;
+            credentialRef: string;
+            expiresAt: number;
+            refreshToken: string;
+          },
+          null
+        >;
+      };
+      oauthAction: {
+        assertAdminForOAuth: FunctionReference<
+          "query",
+          "internal",
+          { workspaceId: Id<"workspaces"> },
+          { userId: Id<"users"> }
+        >;
+        finalizeOAuth: FunctionReference<
+          "action",
+          "internal",
+          { code: string; nonce: string },
+          null | { workspaceId: Id<"workspaces"> }
+        >;
+      };
+      syncOutAction: {
+        pushAssigneeChanges: FunctionReference<
+          "action",
+          "internal",
+          {
+            add: Array<string>;
+            credentialRef: string;
+            issueRef: number;
+            nextLogins: Array<string>;
+            projectRef: string;
+            remove: Array<string>;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        pushCommentCreate: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            commentId: Id<"taskComments">;
+            credentialRef: string;
+            issueRef: number;
+            projectRef: string;
+            taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+          },
+          null
+        >;
+        pushCommentDelete: FunctionReference<
+          "action",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            credentialRef: string;
+            externalCommentId: string;
+            issueRef?: number;
+            projectRef: string;
+          },
+          null
+        >;
+        pushCommentEdit: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            credentialRef: string;
+            externalCommentId: string;
+            issueRef?: number;
+            projectRef: string;
+          },
+          null
+        >;
+        pushCreateIssue: FunctionReference<
+          "action",
+          "internal",
+          {
+            body: string;
+            credentialRef: string;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            projectRef: string;
+            taskId: Id<"tasks">;
+            title: string;
+          },
+          null
+        >;
+        pushDescription: FunctionReference<
+          "action",
+          "internal",
+          {
+            credentialRef: string;
+            issueRef: number;
+            markdown: string;
+            projectRef: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        pushIssueClose: FunctionReference<
+          "action",
+          "internal",
+          {
+            credentialRef: string;
+            issueRef: number;
+            projectRef: string;
+            workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
+        pushIssueState: FunctionReference<
+          "action",
+          "internal",
+          {
+            credentialRef: string;
+            desiredState: "open" | "closed";
+            desiredStateReason?: "completed" | "not_planned";
+            issueRef: number;
+            projectRef: string;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        pushLabelChanges: FunctionReference<
+          "action",
+          "internal",
+          {
+            add: Array<string>;
+            credentialRef: string;
+            issueRef: number;
+            nextLabels: Array<string>;
+            projectRef: string;
+            remove: Array<string>;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+      };
+      tokenClientTestHelper: {
+        runResolve: FunctionReference<
+          "action",
+          "internal",
+          { credentialRef: string },
+          string | null
+        >;
+      };
+      webhook: {
+        handleGitlabWebhookMutation: FunctionReference<
+          "mutation",
+          "internal",
+          { payload: any; token?: string },
+          null
+        >;
+        receiveGitlabWebhook: FunctionReference<
           "action",
           "internal",
           {

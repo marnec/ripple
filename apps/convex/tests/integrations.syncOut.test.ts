@@ -282,6 +282,81 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     expect(err?.message).toMatch(/credentials not configured/i);
   });
 
+  it("provider routing (seam 1): a gitlab-provider link routes to GitLab, not GitHub", async () => {
+    // Keystone property of the dispatch registry: a gitlab-provider link must
+    // route to the GitLab action set, never GitHub's. With no GitLab token
+    // configured the GitLab action records its OWN creds-missing error — the
+    // message ("GitLab …", not "GitHub App …") proves the route. Same scenario
+    // as the positive control above (mismatched state would push).
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const { taskId, linkId } = await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", {
+        name: "GitLab",
+        isBot: true,
+      });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "gitlab",
+        externalAccountId: "gl-1",
+      });
+      const projectLinkId = await ctx.db.insert("projectIntegrationLinks", {
+        projectId,
+        workspaceId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoId: "gl-proj-1",
+        externalRepoFullName: "acme/web",
+      });
+      const statusId = await ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Done",
+        color: "bg-gray-500",
+        order: 0,
+        isDefault: true,
+        isCompleted: true,
+      });
+      const taskId = await ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "GitLab-linked task",
+        statusId,
+        priority: "medium",
+        completed: true,
+        creatorId: botUserId,
+        externalRefs: [
+          {
+            provider: "gitlab",
+            repoFullName: "acme/web",
+            issueNumber: 7,
+            url: "https://gitlab.com/acme/web/-/issues/7",
+          },
+        ],
+      });
+      const linkId = await ctx.db.insert("taskIntegrationLinks", {
+        taskId,
+        projectIntegrationLinkId: projectLinkId,
+        externalIssueId: "301",
+        externalUpdatedAt: 1_000,
+        externalAuthor: { login: "alice", avatarUrl: "", url: "" },
+        externalState: "open", // desired='closed' ≠ observed → would push if routed
+      });
+      return { taskId, linkId };
+    });
+
+    await t.run((ctx) => maybeEnqueueOutboundPush(ctx, taskId));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    // The GitLab action ran (not GitHub's): with no token configured it records
+    // GitLab's own creds-missing error. A GitHub push would say "GitHub App …".
+    const err = await readLastSyncError(t, linkId);
+    expect(err?.message).toMatch(/gitlab/i);
+    expect(err?.message).not.toMatch(/github/i);
+  });
+
   it("freeze gate: paused link does NOT schedule the action", async () => {
     const t = createTestContext();
     const { taskId, linkId } = await setupLinkedTask(t, {

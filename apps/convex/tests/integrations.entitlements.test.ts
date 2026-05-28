@@ -538,6 +538,80 @@ describe("integrations/core/entitlements.setWorkspaceFeature", () => {
     ).rejects.toThrow();
   });
 
+  it("toggling one provider's capability does NOT freeze the other provider's links", async () => {
+    // Regression: `fanoutPauseByBilling` used to walk every link in the
+    // workspace. Disabling `gitlab_integration` then froze github-provider
+    // links (and vice versa), which the workspace-settings UI surfaced as a
+    // bogus "Entitlement revoked" badge on perfectly-fine GitHub connections.
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    // Both capabilities on; one install + one active link per provider.
+    for (const featureKey of ["github_integration", "gitlab_integration"]) {
+      await asUser.mutation(
+        api.integrations.core.entitlements.setWorkspaceFeature,
+        { workspaceId, featureKey, enabled: true },
+      );
+    }
+    const { ghLinkId, glLinkId } = await t.run(async (ctx) => {
+      const ghBot = await ctx.db.insert("users", { name: "gh-bot", isBot: true });
+      const glBot = await ctx.db.insert("users", { name: "gl-bot", isBot: true });
+      const ghIntegrationId = await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId: ghBot,
+        provider: "github",
+        externalAccountId: "gh-install",
+      });
+      const glIntegrationId = await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId: glBot,
+        provider: "gitlab",
+        externalAccountId: "gl-install",
+      });
+      const ghLinkId = await ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        workspaceIntegrationId: ghIntegrationId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "R_kgDOACME",
+      });
+      const glLinkId = await ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        workspaceIntegrationId: glIntegrationId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/api",
+        externalRepoId: "1234",
+      });
+      return { ghLinkId, glLinkId };
+    });
+
+    // Disable gitlab only.
+    await asUser.mutation(
+      api.integrations.core.entitlements.setWorkspaceFeature,
+      { workspaceId, featureKey: "gitlab_integration", enabled: false },
+    );
+
+    const ghLink = await t.run((ctx) => ctx.db.get(ghLinkId));
+    const glLink = await t.run((ctx) => ctx.db.get(glLinkId));
+    expect(glLink?.pausedByBilling).toBe(true);
+    expect(ghLink?.pausedByBilling).toBe(false);
+
+    // Re-enabling gitlab thaws gitlab only; github stays unchanged.
+    await asUser.mutation(
+      api.integrations.core.entitlements.setWorkspaceFeature,
+      { workspaceId, featureKey: "gitlab_integration", enabled: true },
+    );
+    const ghAfter = await t.run((ctx) => ctx.db.get(ghLinkId));
+    const glAfter = await t.run((ctx) => ctx.db.get(glLinkId));
+    expect(glAfter?.pausedByBilling).toBe(false);
+    expect(ghAfter?.pausedByBilling).toBe(false);
+  });
+
   it("disabling an existing-enabled row patches the same row (upsert)", async () => {
     const t = createTestContext();
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);

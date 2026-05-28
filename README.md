@@ -6,6 +6,10 @@ NEXT STEPS:
 
 - I don't really know how to handle unread messages, they kind of work right now but god save me
 
+- remove colors from merge and pull req icons in card and task details
+
+- move relation icon (blocked, ...) to top right corner in task cards
+
 - Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
 
 - split settings in tabs (workspace and projects)

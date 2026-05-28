@@ -41,6 +41,7 @@ async function setupInboundWithIssue(t: ReturnType<typeof createTestContext>) {
       botUserId,
       provider: "github",
       externalAccountId: "install-123",
+      externalBotLogin: "ripple-app-dev[bot]",
     });
     const linkId = await ctx.db.insert("projectIntegrationLinks", {
       workspaceId,
@@ -195,13 +196,6 @@ describe("integrations/core/syncIn comment.created", () => {
 });
 
 describe("integrations/core/syncIn comment.created echo guard (self-authored)", () => {
-  beforeEach(() => {
-    process.env.GITHUB_APP_SLUG = "ripple-app-dev";
-  });
-  afterEach(() => {
-    delete process.env.GITHUB_APP_SLUG;
-  });
-
   // Regression: a Ripple comment pushed to GitHub bounces back as a
   // `comment.created` webhook authored by our own App bot. Without the
   // authorship guard the dupe-by-id check loses the race (the webhook beats

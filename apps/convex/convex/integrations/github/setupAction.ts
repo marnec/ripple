@@ -46,6 +46,12 @@ export const finalizeInstall = internalAction({
       console.warn("[setup] installation account lookup failed", err);
     }
 
+    // GitHub App deliveries authored by our own install carry `<slug>[bot]`
+    // as the author login. Record it so the inbound echo guard can suppress
+    // outbound bounce-backs without a provider-specific env lookup at read time.
+    const slug = process.env.GITHUB_APP_SLUG;
+    const externalBotLogin = slug ? `${slug}[bot]` : undefined;
+
     await ctx.runMutation(
       internal.integrations.core.install.completeInstallationFromCallback,
       {
@@ -55,6 +61,7 @@ export const finalizeInstall = internalAction({
         externalAccountId: args.installationId,
         externalAccountType: accountType,
         accountLogin,
+        externalBotLogin,
       },
     );
 

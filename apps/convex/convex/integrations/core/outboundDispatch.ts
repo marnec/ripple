@@ -1,12 +1,12 @@
-import { ActionRetrier, type RunId } from "@convex-dev/action-retrier";
-import { components, internal } from "../../_generated/api";
+import { ActionRetrier } from "@convex-dev/action-retrier";
+import { components } from "../../_generated/api";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
-import type { FunctionReference } from "convex/server";
 import { normalizeTagList } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
-import { memberToGithubLogin } from "./identity";
+import { memberToExternalLogin, memberToExternalUserId } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
+import { resolveOutboundAdapter, type OutboundAdapter } from "./outboundAdapters";
 import {
   deriveDesiredExternalState,
   shouldSkipForEcho,
@@ -15,16 +15,21 @@ import {
 
 /**
  * Outbound dispatchers. Called by `tasks.update`, `tasks.updatePosition`, and
- * the `taskComments.*` mutations after a change that may need pushing to GitHub
- * (or any future provider) — but only when:
+ * the `taskComments.*` mutations after a change that may need pushing to the
+ * linked provider — but only when:
  *
  *  - The task has a `taskIntegrationLinks` row (it's actually linked).
  *  - The destination link is sync-active (freeze/pause guard).
  *  - The desired external state differs from the last-known mirror (echo guard).
+ *  - The link's provider has a registered outbound adapter (seam 1) — otherwise
+ *    we refuse to push rather than defaulting to GitHub.
  *
- * Each surviving gate enqueues a retrier-managed action; the action body
- * (`github/syncOutAction.ts`) does the HTTP call and records success/failure
- * into the link row via the recorder mutations.
+ * Each surviving gate enqueues a retrier-managed action resolved from the
+ * provider's adapter (`core/outboundAdapters.ts`); the action body
+ * (`<provider>/syncOutAction.ts`) does the HTTP call and records success/failure
+ * into the link row via the recorder mutations. Args are the provider-neutral
+ * contract: an opaque `credentialRef` (seam 2) and `projectRef`/`issueRef`
+ * addressing (seam 4).
  */
 const retrier = new ActionRetrier(components.actionRetrier, {
   initialBackoffMs: 2_000,
@@ -33,43 +38,25 @@ const retrier = new ActionRetrier(components.actionRetrier, {
 });
 
 /**
- * Retrier `onComplete` callback reference. The action body records its own
- * outcome for the 2xx and permanent-fail cases, but a throw-chain that
- * exhausts the retry budget never reaches that path — this callback closes
- * the gap by writing `lastSyncError` + an audit entry. The cast bridges the
- * `RunId` brand that static codegen strips off the generated reference (the
- * validator handles it at runtime). Shared by the two ops that schedule with
- * an `onComplete` (status + description).
- */
-const ON_COMPLETE = internal.integrations.github.syncOutMutations
-  .onOutboundComplete as unknown as FunctionReference<
-  "mutation",
-  "internal",
-  {
-    runId: RunId;
-    result:
-      | { type: "success"; returnValue: unknown }
-      | { type: "failed"; error: string }
-      | { type: "canceled" };
-  }
->;
-
-/**
  * Routing + state for a task-keyed outbound push. `null` for every "skip
  * silently" case the dispatchers share: task gone, not linked (Ripple-native),
- * project link missing, frozen/paused, or no workspace integration row.
+ * project link missing, frozen/paused, no workspace integration row, or no
+ * registered outbound adapter for the link's provider.
  *
- * The `issueNumber` comes from `tasks.externalRefs[0]` because the link stores
- * the stable node id (`externalIssueId`) while GitHub's REST API needs the
- * human issue number.
+ * The `issueRef` comes from `tasks.externalRefs[0]` because the link stores the
+ * stable id (`externalIssueId`) while the provider's REST API needs the human
+ * issue number. `credentialRef`/`projectRef` are the neutral outbound contract
+ * (for GitHub: the installation id + `owner/repo`).
  */
 interface OutboundTaskTarget {
   task: Doc<"tasks">;
   link: Doc<"taskIntegrationLinks">;
   projectLink: Doc<"projectIntegrationLinks">;
-  installationId: string;
-  repoFullName: string;
-  issueNumber: number;
+  adapter: OutboundAdapter;
+  provider: string;
+  credentialRef: string;
+  projectRef: string;
+  issueRef: number;
 }
 
 async function resolveTaskTarget(
@@ -84,8 +71,8 @@ async function resolveTaskTarget(
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
     .unique();
   if (!link) return null; // Ripple-native task; nothing to push.
-  // Issue deleted upstream — the GitHub issue is gone, so any PATCH would 404.
-  // Skip silently rather than spamming `lastSyncError` on every Ripple edit.
+  // Issue deleted upstream — the provider's issue is gone, so any PATCH would
+  // 404. Skip silently rather than spamming `lastSyncError` on every edit.
   if (link.externalDeletedAt !== undefined) return null;
 
   const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
@@ -95,21 +82,30 @@ async function resolveTaskTarget(
   const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) return null;
 
+  // Seam 1: route by provider. No adapter → refuse to push (never fall back to
+  // GitHub for a non-GitHub link).
+  const adapter = resolveOutboundAdapter(integration.provider);
+  if (!adapter) return null;
+
   return {
     task,
     link,
     projectLink,
-    installationId: integration.externalAccountId,
-    repoFullName: projectLink.externalRepoFullName,
-    issueNumber: task.externalRefs?.[0]?.issueNumber ?? 0,
+    adapter,
+    provider: integration.provider,
+    credentialRef: integration.externalAccountId,
+    projectRef: projectLink.externalRepoFullName,
+    issueRef: task.externalRefs?.[0]?.issueNumber ?? 0,
   };
 }
 
 /** Routing for a comment-keyed push, resolved from the comment-link row. */
 interface OutboundCommentTarget {
   commentLink: Doc<"taskCommentIntegrationLinks">;
-  installationId: string;
-  repoFullName: string;
+  adapter: OutboundAdapter;
+  credentialRef: string;
+  projectRef: string;
+  issueRef: number;
 }
 
 async function resolveCommentLinkTarget(
@@ -132,15 +128,24 @@ async function resolveCommentLinkTarget(
   const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) return null;
 
+  const adapter = resolveOutboundAdapter(integration.provider);
+  if (!adapter) return null;
+
+  // Human issue ref the comment hangs off — GitLab needs it to address a note
+  // (GitHub edits/deletes a comment by id alone). Resolved from the task.
+  const task = await ctx.db.get(taskLink.taskId);
+
   return {
     commentLink,
-    installationId: integration.externalAccountId,
-    repoFullName: projectLink.externalRepoFullName,
+    adapter,
+    credentialRef: integration.externalAccountId,
+    projectRef: projectLink.externalRepoFullName,
+    issueRef: task?.externalRefs?.[0]?.issueNumber ?? 0,
   };
 }
 
 /**
- * Issue-create push (task → new GitHub issue). User-initiated, so it throws on
+ * Issue-create push (task → new provider issue). User-initiated, so it throws on
  * a bad request rather than silently no-opping. Guards: the task must exist,
  * be uncompleted, and not already be linked; the chosen repo link must belong
  * to the task's project and be sync-active. The action POSTs the issue and (on
@@ -186,19 +191,21 @@ export async function enqueueIssueCreate(
 
   const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) throw new Error("Workspace integration row missing");
+  const adapter = resolveOutboundAdapter(integration.provider);
+  if (!adapter) {
+    throw new Error(
+      `No outbound adapter registered for provider "${integration.provider}"`,
+    );
+  }
 
-  await retrier.run(
-    ctx,
-    internal.integrations.github.syncOutAction.pushCreateIssue,
-    {
-      taskId: args.taskId,
-      projectIntegrationLinkId: args.projectIntegrationLinkId,
-      title: args.title,
-      body: args.body,
-      installationId: integration.externalAccountId,
-      repoFullName: projectLink.externalRepoFullName,
-    },
-  );
+  await retrier.run(ctx, adapter.ops.createIssue, {
+    taskId: args.taskId,
+    projectIntegrationLinkId: args.projectIntegrationLinkId,
+    title: args.title,
+    body: args.body,
+    credentialRef: integration.externalAccountId,
+    projectRef: projectLink.externalRepoFullName,
+  });
 }
 
 /**
@@ -230,16 +237,16 @@ export async function maybeEnqueueOutboundPush(
 
   const runId = await retrier.run(
     ctx,
-    internal.integrations.github.syncOutAction.pushIssueState,
+    target.adapter.ops.issueState,
     {
       taskId,
       desiredState: desired.state,
       desiredStateReason: desired.stateReason,
-      installationId: target.installationId,
-      repoFullName: target.repoFullName,
-      issueNumber: target.issueNumber,
+      credentialRef: target.credentialRef,
+      projectRef: target.projectRef,
+      issueRef: target.issueRef,
     },
-    { onComplete: ON_COMPLETE },
+    { onComplete: target.adapter.onComplete },
   );
 
   // Map runId → task so the onComplete callback can resolve this push from the
@@ -255,7 +262,7 @@ export async function maybeEnqueueOutboundPush(
  * mutation with the client-rendered markdown. Unlike the other pushers this is
  * user-initiated (a button click), so it throws on a missing link/integration
  * to surface the error rather than silently no-opping — and it has no echo
- * guard (identical re-pushes are harmless GitHub no-ops).
+ * guard (identical re-pushes are harmless provider no-ops).
  */
 export async function enqueueDescriptionPush(
   ctx: MutationCtx,
@@ -277,21 +284,27 @@ export async function enqueueDescriptionPush(
 
   const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) throw new Error("Workspace integration row missing");
+  const adapter = resolveOutboundAdapter(integration.provider);
+  if (!adapter) {
+    throw new Error(
+      `No outbound adapter registered for provider "${integration.provider}"`,
+    );
+  }
 
-  const issueNumber = task.externalRefs?.[0]?.issueNumber ?? 0;
-  if (!issueNumber) throw new Error("Task has no GitHub issue number");
+  const issueRef = task.externalRefs?.[0]?.issueNumber ?? 0;
+  if (!issueRef) throw new Error("Task has no GitHub issue number");
 
   const runId = await retrier.run(
     ctx,
-    internal.integrations.github.syncOutAction.pushDescription,
+    adapter.ops.description,
     {
       taskId: args.taskId,
       markdown: args.markdown,
-      installationId: integration.externalAccountId,
-      repoFullName: projectLink.externalRepoFullName,
-      issueNumber,
+      credentialRef: integration.externalAccountId,
+      projectRef: projectLink.externalRepoFullName,
+      issueRef,
     },
-    { onComplete: ON_COMPLETE },
+    { onComplete: adapter.onComplete },
   );
 
   await ctx.db.insert("integrationOutboundRuns", {
@@ -304,7 +317,7 @@ export async function enqueueDescriptionPush(
  * Label push. Diffs the post-patch label set against the link's
  * `externalLabels` mirror and enqueues a single action that POSTs the adds and
  * DELETEs the removes. The action records the final set as the new mirror so
- * the inbound echo guard catches GitHub's bounce-back webhook.
+ * the inbound echo guard catches the provider's bounce-back webhook.
  */
 export async function maybeEnqueueLabelsPush(
   ctx: MutationCtx,
@@ -322,31 +335,27 @@ export async function maybeEnqueueLabelsPush(
   // Echo guard: no diff, no PATCH.
   if (!changed) return;
 
-  await retrier.run(
-    ctx,
-    internal.integrations.github.syncOutAction.pushLabelChanges,
-    {
-      taskId,
-      add,
-      remove,
-      nextLabels,
-      installationId: target.installationId,
-      repoFullName: target.repoFullName,
-      issueNumber: target.issueNumber,
-    },
-  );
+  await retrier.run(ctx, target.adapter.ops.labels, {
+    taskId,
+    add,
+    remove,
+    nextLabels,
+    credentialRef: target.credentialRef,
+    projectRef: target.projectRef,
+    issueRef: target.issueRef,
+  });
 }
 
 /**
- * Assignee push. Resolves the post-patch Ripple assignee to a single GitHub
+ * Assignee push. Resolves the post-patch Ripple assignee to a single provider
  * login via `workspaceMemberExternalIdentity` (skipping the bot user and
  * unmapped members — they have no login to push), diffs against
  * `externalAssigneeLogins`, and enqueues an action when there's work.
  *
- * Ripple→GitHub is intentionally 1→1: a cleared assignee DELETEs whatever
- * GitHub knows, but an assignee with no mapped identity (bot user, or a member
- * who hasn't linked their GitHub account) skips entirely so we don't erase the
- * real external assignees rendered as shadow chips.
+ * Ripple→provider is intentionally 1→1: a cleared assignee DELETEs whatever the
+ * provider knows, but an assignee with no mapped identity (bot user, or a member
+ * who hasn't linked their account) skips entirely so we don't erase the real
+ * external assignees rendered as shadow chips.
  */
 export async function maybeEnqueueAssigneesPush(
   ctx: MutationCtx,
@@ -354,17 +363,29 @@ export async function maybeEnqueueAssigneesPush(
 ): Promise<void> {
   const target = await resolveTaskTarget(ctx, taskId);
   if (!target) return;
-  const { task, projectLink } = target;
+  const { task, projectLink, provider } = target;
 
+  // GitHub assigns by login; GitLab by numeric user id. Resolve the Ripple
+  // assignee to whichever ref this provider needs (the mirror set + gateway
+  // both speak the same provider-native ref).
   let nextLogins: string[] = [];
   if (task.assigneeId) {
-    const login = await memberToGithubLogin(
-      ctx,
-      projectLink.workspaceId,
-      task.assigneeId,
-    );
-    if (!login) return; // unmappable assignee — preserve GitHub state.
-    nextLogins = normalizeLoginList([login]);
+    const ref =
+      provider === "gitlab"
+        ? await memberToExternalUserId(
+            ctx,
+            projectLink.workspaceId,
+            task.assigneeId,
+            provider,
+          )
+        : await memberToExternalLogin(
+            ctx,
+            projectLink.workspaceId,
+            task.assigneeId,
+            provider,
+          );
+    if (!ref) return; // unmappable assignee — preserve provider state.
+    nextLogins = normalizeLoginList([ref]);
   }
 
   const { add, remove, changed } = diffSet(
@@ -375,30 +396,26 @@ export async function maybeEnqueueAssigneesPush(
   // Echo guard: no diff, no PATCH.
   if (!changed) return;
 
-  await retrier.run(
-    ctx,
-    internal.integrations.github.syncOutAction.pushAssigneeChanges,
-    {
-      taskId,
-      add,
-      remove,
-      nextLogins,
-      installationId: target.installationId,
-      repoFullName: target.repoFullName,
-      issueNumber: target.issueNumber,
-    },
-  );
+  await retrier.run(ctx, target.adapter.ops.assignees, {
+    taskId,
+    add,
+    remove,
+    nextLogins,
+    credentialRef: target.credentialRef,
+    projectRef: target.projectRef,
+    issueRef: target.issueRef,
+  });
 }
 
 /**
- * Comment-create push. The action POSTs to GitHub and (on success) writes a
- * `taskCommentIntegrationLinks` row carrying the returned comment id; failures
+ * Comment-create push. The action POSTs to the provider and (on success) writes
+ * a `taskCommentIntegrationLinks` row carrying the returned comment id; failures
  * land on `taskComments.lastSyncError` (no link row yet).
  *
  * `bodyMarkdown` is the client-rendered markdown of the comment (the stored
- * `taskComments.body` is BlockNote JSON, which GitHub would render as literal
- * text). The conversion is lossy and done client-side for the same reasons as
- * the description push.
+ * `taskComments.body` is BlockNote JSON, which the provider would render as
+ * literal text). The conversion is lossy and done client-side for the same
+ * reasons as the description push.
  */
 export async function maybeEnqueueCommentCreate(
   ctx: MutationCtx,
@@ -411,18 +428,14 @@ export async function maybeEnqueueCommentCreate(
   const target = await resolveTaskTarget(ctx, comment.taskId);
   if (!target) return;
 
-  await retrier.run(
-    ctx,
-    internal.integrations.github.syncOutAction.pushCommentCreate,
-    {
-      commentId,
-      body: bodyMarkdown,
-      taskIntegrationLinkId: target.link._id,
-      installationId: target.installationId,
-      repoFullName: target.repoFullName,
-      issueNumber: target.issueNumber,
-    },
-  );
+  await retrier.run(ctx, target.adapter.ops.commentCreate, {
+    commentId,
+    body: bodyMarkdown,
+    taskIntegrationLinkId: target.link._id,
+    credentialRef: target.credentialRef,
+    projectRef: target.projectRef,
+    issueRef: target.issueRef,
+  });
 }
 
 /**
@@ -441,30 +454,27 @@ export async function maybeEnqueueCommentUpdate(
   const target = await resolveCommentLinkTarget(ctx, commentId);
   if (!target) return;
 
-  await retrier.run(
-    ctx,
-    internal.integrations.github.syncOutAction.pushCommentEdit,
-    {
-      commentLinkId: target.commentLink._id,
-      externalCommentId: target.commentLink.externalCommentId,
-      body: bodyMarkdown,
-      installationId: target.installationId,
-      repoFullName: target.repoFullName,
-    },
-  );
+  await retrier.run(ctx, target.adapter.ops.commentEdit, {
+    commentLinkId: target.commentLink._id,
+    externalCommentId: target.commentLink.externalCommentId,
+    body: bodyMarkdown,
+    credentialRef: target.credentialRef,
+    projectRef: target.projectRef,
+    issueRef: target.issueRef,
+  });
 }
 
 /**
- * Issue-close push. Closes the linked GitHub issue (state=closed,
+ * Issue-close push. Closes the linked provider issue (state=closed,
  * reason=completed) when the user opts in while deleting the task. GitHub App
  * installation tokens can't *delete* issues — there's no such permission — so
  * "delete the issue too" is realized as a close, which the `Issues: write`
  * grant fully supports.
  *
  * MUST be called *before* the task's cascade delete runs — it reads the
- * `taskIntegrationLinks` row to capture the repo and installation, which the
+ * `taskIntegrationLinks` row to capture the repo and credential, which the
  * cascade then removes. Skips silently for an unlinked task or a frozen/paused
- * integration (a frozen link means "don't touch GitHub").
+ * integration (a frozen link means "don't touch the provider").
  *
  * Unlike the other task pushes this schedules *without* an `onComplete`
  * callback or an `integrationOutboundRuns` row: those resolve the affected task
@@ -478,18 +488,14 @@ export async function enqueueIssueClose(
 ): Promise<void> {
   const target = await resolveTaskTarget(ctx, taskId);
   if (!target) return;
-  if (!target.issueNumber) return; // no issue number → nothing to close
+  if (!target.issueRef) return; // no issue number → nothing to close
 
-  await retrier.run(
-    ctx,
-    internal.integrations.github.syncOutAction.pushIssueClose,
-    {
-      repoFullName: target.repoFullName,
-      issueNumber: target.issueNumber,
-      workspaceId: target.projectLink.workspaceId,
-      installationId: target.installationId,
-    },
-  );
+  await retrier.run(ctx, target.adapter.ops.issueClose, {
+    projectRef: target.projectRef,
+    issueRef: target.issueRef,
+    workspaceId: target.projectLink.workspaceId,
+    credentialRef: target.credentialRef,
+  });
 }
 
 /** Comment-delete push. Skipped when no comment-link row exists. */
@@ -500,14 +506,11 @@ export async function maybeEnqueueCommentDelete(
   const target = await resolveCommentLinkTarget(ctx, commentId);
   if (!target) return;
 
-  await retrier.run(
-    ctx,
-    internal.integrations.github.syncOutAction.pushCommentDelete,
-    {
-      commentLinkId: target.commentLink._id,
-      externalCommentId: target.commentLink.externalCommentId,
-      installationId: target.installationId,
-      repoFullName: target.repoFullName,
-    },
-  );
+  await retrier.run(ctx, target.adapter.ops.commentDelete, {
+    commentLinkId: target.commentLink._id,
+    externalCommentId: target.commentLink.externalCommentId,
+    credentialRef: target.credentialRef,
+    projectRef: target.projectRef,
+    issueRef: target.issueRef,
+  });
 }

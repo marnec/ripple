@@ -61,6 +61,46 @@ describe("integrations/core/install.completeAppInstallation", () => {
     expect(bot?.isBot).toBe(true);
   });
 
+  it("persists the provider bot login so the inbound echo guard can match it", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    await enableGithubFeature(t, { workspaceId, asUser });
+
+    const integrationId = await asUser.mutation(
+      api.integrations.core.install.completeAppInstallation,
+      {
+        workspaceId,
+        provider: "github",
+        externalAccountId: "install-bot-login",
+        accountLogin: "acme",
+        externalBotLogin: "ripple-app-dev[bot]",
+      },
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(integrationId));
+    expect(row?.externalBotLogin).toBe("ripple-app-dev[bot]");
+  });
+
+  it("stores a provider credential token (GitLab PAT) on the integration row", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    await enableGithubFeature(t, { workspaceId, asUser });
+
+    const integrationId = await asUser.mutation(
+      api.integrations.core.install.completeAppInstallation,
+      {
+        workspaceId,
+        provider: "github", // entitlement helper enables a feature; token path is provider-neutral
+        externalAccountId: "acct-with-token",
+        accountLogin: "acme",
+        credentialToken: "glpat-secret",
+      },
+    );
+
+    const row = await t.run((ctx) => ctx.db.get(integrationId));
+    expect(row?.credentialToken).toBe("glpat-secret");
+  });
+
   it("writes an integration.activated audit-log entry on first install", async () => {
     const t = createTestContext();
     const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);

@@ -71,7 +71,7 @@ async function foldResponse<T>(
 
 export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
   return {
-    async createIssue({ repoFullName, title, body }) {
+    async createIssue({ projectRef, title, body }) {
       const res = await gh.request<{
         node_id: string;
         number: number;
@@ -79,7 +79,7 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
         user: { login: string; avatar_url: string; html_url: string };
       }>({
         method: "POST",
-        path: `/repos/${repoFullName}/issues`,
+        path: `/repos/${projectRef}/issues`,
         body: { title, body },
       });
       const decision = classifyResponse(toResponse(res));
@@ -106,12 +106,12 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       return foldResponse(res); // permanent_fail / retryable (incl. 429 sleep)
     },
 
-    async setIssueState({ repoFullName, issueNumber, state, stateReason }) {
+    async setIssueState({ projectRef, issueRef, state, stateReason }) {
       const body: Record<string, string> = { state };
       if (state === "closed" && stateReason) body.state_reason = stateReason;
       const res = await gh.request<{ updated_at: string }>({
         method: "PATCH",
-        path: `/repos/${repoFullName}/issues/${issueNumber}`,
+        path: `/repos/${projectRef}/issues/${issueRef}`,
         body,
       });
       return foldResponse(res, (b) => ({
@@ -119,21 +119,21 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       }));
     },
 
-    async setDescription({ repoFullName, issueNumber, markdown }) {
+    async setDescription({ projectRef, issueRef, markdown }) {
       const res = await gh.request<unknown>({
         method: "PATCH",
-        path: `/repos/${repoFullName}/issues/${issueNumber}`,
+        path: `/repos/${projectRef}/issues/${issueRef}`,
         body: { body: markdown },
       });
       return foldResponse(res);
     },
 
-    async setLabels({ repoFullName, issueNumber, add, remove }) {
+    async setLabels({ projectRef, issueRef, add, remove }) {
       // POST /labels auto-creates labels missing on the repo.
       if (add.length > 0) {
         const res = await gh.request<unknown>({
           method: "POST",
-          path: `/repos/${repoFullName}/issues/${issueNumber}/labels`,
+          path: `/repos/${projectRef}/issues/${issueRef}/labels`,
           body: { labels: add },
         });
         const outcome = await foldResponse(res);
@@ -142,7 +142,7 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       for (const name of remove) {
         const res = await gh.request<unknown>({
           method: "DELETE",
-          path: `/repos/${repoFullName}/issues/${issueNumber}/labels/${encodeURIComponent(name)}`,
+          path: `/repos/${projectRef}/issues/${issueRef}/labels/${encodeURIComponent(name)}`,
         });
         // 404 means the label was already absent — treat as success so a
         // benign race (someone removed it on GitHub first) doesn't surface a
@@ -154,11 +154,11 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       return { kind: "success", meta: {} };
     },
 
-    async setAssignees({ repoFullName, issueNumber, add, remove }) {
+    async setAssignees({ projectRef, issueRef, add, remove }) {
       if (add.length > 0) {
         const res = await gh.request<unknown>({
           method: "POST",
-          path: `/repos/${repoFullName}/issues/${issueNumber}/assignees`,
+          path: `/repos/${projectRef}/issues/${issueRef}/assignees`,
           body: { assignees: add },
         });
         const outcome = await foldResponse(res);
@@ -167,7 +167,7 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       if (remove.length > 0) {
         const res = await gh.request<unknown>({
           method: "DELETE",
-          path: `/repos/${repoFullName}/issues/${issueNumber}/assignees`,
+          path: `/repos/${projectRef}/issues/${issueRef}/assignees`,
           body: { assignees: remove },
         });
         const outcome = await foldResponse(res);
@@ -176,7 +176,7 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       return { kind: "success", meta: {} };
     },
 
-    async createComment({ repoFullName, issueNumber, body }) {
+    async createComment({ projectRef, issueRef, body }) {
       const res = await gh.request<{
         id: number;
         node_id: string;
@@ -184,7 +184,7 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
         user: { login: string; avatar_url: string; html_url: string };
       }>({
         method: "POST",
-        path: `/repos/${repoFullName}/issues/${issueNumber}/comments`,
+        path: `/repos/${projectRef}/issues/${issueRef}/comments`,
         body: { body },
       });
       const decision = classifyResponse(toResponse(res));
@@ -210,10 +210,10 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       return foldResponse(res); // permanent_fail / retryable mapping (incl. 429 sleep)
     },
 
-    async editComment({ repoFullName, externalCommentId, body }) {
+    async editComment({ projectRef, externalCommentId, body }) {
       const res = await gh.request<{ updated_at: string }>({
         method: "PATCH",
-        path: `/repos/${repoFullName}/issues/comments/${externalCommentId}`,
+        path: `/repos/${projectRef}/issues/comments/${externalCommentId}`,
         body: { body },
       });
       const decision = classifyResponse(toResponse(res));
@@ -229,10 +229,10 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
       return foldResponse(res);
     },
 
-    async deleteComment({ repoFullName, externalCommentId }) {
+    async deleteComment({ projectRef, externalCommentId }) {
       const res = await gh.request<unknown>({
         method: "DELETE",
-        path: `/repos/${repoFullName}/issues/comments/${externalCommentId}`,
+        path: `/repos/${projectRef}/issues/comments/${externalCommentId}`,
       });
       // 404 means the comment was already gone (deleted on GitHub first) —
       // a benign no-op, recorded as success.
@@ -251,11 +251,15 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
  * Production gateway. Returns `null` when the GitHub App credentials are not
  * configured — the caller records that as a permanent failure (the existing
  * "credentials not configured" affordance).
+ *
+ * `credentialRef` is the provider-neutral credential handle the dispatch layer
+ * threads (seam 2). GitHub interprets it as the App installation id it mints a
+ * short-lived token from.
  */
 export function makeGithubGateway(
-  installationId: string,
+  credentialRef: string,
 ): OutboundGateway | null {
   const client = githubClientFromEnv();
   if (!client) return null;
-  return buildGithubGateway(client.forInstallation(installationId));
+  return buildGithubGateway(client.forInstallation(credentialRef));
 }

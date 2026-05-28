@@ -48,6 +48,21 @@ export type OutboundResult = Infer<typeof outboundResultValidator>;
  *  - state records GitHub's own `updated_at` (not wall-clock) so the
  *    bounce-back compares EQUAL under `isStale` (`<=`) and drops.
  */
+/**
+ * Build the canonical web URL for a freshly-created issue, per provider. GitLab
+ * nests issues under `/-/issues/`; GitHub uses `/issues/`. (gitlab.com host for
+ * now — a self-hosted base URL would be threaded from the integration later.)
+ */
+function issueWebUrl(
+  provider: string,
+  repoFullName: string,
+  issueNumber: number,
+): string {
+  return provider === "gitlab"
+    ? `https://gitlab.com/${repoFullName}/-/issues/${issueNumber}`
+    : `https://github.com/${repoFullName}/issues/${issueNumber}`;
+}
+
 export function mirrorFor(result: OutboundResult): Partial<Doc<"taskIntegrationLinks">> {
   switch (result.op) {
     case "labels":
@@ -279,7 +294,11 @@ export const recordIssueCreateSuccess = internalMutation({
         provider: integration.provider,
         repoFullName: projectLink.externalRepoFullName,
         issueNumber: args.issueNumber,
-        url: `https://github.com/${projectLink.externalRepoFullName}/issues/${args.issueNumber}`,
+        url: issueWebUrl(
+          integration.provider,
+          projectLink.externalRepoFullName,
+          args.issueNumber,
+        ),
       },
     });
 

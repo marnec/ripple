@@ -3,7 +3,7 @@ import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
-import { githubLoginToMember } from "./identity";
+import { externalLoginToMember } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
 import {
@@ -32,18 +32,20 @@ export interface ImportContext {
 }
 
 /**
- * True when an inbound event was authored by this deployment's own GitHub App
- * bot (`<slug>[bot]`) — i.e. it's the echo of one of our own outbound ops
- * (create-issue or create-comment) rather than human/3rd-party activity.
- * Returns false when the slug is unconfigured (tests, local) so the guard is
- * inert there.
+ * True when an inbound event was authored by the linked integration's own bot
+ * identity — i.e. it's the echo of one of our own outbound ops (create-issue
+ * or create-comment) rather than human/3rd-party activity. The bot login is
+ * resolved per-link from the integration (`externalBotLogin`), so this is
+ * provider-neutral: GitHub stores `<app-slug>[bot]`, GitLab the token owner's
+ * username. Returns false when the integration has no recorded bot login
+ * (legacy rows, unconfigured deployments, tests) so the guard is inert there.
  */
-function isSelfAuthored(event: {
-  externalAuthor?: { login: string };
-}): boolean {
-  const slug = process.env.GITHUB_APP_SLUG;
-  if (!slug) return false;
-  return event.externalAuthor?.login === `${slug}[bot]`;
+function isSelfAuthored(
+  event: { externalAuthor?: { login: string } },
+  botLogin: string | undefined,
+): boolean {
+  if (!botLogin) return false;
+  return event.externalAuthor?.login === botLogin;
 }
 
 /**
@@ -65,6 +67,11 @@ export async function applyNormalizedEvent(
 ): Promise<void> {
   const { event, link, importContext } = args;
 
+  // Resolve the link's integration once so the echo guard can compare the
+  // event author against this install's bot identity (provider-neutral).
+  const integration = await getIntegrationForLink(ctx, link);
+  const botLogin = integration?.externalBotLogin;
+
   const existingLink = await ctx.db
     .query("taskIntegrationLinks")
     .withIndex("by_link_externalIssueId", (q) =>
@@ -83,7 +90,7 @@ export async function applyNormalizedEvent(
       // recorder owns that task↔issue link; creating a task here would
       // duplicate it (and land it in triage). Suppressed only for live webhooks
       // — bulk import (importContext present) still ingests bot-authored issues.
-      if (!importContext && isSelfAuthored(event)) return;
+      if (!importContext && isSelfAuthored(event, botLogin)) return;
       await createTaskFromEvent(ctx, {
         event,
         link,
@@ -164,7 +171,7 @@ export async function applyNormalizedEvent(
       // duplicate the comment under the bot identity. The dupe-by-id guard in
       // `applyCommentCreated` only catches this once the recorder has landed,
       // but the webhook routinely arrives first — so suppress by authorship.
-      if (isSelfAuthored(event)) return;
+      if (isSelfAuthored(event, botLogin)) return;
       await applyCommentCreated(ctx, { event, link, existingLink });
       return;
 
@@ -548,9 +555,10 @@ async function applyAssigneesChanged(
   let matchedUserId: Doc<"users">["_id"] | undefined;
   let winnerIndex = -1;
   for (let i = 0; i < event.assignees.length; i++) {
-    const userId = await githubLoginToMember(
+    const userId = await externalLoginToMember(
       ctx,
       link.workspaceId,
+      "github",
       event.assignees[i].login,
     );
     if (userId) {

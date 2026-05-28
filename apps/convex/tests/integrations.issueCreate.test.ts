@@ -54,7 +54,7 @@ describe("buildGithubGateway.createIssue", () => {
     }));
 
     const outcome = await buildGithubGateway(client).createIssue({
-      repoFullName: "acme/web",
+      projectRef: "acme/web",
       title: "Fix login",
       body: "",
     });
@@ -82,7 +82,7 @@ describe("buildGithubGateway.createIssue", () => {
   it("treats a 2xx with no body as retryable (can't link it back)", async () => {
     const { client } = fakeClient(() => ({ status: 201 }));
     const outcome = await buildGithubGateway(client).createIssue({
-      repoFullName: "acme/web",
+      projectRef: "acme/web",
       title: "x",
       body: "",
     });
@@ -93,12 +93,12 @@ describe("buildGithubGateway.createIssue", () => {
     const perm = await buildGithubGateway(
       fakeClient(() => ({ status: 422, errorMessage: "Validation failed" }))
         .client,
-    ).createIssue({ repoFullName: "acme/web", title: "x", body: "" });
+    ).createIssue({ projectRef: "acme/web", title: "x", body: "" });
     expect(perm).toMatchObject({ kind: "permanent_fail", httpStatus: 422 });
 
     const retry = await buildGithubGateway(
       fakeClient(() => ({ status: 503 })).client,
-    ).createIssue({ repoFullName: "acme/web", title: "x", body: "" });
+    ).createIssue({ projectRef: "acme/web", title: "x", body: "" });
     expect(retry.kind).toBe("retryable");
   });
 });
@@ -334,13 +334,6 @@ describe("enqueueIssueCreate guards", () => {
 /* ------------------------------------------------------------------ */
 
 describe("issue.opened echo guard (self-authored)", () => {
-  beforeEach(() => {
-    process.env.GITHUB_APP_SLUG = "ripple-app-dev";
-  });
-  afterEach(() => {
-    delete process.env.GITHUB_APP_SLUG;
-  });
-
   async function inboundFixtures(t: ReturnType<typeof createTestContext>) {
     const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
     const projectId = await setupProject(t, { workspaceId, creatorId: userId });
@@ -360,6 +353,7 @@ describe("issue.opened echo guard (self-authored)", () => {
         botUserId,
         provider: "github",
         externalAccountId: "install-1",
+        externalBotLogin: "ripple-app-dev[bot]",
       });
       const linkId = await ctx.db.insert("projectIntegrationLinks", {
         workspaceId,

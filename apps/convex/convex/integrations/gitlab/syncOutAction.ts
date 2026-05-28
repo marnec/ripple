@@ -1,9 +1,8 @@
-"use node";
-
 import { v } from "convex/values";
 import { internalAction } from "../../_generated/server";
 import { runOutboundOp } from "../core/outboundOrchestrator";
-import { makeGithubGateway } from "./outboundGateway";
+import { makeGitlabGateway } from "./outboundGateway";
+import { getValidGitlabAccessToken } from "./tokenClient";
 import {
   commentCreateSink,
   commentDeleteSink,
@@ -14,28 +13,38 @@ import {
   taskDescriptionSink,
   taskLabelsSink,
   taskStateSink,
-} from "./outboundSinks";
+} from "../github/outboundSinks";
+import type { ActionCtx } from "../../_generated/server";
+import type { OutboundGateway } from "../core/outboundPort";
 
 /**
- * Outbound dispatch actions, scheduled via `@convex-dev/action-retrier`.
+ * GitLab outbound dispatch actions, scheduled via `@convex-dev/action-retrier`
+ * and routed here by the provider registry (`core/outboundAdapters`). They take
+ * the SAME provider-neutral arg contract as the GitHub actions (the dispatch
+ * layer builds one bag); the only differences are credential resolution (a
+ * stored token fetched via `credentialRef` rather than a minted App token) and
+ * the GitLab gateway behind the call.
  *
- * Each action is a thin shell: build the recorder sink, resolve the GitHub
- * gateway (or record a permanent failure if credentials are missing), then
- * hand a single gateway call to `runOutboundOp`. All the repeated machinery —
- * env/JWT/client construction, response classification, the 404/429 special
- * cases, multi-request fan-out, and the retrier's return-vs-throw contract —
- * lives behind the gateway (`outboundGateway.ts`) and the orchestrator
- * (`core/outboundOrchestrator.ts`), each written and tested exactly once.
- *
- * Args are the provider-neutral outbound contract the dispatch layer builds
- * (`core/outboundDispatch.ts`): `credentialRef` is the opaque credential handle
- * the adapter interprets (GitHub: the App installation id it mints a token
- * from); `projectRef`/`issueRef` are the neutral addressing pair (GitHub:
- * `owner/repo` + issue number). The provider→action routing lives in
- * `core/outboundAdapters.ts`, so a GitLab link never reaches these.
+ * The recorder sinks (`../github/outboundSinks`) and their mutations are
+ * provider-neutral — they mirror results onto `taskIntegrationLinks` — so
+ * GitLab reuses them rather than duplicating the recorder layer.
  */
 
-const CREDS_MISSING = "GitHub App credentials not configured";
+const CREDS_MISSING = "GitLab credentials not configured";
+
+/**
+ * Resolve the gateway from the stored credentials, refreshing the OAuth bundle
+ * if expiry is within the skew window. PAT installs go through the same path
+ * and short-circuit (no refresh material → return token as-is). Null means
+ * "no usable credential" — the sink records a permanent failure.
+ */
+async function resolveGateway(
+  ctx: ActionCtx,
+  credentialRef: string,
+): Promise<OutboundGateway | null> {
+  const token = await getValidGitlabAccessToken(ctx, credentialRef);
+  return token ? makeGitlabGateway(token) : null;
+}
 
 export const pushCreateIssue = internalAction({
   args: {
@@ -52,7 +61,7 @@ export const pushCreateIssue = internalAction({
       taskId: args.taskId,
       projectIntegrationLinkId: args.projectIntegrationLinkId,
     });
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -77,9 +86,7 @@ export const pushIssueState = internalAction({
     desiredStateReason: v.optional(
       v.union(v.literal("completed"), v.literal("not_planned")),
     ),
-    /** Opaque credential handle, pre-resolved at scheduling time. */
     credentialRef: v.string(),
-    /** Neutral project address (GitHub: `owner/repo`). */
     projectRef: v.string(),
     issueRef: v.number(),
   },
@@ -90,7 +97,7 @@ export const pushIssueState = internalAction({
       state: args.desiredState,
       stateReason: args.desiredStateReason,
     });
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -125,7 +132,7 @@ export const pushLabelChanges = internalAction({
       taskId: args.taskId,
       nextLabels: args.nextLabels,
     });
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -160,7 +167,7 @@ export const pushAssigneeChanges = internalAction({
       taskId: args.taskId,
       nextLogins: args.nextLogins,
     });
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -190,7 +197,7 @@ export const pushDescription = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const sink = taskDescriptionSink(ctx, args.taskId);
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -223,7 +230,7 @@ export const pushCommentCreate = internalAction({
       commentId: args.commentId,
       taskIntegrationLinkId: args.taskIntegrationLinkId,
     });
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -248,14 +255,12 @@ export const pushCommentEdit = internalAction({
     body: v.string(),
     credentialRef: v.string(),
     projectRef: v.string(),
-    // Carried for the neutral contract (GitLab needs it); GitHub edits a
-    // comment by id alone and ignores it.
     issueRef: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const sink = commentEditSink(ctx, args.commentLinkId);
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -264,6 +269,7 @@ export const pushCommentEdit = internalAction({
       () =>
         gateway.editComment({
           projectRef: args.projectRef,
+          issueRef: args.issueRef,
           externalCommentId: args.externalCommentId,
           body: args.body,
         }),
@@ -277,7 +283,6 @@ export const pushIssueClose = internalAction({
   args: {
     projectRef: v.string(),
     issueRef: v.number(),
-    /** For the audit-log failure trace; the task itself is already deleted. */
     workspaceId: v.id("workspaces"),
     credentialRef: v.string(),
   },
@@ -287,7 +292,7 @@ export const pushIssueClose = internalAction({
       workspaceId: args.workspaceId,
       issueNumber: args.issueRef,
     });
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -317,7 +322,7 @@ export const pushCommentDelete = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const sink = commentDeleteSink(ctx, args.commentLinkId);
-    const gateway = makeGithubGateway(args.credentialRef);
+    const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {
       await sink.recordPermanentFailure(CREDS_MISSING);
       return null;
@@ -326,6 +331,7 @@ export const pushCommentDelete = internalAction({
       () =>
         gateway.deleteComment({
           projectRef: args.projectRef,
+          issueRef: args.issueRef,
           externalCommentId: args.externalCommentId,
         }),
       sink,

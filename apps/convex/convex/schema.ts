@@ -947,6 +947,26 @@ export default defineSchema({
       v.union(v.literal("organization"), v.literal("user")),
     ),
     accountLogin: v.optional(v.string()),
+    // Opaque outbound credential the gateway resolves via `credentialRef`
+    // (seam 2). GitHub leaves this unset — it mints a short-lived token from the
+    // App installation id (`externalAccountId`). GitLab uses this for the
+    // current access token: either a long-lived PAT (advanced) OR an OAuth
+    // access token. Treat as a secret (candidate for at-rest encryption);
+    // never returned to clients.
+    credentialToken: v.optional(v.string()),
+    // OAuth refresh bundle. Present iff `credentialToken` was minted via OAuth
+    // (vs pasted as a PAT). The token-resolution seam refreshes when
+    // `oauthExpiresAt` is within 60s; both fields rotate together. A PAT install
+    // leaves these unset and the seam returns `credentialToken` verbatim.
+    oauthRefreshToken: v.optional(v.string()),
+    oauthExpiresAt: v.optional(v.number()),
+    // Provider-side login of this install's bot identity — the author string a
+    // delivery carries when it's the echo of one of our own outbound ops.
+    // GitHub: `<app-slug>[bot]`; GitLab: the token owner's username. The
+    // inbound echo guard compares an event's author against this instead of a
+    // provider-specific slug pattern. Optional + backfilled: rows written
+    // before this column (and unconfigured deployments) leave the guard inert.
+    externalBotLogin: v.optional(v.string()),
     // Workspace admin who completed the install. Surfaced in the
     // workspace-settings installations list ("installed by …"). Optional
     // for rows created before this column existed.
@@ -965,6 +985,11 @@ export default defineSchema({
     userId: v.id("users"),
     provider: v.string(),
     expiresAt: v.number(),
+    // PKCE code verifier for OAuth flows (GitLab). The OAuth callback exchanges
+    // the auth code together with this verifier; the hash was sent as the
+    // `code_challenge` in the authorize URL. Unused for the GitHub App flow,
+    // which doesn't use PKCE (the App installation is the auth).
+    codeVerifier: v.optional(v.string()),
   }).index("by_nonce", ["nonce"]),
 
   // Per-(workspace, member) mapping of internal users to provider-side
@@ -977,9 +1002,16 @@ export default defineSchema({
     userId: v.id("users"),
     provider: v.string(), // "github", "gitlab", ...
     externalLogin: v.string(), // canonical (lowercase) provider username
+    // Provider-side numeric user id (stored as string, matching the codebase's
+    // convention for provider numeric ids — cf. externalAccountId). GitLab
+    // addresses assignees/authors by id, not login, so its adapter resolves
+    // members through this; GitHub keeps using `externalLogin`. Optional +
+    // backfilled — rows written before this column simply don't match by id.
+    externalUserId: v.optional(v.string()),
   })
     .index("by_workspace_provider_login", ["workspaceId", "provider", "externalLogin"])
-    .index("by_workspace_user_provider", ["workspaceId", "userId", "provider"]),
+    .index("by_workspace_user_provider", ["workspaceId", "userId", "provider"])
+    .index("by_workspace_provider_userId", ["workspaceId", "provider", "externalUserId"]),
 
   // Per repo↔project binding. The `status` state machine is orthogonal to
   // the `pausedByBilling` entitlement flag — both feed `effectiveLinkStatus`.
@@ -1015,9 +1047,15 @@ export default defineSchema({
     // stable lookups use externalRepoId.
     externalRepoFullName: v.string(),
     // Stable provider-side repo identifier. GitHub: repository node id.
+    // GitLab: the numeric project id (also the outbound `projectRef`).
     // Survives renames; the webhook adapter resolves the link by this
     // before falling back to anything else.
     externalRepoId: v.string(),
+    // Per-hook secret for inbound webhook verification. GitLab webhooks aren't
+    // centralized (no org-wide App secret), so each project's hook carries its
+    // own `X-Gitlab-Token`, verified against this per-link value. GitHub leaves
+    // it unset — it verifies the central `X-Hub-Signature-256` HMAC instead.
+    webhookSecret: v.optional(v.string()),
     // Optional branch→status automation: when a PR merges into `branch`, the
     // linked task(s) advance to `statusId` (forward-only, most-advanced-wins).
     // Branch ≈ deploy environment. `branch` is a glob pattern (`*` wildcard,

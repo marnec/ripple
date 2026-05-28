@@ -120,6 +120,52 @@ http.route({
 });
 
 /**
+ * POST /integrations/gitlab/webhook
+ *
+ * Inbound GitLab webhook endpoint. Unlike GitHub there's no central App secret
+ * to verify up-front: GitLab webhooks are per-project with a per-hook
+ * `X-Gitlab-Token`, so verification happens inside the handler against the
+ * resolved link's stored `webhookSecret` (resolve-then-verify). We hand off to
+ * the same receiver component for dedup (keyed on `X-Gitlab-Event-UUID`) +
+ * delivery to `receiveGitlabWebhook`.
+ *
+ * There's no entitlement-freeze pre-check (no installation id to resolve a
+ * workspace from before dedup); the handler's `effectiveLinkStatus` gate drops
+ * frozen/paused deliveries instead.
+ */
+http.route({
+  path: "/integrations/gitlab/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const rawBody = await request.text();
+    const headers: Record<string, string> = {};
+    request.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+    const dedupKey = request.headers.get("x-gitlab-event-uuid") ?? undefined;
+    const handlerFunctionHandle = await createFunctionHandle(
+      internal.integrations.gitlab.webhook.receiveGitlabWebhook,
+    );
+
+    const result = await ctx.runAction(
+      components.webhookReceiver.event.actions.receive,
+      {
+        provider: "gitlab",
+        rawBody,
+        headers,
+        handlerFunctionHandle,
+        maxAttempts: 3,
+        expiresInMs: 30 * 24 * 60 * 60 * 1000,
+        ...(dedupKey ? { dedupKey } : {}),
+      },
+    );
+
+    if (!result.accepted) return new Response("Rejected", { status: 400 });
+    return new Response("OK", { status: 200 });
+  }),
+});
+
+/**
  * GET /integrations/github/setup
  *
  * GitHub App "Setup URL" callback. After an admin installs the App, GitHub
@@ -153,6 +199,44 @@ http.route({
 
     return Response.redirect(
       `${siteUrl}/workspaces/${result.workspaceId}/settings?github_install=success`,
+      302,
+    );
+  }),
+});
+
+/**
+ * GET /integrations/gitlab/oauth/callback
+ *
+ * GitLab OAuth redirect URI. After the user approves access on GitLab, GitLab
+ * redirects here with `code` + our `state` nonce. We hand both to
+ * `finalizeOAuth`, which consumes the nonce (one-time), exchanges the code,
+ * stores the bundle, and returns the workspace to redirect into.
+ *
+ * Always redirects — failure lands on `/workspaces` with
+ * `?gitlab_oauth=error`. Success lands on the originating workspace's settings.
+ */
+http.route({
+  path: "/integrations/gitlab/oauth/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const siteUrl = process.env.SITE_URL ?? "";
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code");
+    const nonce = url.searchParams.get("state");
+
+    const fail = () =>
+      Response.redirect(`${siteUrl}/workspaces?gitlab_oauth=error`, 302);
+
+    if (!code || !nonce) return fail();
+
+    const result = await ctx.runAction(
+      internal.integrations.gitlab.oauthAction.finalizeOAuth,
+      { code, nonce },
+    );
+    if (!result) return fail();
+
+    return Response.redirect(
+      `${siteUrl}/workspaces/${result.workspaceId}/settings?gitlab_oauth=success`,
       302,
     );
   }),

@@ -5,6 +5,7 @@ import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import { getIntegrationForLink } from "./integrationLookups";
 
 /**
  * Admin-only workspace feature toggle. Single chokepoint for entitlement
@@ -51,7 +52,9 @@ export const setWorkspaceFeature = mutation({
     // Only fan out and log when the effective value changes. `pausedByBilling`
     // mirrors entitlement-off, so flipping enable→true means paused→false.
     if (wasEnabled !== args.enabled) {
-      await fanoutPauseByBilling(ctx, args.workspaceId, !args.enabled);
+      await fanoutPauseByBilling(ctx, args.workspaceId, !args.enabled, {
+        provider: providerOfFeatureKey(args.featureKey),
+      });
       const action = args.enabled
         ? "integration.entitlement.granted"
         : "integration.entitlement.revoked";
@@ -105,9 +108,15 @@ export function effectiveLinkStatus(
  * Tested in tests/integrations.entitlements.test.ts.
  */
 /**
- * Walks every `projectIntegrationLinks` row in the workspace and sets
+ * Walks `projectIntegrationLinks` rows in the workspace and sets
  * `pausedByBilling = paused`. Called by the entitlement-toggle mutation when
  * a feature flag flips; the inverse is run when entitlement is restored.
+ *
+ * Scoped by `provider` when provided: toggling `gitlab_integration` must NOT
+ * fan out onto `github`-provider links (and vice versa). Without the filter,
+ * disabling one provider's capability would freeze the other provider's links
+ * in the same workspace. When `provider` is omitted (legacy callers + tests
+ * that don't care), every link is touched.
  *
  * Disconnected links are flipped too — they're terminal for display purposes
  * (see `effectiveLinkStatus`), but the flag stays accurate so a reconnect
@@ -117,6 +126,7 @@ export async function fanoutPauseByBilling(
   ctx: MutationCtx,
   workspaceId: Id<"workspaces">,
   paused: boolean,
+  opts: { provider?: string } = {},
 ): Promise<void> {
   const links = await ctx.db
     .query("projectIntegrationLinks")
@@ -124,11 +134,31 @@ export async function fanoutPauseByBilling(
     .collect();
   for (const link of links) {
     if (link.pausedByBilling === paused) continue;
+    if (opts.provider) {
+      const integration = await getIntegrationForLink(ctx, link);
+      // Legacy links written before `workspaceIntegrationId` (single-install
+      // era, github-only) leave the FK absent and `getIntegrationForLink`'s
+      // workspace-wide fallback can come up empty. Default those to "github"
+      // — matches the convention in `getLinkWebhookConfig`/`drainDisconnect`.
+      const provider = integration?.provider ?? "github";
+      if (provider !== opts.provider) continue;
+    }
     await ctx.db.patch(link._id, {
       pausedByBilling: paused,
       frozenAt: paused ? Date.now() : undefined,
     });
   }
+}
+
+/**
+ * Map a workspace-feature key (`github_integration`, `gitlab_integration`, …)
+ * to the provider string those links carry on `workspaceIntegrations.provider`.
+ * Returns `undefined` for keys that aren't provider-scoped, so the fan-out
+ * falls back to its workspace-wide behavior.
+ */
+function providerOfFeatureKey(featureKey: string): string | undefined {
+  const m = /^([a-z0-9]+)_integration$/.exec(featureKey);
+  return m ? m[1] : undefined;
 }
 
 export async function hasFeature(

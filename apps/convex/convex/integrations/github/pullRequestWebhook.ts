@@ -5,8 +5,17 @@ import {
 } from "../../_generated/server";
 import { resolveActiveInboundLink } from "../core/inboundRouting";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
+import { collectReferencedIssueNumbers } from "../core/closingRefs";
 import type { NormalizedPullRequestEvent } from "../core/types";
 import { withTriggers } from "../../dbTriggers";
+
+// Re-exported from `core/closingRefs` — the number-path parsing is
+// provider-neutral and shared with the (future) GitLab adapter. Kept exported
+// here for the GitHub adapter's existing call sites and tests.
+export {
+  parseClosingIssueNumbers,
+  parseBranchIssueNumber,
+} from "../core/closingRefs";
 
 /**
  * Provider-specific parsing for GitHub `pull_request` deliveries. Mirrors
@@ -34,48 +43,6 @@ interface GithubPullRequest {
   head: { ref: string };
   base: { ref: string };
   user: GithubPrUser;
-}
-
-/**
- * GitHub's issue-closing keywords. Matched against the PR title + body so we
- * link a PR to its task regardless of base branch — GitHub's own closing graph
- * (`closingIssuesReferences`) only resolves when the PR targets the repo's
- * default branch, which would silently break branch→status automation for
- * every non-default target (e.g. `develop`).
- */
-const CLOSING_KEYWORD_RE =
-  /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b\s*:?\s+#(\d+)/gi;
-
-/**
- * Parse same-repo closing references (`closes #27`, `fixes: #4`, …) out of PR
- * text into issue numbers. Deduped; cross-repo (`owner/repo#N`) and URL forms
- * are intentionally out of scope (the common case is same-repo `#N`).
- */
-export function parseClosingIssueNumbers(text: string | null | undefined): number[] {
-  if (!text) return [];
-  const found = new Set<number>();
-  for (const m of text.matchAll(CLOSING_KEYWORD_RE)) {
-    const n = Number(m[1]);
-    if (Number.isInteger(n) && n > 0) found.add(n);
-  }
-  return [...found];
-}
-
-/**
- * Extract the leading issue number from a branch following the
- * `<issueNumber>-<slug>` convention (what Ripple's "Create branch" and
- * GitHub's native "create branch for issue" produce). Lets a PR auto-link to
- * its task by source branch, with no `Closes #N` keyword. Returns null for
- * branches that don't start with `<digits>-` (or bare `<digits>`).
- */
-export function parseBranchIssueNumber(
-  headRef: string | null | undefined,
-): number | null {
-  if (!headRef) return null;
-  const m = /^(\d+)(?:-|$)/.exec(headRef);
-  if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 interface GithubPullRequestPayload {
@@ -165,12 +132,10 @@ export function normalizePullRequestPayload(
  * drives branch→status automation even when it targets a non-default branch.
  */
 function resolveReferencedIssueNumbers(pr: GithubPullRequest): number[] {
-  const numbers = new Set(
-    parseClosingIssueNumbers(`${pr.title}\n${pr.body ?? ""}`),
+  return collectReferencedIssueNumbers(
+    `${pr.title}\n${pr.body ?? ""}`,
+    pr.head.ref,
   );
-  const fromBranch = parseBranchIssueNumber(pr.head.ref);
-  if (fromBranch !== null) numbers.add(fromBranch);
-  return [...numbers];
 }
 
 /**

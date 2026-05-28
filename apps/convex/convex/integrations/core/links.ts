@@ -62,6 +62,12 @@ export const linksForProject = query({
         v.literal("active"),
         v.literal("paused"),
       ),
+      // Provider of the link's integration ("github" / "gitlab"). Surfaced so
+      // each connect card can detect a cross-provider conflict on the project
+      // BEFORE the user touches the picker (mutation enforces "one provider
+      // type per project"; UI uses this to short-circuit with a friendly
+      // banner instead of letting the mutation throw mid-flow).
+      provider: v.string(),
       externalRepoFullName: v.string(),
       pausedByBilling: v.boolean(),
       branchStatusMap: v.optional(
@@ -84,18 +90,23 @@ export const linksForProject = query({
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
 
-    return links
-      .filter((l) => l.status !== "disconnected")
-      .map((l) => ({
-        _id: l._id,
-        status: l.status as "configuring" | "active" | "paused",
-        externalRepoFullName: l.externalRepoFullName,
-        pausedByBilling: l.pausedByBilling,
-        branchStatusMap: l.branchStatusMap,
-        defaultBaseBranch: l.defaultBaseBranch,
-        askBranchSourceEachTime: l.askBranchSourceEachTime,
-        inboundIssueSyncDisabled: l.inboundIssueSyncDisabled,
-      }));
+    const live = links.filter((l) => l.status !== "disconnected");
+    return Promise.all(
+      live.map(async (l) => {
+        const integration = await getIntegrationForLink(ctx, l);
+        return {
+          _id: l._id,
+          status: l.status as "configuring" | "active" | "paused",
+          provider: integration?.provider ?? "github",
+          externalRepoFullName: l.externalRepoFullName,
+          pausedByBilling: l.pausedByBilling,
+          branchStatusMap: l.branchStatusMap,
+          defaultBaseBranch: l.defaultBaseBranch,
+          askBranchSourceEachTime: l.askBranchSourceEachTime,
+          inboundIssueSyncDisabled: l.inboundIssueSyncDisabled,
+        };
+      }),
+    );
   },
 });
 
@@ -106,6 +117,10 @@ export const createLink = mutation({
     externalAccountId: v.string(),
     externalRepoId: v.string(),
     externalRepoFullName: v.string(),
+    // Per-link inbound webhook secret. GitLab needs one per project hook; when
+    // omitted for a GitLab link we generate it so the settings UI can show the
+    // value to paste into the project's webhook config. GitHub ignores it.
+    webhookSecret: v.optional(v.string()),
   },
   returns: v.id("projectIntegrationLinks"),
   handler: async (ctx, args) => {
@@ -177,6 +192,11 @@ export const createLink = mutation({
       );
     }
 
+    const webhookSecret =
+      integration.provider === "gitlab"
+        ? (args.webhookSecret ?? crypto.randomUUID())
+        : args.webhookSecret;
+
     const linkId = await ctx.db.insert("projectIntegrationLinks", {
       projectId: args.projectId,
       workspaceId: args.workspaceId,
@@ -185,6 +205,7 @@ export const createLink = mutation({
       pausedByBilling: false,
       externalRepoId: args.externalRepoId,
       externalRepoFullName: args.externalRepoFullName,
+      ...(webhookSecret ? { webhookSecret } : {}),
     });
 
     // Reconnect rehydration. If any project task carries a frozen ref for
@@ -219,6 +240,36 @@ export const createLink = mutation({
     }
 
     return linkId;
+  },
+});
+
+/**
+ * Admin-only read of a link's inbound webhook configuration, for the GitLab
+ * connect UI: the endpoint URL to register on the GitLab project and the
+ * per-link secret token to paste alongside it. The secret is admin-gated (never
+ * exposed to non-admins). GitHub links return an empty secret (central HMAC).
+ */
+export const getLinkWebhookConfig = query({
+  args: { linkId: v.id("projectIntegrationLinks") },
+  returns: v.object({
+    provider: v.string(),
+    webhookUrl: v.string(),
+    webhookSecret: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const link = await ctx.db.get(args.linkId);
+    if (!link) throw new ConvexError("Link not found");
+    await requireWorkspaceMember(ctx, link.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+    const integration = await getIntegrationForLink(ctx, link);
+    const provider = integration?.provider ?? "github";
+    const siteUrl = process.env.CONVEX_SITE_URL ?? "";
+    return {
+      provider,
+      webhookUrl: `${siteUrl}/integrations/${provider}/webhook`,
+      webhookSecret: link.webhookSecret,
+    };
   },
 });
 

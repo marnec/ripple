@@ -54,58 +54,70 @@ export type OutboundOutcome =
   | { kind: "permanent_fail"; message: string; httpStatus?: number }
   | { kind: "retryable"; message: string };
 
+/**
+ * Provider-neutral addressing for a single issue/MR. `projectRef` identifies
+ * the repository/project the way that provider's REST API addresses it (GitHub:
+ * `owner/repo`; GitLab: the numeric project id or url-encoded path). `issueRef`
+ * is the human-facing number under that project (GitHub issue number; GitLab
+ * `iid`). The adapter knows how to turn these into concrete request paths.
+ */
 export interface OutboundGateway {
-  /** Creates a new issue (task → GitHub). Success meta carries the node id,
+  /** Creates a new issue (task → provider). Success meta carries the stable id,
    *  number, author and `updated_at` needed to write the task↔issue link. */
   createIssue(a: {
-    repoFullName: string;
+    projectRef: string;
     title: string;
     body: string;
   }): Promise<OutboundOutcome>;
 
   setIssueState(a: {
-    repoFullName: string;
-    issueNumber: number;
+    projectRef: string;
+    issueRef: number;
     state: "open" | "closed";
     stateReason?: "completed" | "not_planned";
   }): Promise<OutboundOutcome>;
 
   setDescription(a: {
-    repoFullName: string;
-    issueNumber: number;
+    projectRef: string;
+    issueRef: number;
     markdown: string;
   }): Promise<OutboundOutcome>;
 
   /** POSTs `add` labels then DELETEs `remove` labels; 404-on-DELETE is benign. */
   setLabels(a: {
-    repoFullName: string;
-    issueNumber: number;
+    projectRef: string;
+    issueRef: number;
     add: string[];
     remove: string[];
   }): Promise<OutboundOutcome>;
 
   setAssignees(a: {
-    repoFullName: string;
-    issueNumber: number;
+    projectRef: string;
+    issueRef: number;
     add: string[];
     remove: string[];
   }): Promise<OutboundOutcome>;
 
   createComment(a: {
-    repoFullName: string;
-    issueNumber: number;
+    projectRef: string;
+    issueRef: number;
     body: string;
   }): Promise<OutboundOutcome>;
 
   editComment(a: {
-    repoFullName: string;
+    projectRef: string;
     externalCommentId: string;
     body: string;
+    /** Human issue ref the comment hangs off. GitHub edits a comment by its id
+     *  alone; GitLab addresses a note by project + issue iid + note id, so it
+     *  needs this. Optional so the GitHub adapter can ignore it. */
+    issueRef?: number;
   }): Promise<OutboundOutcome>;
 
   /** DELETEs the comment; a 404 is treated as success (already gone). */
   deleteComment(a: {
-    repoFullName: string;
+    projectRef: string;
     externalCommentId: string;
+    issueRef?: number;
   }): Promise<OutboundOutcome>;
 }

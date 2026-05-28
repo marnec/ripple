@@ -23,6 +23,7 @@ import { IntegrationWarning } from "@/components/IntegrationWarning";
 import { useViewer } from "../UserContext";
 
 const GITHUB_FEATURE_KEY = "github_integration";
+const GITLAB_FEATURE_KEY = "gitlab_integration";
 
 type Props = { workspaceId: Id<"workspaces"> };
 
@@ -75,14 +76,18 @@ function InstallationsList({ workspaceId }: Props) {
  *
  * Non-admins see read-only copy pointing them at an admin.
  */
-function GithubCapabilityToggle({ workspaceId }: Props) {
+function CapabilityToggle({
+  workspaceId,
+  featureKey,
+  label,
+}: Props & { featureKey: string; label: string }) {
   const viewer = useViewer();
   const members = useQuery(api.workspaceMembers.membersWithRoles, {
     workspaceId,
   });
   const feature = useQuery(
     api.integrations.core.entitlements.getWorkspaceFeature,
-    { workspaceId, featureKey: GITHUB_FEATURE_KEY },
+    { workspaceId, featureKey },
   );
   const setFeature = useMutation(
     api.integrations.core.entitlements.setWorkspaceFeature,
@@ -97,9 +102,11 @@ function GithubCapabilityToggle({ workspaceId }: Props) {
 
   const handleToggle = (next: boolean) => {
     setPending(true);
-    setFeature({ workspaceId, featureKey: GITHUB_FEATURE_KEY, enabled: next })
+    setFeature({ workspaceId, featureKey, enabled: next })
       .then(() => {
-        toast.success(next ? "GitHub integration enabled" : "GitHub integration disabled");
+        toast.success(
+          next ? `${label} integration enabled` : `${label} integration disabled`,
+        );
       })
       .catch((err: unknown) => {
         toast.error("Could not update capability", {
@@ -112,10 +119,10 @@ function GithubCapabilityToggle({ workspaceId }: Props) {
   return (
     <div className="mb-4 flex items-start justify-between gap-3 rounded-md border px-3 py-3">
       <div className="min-w-0">
-        <div className="text-sm font-medium">GitHub integration capability</div>
+        <div className="text-sm font-medium">{label} integration capability</div>
         <p className="text-xs text-muted-foreground">
           {isAdmin
-            ? "When disabled, all GitHub sync freezes (inbound and outbound) across this workspace."
+            ? `When disabled, all ${label} sync freezes (inbound and outbound) across this workspace.`
             : enabled
               ? "Enabled for this workspace."
               : "Disabled. Ask a workspace admin to enable it."}
@@ -126,7 +133,7 @@ function GithubCapabilityToggle({ workspaceId }: Props) {
           checked={enabled}
           disabled={pending}
           onCheckedChange={handleToggle}
-          aria-label="Toggle GitHub integration capability"
+          aria-label={`Toggle ${label} integration capability`}
         />
       ) : (
         <Badge variant="outline">{enabled ? "Enabled" : "Disabled"}</Badge>
@@ -213,7 +220,16 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
       <p className="text-sm text-muted-foreground mb-4">
         GitHub repositories linked to projects in this workspace.
       </p>
-      <GithubCapabilityToggle workspaceId={workspaceId} />
+      <CapabilityToggle
+        workspaceId={workspaceId}
+        featureKey={GITHUB_FEATURE_KEY}
+        label="GitHub"
+      />
+      <CapabilityToggle
+        workspaceId={workspaceId}
+        featureKey={GITLAB_FEATURE_KEY}
+        label="GitLab"
+      />
       <InstallationsList workspaceId={workspaceId} />
       {!links ? null : links.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">

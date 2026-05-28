@@ -51,6 +51,9 @@ export const beginAppInstall = mutation({
  * deleted on consume so a replayed callback can't re-resolve it. Returns
  * null for unknown or expired nonces (the callback treats either as a
  * failed install and redirects with an error).
+ *
+ * `codeVerifier` is the PKCE secret stored at OAuth-begin time (GitLab),
+ * absent for the GitHub App flow.
  */
 export const consumeInstallState = internalMutation({
   args: { nonce: v.string() },
@@ -60,6 +63,7 @@ export const consumeInstallState = internalMutation({
       workspaceId: v.id("workspaces"),
       userId: v.id("users"),
       provider: v.string(),
+      codeVerifier: v.optional(v.string()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -77,6 +81,37 @@ export const consumeInstallState = internalMutation({
       workspaceId: row.workspaceId,
       userId: row.userId,
       provider: row.provider,
+      codeVerifier: row.codeVerifier,
     };
+  },
+});
+
+/**
+ * Persist a one-time install-state nonce with an optional PKCE verifier. The
+ * GitLab OAuth flow calls this from an action context (the verifier must be
+ * generated client-side-of-action so its hash can go into the authorize URL),
+ * which is why this is a separate mutation rather than being inlined in the
+ * GitHub App's `beginAppInstall`.
+ */
+export const persistInstallState = internalMutation({
+  args: {
+    nonce: v.string(),
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    provider: v.string(),
+    expiresAt: v.number(),
+    codeVerifier: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.insert("integrationInstallStates", {
+      nonce: args.nonce,
+      workspaceId: args.workspaceId,
+      userId: args.userId,
+      provider: args.provider,
+      expiresAt: args.expiresAt,
+      codeVerifier: args.codeVerifier,
+    });
+    return null;
   },
 });

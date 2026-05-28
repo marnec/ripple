@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { ConnectGithubCard } from "./ConnectGithubWizard";
+import { ConnectGitlabCard } from "./ConnectGitlabCard";
 import { StatusEffectMatrix } from "./StatusEffectMatrix";
 
 const PROJECT_COLORS = [
@@ -193,6 +194,7 @@ function ProjectSettingsContent({
           <Separator className="my-6" />
           <StatusEffectMatrix projectId={projectId} />
           <ConnectGithubCard workspaceId={workspaceId} projectId={projectId} />
+          <ConnectGitlabCard workspaceId={workspaceId} projectId={projectId} />
         </>
       )}
 
