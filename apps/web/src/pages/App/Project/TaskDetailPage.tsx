@@ -108,6 +108,7 @@ function TaskDetailPageContent({
             issueNumber={detail.task.externalRefs?.[0]?.issueNumber}
             url={detail.task.externalRefs?.[0]?.url}
             deleted={detail.task.externalRefs?.[0]?.deleted}
+            provider={detail.task.externalRefs?.[0]?.provider}
             className="text-sm"
           />
           <TaskSyncIndicator taskId={taskId} />

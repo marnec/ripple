@@ -1185,6 +1185,14 @@ export declare const api: {
           { canActivate: boolean }
         >;
       };
+      branchesAction: {
+        listRepoBranches: FunctionReference<
+          "action",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          Array<string>
+        >;
+      };
       entitlements: {
         getWorkspaceFeature: FunctionReference<
           "query",
@@ -1277,7 +1285,12 @@ export declare const api: {
           "query",
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
-          { provider: string; webhookSecret?: string; webhookUrl: string }
+          {
+            installType: "oauth" | "pat";
+            provider: string;
+            webhookSecret?: string;
+            webhookUrl: string;
+          }
         >;
         linksForProject: FunctionReference<
           "query",
@@ -1315,6 +1328,7 @@ export declare const api: {
             pausedByBilling: boolean;
             projectId: Id<"projects">;
             projectName: string;
+            provider: string;
             status: "configuring" | "active" | "paused" | "disconnected";
           }>
         >;
@@ -1475,6 +1489,14 @@ export declare const api: {
       };
     };
     gitlab: {
+      branchesAction: {
+        listRepoBranches: FunctionReference<
+          "action",
+          "public",
+          { linkId: Id<"projectIntegrationLinks"> },
+          Array<string>
+        >;
+      };
       oauthAction: {
         beginOAuth: FunctionReference<
           "action",
@@ -3727,6 +3749,14 @@ export declare const internal: {
   };
   integrations: {
     core: {
+      branchesAction: {
+        providerForLink: FunctionReference<
+          "query",
+          "internal",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null | string
+        >;
+      };
       commentSeedAction: {
         seedCommentBody: FunctionReference<
           "action",
@@ -4212,6 +4242,14 @@ export declare const internal: {
       };
     };
     gitlab: {
+      branchesAction: {
+        branchFetchContext: FunctionReference<
+          "query",
+          "internal",
+          { linkId: Id<"projectIntegrationLinks"> },
+          null | { credentialRef: string; externalProjectId: string }
+        >;
+      };
       credentials: {
         getCredentialBundle: FunctionReference<
           "query",

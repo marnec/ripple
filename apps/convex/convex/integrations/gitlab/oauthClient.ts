@@ -248,6 +248,48 @@ export async function listProjects(args: {
 }
 
 /**
+ * List branch names for a project. Used by the project-settings branch picker
+ * and the per-link `core/branchesAction` dispatch. Capped at two pages of 100
+ * because the picker only needs a reasonable head; pathologically large repos
+ * fall back to the free-text affordance.
+ */
+export async function fetchBranches(args: {
+  cfg: GitlabOAuthConfig;
+  accessToken: string;
+  projectId: number | string;
+}): Promise<string[]> {
+  const base = args.cfg.base ?? GITLAB_BASE;
+  const doFetch = args.cfg.fetchImpl ?? fetch;
+  const collected: string[] = [];
+  for (let page = 1; page <= 2; page++) {
+    // GitLab's /repository/branches endpoint takes a combined `sort` value
+    // (`name_asc` | `updated_asc` | `updated_desc`), unlike `/projects` which
+    // splits `order_by` + `sort`. Using the split shape returns 400
+    // ("sort does not have a valid value"). `updated_desc` puts the freshest
+    // branches at the top of the picker, which is what an admin scanning for
+    // a branch they just pushed expects.
+    const params = new URLSearchParams({
+      per_page: "100",
+      page: String(page),
+      sort: "updated_desc",
+    });
+    const res = await doFetch(
+      `${base}${API_V4}/projects/${encodeURIComponent(String(args.projectId))}/repository/branches?${params.toString()}`,
+      { headers: { Authorization: `Bearer ${args.accessToken}` } },
+    );
+    if (!res.ok) {
+      throw new Error(
+        `GitLab fetchBranches failed: ${res.status} ${await res.text()}`,
+      );
+    }
+    const body = (await res.json()) as Array<{ name: string }>;
+    for (const b of body) collected.push(b.name);
+    if (body.length < 100) break;
+  }
+  return collected;
+}
+
+/**
  * Register a project webhook so GitLab starts delivering issue / comment /
  * merge-request events to our endpoint. The same `token` we register here is
  * what `webhook.ts` verifies via plaintext equality on `X-Gitlab-Token`.

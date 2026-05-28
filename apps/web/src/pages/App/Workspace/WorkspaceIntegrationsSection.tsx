@@ -16,7 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { GitBranch, Pause, Play, RefreshCw, Unplug } from "lucide-react";
+import { Pause, Play, RefreshCw, Unplug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatLastWebhook, isFrozenOver24h } from "@/lib/integration-utils";
 import { IntegrationWarning } from "@/components/IntegrationWarning";
@@ -28,9 +28,11 @@ const GITLAB_FEATURE_KEY = "gitlab_integration";
 type Props = { workspaceId: Id<"workspaces"> };
 
 /**
- * Read-only list of the workspace's GitHub installations (the accounts the
- * App is installed on), with installer attribution. Lets admins audit who
- * connected what. Hidden entirely when there are no installations.
+ * Read-only list of the workspace's provider installations (the accounts the
+ * GitHub App or GitLab OAuth is connected to), with installer attribution and
+ * a provider chip so two `marnec`-style accounts on different providers can be
+ * told apart at a glance. Lets admins audit who connected what. Hidden
+ * entirely when there are no installations.
  */
 function InstallationsList({ workspaceId }: Props) {
   const installations = useQuery(
@@ -48,7 +50,7 @@ function InstallationsList({ workspaceId }: Props) {
             key={inst._id}
             className="flex items-center gap-2 text-sm text-muted-foreground"
           >
-            <GitBranch className="h-3.5 w-3.5 shrink-0" />
+            <ProviderBadge provider={inst.provider} />
             <span className="truncate text-foreground">
               {inst.accountLogin ?? inst.externalAccountId}
             </span>
@@ -214,11 +216,19 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
   // during render trips React Compiler's purity check.
   const [now] = useState(() => Date.now());
 
+  // Collapse historical duplicates: pre-reuse, every disconnect→reconnect
+  // cycle for the same (projectId, externalRepoId) inserted a fresh row. Show
+  // only the most-live representative per pair so the audit list reflects
+  // current state rather than connection history. Status priority:
+  // active > paused > configuring > disconnected.
+  const visibleLinks = collapseDuplicateLinks(links);
+
   return (
     <section className="mb-8">
       <h2 className="text-lg font-semibold mb-1">Integrations</h2>
       <p className="text-sm text-muted-foreground mb-4">
-        GitHub repositories linked to projects in this workspace.
+        Audit and lifecycle controls for repositories linked across this
+        workspace. To connect a new repository, open the project's settings.
       </p>
       <CapabilityToggle
         workspaceId={workspaceId}
@@ -231,14 +241,14 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
         label="GitLab"
       />
       <InstallationsList workspaceId={workspaceId} />
-      {!links ? null : links.length === 0 ? (
+      {!visibleLinks ? null : visibleLinks.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-          No GitHub repositories linked yet. Connect one from a project's
-          settings page.
+          No repositories linked yet. Connect one from a project's settings
+          page.
         </div>
       ) : (
         <ul className="space-y-2">
-          {links.map((link) => {
+          {visibleLinks.map((link) => {
             const isPending = pendingId === link._id;
             const isDisconnected = link.status === "disconnected";
             const isPaused = link.status === "paused";
@@ -274,7 +284,7 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <GitBranch className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <ProviderBadge provider={link.provider} />
                     <div className="min-w-0">
                       <div className="font-mono text-sm truncate">
                         {link.externalRepoFullName}
@@ -502,4 +512,64 @@ function StatusBadge({
       {meta.label}
     </Badge>
   );
+}
+
+// Provider chip rendered on installations and link rows. Two accounts with the
+// same login (e.g. `marnec` on both GitHub and GitLab) are otherwise visually
+// indistinguishable.
+const PROVIDER_BADGE: Record<string, { label: string; className: string }> = {
+  github: {
+    label: "GitHub",
+    className:
+      "bg-slate-100 text-slate-800 dark:bg-slate-800/60 dark:text-slate-200",
+  },
+  gitlab: {
+    label: "GitLab",
+    className:
+      "bg-orange-50 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300",
+  },
+};
+
+function ProviderBadge({ provider }: { provider: string }) {
+  const meta = PROVIDER_BADGE[provider] ?? {
+    label: provider,
+    className: "bg-muted text-muted-foreground",
+  };
+  return (
+    <Badge variant="outline" className={cn("shrink-0", meta.className)}>
+      {meta.label}
+    </Badge>
+  );
+}
+
+// Status priority for the collapse. Higher = more "live"; a tie inside a group
+// (which shouldn't happen with the new reuse logic but can in legacy data) is
+// broken by the original ordering from the query.
+const STATUS_RANK: Record<string, number> = {
+  active: 4,
+  paused: 3,
+  configuring: 2,
+  disconnected: 1,
+};
+
+type WorkspaceLink = {
+  _id: Id<"projectIntegrationLinks">;
+  projectId: Id<"projects">;
+  externalRepoId: string;
+  status: "configuring" | "active" | "paused" | "disconnected";
+};
+
+function collapseDuplicateLinks<L extends WorkspaceLink>(
+  links: L[] | undefined,
+): L[] | undefined {
+  if (!links) return links;
+  const byPair = new Map<string, L>();
+  for (const link of links) {
+    const key = `${link.projectId}:${link.externalRepoId}`;
+    const existing = byPair.get(key);
+    if (!existing || STATUS_RANK[link.status] > STATUS_RANK[existing.status]) {
+      byPair.set(key, link);
+    }
+  }
+  return Array.from(byPair.values());
 }

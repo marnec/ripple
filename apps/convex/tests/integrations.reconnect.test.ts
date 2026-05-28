@@ -116,13 +116,13 @@ async function setupDisconnectedWorkspace(
   });
   await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-  return { workspaceId, projectId, asUser, taskIds };
+  return { workspaceId, projectId, asUser, taskIds, initialLinkId };
 }
 
 describe("integrations/core/links.createLink — reconnect rehydration", () => {
   it("relinking the same repo to the same project rehydrates per-task link rows by frozen externalIssueId", async () => {
     const t = createTestContext();
-    const { workspaceId, projectId, asUser, taskIds } =
+    const { workspaceId, projectId, asUser, taskIds, initialLinkId } =
       await setupDisconnectedWorkspace(t, { taskCount: 3 });
 
     const newLinkId = await asUser.mutation(
@@ -137,9 +137,25 @@ describe("integrations/core/links.createLink — reconnect rehydration", () => {
     );
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
-    // The new link is sync-active.
+    // Reconnect-reuse: same (projectId, externalRepoId) revives the previously
+    // disconnected row in place rather than inserting a duplicate. This keeps
+    // the workspace settings list free of historical noise and gives each
+    // repo↔project pair a stable link id across disconnect cycles.
+    expect(newLinkId).toBe(initialLinkId);
+    const allLinks = await t.run((ctx) =>
+      ctx.db
+        .query("projectIntegrationLinks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(allLinks).toHaveLength(1);
+
+    // The reused link is sync-active and no longer carries the disconnected
+    // status / pausedByBilling residue.
     const link = await t.run((ctx) => ctx.db.get(newLinkId));
     expect(link?.status).toBe("active");
+    expect(link?.pausedByBilling).toBe(false);
+    expect(link?.frozenAt).toBeUndefined();
 
     // Every previously-linked task has a fresh taskIntegrationLinks row
     // pointing at the new link, with externalIssueId carried over.

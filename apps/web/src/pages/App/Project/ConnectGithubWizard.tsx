@@ -266,7 +266,7 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
  * the project stops auto-pulling issue changes; PR sync and outbound push keep
  * working. The Switch reflects the link state reactively.
  */
-function InboundIssueSyncToggle({
+export function InboundIssueSyncToggle({
   linkId,
   disabled,
 }: {

@@ -1,11 +1,10 @@
-import { useEffect, useId, useState } from "react";
-import { useAction, useMutation } from "convex/react";
+import { useState } from "react";
+import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,8 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GitMerge, Plus, RefreshCw, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { GitMerge, Plus, X } from "lucide-react";
+import { BranchPicker } from "./BranchPicker";
 
 type Entry = { branch: string; statusId: Id<"taskStatuses"> };
 
@@ -36,64 +35,29 @@ type Props = {
 
 /**
  * Per-link branch→status automation editor. When a PR merges into a mapped
- * branch, linked tasks advance to the mapped status (forward-only). Branch
- * field is a datalist: suggests the repo's branches but accepts free text so
- * a not-yet-created branch can be pre-configured.
+ * branch, linked tasks advance to the mapped status (forward-only). The
+ * branch field is a live picker backed by GitHub's branch list; a custom
+ * branch name can still be typed to pre-configure one that doesn't exist yet.
  */
 export function BranchStatusMapEditor({ link }: Props) {
   const statuses = useQuery(api.taskStatuses.listByProject, {
     projectId: link.projectId,
   });
   const setMap = useMutation(api.integrations.core.links.setBranchStatusMap);
-  const listBranches = useAction(
-    api.integrations.github.branchesAction.listRepoBranches,
-  );
 
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Row[]>(() => toRows(link.branchStatusMap ?? []));
-  const [branchOptions, setBranchOptions] = useState<string[]>([]);
-  const [loadingBranches, setLoadingBranches] = useState(false);
   const [saving, setSaving] = useState(false);
-  const listId = useId();
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    void listBranches({ linkId: link._id })
-      .then((b) => {
-        if (!cancelled) setBranchOptions(b);
-      })
-      .catch(() => {
-        /* fall back to free-text only */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, link._id, listBranches]);
-
-  // Re-fetch the repo's branches on demand (e.g. after creating one on GitHub).
-  const resync = () => {
-    setLoadingBranches(true);
-    void listBranches({ linkId: link._id })
-      .then(setBranchOptions)
-      .catch(() => {
-        /* keep prior options + free-text fallback */
-      })
-      .finally(() => setLoadingBranches(false));
-  };
 
   const mappable = (statuses ?? []).filter((s) => !s.isTriage);
 
   // A branch can map to only one status, so a branch already used by any row
-  // is removed from the other rows' suggestions (and from "remaining"). Keeping
-  // each row's own value lets that row still show it.
-  const usedBranches = new Set(
-    rows.map((r) => r.branch.trim()).filter((b) => b !== ""),
+  // is excluded from the other rows' picker (and from the row added by
+  // "Add mapping"). The BranchPicker keeps the row's own value visible even
+  // when the excluded list contains it.
+  const usedBranches = Array.from(
+    new Set(rows.map((r) => r.branch.trim()).filter((b) => b !== "")),
   );
-  const remainingOptions = branchOptions.filter((b) => !usedBranches.has(b));
-  // Only meaningful once we know the repo's branches; with none loaded we can't
-  // claim everything is mapped (free-text branches may still be addable).
-  const allMapped = branchOptions.length > 0 && remainingOptions.length === 0;
 
   // Valid rows = a non-empty branch mapped to a status. Empty/whitespace
   // branches are dropped (an in-progress row is not a mapping yet).
@@ -148,41 +112,22 @@ export function BranchStatusMapEditor({ link }: Props) {
       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <GitMerge className="h-3.5 w-3.5" />
         When a PR merges into…
-        <button
-          type="button"
-          aria-label="Refresh branch list"
-          disabled={loadingBranches}
-          onClick={resync}
-          className="ml-auto rounded p-1 hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <RefreshCw
-            className={cn("h-3.5 w-3.5", loadingBranches && "animate-spin")}
-          />
-        </button>
       </div>
 
       <ul className="space-y-1.5">
         {rows.map((row) => (
           <li key={row.id} className="flex items-center gap-2">
-            <datalist id={`${listId}-${row.id}`}>
-              {branchOptions
-                .filter((b) => b === row.branch || !usedBranches.has(b))
-                .map((b) => (
-                  <option key={b} value={b} />
-                ))}
-            </datalist>
-            <Input
-              list={`${listId}-${row.id}`}
+            <BranchPicker
+              linkId={link._id}
               value={row.branch}
-              placeholder="branch (e.g. main)"
-              onChange={(e) =>
+              onChange={(branch) =>
                 setRows((rs) =>
-                  rs.map((r) =>
-                    r.id === row.id ? { ...r, branch: e.target.value } : r,
-                  ),
+                  rs.map((r) => (r.id === row.id ? { ...r, branch } : r)),
                 )
               }
-              className="h-8 flex-1 font-mono text-xs"
+              excludedBranches={usedBranches}
+              placeholder="select branch"
+              className="flex-1"
             />
             <span className="text-xs text-muted-foreground">→</span>
             <Select
@@ -230,7 +175,7 @@ export function BranchStatusMapEditor({ link }: Props) {
             variant="ghost"
             size="sm"
             className="h-7 gap-1 text-xs"
-            disabled={mappable.length === 0 || allMapped}
+            disabled={mappable.length === 0}
             onClick={() => {
               const first = mappable[0];
               if (!first) return;
@@ -238,7 +183,7 @@ export function BranchStatusMapEditor({ link }: Props) {
                 ...rs,
                 {
                   id: crypto.randomUUID(),
-                  branch: remainingOptions[0] ?? "",
+                  branch: "",
                   statusId: first._id,
                 },
               ]);
@@ -247,11 +192,6 @@ export function BranchStatusMapEditor({ link }: Props) {
             <Plus className="h-3.5 w-3.5" />
             Add mapping
           </Button>
-          {allMapped && (
-            <span className="text-xs text-muted-foreground">
-              All branches mapped
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <Button

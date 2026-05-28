@@ -74,6 +74,7 @@ export function KanbanCardPresenter({
             issueNumber={task.externalRefs?.[0]?.issueNumber}
             url={task.externalRefs?.[0]?.url}
             deleted={task.externalRefs?.[0]?.deleted}
+            provider={task.externalRefs?.[0]?.provider}
           />
         </div>
         <h3 className="text-sm font-medium truncate">{task.title}</h3>

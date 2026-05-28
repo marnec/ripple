@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "../../_generated/server";
 import { internal } from "../../_generated/api";
+import type { Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
@@ -197,16 +198,45 @@ export const createLink = mutation({
         ? (args.webhookSecret ?? crypto.randomUUID())
         : args.webhookSecret;
 
-    const linkId = await ctx.db.insert("projectIntegrationLinks", {
-      projectId: args.projectId,
-      workspaceId: args.workspaceId,
-      workspaceIntegrationId: integration._id,
-      status: "active",
-      pausedByBilling: false,
-      externalRepoId: args.externalRepoId,
-      externalRepoFullName: args.externalRepoFullName,
-      ...(webhookSecret ? { webhookSecret } : {}),
-    });
+    // Reconnect-reuse: if this same (projectId, externalRepoId) pair has a
+    // previously-disconnected row, revive it in place instead of inserting a
+    // new one. Avoids accumulating historical duplicates in the workspace
+    // settings list, and keeps a single stable link id per repo↔project pair
+    // across disconnect/reconnect cycles. We deliberately do NOT reuse across
+    // a different project (a disconnected row in project A doesn't constrain
+    // linking the same repo to project B). If multiple disconnected rows
+    // already exist (legacy data, pre-reuse), keep the most recently created
+    // one and leave the older rows as historical orphans.
+    const reuseCandidate = projectLinks
+      .filter(
+        (l) =>
+          l.status === "disconnected" && l.externalRepoId === args.externalRepoId,
+      )
+      .sort((a, b) => b._creationTime - a._creationTime)[0];
+
+    let linkId: Id<"projectIntegrationLinks">;
+    if (reuseCandidate) {
+      await ctx.db.patch(reuseCandidate._id, {
+        workspaceIntegrationId: integration._id,
+        status: "active",
+        pausedByBilling: false,
+        frozenAt: undefined,
+        externalRepoFullName: args.externalRepoFullName,
+        ...(webhookSecret ? { webhookSecret } : {}),
+      });
+      linkId = reuseCandidate._id;
+    } else {
+      linkId = await ctx.db.insert("projectIntegrationLinks", {
+        projectId: args.projectId,
+        workspaceId: args.workspaceId,
+        workspaceIntegrationId: integration._id,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoId: args.externalRepoId,
+        externalRepoFullName: args.externalRepoFullName,
+        ...(webhookSecret ? { webhookSecret } : {}),
+      });
+    }
 
     // Reconnect rehydration. If any project task carries a frozen ref for
     // THIS repo (matching by stable `externalRepoId`, not name — survives
@@ -253,6 +283,10 @@ export const getLinkWebhookConfig = query({
   args: { linkId: v.id("projectIntegrationLinks") },
   returns: v.object({
     provider: v.string(),
+    // OAuth installs auto-register their webhook server-side; PAT installs
+    // require the admin to paste URL + secret into the provider UI by hand. The
+    // settings panel hides the URL/secret fields when this is "oauth".
+    installType: v.union(v.literal("oauth"), v.literal("pat")),
     webhookUrl: v.string(),
     webhookSecret: v.optional(v.string()),
   }),
@@ -264,9 +298,17 @@ export const getLinkWebhookConfig = query({
     });
     const integration = await getIntegrationForLink(ctx, link);
     const provider = integration?.provider ?? "github";
+    // Reliable OAuth marker: only the OAuth callback writes a refresh token.
+    // GitHub App installs (no `oauthRefreshToken`) and GitLab PAT installs
+    // (PAT only sets `credentialToken`) both fall to "pat" semantics here —
+    // but the panel is only shown for GitLab, so the GitHub case is moot.
+    const installType: "oauth" | "pat" = integration?.oauthRefreshToken
+      ? "oauth"
+      : "pat";
     const siteUrl = process.env.CONVEX_SITE_URL ?? "";
     return {
       provider,
+      installType,
       webhookUrl: `${siteUrl}/integrations/${provider}/webhook`,
       webhookSecret: link.webhookSecret,
     };
@@ -773,6 +815,7 @@ export const listByWorkspace = query({
       _id: v.id("projectIntegrationLinks"),
       projectId: v.id("projects"),
       projectName: v.string(),
+      provider: v.string(),
       status: v.union(
         v.literal("configuring"),
         v.literal("active"),
@@ -804,17 +847,27 @@ export const listByWorkspace = query({
       ctx.db,
       links.map((l) => l.projectId),
     );
-    return links.map((l, i) => ({
-      _id: l._id,
-      projectId: l.projectId,
-      projectName: projects[i]?.name ?? "(deleted project)",
-      status: l.status,
-      pausedByBilling: l.pausedByBilling,
-      frozenAt: l.frozenAt,
-      lastWebhookAt: l.lastWebhookAt,
-      externalRepoFullName: l.externalRepoFullName,
-      externalRepoId: l.externalRepoId,
-      branchStatusMap: l.branchStatusMap,
-    }));
+    // Resolve provider per link via its workspaceIntegrationId (a workspace can
+    // hold both GitHub and GitLab installations, so workspace-wide lookup is
+    // not unique). Legacy rows without the FK fall back to "github" — the only
+    // provider that existed before the FK shipped.
+    return Promise.all(
+      links.map(async (l, i) => {
+        const integration = await getIntegrationForLink(ctx, l);
+        return {
+          _id: l._id,
+          projectId: l.projectId,
+          projectName: projects[i]?.name ?? "(deleted project)",
+          provider: integration?.provider ?? "github",
+          status: l.status,
+          pausedByBilling: l.pausedByBilling,
+          frozenAt: l.frozenAt,
+          lastWebhookAt: l.lastWebhookAt,
+          externalRepoFullName: l.externalRepoFullName,
+          externalRepoId: l.externalRepoId,
+          branchStatusMap: l.branchStatusMap,
+        };
+      }),
+    );
   },
 });
