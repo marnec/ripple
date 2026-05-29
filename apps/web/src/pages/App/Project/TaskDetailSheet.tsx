@@ -73,8 +73,17 @@ export function TaskDetailSheet({
   // "shared" (default — both visible, splitting the space) and two solo states
   // where one is fully expanded and the other is reduced to its header. Clicking
   // a section toggles between "shared" and that section's solo state; clicking
-  // either header from a solo state returns to "shared".
+  // either header from a solo state returns to "shared". Reset to "shared"
+  // whenever the sheet switches to a different task — the previous task's
+  // layout preference shouldn't carry over. Render-time reset (per the React
+  // docs' "Resetting state when a prop changes" pattern) so the new state is
+  // applied in the same render without an extra effect/commit pass.
   const [panelState, setPanelState] = useState<"shared" | "description" | "activity">("shared");
+  const [panelStateTaskId, setPanelStateTaskId] = useState(taskId);
+  if (panelStateTaskId !== taskId) {
+    setPanelStateTaskId(taskId);
+    setPanelState("shared");
+  }
   const toggleDescription = () =>
     setPanelState((s) => (s === "shared" ? "description" : "shared"));
   const toggleActivity = () =>
@@ -163,7 +172,7 @@ export function TaskDetailSheet({
                 </div>
               </SheetHeader>
 
-              <div className="flex-1 min-h-0 flex flex-col gap-4 px-4 pb-4">
+              <div className="flex-1 min-h-0 flex flex-col gap-3 px-4 pb-4">
                 {/* Fixed top region — task properties + GitHub info never scroll. */}
                 <div className="shrink-0 space-y-5">
                   <TaskProperties
