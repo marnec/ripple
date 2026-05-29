@@ -348,8 +348,23 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
         )}
       </div>
 
-      {!collapsed && (
-        <>
+      {/* Body wrapper — stays mounted in all states so the parent panel's
+          flex-grow transition can animate without React remounting heavy
+          content mid-transition. `contain: size` (fillHeight only) makes
+          the wrapper's intrinsic size 0, so the body content can't inflate
+          the parent panel's min-content; the panel can therefore collapse
+          cleanly to just its header when the section isn't expanded.
+          When collapsed, the wrapper has 0 allocated height and its
+          overflow-hidden clips the body. */}
+      <div
+        className={
+          fillHeight
+            ? "space-y-4 lg:space-y-0 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col lg:overflow-hidden lg:contain-[size]"
+            : collapsed
+              ? "hidden"
+              : "space-y-4"
+        }
+      >
       {/* Timeline items with connector line */}
       <div
         ref={listRef}
@@ -437,8 +452,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
           Comment
         </Button>
       </div>
-        </>
-      )}
+      </div>
     </div>
   );
 }

@@ -10,6 +10,8 @@ NEXT STEPS:
 
 - move relation icon (blocked, ...) to top right corner in task cards
 
+- in gitlab it's impossible to create a branch from a task because the menu let's you chose at the wrong granularity. This connects well with the cardinality 1 project to N repositories. The choice should be presented to chose the repo first and the branch later (this is also valid for github)
+
 - Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
 
 - split settings in tabs (workspace and projects)
