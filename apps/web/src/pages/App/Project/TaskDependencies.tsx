@@ -118,58 +118,74 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
             )}
           </div>
         )}
-        {expanded && (
-        <AddDependencyPopover
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          workspaceId={workspaceId}
-          existingTaskIds={new Set([
-            taskId,
-            ...blocks.map((d) => d.task._id),
-            ...blockedBy.map((d) => d.task._id),
-            ...relatesTo.map((d) => d.task._id),
-          ])}
-          onAdd={handleAdd}
-        />
-        )}
+        {/* Add button stays mounted with collapsible so opacity/pointer-events
+            can fade in/out alongside the body's max-height transition. */}
+        <div
+          className={cn(
+            "transition-opacity duration-200",
+            expanded ? "opacity-100" : "opacity-0 pointer-events-none",
+          )}
+        >
+          <AddDependencyPopover
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            workspaceId={workspaceId}
+            existingTaskIds={new Set([
+              taskId,
+              ...blocks.map((d) => d.task._id),
+              ...blockedBy.map((d) => d.task._id),
+              ...relatesTo.map((d) => d.task._id),
+            ])}
+            onAdd={handleAdd}
+          />
+        </div>
       </div>
 
-      {expanded && (
-      <ScrollArea className="h-28">
-        <div className={cn("space-y-3 pr-3", deps !== undefined && "animate-fade-in")}>
-          {deps !== undefined && !hasDeps && (
-            <p className="text-xs text-muted-foreground py-1">No dependencies</p>
-          )}
+      {/* Body wrapper animates max-height between 0 and the fixed ScrollArea
+          height (7rem == h-28). overflow-hidden clips content during the
+          transition. Non-collapsible (full-page) callers always see expanded. */}
+      <div
+        className="overflow-hidden"
+        style={{
+          maxHeight: expanded ? "7rem" : 0,
+          transition: "max-height 250ms cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      >
+        <ScrollArea className="h-28">
+          <div className={cn("space-y-3 pr-3", deps !== undefined && "animate-fade-in")}>
+            {deps !== undefined && !hasDeps && (
+              <p className="text-xs text-muted-foreground py-1">No dependencies</p>
+            )}
 
-          {blockedBy.length > 0 && (
-            <DependencyGroup
-              label="Blocked by"
-              icon={<Ban className="h-3 w-3 text-red-500" />}
-              items={blockedBy}
-              onRemove={handleRemove}
-            />
-          )}
+            {blockedBy.length > 0 && (
+              <DependencyGroup
+                label="Blocked by"
+                icon={<Ban className="h-3 w-3 text-red-500" />}
+                items={blockedBy}
+                onRemove={handleRemove}
+              />
+            )}
 
-          {blocks.length > 0 && (
-            <DependencyGroup
-              label="Blocks"
-              icon={<Ban className="h-3 w-3 text-orange-500" />}
-              items={blocks}
-              onRemove={handleRemove}
-            />
-          )}
+            {blocks.length > 0 && (
+              <DependencyGroup
+                label="Blocks"
+                icon={<Ban className="h-3 w-3 text-orange-500" />}
+                items={blocks}
+                onRemove={handleRemove}
+              />
+            )}
 
-          {relatesTo.length > 0 && (
-            <DependencyGroup
-              label="Related to"
-              icon={<Link2 className="h-3 w-3 text-muted-foreground" />}
-              items={relatesTo}
-              onRemove={handleRemove}
-            />
-          )}
-        </div>
-      </ScrollArea>
-      )}
+            {relatesTo.length > 0 && (
+              <DependencyGroup
+                label="Related to"
+                icon={<Link2 className="h-3 w-3 text-muted-foreground" />}
+                items={relatesTo}
+                onRemove={handleRemove}
+              />
+            )}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 }
