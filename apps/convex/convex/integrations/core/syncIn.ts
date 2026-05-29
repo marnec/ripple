@@ -9,7 +9,9 @@ import { logTaskIntegrationActivity } from "./integrationActivity";
 import {
   insertTaskWithExternalLink,
   markTaskExternalLinkDeleted,
+  setTaskExternalLink,
 } from "./taskExternalLink";
+import { extractRippleTaskId, stripRippleMarker } from "./rippleMarker";
 import {
   reconcileTaskStatus,
   resolveCompletedStatus,
@@ -49,6 +51,72 @@ function isSelfAuthored(
 }
 
 /**
+ * Echo claim by ripple-marker. When `enqueueIssueCreate` builds an outbound
+ * `POST /issues`, it appends `<!-- ripple-task: <id> -->` to the body — the
+ * provider stores it, and the webhook bounce-back carries it. If this
+ * `issue.opened` event's body declares a task id we can verify (task exists,
+ * is in the same project, isn't already linked), bind the task to the new
+ * provider issue and return `true` to suppress the "create a new task" path.
+ *
+ * Returns `false` when there's no marker, the marker points at something we
+ * can't claim, or the body already had a marker we should ignore. False
+ * means "fall through to the next echo guard / new-task path". Refuses
+ * silently (no throw) so a spoofed or stale marker can never block a
+ * legitimate user-created issue.
+ */
+async function tryClaimByRippleMarker(
+  ctx: MutationCtx,
+  args: {
+    event: Extract<NormalizedIssueEvent, { kind: "issue.opened" }>;
+    link: Doc<"projectIntegrationLinks">;
+  },
+): Promise<boolean> {
+  const taskIdRaw = extractRippleTaskId(args.event.body);
+  if (!taskIdRaw) return false;
+  // Convex ids are strings; cast and verify by lookup. If the marker is a
+  // fabricated string (or points to a deleted task), the get returns null and
+  // we fall through.
+  const task = await ctx.db.get(taskIdRaw as Id<"tasks">);
+  if (!task) return false;
+  // Marker must point at a task in THIS link's project — a stale marker from
+  // a moved/copied issue must not bind cross-project.
+  if (task.projectId !== args.link.projectId) return false;
+  // The task may already be linked (e.g. recorder beat the webhook). That's
+  // not a duplicate — return true so we skip the create-task path.
+  const existingForTask = await ctx.db
+    .query("taskIntegrationLinks")
+    .withIndex("by_task", (q) => q.eq("taskId", task._id))
+    .unique();
+  if (existingForTask) return true;
+
+  await ctx.db.insert("taskIntegrationLinks", {
+    taskId: task._id,
+    projectIntegrationLinkId: args.link._id,
+    externalIssueId: args.event.externalIssueId,
+    externalUpdatedAt: args.event.externalUpdatedAt,
+    externalAuthor: args.event.externalAuthor,
+    externalState: "open",
+  });
+  await setTaskExternalLink(ctx, {
+    taskId: task._id,
+    projectId: task.projectId,
+    ref: {
+      provider:
+        (await getIntegrationForLink(ctx, args.link))?.provider ?? "github",
+      repoFullName: args.link.externalRepoFullName,
+      issueNumber: args.event.issueNumber,
+      url: args.event.url,
+    },
+  });
+  await logTaskIntegrationActivity(ctx, {
+    taskId: task._id,
+    type: "issue_linked",
+    newValue: `#${args.event.issueNumber}`,
+  });
+  return true;
+}
+
+/**
  * Apply a provider-neutral inbound event to Ripple state. Called from a
  * provider webhook adapter after signature verification, delivery dedup,
  * workspace/link resolution, and the freeze gate have already run — so
@@ -67,10 +135,13 @@ export async function applyNormalizedEvent(
 ): Promise<void> {
   const { event, link, importContext } = args;
 
-  // Resolve the link's integration once so the echo guard can compare the
-  // event author against this install's bot identity (provider-neutral).
+  // Resolve the link's integration once. Used for the bot-login echo guard
+  // (provider-neutral) AND the OAuth gate that decides whether the guard is
+  // safe to apply here (it isn't, for OAuth-impersonating installs where the
+  // user IS the bot login — the ripple-marker handles those echoes instead).
   const integration = await getIntegrationForLink(ctx, link);
   const botLogin = integration?.externalBotLogin;
+  const isOAuthInstall = !!integration?.oauthRefreshToken;
 
   const existingLink = await ctx.db
     .query("taskIntegrationLinks")
@@ -82,15 +153,28 @@ export async function applyNormalizedEvent(
     .unique();
 
   switch (event.kind) {
-    case "issue.opened":
+    case "issue.opened": {
       // Idempotency guard: redelivered open → no-op.
       if (existingLink) return;
-      // Echo guard: a live `issues.opened` authored by our own App bot is the
-      // bounce-back from an outbound "create issue from task" op. The outbound
-      // recorder owns that task↔issue link; creating a task here would
-      // duplicate it (and land it in triage). Suppressed only for live webhooks
-      // — bulk import (importContext present) still ingests bot-authored issues.
-      if (!importContext && isSelfAuthored(event, botLogin)) return;
+      // Provenance marker: if Ripple created this issue, the outbound op
+      // appended `<!-- ripple-task: <id> -->` to the body before POSTing. The
+      // webhook bounce-back carries the marker — claim the link to that task
+      // instead of creating a duplicate.
+      if (!importContext) {
+        const claimed = await tryClaimByRippleMarker(ctx, { event, link });
+        if (claimed) return;
+      }
+      // Belt-and-suspenders bot-login guard for installs that have a real
+      // structurally-separate bot identity (GitHub Apps). Skipped for OAuth
+      // installs where the bot login collides with the user — there the
+      // marker is the only echo signal we trust.
+      if (
+        !importContext &&
+        !isOAuthInstall &&
+        isSelfAuthored(event, botLogin)
+      ) {
+        return;
+      }
       await createTaskFromEvent(ctx, {
         event,
         link,
@@ -99,6 +183,7 @@ export async function applyNormalizedEvent(
         importContext,
       });
       return;
+    }
 
     case "issue.closed":
       if (existingLink) {
@@ -386,19 +471,25 @@ async function createTaskFromEvent(
     },
   });
 
+  // Strip any provenance marker from the body before persisting / seeding —
+  // Ripple's own outbound creates carry `<!-- ripple-task: ... -->`, and we
+  // never want that string showing up inside a BlockNote description. Other
+  // (third-party-authored) bodies pass through untouched.
+  const cleanBody = stripRippleMarker(event.body);
+
   await ctx.db.insert("taskIntegrationLinks", {
     taskId,
     projectIntegrationLinkId: link._id,
     externalIssueId: event.externalIssueId,
     externalUpdatedAt: event.externalUpdatedAt,
     externalAuthor: event.externalAuthor,
-    initialBodyMarkdown: event.body,
+    initialBodyMarkdown: cleanBody,
     externalState,
     externalStateReason,
     // "pending" iff we're about to schedule the seed below; the action drives
     // it to a terminal state. Left undefined for empty bodies (no seed) so the
     // client gate opens immediately via its `!seedExpected` path.
-    seedStatus: event.body.trim().length > 0 ? "pending" : undefined,
+    seedStatus: cleanBody.trim().length > 0 ? "pending" : undefined,
   });
 
   // Mark the task↔issue linkage on the timeline. Integration-created tasks

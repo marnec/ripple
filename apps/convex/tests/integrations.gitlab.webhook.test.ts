@@ -94,6 +94,20 @@ describe("integrations/gitlab/webhook.normalize — issue state", () => {
     });
   });
 
+  it("synthesizes externalAuthor.url when the payload omits user.web_url (Issue/Note hooks don't include it)", () => {
+    // GitLab's Issue Hook user object is {id, name, username, avatar_url,
+    // email} — no web_url. Producing externalAuthor.url=undefined here would
+    // fail the taskIntegrationLinks schema. Falls back to <base>/<username>.
+    const payload = issuePayload("open");
+    delete (payload.user as { web_url?: string }).web_url;
+    const event = normalize(payload);
+    expect(event?.externalAuthor).toEqual({
+      login: "octocat",
+      avatarUrl: "https://gitlab.com/octocat.png",
+      url: "https://gitlab.com/octocat",
+    });
+  });
+
   it("normalizes a closed issue with a default 'completed' state reason", () => {
     const event = normalize(issuePayload("close"));
     expect(event?.kind).toBe("issue.closed");

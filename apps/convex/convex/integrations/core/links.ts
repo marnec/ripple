@@ -639,12 +639,12 @@ export const drainDisconnectBatch = internalMutation({
 
     const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
     if (!projectLink) return null; // defensive — shouldn't happen
-    const integration = await ctx.db
-      .query("workspaceIntegrations")
-      .withIndex("by_workspace", (q) =>
-        q.eq("workspaceId", projectLink.workspaceId),
-      )
-      .unique();
+    // Resolve via the link's `workspaceIntegrationId` FK — a workspace can hold
+    // multiple integrations (e.g. GitHub + GitLab), so a workspace-wide
+    // `.unique()` lookup throws once a second provider is connected. The
+    // helper falls back to the legacy single-integration lookup for old rows
+    // missing the FK.
+    const integration = await getIntegrationForLink(ctx, projectLink);
     const provider = integration?.provider ?? "github";
     const disconnectedAt = Date.now();
 

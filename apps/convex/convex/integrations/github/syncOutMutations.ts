@@ -143,12 +143,9 @@ async function recordOutboundFailureImpl(
   // a system actor; sync events have no human originator.
   const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
   if (!projectLink) return;
-  const integration = await ctx.db
-    .query("workspaceIntegrations")
-    .withIndex("by_workspace", (q) =>
-      q.eq("workspaceId", projectLink.workspaceId),
-    )
-    .unique();
+  // Resolve via the link's workspaceIntegrationId FK — a workspace can hold
+  // both GitHub + GitLab integrations, so a workspace-wide `.unique()` throws.
+  const integration = await getIntegrationForLink(ctx, projectLink);
   if (!integration) return;
   try {
     await auditLog.log(ctx, {
@@ -198,10 +195,15 @@ export const recordIssueCloseFailure = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // The task + its link are gone by the time this runs, so there's no FK to
+    // resolve the integration through — pick the workspace's GitHub install by
+    // provider (a workspace can also hold GitLab, which a workspace-wide
+    // `.unique()` would crash on).
     const integration = await ctx.db
       .query("workspaceIntegrations")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .unique();
+      .filter((q) => q.eq(q.field("provider"), "github"))
+      .first();
     if (!integration) return null;
     try {
       await auditLog.log(ctx, {

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery } from "../../_generated/server";
+import { getIntegrationForLink } from "./integrationLookups";
 
 /**
  * Read-only context bundle the force-resync action needs to drive its
@@ -34,12 +35,10 @@ export const getResyncContext = internalQuery({
     if (!link) return null;
     if (link.status === "disconnected" || link.pausedByBilling) return null;
 
-    const integration = await ctx.db
-      .query("workspaceIntegrations")
-      .withIndex("by_workspace", (q) =>
-        q.eq("workspaceId", link.workspaceId),
-      )
-      .unique();
+    // Resolve via the link's `workspaceIntegrationId` FK — a workspace can hold
+    // multiple integrations (GitHub + GitLab), so a workspace-wide `.unique()`
+    // throws once a second provider is connected.
+    const integration = await getIntegrationForLink(ctx, link);
     if (!integration) return null;
 
     const taskLinks = await ctx.db

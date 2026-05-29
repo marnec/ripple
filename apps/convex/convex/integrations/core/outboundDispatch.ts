@@ -12,6 +12,7 @@ import {
   shouldSkipForEcho,
   shouldSkipForFreeze,
 } from "./syncOut";
+import { appendRippleTaskMarker } from "./rippleMarker";
 
 /**
  * Outbound dispatchers. Called by `tasks.update`, `tasks.updatePosition`, and
@@ -198,11 +199,19 @@ export async function enqueueIssueCreate(
     );
   }
 
+  // Tag the body with the originating task id (invisible HTML comment) so
+  // the inbound webhook can recognize the bounce-back of THIS create and
+  // claim the link by taskId — independent of who authored it on the
+  // provider side. Required for OAuth-impersonating installs (GitLab),
+  // where the bot login collides with the human user. Belt-and-suspenders
+  // for GitHub Apps too.
+  const taggedBody = appendRippleTaskMarker(args.body, args.taskId);
+
   await retrier.run(ctx, adapter.ops.createIssue, {
     taskId: args.taskId,
     projectIntegrationLinkId: args.projectIntegrationLinkId,
     title: args.title,
-    body: args.body,
+    body: taggedBody,
     credentialRef: integration.externalAccountId,
     projectRef: projectLink.externalRepoFullName,
   });

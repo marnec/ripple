@@ -32,12 +32,17 @@ import type {
   NormalizedPullRequestEvent,
 } from "../core/types";
 import { collectReferencedIssueNumbers } from "../core/closingRefs";
+import { GITLAB_BASE } from "./oauthClient";
 
 interface GitlabUser {
   id: number;
   username: string;
-  avatar_url: string;
-  web_url: string;
+  // Issue/Note hook payloads only carry `id`, `name`, `username`, `avatar_url`,
+  // `email` on the user object — `web_url` is ONLY present on certain payloads
+  // (e.g. merge request hooks). Treat both as optional so the normalizer can
+  // synthesize fallbacks when the provider omits them.
+  avatar_url?: string;
+  web_url?: string;
 }
 
 interface GitlabIssueAttributes {
@@ -73,10 +78,14 @@ function parseGitlabTime(s: string): number {
 }
 
 function gitlabAuthor(user: GitlabUser) {
+  // Synthesize a profile URL when the payload omits `web_url` (Issue/Note
+  // hooks do). `taskIntegrationLinks.externalAuthor` requires a string url,
+  // and the canonical `<base>/<username>` form is what GitLab itself serves
+  // for a profile page anyway.
   return {
     login: user.username,
-    avatarUrl: user.avatar_url,
-    url: user.web_url,
+    avatarUrl: user.avatar_url ?? "",
+    url: user.web_url ?? `${GITLAB_BASE}/${user.username}`,
   };
 }
 
