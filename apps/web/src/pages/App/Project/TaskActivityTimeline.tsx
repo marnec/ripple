@@ -7,14 +7,15 @@ import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import {
   ArrowRight,
-  ChevronRight,
   CircleDot,
   GitBranch,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
   Link2,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   Pencil,
   Plus,
   Tag,
@@ -61,10 +62,14 @@ type TaskActivityTimelineProps = {
   provider?: string;
   /** On lg+, pin header & composer and scroll only the list. Requires a parent with a defined height. */
   fillHeight?: boolean;
-  /** When set, the header becomes a collapse toggle (chevron) and `collapsed` hides the body. */
+  /** When set, the header becomes a click target and renders the toggle icon. */
   onToggle?: () => void;
   /** Whether the timeline body is collapsed to just its header. Only meaningful with `onToggle`. */
   collapsed?: boolean;
+  /** Which icon to render in the header toggle button when `onToggle` is set.
+   *  "maximize" means clicking grows this section (from shared/collapsed),
+   *  "minimize" means clicking returns to the shared layout. */
+  toggleIcon?: "maximize" | "minimize";
 };
 
 type TimelineItem = {
@@ -219,7 +224,7 @@ function getActivityDescription(item: TimelineItem, provider: string): React.Rea
   }
 }
 
-export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, provider = "github", fillHeight = false, onToggle, collapsed = false }: TaskActivityTimelineProps) {
+export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, provider = "github", fillHeight = false, onToggle, collapsed = false, toggleIcon = "maximize" }: TaskActivityTimelineProps) {
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
   // Use pre-fetched members when available; fall back to workspace context
   const contextMembers = useWorkspaceMembers();
@@ -313,14 +318,20 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
           <button
             type="button"
             onClick={onToggle}
+            title={
+              toggleIcon === "minimize"
+                ? "Restore shared layout"
+                : collapsed
+                  ? "Show activity"
+                  : "Expand activity"
+            }
             className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
           >
-            <ChevronRight
-              className={cn(
-                "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                !collapsed && "rotate-90",
-              )}
-            />
+            {toggleIcon === "minimize" ? (
+              <Minimize2 className="h-3.5 w-3.5 text-muted-foreground" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
             <h3 className="text-sm font-semibold text-muted-foreground">Activity</h3>
           </button>
         ) : (

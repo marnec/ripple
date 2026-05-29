@@ -9,7 +9,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Maximize2, Trash2 } from "lucide-react";
+import { Maximize2, Minimize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
@@ -60,9 +60,16 @@ export function TaskDetailSheet({
   });
   const navigate = useNavigate();
 
-  // Description and Activity share the remaining vertical space; exactly one is
-  // expanded at a time (both benefit from height and aren't read together).
-  const [openPanel, setOpenPanel] = useState<"description" | "activity">("description");
+  // Description and Activity share the remaining vertical space in three states:
+  // "shared" (default — both visible, splitting the space) and two solo states
+  // where one is fully expanded and the other is reduced to its header. Clicking
+  // a section toggles between "shared" and that section's solo state; clicking
+  // either header from a solo state returns to "shared".
+  const [panelState, setPanelState] = useState<"shared" | "description" | "activity">("shared");
+  const toggleDescription = () =>
+    setPanelState((s) => (s === "shared" ? "description" : "shared"));
+  const toggleActivity = () =>
+    setPanelState((s) => (s === "shared" ? "activity" : "shared"));
 
   // Defer activity timeline one frame after the editor
   const [showActivity, setShowActivity] = useState(false);
@@ -176,37 +183,40 @@ export function TaskDetailSheet({
                   />
                 </div>
 
-                {/* Description / Activity arena — they fight for the remaining
-                    height; opening one collapses the other. Only the open
-                    panel's body scrolls. */}
+                {/* Description / Activity arena — three layout states:
+                    "shared" (both flex-1, split remaining height),
+                    "description" (description fills, activity → header only),
+                    "activity" (activity fills, description → header only). */}
                 <div className="flex-1 min-h-0 flex flex-col gap-3">
                   <div
                     className={cn(
                       "flex flex-col gap-2 min-w-0",
-                      openPanel === "description" ? "flex-1 min-h-0" : "shrink-0",
+                      panelState === "activity" ? "shrink-0" : "flex-1 min-h-0",
                     )}
                   >
-                    <div className="flex items-center justify-between shrink-0">
+                    <div className="flex items-center justify-between gap-2 shrink-0">
                       <button
                         type="button"
-                        onClick={() =>
-                          setOpenPanel((p) =>
-                            p === "description" ? "activity" : "description",
-                          )
+                        onClick={toggleDescription}
+                        title={
+                          panelState === "description"
+                            ? "Restore shared layout"
+                            : panelState === "activity"
+                              ? "Show description"
+                              : "Expand description"
                         }
                         className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
                       >
-                        <ChevronRight
-                          className={cn(
-                            "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                            openPanel === "description" && "rotate-90",
-                          )}
-                        />
+                        {panelState === "description" ? (
+                          <Minimize2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        ) : (
+                          <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
                         <h3 className="text-sm font-semibold text-muted-foreground">
                           Description
                         </h3>
                       </button>
-                      {openPanel === "description" && (
+                      {panelState !== "activity" && (
                         <TaskDescriptionToolbar
                           taskId={taskId}
                           awaitingSeed={detail.awaitingSeed}
@@ -228,9 +238,9 @@ export function TaskDetailSheet({
                       members={detail.members}
                       workspaceId={workspaceId}
                       className={cn(
-                        openPanel === "description"
-                          ? "flex-1 min-h-0 overflow-y-auto"
-                          : "hidden",
+                        panelState === "activity"
+                          ? "hidden"
+                          : "flex-1 min-h-0 overflow-y-auto",
                       )}
                       hideLabel
                       loading={!detail.descriptionReady}
@@ -241,7 +251,7 @@ export function TaskDetailSheet({
                     <div
                       className={cn(
                         "flex flex-col min-w-0",
-                        openPanel === "activity" ? "flex-1 min-h-0" : "shrink-0",
+                        panelState === "description" ? "shrink-0" : "flex-1 min-h-0",
                       )}
                     >
                       <TaskActivityTimeline
@@ -251,11 +261,10 @@ export function TaskDetailSheet({
                         members={detail.members}
                         provider={detail.linkedProvider}
                         fillHeight
-                        collapsed={openPanel !== "activity"}
-                        onToggle={() =>
-                          setOpenPanel((p) =>
-                            p === "activity" ? "description" : "activity",
-                          )
+                        collapsed={panelState === "description"}
+                        onToggle={toggleActivity}
+                        toggleIcon={
+                          panelState === "activity" ? "minimize" : "maximize"
                         }
                       />
                     </div>
