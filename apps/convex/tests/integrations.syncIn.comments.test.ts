@@ -241,6 +241,54 @@ describe("integrations/core/syncIn comment.created echo guard (self-authored)", 
     );
     expect(comments).toHaveLength(1);
   });
+
+  // Regression: GitLab is an OAuth-impersonating install — the recorded
+  // `externalBotLogin` IS the connected human user's username, so the
+  // bot-login echo guard (which compares the inbound author to that login)
+  // would suppress every real comment that user writes on GitLab. The guard
+  // must be inert for OAuth installs and rely on dedup-by-externalCommentId
+  // for the bounce-back of outbound creates instead.
+  it("does NOT suppress a self-author-login comment on an OAuth install (GitLab)", async () => {
+    const t = createTestContext();
+    const { link } = await setupInboundWithIssue(t);
+
+    // Promote the integration to an OAuth install with a bot login that
+    // collides with the inbound author. Without the OAuth gate this would be
+    // suppressed; with it, the event must flow through.
+    await t.run(async (ctx) => {
+      const integration = await ctx.db
+        .query("workspaceIntegrations")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", link.workspaceId))
+        .unique();
+      if (!integration) throw new Error("integration fixture missing");
+      await ctx.db.patch(integration._id, {
+        provider: "gitlab",
+        externalBotLogin: "alice",
+        oauthRefreshToken: "rt_xxx",
+      });
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeCommentCreatedEvent({
+          externalAuthor: {
+            login: "alice",
+            avatarUrl: "",
+            url: "https://gitlab.com/alice",
+          },
+        }),
+        link,
+      }),
+    );
+
+    const comments = await t.run((ctx) =>
+      ctx.db.query("taskComments").collect(),
+    );
+    expect(comments).toHaveLength(1);
+    expect(comments[0]?.body).toBe(
+      "Thanks for the report — I can reproduce.",
+    );
+  });
 });
 
 describe("integrations/core/syncIn comment.edited", () => {

@@ -256,7 +256,11 @@ export async function applyNormalizedEvent(
       // duplicate the comment under the bot identity. The dupe-by-id guard in
       // `applyCommentCreated` only catches this once the recorder has landed,
       // but the webhook routinely arrives first — so suppress by authorship.
-      if (isSelfAuthored(event, botLogin)) return;
+      // Skipped for OAuth-impersonating installs (GitLab) where the bot login
+      // collides with the human user — applying it there would suppress every
+      // real GitLab comment the connected user posts. OAuth installs rely on
+      // the dedup-by-externalCommentId guard inside `applyCommentCreated`.
+      if (!isOAuthInstall && isSelfAuthored(event, botLogin)) return;
       await applyCommentCreated(ctx, { event, link, existingLink });
       return;
 
