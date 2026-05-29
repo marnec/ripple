@@ -8,7 +8,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
 import { Maximize2, Minimize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -24,6 +23,16 @@ import { TaskIssueRef } from "./TaskIssueRef";
 import { TaskProperties } from "./TaskProperties";
 import { TaskSyncIndicator } from "./TaskSyncIndicator";
 import { useTaskDetail } from "./useTaskDetail";
+
+// CSS-driven layout swap: animating `flex-grow` lets the two panels redistribute
+// space without the scale/projection distortion framer-motion's `layout` causes
+// on complex flex children (BlockNote editor, timeline list). flex-basis stays
+// at 0 so the panel's allocated size is grow-driven only, not inflated by the
+// editor/timeline's natural content height; the default `min-content` keeps
+// the header visible when grow is 0.
+const PANEL_TRANSITION_STYLE = {
+  transition: "flex-grow 250ms cubic-bezier(0.16, 1, 0.3, 1)",
+};
 
 type TaskDetailSheetProps = {
   taskId: Id<"tasks"> | null;
@@ -184,15 +193,20 @@ export function TaskDetailSheet({
                 </div>
 
                 {/* Description / Activity arena — three layout states:
-                    "shared" (both flex-1, split remaining height),
-                    "description" (description fills, activity → header only),
-                    "activity" (activity fills, description → header only). */}
+                    "shared" (both flex-grow:1, split remaining height),
+                    "description" (description grows, activity → header only),
+                    "activity" (activity grows, description → header only).
+                    flex-shrink stays 0 so the collapsed panel keeps its header
+                    height; flex-grow flips between 0 and 1 with a CSS
+                    transition driving the size swap. */}
                 <div className="flex-1 min-h-0 flex flex-col gap-3">
                   <div
-                    className={cn(
-                      "flex flex-col gap-2 min-w-0",
-                      panelState === "activity" ? "shrink-0" : "flex-1 min-h-0",
-                    )}
+                    style={{
+                      ...PANEL_TRANSITION_STYLE,
+                      flexGrow: panelState === "activity" ? 0 : 1,
+                      flexBasis: 0,
+                    }}
+                    className="flex flex-col gap-2 min-w-0"
                   >
                     <div className="flex items-center justify-between gap-2 shrink-0">
                       <button
@@ -228,31 +242,40 @@ export function TaskDetailSheet({
                         />
                       )}
                     </div>
-                    {/* Editor stays mounted while collapsed so Yjs sync keeps
-                        running; only its view is hidden. */}
-                    <TaskDescriptionEditor
-                      editor={detail.editor}
-                      documents={detail.documents}
-                      diagrams={detail.diagrams}
-                      spreadsheets={detail.spreadsheets}
-                      members={detail.members}
-                      workspaceId={workspaceId}
-                      className={cn(
-                        panelState === "activity"
-                          ? "hidden"
-                          : "flex-1 min-h-0 overflow-y-auto",
-                      )}
-                      hideLabel
-                      loading={!detail.descriptionReady}
-                    />
+                    {/* Editor stays mounted in all states. `contain: size` on
+                        this wrapper makes the browser size it as if empty,
+                        so the editor's chrome + content do NOT contribute to
+                        the section's min-content. Without this, BlockNote's
+                        intrinsic size keeps the section at ~100px even with
+                        flex-grow: 0. The editor still gets a real height
+                        from flex when expanded; when collapsed the wrapper
+                        is 0 and overflow-hidden clips the editor. */}
+                    <div
+                      className="flex-1 min-h-0 overflow-hidden"
+                      style={{ contain: "size" }}
+                    >
+                      <TaskDescriptionEditor
+                        editor={detail.editor}
+                        documents={detail.documents}
+                        diagrams={detail.diagrams}
+                        spreadsheets={detail.spreadsheets}
+                        members={detail.members}
+                        workspaceId={workspaceId}
+                        className="h-full overflow-y-auto"
+                        hideLabel
+                        loading={!detail.descriptionReady}
+                      />
+                    </div>
                   </div>
 
                   {detail.currentUser && showActivity && (
                     <div
-                      className={cn(
-                        "flex flex-col min-w-0",
-                        panelState === "description" ? "shrink-0" : "flex-1 min-h-0",
-                      )}
+                      style={{
+                        ...PANEL_TRANSITION_STYLE,
+                        flexGrow: panelState === "description" ? 0 : 1,
+                        flexBasis: 0,
+                      }}
+                      className="flex flex-col min-w-0"
                     >
                       <TaskActivityTimeline
                         taskId={taskId}
