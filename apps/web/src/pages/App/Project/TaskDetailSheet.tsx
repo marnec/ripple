@@ -85,10 +85,20 @@ export function TaskDetailSheet({
     setPanelStateTaskId(taskId);
     setPanelState("shared");
   }
+  // Each header cycles through all three states in a stable, predictable
+  // order, prioritising its own section first. Earlier the buttons "toggled
+  // to/from shared", which made clicks from a solo state feel unpredictable
+  // (clicking the other section's header always landed back at shared,
+  // never at the other solo state). No dominant UI pattern exists for this
+  // shared/solo-A/solo-B vertical split, so we go with cycling.
   const toggleDescription = () =>
-    setPanelState((s) => (s === "shared" ? "description" : "shared"));
+    setPanelState((s) =>
+      s === "shared" ? "description" : s === "description" ? "activity" : "shared",
+    );
   const toggleActivity = () =>
-    setPanelState((s) => (s === "shared" ? "activity" : "shared"));
+    setPanelState((s) =>
+      s === "shared" ? "activity" : s === "activity" ? "description" : "shared",
+    );
 
   // Defer activity timeline one frame after the editor
   const [showActivity, setShowActivity] = useState(false);
