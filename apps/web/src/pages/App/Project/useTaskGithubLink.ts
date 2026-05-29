@@ -51,6 +51,9 @@ export interface TaskGithubSeed {
 export interface TaskGithubView {
   /** Whether the task is linked to a GitHub issue (false while loading too). */
   isLinked: boolean;
+  /** Provider that owns the link ("github" or "gitlab"). Defaults to "github"
+   *  for unlinked tasks (callers gate on `isLinked` before using copy). */
+  provider: string;
   /** Outbound sync failure to surface, or null when healthy / never tried. */
   syncError: TaskSyncError | null;
   /** GitHub assignees that didn't win Ripple's single `assigneeId` slot. */
@@ -106,6 +109,7 @@ export function deriveTaskGithubView(
   if (!link) {
     return {
       isLinked: false,
+      provider: "github",
       syncError: null,
       shadowAssignees: [],
       closedBy: null,
@@ -125,6 +129,7 @@ export function deriveTaskGithubView(
   }
   return {
     isLinked: true,
+    provider: link.provider,
     syncError: link.lastSyncError
       ? {
           message: link.lastSyncError.message,

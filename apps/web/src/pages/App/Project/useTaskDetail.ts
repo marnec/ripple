@@ -60,12 +60,16 @@ export function useTaskDetail({
 
   const fileUpload = useUploadFile(workspaceId);
 
-  // GitHub link state — drives the description-seed gate and edit tracking.
-  // Consumes the single `useTaskGithubLink` boundary (one shaping site, shared
-  // with the sync button / indicators) rather than re-querying `getByTask`.
+  // Integration link state — drives the description-seed gate, edit tracking,
+  // and provider-aware copy (timeline labels, seed notice). Consumes the
+  // single `useTaskGithubLink` boundary (one shaping site, shared with the
+  // sync button / indicators) rather than re-querying `getByTask`.
   const github = useTaskGithubLink(taskId);
   const isGithubLinked = github.isLinked;
   const descriptionEdited = github.descriptionEdited;
+  // Aliased separately from the Yjs `provider` (collaboration transport)
+  // exported below — same name, very different things.
+  const linkedProvider = github.provider;
 
   // Collaborative editor - Yjs handles sync automatically
   const { editor, isLoading: editorLoading, isConnected, isOffline, provider, yDoc, descriptionReady, awaitingSeed } = useDocumentCollaboration({
@@ -197,6 +201,7 @@ export function useTaskDetail({
     isConnected,
     isOffline,
     provider,
+    linkedProvider,
     remoteUsers,
     titleValue,
     setTitleValue,

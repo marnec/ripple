@@ -8,8 +8,10 @@ import { TaskDescriptionSyncButton } from "./TaskDescriptionSyncButton";
 
 type Props = {
   taskId: Id<"tasks">;
-  /** A GitHub description seed is in flight — show the seeding notice. */
+  /** A description seed is in flight — show the seeding notice. */
   awaitingSeed: boolean;
+  /** Provider that owns the linked issue; drives the seed-notice copy. */
+  provider: string;
   /**
    * BlockNote editor instance, or null until it's created. Typed `unknown`
    * because the full generic lives in the host; the sync button only reads
@@ -22,14 +24,16 @@ type Props = {
 };
 
 /**
- * The right-aligned cluster in a task's Description header: the GitHub seeding
- * notice, the manual sync-to-GitHub button, the collaboration connection
- * status, and the live presence avatars. Shared verbatim between the
- * task-detail sheet and the full page so a new affordance lands in one place.
+ * The right-aligned cluster in a task's Description header: the provider
+ * seeding notice, the manual sync-to-provider button, the collaboration
+ * connection status, and the live presence avatars. Shared verbatim between
+ * the task-detail sheet and the full page so a new affordance lands in one
+ * place.
  */
 export function TaskDescriptionToolbar({
   taskId,
   awaitingSeed,
+  provider,
   editor,
   isConnected,
   remoteUsers,
@@ -37,7 +41,7 @@ export function TaskDescriptionToolbar({
 }: Props) {
   return (
     <div className="flex items-center gap-2 min-h-8">
-      {awaitingSeed && <SeedingDescriptionNotice />}
+      {awaitingSeed && <SeedingDescriptionNotice provider={provider} />}
       {editor != null && (
         <TaskDescriptionSyncButton taskId={taskId} editor={editor} />
       )}

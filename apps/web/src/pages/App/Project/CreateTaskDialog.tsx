@@ -40,7 +40,11 @@ export function CreateTaskDialog({
   const createIssue = useMutation(api.tasks.createGithubIssue);
 
   // The issue title follows the task title until the user edits it.
-  const { eligible, links } = useGithubIssueEligibility(projectId, workspaceId);
+  const { eligible, links, provider } = useGithubIssueEligibility(
+    projectId,
+    workspaceId,
+  );
+  const providerLabel = provider === "gitlab" ? "GitLab" : "GitHub";
   const draft = useGithubIssueDraft(title, links);
 
   const reset = () => {
@@ -76,9 +80,9 @@ export function CreateTaskDialog({
               title: issueTitle,
               body: "",
             });
-            toast.success("Task created — creating GitHub issue…");
+            toast.success(`Task created — creating ${providerLabel} issue…`);
           } catch (err) {
-            toast.error("Task created, but the GitHub issue failed", {
+            toast.error(`Task created, but the ${providerLabel} issue failed`, {
               description:
                 err instanceof Error ? err.message : "Please try again",
             });
@@ -118,7 +122,7 @@ export function CreateTaskDialog({
                     disabled={isCreating}
                     onCheckedChange={(c) => setAlsoCreateIssue(c === true)}
                   />
-                  Also create a GitHub issue
+                  Also create a {providerLabel} issue
                 </label>
                 {alsoCreateIssue && (
                   <GithubIssueFields

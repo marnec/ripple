@@ -42,6 +42,7 @@ import { useUploadFile } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { StaticCommentBody } from "./StaticCommentBody";
 import { GithubMark } from "@/components/GithubMark";
+import { GitlabMark } from "@/components/GitlabMark";
 import { cn } from "@/lib/utils";
 import type { EditCommentEditorProps, WorkspaceMemberSummary } from "./comment-types";
 
@@ -53,6 +54,11 @@ type TaskActivityTimelineProps = {
   workspaceId: Id<"workspaces">;
   /** Pre-fetched workspace members — avoids a duplicate query when parent already has them. */
   members?: WorkspaceMemberSummary[];
+  /** Provider of the task's integration link ("github" or "gitlab"), drives
+   *  provider-aware labels on integration-sourced events. Defaults to
+   *  "github" — safe for Ripple-native tasks (the integration labels never
+   *  appear for them). */
+  provider?: string;
   /** On lg+, pin header & composer and scroll only the list. Requires a parent with a defined height. */
   fillHeight?: boolean;
   /** When set, the header becomes a collapse toggle (chevron) and `collapsed` hides the body. */
@@ -101,7 +107,16 @@ function formatRelativeTimestamp(ts: number): string {
     : `${month} ${d.getDate()}, ${String(d.getFullYear()).slice(2)}`;
 }
 
-function getActivityIcon(type: string) {
+const PROVIDER_LABEL: Record<string, string> = {
+  github: "GitHub",
+  gitlab: "GitLab",
+};
+
+function providerLabel(provider: string): string {
+  return PROVIDER_LABEL[provider] ?? "GitHub";
+}
+
+function getActivityIcon(type: string, provider: string) {
   switch (type) {
     case "created": return <Plus className="h-3 w-3" />;
     case "status_change": return <CircleDot className="h-3 w-3" />;
@@ -125,13 +140,16 @@ function getActivityIcon(type: string) {
     case "branch_created": return <GitBranch className="h-3 w-3" />;
     case "status_synced": return <CircleDot className="h-3 w-3" />;
     case "description_synced": return <FileText className="h-3 w-3" />;
-    case "issue_linked": return <GithubMark className="h-3 w-3" />;
-    case "issue_created": return <GithubMark className="h-3 w-3" />;
+    case "issue_linked":
+    case "issue_created": {
+      const Mark = provider === "gitlab" ? GitlabMark : GithubMark;
+      return <Mark className="h-3 w-3" />;
+    }
     default: return <Minus className="h-3 w-3" />;
   }
 }
 
-function getActivityDescription(item: TimelineItem): React.ReactNode {
+function getActivityDescription(item: TimelineItem, provider: string): React.ReactNode {
   const { type, oldValue, newValue, userName } = item;
 
   switch (type) {
@@ -175,11 +193,13 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
     case "comment_delete":
       return <><span className="font-medium">{userName}</span> deleted a comment</>;
     // Integration events — passive voice: the actor is the integration bot, not
-    // a Ripple user, so attributing a name would be misleading.
+    // a Ripple user, so attributing a name would be misleading. Provider label
+    // is threaded through so GitLab tasks read "Imported from GitLab issue …"
+    // instead of "GitHub" (the default before the GitLab integration shipped).
     case "issue_linked":
-      return <>Imported from GitHub issue <span className="font-medium">{newValue}</span></>;
+      return <>Imported from {providerLabel(provider)} issue <span className="font-medium">{newValue}</span></>;
     case "issue_created":
-      return <>Created GitHub issue <span className="font-medium">{newValue}</span></>;
+      return <>Created {providerLabel(provider)} issue <span className="font-medium">{newValue}</span></>;
     case "branch_created":
       return <>Created branch <span className="font-medium">{newValue}</span></>;
     case "pr_linked":
@@ -193,13 +213,13 @@ function getActivityDescription(item: TimelineItem): React.ReactNode {
     case "status_synced":
       return <>Status synced from <span className="font-medium">{oldValue}</span> <ArrowRight className="inline h-3 w-3 mx-0.5" /> <span className="font-medium">{newValue}</span></>;
     case "description_synced":
-      return <>Synced description to GitHub</>;
+      return <>Synced description to {providerLabel(provider)}</>;
     default:
       return <><span className="font-medium">{userName}</span> made a change</>;
   }
 }
 
-export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, fillHeight = false, onToggle, collapsed = false }: TaskActivityTimelineProps) {
+export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, members: membersProp, provider = "github", fillHeight = false, onToggle, collapsed = false }: TaskActivityTimelineProps) {
   const timeline = useQuery(api.taskActivity.timeline, { taskId });
   // Use pre-fetched members when available; fall back to workspace context
   const contextMembers = useWorkspaceMembers();
@@ -370,7 +390,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
                     onCancelEdit={() => setEditingCommentId(null)}
                   />
                 ) : (
-                  <ActivityItem key={item._id} item={item} />
+                  <ActivityItem key={item._id} item={item} provider={provider} />
                 )
               )
             )}
@@ -413,14 +433,14 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
 }
 
 // Activity event row — compact, muted styling
-function ActivityItem({ item }: { item: TimelineItem }) {
+function ActivityItem({ item, provider }: { item: TimelineItem; provider: string }) {
   return (
     <div className="relative flex items-center gap-2 py-1">
       <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground ring-2 ring-background z-10">
-        {getActivityIcon(item.type ?? "")}
+        {getActivityIcon(item.type ?? "", provider)}
       </div>
       <div className="flex-1 min-w-0 text-sm text-muted-foreground leading-6">
-        {getActivityDescription(item)}
+        {getActivityDescription(item, provider)}
       </div>
       <span
         className="text-xs text-muted-foreground/60 shrink-0 leading-6"

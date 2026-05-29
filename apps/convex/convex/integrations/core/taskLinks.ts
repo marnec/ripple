@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "../../_generated/server";
 import { checkResourceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import { getIntegrationForLink } from "./integrationLookups";
 
 /**
  * Per-task integration link state, read only by the task-detail surface
@@ -14,6 +15,11 @@ export const getByTask = query({
   returns: v.union(
     v.null(),
     v.object({
+      // Provider that owns the link (drives provider-aware UI copy: "Seeding
+      // from {GitHub|GitLab}", "Imported from {GitHub|GitLab} issue", etc.).
+      // Resolved from the link's workspace integration; falls back to "github"
+      // for legacy rows missing the FK.
+      provider: v.string(),
       lastSyncError: v.optional(
         v.object({
           occurredAt: v.number(),
@@ -122,8 +128,13 @@ export const getByTask = query({
           canManageDefault: access.membership.role === WorkspaceRole.ADMIN,
         }
       : null;
+    const integration = projectLink
+      ? await getIntegrationForLink(ctx, projectLink)
+      : null;
+    const provider = integration?.provider ?? "github";
 
     return {
+      provider,
       lastSyncError: link.lastSyncError,
       externalState: link.externalState,
       externalDeletedAt: link.externalDeletedAt,

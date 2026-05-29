@@ -1427,6 +1427,7 @@ export declare const api: {
               message: string;
               occurredAt: number;
             };
+            provider: string;
             seedExpected: boolean;
             seedStatus?: "pending" | "seeded" | "skipped" | "failed";
           }

@@ -193,6 +193,7 @@ function TaskDetailPageContent({
                   <TaskDescriptionToolbar
                     taskId={taskId}
                     awaitingSeed={detail.awaitingSeed}
+                    provider={detail.linkedProvider}
                     editor={detail.editor}
                     isConnected={detail.isConnected}
                     remoteUsers={detail.remoteUsers}
@@ -221,6 +222,7 @@ function TaskDetailPageContent({
                 currentUserId={detail.currentUser._id}
                 workspaceId={workspaceId}
                 members={detail.members}
+                provider={detail.linkedProvider}
                 fillHeight
               />
             </div>

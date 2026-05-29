@@ -32,6 +32,7 @@ type Link = NonNullable<Parameters<typeof deriveTaskGithubView>[0]>;
 // getByTask always returns these two booleans; fill them so partial fixtures
 // satisfy the type while each test sets only the fields it cares about.
 const mkLink = (partial: Partial<Link> = {}): Link => ({
+  provider: "github",
   seedExpected: false,
   descriptionSnapshotId: null,
   branchSource: null,
@@ -42,6 +43,7 @@ describe("deriveTaskGithubView", () => {
   it("undefined (loading) → not linked, everything empty", () => {
     expect(deriveTaskGithubView(undefined)).toEqual({
       isLinked: false,
+      provider: "github",
       syncError: null,
       shadowAssignees: [],
       closedBy: null,

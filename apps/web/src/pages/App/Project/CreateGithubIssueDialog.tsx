@@ -41,7 +41,8 @@ export function CreateGithubIssueDialog({
   open,
   onOpenChange,
 }: Props) {
-  const { links } = useGithubIssueEligibility(projectId, workspaceId);
+  const { links, provider } = useGithubIssueEligibility(projectId, workspaceId);
+  const providerLabel = provider === "gitlab" ? "GitLab" : "GitHub";
   const draft = useGithubIssueDraft(taskTitle, links);
   const createIssue = useMutation(api.tasks.createGithubIssue);
   const [submitting, setSubmitting] = useState(false);
@@ -61,7 +62,7 @@ export function CreateGithubIssueDialog({
       body: "",
     })
       .then(() => {
-        toast.success("Creating GitHub issue…", {
+        toast.success(`Creating ${providerLabel} issue…`, {
           description: "The link will appear here once it's created.",
         });
         draft.reset();
@@ -79,7 +80,7 @@ export function CreateGithubIssueDialog({
     <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Create GitHub issue</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>Create {providerLabel} issue</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
             Create an issue on a connected repository and link it to this task.
             Merging a PR into a mapped branch will then move the task.

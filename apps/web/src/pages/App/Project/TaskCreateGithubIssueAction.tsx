@@ -32,17 +32,18 @@ export function TaskCreateGithubIssueAction({
   isLinked,
   completed,
 }: Props) {
-  const { eligible } = useGithubIssueEligibility(projectId, workspaceId);
+  const { eligible, provider } = useGithubIssueEligibility(projectId, workspaceId);
+  const providerLabel = provider === "gitlab" ? "GitLab" : "GitHub";
   const [open, setOpen] = useState(false);
 
   if (!eligible) return null;
 
   const disabled = isLinked || completed;
   const title = isLinked
-    ? "Already linked to a GitHub issue"
+    ? `Already linked to a ${providerLabel} issue`
     : completed
       ? "Completed tasks can't create an issue"
-      : "Create GitHub issue from this task";
+      : `Create ${providerLabel} issue from this task`;
 
   return (
     <>
