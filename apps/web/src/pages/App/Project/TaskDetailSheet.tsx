@@ -8,6 +8,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 import { Maximize2, Minimize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -228,7 +229,7 @@ export function TaskDetailSheet({
                               ? "Show description"
                               : "Expand description"
                         }
-                        className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
+                        className="flex flex-1 items-center gap-1.5 -ml-1 rounded px-1 py-0.5 cursor-pointer hover:bg-muted/50"
                       >
                         {panelState === "description" ? (
                           <Minimize2 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -239,7 +240,18 @@ export function TaskDetailSheet({
                           Description
                         </h3>
                       </button>
-                      {panelState !== "activity" && (
+                      {/* Toolbar stays mounted in all states so its min-h-8
+                          keeps the header row at a constant height — hiding
+                          it conditionally caused the header (and therefore
+                          the whole description block) to shift up when the
+                          activity panel expanded. Opacity + pointer-events
+                          handle the visual hide. */}
+                      <div
+                        className={cn(
+                          "transition-opacity duration-200",
+                          panelState === "activity" && "opacity-0 pointer-events-none",
+                        )}
+                      >
                         <TaskDescriptionToolbar
                           taskId={taskId}
                           awaitingSeed={detail.awaitingSeed}
@@ -249,7 +261,7 @@ export function TaskDetailSheet({
                           remoteUsers={detail.remoteUsers}
                           currentUser={detail.currentUser}
                         />
-                      )}
+                      </div>
                     </div>
                     {/* Editor stays mounted in all states. `contain: size` on
                         this wrapper makes the browser size it as if empty,

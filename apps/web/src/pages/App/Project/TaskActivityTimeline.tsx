@@ -309,7 +309,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
       {/* Header with filter */}
       <div
         className={cn(
-          "flex items-center justify-between",
+          "flex items-center justify-between gap-2",
           fillHeight && "lg:mb-3 lg:shrink-0",
           fillHeight && !collapsed && "lg:border-b lg:pb-3",
         )}
@@ -325,7 +325,7 @@ export function TaskActivityTimeline({ taskId, currentUserId, workspaceId, membe
                   ? "Show activity"
                   : "Expand activity"
             }
-            className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
+            className="flex flex-1 items-center gap-1.5 -ml-1 rounded px-1 py-0.5 cursor-pointer hover:bg-muted/50"
           >
             {toggleIcon === "minimize" ? (
               <Minimize2 className="h-3.5 w-3.5 text-muted-foreground" />

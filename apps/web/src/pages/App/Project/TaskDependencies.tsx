@@ -84,12 +84,12 @@ export function TaskDependencies({ taskId, workspaceId, collapsible = false }: T
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         {collapsible ? (
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-1.5 -ml-1 rounded px-1 py-0.5 hover:bg-muted/50"
+            className="flex flex-1 items-center gap-1.5 -ml-1 rounded px-1 py-0.5 cursor-pointer hover:bg-muted/50"
           >
             <ChevronRight
               className={cn(
