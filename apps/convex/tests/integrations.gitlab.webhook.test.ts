@@ -182,6 +182,9 @@ describe("integrations/gitlab/webhook.normalize — issue update", () => {
           login: "alice",
           avatarUrl: "https://gitlab.com/alice.png",
           url: "https://gitlab.com/alice",
+          // The numeric user id is carried so the core reconciler can resolve
+          // the Ripple member by id (GitLab's native addressing).
+          id: "9",
         },
       ],
     });

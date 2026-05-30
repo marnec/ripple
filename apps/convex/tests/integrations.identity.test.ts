@@ -3,6 +3,7 @@ import {
   externalLoginToMember,
   externalUserIdToMember,
   memberToExternalLogin,
+  memberToExternalUserId,
 } from "../convex/integrations/core/identity";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
 
@@ -109,6 +110,103 @@ describe("integrations/core/identity externalUserIdToMember", () => {
       externalUserIdToMember(ctx, workspaceId, "gitlab", "99999"),
     );
     expect(resolved ?? undefined).toBeUndefined();
+  });
+
+  it("falls back to the OAuth-captured gitlab user id for gitlab", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    await t.run((ctx) => ctx.db.patch(userId, { gitlabUserId: "42" }));
+
+    const resolved = await t.run((ctx) =>
+      externalUserIdToMember(ctx, workspaceId, "gitlab", "42"),
+    );
+    expect(resolved).toBe(userId);
+  });
+
+  it("does NOT use the captured gitlab id for a non-gitlab provider", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    await t.run((ctx) => ctx.db.patch(userId, { gitlabUserId: "42" }));
+
+    const resolved = await t.run((ctx) =>
+      externalUserIdToMember(ctx, workspaceId, "github", "42"),
+    );
+    expect(resolved ?? undefined).toBeUndefined();
+  });
+
+  it("does NOT match a captured gitlab id for a non-member of the workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    // A user who carries the gitlab id but is NOT a member of this workspace.
+    await t.run((ctx) =>
+      ctx.db.insert("users", { name: "outsider", gitlabUserId: "42" }),
+    );
+
+    const resolved = await t.run((ctx) =>
+      externalUserIdToMember(ctx, workspaceId, "gitlab", "42"),
+    );
+    expect(resolved ?? undefined).toBeUndefined();
+  });
+
+  it("override wins over the OAuth-captured gitlab id", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const otherUserId = await t.run((ctx) =>
+      ctx.db.insert("users", { name: "other" }),
+    );
+    await t.run(async (ctx) => {
+      await ctx.db.patch(userId, { gitlabUserId: "42" });
+      await ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId,
+        userId: otherUserId,
+        provider: "gitlab",
+        externalLogin: "other",
+        externalUserId: "42",
+      });
+    });
+
+    const resolved = await t.run((ctx) =>
+      externalUserIdToMember(ctx, workspaceId, "gitlab", "42"),
+    );
+    expect(resolved).toBe(otherUserId);
+  });
+});
+
+describe("integrations/core/identity memberToExternalUserId", () => {
+  it("returns the override user id for the given provider", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    await t.run((ctx) =>
+      ctx.db.insert("workspaceMemberExternalIdentity", {
+        workspaceId,
+        userId,
+        provider: "gitlab",
+        externalLogin: "alice",
+        externalUserId: "12345",
+      }),
+    );
+
+    const id = await t.run((ctx) =>
+      memberToExternalUserId(ctx, workspaceId, userId, "gitlab"),
+    );
+    expect(id).toBe("12345");
+  });
+
+  it("falls back to the OAuth-captured gitlab id only for gitlab", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    await t.run((ctx) => ctx.db.patch(userId, { gitlabUserId: "42" }));
+
+    expect(
+      await t.run((ctx) =>
+        memberToExternalUserId(ctx, workspaceId, userId, "gitlab"),
+      ),
+    ).toBe("42");
+    expect(
+      (await t.run((ctx) =>
+        memberToExternalUserId(ctx, workspaceId, userId, "github"),
+      )) ?? undefined,
+    ).toBeUndefined();
   });
 });
 

@@ -55,6 +55,10 @@ export const userValidator = v.object({
   // the user doc, so it must be allowed through anywhere a full user row is
   // returned (e.g. users.viewer, task/cycle assignee).
   githubLogin: v.optional(v.string()),
+  // GitLab identity captured at OAuth sign-in (numeric id + lowercase username),
+  // same reasoning as githubLogin above — must pass through full-user-row returns.
+  gitlabUserId: v.optional(v.string()),
+  gitlabLogin: v.optional(v.string()),
 });
 
 export const referenceValidator = v.object({

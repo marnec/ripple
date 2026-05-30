@@ -647,6 +647,8 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
@@ -2503,6 +2505,8 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
@@ -2600,6 +2604,8 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
@@ -2676,6 +2682,8 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
@@ -2757,6 +2765,8 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
@@ -2889,6 +2899,8 @@ export declare const api: {
             email?: string;
             emailVerificationTime?: number;
             githubLogin?: string;
+            gitlabLogin?: string;
+            gitlabUserId?: string;
             image?: string;
             isAnonymous?: boolean;
             isBot?: boolean;
@@ -2958,6 +2970,8 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
@@ -3145,6 +3159,8 @@ export declare const api: {
         email?: string;
         emailVerificationTime?: number;
         githubLogin?: string;
+        gitlabLogin?: string;
+        gitlabUserId?: string;
         image?: string;
         isAnonymous?: boolean;
         isBot?: boolean;
@@ -3163,6 +3179,8 @@ export declare const api: {
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
+          gitlabLogin?: string;
+          gitlabUserId?: string;
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
@@ -3186,6 +3204,8 @@ export declare const api: {
         email?: string;
         emailVerificationTime?: number;
         githubLogin?: string;
+        gitlabLogin?: string;
+        gitlabUserId?: string;
         image?: string;
         isAnonymous?: boolean;
         isBot?: boolean;
@@ -3277,6 +3297,8 @@ export declare const api: {
         email?: string;
         emailVerificationTime?: number;
         githubLogin?: string;
+        gitlabLogin?: string;
+        gitlabUserId?: string;
         image?: string;
         isAnonymous?: boolean;
         isBot?: boolean;

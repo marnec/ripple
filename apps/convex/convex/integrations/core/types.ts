@@ -209,6 +209,11 @@ export interface NormalizedIssueAssigneesChangedEvent {
     login: string;
     avatarUrl: string;
     url: string;
+    // Provider-side numeric user id (stringified). Present for providers that
+    // address assignees by id (GitLab); absent for GitHub, which resolves the
+    // member by `login`. The reconciler (`core/syncIn.applyAssigneesChanged`)
+    // picks the match key per provider. Not persisted on the shadow set.
+    id?: string;
   }[];
 }
 

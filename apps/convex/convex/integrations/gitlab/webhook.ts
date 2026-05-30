@@ -195,7 +195,13 @@ function normalizeIssueUpdate(
     return {
       kind: "issue.assignees_changed",
       ...base,
-      assignees: (p.assignees ?? []).map(gitlabAuthor),
+      // Carry the numeric user id alongside the display fields: GitLab addresses
+      // members by id, so the core reconciler resolves the Ripple assignee from
+      // `id` (not `login`) via `users.gitlabUserId` / the override table.
+      assignees: (p.assignees ?? []).map((u) => ({
+        ...gitlabAuthor(u),
+        id: String(u.id),
+      })),
     };
   }
   return null;
@@ -355,6 +361,37 @@ export async function handleGitlabWebhook(
   );
   if (!externalRepoId) return;
   const kind = (payload as { object_kind?: string } | null)?.object_kind;
+
+  // TEMP DIAGNOSTIC (gitlab assignee debug) — record EVERY delivery's shape into
+  // the link row (read back via runOneoffQuery). Resolves the link directly by
+  // repo id (no token gate) so it captures merge_request deliveries too. Remove
+  // after triage.
+  {
+    const p = payload as {
+      object_kind?: string;
+      object_attributes?: { action?: string; iid?: number; id?: number };
+      changes?: Record<string, unknown>;
+      assignees?: Array<{ id?: number; username?: string }>;
+    };
+    const repoLinks = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_externalRepo", (q) => q.eq("externalRepoId", externalRepoId))
+      .collect();
+    const dbg = repoLinks.find((l) => l.status !== "disconnected");
+    if (dbg) {
+      await ctx.db.patch(dbg._id, {
+        debugLastEvent: JSON.stringify({
+          object_kind: p.object_kind,
+          action: p.object_attributes?.action,
+          attrId: p.object_attributes?.id,
+          iid: p.object_attributes?.iid,
+          changesKeys: p.changes ? Object.keys(p.changes) : null,
+          changesAssignees: p.changes?.assignees ?? null,
+          topAssignees: (p.assignees ?? []).map((a) => ({ id: a.id, username: a.username })),
+        }),
+      });
+    }
+  }
 
   if (kind === "merge_request") {
     const event = normalizeMergeRequest(payload);

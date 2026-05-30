@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { GitHubLogoIcon } from "@radix-ui/react-icons";
+import { GitlabMark } from "@/components/GitlabMark";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useState } from "react";
 import { PasswordReset } from "./PasswordReset";
@@ -96,6 +97,16 @@ function AuthCard({ setStep }: { setStep: (s: Step) => void }) {
       >
         <GitHubLogoIcon className="mr-2 size-4" />
         Continue with GitHub
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
+        onClick={() => void signIn("gitlab")}
+      >
+        <GitlabMark className="mr-2 size-4" />
+        Continue with GitLab
       </Button>
 
       <div className="relative" aria-hidden="true">

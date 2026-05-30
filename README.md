@@ -4,7 +4,6 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- gitlab login and associated external identity for gilab tasks
 
 - split settings in tabs (workspace and projects)
 

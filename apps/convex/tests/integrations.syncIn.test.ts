@@ -1382,6 +1382,135 @@ describe("integrations/core/syncIn.applyNormalizedEvent — issue.assignees_chan
     ]);
   });
 
+  it("maps a GitLab assignee to its workspace member by numeric id (users.gitlabUserId)", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link, botUserId } =
+      await setupInboundFixtures(t);
+
+    // Re-point the link at a GitLab integration so the reconciler resolves
+    // assignees by id (GitLab's native addressing) rather than by login.
+    const gitlabLink = await t.run(async (ctx) => {
+      const integrationId = await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "gitlab",
+        externalAccountId: "gl-9",
+      });
+      await ctx.db.patch(link._id, { workspaceIntegrationId: integrationId });
+      return (await ctx.db.get(link._id))!;
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link: gitlabLink }),
+    );
+
+    // Alice signed into Ripple via GitLab, so her numeric id is captured on the
+    // user row. No per-workspace override exists — the matcher resolves her
+    // through users.gitlabUserId.
+    const aliceUserId = await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", {
+        name: "Alice",
+        gitlabUserId: "777",
+      });
+      await ctx.db.insert("workspaceMembers", {
+        userId: uid,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+      return uid;
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          assignees: [
+            {
+              login: "alice",
+              avatarUrl: "u",
+              url: "https://gitlab.com/alice",
+              id: "777",
+            },
+          ],
+        }),
+        link: gitlabLink,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.assigneeId).toBe(aliceUserId);
+    // She won the slot, so she is NOT a shadow chip (and the persisted shadow
+    // shape never carries the match-only `id`).
+    expect(task?.externalAssignees).toBeUndefined();
+  });
+
+  it("does not resolve a GitLab assignee by username — id is the match key", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, link, botUserId } =
+      await setupInboundFixtures(t);
+
+    const gitlabLink = await t.run(async (ctx) => {
+      const integrationId = await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "gitlab",
+        externalAccountId: "gl-9",
+      });
+      await ctx.db.patch(link._id, { workspaceIntegrationId: integrationId });
+      return (await ctx.db.get(link._id))!;
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: makeOpenedEvent(), link: gitlabLink }),
+    );
+
+    // A member whose GitLab id is 777, but the event reports a *different* id
+    // (matching username notwithstanding). GitLab addresses by id, so the slot
+    // stays empty and the assignee surfaces only as a shadow chip.
+    await t.run(async (ctx) => {
+      const uid = await ctx.db.insert("users", {
+        name: "Alice",
+        gitlabUserId: "777",
+      });
+      await ctx.db.insert("workspaceMembers", {
+        userId: uid,
+        workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeAssigneesChangedEvent({
+          assignees: [
+            {
+              login: "alice",
+              avatarUrl: "u",
+              url: "https://gitlab.com/alice",
+              id: "999",
+            },
+          ],
+        }),
+        link: gitlabLink,
+      }),
+    );
+
+    const [task] = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .collect(),
+    );
+    expect(task?.assigneeId).toBeUndefined();
+    expect(task?.externalAssignees).toEqual([
+      { login: "alice", avatarUrl: "u", url: "https://gitlab.com/alice" },
+    ]);
+  });
+
   it("with multiple assignees, the first matching workspace member wins and the rest become shadow chips", async () => {
     const t = createTestContext();
     const { workspaceId, projectId, link } = await setupInboundFixtures(t);

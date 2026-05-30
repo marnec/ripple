@@ -8,6 +8,7 @@ import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
 import { logActivity } from "./auditLog";
 import { cascadeDelete } from "./cascadeDelete";
+import { userValidator } from "./validators";
 import { internal } from "./_generated/api";
 
 const workspaceMemberValidator = v.object({
@@ -33,17 +34,9 @@ export const byWorkspace = query({
 
 export const membersByWorkspace = query({
   args: { workspaceId: v.id("workspaces") },
-  returns: v.array(v.object({
-    _id: v.id("users"),
-    _creationTime: v.number(),
-    name: v.optional(v.string()),
-    email: v.optional(v.string()),
-    emailVerificationTime: v.optional(v.number()),
-    image: v.optional(v.string()),
-    isAnonymous: v.optional(v.boolean()),
-    isBot: v.optional(v.boolean()),
-    githubLogin: v.optional(v.string()),
-  })),
+  // Returns full user docs (`ctx.db.get`), so reuse the shared user validator —
+  // keeps new identity columns (github/gitlab) flowing without per-query drift.
+  returns: v.array(userValidator),
   handler: async (ctx, { workspaceId }) => {
     await requireWorkspaceMember(ctx, workspaceId);
 

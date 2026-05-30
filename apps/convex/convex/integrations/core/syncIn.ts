@@ -3,7 +3,7 @@ import { internal } from "../../_generated/api";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
-import { externalLoginToMember } from "./identity";
+import { externalLoginToMember, externalUserIdToMember } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
 import {
@@ -243,7 +243,12 @@ export async function applyNormalizedEvent(
       // we don't synthesize an orphan task from an assignee-only event.
       if (!existingLink) return;
       if (isStale(event, existingLink)) return;
-      await applyAssigneesChanged(ctx, { event, link, existingLink });
+      await applyAssigneesChanged(ctx, {
+        event,
+        link,
+        existingLink,
+        provider: integration?.provider ?? "github",
+      });
       return;
 
     case "comment.created":
@@ -611,20 +616,23 @@ async function applyLabelsChanged(
 }
 
 /**
- * Reconcile the task's `assigneeId` against the GitHub assignee set. First
- * login that maps to a workspace member via `workspaceMemberExternalIdentity`
- * wins the single Ripple slot; the rest land on the shadow set for display.
+ * Reconcile the task's `assigneeId` against the provider's assignee set. The
+ * first assignee that maps to a workspace member wins the single Ripple slot;
+ * the rest land on the shadow set for display. The match key is provider-native
+ * (`core/identity`): GitHub resolves by login (`users.githubLogin` / override),
+ * GitLab by numeric id (`users.gitlabUserId` / override). When the event omits
+ * the id for an id-addressed provider, that assignee simply can't win the slot.
  *
- * An inbound GitHub assignee change only ever *promotes* a matched member into
- * the slot — it never empties it. When no GitHub login resolves to a member
- * (an external-only assignment, or GitHub clearing all assignees) we PRESERVE
+ * An inbound assignee change only ever *promotes* a matched member into the
+ * slot — it never empties it. When no assignee resolves to a member (an
+ * external-only assignment, or the provider clearing all assignees) we PRESERVE
  * any existing local assignee instead of blanking it: a remote assignment that
  * maps to nobody in Ripple must not wipe a human-set owner. The unmatched
- * GitHub identities still surface via the shadow set. We never borrow the bot
- * user for the slot. The shadow set is written both to the link (source of
- * truth) and denormalized onto the task row so the kanban / list can render
- * external assignees beside the internal one without subscribing to the
- * high-churn link table.
+ * identities still surface via the shadow set. We never borrow the bot user for
+ * the slot. The shadow set is written both to the link (source of truth) and
+ * denormalized onto the task row so the kanban / list can render external
+ * assignees beside the internal one without subscribing to the high-churn link
+ * table.
  */
 async function applyAssigneesChanged(
   ctx: MutationCtx,
@@ -632,30 +640,33 @@ async function applyAssigneesChanged(
     event: Extract<NormalizedIssueEvent, { kind: "issue.assignees_changed" }>;
     link: Doc<"projectIntegrationLinks">;
     existingLink: Doc<"taskIntegrationLinks">;
+    provider: string;
   },
 ): Promise<void> {
-  const { event, link, existingLink } = args;
+  const { event, link, existingLink, provider } = args;
 
   const nextLogins = normalizeLoginList(event.assignees.map((a) => a.login));
 
   // Echo guard: same set as last-known → bounce-back from our own outbound.
   if (!diffSet(nextLogins, existingLink.externalAssigneeLogins).changed) return;
 
-  // First-matching-login wins for `assigneeId`. The non-winning entries
-  // (unmatched logins + matched-but-not-first) become the shadow set. When no
-  // login resolves to a workspace member we leave `matchedUserId` unset and
-  // preserve the task's existing assignee below (see the patch) rather than
-  // blanking it. We do NOT borrow the bot user for the slot: it would pollute
-  // assignee facets and mask that the task needs a Ripple owner.
+  // First-matching assignee wins for `assigneeId`. The non-winning entries
+  // (unmatched + matched-but-not-first) become the shadow set. When nobody
+  // resolves to a workspace member we leave `matchedUserId` unset and preserve
+  // the task's existing assignee below (see the patch) rather than blanking it.
+  // We do NOT borrow the bot user for the slot: it would pollute assignee facets
+  // and mask that the task needs a Ripple owner. The match key is provider-
+  // native — GitLab addresses members by id, every other provider by login.
   let matchedUserId: Doc<"users">["_id"] | undefined;
   let winnerIndex = -1;
   for (let i = 0; i < event.assignees.length; i++) {
-    const userId = await externalLoginToMember(
-      ctx,
-      link.workspaceId,
-      "github",
-      event.assignees[i].login,
-    );
+    const a = event.assignees[i];
+    const userId =
+      provider === "gitlab"
+        ? a.id
+          ? await externalUserIdToMember(ctx, link.workspaceId, "gitlab", a.id)
+          : undefined
+        : await externalLoginToMember(ctx, link.workspaceId, provider, a.login);
     if (userId) {
       matchedUserId = userId;
       winnerIndex = i;
@@ -663,10 +674,13 @@ async function applyAssigneesChanged(
     }
   }
 
-  const shadowAssignees =
+  // Strip any provider-side `id` before persisting — the shadow set's stored
+  // shape is `{login, avatarUrl, url}` (see schema), id is match-only.
+  const shadowAssignees = (
     winnerIndex >= 0
       ? event.assignees.filter((_, i) => i !== winnerIndex)
-      : event.assignees;
+      : event.assignees
+  ).map((a) => ({ login: a.login, avatarUrl: a.avatarUrl, url: a.url }));
   // `undefined` (not `[]`) when empty so non-integration task rows stay minimal
   // and the denormalized field matches the externalRefs "absent when none" shape.
   const nextExternal = shadowAssignees.length > 0 ? shadowAssignees : undefined;

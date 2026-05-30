@@ -37,10 +37,20 @@ export default defineSchema({
     // the provider-generic override (and the home for non-OAuth providers /
     // manual linking). Absent for users who never signed in via GitHub.
     githubLogin: v.optional(v.string()),
+    // Canonical GitLab identity, captured at GitLab OAuth sign-in (see auth.ts).
+    // GitLab addresses users by numeric id (not login), so `gitlabUserId` is the
+    // match key that lets inbound GitLab assignees resolve to this user without a
+    // per-workspace `workspaceMemberExternalIdentity` row; `gitlabLogin` (the
+    // lowercase username) is kept for display / manual linking. Both absent for
+    // users who never signed in via GitLab. Mirrors the GitHub pair above.
+    gitlabUserId: v.optional(v.string()),
+    gitlabLogin: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
-    .index("by_github_login", ["githubLogin"]),
+    .index("by_github_login", ["githubLogin"])
+    .index("by_gitlab_user_id", ["gitlabUserId"])
+    .index("by_gitlab_login", ["gitlabLogin"]),
 
   messages: defineTable({
     userId: v.id("users"),
@@ -1042,6 +1052,8 @@ export default defineSchema({
     // Timestamp of the most recent webhook delivery processed for this link.
     // Drives the "Last webhook received" indicator in workspace settings.
     lastWebhookAt: v.optional(v.number()),
+    // TEMP DIAGNOSTIC — remove after gitlab assignee triage.
+    debugLastEvent: v.optional(v.string()),
     // Human-readable "owner/repo" — feeds tasks.externalRefs[].repoFullName
     // and the URL for issue links. Updated silently on repo rename events;
     // stable lookups use externalRepoId.

@@ -11,16 +11,20 @@ import type { Id } from "../../_generated/dataModel";
  *     override. Empty in the common case today, but it's the home for explicit
  *     "this member is `@x` on <provider> here" links and for non-OAuth
  *     identities. Keyed off the same `provider` field for every provider.
- *  2. `users.githubLogin` — captured at GitHub OAuth sign-in (see auth.ts), then
- *     confirmed to be a member of the workspace. This is what makes the
- *     "same GitHub account on both sides" case resolve with no manual linking.
- *     GitHub-only: other providers have no equivalent OAuth-captured column, so
- *     layer 2 is skipped for them and they rely entirely on layer 1.
+ *  2. The OAuth-captured columns on the user row, then confirmed to be a member
+ *     of the workspace. This is what makes the "same account on both sides" case
+ *     resolve with no manual linking. Each provider that supports OAuth sign-in
+ *     has its own captured column and its own native addressing:
+ *       - GitHub → `users.githubLogin` (addressed by login).
+ *       - GitLab → `users.gitlabUserId` (addressed by numeric id; `gitlabLogin`
+ *         is captured too but GitLab resolves assignees/authors by id).
+ *     Providers with no OAuth-captured column skip layer 2 and rely on layer 1.
  *
  * Both directions check (1) then (2) so the override always wins.
  */
 
 const GITHUB = "github";
+const GITLAB = "gitlab";
 
 /**
  * Resolve a provider login to the workspace member it belongs to, or undefined.
@@ -71,9 +75,10 @@ export async function externalLoginToMember(
 
 /**
  * Resolve a provider-side numeric user id to the workspace member it belongs
- * to, or undefined. Override-table only — there is no OAuth-captured user-id
- * column, so this has no layer 2. Used by providers that address identities by
- * id rather than login (e.g. GitLab `assignee_ids` / `author.id`).
+ * to, or undefined. Used by providers that address identities by id rather than
+ * login (e.g. GitLab `assignee_ids` / `author.id`). Layer 1 is the override
+ * table; layer 2 is the OAuth-captured `users.gitlabUserId` (GitLab-only — the
+ * one provider that both signs in via OAuth and addresses by id).
  */
 export async function externalUserIdToMember(
   ctx: QueryCtx,
@@ -82,6 +87,8 @@ export async function externalUserIdToMember(
   externalUserId: string,
 ): Promise<Id<"users"> | undefined> {
   if (externalUserId.length === 0) return undefined;
+
+  // (1) Per-workspace override.
   const override = await ctx.db
     .query("workspaceMemberExternalIdentity")
     .withIndex("by_workspace_provider_userId", (q) =>
@@ -91,14 +98,35 @@ export async function externalUserIdToMember(
         .eq("externalUserId", externalUserId),
     )
     .unique();
-  return override?.userId;
+  if (override) return override.userId;
+
+  // (2) OAuth-captured GitLab user id on the user row, scoped to this
+  // workspace's members. GitLab-only — other providers have no captured id.
+  if (provider !== GITLAB) return undefined;
+
+  // A GitLab user id is globally unique, so at most one user carries it;
+  // `.take(2)` is defensive against a stale duplicate rather than expected.
+  const users = await ctx.db
+    .query("users")
+    .withIndex("by_gitlab_user_id", (q) => q.eq("gitlabUserId", externalUserId))
+    .take(2);
+  if (users.length !== 1) return undefined;
+
+  const membership = await ctx.db
+    .query("workspaceMembers")
+    .withIndex("by_workspace_user", (q) =>
+      q.eq("workspaceId", workspaceId).eq("userId", users[0]._id),
+    )
+    .unique();
+  return membership ? users[0]._id : undefined;
 }
 
 /**
  * Resolve a workspace member to their provider-side numeric user id, or
- * undefined. Override-table only (the inverse of `externalUserIdToMember`) —
- * used for outbound assignment to providers that assign by id rather than login
- * (e.g. GitLab `assignee_ids`).
+ * undefined (the inverse of `externalUserIdToMember`) — used for outbound
+ * assignment to providers that assign by id rather than login (e.g. GitLab
+ * `assignee_ids`). Layer 1 is the override table; layer 2 is the OAuth-captured
+ * `users.gitlabUserId` (GitLab-only).
  */
 export async function memberToExternalUserId(
   ctx: QueryCtx,
@@ -106,6 +134,7 @@ export async function memberToExternalUserId(
   userId: Id<"users">,
   provider: string,
 ): Promise<string | undefined> {
+  // (1) Per-workspace override.
   const override = await ctx.db
     .query("workspaceMemberExternalIdentity")
     .withIndex("by_workspace_user_provider", (q) =>
@@ -115,7 +144,12 @@ export async function memberToExternalUserId(
         .eq("provider", provider),
     )
     .unique();
-  return override?.externalUserId ?? undefined;
+  if (override) return override.externalUserId ?? undefined;
+
+  // (2) OAuth-captured GitLab user id on the user row — GitLab-only.
+  if (provider !== GITLAB) return undefined;
+  const user = await ctx.db.get(userId);
+  return user?.gitlabUserId ?? undefined;
 }
 
 /**

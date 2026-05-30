@@ -986,6 +986,7 @@ export type DataModel = {
       askBranchSourceEachTime?: boolean;
       autoSelectTags?: Array<string>;
       branchStatusMap?: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
+      debugLastEvent?: string;
       defaultBaseBranch?: string;
       externalRepoFullName: string;
       externalRepoId: string;
@@ -1007,6 +1008,7 @@ export type DataModel = {
       | "askBranchSourceEachTime"
       | "autoSelectTags"
       | "branchStatusMap"
+      | "debugLastEvent"
       | "defaultBaseBranch"
       | "externalRepoFullName"
       | "externalRepoId"
@@ -1893,6 +1895,8 @@ export type DataModel = {
       email?: string;
       emailVerificationTime?: number;
       githubLogin?: string;
+      gitlabLogin?: string;
+      gitlabUserId?: string;
       image?: string;
       isAnonymous?: boolean;
       isBot?: boolean;
@@ -1908,6 +1912,8 @@ export type DataModel = {
       | "email"
       | "emailVerificationTime"
       | "githubLogin"
+      | "gitlabLogin"
+      | "gitlabUserId"
       | "image"
       | "isAnonymous"
       | "isBot"
@@ -1918,6 +1924,8 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_github_login: ["githubLogin", "_creationTime"];
+      by_gitlab_login: ["gitlabLogin", "_creationTime"];
+      by_gitlab_user_id: ["gitlabUserId", "_creationTime"];
       email: ["email", "_creationTime"];
       phone: ["phone", "_creationTime"];
     };

@@ -1,4 +1,5 @@
 import GitHub from "@auth/core/providers/github";
+import GitLab from "@auth/core/providers/gitlab";
 import Resend from "@auth/core/providers/resend";
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
@@ -111,6 +112,39 @@ export const { auth, signIn, signOut, store } = convexAuth({
           githubLogin:
             typeof profile.login === "string"
               ? profile.login.toLowerCase()
+              : undefined,
+        };
+      },
+    }),
+    // Mirror the GitHub customization for GitLab. GitLab addresses users by their
+    // numeric id (not login), so `gitlabUserId` is the canonical key that lets
+    // inbound GitLab assignees resolve to this Ripple user (see
+    // `integrations/core/identity.ts`); the lowercase `gitlabLogin` is captured
+    // for display / manual linking. The `createOrUpdateUser` callback persists
+    // both via its `...profile` spread, exactly as it does `githubLogin`.
+    //
+    // Credentials: unlike GitHub (whose OAuth *App* for sign-in is a distinct
+    // entity from the GitHub *App* used for the issue integration), GitLab has a
+    // single OAuth-application concept — so the sign-in provider reuses the same
+    // `GITLAB_OAUTH_CLIENT_ID/SECRET` the workspace integration already uses
+    // (`integrations/gitlab/oauthClient.gitlabOAuthFromEnv`). That GitLab app
+    // must additionally allow the Convex Auth callback redirect URI
+    // `${CONVEX_SITE_URL}/api/auth/callback/gitlab` and the `read_user` scope.
+    // Passing `undefined` here falls through to Convex Auth's standard
+    // `AUTH_GITLAB_ID/SECRET` env defaults for anyone who prefers a dedicated app.
+    GitLab({
+      clientId: process.env.GITLAB_OAUTH_CLIENT_ID,
+      clientSecret: process.env.GITLAB_OAUTH_CLIENT_SECRET,
+      profile(profile) {
+        return {
+          id: String(profile.id),
+          name: profile.name ?? profile.username,
+          email: profile.email,
+          image: profile.avatar_url,
+          gitlabUserId: profile.id != null ? String(profile.id) : undefined,
+          gitlabLogin:
+            typeof profile.username === "string"
+              ? profile.username.toLowerCase()
               : undefined,
         };
       },
