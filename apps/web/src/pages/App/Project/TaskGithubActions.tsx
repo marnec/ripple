@@ -19,6 +19,7 @@ export function TaskGithubActions({
     _id: Id<"tasks">;
     title: string;
     completed: boolean;
+    labels?: string[];
     externalRefs?: Array<{
       repoFullName?: string;
       issueNumber?: number;
@@ -45,6 +46,7 @@ export function TaskGithubActions({
       <TaskCreateGithubIssueAction
         taskId={task._id}
         taskTitle={task.title}
+        taskLabels={task.labels ?? []}
         projectId={projectId}
         workspaceId={workspaceId}
         isLinked={Boolean(ref)}

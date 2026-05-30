@@ -18,6 +18,9 @@ NEXT STEPS:
 - add a dependency view to tasks
 
 - knowledge-graph
+    - explore the ability to flag a diagram as a "presentation" which prevents its embedding but enables it's presentation mode and the ability to download a pdf/pptx (https://npm.io/package/excalidraw-presentation). Presentation mode probably needs to 
+    be recreated through code (https://deepwiki.com/excalidraw-smart-presentation/excalidraw-smart-presentation.github.io/5.1-presentation-mode-overview)
+
     - explore pdf reading, annotation and embedding
 
 - external ticketing system??: 

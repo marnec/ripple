@@ -1084,6 +1084,12 @@ export default defineSchema({
     // halts BOTH directions) and to PR sync / outbound push / explicit import,
     // all of which keep working. Gated in `handleGithubWebhook`.
     inboundIssueSyncDisabled: v.optional(v.boolean()),
+    // Tag→repo routing: when creating an issue from a task whose labels match
+    // exactly one repo's tag set, that repo is preselected in the create-issue
+    // dialog. A tag belongs to at most one repo within a project (enforced in
+    // setRepoTagRules). Normalized (trim+lowercase) to match tasks.labels.
+    // Absent/empty = no routing rule for this repo.
+    autoSelectTags: v.optional(v.array(v.string())),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_project", ["projectId"])

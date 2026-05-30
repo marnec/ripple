@@ -79,6 +79,7 @@ export const linksForProject = query({
       defaultBaseBranch: v.optional(v.string()),
       askBranchSourceEachTime: v.optional(v.boolean()),
       inboundIssueSyncDisabled: v.optional(v.boolean()),
+      autoSelectTags: v.optional(v.array(v.string())),
     }),
   ),
   handler: async (ctx, { projectId }) => {
@@ -105,6 +106,7 @@ export const linksForProject = query({
           defaultBaseBranch: l.defaultBaseBranch,
           askBranchSourceEachTime: l.askBranchSourceEachTime,
           inboundIssueSyncDisabled: l.inboundIssueSyncDisabled,
+          autoSelectTags: l.autoSelectTags,
         };
       }),
     );
@@ -390,6 +392,60 @@ export const setBranchSourceDefaults = mutation({
     await ctx.db.patch(args.linkId, {
       defaultBaseBranch: trimmed ? trimmed : undefined,
       askBranchSourceEachTime: args.askEachTime,
+    });
+    return null;
+  },
+});
+
+/**
+ * Set the tag→repo routing rule for a link. Admin-only (a project-wide setting,
+ * like `setBranchStatusMap`). Tags are normalized (trim + lowercase) to match
+ * `tasks.labels` so preselection is a plain set intersection. A tag belongs to
+ * at most one repo within a project — assigning a tag already claimed by a
+ * sibling link is rejected (the create-issue dialog relies on each tag pointing
+ * to a single repo; the "conflict ⇒ no preference" rule then only fires when a
+ * *task* carries tags across repos). An empty list clears the rule.
+ */
+export const setRepoTagRules = mutation({
+  args: {
+    linkId: v.id("projectIntegrationLinks"),
+    tags: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const link = await ctx.db.get(args.linkId);
+    if (!link) throw new ConvexError("Link not found");
+
+    await requireWorkspaceMember(ctx, link.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    const normalized = [
+      ...new Set(
+        args.tags.map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0),
+      ),
+    ];
+
+    // A tag may route to at most one repo in the project. Reject overlap with a
+    // sibling link's rule so the dialog's single-repo match stays unambiguous.
+    const siblings = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_project", (q) => q.eq("projectId", link.projectId))
+      .collect();
+    for (const sibling of siblings) {
+      if (sibling._id === link._id) continue;
+      if (sibling.status === "disconnected") continue;
+      const claimed = new Set(sibling.autoSelectTags ?? []);
+      const clash = normalized.find((t) => claimed.has(t));
+      if (clash) {
+        throw new ConvexError(
+          `Tag "${clash}" is already routed to ${sibling.externalRepoFullName}. Remove it there first.`,
+        );
+      }
+    }
+
+    await ctx.db.patch(args.linkId, {
+      autoSelectTags: normalized.length ? normalized : undefined,
     });
     return null;
   },

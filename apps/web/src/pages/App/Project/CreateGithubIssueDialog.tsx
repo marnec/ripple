@@ -21,6 +21,8 @@ import { useGithubIssueEligibility } from "./useGithubIssueEligibility";
 type Props = {
   taskId: Id<"tasks">;
   taskTitle: string;
+  /** The task's tags — used to preselect the repo via the project's routing rules. */
+  taskLabels: string[];
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
   open: boolean;
@@ -36,6 +38,7 @@ type Props = {
 export function CreateGithubIssueDialog({
   taskId,
   taskTitle,
+  taskLabels,
   projectId,
   workspaceId,
   open,
@@ -43,7 +46,7 @@ export function CreateGithubIssueDialog({
 }: Props) {
   const { links, provider } = useGithubIssueEligibility(projectId, workspaceId);
   const providerLabel = provider === "gitlab" ? "GitLab" : "GitHub";
-  const draft = useGithubIssueDraft(taskTitle, links);
+  const draft = useGithubIssueDraft(taskTitle, links, taskLabels);
   const createIssue = useMutation(api.tasks.createGithubIssue);
   const [submitting, setSubmitting] = useState(false);
 

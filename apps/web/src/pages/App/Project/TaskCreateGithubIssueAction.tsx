@@ -8,6 +8,8 @@ import { CreateGithubIssueDialog } from "./CreateGithubIssueDialog";
 type Props = {
   taskId: Id<"tasks">;
   taskTitle: string;
+  /** The task's tags — used to preselect the repo via the project's routing rules. */
+  taskLabels: string[];
   projectId: Id<"projects">;
   workspaceId: Id<"workspaces">;
   /** Task is already linked to a GitHub issue — nothing to create. */
@@ -27,6 +29,7 @@ type Props = {
 export function TaskCreateGithubIssueAction({
   taskId,
   taskTitle,
+  taskLabels,
   projectId,
   workspaceId,
   isLinked,
@@ -59,6 +62,7 @@ export function TaskCreateGithubIssueAction({
       <CreateGithubIssueDialog
         taskId={taskId}
         taskTitle={taskTitle}
+        taskLabels={taskLabels}
         projectId={projectId}
         workspaceId={workspaceId}
         open={open}

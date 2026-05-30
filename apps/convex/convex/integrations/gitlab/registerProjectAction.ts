@@ -48,7 +48,9 @@ export const listMyProjects = action({
       args.externalAccountId,
     );
     if (!accessToken) {
-      throw new ConvexError("No GitLab credentials stored for this account");
+      throw new ConvexError(
+        "GitLab authorization expired or was revoked. Please reconnect this GitLab integration.",
+      );
     }
     return await listProjects({
       cfg,
@@ -105,7 +107,9 @@ export const registerProject = action({
       args.externalAccountId,
     );
     if (!accessToken) {
-      throw new ConvexError("No GitLab credentials stored for this account");
+      throw new ConvexError(
+        "GitLab authorization expired or was revoked. Please reconnect this GitLab integration.",
+      );
     }
 
     // Create the link first so `createLink` mints the webhook secret. We then

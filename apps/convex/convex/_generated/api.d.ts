@@ -1311,6 +1311,7 @@ export declare const api: {
           Array<{
             _id: Id<"projectIntegrationLinks">;
             askBranchSourceEachTime?: boolean;
+            autoSelectTags?: Array<string>;
             branchStatusMap?: Array<{
               branch: string;
               statusId: Id<"taskStatuses">;
@@ -1379,6 +1380,12 @@ export declare const api: {
           "mutation",
           "public",
           { enabled: boolean; linkId: Id<"projectIntegrationLinks"> },
+          null
+        >;
+        setRepoTagRules: FunctionReference<
+          "mutation",
+          "public",
+          { linkId: Id<"projectIntegrationLinks">; tags: Array<string> },
           null
         >;
         unlinkLink: FunctionReference<

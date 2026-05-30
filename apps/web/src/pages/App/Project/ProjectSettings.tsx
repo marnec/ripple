@@ -23,6 +23,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { ConnectGithubCard } from "./ConnectGithubWizard";
 import { ConnectGitlabCard } from "./ConnectGitlabCard";
+import { RepoTagRoutingSection } from "./RepoTagRoutingSection";
 import { StatusEffectMatrix } from "./StatusEffectMatrix";
 
 const PROJECT_COLORS = [
@@ -195,6 +196,10 @@ function ProjectSettingsContent({
           <StatusEffectMatrix projectId={projectId} />
           <ConnectGithubCard workspaceId={workspaceId} projectId={projectId} />
           <ConnectGitlabCard workspaceId={workspaceId} projectId={projectId} />
+          <RepoTagRoutingSection
+            workspaceId={workspaceId}
+            projectId={projectId}
+          />
         </>
       )}
 

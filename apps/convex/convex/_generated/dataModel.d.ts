@@ -984,6 +984,7 @@ export type DataModel = {
   projectIntegrationLinks: {
     document: {
       askBranchSourceEachTime?: boolean;
+      autoSelectTags?: Array<string>;
       branchStatusMap?: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
       defaultBaseBranch?: string;
       externalRepoFullName: string;
@@ -1004,6 +1005,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "askBranchSourceEachTime"
+      | "autoSelectTags"
       | "branchStatusMap"
       | "defaultBaseBranch"
       | "externalRepoFullName"

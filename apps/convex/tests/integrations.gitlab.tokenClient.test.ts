@@ -146,6 +146,75 @@ describe("integrations/gitlab/tokenClient.getValidGitlabAccessToken", () => {
     expect(persisted?.oauthExpiresAt).toBeGreaterThan(Date.now() + 60 * 1000);
   });
 
+  it("refresh loses the rotation race: rides a concurrent caller's fresh bundle", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const integrationId = await insertIntegration(t, {
+      workspaceId,
+      externalAccountId: "acct-race",
+      credentialToken: "at-stale",
+      oauthRefreshToken: "rt-1",
+      oauthExpiresAt: Date.now() + 30 * 1000,
+    });
+
+    process.env.GITLAB_OAUTH_CLIENT_ID = "cid";
+    process.env.GITLAB_OAUTH_CLIENT_SECRET = "csec";
+    process.env.GITLAB_OAUTH_REDIRECT_URI = "https://app.example/cb";
+
+    // Simulate a concurrent caller that won the refresh: while our POST is in
+    // flight it stores a fresh bundle, then GitLab rejects our (now-spent)
+    // refresh token with invalid_grant.
+    fetchMock.mockImplementation(async () => {
+      await t.run((ctx) =>
+        ctx.db.patch(integrationId, {
+          credentialToken: "at-concurrent",
+          oauthRefreshToken: "rt-2",
+          oauthExpiresAt: Date.now() + 60 * 60 * 1000,
+        }),
+      );
+      return new Response(JSON.stringify({ error: "invalid_grant" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const token = await t.action(
+      internal.integrations.gitlab.tokenClientTestHelper.runResolve,
+      { credentialRef: "acct-race" },
+    );
+    // Re-read found the concurrent caller's fresh token; no error bubbled.
+    expect(token).toBe("at-concurrent");
+  });
+
+  it("dead refresh token (no concurrent refresh): returns null, no throw", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    await insertIntegration(t, {
+      workspaceId,
+      externalAccountId: "acct-dead",
+      credentialToken: "at-stale",
+      oauthRefreshToken: "rt-dead",
+      oauthExpiresAt: Date.now() + 30 * 1000,
+    });
+
+    process.env.GITLAB_OAUTH_CLIENT_ID = "cid";
+    process.env.GITLAB_OAUTH_CLIENT_SECRET = "csec";
+    process.env.GITLAB_OAUTH_REDIRECT_URI = "https://app.example/cb";
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "invalid_grant" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const token = await t.action(
+      internal.integrations.gitlab.tokenClientTestHelper.runResolve,
+      { credentialRef: "acct-dead" },
+    );
+    expect(token).toBeNull();
+  });
+
   it("OAuth install but env unconfigured: returns null (can't refresh)", async () => {
     const t = createTestContext();
     const { workspaceId } = await setupWorkspaceWithAdmin(t);

@@ -19,10 +19,21 @@ import {
  *     bundle, persist it (GitLab rotates the refresh token too), return the
  *     new access token.
  *
- * Returns `null` when no credentials are stored at all, or when the integration
- * is OAuth-flavored but the env client is not configured (we can't refresh
- * without the OAuth client id/secret). Callers translate `null` into the
- * existing "credentials not configured" permanent-failure path.
+ * Returns `null` when no credentials are stored at all, when the integration is
+ * OAuth-flavored but the env client is not configured (we can't refresh without
+ * the OAuth client id/secret), or when the refresh token is dead (revoked /
+ * expired / already spent and unrecoverable). Callers translate `null` into the
+ * existing "credentials not configured" permanent-failure path; the interactive
+ * picker/register actions phrase it as "reconnect".
+ *
+ * Rotation race: GitLab invalidates a refresh token the instant another refresh
+ * spends it (no reuse grace on gitlab.com), so two near-simultaneous callers
+ * (e.g. two outbound ops draining, or a picker + a sync) both reading the same
+ * expired bundle will have one win the refresh and the other lose with
+ * `invalid_grant`. On any refresh failure we re-read the bundle once: if a
+ * concurrent caller already stored a fresh access token, we use it (only the
+ * GitLab-winning POST ever persists, so the stored bundle is always the valid
+ * one). Otherwise the token is genuinely dead and we return `null`.
  *
  * Refresh skew: 60s. GitLab access tokens default to 2h, so this is generous
  * enough to absorb clock drift + a single retry without re-entering the
@@ -54,18 +65,44 @@ export async function getValidGitlabAccessToken(
     );
     return null;
   }
-  const refreshed = await refreshAccessToken({
-    cfg,
-    refreshToken: bundle.refreshToken,
-  });
-  await ctx.runMutation(
-    internal.integrations.gitlab.credentials.storeRefreshedBundle,
-    {
-      credentialRef,
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-    },
-  );
-  return refreshed.accessToken;
+  try {
+    const refreshed = await refreshAccessToken({
+      cfg,
+      refreshToken: bundle.refreshToken,
+    });
+    await ctx.runMutation(
+      internal.integrations.gitlab.credentials.storeRefreshedBundle,
+      {
+        credentialRef,
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+      },
+    );
+    return refreshed.accessToken;
+  } catch (err) {
+    // The refresh POST failed. The dominant cause is the rotation race (a
+    // concurrent caller spent the refresh token first); re-read the bundle and,
+    // if it's now fresh, ride on that caller's refresh instead of failing.
+    const latest = await ctx.runQuery(
+      internal.integrations.gitlab.credentials.getCredentialBundle,
+      { credentialRef },
+    );
+    if (
+      latest?.accessToken &&
+      latest.expiresAt &&
+      latest.expiresAt - Date.now() > EXPIRY_SKEW_MS
+    ) {
+      return latest.accessToken;
+    }
+    // No concurrent refresh saved us — the token is genuinely dead (revoked,
+    // expired, or a race we can't recover). Return null so callers hit the
+    // "credentials not configured / reconnect" path rather than bubbling an
+    // uncaught error.
+    console.error(
+      `[gitlab/tokenClient] refresh failed for ${credentialRef}; reconnect required:`,
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
 }
