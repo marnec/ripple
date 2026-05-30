@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CalendarApp, BackgroundEvent } from "@schedule-x/calendar";
-import type { TaskCalendarEvent } from "./ProjectCalendar";
+import type { TaskCalendarEvent } from "./ProjectCalendar/calendar-events";
 
 function isTaskEvent(e: unknown): e is TaskCalendarEvent {
   return typeof e === "object" && e !== null && "_meta" in e && (e as any)._meta != null;
