@@ -19,7 +19,6 @@
 
 import {
   type KeyboardEvent,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -152,13 +151,13 @@ export function EditableDateTime({
   endsAt: number;
   onSave: (startsAt: number, endsAt: number) => void | Promise<void>;
 }) {
-  const startDate = useMemo(() => {
+  const startDate = (() => {
     const d = new Date(startsAt);
     d.setHours(0, 0, 0, 0);
     return d;
-  }, [startsAt]);
-  const startTime = useMemo(() => msToExactTime(startsAt), [startsAt]);
-  const endTime = useMemo(() => msToExactTime(endsAt), [endsAt]);
+  })();
+  const startTime = msToExactTime(startsAt);
+  const endTime = msToExactTime(endsAt);
   const spansMidnight = endTime <= startTime;
 
   const commit = (next: { date: Date; startTime: string; endTime: string }) => {
@@ -348,20 +347,14 @@ export function InviteAdder({
   const [invalidEmail, setInvalidEmail] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const memberOptions = useMemo(
-    () =>
-      (members ?? [])
-        .filter(
-          (m) => m.userId !== organizerId && !existingUserIds.has(m.userId),
-        )
-        .map((m) => ({
-          userId: m.userId,
-          name: m.name ?? m.email ?? "Unknown",
-          email: m.email,
-          image: m.image,
-        })),
-    [members, existingUserIds, organizerId],
-  );
+  const memberOptions = (members ?? [])
+    .filter((m) => m.userId !== organizerId && !existingUserIds.has(m.userId))
+    .map((m) => ({
+      userId: m.userId,
+      name: m.name ?? m.email ?? "Unknown",
+      email: m.email,
+      image: m.image,
+    }));
 
   const reset = () => {
     setMemberIds([]);

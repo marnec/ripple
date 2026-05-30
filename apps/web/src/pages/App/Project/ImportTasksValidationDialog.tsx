@@ -22,7 +22,6 @@ import {
   taskImportRowSchema,
 } from "@ripple/shared/taskImportSchema";
 import { Download } from "lucide-react";
-import { useMemo } from "react";
 
 interface RowFailure {
   rowNumber: number; // 1-based, header excluded
@@ -45,7 +44,7 @@ interface Props {
 }
 
 export function ImportTasksValidationDialog({ open, rows, onOpenChange }: Props) {
-  const failures = useMemo<RowFailure[]>(() => {
+  const failures: RowFailure[] = (() => {
     if (!open || rows.length === 0) return [];
     const out: RowFailure[] = [];
     for (const [idx, row] of rows.entries()) {
@@ -62,7 +61,7 @@ export function ImportTasksValidationDialog({ open, rows, onOpenChange }: Props)
       }
     }
     return out;
-  }, [open, rows]);
+  })();
 
   const downloadReport = () => {
     const header = "row,field,value,error";

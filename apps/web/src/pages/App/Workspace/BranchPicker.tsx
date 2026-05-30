@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useAction } from "convex/react";
 import { Check, ChevronsUpDown, GitBranch, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@convex/_generated/api";
@@ -89,19 +89,20 @@ export function BranchPicker({
   };
 
   // Hide siblings' already-mapped branches but never the row's own value.
-  const visibleOptions = useMemo(() => {
-    const excluded = new Set(excludedBranches);
-    return options.filter((b) => b === value || !excluded.has(b));
-  }, [options, excludedBranches, value]);
+  const excludedSet = new Set(excludedBranches);
+  const visibleOptions = options.filter(
+    (b) => b === value || !excludedSet.has(b),
+  );
 
   // Custom client-side filter (cmdk's built-in lowercases + tokenizes; for
   // exact branch names a startsWith/includes is more predictable).
   const trimmedSearch = search.trim();
-  const filteredOptions = useMemo(() => {
-    if (trimmedSearch === "") return visibleOptions;
-    const q = trimmedSearch.toLowerCase();
-    return visibleOptions.filter((b) => b.toLowerCase().includes(q));
-  }, [visibleOptions, trimmedSearch]);
+  const filteredOptions =
+    trimmedSearch === ""
+      ? visibleOptions
+      : visibleOptions.filter((b) =>
+          b.toLowerCase().includes(trimmedSearch.toLowerCase()),
+        );
 
   const exactMatch = visibleOptions.includes(trimmedSearch);
   const canCommitCustom =

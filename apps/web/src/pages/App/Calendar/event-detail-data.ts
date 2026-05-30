@@ -5,7 +5,6 @@
  * keep Vite's React Fast Refresh happy.
  */
 
-import { useMemo } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { toast } from "sonner";
@@ -99,10 +98,10 @@ export function useEventDetail({
   const selfInvite = useMutation(api.calendarEvents.selfInvite);
   const removeInvitee = useMutation(api.calendarEvents.removeInvitee);
 
-  const myInvitee = useMemo(() => {
-    if (!detail || !viewer) return undefined;
-    return detail.invitees.find((i) => i.userId === viewer._id);
-  }, [detail, viewer]);
+  const myInvitee =
+    !detail || !viewer
+      ? undefined
+      : detail.invitees.find((i) => i.userId === viewer._id);
 
   // Cancellation is a hard delete (events have no soft-delete state). If
   // we have `detail`, the event still exists, so an organizer can edit it.
