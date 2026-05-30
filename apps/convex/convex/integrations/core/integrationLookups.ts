@@ -50,3 +50,17 @@ export async function getIntegrationForLink(
   }
   return getWorkspaceIntegration(ctx, link.workspaceId);
 }
+
+/**
+ * The provider for a (possibly null) integration row, applying the legacy
+ * default. Links and rows written in the single-install, GitHub-only era predate
+ * the `provider` field; a missing integration or provider therefore resolves to
+ * `"github"`. This is the single home for that rule — callers previously
+ * copy-pasted `integration?.provider ?? "github"` (with the same comment) at
+ * ~8 sites, which meant the legacy invariant had eight places to drift.
+ */
+export function resolveProvider(
+  integration: Doc<"workspaceIntegrations"> | null,
+): string {
+  return integration?.provider ?? "github";
+}

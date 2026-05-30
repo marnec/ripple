@@ -4,7 +4,7 @@ import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { normalizeTagList } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
-import { memberToExternalLogin, memberToExternalUserId } from "./identity";
+import { memberToExternalAssigneeRef } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
 import { resolveOutboundAdapter, type OutboundAdapter } from "./outboundAdapters";
 import {
@@ -379,20 +379,12 @@ export async function maybeEnqueueAssigneesPush(
   // both speak the same provider-native ref).
   let nextLogins: string[] = [];
   if (task.assigneeId) {
-    const ref =
-      provider === "gitlab"
-        ? await memberToExternalUserId(
-            ctx,
-            projectLink.workspaceId,
-            task.assigneeId,
-            provider,
-          )
-        : await memberToExternalLogin(
-            ctx,
-            projectLink.workspaceId,
-            task.assigneeId,
-            provider,
-          );
+    const ref = await memberToExternalAssigneeRef(
+      ctx,
+      projectLink.workspaceId,
+      task.assigneeId,
+      provider,
+    );
     if (!ref) return; // unmappable assignee — preserve provider state.
     nextLogins = normalizeLoginList([ref]);
   }

@@ -12,7 +12,7 @@ import {
   clearTaskExternalLink,
   setTaskExternalLink,
 } from "./taskExternalLink";
-import { getIntegrationForLink } from "./integrationLookups";
+import { getIntegrationForLink, resolveProvider } from "./integrationLookups";
 
 /**
  * Per-batch size for the disconnect cascade workpool drain. Each step
@@ -98,7 +98,7 @@ export const linksForProject = query({
         return {
           _id: l._id,
           status: l.status as "configuring" | "active" | "paused",
-          provider: integration?.provider ?? "github",
+          provider: resolveProvider(integration),
           externalRepoFullName: l.externalRepoFullName,
           pausedByBilling: l.pausedByBilling,
           branchStatusMap: l.branchStatusMap,
@@ -297,7 +297,7 @@ export const getLinkWebhookConfig = query({
       role: WorkspaceRole.ADMIN,
     });
     const integration = await getIntegrationForLink(ctx, link);
-    const provider = integration?.provider ?? "github";
+    const provider = resolveProvider(integration);
     // Reliable OAuth marker: only the OAuth callback writes a refresh token.
     // GitHub App installs (no `oauthRefreshToken`) and GitLab PAT installs
     // (PAT only sets `credentialToken`) both fall to "pat" semantics here —
@@ -645,7 +645,7 @@ export const drainDisconnectBatch = internalMutation({
     // helper falls back to the legacy single-integration lookup for old rows
     // missing the FK.
     const integration = await getIntegrationForLink(ctx, projectLink);
-    const provider = integration?.provider ?? "github";
+    const provider = resolveProvider(integration);
     const disconnectedAt = Date.now();
 
     // Task writes go through triggers so the aggregate/graph stay consistent;
@@ -858,7 +858,7 @@ export const listByWorkspace = query({
           _id: l._id,
           projectId: l.projectId,
           projectName: projects[i]?.name ?? "(deleted project)",
-          provider: integration?.provider ?? "github",
+          provider: resolveProvider(integration),
           status: l.status,
           pausedByBilling: l.pausedByBilling,
           frozenAt: l.frozenAt,

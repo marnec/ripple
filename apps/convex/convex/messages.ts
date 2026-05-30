@@ -365,6 +365,43 @@ async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
   });
 }
 
+/**
+ * Run the full mention/reply enrichment pipeline for a page of messages.
+ *
+ * `enrichWithReplyTo` and `enrichWithMentionedUsers` both populate the shared
+ * `userMap`, so they run first and in order. The remaining four passes only read
+ * each message `body` and are mutually independent, so they run concurrently —
+ * collapsing six sequential DB round-trip waves into three and removing the
+ * artificial serialization between the task/project/resource/event lookups.
+ *
+ * Shared by `list`, `search`, and `getMessageContext` so the chat read path has
+ * one enrichment definition rather than three drifting copies.
+ */
+async function enrichMessages<
+  T extends { body: string; replyToId?: Id<"messages"> },
+>(
+  ctx: { db: DatabaseReader },
+  messages: T[],
+  userMap: Map<string, Doc<"users"> | null>,
+  workspaceId: Id<"workspaces">,
+) {
+  const withReplyTo = await enrichWithReplyTo(ctx, messages, userMap);
+  const withUsers = await enrichWithMentionedUsers(ctx, withReplyTo, userMap);
+  const [tasks, projects, resources, events] = await Promise.all([
+    enrichWithMentionedTasks(ctx, withUsers),
+    enrichWithMentionedProjects(ctx, withUsers),
+    enrichWithMentionedResources(ctx, withUsers),
+    enrichWithMentionedEvents(ctx, withUsers, workspaceId),
+  ]);
+  return withUsers.map((m, i) => ({
+    ...m,
+    mentionedTasks: tasks[i].mentionedTasks,
+    mentionedProjects: projects[i].mentionedProjects,
+    mentionedResources: resources[i].mentionedResources,
+    mentionedEvents: events[i].mentionedEvents,
+  }));
+}
+
 export const list = query({
   args: { channelId: v.id("channels"), paginationOpts: paginationOptsValidator },
   returns: v.object({
@@ -398,16 +435,11 @@ export const list = query({
       return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
-    const messagesWithReplyTo = await enrichWithReplyTo(ctx, messagesWithAuthor, userMap);
-    const messagesWithMentions = await enrichWithMentionedUsers(ctx, messagesWithReplyTo, userMap);
-    const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
-    const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
-    const messagesWithResources = await enrichWithMentionedResources(ctx, messagesWithProjects);
-    const messagesWithEvents = await enrichWithMentionedEvents(ctx, messagesWithResources, channel.workspaceId);
+    const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId);
 
     return {
       ...messagesPage,
-      page: messagesWithEvents,
+      page,
     };
   },
 });
@@ -538,14 +570,7 @@ export const search = query({
       return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
-    const searchResultsWithReplyTo = await enrichWithReplyTo(ctx, searchResultsWithAuthor, userMap);
-    const searchResultsWithMentions = await enrichWithMentionedUsers(ctx, searchResultsWithReplyTo, userMap);
-    const searchResultsWithTasks = await enrichWithMentionedTasks(ctx, searchResultsWithMentions);
-    const searchResultsWithProjects = await enrichWithMentionedProjects(ctx, searchResultsWithTasks);
-    const searchResultsWithResources = await enrichWithMentionedResources(ctx, searchResultsWithProjects);
-    const searchResultsWithEvents = await enrichWithMentionedEvents(ctx, searchResultsWithResources, channel.workspaceId);
-
-    return searchResultsWithEvents;
+    return enrichMessages(ctx, searchResultsWithAuthor, userMap, channel.workspaceId);
   },
 });
 
@@ -599,15 +624,10 @@ export const getMessageContext = query({
       return { ...message, author: getUserDisplayName(user), authorImage: user?.image };
     });
 
-    const messagesWithReplyTo = await enrichWithReplyTo(ctx, messagesWithAuthor, userMap);
-    const messagesWithMentions = await enrichWithMentionedUsers(ctx, messagesWithReplyTo, userMap);
-    const messagesWithTasks = await enrichWithMentionedTasks(ctx, messagesWithMentions);
-    const messagesWithProjects = await enrichWithMentionedProjects(ctx, messagesWithTasks);
-    const messagesWithResources = await enrichWithMentionedResources(ctx, messagesWithProjects);
-    const messagesWithEvents = await enrichWithMentionedEvents(ctx, messagesWithResources, channel.workspaceId);
+    const page = await enrichMessages(ctx, messagesWithAuthor, userMap, channel.workspaceId);
 
     return {
-      messages: messagesWithEvents,
+      messages: page,
       targetMessageId: messageId,
       targetIndex: messagesBefore.length // Index of the target message in the results
     };

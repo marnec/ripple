@@ -1,8 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { action, internalMutation, internalQuery } from "../../_generated/server";
-import { api, internal } from "../../_generated/api";
+import { internal } from "../../_generated/api";
 import { getIntegrationForLink } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";
+import { resolveBranchAdapter } from "./branchAdapters";
 
 /**
  * Provider-agnostic branch list for the project-settings pickers (branch
@@ -23,19 +24,9 @@ export const listRepoBranches = action({
       internal.integrations.core.branchesAction.providerForLink,
       { linkId },
     );
-    if (provider === "github") {
-      return ctx.runAction(
-        api.integrations.github.branchesAction.listRepoBranches,
-        { linkId },
-      );
-    }
-    if (provider === "gitlab") {
-      return ctx.runAction(
-        api.integrations.gitlab.branchesAction.listRepoBranches,
-        { linkId },
-      );
-    }
-    return [];
+    const adapter = resolveBranchAdapter(provider);
+    if (!adapter) return [];
+    return ctx.runAction(adapter.listRepoBranches, { linkId });
   },
 });
 
@@ -89,19 +80,9 @@ export const listTaskRepoBranches = action({
       internal.integrations.core.branchesAction.providerForTask,
       { taskId },
     );
-    if (provider === "github") {
-      return ctx.runAction(
-        api.integrations.github.branchesAction.listTaskRepoBranches,
-        { taskId },
-      );
-    }
-    if (provider === "gitlab") {
-      return ctx.runAction(
-        api.integrations.gitlab.branchesAction.listTaskRepoBranches,
-        { taskId },
-      );
-    }
-    return { branches: [], defaultBranch: null };
+    const adapter = resolveBranchAdapter(provider);
+    if (!adapter) return { branches: [], defaultBranch: null };
+    return ctx.runAction(adapter.listTaskRepoBranches, { taskId });
   },
 });
 
@@ -127,19 +108,9 @@ export const createBranchForTask = action({
       internal.integrations.core.branchesAction.providerForTask,
       { taskId },
     );
-    if (provider === "github") {
-      return ctx.runAction(
-        api.integrations.github.branchesAction.createBranchForTask,
-        { taskId, baseBranch },
-      );
-    }
-    if (provider === "gitlab") {
-      return ctx.runAction(
-        api.integrations.gitlab.branchesAction.createBranchForTask,
-        { taskId, baseBranch },
-      );
-    }
-    throw new ConvexError("This task isn't linked to an issue");
+    const adapter = resolveBranchAdapter(provider);
+    if (!adapter) throw new ConvexError("This task isn't linked to an issue");
+    return ctx.runAction(adapter.createBranchForTask, { taskId, baseBranch });
   },
 });
 

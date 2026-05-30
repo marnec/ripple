@@ -15,6 +15,7 @@ import { syncTaskTags, normalizeTagList } from "./tagSync";
 import { applyStatusSideEffects } from "./taskStatusSideEffects";
 import { getAll } from "convex-helpers/server/relationships";
 import type { Doc } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { notify } from "./utils/notify";
 import {
   maybeEnqueueAssigneesPush,
@@ -391,24 +392,7 @@ export const listByProject = query({
     }
 
     // Enrich each task with status, assignee, project key, and blocker status
-    const enrichedTasks = await Promise.all(
-      tasks.map(async (task) => {
-        const status = await ctx.db.get(task.statusId);
-        const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        const blockerEdges = await ctx.db
-          .query("edges")
-          .withIndex("by_target", (q) => q.eq("targetId", task._id))
-          .collect();
-
-        return {
-          ...task,
-          status,
-          assignee,
-          projectKey: project.key,
-          hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
-        };
-      })
-    );
+    const enrichedTasks = await enrichTasks(ctx, tasks, project.key);
 
     // Sort by position — use plain < / > (character-code order) because
     // fractional-indexing strings require ordinal comparison, not locale collation.
@@ -597,24 +581,40 @@ export const listCompletedByProject = query({
 });
 
 async function enrichTasks(
-  ctx: { db: { get: (id: any) => Promise<any>; query: (table: any) => any } },
+  ctx: QueryCtx,
   tasks: Doc<"tasks">[],
   projectKey: string | undefined,
 ) {
+  // Batch the shared status + assignee point-reads. A project has only a
+  // handful of statuses but many tasks, so the previous per-task `ctx.db.get`
+  // re-fetched the same status rows once per card; `getAll` collapses them into
+  // two deduped round-trips.
+  const statusIds = [...new Set(tasks.map((t) => t.statusId))];
+  const assigneeIds = [
+    ...new Set(tasks.flatMap((t) => (t.assigneeId ? [t.assigneeId] : []))),
+  ];
+  const [statuses, assignees] = await Promise.all([
+    getAll(ctx.db, statusIds),
+    getAll(ctx.db, assigneeIds),
+  ]);
+  const statusMap = new Map(statusIds.map((id, i) => [id, statuses[i]]));
+  const assigneeMap = new Map(assigneeIds.map((id, i) => [id, assignees[i]]));
+
+  // Blocker presence stays one indexed `by_target` read per task (the index
+  // can't be range-batched across many target ids), but each returns only this
+  // task's inbound edges and they run concurrently.
   return Promise.all(
     tasks.map(async (task) => {
-      const status = await ctx.db.get(task.statusId);
-      const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
       const blockerEdges = await ctx.db
         .query("edges")
-        .withIndex("by_target", (q: any) => q.eq("targetId", task._id))
+        .withIndex("by_target", (q) => q.eq("targetId", task._id))
         .collect();
       return {
         ...task,
-        status,
-        assignee,
+        status: statusMap.get(task.statusId) ?? null,
+        assignee: task.assigneeId ? assigneeMap.get(task.assigneeId) ?? null : null,
         projectKey,
-        hasBlockers: blockerEdges.some((e: any) => e.edgeType === "blocks"),
+        hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
       };
     }),
   );

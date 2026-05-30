@@ -145,3 +145,21 @@ export async function memberToExternalLogin(
   const user = await ctx.db.get(userId);
   return user?.githubLogin ?? undefined;
 }
+
+/**
+ * Resolve a workspace member to the provider-native assignee reference that the
+ * outbound gateway and the mirror set both speak: GitHub assigns by login,
+ * GitLab by numeric user id. This is the single home for that login-vs-id
+ * choice, so `core/outboundDispatch` no longer branches on `provider` for
+ * identity addressing — it asks for "the assignee ref" and this picks the kind.
+ */
+export async function memberToExternalAssigneeRef(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  userId: Id<"users">,
+  provider: string,
+): Promise<string | undefined> {
+  return provider === "gitlab"
+    ? memberToExternalUserId(ctx, workspaceId, userId, provider)
+    : memberToExternalLogin(ctx, workspaceId, userId, provider);
+}
