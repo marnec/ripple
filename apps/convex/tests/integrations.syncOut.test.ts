@@ -459,7 +459,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     });
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.onOutboundComplete,
+      internal.integrations.core.syncOutMutations.onOutboundComplete,
       {
         runId: "run_A" as RunId,
         result: { type: "failed", error: "boom" },
@@ -488,7 +488,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     );
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.onOutboundComplete,
+      internal.integrations.core.syncOutMutations.onOutboundComplete,
       {
         runId: "run_ok" as RunId,
         result: { type: "success", returnValue: null },
@@ -514,7 +514,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     const githubUpdatedAt = 1_700_000_500_000;
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+      internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
       {
         taskId,
         result: {
@@ -538,7 +538,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
     });
     // setupLinkedTask seeds externalUpdatedAt: 1_000.
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+      internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
       { taskId, result: { op: "labels", nextLabels: ["bug"] } },
     );
     const link = await t.run((ctx) => ctx.db.get(linkId));
@@ -552,7 +552,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
       externalState: "open",
     });
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+      internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
       { taskId, result: { op: "assignees", nextLogins: ["octocat"] } },
     );
     const link = await t.run((ctx) => ctx.db.get(linkId));
@@ -561,7 +561,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueOutboundPush", () => {
   });
 });
 
-describe("integrations/github/syncOutMutations.recordOutboundFailure", () => {
+describe("integrations/core/syncOutMutations.recordOutboundFailure", () => {
   // Audit-log component defers aggregate updates; real timers corrupt
   // convex-test state. Same pattern as integrations.links.test.ts.
   beforeEach(() => vi.useFakeTimers());
@@ -636,7 +636,7 @@ describe("integrations/github/syncOutMutations.recordOutboundFailure", () => {
     const { workspaceId, taskId, botUserId } = await setupLinkedTask(t);
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordOutboundFailure,
+      internal.integrations.core.syncOutMutations.recordOutboundFailure,
       {
         taskId,
         message: "Unprocessable Entity",
@@ -1072,7 +1072,7 @@ describe("integrations/core/outboundDispatch.maybeEnqueueLabelsPush", () => {
     );
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+      internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
       { taskId, result: { op: "labels", nextLabels: ["bug", "good first issue"] } },
     );
 

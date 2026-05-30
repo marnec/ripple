@@ -155,7 +155,7 @@ describe("tasks.syncDescriptionToGitHub (outbound description push)", () => {
     const t = createTestContext();
     const { asUser, taskId } = await setupTask(t);
 
-    await t.mutation(internal.integrations.github.syncOutMutations.recordTaskOutboundResult, {
+    await t.mutation(internal.integrations.core.syncOutMutations.recordTaskOutboundResult, {
       taskId,
       result: { op: "description" },
     });

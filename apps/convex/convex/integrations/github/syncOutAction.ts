@@ -14,7 +14,7 @@ import {
   taskDescriptionSink,
   taskLabelsSink,
   taskStateSink,
-} from "./outboundSinks";
+} from "../core/outboundSinks";
 
 /**
  * Outbound dispatch actions, scheduled via `@convex-dev/action-retrier`.
@@ -279,6 +279,9 @@ export const pushIssueClose = internalAction({
     issueRef: v.number(),
     /** For the audit-log failure trace; the task itself is already deleted. */
     workspaceId: v.id("workspaces"),
+    /** Provider this close targets — selects the install the audit entry is
+     * attributed to (the task/link FK is already gone). */
+    provider: v.string(),
     credentialRef: v.string(),
   },
   returns: v.null(),
@@ -286,6 +289,7 @@ export const pushIssueClose = internalAction({
     const sink = issueCloseSink(ctx, {
       workspaceId: args.workspaceId,
       issueNumber: args.issueRef,
+      provider: args.provider,
     });
     const gateway = makeGithubGateway(args.credentialRef);
     if (!gateway) {

@@ -178,7 +178,7 @@ describe("recordIssueCreateSuccess", () => {
     const { projectLinkId, taskId } = await setupOutboundFixtures(t);
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordIssueCreateSuccess,
+      internal.integrations.core.syncOutMutations.recordIssueCreateSuccess,
       {
         taskId,
         projectIntegrationLinkId: projectLinkId,
@@ -234,7 +234,7 @@ describe("recordIssueCreateSuccess", () => {
     });
 
     await t.mutation(
-      internal.integrations.github.syncOutMutations.recordIssueCreateSuccess,
+      internal.integrations.core.syncOutMutations.recordIssueCreateSuccess,
       {
         taskId,
         projectIntegrationLinkId: projectLinkId,

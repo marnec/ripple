@@ -495,6 +495,7 @@ export async function enqueueIssueClose(
     projectRef: target.projectRef,
     issueRef: target.issueRef,
     workspaceId: target.projectLink.workspaceId,
+    provider: target.provider,
     credentialRef: target.credentialRef,
   });
 }

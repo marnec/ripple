@@ -82,7 +82,7 @@ const GITHUB_ADAPTER: OutboundAdapter = {
     commentDelete: gh.pushCommentDelete as unknown as OutboundActionRef,
     issueClose: gh.pushIssueClose as unknown as OutboundActionRef,
   },
-  onComplete: internal.integrations.github.syncOutMutations
+  onComplete: internal.integrations.core.syncOutMutations
     .onOutboundComplete as unknown as OnCompleteRef,
 };
 
@@ -102,7 +102,7 @@ const GITLAB_ADAPTER: OutboundAdapter = {
   },
   // GitLab reuses the provider-neutral recorder/onComplete (it writes to
   // taskIntegrationLinks, not anything GitHub-specific).
-  onComplete: internal.integrations.github.syncOutMutations
+  onComplete: internal.integrations.core.syncOutMutations
     .onOutboundComplete as unknown as OnCompleteRef,
 };
 

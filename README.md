@@ -10,18 +10,18 @@ NEXT STEPS:
 
 - move relation icon (blocked, ...) to top right corner in task cards
 
-- in gitlab it's impossible to create a branch from a task because the menu let's you chose at the wrong granularity. This connects well with the cardinality 1 project to N repositories. The choice should be presented to chose the repo first and the branch later (this is also valid for github)
-
-- Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
-
 - split settings in tabs (workspace and projects)
 
 - restyle graph https://d3js.org/d3-force
 
-- on "@ripple/convex:dev: 5/26/2026, 9:54:29 AM [CONVEX M(auth:store)] [INFO] '`auth:store` type: refreshSession'" the whole app seems to reload
+- add a configuration section in integration when more than one repo is present to let users associate tags to branches so that when creating an issue from a task that has a tag it preselect the correct repo. If tags present with conflicting mapping then don't apply the preference. A user can set as many rules as associated branches and not more.
+
+- gitlab login and associated external identity for gilab tasks
 
 - document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
 - guests can comment (all viewers?)
+
+- Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding

@@ -3920,6 +3920,126 @@ export declare const internal: {
           null
         >;
       };
+      syncOutMutations: {
+        onOutboundComplete: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            result:
+              | { returnValue: any; type: "success" }
+              | { error: string; type: "failed" }
+              | { type: "canceled" };
+            runId: string;
+          },
+          null
+        >;
+        recordCommentCreateFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentId: Id<"taskComments">;
+            httpStatus?: number;
+            message: string;
+          },
+          null
+        >;
+        recordCommentCreateSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentId: Id<"taskComments">;
+            externalCommentId: string;
+            externalUpdatedAt: number;
+            taskIntegrationLinkId: Id<"taskIntegrationLinks">;
+          },
+          null
+        >;
+        recordCommentDeleteSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          { commentLinkId: Id<"taskCommentIntegrationLinks"> },
+          null
+        >;
+        recordCommentEditSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            externalUpdatedAt: number;
+          },
+          null
+        >;
+        recordCommentLinkFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            httpStatus?: number;
+            message: string;
+          },
+          null
+        >;
+        recordIssueCloseFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            httpStatus?: number;
+            issueNumber: number;
+            message: string;
+            provider: string;
+            workspaceId: Id<"workspaces">;
+          },
+          null
+        >;
+        recordIssueCreateFailure: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            httpStatus?: number;
+            message: string;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        recordIssueCreateSuccess: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            externalAuthor: { avatarUrl: string; login: string; url: string };
+            externalIssueId: string;
+            externalUpdatedAt: number;
+            issueNumber: number;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+        recordOutboundFailure: FunctionReference<
+          "mutation",
+          "internal",
+          { httpStatus?: number; message: string; taskId: Id<"tasks"> },
+          null
+        >;
+        recordTaskOutboundResult: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            result:
+              | { nextLabels: Array<string>; op: "labels" }
+              | { nextLogins: Array<string>; op: "assignees" }
+              | { op: "description" }
+              | {
+                  externalUpdatedAt: number;
+                  op: "state";
+                  state: "open" | "closed";
+                  stateReason?: "completed" | "not_planned";
+                };
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
+      };
     };
     github: {
       branchesAction: {
@@ -4102,6 +4222,7 @@ export declare const internal: {
             credentialRef: string;
             issueRef: number;
             projectRef: string;
+            provider: string;
             workspaceId: Id<"workspaces">;
           },
           null
@@ -4129,125 +4250,6 @@ export declare const internal: {
             nextLabels: Array<string>;
             projectRef: string;
             remove: Array<string>;
-            taskId: Id<"tasks">;
-          },
-          null
-        >;
-      };
-      syncOutMutations: {
-        onOutboundComplete: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            result:
-              | { returnValue: any; type: "success" }
-              | { error: string; type: "failed" }
-              | { type: "canceled" };
-            runId: string;
-          },
-          null
-        >;
-        recordCommentCreateFailure: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            commentId: Id<"taskComments">;
-            httpStatus?: number;
-            message: string;
-          },
-          null
-        >;
-        recordCommentCreateSuccess: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            commentId: Id<"taskComments">;
-            externalCommentId: string;
-            externalUpdatedAt: number;
-            taskIntegrationLinkId: Id<"taskIntegrationLinks">;
-          },
-          null
-        >;
-        recordCommentDeleteSuccess: FunctionReference<
-          "mutation",
-          "internal",
-          { commentLinkId: Id<"taskCommentIntegrationLinks"> },
-          null
-        >;
-        recordCommentEditSuccess: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            commentLinkId: Id<"taskCommentIntegrationLinks">;
-            externalUpdatedAt: number;
-          },
-          null
-        >;
-        recordCommentLinkFailure: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            commentLinkId: Id<"taskCommentIntegrationLinks">;
-            httpStatus?: number;
-            message: string;
-          },
-          null
-        >;
-        recordIssueCloseFailure: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            httpStatus?: number;
-            issueNumber: number;
-            message: string;
-            workspaceId: Id<"workspaces">;
-          },
-          null
-        >;
-        recordIssueCreateFailure: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            httpStatus?: number;
-            message: string;
-            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
-            taskId: Id<"tasks">;
-          },
-          null
-        >;
-        recordIssueCreateSuccess: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            externalAuthor: { avatarUrl: string; login: string; url: string };
-            externalIssueId: string;
-            externalUpdatedAt: number;
-            issueNumber: number;
-            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
-            taskId: Id<"tasks">;
-          },
-          null
-        >;
-        recordOutboundFailure: FunctionReference<
-          "mutation",
-          "internal",
-          { httpStatus?: number; message: string; taskId: Id<"tasks"> },
-          null
-        >;
-        recordTaskOutboundResult: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            result:
-              | { nextLabels: Array<string>; op: "labels" }
-              | { nextLogins: Array<string>; op: "assignees" }
-              | { op: "description" }
-              | {
-                  externalUpdatedAt: number;
-                  op: "state";
-                  state: "open" | "closed";
-                  stateReason?: "completed" | "not_planned";
-                };
             taskId: Id<"tasks">;
           },
           null
@@ -4423,6 +4425,7 @@ export declare const internal: {
             credentialRef: string;
             issueRef: number;
             projectRef: string;
+            provider: string;
             workspaceId: Id<"workspaces">;
           },
           null

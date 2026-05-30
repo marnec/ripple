@@ -3,9 +3,9 @@ import { internalMutation } from "../../_generated/server";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
-import { getIntegrationForLink } from "../core/integrationLookups";
-import { logTaskIntegrationActivity } from "../core/integrationActivity";
-import { setTaskExternalLink } from "../core/taskExternalLink";
+import { getIntegrationForLink } from "./integrationLookups";
+import { logTaskIntegrationActivity } from "./integrationActivity";
+import { setTaskExternalLink } from "./taskExternalLink";
 import { onCompleteValidator } from "@convex-dev/action-retrier";
 
 /**
@@ -190,19 +190,23 @@ export const recordIssueCloseFailure = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
     issueNumber: v.number(),
+    /** The provider whose issue-close failed — selects the right install to
+     * attribute the audit entry to (a workspace may hold both GitHub + GitLab). */
+    provider: v.string(),
     message: v.string(),
     httpStatus: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     // The task + its link are gone by the time this runs, so there's no FK to
-    // resolve the integration through — pick the workspace's GitHub install by
-    // provider (a workspace can also hold GitLab, which a workspace-wide
-    // `.unique()` would crash on).
+    // resolve the integration through — pick the workspace install for THIS
+    // provider (a workspace can hold both GitHub + GitLab, so a workspace-wide
+    // `.unique()` would crash and assuming "github" would mis-attribute a
+    // GitLab failure).
     const integration = await ctx.db
       .query("workspaceIntegrations")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("provider"), "github"))
+      .filter((q) => q.eq(q.field("provider"), args.provider))
       .first();
     if (!integration) return null;
     try {

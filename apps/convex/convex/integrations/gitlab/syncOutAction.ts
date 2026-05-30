@@ -13,7 +13,7 @@ import {
   taskDescriptionSink,
   taskLabelsSink,
   taskStateSink,
-} from "../github/outboundSinks";
+} from "../core/outboundSinks";
 import type { ActionCtx } from "../../_generated/server";
 import type { OutboundGateway } from "../core/outboundPort";
 
@@ -25,7 +25,7 @@ import type { OutboundGateway } from "../core/outboundPort";
  * stored token fetched via `credentialRef` rather than a minted App token) and
  * the GitLab gateway behind the call.
  *
- * The recorder sinks (`../github/outboundSinks`) and their mutations are
+ * The recorder sinks (`../core/outboundSinks`) and their mutations are
  * provider-neutral — they mirror results onto `taskIntegrationLinks` — so
  * GitLab reuses them rather than duplicating the recorder layer.
  */
@@ -284,6 +284,9 @@ export const pushIssueClose = internalAction({
     projectRef: v.string(),
     issueRef: v.number(),
     workspaceId: v.id("workspaces"),
+    /** Provider this close targets — selects the install the audit entry is
+     * attributed to (the task/link FK is already gone). */
+    provider: v.string(),
     credentialRef: v.string(),
   },
   returns: v.null(),
@@ -291,6 +294,7 @@ export const pushIssueClose = internalAction({
     const sink = issueCloseSink(ctx, {
       workspaceId: args.workspaceId,
       issueNumber: args.issueRef,
+      provider: args.provider,
     });
     const gateway = await resolveGateway(ctx, args.credentialRef);
     if (!gateway) {

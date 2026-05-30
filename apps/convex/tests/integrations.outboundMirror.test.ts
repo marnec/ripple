@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mirrorFor } from "../convex/integrations/github/syncOutMutations";
+import { mirrorFor } from "../convex/integrations/core/syncOutMutations";
 
 /**
  * Pure tests for the op→mirror mapping that `recordTaskOutboundResult` applies.

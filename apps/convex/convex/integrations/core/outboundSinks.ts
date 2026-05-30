@@ -1,7 +1,7 @@
 import type { ActionCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
-import type { OutboundRecorderSink } from "../core/outboundRecorderSink";
+import type { OutboundRecorderSink } from "./outboundRecorderSink";
 
 /**
  * Concrete `OutboundRecorderSink`s for each outbound op. Each closes over an
@@ -21,7 +21,7 @@ import type { OutboundRecorderSink } from "../core/outboundRecorderSink";
 function taskFailure(ctx: ActionCtx, taskId: Id<"tasks">) {
   return async (message: string, httpStatus?: number): Promise<void> => {
     await ctx.runMutation(
-      internal.integrations.github.syncOutMutations.recordOutboundFailure,
+      internal.integrations.core.syncOutMutations.recordOutboundFailure,
       { taskId, message, httpStatus },
     );
   };
@@ -38,7 +38,7 @@ export function taskStateSink(
   return {
     recordSuccess: async (meta) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+        internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
         {
           taskId: args.taskId,
           result: {
@@ -63,7 +63,7 @@ export function taskDescriptionSink(
   return {
     recordSuccess: async () => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+        internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
         { taskId, result: { op: "description" } },
       );
     },
@@ -78,7 +78,7 @@ export function taskLabelsSink(
   return {
     recordSuccess: async () => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+        internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
         { taskId: args.taskId, result: { op: "labels", nextLabels: args.nextLabels } },
       );
     },
@@ -93,7 +93,7 @@ export function taskAssigneesSink(
   return {
     recordSuccess: async () => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordTaskOutboundResult,
+        internal.integrations.core.syncOutMutations.recordTaskOutboundResult,
         { taskId: args.taskId, result: { op: "assignees", nextLogins: args.nextLogins } },
       );
     },
@@ -118,7 +118,7 @@ export function issueCreateSink(
       // The gateway only returns success for create with a full body, so these
       // fields are present.
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordIssueCreateSuccess,
+        internal.integrations.core.syncOutMutations.recordIssueCreateSuccess,
         {
           taskId: args.taskId,
           projectIntegrationLinkId: args.projectIntegrationLinkId,
@@ -131,7 +131,7 @@ export function issueCreateSink(
     },
     recordPermanentFailure: async (message, httpStatus) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordIssueCreateFailure,
+        internal.integrations.core.syncOutMutations.recordIssueCreateFailure,
         {
           taskId: args.taskId,
           projectIntegrationLinkId: args.projectIntegrationLinkId,
@@ -155,7 +155,7 @@ export function commentCreateSink(
       // The gateway only returns success for create with a full body, so these
       // fields are present.
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations
+        internal.integrations.core.syncOutMutations
           .recordCommentCreateSuccess,
         {
           commentId: args.commentId,
@@ -167,7 +167,7 @@ export function commentCreateSink(
     },
     recordPermanentFailure: async (message, httpStatus) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations
+        internal.integrations.core.syncOutMutations
           .recordCommentCreateFailure,
         { commentId: args.commentId, message, httpStatus },
       );
@@ -182,13 +182,13 @@ export function commentEditSink(
   return {
     recordSuccess: async (meta) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordCommentEditSuccess,
+        internal.integrations.core.syncOutMutations.recordCommentEditSuccess,
         { commentLinkId, externalUpdatedAt: meta.externalUpdatedAt! },
       );
     },
     recordPermanentFailure: async (message, httpStatus) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordCommentLinkFailure,
+        internal.integrations.core.syncOutMutations.recordCommentLinkFailure,
         { commentLinkId, message, httpStatus },
       );
     },
@@ -204,7 +204,7 @@ export function commentEditSink(
  */
 export function issueCloseSink(
   ctx: ActionCtx,
-  args: { workspaceId: Id<"workspaces">; issueNumber: number },
+  args: { workspaceId: Id<"workspaces">; issueNumber: number; provider: string },
 ): OutboundRecorderSink {
   return {
     recordSuccess: async () => {
@@ -212,10 +212,11 @@ export function issueCloseSink(
     },
     recordPermanentFailure: async (message, httpStatus) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordIssueCloseFailure,
+        internal.integrations.core.syncOutMutations.recordIssueCloseFailure,
         {
           workspaceId: args.workspaceId,
           issueNumber: args.issueNumber,
+          provider: args.provider,
           message,
           httpStatus,
         },
@@ -231,14 +232,14 @@ export function commentDeleteSink(
   return {
     recordSuccess: async () => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations
+        internal.integrations.core.syncOutMutations
           .recordCommentDeleteSuccess,
         { commentLinkId },
       );
     },
     recordPermanentFailure: async (message, httpStatus) => {
       await ctx.runMutation(
-        internal.integrations.github.syncOutMutations.recordCommentLinkFailure,
+        internal.integrations.core.syncOutMutations.recordCommentLinkFailure,
         { commentLinkId, message, httpStatus },
       );
     },
