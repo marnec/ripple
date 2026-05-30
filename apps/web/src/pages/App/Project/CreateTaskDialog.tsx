@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { TagPills } from "@/components/TagPills";
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -34,21 +36,25 @@ export function CreateTaskDialog({
   plannedStartDate,
 }: CreateTaskDialogProps) {
   const [title, setTitle] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [alsoCreateIssue, setAlsoCreateIssue] = useState(false);
   const createTask = useMutation(api.tasks.create);
   const createIssue = useMutation(api.tasks.createGithubIssue);
 
-  // The issue title follows the task title until the user edits it.
+  // The issue title follows the task title until the user edits it. The task's
+  // tags feed the draft so the target repo is preselected per the project's
+  // tag-routing rules — at creation time, not just from the task detail.
   const { eligible, links, provider } = useGithubIssueEligibility(
     projectId,
     workspaceId,
   );
   const providerLabel = provider === "gitlab" ? "GitLab" : "GitHub";
-  const draft = useGithubIssueDraft(title, links);
+  const draft = useGithubIssueDraft(title, links, tags);
 
   const reset = () => {
     setTitle("");
+    setTags([]);
     setAlsoCreateIssue(false);
     draft.reset();
   };
@@ -68,7 +74,13 @@ export function CreateTaskDialog({
     const issueTitle = draft.title.trim();
 
     setIsCreating(true);
-    createTask({ projectId, workspaceId, title: trimmedTitle, plannedStartDate })
+    createTask({
+      projectId,
+      workspaceId,
+      title: trimmedTitle,
+      plannedStartDate,
+      ...(tags.length > 0 ? { labels: tags } : {}),
+    })
       .then(async (taskId) => {
         // Best-effort: a task is created even if the issue request is rejected,
         // so surface that separately rather than failing the whole flow.
@@ -114,6 +126,18 @@ export function CreateTaskDialog({
               onChange={(e) => setTitle(e.target.value)}
               disabled={isCreating}
             />
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Tags (optional)
+              </Label>
+              <TagPills
+                workspaceId={workspaceId}
+                value={tags}
+                onAdd={(tag) => setTags((prev) => [...prev, tag])}
+                onRemove={(tag) => setTags((prev) => prev.filter((t) => t !== tag))}
+                disabled={isCreating}
+              />
+            </div>
             {eligible && (
               <div className="space-y-3 rounded-md border bg-muted/30 p-3">
                 <label className="flex items-center gap-2 text-sm">

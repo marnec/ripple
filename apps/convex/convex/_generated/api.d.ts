@@ -1382,10 +1382,14 @@ export declare const api: {
           { enabled: boolean; linkId: Id<"projectIntegrationLinks"> },
           null
         >;
-        setRepoTagRules: FunctionReference<
+        setTagRoutingRule: FunctionReference<
           "mutation",
           "public",
-          { linkId: Id<"projectIntegrationLinks">; tags: Array<string> },
+          {
+            linkId: Id<"projectIntegrationLinks"> | null;
+            projectId: Id<"projects">;
+            tag: string;
+          },
           null
         >;
         unlinkLink: FunctionReference<

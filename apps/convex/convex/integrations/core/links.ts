@@ -398,55 +398,61 @@ export const setBranchSourceDefaults = mutation({
 });
 
 /**
- * Set the tag→repo routing rule for a link. Admin-only (a project-wide setting,
- * like `setBranchStatusMap`). Tags are normalized (trim + lowercase) to match
- * `tasks.labels` so preselection is a plain set intersection. A tag belongs to
- * at most one repo within a project — assigning a tag already claimed by a
- * sibling link is rejected (the create-issue dialog relies on each tag pointing
- * to a single repo; the "conflict ⇒ no preference" rule then only fires when a
- * *task* carries tags across repos). An empty list clears the rule.
+ * Route a single tag to a repo (`linkId`) or clear its routing (`linkId: null`)
+ * within a project. Admin-only (a project-wide setting, like
+ * `setBranchStatusMap`). The tag is normalized (trim + lowercase) to match
+ * `tasks.labels` so the create-issue preselection is a plain set intersection.
+ *
+ * A tag belongs to at most one repo. This enforces that *atomically*: it strips
+ * the tag from every link in the project, then adds it to the target (if any),
+ * all in one mutation — so a reassignment (move tag A→B) never leaves a window
+ * where two repos claim the same tag. The "conflict ⇒ no preference" rule then
+ * only ever fires because a *task* carries tags spanning repos, never because of
+ * a stale double-claim in config.
  */
-export const setRepoTagRules = mutation({
+export const setTagRoutingRule = mutation({
   args: {
-    linkId: v.id("projectIntegrationLinks"),
-    tags: v.array(v.string()),
+    projectId: v.id("projects"),
+    tag: v.string(),
+    linkId: v.union(v.id("projectIntegrationLinks"), v.null()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const link = await ctx.db.get(args.linkId);
-    if (!link) throw new ConvexError("Link not found");
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new ConvexError("Project not found");
 
-    await requireWorkspaceMember(ctx, link.workspaceId, {
+    await requireWorkspaceMember(ctx, project.workspaceId, {
       role: WorkspaceRole.ADMIN,
     });
 
-    const normalized = [
-      ...new Set(
-        args.tags.map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0),
-      ),
-    ];
+    const tag = args.tag.trim().toLowerCase();
+    if (!tag) throw new ConvexError("Tag is empty");
 
-    // A tag may route to at most one repo in the project. Reject overlap with a
-    // sibling link's rule so the dialog's single-repo match stays unambiguous.
-    const siblings = await ctx.db
-      .query("projectIntegrationLinks")
-      .withIndex("by_project", (q) => q.eq("projectId", link.projectId))
-      .collect();
-    for (const sibling of siblings) {
-      if (sibling._id === link._id) continue;
-      if (sibling.status === "disconnected") continue;
-      const claimed = new Set(sibling.autoSelectTags ?? []);
-      const clash = normalized.find((t) => claimed.has(t));
-      if (clash) {
-        throw new ConvexError(
-          `Tag "${clash}" is already routed to ${sibling.externalRepoFullName}. Remove it there first.`,
-        );
+    if (args.linkId) {
+      const target = await ctx.db.get(args.linkId);
+      if (!target || target.projectId !== args.projectId) {
+        throw new ConvexError("Repository is not connected to this project");
       }
     }
 
-    await ctx.db.patch(args.linkId, {
-      autoSelectTags: normalized.length ? normalized : undefined,
-    });
+    const links = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    for (const link of links) {
+      if (link.status === "disconnected") continue;
+      const current = link.autoSelectTags ?? [];
+      const has = current.includes(tag);
+      const shouldHave = args.linkId === link._id;
+      if (has === shouldHave) continue;
+      const next = shouldHave
+        ? [...current, tag]
+        : current.filter((t) => t !== tag);
+      await ctx.db.patch(link._id, {
+        autoSelectTags: next.length ? next : undefined,
+      });
+    }
     return null;
   },
 });

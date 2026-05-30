@@ -207,74 +207,111 @@ describe("integrations/core/links.setInboundIssueSync", () => {
   });
 });
 
-describe("integrations/core/links.setRepoTagRules", () => {
-  it("normalizes (trim+lowercase), dedupes, and persists tags", async () => {
-    const t = createTestContext();
-    const { linkId, asUser } = await setup(t);
-
-    await asUser.mutation(api.integrations.core.links.setRepoTagRules, {
-      linkId,
-      tags: ["  Backend ", "backend", "API", ""],
-    });
-
-    const link = await t.run((ctx) => ctx.db.get(linkId));
-    expect(link?.autoSelectTags).toEqual(["backend", "api"]);
-  });
-
-  it("clears the rule when given an empty (or all-blank) list", async () => {
-    const t = createTestContext();
-    const { linkId, asUser } = await setup(t);
-    await asUser.mutation(api.integrations.core.links.setRepoTagRules, {
-      linkId,
-      tags: ["backend"],
-    });
-
-    await asUser.mutation(api.integrations.core.links.setRepoTagRules, {
-      linkId,
-      tags: ["   "],
-    });
-
-    const link = await t.run((ctx) => ctx.db.get(linkId));
-    expect(link?.autoSelectTags).toBeUndefined();
-  });
-
-  it("rejects a tag already routed to a sibling repo in the project", async () => {
-    const t = createTestContext();
-    const { linkId, asUser, workspaceId, projectId } = await setup(t);
-    const siblingLinkId = await t.run((ctx) =>
-      ctx.db.insert("projectIntegrationLinks", {
-        workspaceId,
-        projectId,
+describe("integrations/core/links.setTagRoutingRule", () => {
+  async function withSibling(t: ReturnType<typeof createTestContext>) {
+    const ctx = await setup(t);
+    const siblingLinkId = await t.run((c) =>
+      c.db.insert("projectIntegrationLinks", {
+        workspaceId: ctx.workspaceId,
+        projectId: ctx.projectId,
         status: "active",
         pausedByBilling: false,
         externalRepoFullName: "acme/api",
         externalRepoId: "R_kg2",
       }),
     );
-    await asUser.mutation(api.integrations.core.links.setRepoTagRules, {
-      linkId: siblingLinkId,
-      tags: ["backend"],
+    return { ...ctx, siblingLinkId };
+  }
+
+  it("routes a normalized tag to the chosen link", async () => {
+    const t = createTestContext();
+    const { linkId, projectId, asUser } = await setup(t);
+
+    await asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+      projectId,
+      tag: "  Backend ",
+      linkId,
     });
 
-    await expect(
-      asUser.mutation(api.integrations.core.links.setRepoTagRules, {
-        linkId,
-        // case-insensitive clash with the sibling's "backend"
-        tags: ["Backend"],
-      }),
-    ).rejects.toThrow(/already routed/);
+    const link = await t.run((ctx) => ctx.db.get(linkId));
+    expect(link?.autoSelectTags).toEqual(["backend"]);
+  });
 
-    // The rejected link keeps no rule.
+  it("moves a tag between repos atomically (strips the old claim)", async () => {
+    const t = createTestContext();
+    const { linkId, siblingLinkId, projectId, asUser } = await withSibling(t);
+
+    await asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+      projectId,
+      tag: "backend",
+      linkId,
+    });
+    await asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+      projectId,
+      tag: "backend",
+      linkId: siblingLinkId,
+    });
+
+    const from = await t.run((ctx) => ctx.db.get(linkId));
+    const to = await t.run((ctx) => ctx.db.get(siblingLinkId));
+    expect(from?.autoSelectTags).toBeUndefined();
+    expect(to?.autoSelectTags).toEqual(["backend"]);
+  });
+
+  it("clears a tag's routing when linkId is null", async () => {
+    const t = createTestContext();
+    const { linkId, projectId, asUser } = await setup(t);
+    await asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+      projectId,
+      tag: "backend",
+      linkId,
+    });
+
+    await asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+      projectId,
+      tag: "backend",
+      linkId: null,
+    });
+
     const link = await t.run((ctx) => ctx.db.get(linkId));
     expect(link?.autoSelectTags).toBeUndefined();
+  });
+
+  it("rejects a link that belongs to another project", async () => {
+    const t = createTestContext();
+    const { projectId, asUser, workspaceId } = await setup(t);
+    const otherProjectId = await setupProject(t, {
+      workspaceId,
+      creatorId: (await setupWorkspaceWithAdmin(t)).userId,
+      name: "Other",
+    });
+    const foreignLinkId = await t.run((ctx) =>
+      ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId: otherProjectId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/other",
+        externalRepoId: "R_kg9",
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+        projectId,
+        tag: "backend",
+        linkId: foreignLinkId,
+      }),
+    ).rejects.toThrow();
   });
 
   it("surfaces tags through linksForProject", async () => {
     const t = createTestContext();
     const { linkId, projectId, asUser } = await setup(t);
-    await asUser.mutation(api.integrations.core.links.setRepoTagRules, {
+    await asUser.mutation(api.integrations.core.links.setTagRoutingRule, {
+      projectId,
+      tag: "backend",
       linkId,
-      tags: ["backend"],
     });
 
     const links = await asUser.query(
@@ -288,13 +325,14 @@ describe("integrations/core/links.setRepoTagRules", () => {
 
   it("rejects non-admin callers", async () => {
     const t = createTestContext();
-    const { linkId } = await setup(t);
+    const { linkId, projectId } = await setup(t);
     const outsider = t.withIdentity({ subject: "stranger|s", issuer: "test" });
 
     await expect(
-      outsider.mutation(api.integrations.core.links.setRepoTagRules, {
+      outsider.mutation(api.integrations.core.links.setTagRoutingRule, {
+        projectId,
+        tag: "backend",
         linkId,
-        tags: ["backend"],
       }),
     ).rejects.toThrow();
   });

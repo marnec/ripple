@@ -4,8 +4,6 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- add a configuration section in integration when more than one repo is present to let users associate tags to branches so that when creating an issue from a task that has a tag it preselect the correct repo. If tags present with conflicting mapping then don't apply the preference. A user can set as many rules as associated branches and not more.
-
 - gitlab login and associated external identity for gilab tasks
 
 - split settings in tabs (workspace and projects)
@@ -18,8 +16,7 @@ NEXT STEPS:
 - add a dependency view to tasks
 
 - knowledge-graph
-    - explore the ability to flag a diagram as a "presentation" which prevents its embedding but enables it's presentation mode and the ability to download a pdf/pptx (https://npm.io/package/excalidraw-presentation). Presentation mode probably needs to 
-    be recreated through code (https://deepwiki.com/excalidraw-smart-presentation/excalidraw-smart-presentation.github.io/5.1-presentation-mode-overview)
+    - explore the ability to flag a diagram as a "presentation" which prevents its embedding but enables it's presentation mode and the ability to download a pdf/pptx (https://npm.io/package/excalidraw-presentation). Add relevant index so that non_presentation diagrams can be recovered when embedding in docs. Presentation mode probably needs to be recreated through code (https://deepwiki.com/excalidraw-smart-presentation/excalidraw-smart-presentation.github.io/5.1-presentation-mode-overview)
 
     - explore pdf reading, annotation and embedding
 
