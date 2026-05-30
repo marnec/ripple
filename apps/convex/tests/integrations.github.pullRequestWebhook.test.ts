@@ -5,7 +5,7 @@ import {
   parseBranchIssueNumber,
   parseClosingIssueNumbers,
 } from "../convex/integrations/github/pullRequestWebhook";
-import { branchNameForIssue } from "../convex/integrations/github/branchesAction";
+import { branchNameForIssue } from "../convex/integrations/core/branchNaming";
 import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
 import { GithubClient } from "../convex/integrations/github/client";
 import {

@@ -30,12 +30,15 @@ type Props = {
 };
 
 /**
- * Branch/PR affordances for an issue-linked task's detail header:
+ * Branch/PR affordances for an issue-linked task's detail header. Provider-
+ * neutral (GitHub or GitLab): the repo is fixed by the task's single issue link,
+ * so there's no repo choice here — the branch always lands in the issue's repo,
+ * via the `core.branchesAction` dispatch.
  *  - no branch yet → "Create branch". When the project link asks each time
  *    (the default), the button opens a base-branch picker; otherwise it creates
  *    in one click off the project's configured default (or the repo default).
- *  - branch exists → open a prefilled "Create pull request" compare page
- *    (`Closes #N` in the body + the recorded base, so it links + automates).
+ *  - branch exists → open a prefilled "Create pull/merge request" page
+ *    (`Closes #N` + the recorded base, so it links + automates).
  *
  * Self-gates to nothing for native or issue-deleted tasks.
  */
@@ -47,7 +50,7 @@ export function TaskGithubBranchActions({
 }: Props) {
   const gh = useTaskGithubLink(taskId);
   const createBranch = useAction(
-    api.integrations.github.branchesAction.createBranchForTask,
+    api.integrations.core.branchesAction.createBranchForTask,
   );
   const [creating, setCreating] = useState(false);
 
@@ -81,16 +84,21 @@ export function TaskGithubBranchActions({
       .finally(() => setCreating(false));
   };
 
-  // Compare against the recorded base when known so a Git Flow feature PR opens
-  // against e.g. `develop` rather than always the repo default.
+  // Prefilled PR/MR creation page. Targets the recorded base when known so a
+  // Git Flow feature opens against e.g. `develop` rather than always the repo
+  // default, and provider-shaped (GitHub compare page vs GitLab new-MR form).
+  const isGitlab = gh.provider === "gitlab";
   const compareUrl = branch
-    ? `https://github.com/${repoFullName}/compare/` +
-      (gh.branchBaseRef
-        ? `${encodeURIComponent(gh.branchBaseRef)}...${encodeURIComponent(branch)}`
-        : encodeURIComponent(branch)) +
-      `?expand=1&title=${encodeURIComponent(taskTitle)}` +
-      `&body=${encodeURIComponent(`Closes #${issueNumber}`)}`
+    ? buildPrUrl({
+        provider: gh.provider,
+        repoFullName,
+        branch,
+        base: gh.branchBaseRef,
+        title: taskTitle,
+        issueNumber,
+      })
     : null;
+  const prTitle = isGitlab ? "Create merge request" : "Create pull request";
 
   // Create PR is leftmost (appears once a branch exists); the create-branch
   // control follows it and disables in place once a branch has been created.
@@ -102,7 +110,7 @@ export function TaskGithubBranchActions({
         <Button
           variant="ghost"
           size="icon-sm"
-          title="Create pull request"
+          title={prTitle}
           onClick={() =>
             window.open(compareUrl, "_blank", "noopener,noreferrer")
           }
@@ -146,6 +154,42 @@ export function TaskGithubBranchActions({
   );
 }
 
+/**
+ * Build the prefilled PR/MR creation URL for the recorded branch. GitHub opens
+ * the compare page (`base...head`); GitLab opens the new-merge-request form with
+ * `source_branch`/`target_branch`. Both prefill the title and a `Closes #N` body
+ * so the opened request links back to the issue. Self-hosted GitLab isn't
+ * supported yet, so the GitLab host is hardcoded to gitlab.com (matches the
+ * backend's `GITLAB_BASE`).
+ */
+function buildPrUrl(args: {
+  provider: string;
+  repoFullName: string;
+  branch: string;
+  base: string | null;
+  title: string;
+  issueNumber: number;
+}): string {
+  const { provider, repoFullName, branch, base, title, issueNumber } = args;
+  if (provider === "gitlab") {
+    const params = new URLSearchParams({
+      "merge_request[source_branch]": branch,
+      "merge_request[title]": title,
+      "merge_request[description]": `Closes #${issueNumber}`,
+    });
+    if (base) params.set("merge_request[target_branch]", base);
+    return `https://gitlab.com/${repoFullName}/-/merge_requests/new?${params.toString()}`;
+  }
+  const compare = base
+    ? `${encodeURIComponent(base)}...${encodeURIComponent(branch)}`
+    : encodeURIComponent(branch);
+  return (
+    `https://github.com/${repoFullName}/compare/${compare}` +
+    `?expand=1&title=${encodeURIComponent(title)}` +
+    `&body=${encodeURIComponent(`Closes #${issueNumber}`)}`
+  );
+}
+
 type PickerProps = {
   taskId: Id<"tasks">;
   creating: boolean;
@@ -166,7 +210,7 @@ function BranchSourcePicker({
   onCreate,
 }: PickerProps) {
   const listBranches = useAction(
-    api.integrations.github.branchesAction.listTaskRepoBranches,
+    api.integrations.core.branchesAction.listTaskRepoBranches,
   );
   const setDefaults = useMutation(
     api.integrations.core.links.setBranchSourceDefaults,

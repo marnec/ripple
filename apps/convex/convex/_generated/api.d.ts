@@ -1186,11 +1186,23 @@ export declare const api: {
         >;
       };
       branchesAction: {
+        createBranchForTask: FunctionReference<
+          "action",
+          "public",
+          { baseBranch?: string; taskId: Id<"tasks"> },
+          { alreadyExisted: boolean; baseBranch: string; branchName: string }
+        >;
         listRepoBranches: FunctionReference<
           "action",
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
           Array<string>
+        >;
+        listTaskRepoBranches: FunctionReference<
+          "action",
+          "public",
+          { taskId: Id<"tasks"> },
+          { branches: Array<string>; defaultBranch: string | null }
         >;
       };
       entitlements: {
@@ -1491,11 +1503,23 @@ export declare const api: {
     };
     gitlab: {
       branchesAction: {
+        createBranchForTask: FunctionReference<
+          "action",
+          "public",
+          { baseBranch?: string; taskId: Id<"tasks"> },
+          { alreadyExisted: boolean; baseBranch: string; branchName: string }
+        >;
         listRepoBranches: FunctionReference<
           "action",
           "public",
           { linkId: Id<"projectIntegrationLinks"> },
           Array<string>
+        >;
+        listTaskRepoBranches: FunctionReference<
+          "action",
+          "public",
+          { taskId: Id<"tasks"> },
+          { branches: Array<string>; defaultBranch: string | null }
         >;
       };
       oauthAction: {
@@ -3757,6 +3781,23 @@ export declare const internal: {
           { linkId: Id<"projectIntegrationLinks"> },
           null | string
         >;
+        providerForTask: FunctionReference<
+          "query",
+          "internal",
+          { taskId: Id<"tasks"> },
+          null | string
+        >;
+        recordTaskBranchName: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            baseBranch: string;
+            branchName: string;
+            linkId: Id<"taskIntegrationLinks">;
+            taskId: Id<"tasks">;
+          },
+          null
+        >;
       };
       commentSeedAction: {
         seedCommentBody: FunctionReference<
@@ -3902,17 +3943,6 @@ export declare const internal: {
           "internal",
           { linkId: Id<"projectIntegrationLinks"> },
           null | { externalAccountId: string; owner: string; repo: string }
-        >;
-        recordTaskBranchName: FunctionReference<
-          "mutation",
-          "internal",
-          {
-            baseBranch: string;
-            branchName: string;
-            linkId: Id<"taskIntegrationLinks">;
-            taskId: Id<"tasks">;
-          },
-          null
         >;
       };
       forceResyncAction: {
@@ -4244,6 +4274,20 @@ export declare const internal: {
     };
     gitlab: {
       branchesAction: {
+        branchCreateContext: FunctionReference<
+          "query",
+          "internal",
+          { taskId: Id<"tasks"> },
+          null | {
+            credentialRef: string;
+            defaultBaseBranch: string | null;
+            existingBranchName: string | null;
+            externalProjectId: string;
+            issueNumber: number;
+            linkId: Id<"taskIntegrationLinks">;
+            title: string;
+          }
+        >;
         branchFetchContext: FunctionReference<
           "query",
           "internal",

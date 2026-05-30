@@ -290,6 +290,60 @@ export async function fetchBranches(args: {
 }
 
 /**
+ * Read a project's default branch (GitLab `default_branch`). Used as the final
+ * fallback base for `createBranch` when neither an explicit base nor a
+ * project-configured default is given. Returns `null` for an empty/unborn repo.
+ */
+export async function fetchProjectDefaultBranch(args: {
+  cfg: GitlabOAuthConfig;
+  accessToken: string;
+  projectId: number | string;
+}): Promise<string | null> {
+  const base = args.cfg.base ?? GITLAB_BASE;
+  const doFetch = args.cfg.fetchImpl ?? fetch;
+  const res = await doFetch(
+    `${base}${API_V4}/projects/${encodeURIComponent(String(args.projectId))}`,
+    { headers: { Authorization: `Bearer ${args.accessToken}` } },
+  );
+  if (!res.ok) {
+    throw new Error(
+      `GitLab project lookup failed: ${res.status} ${await res.text()}`,
+    );
+  }
+  const body = (await res.json()) as { default_branch?: string | null };
+  return body.default_branch ?? null;
+}
+
+/**
+ * Create a branch (`POST /projects/:id/repository/branches`). GitLab takes the
+ * base as a `ref` name directly (branch/tag/SHA) — no separate "read head"
+ * round-trip like GitHub. Idempotent: a pre-existing branch comes back as a 400
+ * "Branch already exists", which we adopt (mirrors GitHub's 422 path) rather
+ * than failing the user's click.
+ */
+export async function createBranch(args: {
+  cfg: GitlabOAuthConfig;
+  accessToken: string;
+  projectId: number | string;
+  branch: string;
+  ref: string;
+}): Promise<{ alreadyExisted: boolean }> {
+  const base = args.cfg.base ?? GITLAB_BASE;
+  const doFetch = args.cfg.fetchImpl ?? fetch;
+  const params = new URLSearchParams({ branch: args.branch, ref: args.ref });
+  const res = await doFetch(
+    `${base}${API_V4}/projects/${encodeURIComponent(String(args.projectId))}/repository/branches?${params.toString()}`,
+    { method: "POST", headers: { Authorization: `Bearer ${args.accessToken}` } },
+  );
+  if (res.ok) return { alreadyExisted: false };
+  const text = await res.text();
+  if (res.status === 400 && /already exists/i.test(text)) {
+    return { alreadyExisted: true };
+  }
+  throw new Error(`GitLab createBranch failed: ${res.status} ${text}`);
+}
+
+/**
  * Register a project webhook so GitLab starts delivering issue / comment /
  * merge-request events to our endpoint. The same `token` we register here is
  * what `webhook.ts` verifies via plaintext equality on `X-Gitlab-Token`.

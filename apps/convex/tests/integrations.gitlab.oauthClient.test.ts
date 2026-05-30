@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAuthorizeUrl,
+  createBranch,
   createProjectHook,
   deriveCodeChallenge,
   exchangeCodeForToken,
+  fetchProjectDefaultBranch,
   generateCodeVerifier,
   fetchCurrentUser,
   listProjects,
@@ -262,5 +264,106 @@ describe("oauthClient.createProjectHook", () => {
         token: "t",
       }),
     ).rejects.toThrow(/createProjectHook failed: 403/);
+  });
+});
+
+describe("oauthClient.fetchProjectDefaultBranch", () => {
+  it("GETs the (url-encoded) project and returns default_branch", async () => {
+    let capturedUrl = "";
+    let capturedAuth = "";
+    const fetchImpl: typeof fetch = async (url, init) => {
+      capturedUrl = String(url);
+      capturedAuth = new Headers(init?.headers ?? {}).get("Authorization") ?? "";
+      return jsonResponse(200, { default_branch: "develop" });
+    };
+    const branch = await fetchProjectDefaultBranch({
+      cfg: { ...cfg, fetchImpl },
+      accessToken: "at",
+      projectId: "acme/web",
+    });
+    // The path id must be url-encoded so the slash isn't read as a sub-route.
+    expect(capturedUrl).toBe(`${cfg.base}/api/v4/projects/acme%2Fweb`);
+    expect(capturedAuth).toBe("Bearer at");
+    expect(branch).toBe("develop");
+  });
+
+  it("returns null for an unborn repo (no default_branch)", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      jsonResponse(200, { default_branch: null });
+    const branch = await fetchProjectDefaultBranch({
+      cfg: { ...cfg, fetchImpl },
+      accessToken: "at",
+      projectId: 7,
+    });
+    expect(branch).toBeNull();
+  });
+
+  it("throws on non-2xx", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      new Response("404 Not Found", { status: 404 });
+    await expect(
+      fetchProjectDefaultBranch({
+        cfg: { ...cfg, fetchImpl },
+        accessToken: "at",
+        projectId: 7,
+      }),
+    ).rejects.toThrow(/project lookup failed: 404/);
+  });
+});
+
+describe("oauthClient.createBranch", () => {
+  it("POSTs branch + ref as query params with Bearer auth", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedAuth = "";
+    const fetchImpl: typeof fetch = async (url, init) => {
+      capturedUrl = String(url);
+      capturedMethod = String(init?.method ?? "");
+      capturedAuth = new Headers(init?.headers ?? {}).get("Authorization") ?? "";
+      return jsonResponse(201, { name: "27-fix-login" });
+    };
+    const out = await createBranch({
+      cfg: { ...cfg, fetchImpl },
+      accessToken: "at",
+      projectId: 42,
+      branch: "27-fix-login",
+      ref: "develop",
+    });
+    const url = new URL(capturedUrl);
+    expect(url.origin + url.pathname).toBe(
+      `${cfg.base}/api/v4/projects/42/repository/branches`,
+    );
+    expect(url.searchParams.get("branch")).toBe("27-fix-login");
+    expect(url.searchParams.get("ref")).toBe("develop");
+    expect(capturedMethod).toBe("POST");
+    expect(capturedAuth).toBe("Bearer at");
+    expect(out).toEqual({ alreadyExisted: false });
+  });
+
+  it("adopts a 400 'Branch already exists' as idempotent success", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      jsonResponse(400, { message: "Branch already exists" });
+    const out = await createBranch({
+      cfg: { ...cfg, fetchImpl },
+      accessToken: "at",
+      projectId: 42,
+      branch: "27-fix-login",
+      ref: "main",
+    });
+    expect(out).toEqual({ alreadyExisted: true });
+  });
+
+  it("throws (with status) on a genuine failure like 403", async () => {
+    const fetchImpl: typeof fetch = async () =>
+      new Response("403 Forbidden", { status: 403 });
+    await expect(
+      createBranch({
+        cfg: { ...cfg, fetchImpl },
+        accessToken: "at",
+        projectId: 42,
+        branch: "b",
+        ref: "main",
+      }),
+    ).rejects.toThrow(/createBranch failed: 403/);
   });
 });

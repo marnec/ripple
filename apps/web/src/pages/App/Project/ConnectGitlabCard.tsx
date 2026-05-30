@@ -177,6 +177,32 @@ export function ConnectGitlabCard({ workspaceId, projectId }: Props) {
           <p className="text-xs text-muted-foreground">
             Resync lives under Workspace Settings → Integrations.
           </p>
+          {ready && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setOpen(true)}
+                className="gap-2"
+              >
+                <GitBranch className="h-4 w-4" />
+                Connect another project
+              </Button>
+              <ConnectGitlabWizard
+                workspaceId={workspaceId}
+                projectId={projectId}
+                open={open}
+                onOpenChange={setOpen}
+                oauthAvailable={oauthConfigured === true}
+                gitlabInstalls={gitlabInstalls.map((i) => ({
+                  externalAccountId: i.externalAccountId,
+                  accountLogin: i.accountLogin ?? i.externalAccountId,
+                }))}
+                workspaceLinks={(workspaceLinks ?? []).filter(
+                  (l) => l.provider === "gitlab" && l.status !== "disconnected",
+                )}
+              />
+            </>
+          )}
         </div>
       ) : !ready ? (
         <div className="space-y-3">

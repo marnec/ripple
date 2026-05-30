@@ -1,9 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import {
-  action,
-  internalMutation,
-  internalQuery,
-} from "../../_generated/server";
+import { action, internalQuery } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import {
   requireResourceMember,
@@ -11,24 +7,8 @@ import {
 } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getIntegrationForLink } from "../core/integrationLookups";
-import { logTaskIntegrationActivity } from "../core/integrationActivity";
+import { branchNameForIssue } from "../core/branchNaming";
 import { githubClientFromEnv } from "./client";
-
-/**
- * Conventional branch name for an issue: `<issueNumber>-<slug-of-title>`,
- * matching GitHub's own "create a branch for this issue" format. The leading
- * issue number is what lets a PR opened from this branch auto-link to the task
- * (see `parseBranchIssueNumber`) without a `Closes #N` keyword.
- */
-export function branchNameForIssue(issueNumber: number, title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 50)
-    .replace(/-+$/g, "");
-  return slug ? `${issueNumber}-${slug}` : `${issueNumber}`;
-}
 
 /**
  * List the linked repo's branch names for the branch→status settings
@@ -135,29 +115,6 @@ export const branchCreateContext = internalQuery({
       existingBranchName: link.branchName ?? null,
       defaultBaseBranch: projectLink.defaultBaseBranch ?? null,
     };
-  },
-});
-
-/** Persist the created branch name + base on the task's link (drives the UI
- * chip and the prefilled compare URL's base). */
-export const recordTaskBranchName = internalMutation({
-  args: {
-    linkId: v.id("taskIntegrationLinks"),
-    taskId: v.id("tasks"),
-    branchName: v.string(),
-    baseBranch: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, { linkId, taskId, branchName, baseBranch }) => {
-    const link = await ctx.db.get(linkId);
-    if (!link) return null;
-    await ctx.db.patch(linkId, { branchName, branchBaseRef: baseBranch });
-    await logTaskIntegrationActivity(ctx, {
-      taskId,
-      type: "branch_created",
-      newValue: branchName,
-    });
-    return null;
   },
 });
 
@@ -295,7 +252,7 @@ export const createBranchForTask = action({
     }
 
     await ctx.runMutation(
-      internal.integrations.github.branchesAction.recordTaskBranchName,
+      internal.integrations.core.branchesAction.recordTaskBranchName,
       { linkId: cfg.linkId, taskId, branchName, baseBranch: base },
     );
     return { branchName, baseBranch: base, alreadyExisted };

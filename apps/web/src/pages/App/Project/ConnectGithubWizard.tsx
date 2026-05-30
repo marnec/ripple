@@ -186,6 +186,24 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
           <p className="text-xs text-muted-foreground">
             Resync lives under Workspace Settings → Integrations.
           </p>
+          {ready && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setOpen(true)}
+                className="gap-2"
+              >
+                <GitBranch className="h-4 w-4" />
+                Connect another repo
+              </Button>
+              <ConnectGithubWizard
+                workspaceId={workspaceId}
+                projectId={projectId}
+                open={open}
+                onOpenChange={setOpen}
+              />
+            </>
+          )}
         </div>
       ) : !ready ? (
         <div className="space-y-3">
