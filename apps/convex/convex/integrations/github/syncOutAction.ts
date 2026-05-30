@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { internalAction } from "../../_generated/server";
-import { runOutboundOp } from "../core/outboundOrchestrator";
+import { runProviderOutbound } from "../core/runOutboundAction";
 import { makeGithubGateway } from "./outboundGateway";
 import {
   commentCreateSink,
@@ -19,13 +19,15 @@ import {
 /**
  * Outbound dispatch actions, scheduled via `@convex-dev/action-retrier`.
  *
- * Each action is a thin shell: build the recorder sink, resolve the GitHub
- * gateway (or record a permanent failure if credentials are missing), then
- * hand a single gateway call to `runOutboundOp`. All the repeated machinery —
- * env/JWT/client construction, response classification, the 404/429 special
- * cases, multi-request fan-out, and the retrier's return-vs-throw contract —
- * lives behind the gateway (`outboundGateway.ts`) and the orchestrator
- * (`core/outboundOrchestrator.ts`), each written and tested exactly once.
+ * Each handler is one call to `runProviderOutbound` (`core/runOutboundAction`):
+ * it resolves the GitHub gateway (or records a permanent failure if credentials
+ * are missing) and hands the op's single gateway call to the orchestrator. All
+ * the repeated machinery — env/JWT/client construction, response
+ * classification, the 404/429 special cases, multi-request fan-out, and the
+ * retrier's return-vs-throw contract — lives behind the gateway
+ * (`outboundGateway.ts`) and `core/outboundOrchestrator.ts`, each written and
+ * tested exactly once. The only per-op variation that stays here is the sink
+ * (which row to mirror onto) and the one gateway method to call.
  *
  * Args are the provider-neutral outbound contract the dispatch layer builds
  * (`core/outboundDispatch.ts`): `credentialRef` is the opaque credential handle
@@ -47,27 +49,21 @@ export const pushCreateIssue = internalAction({
     projectRef: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = issueCreateSink(ctx, {
-      taskId: args.taskId,
-      projectIntegrationLinkId: args.projectIntegrationLinkId,
-    });
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: issueCreateSink(ctx, {
+        taskId: args.taskId,
+        projectIntegrationLinkId: args.projectIntegrationLinkId,
+      }),
+      call: (gateway) =>
         gateway.createIssue({
           projectRef: args.projectRef,
           title: args.title,
           body: args.body,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushIssueState = internalAction({
@@ -84,29 +80,23 @@ export const pushIssueState = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskStateSink(ctx, {
-      taskId: args.taskId,
-      state: args.desiredState,
-      stateReason: args.desiredStateReason,
-    });
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskStateSink(ctx, {
+        taskId: args.taskId,
+        state: args.desiredState,
+        stateReason: args.desiredStateReason,
+      }),
+      call: (gateway) =>
         gateway.setIssueState({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           state: args.desiredState,
           stateReason: args.desiredStateReason,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushLabelChanges = internalAction({
@@ -120,28 +110,22 @@ export const pushLabelChanges = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskLabelsSink(ctx, {
-      taskId: args.taskId,
-      nextLabels: args.nextLabels,
-    });
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskLabelsSink(ctx, {
+        taskId: args.taskId,
+        nextLabels: args.nextLabels,
+      }),
+      call: (gateway) =>
         gateway.setLabels({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           add: args.add,
           remove: args.remove,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushAssigneeChanges = internalAction({
@@ -155,28 +139,22 @@ export const pushAssigneeChanges = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskAssigneesSink(ctx, {
-      taskId: args.taskId,
-      nextLogins: args.nextLogins,
-    });
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskAssigneesSink(ctx, {
+        taskId: args.taskId,
+        nextLogins: args.nextLogins,
+      }),
+      call: (gateway) =>
         gateway.setAssignees({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           add: args.add,
           remove: args.remove,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushDescription = internalAction({
@@ -188,24 +166,18 @@ export const pushDescription = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskDescriptionSink(ctx, args.taskId);
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskDescriptionSink(ctx, args.taskId),
+      call: (gateway) =>
         gateway.setDescription({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           markdown: args.markdown,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushCommentCreate = internalAction({
@@ -218,27 +190,21 @@ export const pushCommentCreate = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = commentCreateSink(ctx, {
-      commentId: args.commentId,
-      taskIntegrationLinkId: args.taskIntegrationLinkId,
-    });
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: commentCreateSink(ctx, {
+        commentId: args.commentId,
+        taskIntegrationLinkId: args.taskIntegrationLinkId,
+      }),
+      call: (gateway) =>
         gateway.createComment({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           body: args.body,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushCommentEdit = internalAction({
@@ -253,24 +219,18 @@ export const pushCommentEdit = internalAction({
     issueRef: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = commentEditSink(ctx, args.commentLinkId);
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: commentEditSink(ctx, args.commentLinkId),
+      call: (gateway) =>
         gateway.editComment({
           projectRef: args.projectRef,
           externalCommentId: args.externalCommentId,
           body: args.body,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushIssueClose = internalAction({
@@ -285,29 +245,23 @@ export const pushIssueClose = internalAction({
     credentialRef: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = issueCloseSink(ctx, {
-      workspaceId: args.workspaceId,
-      issueNumber: args.issueRef,
-      provider: args.provider,
-    });
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: issueCloseSink(ctx, {
+        workspaceId: args.workspaceId,
+        issueNumber: args.issueRef,
+        provider: args.provider,
+      }),
+      call: (gateway) =>
         gateway.setIssueState({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           state: "closed",
           stateReason: "completed",
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushCommentDelete = internalAction({
@@ -319,21 +273,15 @@ export const pushCommentDelete = internalAction({
     issueRef: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = commentDeleteSink(ctx, args.commentLinkId);
-    const gateway = makeGithubGateway(args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => makeGithubGateway(args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: commentDeleteSink(ctx, args.commentLinkId),
+      call: (gateway) =>
         gateway.deleteComment({
           projectRef: args.projectRef,
           externalCommentId: args.externalCommentId,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });

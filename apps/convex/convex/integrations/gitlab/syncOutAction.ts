@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalAction } from "../../_generated/server";
-import { runOutboundOp } from "../core/outboundOrchestrator";
+import { runProviderOutbound } from "../core/runOutboundAction";
 import { makeGitlabGateway } from "./outboundGateway";
 import { getValidGitlabAccessToken } from "./tokenClient";
 import {
@@ -21,9 +21,10 @@ import type { OutboundGateway } from "../core/outboundPort";
  * GitLab outbound dispatch actions, scheduled via `@convex-dev/action-retrier`
  * and routed here by the provider registry (`core/outboundAdapters`). They take
  * the SAME provider-neutral arg contract as the GitHub actions (the dispatch
- * layer builds one bag); the only differences are credential resolution (a
- * stored token fetched via `credentialRef` rather than a minted App token) and
- * the GitLab gateway behind the call.
+ * layer builds one bag) and share the same `core/runOutboundAction` shell; the
+ * only differences are credential resolution (a stored token fetched via
+ * `credentialRef` rather than a minted App token, hence the async
+ * `resolveGateway` below) and the GitLab gateway behind the call.
  *
  * The recorder sinks (`../core/outboundSinks`) and their mutations are
  * provider-neutral — they mirror results onto `taskIntegrationLinks` — so
@@ -56,27 +57,21 @@ export const pushCreateIssue = internalAction({
     projectRef: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = issueCreateSink(ctx, {
-      taskId: args.taskId,
-      projectIntegrationLinkId: args.projectIntegrationLinkId,
-    });
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: issueCreateSink(ctx, {
+        taskId: args.taskId,
+        projectIntegrationLinkId: args.projectIntegrationLinkId,
+      }),
+      call: (gateway) =>
         gateway.createIssue({
           projectRef: args.projectRef,
           title: args.title,
           body: args.body,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushIssueState = internalAction({
@@ -91,29 +86,23 @@ export const pushIssueState = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskStateSink(ctx, {
-      taskId: args.taskId,
-      state: args.desiredState,
-      stateReason: args.desiredStateReason,
-    });
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskStateSink(ctx, {
+        taskId: args.taskId,
+        state: args.desiredState,
+        stateReason: args.desiredStateReason,
+      }),
+      call: (gateway) =>
         gateway.setIssueState({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           state: args.desiredState,
           stateReason: args.desiredStateReason,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushLabelChanges = internalAction({
@@ -127,28 +116,22 @@ export const pushLabelChanges = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskLabelsSink(ctx, {
-      taskId: args.taskId,
-      nextLabels: args.nextLabels,
-    });
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskLabelsSink(ctx, {
+        taskId: args.taskId,
+        nextLabels: args.nextLabels,
+      }),
+      call: (gateway) =>
         gateway.setLabels({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           add: args.add,
           remove: args.remove,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushAssigneeChanges = internalAction({
@@ -162,28 +145,22 @@ export const pushAssigneeChanges = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskAssigneesSink(ctx, {
-      taskId: args.taskId,
-      nextLogins: args.nextLogins,
-    });
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskAssigneesSink(ctx, {
+        taskId: args.taskId,
+        nextLogins: args.nextLogins,
+      }),
+      call: (gateway) =>
         gateway.setAssignees({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           add: args.add,
           remove: args.remove,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushDescription = internalAction({
@@ -195,24 +172,18 @@ export const pushDescription = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = taskDescriptionSink(ctx, args.taskId);
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: taskDescriptionSink(ctx, args.taskId),
+      call: (gateway) =>
         gateway.setDescription({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           markdown: args.markdown,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushCommentCreate = internalAction({
@@ -225,27 +196,21 @@ export const pushCommentCreate = internalAction({
     issueRef: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = commentCreateSink(ctx, {
-      commentId: args.commentId,
-      taskIntegrationLinkId: args.taskIntegrationLinkId,
-    });
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: commentCreateSink(ctx, {
+        commentId: args.commentId,
+        taskIntegrationLinkId: args.taskIntegrationLinkId,
+      }),
+      call: (gateway) =>
         gateway.createComment({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           body: args.body,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushCommentEdit = internalAction({
@@ -258,25 +223,19 @@ export const pushCommentEdit = internalAction({
     issueRef: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = commentEditSink(ctx, args.commentLinkId);
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: commentEditSink(ctx, args.commentLinkId),
+      call: (gateway) =>
         gateway.editComment({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           externalCommentId: args.externalCommentId,
           body: args.body,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushIssueClose = internalAction({
@@ -290,29 +249,23 @@ export const pushIssueClose = internalAction({
     credentialRef: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = issueCloseSink(ctx, {
-      workspaceId: args.workspaceId,
-      issueNumber: args.issueRef,
-      provider: args.provider,
-    });
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: issueCloseSink(ctx, {
+        workspaceId: args.workspaceId,
+        issueNumber: args.issueRef,
+        provider: args.provider,
+      }),
+      call: (gateway) =>
         gateway.setIssueState({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           state: "closed",
           stateReason: "completed",
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
 
 export const pushCommentDelete = internalAction({
@@ -324,22 +277,16 @@ export const pushCommentDelete = internalAction({
     issueRef: v.optional(v.number()),
   },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const sink = commentDeleteSink(ctx, args.commentLinkId);
-    const gateway = await resolveGateway(ctx, args.credentialRef);
-    if (!gateway) {
-      await sink.recordPermanentFailure(CREDS_MISSING);
-      return null;
-    }
-    await runOutboundOp(
-      () =>
+  handler: (ctx, args) =>
+    runProviderOutbound({
+      resolveGateway: () => resolveGateway(ctx, args.credentialRef),
+      credsMissing: CREDS_MISSING,
+      sink: commentDeleteSink(ctx, args.commentLinkId),
+      call: (gateway) =>
         gateway.deleteComment({
           projectRef: args.projectRef,
           issueRef: args.issueRef,
           externalCommentId: args.externalCommentId,
         }),
-      sink,
-    );
-    return null;
-  },
+    }),
 });
