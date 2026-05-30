@@ -986,7 +986,6 @@ export type DataModel = {
       askBranchSourceEachTime?: boolean;
       autoSelectTags?: Array<string>;
       branchStatusMap?: Array<{ branch: string; statusId: Id<"taskStatuses"> }>;
-      debugLastEvent?: string;
       defaultBaseBranch?: string;
       externalRepoFullName: string;
       externalRepoId: string;
@@ -1008,7 +1007,6 @@ export type DataModel = {
       | "askBranchSourceEachTime"
       | "autoSelectTags"
       | "branchStatusMap"
-      | "debugLastEvent"
       | "defaultBaseBranch"
       | "externalRepoFullName"
       | "externalRepoId"

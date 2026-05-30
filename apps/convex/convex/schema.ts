@@ -1052,8 +1052,6 @@ export default defineSchema({
     // Timestamp of the most recent webhook delivery processed for this link.
     // Drives the "Last webhook received" indicator in workspace settings.
     lastWebhookAt: v.optional(v.number()),
-    // TEMP DIAGNOSTIC — remove after gitlab assignee triage.
-    debugLastEvent: v.optional(v.string()),
     // Human-readable "owner/repo" — feeds tasks.externalRefs[].repoFullName
     // and the URL for issue links. Updated silently on repo rename events;
     // stable lookups use externalRepoId.
