@@ -27,22 +27,22 @@ const STATE_META: Record<
   draft: {
     icon: GitPullRequestDraft,
     label: "Draft",
-    className: "text-muted-foreground",
+    className: "text-white",
   },
   open: {
     icon: GitPullRequest,
     label: "Open",
-    className: "text-emerald-600 dark:text-emerald-400",
+    className: "text-white",
   },
   merged: {
     icon: GitMerge,
     label: "Merged",
-    className: "text-violet-600 dark:text-violet-400",
+    className: "text-white",
   },
   closed: {
     icon: GitPullRequestClosed,
     label: "Closed",
-    className: "text-rose-600 dark:text-rose-400",
+    className: "text-white",
   },
 };
 

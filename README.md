@@ -1,27 +1,21 @@
 NEXT STEPS:
 
-- calendar; plan calls; invite guests
+- calendar;
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
-
-- I don't really know how to handle unread messages, they kind of work right now but god save me
-
-- remove colors from merge and pull req icons in card and task details
-
-- move relation icon (blocked, ...) to top right corner in task cards
-
-- split settings in tabs (workspace and projects)
-
-- restyle graph https://d3js.org/d3-force
 
 - add a configuration section in integration when more than one repo is present to let users associate tags to branches so that when creating an issue from a task that has a tag it preselect the correct repo. If tags present with conflicting mapping then don't apply the preference. A user can set as many rules as associated branches and not more.
 
 - gitlab login and associated external identity for gilab tasks
 
+- split settings in tabs (workspace and projects)
+
+- restyle graph https://d3js.org/d3-force
+
 - document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)
 - guests can comment (all viewers?)
 
-- Deferred: dev panel on the task (branch/commits/PR/CI checks inline, à la Linear/Jira)
+- add a dependency view to tasks
 
 - knowledge-graph
     - explore pdf reading, annotation and embedding
@@ -62,6 +56,11 @@ keyboard accessiblity
     - [ ] kanban active-backlog overflow strategy when a project's uncompleted set grows past the read cap
     - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
 
+- deferred refactors
+    - [ ] don't denormalize author name/image onto `messages` (profile edit → rewrites every message); if chat read-cache coupling ever bites, fix read-side (one-row-per-user digest joined at query time)
+    - [ ] sidebar digest table for `workspaceSidebarData.get` (currently 4-table `.collect()` feeding the always-mounted sidebar — largest standing cache-invalidation surface)
+    - [ ] extract `IntegrationCardShell` + shared stepper from `ConnectGithubWizard`/`ConnectGitlabCard` twins (keep provider wizards as explicit variants)
+
 
 - [ ] External integrations
     - [ ] github issues
@@ -72,6 +71,8 @@ keyboard accessiblity
             - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
             - [ ] comment/description @mention fidelity on outbound markdown: `userMention`/`eventMention` inline content has no markdown serialization, so `blocksToMarkdownLossy` drops them to empty when pushing to GitHub. To render `@login` we'd need a userId→GitHub-login map at render time (same lossiness affects description sync)
     - [ ] add sentry
+
+- I don't really know how to handle unread messages, they kind of work right now but god save me
 
 - identity model refactor
     - [ ] split `users` (auth-only) from a new `profiles` table that can host synthetic / bot identities (integration bots, system actors); `creatorId`/`assigneeId`/`userId` refs point at `profiles`. Lets integrations create non-auth identities without polluting the auth surface.

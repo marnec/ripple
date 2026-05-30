@@ -26,10 +26,10 @@ const PR_STATE_META: Record<
   "draft" | "open" | "merged" | "closed",
   { icon: LucideIcon; label: string; className: string }
 > = {
-  draft: { icon: GitPullRequestDraft, label: "Draft PR", className: "text-muted-foreground" },
-  open: { icon: GitPullRequest, label: "Open PR", className: "text-emerald-600 dark:text-emerald-400" },
-  merged: { icon: GitMerge, label: "Merged PR", className: "text-violet-600 dark:text-violet-400" },
-  closed: { icon: GitPullRequestClosed, label: "Closed PR", className: "text-rose-600 dark:text-rose-400" },
+  draft: { icon: GitPullRequestDraft, label: "Draft PR", className: "text-white" },
+  open: { icon: GitPullRequest, label: "Open PR", className: "text-white" },
+  merged: { icon: GitMerge, label: "Merged PR", className: "text-white" },
+  closed: { icon: GitPullRequestClosed, label: "Closed PR", className: "text-white" },
 };
 
 type KanbanCardPresenterProps = {
@@ -49,15 +49,21 @@ export function KanbanCardPresenter({
     <Card
       onClick={onClick}
       className={cn(
-        "cursor-grab active:cursor-grabbing py-0 gap-0 border shadow ring-0 dark:bg-stone-950 bg-stone-100",
+        "relative cursor-grab active:cursor-grabbing py-0 gap-0 border shadow ring-0 dark:bg-stone-950 bg-stone-100",
         isDragging && "shadow-lg rotate-2"
       )}
     >
+      {/* Relation indicator (blocked, …) — pinned to the top-right corner */}
+      {task.hasBlockers && (
+        <span
+          title="Blocked"
+          className="absolute top-2 right-3 z-10"
+        >
+          <Ban className="h-3 w-3 text-red-500 shrink-0" />
+        </span>
+      )}
       <CardHeader className="py-2 px-3">
         <div className="flex items-center gap-1.5 min-h-4">
-          {task.hasBlockers && (
-            <span title="Blocked"><Ban className="h-3 w-3 text-red-500 shrink-0" /></span>
-          )}
           <TaskCode
             task={task}
             fallback={
