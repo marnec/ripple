@@ -1,5 +1,5 @@
 import type { Id } from "@convex/_generated/dataModel";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 
 type Props = { taskId: Id<"tasks"> };
@@ -34,12 +34,13 @@ export function TaskGithubExternalInfo({ taskId }: Props) {
             rel="noreferrer noopener"
             className="inline-flex items-center gap-1 font-medium text-foreground hover:underline"
           >
-            <Avatar className="h-4 w-4">
-              <AvatarImage src={closedBy.avatarUrl} alt={`@${closedBy.login}`} />
-              <AvatarFallback className="text-[9px]">
-                {closedBy.login.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar
+              className="h-4 w-4"
+              name={closedBy.login}
+              image={closedBy.avatarUrl}
+              alt={`@${closedBy.login}`}
+              fallbackClassName="text-[9px]"
+            />
             @{closedBy.login}
           </a>
         </div>

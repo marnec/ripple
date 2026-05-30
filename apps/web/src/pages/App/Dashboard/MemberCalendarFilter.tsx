@@ -15,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import { cn } from "@/lib/utils";
 import type { Id } from "@convex/_generated/dataModel";
 
@@ -108,12 +108,11 @@ export function MemberCalendarFilter({
                     onSelect={() => toggle(m.userId)}
                     className="cursor-pointer"
                   >
-                    <Avatar className="size-5 mr-2">
-                      {m.image && <AvatarImage src={m.image} alt={m.name} />}
-                      <AvatarFallback>
-                        {m.name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar
+                      className="size-5 mr-2"
+                      name={m.name}
+                      image={m.image}
+                    />
                     <span className="flex-1 truncate">{m.name}</span>
                     {/* Tiny colour swatch so the user knows which hue
                         their busy-blocks will use before toggling on. */}

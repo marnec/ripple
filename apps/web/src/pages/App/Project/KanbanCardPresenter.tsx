@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { TaskCode } from "@/components/TaskCode";
@@ -114,14 +114,13 @@ export function KanbanCardPresenter({
 
             {/* Assignee Avatar — ghost placeholder keeps row height stable */}
             {task.assignee ? (
-              <Avatar className="h-6 w-6">
-                {task.assignee.image && (
-                  <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
-                )}
-                <AvatarFallback className="text-xs">
-                  {task.assignee.name?.slice(0, 2).toUpperCase() ?? "?"}
-                </AvatarFallback>
-              </Avatar>
+              <UserAvatar
+                className="h-6 w-6"
+                name={task.assignee.name}
+                image={task.assignee.image}
+                alt={task.assignee.name ?? "Assignee"}
+                fallbackClassName="text-xs"
+              />
             ) : (
               <div className="h-6 w-6" aria-hidden />
             )}

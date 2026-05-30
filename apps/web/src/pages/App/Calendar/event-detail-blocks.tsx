@@ -31,7 +31,7 @@ import {
   UserPlus,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -533,10 +533,7 @@ export function PersonRow({
 }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <Avatar className="size-6">
-        {image && <AvatarImage src={image} alt={name} />}
-        <AvatarFallback>{name.charAt(0).toUpperCase()}</AvatarFallback>
-      </Avatar>
+      <UserAvatar className="size-6" name={name} image={image} />
       <div className="min-w-0 flex flex-col">
         <span className="text-sm truncate">
           {name}

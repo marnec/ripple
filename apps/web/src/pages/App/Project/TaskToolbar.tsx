@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   Popover,
   PopoverContent,
@@ -272,12 +272,12 @@ export function TaskToolbar({
                     selected ? "bg-accent" : "hover:bg-accent/50"
                   )}
                 >
-                  <Avatar className="h-5 w-5">
-                    {m.image && <AvatarImage src={m.image} alt={m.name ?? ""} />}
-                    <AvatarFallback className="text-[10px]">
-                      {m.name?.slice(0, 2).toUpperCase() ?? "?"}
-                    </AvatarFallback>
-                  </Avatar>
+                  <UserAvatar
+                    className="h-5 w-5"
+                    name={m.name}
+                    image={m.image}
+                    fallbackClassName="text-[10px]"
+                  />
                   <span className="truncate flex-1 text-left">{m.name ?? "Unknown"}</span>
                   {selected && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
                 </button>

@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -132,14 +132,13 @@ export function TaskRow({ task, statuses, onStatusChange, onClick, hideStatusMen
         )}
 
         {!hideAssignee && task.assignee && (
-          <Avatar className="h-6 w-6">
-            {task.assignee.image && (
-              <AvatarImage src={task.assignee.image} alt={task.assignee.name ?? "Assignee"} />
-            )}
-            <AvatarFallback className="text-xs">
-              {task.assignee.name?.slice(0, 2).toUpperCase() ?? "?"}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            className="h-6 w-6"
+            name={task.assignee.name}
+            image={task.assignee.image}
+            alt={task.assignee.name ?? "Assignee"}
+            fallbackClassName="text-xs"
+          />
         )}
       </ItemActions>
     </Item>

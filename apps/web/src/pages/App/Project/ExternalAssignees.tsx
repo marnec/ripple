@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   Tooltip,
   TooltipContent,
@@ -79,12 +79,13 @@ export function ExternalAssigneeAvatars({
               />
             }
           >
-            <Avatar className={cn(avatarSize, "ring-1 ring-background")}>
-              <AvatarImage src={a.avatarUrl} alt={`@${a.login}`} />
-              <AvatarFallback className={fallbackText}>
-                {a.login.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar
+              className={cn(avatarSize, "ring-1 ring-background")}
+              name={a.login}
+              image={a.avatarUrl}
+              alt={`@${a.login}`}
+              fallbackClassName={fallbackText}
+            />
           </TooltipTrigger>
           <TooltipContent side="top">@{a.login}</TooltipContent>
         </Tooltip>
