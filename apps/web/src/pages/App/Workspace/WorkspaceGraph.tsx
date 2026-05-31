@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
+import { forceX, forceY } from "d3-force";
 import type { Id } from "@convex/_generated/dataModel";
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject, type LinkObject } from "react-force-graph-2d";
 import { getNodeColor, getNodeSize } from "./graphConstants";
@@ -113,6 +114,12 @@ export function WorkspaceGraph({ workspaceId, graph, width, height, hiddenTypes,
       ctx.arc(x, y, size, 0, 2 * Math.PI);
       ctx.fillStyle = color;
       ctx.fill();
+      // White separation ring (example: circle stroke #fff, stroke-width 1.5 at
+      // r=5 → ~0.3·r). On dark theme stroke with the background instead of white
+      // so the ring reads as separation rather than a bright halo.
+      ctx.lineWidth = size * 0.3;
+      ctx.strokeStyle = isDark ? "#0a0a0a" : "#ffffff";
+      ctx.stroke();
 
       // Show label when zoomed in or highlighted
       const zoom = ctx.getTransform().a;
@@ -165,6 +172,21 @@ export function WorkspaceGraph({ workspaceId, graph, width, height, hiddenTypes,
     nodesRef.current = graphData.nodes;
   }, [graphData]);
 
+  // Disjoint force-directed layout (https://observablehq.com/@d3/disjoint-force-directed-graph):
+  // replace the single centering force with independent x/y positioning forces
+  // so each disconnected cluster gravitates toward the centre on its own axis
+  // instead of unconnected components drifting off to infinity. forceManyBody
+  // (charge) and forceLink are left at react-force-graph's defaults, matching
+  // the example's d3.forceManyBody()/d3.forceLink(links).id(d => d.id).
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    fg.d3Force("center", null);
+    fg.d3Force("x", forceX());
+    fg.d3Force("y", forceY());
+    fg.d3ReheatSimulation();
+  }, [graphData]);
+
   if (!graph) return null;
 
   if (graphData.nodes.length === 0) {
@@ -194,9 +216,11 @@ export function WorkspaceGraph({ workspaceId, graph, width, height, hiddenTypes,
         onNodeHover={handleNodeHover}
         onEngineTick={handleEngineTick}
         linkColor={(link: GraphLink) => {
+          // Example links: stroke #999, stroke-opacity 0.6. #999 reads on both
+          // themes; the synthetic "contains" links stay fainter to set them apart.
           const et = typeof link.edgeType === "string" ? link.edgeType : "";
-          if (et === "contains") return isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
-          return isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)";
+          if (et === "contains") return "rgba(153,153,153,0.3)";
+          return "rgba(153,153,153,0.6)";
         }}
         linkWidth={(link: GraphLink) => {
           const et = typeof link.edgeType === "string" ? link.edgeType : "";
