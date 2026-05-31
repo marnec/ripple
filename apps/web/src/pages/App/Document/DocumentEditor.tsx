@@ -139,6 +139,9 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     schema,
     uploadFile: fileUpload?.uploadFile,
     dictionary: documentDictionary,
+    // Collaborative comments — gated on a real viewer so threads are never
+    // attributed to the "anonymous" fallback id.
+    enableComments: !!viewer?._id,
   });
 
   // Inject imported content (from .docx import) once when the editor is ready
@@ -409,8 +412,17 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             // rather than reset it to the first block.
             // BlockNote's `editor.focus()` alone lands at the top; we have to
             // explicitly position the caret with setTextCursorPosition first.
+            //
+            // Guard on `.bn-root`, not just `.bn-editor`: BlockNote renders its
+            // floating UI (formatting toolbar, comment composer, suggestion
+            // menus) into a body-level `.bn-root` portal. React synthetic events
+            // bubble through the React tree across portals, so a mousedown on
+            // e.g. the "Add comment" button reaches this handler even though the
+            // button isn't a DOM descendant. Without this, clicking the comment
+            // button would collapse the selection and move the caret to the last
+            // block, so the comment composer never opens.
             const target = e.target as HTMLElement;
-            if (target.closest(".bn-editor")) return;
+            if (target.closest(".bn-root")) return;
             e.preventDefault();
             const blocks = editor.document;
             const lastBlock = blocks[blocks.length - 1];

@@ -1,9 +1,13 @@
 import type { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema } from "@blocknote/core";
+import { CommentsExtension, DefaultThreadStoreAuth, YjsThreadStore, type User } from "@blocknote/core/comments";
 import { en } from "@blocknote/core/locales";
 import { useCreateBlockNote } from "@blocknote/react";
+import { useConvex } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Awareness } from "y-protocols/awareness";
 import { IndexeddbPersistence } from "y-indexeddb";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import { extractTextFromXml } from "@ripple/shared/blockRef";
 import { getUserColor } from "../lib/user-colors";
 import { useDescriptionSeedGate, type DescriptionSeed } from "./use-description-seed-gate";
@@ -31,6 +35,14 @@ export interface UseDocumentCollaborationOptions<
    * type into a doc that's about to be filled. Omit for docs/diagrams.
    */
   seed?: DescriptionSeed;
+  /**
+   * Enable BlockNote collaborative comments (threads live in the Y.Doc's
+   * `threads` map, so they persist through the same snapshot/IndexedDB path as
+   * the document body). Only meaningful for real documents — leave off for the
+   * task-description editor. Requires a stable, real `userId` (not the
+   * "anonymous" fallback), so callers should gate on a loaded viewer.
+   */
+  enableComments?: boolean;
 }
 
 export interface UseDocumentCollaborationResult<
@@ -73,6 +85,7 @@ export function useDocumentCollaboration<
   uploadFile,
   dictionary,
   seed,
+  enableComments = false,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
   const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
     resourceType,
@@ -128,6 +141,45 @@ export function useDocumentCollaboration<
   // content appears in the editor right away instead of showing an empty state.
   const localAwareness = useMemo(() => new Awareness(yDoc), [yDoc]);
 
+  const convex = useConvex();
+
+  // Collaborative comments extension. Threads are stored in the Y.Doc's
+  // `threads` map (same doc as the body fragment), so they ride along the
+  // existing snapshot + IndexedDB persistence and the partyserver Yjs sync —
+  // no separate backend. Author identity is resolved on demand from Convex.
+  // `DefaultThreadStoreAuth(userId, "editor")` mirrors the doc's access model:
+  // every workspace member can edit the document, so every member is an editor
+  // of its comments (can delete any thread). Author-only rules (edit own
+  // comment) are enforced per-comment by the auth class.
+  const commentsExtension = useMemo(() => {
+    if (!enableComments) return undefined;
+    const threadStore = new YjsThreadStore(
+      userId,
+      yDoc.getMap("threads"),
+      new DefaultThreadStoreAuth(userId, "editor"),
+    );
+    const resolveUsers = async (userIds: string[]): Promise<User[]> => {
+      let userMap: Partial<Record<Id<"users">, { name?: string; image?: string }>> = {};
+      try {
+        userMap = await convex.query(api.users.getByIds, {
+          ids: userIds as Id<"users">[],
+        });
+      } catch {
+        // A comment authored by an id that no longer resolves (or an unexpected
+        // id shape) must not blow up the whole editor — fall back to placeholders.
+      }
+      return userIds.map((id) => {
+        const user = userMap[id as Id<"users">];
+        return {
+          id,
+          username: user?.name ?? "Unknown user",
+          avatarUrl: user?.image ?? "",
+        };
+      });
+    };
+    return CommentsExtension({ threadStore, resolveUsers });
+  }, [enableComments, userId, yDoc, convex]);
+
   // Always create editor with Yjs collaboration so the fragment binding is
   // established from mount. When provider arrives later, editor recreates with
   // the real awareness (content is already in the fragment, so no visual pop).
@@ -136,6 +188,7 @@ export function useDocumentCollaboration<
       schema,
       uploadFile,
       dictionary,
+      extensions: commentsExtension ? [commentsExtension] : undefined,
       collaboration: {
         provider: provider ?? { awareness: localAwareness },
         fragment: yDoc.getXmlFragment("document-store"),
@@ -145,7 +198,7 @@ export function useDocumentCollaboration<
         },
       },
     },
-    [provider, localAwareness, userName, userColor, schema, uploadFile, dictionary]
+    [provider, localAwareness, userName, userColor, schema, uploadFile, dictionary, commentsExtension]
   );
 
   // Workaround for BlockNote #2244 / y-prosemirror #102: when ProseMirror

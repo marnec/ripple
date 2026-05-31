@@ -4,6 +4,14 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist";
 
+/* BlockNote's shadcn variant ships Tailwind utility classes (e.g. `w-[300px]`
+   on comment cards, `gap`/`padding` on threads) inside its compiled output.
+   Tailwind v4 does not scan `node_modules` by default, so arbitrary utilities
+   used only by BlockNote never get generated — the comments UI then renders
+   with no width constraint and missing padding. Register the package as an
+   explicit source so those classes are emitted. */
+@source "../node_modules/@blocknote/shadcn/dist";
+
 @custom-variant dark (&:is(.dark *));
 @plugin "tailwindcss-animate";
 
