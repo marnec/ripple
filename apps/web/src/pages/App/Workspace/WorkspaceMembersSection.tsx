@@ -52,9 +52,7 @@ export function WorkspaceMembersSection({
   };
 
   return (
-    <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-4">Members</h2>
-      <div className="space-y-2">
+    <div className="space-y-2">
         {members.map((member) => {
           const isSelf = member.userId === currentUser?._id;
           return (
@@ -105,7 +103,6 @@ export function WorkspaceMembersSection({
             </div>
           );
         })}
-      </div>
-    </section>
+    </div>
   );
 }

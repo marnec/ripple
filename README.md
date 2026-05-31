@@ -5,8 +5,6 @@ NEXT STEPS:
     - recurrent events
 
 
-- split settings in tabs (workspace and projects)
-
 - restyle graph https://d3js.org/d3-force
 
 - document comments (https://www.blocknotejs.org/docs/features/collaboration/comments)

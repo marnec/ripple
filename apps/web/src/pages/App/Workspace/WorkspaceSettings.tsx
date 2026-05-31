@@ -1,10 +1,15 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
+import {
+  SettingsLayout,
+  useSettingsSection,
+  type SettingsSection,
+} from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import {
   NOTIFICATION_GROUPS,
@@ -17,6 +22,7 @@ import {
 } from "@ripple/shared/notificationCategories";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
+import { Bell, Plug, SlidersHorizontal, Users } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -25,6 +31,35 @@ import type { Id } from "@convex/_generated/dataModel";
 import { WorkspaceIntegrationsSection } from "./WorkspaceIntegrationsSection";
 import { WorkspaceMembersSection } from "./WorkspaceMembersSection";
 
+const SECTIONS: SettingsSection[] = [
+  {
+    value: "general",
+    label: "General",
+    icon: SlidersHorizontal,
+    description: "Your workspace name and description.",
+  },
+  {
+    value: "members",
+    label: "Members",
+    icon: Users,
+    description: "Manage who can access this workspace and their roles.",
+  },
+  {
+    value: "integrations",
+    label: "Integrations",
+    icon: Plug,
+    description:
+      "Audit and control repositories linked across this workspace. Connect new repositories from a project's settings.",
+  },
+  {
+    value: "notifications",
+    label: "Notifications",
+    icon: Bell,
+    description:
+      "Choose which workspace notifications you receive. Chat and task notifications live in each channel's and project's settings.",
+  },
+];
+
 export function WorkspaceSettings() {
   const { workspaceId } = useParams();
   const id = workspaceId as Id<"workspaces">;
@@ -32,6 +67,7 @@ export function WorkspaceSettings() {
   const updateWorkspace = useMutation(api.workspaces.update);
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [descriptionOverride, setDescriptionOverride] = useState<string | null>(null);
+  const { active, setActive } = useSettingsSection(SECTIONS);
 
   if (workspace === undefined) {
     return (
@@ -64,50 +100,49 @@ export function WorkspaceSettings() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
-      <h1 className="hidden md:block text-2xl font-bold mb-6">Workspace Settings</h1>
+    <>
+      <MobileHeaderTitle name={workspace.name} />
+      <SettingsLayout
+        eyebrow="Workspace"
+        sections={SECTIONS}
+        active={active}
+        onChange={setActive}
+      >
+        {active.value === "general" && (
+          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="workspace-name">Workspace Name</Label>
+              <Input
+                id="workspace-name"
+                value={name}
+                onChange={(e) => setNameOverride(e.target.value)}
+                placeholder="Enter workspace name"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="workspace-description">Description</Label>
+              <Textarea
+                id="workspace-description"
+                value={description}
+                onChange={(e) => setDescriptionOverride(e.target.value)}
+                placeholder="Enter workspace description"
+                rows={3}
+              />
+            </div>
+            {hasChanges && <Button type="submit">Save Changes</Button>}
+          </form>
+        )}
 
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Details</h2>
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="workspace-name">Workspace Name</Label>
-            <Input
-              id="workspace-name"
-              value={name}
-              onChange={(e) => setNameOverride(e.target.value)}
-              placeholder="Enter workspace name"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="workspace-description">Description</Label>
-            <Textarea
-              id="workspace-description"
-              value={description}
-              onChange={(e) => setDescriptionOverride(e.target.value)}
-              placeholder="Enter workspace description"
-              rows={3}
-            />
-          </div>
-          {hasChanges && (
-            <Button type="submit">Save Changes</Button>
-          )}
-        </form>
-      </section>
+        {active.value === "members" && <WorkspaceMembersSection workspaceId={id} />}
 
-      <Separator className="my-6" />
+        {active.value === "integrations" && (
+          <WorkspaceIntegrationsSection workspaceId={id} />
+        )}
 
-      <WorkspaceMembersSection workspaceId={id} />
-
-      <Separator className="my-6" />
-
-      <WorkspaceIntegrationsSection workspaceId={id} />
-
-      <Separator className="my-6" />
-
-      <WorkspaceNotificationSettings />
-    </div>
+        {active.value === "notifications" && <WorkspaceNotificationSettings />}
+      </SettingsLayout>
+    </>
   );
 }
 
@@ -179,13 +214,8 @@ function WorkspaceNotificationSettings() {
   };
 
   return (
-    <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-4">Notifications</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Configure which workspace notifications you receive. Chat and task notifications are configured in each channel's and project's settings.
-      </p>
-      <div className="space-y-4">
-        {NOTIFICATION_GROUPS.map((group) => {
+    <div className="space-y-4">
+      {NOTIFICATION_GROUPS.map((group) => {
           // A group renders the Email column only when at least one of
           // its categories actually supports email (today: Calendar).
           // Other groups stay single-column to match the existing
@@ -278,7 +308,6 @@ function WorkspaceNotificationSettings() {
             </div>
           );
         })}
-      </div>
-    </section>
+    </div>
   );
 }

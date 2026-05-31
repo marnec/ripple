@@ -224,12 +224,7 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
   const visibleLinks = collapseDuplicateLinks(links);
 
   return (
-    <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-1">Integrations</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Audit and lifecycle controls for repositories linked across this
-        workspace. To connect a new repository, open the project's settings.
-      </p>
+    <div className="space-y-4">
       <CapabilityToggle
         workspaceId={workspaceId}
         featureKey={GITHUB_FEATURE_KEY}
@@ -468,7 +463,7 @@ export function WorkspaceIntegrationsSection({ workspaceId }: Props) {
           </ResponsiveDialogFooter>
         </ResponsiveDialogContent>
       </ResponsiveDialog>
-    </section>
+    </div>
   );
 }
 

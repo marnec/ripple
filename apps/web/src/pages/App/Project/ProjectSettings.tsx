@@ -1,8 +1,12 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
+import {
+  SettingsLayout,
+  useSettingsSection,
+  type SettingsSection,
+} from "@/components/SettingsLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@ripple/shared/types/routes";
@@ -15,7 +19,7 @@ import {
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useViewer } from "../UserContext";
-import { Trash2 } from "lucide-react";
+import { Bell, Plug, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -74,6 +78,38 @@ function ProjectSettingsContent({
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [projectKey, setProjectKey] = useState<string | null>(null);
 
+  // Check if current user is the project creator (admin). The Integrations
+  // section and the danger zone are creator-only; everything else is shared.
+  const isCreator =
+    !!currentUser && !!project && currentUser._id === project.creatorId;
+
+  const sections: SettingsSection[] = [
+    {
+      value: "general",
+      label: "General",
+      icon: SlidersHorizontal,
+      description: "Project name, identifier, and color.",
+    },
+    ...(isCreator
+      ? [
+          {
+            value: "integrations",
+            label: "Integrations",
+            icon: Plug,
+            description:
+              "Connect a repository and map status changes between this project and GitHub or GitLab.",
+          } satisfies SettingsSection,
+        ]
+      : []),
+    {
+      value: "notifications",
+      label: "Notifications",
+      icon: Bell,
+      description: "Control which task notifications you receive for this project.",
+    },
+  ];
+  const { active, setActive } = useSettingsSection(sections);
+
   if (project === undefined || currentUser === undefined) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -89,9 +125,6 @@ function ProjectSettingsContent({
   const displayName = projectName ?? project.name;
   const displayColor = selectedColor ?? project.color;
   const displayKey = projectKey ?? project.key ?? "";
-
-  // Check if current user is the project creator (admin)
-  const isCreator = currentUser._id === project.creatorId;
 
   const handleSaveDetails = async () => {
     try {
@@ -130,69 +163,90 @@ function ProjectSettingsContent({
   const hasChanges = projectName !== null || selectedColor !== null || projectKey !== null;
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
-      <h1 className="hidden md:block text-2xl font-bold mb-6">Project Settings</h1>
-
-      {/* Project Details Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Details</h2>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="project-name">Project Name</Label>
-            <Input
-              id="project-name"
-              value={displayName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="Enter project name"
-              disabled={!isCreator}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="project-key">Project Key</Label>
-            <Input
-              id="project-key"
-              value={displayKey}
-              onChange={(e) => setProjectKey(e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 5))}
-              placeholder="e.g., ENG"
-              disabled={!isCreator || !!projectHasTasks}
-              maxLength={5}
-              className="font-mono uppercase"
-            />
-            <p className="text-xs text-muted-foreground">
-              {projectHasTasks
-                ? "The project key cannot be changed once tasks have been created."
-                : `2-5 character identifier used in task IDs (e.g., ${displayKey || "ENG"}-1). Cannot be changed once tasks exist.`}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label>Color</Label>
-            <div className="flex flex-wrap gap-2">
-              {PROJECT_COLORS.map((color) => (
-                <button
-                  key={color.class}
-                  type="button"
-                  onClick={() => isCreator && setSelectedColor(color.class)}
-                  disabled={!isCreator}
-                  className={`w-8 h-8 rounded-full ${color.class} ${
-                    displayColor === color.class
-                      ? "ring-2 ring-offset-2 ring-primary"
-                      : ""
-                  } ${!isCreator ? "opacity-50 cursor-not-allowed" : ""}`}
-                  title={color.name}
-                />
-              ))}
+    <SettingsLayout
+      eyebrow="Project"
+      sections={sections}
+      active={active}
+      onChange={setActive}
+    >
+      {active.value === "general" && (
+        <div className="space-y-8">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="project-name">Project Name</Label>
+              <Input
+                id="project-name"
+                value={displayName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Enter project name"
+                disabled={!isCreator}
+              />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="project-key">Project Key</Label>
+              <Input
+                id="project-key"
+                value={displayKey}
+                onChange={(e) => setProjectKey(e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 5))}
+                placeholder="e.g., ENG"
+                disabled={!isCreator || !!projectHasTasks}
+                maxLength={5}
+                className="font-mono uppercase"
+              />
+              <p className="text-xs text-muted-foreground">
+                {projectHasTasks
+                  ? "The project key cannot be changed once tasks have been created."
+                  : `2-5 character identifier used in task IDs (e.g., ${displayKey || "ENG"}-1). Cannot be changed once tasks exist.`}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <div className="flex flex-wrap gap-2">
+                {PROJECT_COLORS.map((color) => (
+                  <button
+                    key={color.class}
+                    type="button"
+                    onClick={() => isCreator && setSelectedColor(color.class)}
+                    disabled={!isCreator}
+                    className={`w-8 h-8 rounded-full ${color.class} ${
+                      displayColor === color.class
+                        ? "ring-2 ring-offset-2 ring-primary"
+                        : ""
+                    } ${!isCreator ? "opacity-50 cursor-not-allowed" : ""}`}
+                    title={color.name}
+                  />
+                ))}
+              </div>
+            </div>
+            {hasChanges && isCreator && (
+              <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
+            )}
           </div>
-          {hasChanges && isCreator && (
-            <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
+
+          {/* Danger zone — creator only */}
+          {isCreator && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+              <h3 className="text-sm font-semibold text-destructive">Delete project</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Permanently deletes this project and all of its tasks. This cannot be undone.
+              </p>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="mt-3"
+                onClick={() => void handleDeleteProject()}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Project
+              </Button>
+            </div>
           )}
         </div>
-      </section>
+      )}
 
-      {/* Status effects + GitHub integration - creator/admin only */}
-      {isCreator && (
-        <>
-          <Separator className="my-6" />
+      {/* Status effects + repo integrations — creator only */}
+      {active.value === "integrations" && isCreator && (
+        <div className="space-y-6">
           <StatusEffectMatrix projectId={projectId} />
           <ConnectGithubCard workspaceId={workspaceId} projectId={projectId} />
           <ConnectGitlabCard workspaceId={workspaceId} projectId={projectId} />
@@ -200,30 +254,13 @@ function ProjectSettingsContent({
             workspaceId={workspaceId}
             projectId={projectId}
           />
-        </>
+        </div>
       )}
 
-      {/* Notifications Section - visible to all users */}
-      <ProjectNotificationSettings projectId={projectId} />
-
-      {/* Danger Zone - only visible to creator */}
-      {isCreator && (
-        <>
-          <Separator className="my-6" />
-
-          <section>
-            <h2 className="text-lg font-semibold mb-4 text-destructive">Danger Zone</h2>
-            <Button variant="destructive" onClick={() => void handleDeleteProject()}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Project
-            </Button>
-            <p className="text-sm text-muted-foreground mt-2">
-              This will permanently delete the project and all its tasks.
-            </p>
-          </section>
-        </>
+      {active.value === "notifications" && (
+        <ProjectNotificationSettings projectId={projectId} />
       )}
-    </div>
+    </SettingsLayout>
   );
 }
 
@@ -248,34 +285,25 @@ function ProjectNotificationSettings({ projectId }: { projectId: Id<"projects"> 
     };
 
   return (
-    <>
-      <Separator className="my-6" />
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Notifications</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Control which task notifications you receive for this project.
-        </p>
-        <div className="space-y-2">
-          {TASK_NOTIFICATION_CATEGORIES.map((category) => {
-            const lockedOn = category === "taskCommentMention" && currentPrefs.taskComment;
-            return (
-              <div
-                key={category}
-                className="flex items-center justify-between py-0.5"
-              >
-                <span className={`text-sm ${lockedOn ? "text-muted-foreground" : ""}`}>
-                  {NOTIFICATION_CATEGORY_LABELS[category]}
-                </span>
-                <Switch
-                  checked={currentPrefs[category]}
-                  disabled={lockedOn}
-                  onCheckedChange={(checked) => handleToggle(category, checked)}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </section>
-    </>
+    <div className="space-y-2">
+      {TASK_NOTIFICATION_CATEGORIES.map((category) => {
+          const lockedOn = category === "taskCommentMention" && currentPrefs.taskComment;
+          return (
+            <div
+              key={category}
+              className="flex items-center justify-between py-0.5"
+            >
+              <span className={`text-sm ${lockedOn ? "text-muted-foreground" : ""}`}>
+                {NOTIFICATION_CATEGORY_LABELS[category]}
+              </span>
+              <Switch
+                checked={currentPrefs[category]}
+                disabled={lockedOn}
+                onCheckedChange={(checked) => handleToggle(category, checked)}
+              />
+            </div>
+          );
+        })}
+    </div>
   );
 }
