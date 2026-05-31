@@ -437,9 +437,9 @@ importers:
       convex-helpers:
         specifier: 0.1.115
         version: 0.1.115(@standard-schema/spec@1.1.0)(convex@1.37.0(react@19.2.5))(hono@4.12.16)(react@19.2.5)(typescript@6.0.3)(zod@4.4.2)
-      d3-force:
-        specifier: 3.0.0
-        version: 3.0.0
+      d3-force-3d:
+        specifier: 3.0.6
+        version: 3.0.6
       date-fns:
         specifier: 4.1.0
         version: 4.1.0
@@ -576,9 +576,6 @@ importers:
       '@types/color-hash':
         specifier: ^2.0.0
         version: 2.0.0
-      '@types/d3-force':
-        specifier: ^3.0.10
-        version: 3.0.10
       '@types/node':
         specifier: ^20.14.9
         version: 20.19.39

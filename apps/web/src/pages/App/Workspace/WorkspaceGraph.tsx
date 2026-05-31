@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
-import { forceX, forceY } from "d3-force";
+import { forceX, forceY } from "d3-force-3d";
 import type { Id } from "@convex/_generated/dataModel";
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject, type LinkObject } from "react-force-graph-2d";
 import { getNodeColor, getNodeSize } from "./graphConstants";
