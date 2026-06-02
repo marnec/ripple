@@ -5,12 +5,11 @@ NEXT STEPS:
     - recurrent events
 
 
-- [x] document comments (https://www.blocknotejs.org/docs/features/collaboration/comments) — BlockNote `CommentsExtension` + `YjsThreadStore` over the doc's `threads` Y.Map (persists via existing snapshot/IndexedDB, syncs via partyserver); author identity resolved via `users.getByIds`
-- [ ] guests can comment (all viewers?) — needs a guest-identity → resolveUsers mapping (guest ids aren't `users` ids), so deferred from the v1 above
-
 - add a dependency view to tasks
 
 - explore the ability to flag a diagram as a "presentation" which prevents its embedding but enables it's presentation mode and the ability to download a pdf/pptx (https://npm.io/package/excalidraw-presentation). Add relevant index so that non_presentation diagrams can be recovered when embedding in docs. Presentation mode probably needs to be recreated through code (https://deepwiki.com/excalidraw-smart-presentation/excalidraw-smart-presentation.github.io/5.1-presentation-mode-overview)
+
+- doc comments restyle (explore sidebar https://www.blocknotejs.org/docs/features/collaboration/comments#sidebar-view)
 
 - explore pdf reading, annotation and embedding
 

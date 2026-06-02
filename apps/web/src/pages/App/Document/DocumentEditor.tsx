@@ -92,11 +92,22 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const searchResults = useQuery(
     api.nodes.search,
     hasHashSearch && document
-      ? { workspaceId: document.workspaceId, searchText: debouncedHashSearch }
+      ? {
+          workspaceId: document.workspaceId,
+          searchText: debouncedHashSearch,
+          // Presentation diagrams are decks, not embeddable illustrations.
+          excludePresentations: true,
+        }
       : "skip",
   );
   const workspaceMembers = useQuery(
     api.workspaceMembers.membersByWorkspace,
+    document ? { workspaceId: document.workspaceId } : "skip",
+  );
+  // Presentation diagrams are filtered out of the recents shown in the embed
+  // picker (the search path is filtered server-side via excludePresentations).
+  const presentationDiagramIds = useQuery(
+    api.diagrams.listPresentationIds,
     document ? { workspaceId: document.workspaceId } : "skip",
   );
   const viewer = useViewer();
@@ -298,6 +309,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const { getHashItems, handleCellRefInsert, handleBlockPickerInsert } = useDocumentSuggestions({
     recents,
     searchResults,
+    excludeDiagramIds: presentationDiagramIds,
     hasSearch: hasHashSearch,
     isStale: isHashSearchStale,
     editor,

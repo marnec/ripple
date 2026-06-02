@@ -776,6 +776,7 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"diagrams">;
         name: string;
+        presentation?: boolean;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
@@ -789,10 +790,17 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"diagrams">;
         name: string;
+        presentation?: boolean;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>
+    >;
+    listPresentationIds: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      Array<Id<"diagrams">>
     >;
     remove: FunctionReference<
       "mutation",
@@ -842,6 +850,7 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"diagrams">;
           name: string;
+          presentation?: boolean;
           tags?: Array<string>;
           workspaceId: Id<"workspaces">;
           yjsSnapshotId?: Id<"_storage">;
@@ -849,6 +858,12 @@ export declare const api: {
         pageStatus?: "SplitRecommended" | "SplitRequired" | null;
         splitCursor?: string | null;
       }
+    >;
+    setPresentation: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"diagrams">; presentation: boolean },
+      null
     >;
     updateTags: FunctionReference<
       "mutation",
@@ -1834,6 +1849,7 @@ export declare const api: {
       "query",
       "public",
       {
+        excludePresentations?: boolean;
         resourceType?:
           | "document"
           | "diagram"
@@ -4728,6 +4744,20 @@ export declare const internal: {
       any
     >;
     backfillMemberAggregates: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    backfillNodePresentation: FunctionReference<
       "mutation",
       "internal",
       {

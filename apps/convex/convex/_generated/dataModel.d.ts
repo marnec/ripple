@@ -479,6 +479,7 @@ export type DataModel = {
   diagrams: {
     document: {
       name: string;
+      presentation?: boolean;
       tags?: Array<string>;
       workspaceId: Id<"workspaces">;
       yjsSnapshotId?: Id<"_storage">;
@@ -489,6 +490,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "name"
+      | "presentation"
       | "tags"
       | "workspaceId"
       | "yjsSnapshotId";
@@ -496,6 +498,11 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_presentation: [
+        "workspaceId",
+        "presentation",
+        "_creationTime",
+      ];
       by_yjsSnapshotId: ["yjsSnapshotId", "_creationTime"];
     };
     searchIndexes: {
@@ -838,6 +845,7 @@ export type DataModel = {
     document: {
       metadata?: { projectId: Id<"projects">; type: "task" };
       name: string;
+      presentation?: boolean;
       resourceId: string;
       resourceType:
         | "document"
@@ -861,6 +869,7 @@ export type DataModel = {
       | "metadata.projectId"
       | "metadata.type"
       | "name"
+      | "presentation"
       | "resourceId"
       | "resourceType"
       | "searchable"
@@ -877,7 +886,11 @@ export type DataModel = {
     searchIndexes: {
       by_name: {
         searchField: "name";
-        filterFields: "resourceType" | "searchable" | "workspaceId";
+        filterFields:
+          | "presentation"
+          | "resourceType"
+          | "searchable"
+          | "workspaceId";
       };
     };
     vectorIndexes: {};

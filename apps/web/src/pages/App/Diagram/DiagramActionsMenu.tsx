@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileCode2, FileImage, FileJson } from "lucide-react";
+import { FileCode2, FileImage, FileJson, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { ShareDialog } from "@/components/ShareDialog";
@@ -13,6 +13,8 @@ interface DiagramActionsMenuProps {
   diagramId: Id<"diagrams">;
   diagramName: string;
   isAdmin: boolean;
+  /** Presentation diagrams gain PDF export (one page per frame). */
+  isPresentation?: boolean;
   excalidrawAPI: ExcalidrawImperativeAPI | null;
 }
 
@@ -20,6 +22,7 @@ export function DiagramActionsMenu({
   diagramId,
   diagramName,
   isAdmin,
+  isPresentation = false,
   excalidrawAPI,
 }: DiagramActionsMenuProps) {
   const [shareOpen, setShareOpen] = useState(false);
@@ -31,6 +34,18 @@ export function DiagramActionsMenu({
   );
 
   const downloadItems: readonly DownloadItem[] = [
+    ...(isPresentation
+      ? [
+          {
+            label: "PDF",
+            icon: <FileText className="text-muted-foreground" />,
+            onSelect: guarded(async (api) => {
+              const m = await loadExporters();
+              await m.exportDiagramPdf(api, diagramName);
+            }, "Failed to export PDF."),
+          },
+        ]
+      : []),
     {
       label: "PNG",
       icon: <FileImage className="text-muted-foreground" />,

@@ -17,10 +17,12 @@ import { useQuery } from "convex-helpers/react/cache";
 import { api } from "@convex/_generated/api";
 import { useViewer } from "../UserContext";
 import { useState } from "react";
-import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawImperativeAPI, BinaryFiles } from "@excalidraw/excalidraw/types";
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import { useTheme } from "next-themes";
-import { Settings } from "lucide-react";
+import { Presentation, Settings } from "lucide-react";
 import { DiagramActionsMenu } from "./DiagramActionsMenu";
+import { PresentationOverlay } from "./PresentationOverlay";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
 import { useSnapshotFallback } from "@/hooks/use-snapshot-fallback";
@@ -48,6 +50,11 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
   useRecordVisit(workspaceId, "diagram", diagramId, diagram?.name);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+  // Snapshot of the scene captured when entering presentation mode (null = not presenting).
+  const [presentationScene, setPresentationScene] = useState<{
+    elements: readonly ExcalidrawElement[];
+    files: BinaryFiles;
+  } | null>(null);
   const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
   const isAdmin = myRole === "admin";
   const updateTags = useMutation(api.diagrams.updateTags).withOptimisticUpdate(
@@ -173,11 +180,29 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               onUserClick={handleJumpToUser}
             />
           )}
+          {diagram?.presentation && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!excalidrawAPI) return;
+                setPresentationScene({
+                  elements: excalidrawAPI.getSceneElements(),
+                  files: excalidrawAPI.getFiles(),
+                });
+              }}
+              disabled={!excalidrawAPI}
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50"
+              title="Present"
+            >
+              <Presentation className="size-4" />
+            </button>
+          )}
           {diagram && (
             <DiagramActionsMenu
               diagramId={diagramId}
               diagramName={diagram.name}
               isAdmin={isAdmin}
+              isPresentation={diagram.presentation ?? false}
               excalidrawAPI={excalidrawAPI}
             />
           )}
@@ -219,6 +244,15 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           />
         )}
       </div>
+
+      {presentationScene && (
+        <PresentationOverlay
+          elements={presentationScene.elements}
+          files={presentationScene.files}
+          theme={resolvedTheme as Theme}
+          onClose={() => setPresentationScene(null)}
+        />
+      )}
     </div>
   );
 }

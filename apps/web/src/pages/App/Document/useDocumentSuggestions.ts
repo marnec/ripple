@@ -54,6 +54,7 @@ function isEmbeddable(type: string): type is EmbeddableType {
 export function useDocumentSuggestions({
   recents,
   searchResults,
+  excludeDiagramIds,
   hasSearch,
   isStale,
   editor,
@@ -66,6 +67,8 @@ export function useDocumentSuggestions({
 }: {
   recents: RecentItem[];
   searchResults: NodeResult[] | undefined;
+  /** Diagram ids to hide from recents (presentation diagrams aren't embeddable). */
+  excludeDiagramIds: Id<"diagrams">[] | undefined;
   hasSearch: boolean;
   isStale: boolean;
   editor: DocumentSchemaEditor | null;
@@ -114,9 +117,16 @@ export function useDocumentSuggestions({
     onSearchChange(query);
 
     if (!hasSearch && !query.trim()) {
-      // No search text — show embeddable recents
+      // No search text — show embeddable recents (minus presentation diagrams,
+      // which aren't embeddable; the search path is filtered server-side).
+      const excluded = new Set<string>(excludeDiagramIds ?? []);
       const recentItems = recents
-        .filter((r) => isEmbeddable(r.resourceType) && r.resourceId !== currentDocumentId)
+        .filter(
+          (r) =>
+            isEmbeddable(r.resourceType) &&
+            r.resourceId !== currentDocumentId &&
+            !excluded.has(r.resourceId),
+        )
         .map((r) => makeItem(r.resourceType, r.resourceId, r.resourceName, "Recent"));
 
       if (recentItems.length > 0) return recentItems;

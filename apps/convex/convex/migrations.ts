@@ -122,6 +122,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillChannelNodes,
   internal.migrations.backfillTaskNodes,
   internal.migrations.backfillNodeSearchable,
+  internal.migrations.backfillNodePresentation,
   internal.migrations.backfillCalendarEventNodes,
   internal.migrations.stripMessageEdges,
   internal.migrations.stripEdgeGroupId,
@@ -677,6 +678,21 @@ export const backfillNodeSearchable = migrations.define({
   migrateOne: async (ctx, node) => {
     if (node.searchable !== undefined) return;
     await ctx.db.patch(node._id, { searchable: true });
+  },
+});
+
+// `nodes.search`'s `excludePresentations` path filters with
+// `.eq("presentation", false)`. Search filterFields don't match `undefined`,
+// so legacy rows (created before the field existed) would drop out of the
+// document embed picker entirely. Backfill every row missing the field to
+// `false`; diagrams flagged as presentations get `true` re-synced when the
+// flag is next toggled (or could be backfilled from the diagrams table, but
+// no diagram is a presentation yet at the time this ships).
+export const backfillNodePresentation = migrations.define({
+  table: "nodes",
+  migrateOne: async (ctx, node) => {
+    if (node.presentation !== undefined) return;
+    await ctx.db.patch(node._id, { presentation: false });
   },
 });
 

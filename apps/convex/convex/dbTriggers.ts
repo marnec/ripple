@@ -140,6 +140,24 @@ triggers.register("tags", tagsByWorkspace.trigger());
 // Keep the nodes table in sync on insert/update. Delete-time cleanup of
 // nodes and edges is handled by cascade rules in cascadeDelete.ts.
 
+type NodeInsertCtx = Parameters<Parameters<typeof triggers.register>[1]>[0];
+
+/**
+ * Single entry point for inserting `nodes` rows from triggers. Defaults
+ * `presentation: false` so the field is always an explicit boolean — Convex
+ * search filterFields don't match `undefined`, and `nodes.search`'s
+ * `excludePresentations` path relies on `.eq("presentation", false)` matching
+ * every non-presentation row.
+ */
+async function insertNode(
+  ctx: NodeInsertCtx,
+  fields: Omit<DataModel["nodes"]["document"], "_id" | "_creationTime" | "presentation"> & {
+    presentation?: boolean;
+  },
+) {
+  await ctx.db.insert("nodes", { presentation: false, ...fields });
+}
+
 async function syncNode(
   ctx: Parameters<Parameters<typeof triggers.register>[1]>[0],
   id: string,
@@ -147,18 +165,34 @@ async function syncNode(
   newTags: string[],
   oldName: string,
   oldTags: string[],
+  newPresentation?: boolean,
+  oldPresentation?: boolean,
 ) {
-  if (newName === oldName && JSON.stringify(newTags) === JSON.stringify(oldTags)) return;
+  const presentationChanged =
+    newPresentation !== undefined && (newPresentation ?? false) !== (oldPresentation ?? false);
+  if (
+    !presentationChanged &&
+    newName === oldName &&
+    JSON.stringify(newTags) === JSON.stringify(oldTags)
+  ) {
+    return;
+  }
   const node = await ctx.db
     .query("nodes")
     .withIndex("by_resource", (q) => q.eq("resourceId", id))
     .first();
-  if (node) await ctx.db.patch(node._id, { name: newName, tags: newTags });
+  if (node) {
+    await ctx.db.patch(node._id, {
+      name: newName,
+      tags: newTags,
+      ...(presentationChanged ? { presentation: newPresentation ?? false } : {}),
+    });
+  }
 }
 
 triggers.register("documents", async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "document",
       resourceId: change.id,
@@ -176,25 +210,27 @@ triggers.register("documents", async (ctx, change) => {
 
 triggers.register("diagrams", async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "diagram",
       resourceId: change.id,
       name: change.newDoc.name,
       tags: change.newDoc.tags ?? [],
       searchable: true,
+      presentation: change.newDoc.presentation ?? false,
     });
   } else if (change.operation === "update") {
     await syncNode(ctx, change.id,
       change.newDoc.name, change.newDoc.tags ?? [],
-      change.oldDoc.name, change.oldDoc.tags ?? []);
+      change.oldDoc.name, change.oldDoc.tags ?? [],
+      change.newDoc.presentation ?? false, change.oldDoc.presentation ?? false);
   }
   // delete: node + edge cleanup handled by cascade rules
 });
 
 triggers.register("spreadsheets", async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "spreadsheet",
       resourceId: change.id,
@@ -212,7 +248,7 @@ triggers.register("spreadsheets", async (ctx, change) => {
 
 triggers.register("projects", async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "project",
       resourceId: change.id,
@@ -233,7 +269,7 @@ triggers.register("projects", async (ctx, change) => {
 
 triggers.register("channels", async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "channel",
       resourceId: change.id,
@@ -254,7 +290,7 @@ triggers.register("channels", async (ctx, change) => {
 
 triggers.register("tasks", async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "task",
       resourceId: change.id,
@@ -292,7 +328,7 @@ triggers.register("tasks", async (ctx, change) => {
 // trigger above.
 triggers.register("calendarEvents", async (ctx, change) => {
   if (change.operation === "insert") {
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "calendarEvent",
       resourceId: change.id,
@@ -326,7 +362,7 @@ triggers.register("calendarEvents", async (ctx, change) => {
 triggers.register("workspaceMembers", async (ctx, change) => {
   if (change.operation === "insert") {
     const user = await ctx.db.get(change.newDoc.userId);
-    await ctx.db.insert("nodes", {
+    await insertNode(ctx, {
       workspaceId: change.newDoc.workspaceId,
       resourceType: "user",
       resourceId: change.newDoc.userId,
