@@ -23,6 +23,8 @@ import { useTheme } from "next-themes";
 import { Presentation, Settings } from "lucide-react";
 import { DiagramActionsMenu } from "./DiagramActionsMenu";
 import { PresentationOverlay } from "./PresentationOverlay";
+import { useFrameDeleteProtection } from "@/hooks/use-frame-delete-protection";
+import { FrameDeleteWarningDialog } from "@/components/FrameDeleteWarningDialog";
 import { useDiagramCollaboration } from "@/hooks/use-diagram-collaboration";
 import { useDiagramCursorAwareness } from "@/hooks/use-diagram-cursor-awareness";
 import { useSnapshotFallback } from "@/hooks/use-snapshot-fallback";
@@ -57,6 +59,63 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   } | null>(null);
   const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
   const isAdmin = myRole === "admin";
+
+  // Per-frame embeds of this diagram: drives the "delete an embedded frame"
+  // warning. Each row is one (source, frame) place that embeds a specific frame.
+  const frameEmbeds = useQuery(
+    api.edges.getFrameEmbeds,
+    diagram ? { diagramId, workspaceId } : "skip",
+  );
+  const embeddedFrameIds = new Set((frameEmbeds ?? []).map((r) => r.frameId));
+  // Pending guarded deletion: the embedded frames + the full selection to
+  // remove on confirm (so we reproduce Excalidraw's "delete frame + contents").
+  const [frameDeleteTarget, setFrameDeleteTarget] = useState<{
+    frameIds: string[];
+    selectedIds: string[];
+    frameName?: string;
+  } | null>(null);
+
+  useFrameDeleteProtection({
+    api: excalidrawAPI,
+    enabled: true,
+    embeddedFrameIds,
+    onIntercept: (frameIds, selectedIds) => {
+      const firstFrame = excalidrawAPI
+        ?.getSceneElements()
+        .find((el) => el.id === frameIds[0]) as
+        | { name?: string | null }
+        | undefined;
+      setFrameDeleteTarget({
+        frameIds,
+        selectedIds,
+        frameName: firstFrame?.name ?? undefined,
+      });
+    },
+  });
+
+  const confirmFrameDelete = () => {
+    if (!excalidrawAPI || !frameDeleteTarget) return;
+    const { frameIds, selectedIds } = frameDeleteTarget;
+    const frameSet = new Set(frameIds);
+    const selectedSet = new Set(selectedIds);
+    // Keep the frame's contents: detach members of a guarded frame (clear their
+    // frameId so they don't dangle off a deleted frame) and delete only the
+    // frame outline — plus any other explicitly-selected elements.
+    const next = excalidrawAPI.getSceneElements().map((el) => {
+      if (el.frameId && frameSet.has(el.frameId)) {
+        return { ...el, frameId: null };
+      }
+      if (selectedSet.has(el.id)) {
+        return { ...el, isDeleted: true };
+      }
+      return el;
+    });
+    excalidrawAPI.updateScene({
+      elements: next,
+      appState: { selectedElementIds: {} },
+    });
+    setFrameDeleteTarget(null);
+  };
   const updateTags = useMutation(api.diagrams.updateTags).withOptimisticUpdate(
     tagsOptimisticUpdate(api.diagrams.get),
   );
@@ -180,7 +239,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               onUserClick={handleJumpToUser}
             />
           )}
-          {diagram?.presentation && (
+          {diagram && (
             <button
               type="button"
               onClick={() => {
@@ -202,7 +261,6 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               diagramId={diagramId}
               diagramName={diagram.name}
               isAdmin={isAdmin}
-              isPresentation={diagram.presentation ?? false}
               excalidrawAPI={excalidrawAPI}
             />
           )}
@@ -253,6 +311,22 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           onClose={() => setPresentationScene(null)}
         />
       )}
+
+      <FrameDeleteWarningDialog
+        open={frameDeleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setFrameDeleteTarget(null);
+        }}
+        onConfirm={confirmFrameDelete}
+        frameName={frameDeleteTarget?.frameName}
+        references={
+          frameDeleteTarget
+            ? (frameEmbeds ?? []).filter((r) =>
+                frameDeleteTarget.frameIds.includes(r.frameId),
+              )
+            : []
+        }
+      />
     </div>
   );
 }

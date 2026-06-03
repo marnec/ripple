@@ -21,7 +21,6 @@ const diagramValidator = v.object({
   name: v.string(),
   tags: v.optional(v.array(v.string())),
   yjsSnapshotId: v.optional(v.id("_storage")),
-  presentation: v.optional(v.boolean()),
 });
 
 export const list = query({
@@ -88,25 +87,6 @@ export const search = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .order("desc")
       .paginate(paginationOpts);
-  },
-});
-
-// IDs of presentation-flagged diagrams in a workspace. Used by the document
-// embed picker to filter presentation diagrams out of the localStorage recents
-// list (the server-side search path uses `nodes.search` `excludePresentations`
-// instead). Uses the `by_workspace_presentation` index — scans only flagged rows.
-export const listPresentationIds = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(v.id("diagrams")),
-  handler: async (ctx, { workspaceId }) => {
-    await requireWorkspaceMember(ctx, workspaceId);
-    const rows = await ctx.db
-      .query("diagrams")
-      .withIndex("by_workspace_presentation", (q) =>
-        q.eq("workspaceId", workspaceId).eq("presentation", true),
-      )
-      .collect();
-    return rows.map((d) => d._id);
   },
 });
 
@@ -194,28 +174,6 @@ export const rename = mutation({
 
     const db = writerWithTriggers(ctx, ctx.db, triggers);
     await db.patch(id, { name });
-    return null;
-  },
-});
-
-export const setPresentation = mutation({
-  args: { id: v.id("diagrams"), presentation: v.boolean() },
-  returns: v.null(),
-  handler: async (ctx, { id, presentation }) => {
-    const { userId, resource: diagram } = await requireResourceMember(ctx, "diagrams", id);
-
-    await logActivity(ctx, {
-      userId, resourceType: "diagrams", resourceId: id,
-      action: "updated",
-      oldValue: String(diagram.presentation ?? false),
-      newValue: String(presentation),
-      resourceName: diagram.name, scope: diagram.workspaceId,
-    });
-
-    // Write through triggers so the denormalized `nodes.presentation` flag
-    // (used by the document embed picker) stays in sync.
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { presentation });
     return null;
   },
 });

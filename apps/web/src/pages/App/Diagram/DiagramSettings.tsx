@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
@@ -37,7 +36,6 @@ function DiagramSettingsContent({
   // Mutations
   const renameDiagram = useMutation(api.diagrams.rename);
   const updateTags = useMutation(api.diagrams.updateTags);
-  const setPresentation = useMutation(api.diagrams.setPresentation);
 
   // Confirmed delete hook
   const { requestDelete, dialog: deleteDialog } = useConfirmedDelete("diagram", workspaceId, {
@@ -112,35 +110,6 @@ function DiagramSettingsContent({
           workspaceId={workspaceId}
           placeholder="Add tags to organize this diagram..."
         />
-      </section>
-
-      {/* Presentation Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Presentation</h2>
-        <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
-          <div className="space-y-1">
-            <Label htmlFor="diagram-presentation" className="text-sm font-medium">
-              Use as presentation
-            </Label>
-            <p className="text-sm text-muted-foreground">
-              Turns this diagram into a slide deck. Its frames become slides you
-              can present fullscreen and export to PDF. Presentations can't be
-              embedded in documents.
-            </p>
-          </div>
-          <Switch
-            id="diagram-presentation"
-            checked={diagram.presentation ?? false}
-            onCheckedChange={(checked) => {
-              void setPresentation({ id: diagramId, presentation: checked }).catch(
-                (error: unknown) =>
-                  toast.error("Failed to update presentation setting", {
-                    description: error instanceof Error ? error.message : "Please try again",
-                  }),
-              );
-            }}
-          />
-        </div>
       </section>
 
       <Separator className="my-6" />

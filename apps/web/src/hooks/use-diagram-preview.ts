@@ -7,6 +7,7 @@ import { exportToSvg } from "@excalidraw/excalidraw";
 import * as Y from "yjs";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { frameViewElements } from "@/pages/App/Diagram/frames";
 
 // Module-level SVG cache to avoid redundant exportToSvg calls across mounts
 const svgCache = new Map<
@@ -29,6 +30,9 @@ export interface UseDiagramPreviewResult {
   refresh: () => void;
   /** The diagram document from Convex (for metadata, null checks) */
   diagram: { _id: Id<"diagrams">; name: string } | null | undefined;
+  /** Name of the targeted frame, or null when embedding the whole diagram
+   *  (also null when a previously-targeted frame no longer exists). */
+  frameName: string | null;
 }
 
 /**
@@ -40,6 +44,9 @@ export interface UseDiagramPreviewResult {
  */
 export function useDiagramPreview(
   diagramId: Id<"diagrams">,
+  /** When set, render only this Excalidraw frame; falls back to the whole
+   *  diagram when null or when the frame can't be found in the scene. */
+  frameId?: string | null,
 ): UseDiagramPreviewResult {
   // Convex query for metadata (diagram exists? name?)
   const diagram = useQuery(api.diagrams.get, { id: diagramId });
@@ -53,7 +60,8 @@ export function useDiagramPreview(
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
 
-  const cacheKey = `${diagramId}-${resolvedTheme}`;
+  const cacheKey = `${diagramId}-${frameId ?? "all"}-${resolvedTheme}`;
+  const [frameName, setFrameName] = useState<string | null>(null);
   const [localSvg, setLocalSvg] = useState<string | null>(() => {
     // Check cache on initial render
     const cached = svgCache.get(cacheKey);
@@ -97,7 +105,7 @@ export function useDiagramPreview(
   useEffect(() => {
     let cancelled = false;
     const currentTheme = resolvedTheme ?? "light";
-    const effectCacheKey = `${diagramId}-${currentTheme}`;
+    const effectCacheKey = `${diagramId}-${frameId ?? "all"}-${currentTheme}`;
 
     // Helper: generate SVG from current Yjs state
     const generateSvg = async () => {
@@ -109,21 +117,55 @@ export function useDiagramPreview(
         const elements = yjsToExcalidraw(yElements);
         if (elements.length === 0) return;
 
+        // Frame targeting: render the frame's content with its NATURAL bounds
+        // (not exportingFrame, which clips to the frame rectangle and cut off
+        // elements that extend past the edge — the editor doesn't clip them).
+        // frameViewElements keeps the same overlap selection exportingFrame
+        // uses. Falls back to the whole diagram when the frame can't be found.
+        let renderElements = elements;
+        let resolvedFrameName: string | null = null;
+        let isFrameRender = false;
+        if (frameId) {
+          const sel = frameViewElements(elements, frameId);
+          if (sel.length > 0) {
+            renderElements = sel;
+            const frameEl = sel.find((el) => el.type === "frame");
+            resolvedFrameName =
+              (frameEl as { name?: string | null } | undefined)?.name ?? null;
+            isFrameRender = true;
+          }
+        }
+        if (!cancelled) setFrameName(resolvedFrameName);
+
         const svg = await exportToSvg({
-          elements,
+          elements: renderElements,
           appState: {
             exportWithDarkMode: isDark,
             exportBackground: false,
+            // Show frame content without the frame's own chrome or clipping.
+            ...(isFrameRender
+              ? {
+                  frameRendering: {
+                    enabled: true,
+                    name: false,
+                    outline: false,
+                    clip: false,
+                  },
+                }
+              : {}),
           },
           files: null,
         });
 
-        // Make the SVG intrinsically responsive so it scales with its container.
-        // exportToSvg sets fixed pixel width/height which prevents CSS scaling.
+        // Strip the fixed pixel size so the SVG scales with its container.
+        // Height is left to CSS: DiagramView measures the viewBox and gives the
+        // container an explicit aspect-ratio (with the SVG filling it), falling
+        // back to height:auto until that measurement lands.
         svg.removeAttribute("width");
         svg.removeAttribute("height");
+        svg.style.removeProperty("height");
         svg.style.width = "100%";
-        svg.style.height = "auto";
+        svg.style.display = "block";
 
         if (!cancelled) {
           const svgHtml = svg.outerHTML;
@@ -183,7 +225,7 @@ export function useDiagramPreview(
       void persistence.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diagramId, resolvedTheme, refreshCounter]);
+  }, [diagramId, frameId, resolvedTheme, refreshCounter]);
 
   // Fetch and apply Convex snapshot when URL changes (reactive live updates)
   useEffect(() => {
@@ -211,9 +253,10 @@ export function useDiagramPreview(
   }, [snapshotUrl, yDoc]);
 
   const refresh = useCallback(() => {
-    // Invalidate cache for this diagram
-    svgCache.delete(`${diagramId}-light`);
-    svgCache.delete(`${diagramId}-dark`);
+    // Invalidate every cached variant for this diagram (all frames + themes).
+    for (const key of svgCache.keys()) {
+      if (key.startsWith(`${diagramId}-`)) svgCache.delete(key);
+    }
     setIsLocalLoading(true);
     setLocalSvg(null);
     prevSnapshotUrlRef.current = null; // Force re-fetch
@@ -222,5 +265,5 @@ export function useDiagramPreview(
 
   const isLoading = diagram === undefined && isLocalLoading;
 
-  return { svgHtml: localSvg, isLoading, isDark, refresh, diagram };
+  return { svgHtml: localSvg, isLoading, isDark, refresh, diagram, frameName };
 }

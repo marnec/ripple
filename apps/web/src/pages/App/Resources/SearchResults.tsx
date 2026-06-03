@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useMutation, usePaginatedQuery } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { format, isThisYear } from "date-fns";
-import { Globe, Lock, Presentation, Star, StarOff, Video } from "lucide-react";
+import { Globe, Lock, Star, StarOff, Video } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "@convex/_generated/api";
@@ -25,7 +25,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import type { BrowsableResourceType as ResourceType, FavoritableResourceType as FavoritableType } from "@ripple/shared/types/resources";
 import { getResourcePreloader } from "../preload";
 
-type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; type?: string; presentation?: boolean };
+type SearchResult = { _id: string; name: string; tags?: string[]; _creationTime?: number; type?: string };
 
 const PAGE_SIZE = 20;
 
@@ -70,14 +70,6 @@ function ChannelTypeBadge({ type }: { type: string }) {
   );
 }
 
-function PresentationBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-      <Presentation className="h-3 w-3" />
-      <span className="hidden sm:inline">Presentation</span>
-    </span>
-  );
-}
 
 export type ResourceView = "cards" | "list";
 
@@ -236,11 +228,6 @@ function ResourceListRow({
             <ChannelTypeBadge type={resource.type} />
           </span>
         )}
-        {resource.presentation && (
-          <span className="pointer-events-none">
-            <PresentationBadge />
-          </span>
-        )}
         {canFavorite && (
           <div className="relative z-10">
             <FavoriteButton
@@ -308,7 +295,6 @@ function ResourceListRow({
         {isChannel && resource.type !== undefined && (
           <ChannelTypeBadge type={resource.type} />
         )}
-        {resource.presentation && <PresentationBadge />}
         {canFavorite && (
           <Star
             className={cn(
@@ -490,8 +476,7 @@ export function SearchResults({
             {resourceType === "channel" && resource.type !== undefined && (
               <ChannelTypeBadge type={resource.type} />
             )}
-            {resource.presentation && <PresentationBadge />}
-          </CardHeader>
+              </CardHeader>
           <CardContent className="pointer-events-none flex flex-1 flex-col justify-between pt-0">
             <div className="flex flex-wrap gap-1">
               {resource.tags && resource.tags.length > 0 ? (

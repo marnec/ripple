@@ -47,7 +47,8 @@ function extractTaskEmbedRefs(blocks: any[]): Set<string> {
   const refs = new Set<string>();
   for (const block of blocks) {
     if (block.type === "diagram" && block.props?.diagramId) {
-      refs.add(`diagram|${block.props.diagramId}`);
+      // 3rd segment = embedded frame id ("" = whole diagram).
+      refs.add(`diagram|${block.props.diagramId}|${block.props.frameId ?? ""}`);
     }
     if (block.type === "documentBlockEmbed" && block.props?.documentId) {
       refs.add(`document|${block.props.documentId}`);
@@ -58,7 +59,8 @@ function extractTaskEmbedRefs(blocks: any[]): Set<string> {
     if (Array.isArray(block.content)) {
       for (const ic of block.content) {
         if (ic.type === "diagramEmbed" && ic.props?.diagramId) {
-          refs.add(`diagram|${ic.props.diagramId}`);
+          // Inline diagram embeds are always whole-diagram (no frame picker).
+          refs.add(`diagram|${ic.props.diagramId}|`);
         }
       }
     }
@@ -87,11 +89,15 @@ function extractTaskDocBlockRefs(blocks: any[]): Set<string> {
   return refs;
 }
 
-/** Parse "type|id" keys into the edges-table reference shape. Pure + module-scoped. */
+/** Parse "type|id" (or "diagram|id|frameId") keys into the edges-table reference shape. Pure + module-scoped. */
 function parseEmbedRefs(keys: Set<string>) {
   return [...keys].map((key) => {
-    const [targetType, targetId] = key.split("|");
-    return { targetType: targetType as "diagram" | "document" | "spreadsheet", targetId };
+    const [targetType, targetId, frameId] = key.split("|");
+    return {
+      targetType: targetType as "diagram" | "document" | "spreadsheet",
+      targetId,
+      frameId: frameId || undefined,
+    };
   });
 }
 

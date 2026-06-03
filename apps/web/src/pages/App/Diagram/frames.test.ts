@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { orderFrames, type FrameLike } from "./frames";
+import { frameViewElements, orderFrames, type FrameLike } from "./frames";
 
 function frame(id: string, x: number, y: number, w = 100, h = 100): FrameLike & { id: string } {
   return { id, type: "frame", x, y, width: w, height: h };
@@ -44,5 +44,33 @@ describe("orderFrames", () => {
       "bottom-left",
       "bottom-right",
     ]);
+  });
+});
+
+describe("frameViewElements", () => {
+  const frame = { id: "F", type: "frame", x: 0, y: 0, width: 200, height: 200 };
+
+  it("returns the frame + its members, excluding straddling non-members", () => {
+    const els = [
+      frame,
+      { id: "m1", type: "rectangle", x: 10, y: 10, width: 20, height: 20, frameId: "F" },
+      // Overlaps the frame edge but belongs to no frame — a neighbouring
+      // cluster that must NOT be pulled into the frame's embed.
+      { id: "straddle", type: "rectangle", x: 180, y: 10, width: 80, height: 20, frameId: null },
+    ];
+    expect(frameViewElements(els, "F").map((e) => e.id).sort()).toEqual(["F", "m1"]);
+  });
+
+  it("falls back to overlapping elements when the frame has no members", () => {
+    const els = [
+      frame,
+      { id: "o1", type: "rectangle", x: 180, y: 10, width: 80, height: 20 }, // overlaps frame
+      { id: "far", type: "rectangle", x: 500, y: 500, width: 20, height: 20 },
+    ];
+    expect(frameViewElements(els, "F").map((e) => e.id).sort()).toEqual(["F", "o1"]);
+  });
+
+  it("returns [] when the frame is missing", () => {
+    expect(frameViewElements([frame], "nope")).toEqual([]);
   });
 });

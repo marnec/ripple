@@ -29,14 +29,9 @@ export const search = query({
         v.literal("task"),
       ),
     ),
-    // The document embed picker passes `true` to hide presentation diagrams
-    // (they're decks, not embeddable illustrations). Ctrl+K omits it so
-    // presentations stay globally findable. Relies on every node row carrying
-    // an explicit `presentation` boolean (insertNode default + backfill).
-    excludePresentations: v.optional(v.boolean()),
   },
   returns: v.array(nodeResultValidator),
-  handler: async (ctx, { workspaceId, searchText, resourceType, excludePresentations }) => {
+  handler: async (ctx, { workspaceId, searchText, resourceType }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
 
@@ -47,11 +42,10 @@ export const search = query({
     const results = await ctx.db
       .query("nodes")
       .withSearchIndex("by_name", (q) => {
-        let base = q
+        const base = q
           .search("name", searchText)
           .eq("workspaceId", workspaceId)
           .eq("searchable", true);
-        if (excludePresentations) base = base.eq("presentation", false);
         return resourceType ? base.eq("resourceType", resourceType) : base;
       })
       .take(20);

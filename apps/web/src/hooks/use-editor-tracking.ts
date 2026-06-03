@@ -132,7 +132,9 @@ export function extractHardEmbeds(blocks: unknown[]): Set<string> {
   const refs = new Set<string>();
   for (const block of blocks as EditorBlock[]) {
     if (block.type === "diagram" && block.props?.diagramId) {
-      refs.add(`diagram|${block.props.diagramId}`);
+      // 3rd segment = embedded frame id ("" = whole diagram). Frame ids and
+      // Convex ids contain no "|", so a 3-part split round-trips cleanly.
+      refs.add(`diagram|${block.props.diagramId}|${block.props.frameId ?? ""}`);
     }
     if (block.type === "spreadsheetRange" && block.props?.spreadsheetId) {
       refs.add(`spreadsheet|${block.props.spreadsheetId}`);

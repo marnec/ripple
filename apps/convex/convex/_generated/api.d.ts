@@ -776,7 +776,6 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"diagrams">;
         name: string;
-        presentation?: boolean;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
@@ -790,17 +789,10 @@ export declare const api: {
         _creationTime: number;
         _id: Id<"diagrams">;
         name: string;
-        presentation?: boolean;
         tags?: Array<string>;
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       }>
-    >;
-    listPresentationIds: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<Id<"diagrams">>
     >;
     remove: FunctionReference<
       "mutation",
@@ -850,7 +842,6 @@ export declare const api: {
           _creationTime: number;
           _id: Id<"diagrams">;
           name: string;
-          presentation?: boolean;
           tags?: Array<string>;
           workspaceId: Id<"workspaces">;
           yjsSnapshotId?: Id<"_storage">;
@@ -858,12 +849,6 @@ export declare const api: {
         pageStatus?: "SplitRecommended" | "SplitRequired" | null;
         splitCursor?: string | null;
       }
-    >;
-    setPresentation: FunctionReference<
-      "mutation",
-      "public",
-      { id: Id<"diagrams">; presentation: boolean },
-      null
     >;
     updateTags: FunctionReference<
       "mutation",
@@ -1021,6 +1006,21 @@ export declare const api: {
         workspaceId: string;
       }>
     >;
+    getFrameEmbeds: FunctionReference<
+      "query",
+      "public",
+      { diagramId: string; workspaceId: Id<"workspaces"> },
+      Array<{
+        _id: Id<"edges">;
+        edgeType: string;
+        frameId: string;
+        projectId?: string;
+        sourceId: string;
+        sourceName: string;
+        sourceType: string;
+        workspaceId: string;
+      }>
+    >;
     listByTask: FunctionReference<
       "query",
       "public",
@@ -1069,6 +1069,7 @@ export declare const api: {
       "public",
       {
         references: Array<{
+          frameId?: string;
           targetId: string;
           targetType: "diagram" | "spreadsheet" | "document";
         }>;
@@ -1849,7 +1850,6 @@ export declare const api: {
       "query",
       "public",
       {
-        excludePresentations?: boolean;
         resourceType?:
           | "document"
           | "diagram"
@@ -4744,20 +4744,6 @@ export declare const internal: {
       any
     >;
     backfillMemberAggregates: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        batchSize?: number;
-        cursor?: string | null;
-        dryRun?: boolean;
-        fn?: string;
-        next?: Array<string>;
-        oneBatchOnly?: boolean;
-        reset?: boolean;
-      },
-      any
-    >;
-    backfillNodePresentation: FunctionReference<
       "mutation",
       "internal",
       {

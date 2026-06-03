@@ -30,6 +30,14 @@ interface BlockPickerDialogOpen {
 
 type BlockPickerDialogState = BlockPickerDialogOpen | null;
 
+interface FramePickerDialogOpen {
+  open: boolean;
+  diagramId: Id<"diagrams">;
+  diagramName: string;
+}
+
+type FramePickerDialogState = FramePickerDialogOpen | null;
+
 const RESOURCE_ICON = {
   diagram: PenTool,
   spreadsheet: Table,
@@ -54,7 +62,6 @@ function isEmbeddable(type: string): type is EmbeddableType {
 export function useDocumentSuggestions({
   recents,
   searchResults,
-  excludeDiagramIds,
   hasSearch,
   isStale,
   editor,
@@ -62,13 +69,12 @@ export function useDocumentSuggestions({
   ensureBlockRef,
   setCellRefDialog,
   setBlockPickerDialog,
+  setFramePickerDialog,
   onSearchChange,
   currentDocumentId,
 }: {
   recents: RecentItem[];
   searchResults: NodeResult[] | undefined;
-  /** Diagram ids to hide from recents (presentation diagrams aren't embeddable). */
-  excludeDiagramIds: Id<"diagrams">[] | undefined;
   hasSearch: boolean;
   isStale: boolean;
   editor: DocumentSchemaEditor | null;
@@ -76,6 +82,7 @@ export function useDocumentSuggestions({
   ensureBlockRef: (args: { documentId: Id<"documents">; blockId: string }) => Promise<null>;
   setCellRefDialog: (state: CellRefDialogState) => void;
   setBlockPickerDialog: (state: BlockPickerDialogState) => void;
+  setFramePickerDialog: (state: FramePickerDialogState) => void;
   onSearchChange: (query: string) => void;
   currentDocumentId?: Id<"documents">;
 }) {
@@ -89,11 +96,12 @@ export function useDocumentSuggestions({
       onItemClick: () => {
         if (!editor) return;
         if (resourceType === "diagram") {
-          editor.insertBlocks(
-            [{ type: "diagram" as const, props: { diagramId: resourceId } }],
-            editor.getTextCursorPosition().block,
-            "after",
-          );
+          // Pick which frame to embed (or the whole diagram) before inserting.
+          setFramePickerDialog({
+            open: true,
+            diagramId: resourceId as Id<"diagrams">,
+            diagramName: name,
+          });
         } else if (resourceType === "spreadsheet") {
           setCellRefDialog({
             open: true,
@@ -117,15 +125,11 @@ export function useDocumentSuggestions({
     onSearchChange(query);
 
     if (!hasSearch && !query.trim()) {
-      // No search text — show embeddable recents (minus presentation diagrams,
-      // which aren't embeddable; the search path is filtered server-side).
-      const excluded = new Set<string>(excludeDiagramIds ?? []);
+      // No search text — show embeddable recents.
       const recentItems = recents
         .filter(
           (r) =>
-            isEmbeddable(r.resourceType) &&
-            r.resourceId !== currentDocumentId &&
-            !excluded.has(r.resourceId),
+            isEmbeddable(r.resourceType) && r.resourceId !== currentDocumentId,
         )
         .map((r) => makeItem(r.resourceType, r.resourceId, r.resourceName, "Recent"));
 
@@ -197,6 +201,26 @@ export function useDocumentSuggestions({
     setCellRefDialog(null);
   };
 
+  const handleFramePickerInsert = (
+    frameId: string | null,
+    framePickerDialog: FramePickerDialogOpen,
+  ) => {
+    if (!editor) return;
+    editor.focus();
+    editor.insertBlocks(
+      [
+        {
+          type: "diagram" as const,
+          // "" = whole diagram (BlockNote props can't be null).
+          props: { diagramId: framePickerDialog.diagramId, frameId: frameId ?? "" },
+        },
+      ],
+      editor.getTextCursorPosition().block,
+      "after",
+    );
+    setFramePickerDialog(null);
+  };
+
   const handleBlockPickerInsert = (blockId: string, blockPickerDialog: BlockPickerDialogOpen) => {
     if (!editor) return;
 
@@ -213,5 +237,5 @@ export function useDocumentSuggestions({
     setBlockPickerDialog(null);
   };
 
-  return { getHashItems, handleCellRefInsert, handleBlockPickerInsert };
+  return { getHashItems, handleCellRefInsert, handleBlockPickerInsert, handleFramePickerInsert };
 }

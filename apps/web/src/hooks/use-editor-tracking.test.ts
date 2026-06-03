@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { extractEventMentions, extractMentions } from "./use-editor-tracking";
+import {
+  extractEventMentions,
+  extractHardEmbeds,
+  extractMentions,
+} from "./use-editor-tracking";
 
 const para = (content: unknown[]) => ({ type: "paragraph", content });
 const eventMention = (eventId: string) => ({
@@ -9,6 +13,32 @@ const eventMention = (eventId: string) => ({
 const userMention = (userId: string) => ({
   type: "mention",
   props: { userId },
+});
+
+describe("extractHardEmbeds — diagram frame keys", () => {
+  it("encodes a frame embed as diagram|id|frameId", () => {
+    const blocks = [
+      { type: "diagram", props: { diagramId: "dia1", frameId: "frame-A" } },
+    ];
+    expect([...extractHardEmbeds(blocks)]).toEqual(["diagram|dia1|frame-A"]);
+  });
+
+  it("encodes a whole-diagram embed with a trailing empty frame segment", () => {
+    const blocks = [{ type: "diagram", props: { diagramId: "dia1", frameId: "" } }];
+    expect([...extractHardEmbeds(blocks)]).toEqual(["diagram|dia1|"]);
+  });
+
+  it("keeps whole + per-frame embeds of the same diagram distinct", () => {
+    const blocks = [
+      { type: "diagram", props: { diagramId: "dia1", frameId: "" } },
+      { type: "diagram", props: { diagramId: "dia1", frameId: "frame-A" } },
+      { type: "diagram", props: { diagramId: "dia1", frameId: "frame-A" } },
+    ];
+    expect([...extractHardEmbeds(blocks)].sort()).toEqual([
+      "diagram|dia1|",
+      "diagram|dia1|frame-A",
+    ]);
+  });
 });
 
 describe("extractEventMentions", () => {

@@ -142,20 +142,12 @@ triggers.register("tags", tagsByWorkspace.trigger());
 
 type NodeInsertCtx = Parameters<Parameters<typeof triggers.register>[1]>[0];
 
-/**
- * Single entry point for inserting `nodes` rows from triggers. Defaults
- * `presentation: false` so the field is always an explicit boolean — Convex
- * search filterFields don't match `undefined`, and `nodes.search`'s
- * `excludePresentations` path relies on `.eq("presentation", false)` matching
- * every non-presentation row.
- */
+/** Single entry point for inserting `nodes` rows from triggers. */
 async function insertNode(
   ctx: NodeInsertCtx,
-  fields: Omit<DataModel["nodes"]["document"], "_id" | "_creationTime" | "presentation"> & {
-    presentation?: boolean;
-  },
+  fields: Omit<DataModel["nodes"]["document"], "_id" | "_creationTime" | "presentation">,
 ) {
-  await ctx.db.insert("nodes", { presentation: false, ...fields });
+  await ctx.db.insert("nodes", fields);
 }
 
 async function syncNode(
@@ -165,16 +157,8 @@ async function syncNode(
   newTags: string[],
   oldName: string,
   oldTags: string[],
-  newPresentation?: boolean,
-  oldPresentation?: boolean,
 ) {
-  const presentationChanged =
-    newPresentation !== undefined && (newPresentation ?? false) !== (oldPresentation ?? false);
-  if (
-    !presentationChanged &&
-    newName === oldName &&
-    JSON.stringify(newTags) === JSON.stringify(oldTags)
-  ) {
+  if (newName === oldName && JSON.stringify(newTags) === JSON.stringify(oldTags)) {
     return;
   }
   const node = await ctx.db
@@ -182,11 +166,7 @@ async function syncNode(
     .withIndex("by_resource", (q) => q.eq("resourceId", id))
     .first();
   if (node) {
-    await ctx.db.patch(node._id, {
-      name: newName,
-      tags: newTags,
-      ...(presentationChanged ? { presentation: newPresentation ?? false } : {}),
-    });
+    await ctx.db.patch(node._id, { name: newName, tags: newTags });
   }
 }
 
@@ -217,13 +197,11 @@ triggers.register("diagrams", async (ctx, change) => {
       name: change.newDoc.name,
       tags: change.newDoc.tags ?? [],
       searchable: true,
-      presentation: change.newDoc.presentation ?? false,
     });
   } else if (change.operation === "update") {
     await syncNode(ctx, change.id,
       change.newDoc.name, change.newDoc.tags ?? [],
-      change.oldDoc.name, change.oldDoc.tags ?? [],
-      change.newDoc.presentation ?? false, change.oldDoc.presentation ?? false);
+      change.oldDoc.name, change.oldDoc.tags ?? []);
   }
   // delete: node + edge cleanup handled by cascade rules
 });

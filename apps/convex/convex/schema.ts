@@ -184,13 +184,8 @@ export default defineSchema({
     name: v.string(),
     tags: v.optional(v.array(v.string())),
     yjsSnapshotId: v.optional(v.id("_storage")),
-    // When true, the diagram is a slide deck: it's excluded from the document
-    // embed picker (see nodes.search `excludePresentations`) and gains
-    // presentation mode + PDF export. Defaults to false/undefined.
-    presentation: v.optional(v.boolean()),
   })
     .index("by_workspace", ["workspaceId"])
-    .index("by_workspace_presentation", ["workspaceId", "presentation"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
@@ -809,6 +804,12 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
     sourceNodeId: v.optional(v.id("nodes")),
     targetNodeId: v.optional(v.id("nodes")),
+    // For `embeds` edges that target a single Excalidraw frame of a diagram:
+    // the frame element's id. Undefined = whole-resource embed (the default,
+    // and every pre-frame-tracking row). Lets `getFrameEmbeds` warn before a
+    // frame embedded elsewhere is deleted, without changing diagram-level
+    // backlinks (those still key off targetId).
+    frameId: v.optional(v.string()),
     createdBy: v.optional(v.id("users")),
     createdAt: v.number(),
   })
@@ -847,12 +848,6 @@ export default defineSchema({
     // connected nodes — fuzzy search would surface low-information past
     // events as noise.
     searchable: v.optional(v.boolean()),
-    // Denormalized from `diagrams.presentation` (false for every non-diagram
-    // node). Lets the document embed picker exclude presentation diagrams at
-    // the index level via `nodes.search` `excludePresentations`. Always set
-    // explicitly on insert (and backfilled) because search filterFields don't
-    // match `undefined`.
-    presentation: v.optional(v.boolean()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_type", ["workspaceId", "resourceType"])
@@ -860,7 +855,7 @@ export default defineSchema({
     .index("by_resource_workspace", ["resourceId", "workspaceId"])
     .searchIndex("by_name", {
       searchField: "name",
-      filterFields: ["workspaceId", "resourceType", "searchable", "presentation"],
+      filterFields: ["workspaceId", "resourceType", "searchable"],
     }),
 
   notificationSubscriptions: defineTable({

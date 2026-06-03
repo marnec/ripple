@@ -13,8 +13,6 @@ interface DiagramActionsMenuProps {
   diagramId: Id<"diagrams">;
   diagramName: string;
   isAdmin: boolean;
-  /** Presentation diagrams gain PDF export (one page per frame). */
-  isPresentation?: boolean;
   excalidrawAPI: ExcalidrawImperativeAPI | null;
 }
 
@@ -22,7 +20,6 @@ export function DiagramActionsMenu({
   diagramId,
   diagramName,
   isAdmin,
-  isPresentation = false,
   excalidrawAPI,
 }: DiagramActionsMenuProps) {
   const [shareOpen, setShareOpen] = useState(false);
@@ -34,18 +31,15 @@ export function DiagramActionsMenu({
   );
 
   const downloadItems: readonly DownloadItem[] = [
-    ...(isPresentation
-      ? [
-          {
-            label: "PDF",
-            icon: <FileText className="text-muted-foreground" />,
-            onSelect: guarded(async (api) => {
-              const m = await loadExporters();
-              await m.exportDiagramPdf(api, diagramName);
-            }, "Failed to export PDF."),
-          },
-        ]
-      : []),
+    {
+      // One PDF page per frame (whole-diagram fallback when there are no frames).
+      label: "PDF",
+      icon: <FileText className="text-muted-foreground" />,
+      onSelect: guarded(async (api) => {
+        const m = await loadExporters();
+        await m.exportDiagramPdf(api, diagramName);
+      }, "Failed to export PDF."),
+    },
     {
       label: "PNG",
       icon: <FileImage className="text-muted-foreground" />,

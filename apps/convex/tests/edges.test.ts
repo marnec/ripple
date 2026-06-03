@@ -173,6 +173,151 @@ describe("edges.syncEdges", () => {
   });
 });
 
+describe("edges.syncEdges — per-frame embeds", () => {
+  it("creates one edge per (diagram, frame); whole + 2 frames → 3 edges", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { documentId, diagramId } = await t.run(async (ctx) => {
+      const docId = await ctx.db.insert("documents", { workspaceId, name: "Doc" });
+      const diaId = await ctx.db.insert("diagrams", { workspaceId, name: "Dia" });
+      return { documentId: docId, diagramId: diaId };
+    });
+
+    await asUser.mutation(api.edges.syncEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      references: [
+        { targetType: "diagram", targetId: diagramId }, // whole diagram
+        { targetType: "diagram", targetId: diagramId, frameId: "frame-A" },
+        { targetType: "diagram", targetId: diagramId, frameId: "frame-B" },
+      ],
+      workspaceId,
+    });
+
+    const edges = await t.run(async (ctx) =>
+      ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect(),
+    );
+
+    expect(edges).toHaveLength(3);
+    expect(edges.every((e) => e.targetId === diagramId)).toBe(true);
+    expect(new Set(edges.map((e) => e.frameId))).toEqual(
+      new Set([undefined, "frame-A", "frame-B"]),
+    );
+  });
+
+  it("re-syncs when a block's frame changes (old frame edge deleted, new inserted)", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { documentId, diagramId } = await t.run(async (ctx) => {
+      const docId = await ctx.db.insert("documents", { workspaceId, name: "Doc" });
+      const diaId = await ctx.db.insert("diagrams", { workspaceId, name: "Dia" });
+      return { documentId: docId, diagramId: diaId };
+    });
+
+    await asUser.mutation(api.edges.syncEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      references: [{ targetType: "diagram", targetId: diagramId, frameId: "frame-A" }],
+      workspaceId,
+    });
+    await asUser.mutation(api.edges.syncEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      references: [{ targetType: "diagram", targetId: diagramId, frameId: "frame-B" }],
+      workspaceId,
+    });
+
+    const edges = await t.run(async (ctx) =>
+      ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect(),
+    );
+    expect(edges).toHaveLength(1);
+    expect(edges[0].frameId).toBe("frame-B");
+  });
+});
+
+describe("edges.getFrameEmbeds", () => {
+  it("returns embedded frames with sources, excluding whole-diagram embeds", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { documentId, diagramId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const docId = await db.insert("documents", { workspaceId, name: "My Doc" });
+      const diaId = await db.insert("diagrams", { workspaceId, name: "My Diagram" });
+      return { documentId: docId, diagramId: diaId };
+    });
+
+    await asUser.mutation(api.edges.syncEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      references: [
+        { targetType: "diagram", targetId: diagramId }, // whole — excluded
+        { targetType: "diagram", targetId: diagramId, frameId: "frame-A" },
+      ],
+      workspaceId,
+    });
+
+    const rows = await asUser.query(api.edges.getFrameEmbeds, {
+      diagramId,
+      workspaceId,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].frameId).toBe("frame-A");
+    expect(rows[0].sourceType).toBe("document");
+    expect(rows[0].sourceName).toBe("My Doc");
+  });
+
+  it("returns empty for unauthenticated users", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    const rows = await t.query(api.edges.getFrameEmbeds, {
+      diagramId: "someId",
+      workspaceId,
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it("getBacklinks collapses multiple frame-embeds from one source to one entry", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { documentId, diagramId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const docId = await db.insert("documents", { workspaceId, name: "Doc" });
+      const diaId = await db.insert("diagrams", { workspaceId, name: "Dia" });
+      return { documentId: docId, diagramId: diaId };
+    });
+
+    // Same document embeds two different frames of the same diagram.
+    await asUser.mutation(api.edges.syncEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      references: [
+        { targetType: "diagram", targetId: diagramId, frameId: "frame-A" },
+        { targetType: "diagram", targetId: diagramId, frameId: "frame-B" },
+      ],
+      workspaceId,
+    });
+
+    const backlinks = await asUser.query(api.edges.getBacklinks, {
+      targetId: diagramId,
+      workspaceId,
+    });
+
+    expect(backlinks).toHaveLength(1);
+    expect(backlinks[0].sourceId).toBe(documentId);
+  });
+});
+
 describe("edge nodeIds", () => {
   it("syncEdges populates sourceNodeId and targetNodeId", async () => {
     const t = createTestContext();

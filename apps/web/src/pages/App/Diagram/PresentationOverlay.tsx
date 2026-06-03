@@ -3,7 +3,7 @@ import "@excalidraw/excalidraw/index.css";
 import type { ExcalidrawImperativeAPI, BinaryFiles } from "@excalidraw/excalidraw/types";
 import type { ExcalidrawElement, Theme } from "@excalidraw/excalidraw/element/types";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { orderFrames } from "./frames";
 
@@ -31,18 +31,50 @@ export function PresentationOverlay({ elements, files, theme, onClose }: Present
 
   const goTo = (next: number) => setIndex(Math.min(Math.max(next, 0), slideCount - 1));
 
+  // Whether the first slide has been positioned yet. The initial placement is
+  // snapped (no animation); only subsequent slide changes animate.
+  const positionedRef = useRef(false);
+
   // Move the camera to the active slide. fitToViewport fills ~92% of the
-  // screen with the frame (or the whole scene when there are no frames).
+  // screen with the frame, or the whole scene when there are no frames.
   useEffect(() => {
     if (!api) return;
-    const target = frames[index];
-    api.scrollToContent(target, {
-      fitToViewport: true,
-      viewportZoomFactor: 0.92,
-      animate: true,
-      duration: 350,
-    });
-  }, [api, index, frames]);
+    // Target the active frame, or the entire snapshot when the diagram has no
+    // frames — a frameless deck is one fit-to-content slide. (Relying on
+    // scrollToContent's default arg here is unsafe: passing an explicit target
+    // keeps the camera correct regardless of what's in the scene.)
+    const target = frames[index] ?? elements;
+
+    let raf = 0;
+    let cancelled = false;
+    const fit = () => {
+      if (cancelled || !api) return;
+      // Excalidraw measures its canvas via a ResizeObserver *after* mount, so
+      // on the very first frame the fullscreen container still reports a 0×0
+      // viewport. Fitting then divides by a zero-size viewport and flings the
+      // content off-screen (the "ghost" sliding out during the crossfade, and
+      // an empty viewport for a single-slide deck). Wait for real dimensions.
+      const { width, height } = api.getAppState();
+      if (!width || !height) {
+        raf = requestAnimationFrame(fit);
+        return;
+      }
+      api.scrollToContent(target, {
+        fitToViewport: true,
+        viewportZoomFactor: 0.92,
+        // Snap the first slide into place; animate only when navigating, so the
+        // entrance doesn't visibly pan from Excalidraw's default top-left camera.
+        animate: positionedRef.current,
+        duration: 350,
+      });
+      positionedRef.current = true;
+    };
+    raf = requestAnimationFrame(fit);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [api, index, frames, elements]);
 
   useEffect(() => {
     const clamp = (n: number) => Math.min(Math.max(n, 0), slideCount - 1);
@@ -148,6 +180,13 @@ export function PresentationOverlay({ elements, files, theme, onClose }: Present
           >
             <ChevronRight className="size-5" />
           </Button>
+          {frames.length === 0 && (
+            // The whole diagram is one fallback slide — tell the user how to
+            // turn it into a real deck.
+            <span className="rounded-md bg-background/70 px-3 py-1.5 text-sm text-muted-foreground backdrop-blur">
+              Add frames to the diagram to create slides
+            </span>
+          )}
         </div>
       </div>
     </div>

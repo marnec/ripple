@@ -51,6 +51,7 @@ import { getUserColor } from "../../../lib/user-colors";
 import { ActiveUsers } from "./ActiveUsers";
 import { BlockPickerDialog } from "./BlockPickerDialog";
 import { CellRefDialog } from "./CellRefDialog";
+import { FramePickerDialog } from "./FramePickerDialog";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { DocumentSpotlightFrame } from "./DocumentSpotlightFrame";
 import { EditorRevealRipple } from "./EditorRevealRipple";
@@ -95,19 +96,11 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       ? {
           workspaceId: document.workspaceId,
           searchText: debouncedHashSearch,
-          // Presentation diagrams are decks, not embeddable illustrations.
-          excludePresentations: true,
         }
       : "skip",
   );
   const workspaceMembers = useQuery(
     api.workspaceMembers.membersByWorkspace,
-    document ? { workspaceId: document.workspaceId } : "skip",
-  );
-  // Presentation diagrams are filtered out of the recents shown in the embed
-  // picker (the search path is filtered server-side via excludePresentations).
-  const presentationDiagramIds = useQuery(
-    api.diagrams.listPresentationIds,
     document ? { workspaceId: document.workspaceId } : "skip",
   );
   const viewer = useViewer();
@@ -137,6 +130,12 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     open: boolean;
     documentId: Id<"documents">;
     documentName: string;
+  } | null>(null);
+
+  const [framePickerDialog, setFramePickerDialog] = useState<{
+    open: boolean;
+    diagramId: Id<"diagrams">;
+    diagramName: string;
   } | null>(null);
 
   const reportMention = useMutation(api.documents.reportMention);
@@ -254,10 +253,12 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   const onEmbedsChanged = (current: Set<string>) => {
     if (!document) return;
     const references = [...current].map((key) => {
-      const sep = key.indexOf("|");
+      // "type|id" or, for diagram embeds, "diagram|id|frameId" ("" = whole).
+      const [targetType, targetId, frameId] = key.split("|");
       return {
-        targetType: key.slice(0, sep) as "diagram" | "spreadsheet" | "document",
-        targetId: key.slice(sep + 1),
+        targetType: targetType as "diagram" | "spreadsheet" | "document",
+        targetId,
+        frameId: frameId || undefined,
       };
     });
     void syncEdges({
@@ -306,10 +307,9 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   });
 
   // Suggestion menu items (#-trigger) and insert handlers
-  const { getHashItems, handleCellRefInsert, handleBlockPickerInsert } = useDocumentSuggestions({
+  const { getHashItems, handleCellRefInsert, handleBlockPickerInsert, handleFramePickerInsert } = useDocumentSuggestions({
     recents,
     searchResults,
-    excludeDiagramIds: presentationDiagramIds,
     hasSearch: hasHashSearch,
     isStale: isHashSearchStale,
     editor,
@@ -317,6 +317,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     ensureBlockRef,
     setCellRefDialog,
     setBlockPickerDialog,
+    setFramePickerDialog,
     onSearchChange: setHashSearch,
     currentDocumentId: documentId,
   });
@@ -478,6 +479,20 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               onInsert={(blockId) => {
                 if (!blockPickerDialog) return;
                 handleBlockPickerInsert(blockId, blockPickerDialog);
+              }}
+            />
+          )}
+          {framePickerDialog && (
+            <FramePickerDialog
+              open={framePickerDialog.open}
+              onOpenChange={(open) => {
+                if (!open) setFramePickerDialog(null);
+              }}
+              diagramId={framePickerDialog.diagramId}
+              diagramName={framePickerDialog.diagramName}
+              onInsert={(frameId) => {
+                if (!framePickerDialog) return;
+                handleFramePickerInsert(frameId, framePickerDialog);
               }}
             />
           )}

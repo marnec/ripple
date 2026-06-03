@@ -10,23 +10,32 @@ import type { Id } from "@convex/_generated/dataModel";
 
 const DiagramView = ({
   diagramId,
+  frameId,
   onAspectRatioChange,
   onNavigate,
 }: {
   diagramId: Id<"diagrams">;
+  frameId: string | null;
   onAspectRatioChange?: (ratio: number) => void;
   onNavigate: () => void;
 }) => {
-  const { svgHtml, isLoading, diagram } =
-    useDiagramPreview(diagramId);
+  const { svgHtml, isLoading, diagram, frameName } =
+    useDiagramPreview(diagramId, frameId);
+
+  // width / height from the SVG's viewBox, used to size the container
+  // explicitly. The embedded SVG fills its box (height:100%), so the box must
+  // carry the aspect ratio itself — otherwise frame SVGs collapse vertically
+  // and the embed shows only a clipped sliver.
+  const [boxRatio, setBoxRatio] = useState(0);
 
   const svgContainerRef = (node: HTMLDivElement | null) => {
-      if (!node || !onAspectRatioChange) return;
+      if (!node) return;
       const svg = node.querySelector("svg");
       if (!svg) return;
       const { width, height } = svg.viewBox.baseVal;
       if (width > 0 && height > 0) {
-        onAspectRatioChange(height / width);
+        setBoxRatio((prev) => (Math.abs(prev - width / height) > 0.0001 ? width / height : prev));
+        onAspectRatioChange?.(height / width);
       }
     };
 
@@ -60,12 +69,16 @@ const DiagramView = ({
                 }}
               >
                 {diagram.name}
+                {frameName ? ` › ${frameName}` : ""}
               </span>
             ) : null}
           </div>
           <div
             ref={svgContainerRef}
-            className="w-full [&>svg]:w-full [&>svg]:h-auto overflow-hidden"
+            className={`w-full overflow-hidden [&>svg]:block [&>svg]:w-full ${
+              boxRatio ? "[&>svg]:h-full" : "[&>svg]:h-auto"
+            }`}
+            style={boxRatio ? { aspectRatio: String(boxRatio) } : undefined}
             dangerouslySetInnerHTML={{ __html: svgHtml }}
           />
         </div>
@@ -83,6 +96,13 @@ const diagramPropSchema = {
   diagramId: {
     default: null as unknown as Id<"diagrams">,
   },
+  // Optional Excalidraw frame to embed instead of the whole diagram. Empty
+  // string (the default, and the value on pre-existing embeds) = whole diagram.
+  // BlockNote prop values must be string/number/boolean, so we use "" rather
+  // than null as the "no frame" sentinel.
+  frameId: {
+    default: "",
+  },
   width: {
     default: 512,
   },
@@ -96,7 +116,7 @@ type DiagramBlockProps = ReactCustomBlockRenderProps<
 >;
 
 const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
-  const { diagramId } = block.props;
+  const { diagramId, frameId } = block.props;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
   const navigate = useNavigate();
@@ -205,6 +225,7 @@ const ResizableDiagram = ({ block, editor }: DiagramBlockProps) => {
       <div className="p-3 border rounded-lg h-full">
         <DiagramView
           diagramId={diagramId as Id<"diagrams">}
+          frameId={frameId || null}
           onAspectRatioChange={handleAspectRatioChange}
           onNavigate={handleNavigate}
         />

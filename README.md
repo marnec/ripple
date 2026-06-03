@@ -7,7 +7,8 @@ NEXT STEPS:
 
 - add a dependency view to tasks
 
-- explore the ability to flag a diagram as a "presentation" which prevents its embedding but enables it's presentation mode and the ability to download a pdf/pptx (https://npm.io/package/excalidraw-presentation). Add relevant index so that non_presentation diagrams can be recovered when embedding in docs. Presentation mode probably needs to be recreated through code (https://deepwiki.com/excalidraw-smart-presentation/excalidraw-smart-presentation.github.io/5.1-presentation-mode-overview)
+
+- when embedding whole diagram, existing frames shouldn't appear in the embedded image
 
 - doc comments restyle (explore sidebar https://www.blocknotejs.org/docs/features/collaboration/comments#sidebar-view)
 

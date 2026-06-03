@@ -17,6 +17,54 @@ export interface FrameLike {
   height: number;
 }
 
+export interface SceneElementLike extends FrameLike {
+  id: string;
+  frameId?: string | null;
+}
+
+/**
+ * The elements to render when showing a single frame in isolation (doc embeds,
+ * picker thumbnails): the frame element plus its content.
+ *
+ * Content is the frame's true members (`frameId`) when it has any — neighbouring
+ * clusters that merely straddle the frame edge but belong to no frame are
+ * excluded, so we don't render half of an unrelated group as empty boxes. Only
+ * when a frame has no members at all (a diagram where nothing was assigned) do
+ * we fall back to elements overlapping the frame's bounding box.
+ *
+ * Callers export these WITHOUT `exportingFrame` so the result keeps its natural
+ * bounds and is NOT clipped to the frame rectangle — matching how the editor
+ * shows a frame (members that extend past the edge stay fully visible, rather
+ * than being cut off the way `exportingFrame`'s clip-to-frame did).
+ */
+export function frameViewElements<T extends SceneElementLike>(
+  elements: readonly T[],
+  frameId: string,
+): T[] {
+  const frame = elements.find((el) => el.type === "frame" && el.id === frameId);
+  if (!frame) return [];
+
+  const members = elements.filter(
+    (el) => el.type !== "frame" && el.frameId === frameId,
+  );
+  if (members.length > 0) return [frame, ...members];
+
+  // Fallback: no membership recorded — take elements overlapping the frame.
+  const left = frame.x;
+  const right = frame.x + frame.width;
+  const top = frame.y;
+  const bottom = frame.y + frame.height;
+  const overlapping = elements.filter(
+    (el) =>
+      el.type !== "frame" &&
+      el.x < right &&
+      el.x + el.width > left &&
+      el.y < bottom &&
+      el.y + el.height > top,
+  );
+  return overlapping.length > 0 ? [frame, ...overlapping] : [];
+}
+
 export function orderFrames<T extends FrameLike>(elements: readonly T[]): T[] {
   const frames = elements.filter((el) => el.type === "frame");
   if (frames.length === 0) return [];
