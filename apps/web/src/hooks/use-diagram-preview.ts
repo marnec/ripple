@@ -124,7 +124,6 @@ export function useDiagramPreview(
         // uses. Falls back to the whole diagram when the frame can't be found.
         let renderElements = elements;
         let resolvedFrameName: string | null = null;
-        let isFrameRender = false;
         if (frameId) {
           const sel = frameViewElements(elements, frameId);
           if (sel.length > 0) {
@@ -132,7 +131,6 @@ export function useDiagramPreview(
             const frameEl = sel.find((el) => el.type === "frame");
             resolvedFrameName =
               (frameEl as { name?: string | null } | undefined)?.name ?? null;
-            isFrameRender = true;
           }
         }
         if (!cancelled) setFrameName(resolvedFrameName);
@@ -142,17 +140,16 @@ export function useDiagramPreview(
           appState: {
             exportWithDarkMode: isDark,
             exportBackground: false,
-            // Show frame content without the frame's own chrome or clipping.
-            ...(isFrameRender
-              ? {
-                  frameRendering: {
-                    enabled: true,
-                    name: false,
-                    outline: false,
-                    clip: false,
-                  },
-                }
-              : {}),
+            // Frames are editor scaffolding, not content — never draw their
+            // outline, name, or clip box in an embed. This applies to both a
+            // single-frame embed (show that frame's content, no chrome) and a
+            // whole-diagram embed (existing frames must not box the content).
+            frameRendering: {
+              enabled: true,
+              name: false,
+              outline: false,
+              clip: false,
+            },
           },
           files: null,
         });
