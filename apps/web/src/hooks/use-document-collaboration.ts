@@ -10,6 +10,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { extractTextFromXml } from "@ripple/shared/blockRef";
 import { getUserColor } from "../lib/user-colors";
+import { documentCommentSchema } from "../pages/App/Document/comment-schema";
 import { useDescriptionSeedGate, type DescriptionSeed } from "./use-description-seed-gate";
 import { useYjsProvider } from "./use-yjs-provider";
 
@@ -177,7 +178,9 @@ export function useDocumentCollaboration<
         };
       });
     };
-    return CommentsExtension({ threadStore, resolveUsers });
+    // Pass the shared comment schema so BlockNote renders stored bodies with the
+    // same schema the rail's composer authors them in (see comment-schema.ts).
+    return CommentsExtension({ threadStore, resolveUsers, schema: documentCommentSchema });
   }, [enableComments, userId, yDoc, convex]);
 
   // Always create editor with Yjs collaboration so the fragment binding is

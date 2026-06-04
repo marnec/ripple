@@ -12,17 +12,23 @@ import type { ThreadData } from "@blocknote/core/comments";
 import {
   Thread,
   getReferenceText,
+  useCreateBlockNote,
   useEditorDOMElement,
   useThreads,
 } from "@blocknote/react";
-import { Check, MessageSquare, Undo2, X } from "lucide-react";
+import { BlockNoteView } from "@blocknote/shadcn";
+import { useTheme } from "next-themes";
+import { Check, MessageSquare, MessageSquarePlus, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { isBlocksEmpty } from "@/lib/editor-utils";
 import {
   Drawer,
   DrawerContent,
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { documentCommentSchema } from "./comment-schema";
 import {
   countOpenThreads,
   visibleThreads,
@@ -36,6 +42,12 @@ type AnyEditor = BlockNoteEditor<any, any, any>;
 /** The slice of the comments extension instance the rail interacts with. */
 type CommentsExtensionInstance = {
   selectThread: (threadId: string | undefined, scrollToThread?: boolean) => void;
+  createThread: (options: {
+    initialComment: { body: unknown; metadata?: unknown };
+    metadata?: unknown;
+  }) => Promise<void>;
+  startPendingComment: () => void;
+  stopPendingComment: () => void;
   threadStore: {
     resolveThread: (options: { threadId: string }) => Promise<void>;
     unresolveThread: (options: { threadId: string }) => Promise<void>;
@@ -94,6 +106,28 @@ function useCommentsStore(editor: AnyEditor): {
     () => ext?.store.state.threadPositions ?? EMPTY_POSITIONS,
   );
   return { selectedThreadId, positions };
+}
+
+/** Whether a comment is currently being composed (text selected + "Comment"). */
+function usePendingComment(editor: AnyEditor): boolean {
+  const ext = getCommentsExtension(editor);
+  return useSyncExternalStore(
+    (onChange) => (ext ? ext.store.subscribe(onChange) : () => {}),
+    () => ext?.store.state.pendingComment ?? false,
+  );
+}
+
+/** The main editor's current non-collapsed selection, as a thread position. */
+function currentSelection(
+  editor: AnyEditor,
+): { from: number; to: number } | undefined {
+  try {
+    const sel = editor._tiptapEditor.state.selection;
+    if (sel.from === sel.to) return undefined;
+    return { from: sel.from, to: sel.to };
+  } catch {
+    return undefined;
+  }
 }
 
 // --- Shared UI state (open + open-count) -----------------------------------
@@ -374,8 +408,124 @@ function CommentsRailContent({
           </div>
         )}
       </div>
+
+      <CommentComposer editor={editor} />
     </div>
   );
+}
+
+/**
+ * Fixed composer pinned at the bottom of the rail (mirrors the task-comments
+ * layout). A new document comment is anchored to a text selection, so the
+ * composer is only "armed" once the user starts a comment from the document
+ * (the formatting-toolbar "Add comment" button → `startPendingComment`, which
+ * also opens this rail). When idle it shows a hint instead of an input, so the
+ * user is never faced with a composer that can't actually submit.
+ *
+ * On submit, `createThread` anchors the new thread to the main editor's
+ * preserved selection (kept alive by `startPendingComment`'s ShowSelection).
+ */
+function CommentComposer({ editor }: { editor: AnyEditor }) {
+  const pending = usePendingComment(editor);
+  const { resolvedTheme } = useTheme();
+  const composerEditor = useCreateBlockNote({
+    schema: documentCommentSchema,
+    trailingBlock: false,
+  });
+  const [isEmpty, setIsEmpty] = useState(true);
+
+  // Focus the composer when a comment is started from the document.
+  useEffect(() => {
+    if (!pending) return;
+    const id = setTimeout(() => composerEditor.focus(), 0);
+    return () => clearTimeout(id);
+  }, [pending, composerEditor]);
+
+  const resetComposer = () => {
+    composerEditor.replaceBlocks(composerEditor.document, [
+      { type: "paragraph" },
+    ]);
+    setIsEmpty(true);
+  };
+
+  const submit = () => {
+    if (isBlocksEmpty(composerEditor.document)) return;
+    const ext = getCommentsExtension(editor);
+    if (!ext) return;
+    void ext
+      .createThread({ initialComment: { body: composerEditor.document } })
+      .then(() => {
+        resetComposer();
+        ext.stopPendingComment();
+      });
+  };
+
+  const cancel = () => {
+    getCommentsExtension(editor)?.stopPendingComment();
+    resetComposer();
+  };
+
+  if (!pending) {
+    return (
+      <div className="shrink-0 border-t px-3 py-2.5 flex items-center gap-2 text-xs text-muted-foreground">
+        <MessageSquarePlus className="size-3.5 shrink-0" />
+        <span>Select text in the document to start a comment.</span>
+      </div>
+    );
+  }
+
+  const reference = getReferenceText(editor, currentSelection(editor));
+
+  return (
+    <div
+      className="shrink-0 border-t p-3 space-y-2"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          submit();
+        }
+      }}
+    >
+      {reference && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="shrink-0">Commenting on</span>
+          <span className="truncate rounded bg-muted px-1.5 py-0.5 italic text-foreground/80">
+            “{reference}”
+          </span>
+        </div>
+      )}
+      <div className="task-comment-editor border rounded-md p-2">
+        <BlockNoteView
+          editor={composerEditor}
+          theme={resolvedTheme === "dark" ? "dark" : "light"}
+          sideMenu={false}
+          onChange={() => setIsEmpty(isBlocksEmpty(composerEditor.document))}
+        />
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={cancel}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={isEmpty} onClick={submit}>
+          Comment
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Always-mounted (renders nothing) watcher that opens the rail when the user
+ * starts a comment from the document, so the fixed composer becomes visible and
+ * focused. Must live inside `BlockNoteView` for the editor context.
+ */
+export function CommentPendingWatcher({ editor }: { editor: AnyEditor }) {
+  const pending = usePendingComment(editor);
+  const { open, setOpen } = useCommentsUI();
+  useEffect(() => {
+    if (pending && !open) setOpen(true);
+  }, [pending, open, setOpen]);
+  return null;
 }
 
 // --- Desktop docked rail (resizable) ---------------------------------------

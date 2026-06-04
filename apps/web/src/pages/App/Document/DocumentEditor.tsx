@@ -14,7 +14,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
 import {
   BlockNoteViewEditor,
-  FloatingComposerController,
   SuggestionMenuController,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
@@ -72,6 +71,7 @@ import {
   CommentsUIProvider,
   CommentsToggleButton,
   CommentCountReporter,
+  CommentPendingWatcher,
   CommentsDockedRail,
   CommentsDrawer,
 } from "./CommentsRail";
@@ -499,7 +499,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             active={showReferencedBlocks}
           />
           <BlockNoteViewEditor />
-          {commentsEnabled && <FloatingComposerController />}
           {cellRefDialog && (
             <CellRefDialog
               open={cellRefDialog.open}
@@ -556,6 +555,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
         <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
         <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
         {commentsEnabled && <CommentCountReporter />}
+        {commentsEnabled && <CommentPendingWatcher editor={editor} />}
         {commentsEnabled && isMobile && <CommentsDrawer editor={editor} />}
         </BlockNoteView>
       </div>
