@@ -20,15 +20,20 @@ function resolveGhostPosition({
   if (!dayEl) return null;
   const dayRect = dayEl.getBoundingClientRect();
 
-  let topOffset = 24;
+  // Anchor vertically to the target day's own events container. It is always
+  // rendered (even with no events), and its top already accounts for the day
+  // header height — which is taller in the first week row because of the
+  // day-name label (e.g. "SUN"). Measuring it per-cell is correct whether or
+  // not anything is scheduled, unlike deriving an offset from some other cell's
+  // event (which broke alignment when the grid had no events to sample).
+  const eventsEl = dayEl.querySelector(".sx__month-grid-day__events");
+  const top = eventsEl ? eventsEl.getBoundingClientRect().top : dayRect.top + 24;
+
+  // Match an existing event's height if one is on screen, else fall back.
   let eventHeight = 22;
   const refEvent = calendarRoot.querySelector(".sx__month-grid-event");
-  const refCell = refEvent?.closest("[data-date]");
-  if (refEvent && refCell) {
-    const eventRect = refEvent.getBoundingClientRect();
-    const cellRect = refCell.getBoundingClientRect();
-    topOffset = Math.round(eventRect.top - cellRect.top);
-    eventHeight = Math.round(eventRect.height);
+  if (refEvent) {
+    eventHeight = Math.round(refEvent.getBoundingClientRect().height);
   }
 
   let width = dayRect.width - 4;
@@ -43,7 +48,7 @@ function resolveGhostPosition({
     }
   }
 
-  return { top: dayRect.top + topOffset, left: dayRect.left + 2, width, height: eventHeight };
+  return { top, left: dayRect.left + 2, width, height: eventHeight };
 }
 
 export function CalendarGhostOverlay({
