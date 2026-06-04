@@ -4,11 +4,7 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-
 - add a dependency view to tasks
-
-
-- when embedding whole diagram, existing frames shouldn't appear in the embedded image
 
 - doc comments restyle (explore sidebar https://www.blocknotejs.org/docs/features/collaboration/comments#sidebar-view)
 

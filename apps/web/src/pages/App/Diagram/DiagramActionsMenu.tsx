@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileCode2, FileImage, FileJson, FileText } from "lucide-react";
+import { FileImage, FileJson, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import { ShareDialog } from "@/components/ShareDialog";
@@ -32,6 +32,19 @@ export function DiagramActionsMenu({
 
   const downloadItems: readonly DownloadItem[] = [
     {
+      // Opens Excalidraw's native export dialog (PNG / SVG / copy-to-clipboard,
+      // with scale / background / dark-mode options) — the same dialog the
+      // Ctrl+Shift+E shortcut and the hamburger's "Export image" item open.
+      // Routing it through here lets the native menu stay hidden while keeping
+      // the dialog's richer options. `updateScene` merges this into Excalidraw's
+      // appState, which is what triggers the dialog to render.
+      label: "image",
+      icon: <FileImage className="text-muted-foreground" />,
+      onSelect: guarded((api) => {
+        api.updateScene({ appState: { openDialog: { name: "imageExport" } } });
+      }, "Failed to open image export."),
+    },
+    {
       // One PDF page per frame (whole-diagram fallback when there are no frames).
       label: "PDF",
       icon: <FileText className="text-muted-foreground" />,
@@ -39,22 +52,6 @@ export function DiagramActionsMenu({
         const m = await loadExporters();
         await m.exportDiagramPdf(api, diagramName);
       }, "Failed to export PDF."),
-    },
-    {
-      label: "PNG",
-      icon: <FileImage className="text-muted-foreground" />,
-      onSelect: guarded(async (api) => {
-        const m = await loadExporters();
-        await m.exportDiagramPng(api, diagramName);
-      }, "Failed to export PNG."),
-    },
-    {
-      label: "SVG",
-      icon: <FileCode2 className="text-muted-foreground" />,
-      onSelect: guarded(async (api) => {
-        const m = await loadExporters();
-        await m.exportDiagramSvg(api, diagramName);
-      }, "Failed to export SVG."),
     },
     {
       label: "Excalidraw",

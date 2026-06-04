@@ -209,6 +209,42 @@ describe("edges.syncEdges — per-frame embeds", () => {
     );
   });
 
+  it("resolves targetNodeId once per target across whole + frame edges", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { documentId, diagramId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const docId = await db.insert("documents", { workspaceId, name: "Doc" });
+      const diaId = await db.insert("diagrams", { workspaceId, name: "Dia" });
+      return { documentId: docId, diagramId: diaId };
+    });
+
+    await asUser.mutation(api.edges.syncEdges, {
+      sourceType: "document",
+      sourceId: documentId,
+      references: [
+        { targetType: "diagram", targetId: diagramId },
+        { targetType: "diagram", targetId: diagramId, frameId: "frame-A" },
+        { targetType: "diagram", targetId: diagramId, frameId: "frame-B" },
+      ],
+      workspaceId,
+    });
+
+    const edges = await t.run(async (ctx) =>
+      ctx.db
+        .query("edges")
+        .withIndex("by_source", (q) => q.eq("sourceId", documentId))
+        .collect(),
+    );
+
+    expect(edges).toHaveLength(3);
+    // The diagram has exactly one node; all three embed edges must point at it.
+    const targetNodeIds = new Set(edges.map((e) => e.targetNodeId));
+    expect(targetNodeIds.size).toBe(1);
+    expect([...targetNodeIds][0]).toBeDefined();
+  });
+
   it("re-syncs when a block's frame changes (old frame edge deleted, new inserted)", async () => {
     const t = createTestContext();
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);

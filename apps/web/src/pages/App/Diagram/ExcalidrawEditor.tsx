@@ -1,6 +1,6 @@
 "use client";
 
-import { Excalidraw, MainMenu } from "@excalidraw/excalidraw";
+import { Excalidraw } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type {
   ExcalidrawImperativeAPI,
@@ -214,6 +214,13 @@ export function ExcalidrawEditor({
         .excalidraw .zoom-actions { display: none !important; }
         .excalidraw .undo-redo-buttons { display: none !important; }
         .excalidraw .HelpButton { display: none !important; }
+        /* Hide the hamburger ("sandwich") menu entirely — its only useful entry
+           (Export image) is now reached via Ripple's share menu, which opens the
+           same native dialog. The dialog renders independently of this menu, so
+           hiding the trigger is safe. Note: removing the <MainMenu> child makes
+           Excalidraw fall back to its DEFAULT menu, so the trigger must be hidden
+           via CSS rather than by dropping the element. */
+        .excalidraw .main-menu-trigger { display: none !important; }
         /* Reset the injected button so only the .ToolIcon__icon box shows,
            matching the native shape tools. */
         .ripple-frame-tool { background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
@@ -283,12 +290,7 @@ export function ExcalidrawEditor({
             },
           },
         }}
-      >
-        <MainMenu>
-          <MainMenu.DefaultItems.SaveAsImage />
-          <MainMenu.DefaultItems.SaveToActiveFile />
-        </MainMenu>
-      </Excalidraw>
+      />
 
       {frameSlot &&
         !viewModeEnabled &&

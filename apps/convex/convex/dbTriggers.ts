@@ -145,7 +145,7 @@ type NodeInsertCtx = Parameters<Parameters<typeof triggers.register>[1]>[0];
 /** Single entry point for inserting `nodes` rows from triggers. */
 async function insertNode(
   ctx: NodeInsertCtx,
-  fields: Omit<DataModel["nodes"]["document"], "_id" | "_creationTime" | "presentation">,
+  fields: Omit<DataModel["nodes"]["document"], "_id" | "_creationTime">,
 ) {
   await ctx.db.insert("nodes", fields);
 }
