@@ -84,6 +84,7 @@ export function CalendarSidebarProvider({
     <CalendarSidebarContext.Provider value={ctx}>
       <div
         data-slot="calendar-sidebar-wrapper"
+        data-state={open ? "expanded" : "collapsed"}
         style={
           {
             "--sidebar-width": SIDEBAR_WIDTH,

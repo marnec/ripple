@@ -61,7 +61,7 @@ function ProjectLayoutContent({
   return (
     <div className="flex h-full w-full flex-col">
       {/* Project header with inline tabs */}
-      <div className="flex items-center justify-between gap-4 px-3 border-b min-h-11">
+      <div className="flex items-center justify-between gap-4 px-4 border-b min-h-11">
         <div className="flex items-center gap-2 min-w-0">
           <FavoriteButton
             resourceType="project"

@@ -211,6 +211,13 @@
   padding-block: 8px;
 }
 
+/* When the unscheduled sidebar is open it floats over the inset's right edge,
+   so the toolbar's right-most control (the "Unscheduled" button) sits flush
+   against the sidebar border. Nudge it away. */
+[data-slot="calendar-sidebar-wrapper"][data-state="expanded"] .sx__calendar-header {
+  padding-inline-end: 8px;
+}
+
 /* Month-grid truncation. Two layers of fix here, because the rendered
    DOM is a flex container with two child divs:
      <div class="sx__month-grid-event">                ← flex parent
