@@ -11,7 +11,12 @@ import {
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { SuggestionMenuController } from "@blocknote/react";
+import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
+import {
+  BlockNoteViewEditor,
+  FloatingComposerController,
+  SuggestionMenuController,
+} from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -29,6 +34,13 @@ import { useLocalRecents } from "@/hooks/use-local-recents";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
+
+// The WebGL "reveal ripple" that fired on clicks outside the editor is disabled
+// — editor-boundary detection is now handled by the caret-guard whitelist + the
+// spotlight frame, so the ripple is purely decorative and was distracting. Kept
+// behind a flag (not deleted) because the effect is complex and may be reused
+// elsewhere; flip to `true` to bring it back.
+const SHOW_EDITOR_REVEAL_RIPPLE = false;
 
 const documentDictionary = {
   ...bnEn,
@@ -56,6 +68,13 @@ import { ConnectionStatus } from "./ConnectionStatus";
 import { DocumentSpotlightFrame } from "./DocumentSpotlightFrame";
 import { EditorRevealRipple } from "./EditorRevealRipple";
 import { ReferencedBlocksHighlight } from "./ReferencedBlocksHighlight";
+import {
+  CommentsUIProvider,
+  CommentsToggleButton,
+  CommentCountReporter,
+  CommentsDockedRail,
+  CommentsDrawer,
+} from "./CommentsRail";
 import { documentSchema as schema } from "./schema";
 import { SnapshotFallback } from "./SnapshotFallback";
 import { useDocumentSuggestions } from "./useDocumentSuggestions";
@@ -153,6 +172,13 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
     // attributed to the "anonymous" fallback id.
     enableComments: !!viewer?._id,
   });
+
+  // Mirrors `enableComments` above: the comments extension only exists for a
+  // real viewer, so all comment UI (toggle, rail, reporter) is gated on this.
+  const commentsEnabled = !!viewer?._id;
+
+  // Editor scroll container: scrollbar appears only while scrolling, then fades.
+  const editorScrollRef = useAutoHideScrollbar<HTMLDivElement>();
 
   // Inject imported content (from .docx import) once when the editor is ready
   useEffect(() => {
@@ -341,6 +367,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   }
 
   return (
+    <CommentsUIProvider>
     <div className="h-full flex-1 min-w-0 flex flex-col animate-fade-in">
       <div className="flex items-center justify-between px-3 py-1.5 border-b">
         <div className="flex h-8 min-w-0 items-center gap-4">
@@ -383,6 +410,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }
             />
           )}
+          {commentsEnabled && <CommentsToggleButton />}
           {document && (
             <DocumentActionsMenu
               documentId={documentId}
@@ -416,26 +444,46 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
       )}
       <MobileHeaderTitle name={document.name} />
       <div className="flex-1 flex flex-col min-h-0 relative">
-        <EditorRevealRipple />
+        {SHOW_EDITOR_REVEAL_RIPPLE && <EditorRevealRipple />}
+        {/*
+          BlockNoteView is the outer flex container so the comments rail can sit
+          beside the editor while still living inside BlockNoteView's React
+          context (the rail's `useThreads`/`Thread` need both the editor context
+          and the shadcn components context that BlockNoteView provides).
+          `renderEditor={false}` + `<BlockNoteViewEditor />` lets us place the
+          editor in our own scrollable column; `comments={false}` disables the
+          default floating thread UI in favour of the rail — but it also removes
+          the floating composer, so `<FloatingComposerController />` is added
+          back manually or comment creation breaks.
+        */}
+        <BlockNoteView
+          editor={editor}
+          theme={resolvedTheme === "dark" ? "dark" : "light"}
+          renderEditor={false}
+          comments={false}
+          className="flex-1 min-h-0 flex overflow-hidden"
+        >
         <div
-          className="flex-1 overflow-y-scroll scrollbar-stable pt-4"
+          ref={editorScrollRef}
+          data-editor-scroll
+          className="flex-1 min-w-0 scrollbar-autohide pt-4"
           onMouseDown={(e) => {
-            // Clicking outside the editable area (padding / below last block /
-            // side margins) should drop the caret at the end of the document
-            // rather than reset it to the first block.
-            // BlockNote's `editor.focus()` alone lands at the top; we have to
-            // explicitly position the caret with setTextCursorPosition first.
+            // Clicking the empty editor padding (side margins / below the last
+            // block) should drop the caret at the end of the document rather
+            // than reset it to the first block. BlockNote's `editor.focus()`
+            // alone lands at the top, so we position the caret explicitly first.
             //
-            // Guard on `.bn-root`, not just `.bn-editor`: BlockNote renders its
-            // floating UI (formatting toolbar, comment composer, suggestion
-            // menus) into a body-level `.bn-root` portal. React synthetic events
-            // bubble through the React tree across portals, so a mousedown on
-            // e.g. the "Add comment" button reaches this handler even though the
-            // button isn't a DOM descendant. Without this, clicking the comment
-            // button would collapse the selection and move the caret to the last
-            // block, so the comment composer never opens.
+            // Whitelist the padding rather than blacklisting BlockNote UI: now
+            // that BlockNoteView is the outer container, every click is inside
+            // its `.bn-root`, and the editor's floating UI (toolbar, composer,
+            // menus) bubbles here through the React tree. So only act when the
+            // target is the scroll container itself or the spotlight-frame
+            // wrapper — never the editor content or any BlockNote control.
             const target = e.target as HTMLElement;
-            if (target.closest(".bn-root")) return;
+            const isPadding =
+              target.dataset.editorScroll !== undefined ||
+              target.classList.contains("document-spotlight-frame");
+            if (!isPadding) return;
             e.preventDefault();
             const blocks = editor.document;
             const lastBlock = blocks[blocks.length - 1];
@@ -450,10 +498,8 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
             blockIds={referencedBlockIds}
             active={showReferencedBlocks}
           />
-          <BlockNoteView editor={editor} theme={resolvedTheme === "dark" ? "dark" : "light"}>
-            <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
-            <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
-          </BlockNoteView>
+          <BlockNoteViewEditor />
+          {commentsEnabled && <FloatingComposerController />}
           {cellRefDialog && (
             <CellRefDialog
               open={cellRefDialog.open}
@@ -506,7 +552,14 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           )}
         </DocumentSpotlightFrame>
         </div>
+        {commentsEnabled && !isMobile && <CommentsDockedRail editor={editor} />}
+        <SuggestionMenuController triggerCharacter={"#"} getItems={getHashItems} />
+        <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
+        {commentsEnabled && <CommentCountReporter />}
+        {commentsEnabled && isMobile && <CommentsDrawer editor={editor} />}
+        </BlockNoteView>
       </div>
     </div>
+    </CommentsUIProvider>
   );
 }

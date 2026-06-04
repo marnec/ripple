@@ -4,9 +4,9 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- add a dependency view to tasks
+- fix sidebar overflows and scrolls horizontally 
 
-- doc comments restyle (explore sidebar https://www.blocknotejs.org/docs/features/collaboration/comments#sidebar-view)
+- add a dependency view to tasks
 
 - explore pdf reading, annotation and embedding
 

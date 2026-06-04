@@ -533,6 +533,47 @@ body {
   background: hsl(var(--foreground) / 0.3);
 }
 
+/* Auto-hide scrollbar — gutter stays reserved (no layout shift), but the thumb
+   is invisible until the container is scrolled. A scroll listener toggles
+   `data-scrolling`; the thumb fades back out after a short idle (see
+   use-autohide-scrollbar). Class selectors beat the global `*` rules below. */
+.scrollbar-autohide {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-autohide[data-scrolling="true"] {
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent)
+    transparent;
+}
+
+/* WebKit fallback (older Safari, which ignores `scrollbar-color`). The thumb
+   transition gives a soft fade-out there; Firefox/Chrome use the standard
+   `scrollbar-color` above (not animatable, so it hard-cuts — acceptable). */
+.scrollbar-autohide::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-autohide::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-autohide::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.scrollbar-autohide[data-scrolling="true"]::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--foreground) 22%, transparent);
+}
+
+.scrollbar-autohide[data-scrolling="true"]::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--foreground) 35%, transparent);
+}
+
 /* Global scrollbar style — matches .scrollbar-stable but without the fixed
    gutter, so any scrollable element inherits the subtle thin look used in
    Documents and TaskDetailSheet. Standard properties are inherited from html;
