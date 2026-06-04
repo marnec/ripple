@@ -208,6 +208,7 @@
 
 .sx__calendar-header {
   padding-inline: 0;
+  padding-block: 8px;
 }
 
 /* Month-grid truncation. Two layers of fix here, because the rendered
