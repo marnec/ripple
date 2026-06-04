@@ -6,6 +6,9 @@ NEXT STEPS:
 
 - fix sidebar overflows and scrolls horizontally 
 
+- move references btn in doc header from its current pos to right btn array, leave only icon, disabled if no refs
+- embedded table width should behave exactly like embedded diagram width it should acquire a width and keep it until possible, it should only shrink if its container shrinks to much (e.g. full width table and comments sidebar opens)
+
 - add a dependency view to tasks
 
 - explore pdf reading, annotation and embedding

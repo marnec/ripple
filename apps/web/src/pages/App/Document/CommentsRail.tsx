@@ -17,6 +17,7 @@ import {
   useThreads,
 } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
+import { AnimatePresence, m } from "framer-motion";
 import { useTheme } from "next-themes";
 import { Check, MessageSquare, MessageSquarePlus, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -465,51 +466,75 @@ function CommentComposer({ editor }: { editor: AnyEditor }) {
     resetComposer();
   };
 
-  if (!pending) {
-    return (
-      <div className="shrink-0 border-t px-3 py-2.5 flex items-center gap-2 text-xs text-muted-foreground">
-        <MessageSquarePlus className="size-3.5 shrink-0" />
-        <span>Select text in the document to start a comment.</span>
-      </div>
-    );
-  }
+  const reference = pending
+    ? getReferenceText(editor, currentSelection(editor))
+    : undefined;
 
-  const reference = getReferenceText(editor, currentSelection(editor));
-
+  // The bottom slot swaps between an idle hint and the armed composer; each
+  // slides up from the bottom edge (height + slight y) while the container
+  // clips. No `mode="wait"` so the composer mounts immediately on `pending` and
+  // the focus effect above can land the caret without waiting on an exit.
   return (
-    <div
-      className="shrink-0 border-t p-3 space-y-2"
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          submit();
-        }
-      }}
-    >
-      {reference && (
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="shrink-0">Commenting on</span>
-          <span className="truncate rounded bg-muted px-1.5 py-0.5 italic text-foreground/80">
-            “{reference}”
-          </span>
-        </div>
-      )}
-      <div className="task-comment-editor border rounded-md p-2">
-        <BlockNoteView
-          editor={composerEditor}
-          theme={resolvedTheme === "dark" ? "dark" : "light"}
-          sideMenu={false}
-          onChange={() => setIsEmpty(isBlocksEmpty(composerEditor.document))}
-        />
-      </div>
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" size="sm" onClick={cancel}>
-          Cancel
-        </Button>
-        <Button size="sm" disabled={isEmpty} onClick={submit}>
-          Comment
-        </Button>
-      </div>
+    <div className="shrink-0 overflow-hidden border-t">
+      <AnimatePresence initial={false}>
+        {pending ? (
+          <m.div
+            key="composer"
+            initial={{ height: 0, opacity: 0, y: 12 }}
+            animate={{ height: "auto", opacity: 1, y: 0 }}
+            exit={{ height: 0, opacity: 0, y: 12 }}
+            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+          >
+            <div className="p-3 space-y-2">
+              {reference && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="shrink-0">Commenting on</span>
+                  <span className="truncate rounded bg-muted px-1.5 py-0.5 italic text-foreground/80">
+                    “{reference}”
+                  </span>
+                </div>
+              )}
+              <div className="task-comment-editor border rounded-md p-2">
+                <BlockNoteView
+                  editor={composerEditor}
+                  theme={resolvedTheme === "dark" ? "dark" : "light"}
+                  sideMenu={false}
+                  onChange={() =>
+                    setIsEmpty(isBlocksEmpty(composerEditor.document))
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={cancel}>
+                  Cancel
+                </Button>
+                <Button size="sm" disabled={isEmpty} onClick={submit}>
+                  Comment
+                </Button>
+              </div>
+            </div>
+          </m.div>
+        ) : (
+          <m.div
+            key="hint"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            <div className="px-3 py-2.5 flex items-center gap-2 text-xs text-muted-foreground">
+              <MessageSquarePlus className="size-3.5 shrink-0" />
+              <span>Select text in the document to start a comment.</span>
+            </div>
+          </m.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -579,28 +604,50 @@ export function CommentsDockedRail({ editor }: { editor: AnyEditor }) {
     };
   }, [dragging]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className="relative flex h-full shrink-0 border-l bg-background animate-fade-in"
-      style={{ width }}
-    >
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        onMouseDown={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        className="absolute left-0 top-0 z-10 h-full w-1 -translate-x-1/2 cursor-col-resize hover:bg-ring/40 transition-colors"
-      />
-      <CommentsRailContent
-        editor={editor}
-        onClose={() => setOpen(false)}
-        showClose
-      />
-    </div>
+    <AnimatePresence initial={false}>
+      {open && (
+        <m.div
+          key="comments-rail"
+          initial={{ width: 0 }}
+          animate={{ width }}
+          exit={{ width: 0 }}
+          // Slide via width so the editor reflows with the panel. During a
+          // resize drag the width changes every frame, so use a 0s transition
+          // then to keep dragging instant; only the open/close uses easing.
+          transition={
+            dragging ? { duration: 0 } : { duration: 0.26, ease: [0.32, 0.72, 0, 1] }
+          }
+          className="relative h-full shrink-0 overflow-hidden"
+        >
+          {/* Left-anchored inner at the final width. The clipping container is a
+              right-side flex item, so as it widens its left edge moves left and
+              carries this left-pinned panel with it — the panel physically
+              slides in from the right (and out on close) while still pushing the
+              editor. (Right-anchoring would keep the panel still and merely
+              uncover it — a reveal, not a slide.) Fixed width avoids reflow. */}
+          <div
+            className="absolute left-0 top-0 flex h-full border-l bg-background"
+            style={{ width }}
+          >
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              className="absolute left-0 top-0 z-10 h-full w-1.5 cursor-col-resize hover:bg-ring/40 transition-colors"
+            />
+            <CommentsRailContent
+              editor={editor}
+              onClose={() => setOpen(false)}
+              showClose
+            />
+          </div>
+        </m.div>
+      )}
+    </AnimatePresence>
   );
 }
 
