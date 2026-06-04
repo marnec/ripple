@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTheme } from "next-themes";
 import { FileImage, FileJson, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
@@ -23,6 +24,7 @@ export function DiagramActionsMenu({
   excalidrawAPI,
 }: DiagramActionsMenuProps) {
   const [shareOpen, setShareOpen] = useState(false);
+  const { resolvedTheme } = useTheme();
 
   const guarded = makeExportHandler(
     () => excalidrawAPI,
@@ -41,7 +43,15 @@ export function DiagramActionsMenu({
       label: "image",
       icon: <FileImage className="text-muted-foreground" />,
       onSelect: guarded((api) => {
-        api.updateScene({ appState: { openDialog: { name: "imageExport" } } });
+        // Seed the dialog's "Dark mode" switch from the app's resolved theme —
+        // the switch initialises from appState.exportWithDarkMode, so set it as
+        // we open the dialog. The user can still toggle it inside the dialog.
+        api.updateScene({
+          appState: {
+            openDialog: { name: "imageExport" },
+            exportWithDarkMode: resolvedTheme === "dark",
+          },
+        });
       }, "Failed to open image export."),
     },
     {
