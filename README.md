@@ -4,8 +4,6 @@ NEXT STEPS:
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
-- fix sidebar overflows and scrolls horizontally 
-
 - add a dependency view to tasks
 
 - explore pdf reading, annotation and embedding
@@ -55,7 +53,6 @@ keyboard accessiblity
 - [ ] External integrations
     - [ ] github issues
         - v1 deferrals (revisit after first ship):
-            - [ ] migration: clear `taskCommentIntegrationLinks.externalAuthor` on Ripple-originated comment links written before the avatar-override fix (those still render the bot chip over the real author's avatar). Inbound/external-authored links must keep their `externalAuthor`. Not yet deployed to prod, so safe to defer until first ship.
             - [ ] milestone ↔ cycle sync (opt-in, name-paired via stored `externalMilestoneId`)
             - [ ] priority sync via configurable label template (e.g. `priority/high`)
             - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
