@@ -160,6 +160,19 @@
   width: calc(100% + 10px);
 }
 
+/* …but stop just short of the cell's two edges. The bleed above fills the
+   whole day cell, so a task occupying a full day touches both borders and
+   contiguous tasks in adjacent cells butt right up against each other,
+   reading as one continuous bar. A small symmetric inset (~3px each side
+   via a 3px start margin + a correspondingly shorter width) restores ~6px
+   of breathing room between adjacent tasks without bringing back
+   schedule-x's larger default 9px gap. Scoped to month-grid so the
+   time-grid views (MyCalendarTab) keep their full-width bleed. */
+.sx__calendar-wrapper .sx__month-grid-event .sx-event-content {
+  width: calc(100% + 3px);
+  margin-inline-start: 3px;
+}
+
 .sx-event-dot {
   flex-shrink: 0;
   width: 7px;
