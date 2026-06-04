@@ -266,6 +266,37 @@ export function ExcalidrawEditor({
           --color-brand-active: #bfdbfe;
           --color-surface-primary-container: #1e3a8a;
         }
+
+        /* ── Export-image dialog buttons → shadcn "secondary" ─────────────
+           The PNG / SVG / copy-to-clipboard buttons in the native export
+           dialog are FilledButtons (.ExcButton) and otherwise render as solid
+           brand-blue boxes, which clash with the app's buttons. Repaint them
+           to match shadcn's secondary variant using the app's own design
+           tokens (which cascade in from :root). Geometry selector carries
+           .ExcButton--size-medium and color selectors carry
+           .ExcButton--color-primary.ExcButton--variant-filled so they outrank
+           Excalidraw's own (0,2,0)/(0,3,0) rules. The base .ExcButton rule
+           consumes --text-color/--back-color/--border-color, so overriding
+           those vars is enough (and keeps the success-state green flash). */
+        .excalidraw .ImageExportModal__settings__buttons__button.ExcButton--size-medium {
+          min-height: 2rem;
+          padding: 0.375rem 0.75rem;
+          font-size: 0.875rem;
+          font-weight: 500;
+          border-radius: var(--radius);
+        }
+        .excalidraw .ImageExportModal__settings__buttons__button .ExcButton__icon {
+          width: 1rem;
+          height: 1rem;
+        }
+        .excalidraw .ImageExportModal__settings__buttons__button.ExcButton--color-primary.ExcButton--variant-filled {
+          --text-color: var(--secondary-foreground);
+          --back-color: var(--secondary);
+          --border-color: var(--border);
+        }
+        .excalidraw .ImageExportModal__settings__buttons__button.ExcButton--color-primary.ExcButton--variant-filled:hover {
+          --back-color: color-mix(in oklab, var(--secondary) 90%, var(--foreground));
+        }
       `}</style>
 
       <Excalidraw
