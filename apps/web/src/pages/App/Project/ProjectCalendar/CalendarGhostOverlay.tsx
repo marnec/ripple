@@ -26,8 +26,21 @@ function resolveGhostPosition({
   // day-name label (e.g. "SUN"). Measuring it per-cell is correct whether or
   // not anything is scheduled, unlike deriving an offset from some other cell's
   // event (which broke alignment when the grid had no events to sample).
+  // If the cell already has events, anchor below the last one (plus the grid
+  // gap) so the ghost previews the slot a drop would actually land in, rather
+  // than overlapping the existing events.
   const eventsEl = dayEl.querySelector(".sx__month-grid-day__events");
-  const top = eventsEl ? eventsEl.getBoundingClientRect().top : dayRect.top + 24;
+  const GRID_GAP = 4; // matches .sx__month-grid-day__events { grid-gap: 4px }
+  let top: number;
+  if (eventsEl) {
+    const cellEvents = eventsEl.querySelectorAll(".sx__month-grid-event");
+    const lastEvent = cellEvents[cellEvents.length - 1];
+    top = lastEvent
+      ? lastEvent.getBoundingClientRect().bottom + GRID_GAP
+      : eventsEl.getBoundingClientRect().top;
+  } else {
+    top = dayRect.top + 24;
+  }
 
   // Match an existing event's height if one is on screen, else fall back.
   let eventHeight = 22;
