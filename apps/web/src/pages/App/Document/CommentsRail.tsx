@@ -326,7 +326,10 @@ function CommentsRailContent({
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 py-2"
       >
         {threads.length === 0 ? (
-          <div className="flex h-full min-h-32 flex-col items-center justify-center gap-2 px-4 text-center animate-fade-in">
+          // Top-anchored (not vertically centered) so it doesn't re-center —
+          // and visibly shift — when the bottom composer/hint slot changes the
+          // list height. Matches how the comment list itself is top-aligned.
+          <div className="flex flex-col items-center gap-2 px-4 pt-12 text-center animate-fade-in">
             <MessageSquare className="h-6 w-6 text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">
               {filter === "resolved"
@@ -434,6 +437,17 @@ function CommentComposer({ editor }: { editor: AnyEditor }) {
     trailingBlock: false,
   });
   const [isEmpty, setIsEmpty] = useState(true);
+  // The idle hint is revealed only once the composer has fully collapsed (set in
+  // the composer's `onExitComplete`) so it never overlaps the closing composer.
+  // It's reset to false the moment a comment is armed — done during render (the
+  // React-recommended way to adjust state on a prop change) rather than in an
+  // effect, which keeps the hint hidden through the next close until exit ends.
+  const [showHint, setShowHint] = useState(true);
+  const [wasPending, setWasPending] = useState(pending);
+  if (pending !== wasPending) {
+    setWasPending(pending);
+    if (pending) setShowHint(false);
+  }
 
   // Focus the composer when a comment is started from the document.
   useEffect(() => {
@@ -470,14 +484,20 @@ function CommentComposer({ editor }: { editor: AnyEditor }) {
     ? getReferenceText(editor, currentSelection(editor))
     : undefined;
 
-  // The bottom slot swaps between an idle hint and the armed composer; each
-  // slides up from the bottom edge (height + slight y) while the container
-  // clips. No `mode="wait"` so the composer mounts immediately on `pending` and
-  // the focus effect above can land the caret without waiting on an exit.
+  // The composer slides up from the bottom on open. The idle hint does NOT
+  // animate out (abrupt) when arming — animating both at once read as two
+  // competing motions — but DOES fade in slowly when it reappears after the
+  // composer closes, gated on `showHint` (set in `onExitComplete`) so it waits
+  // for the composer to finish collapsing rather than overlapping it.
   return (
     <div className="shrink-0 overflow-hidden border-t">
-      <AnimatePresence initial={false}>
-        {pending ? (
+      <AnimatePresence
+        initial={false}
+        onExitComplete={() => {
+          if (!pending) setShowHint(true);
+        }}
+      >
+        {pending && (
           <m.div
             key="composer"
             initial={{ height: 0, opacity: 0, y: 12 }}
@@ -520,21 +540,23 @@ function CommentComposer({ editor }: { editor: AnyEditor }) {
               </div>
             </div>
           </m.div>
-        ) : (
-          <m.div
-            key="hint"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-          >
-            <div className="px-3 py-2.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <MessageSquarePlus className="size-3.5 shrink-0" />
-              <span>Select text in the document to start a comment.</span>
-            </div>
-          </m.div>
         )}
       </AnimatePresence>
+      {!pending && showHint && (
+        // Fades in slowly when it reappears after the composer closes (a plain
+        // m.div animates on mount). No AnimatePresence/exit → it disappears
+        // abruptly when a comment is armed.
+        <m.div
+          data-comment-hint
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+          className="px-3 py-2.5 flex items-center gap-2 text-xs text-muted-foreground"
+        >
+          <MessageSquarePlus className="size-3.5 shrink-0" />
+          <span>Select text in the document to start a comment.</span>
+        </m.div>
+      )}
     </div>
   );
 }

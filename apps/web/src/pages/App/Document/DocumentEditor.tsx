@@ -9,6 +9,7 @@ import {
   TagPickerButton,
 } from "@/components/TagPickerButton";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
+import { cn } from "@/lib/utils";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
@@ -22,7 +23,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@ripple/shared/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { Link2, Link2Off, Settings } from "lucide-react";
+import { Link2, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -304,17 +305,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
 
   // Track which blocks in this document are referenced by embeds elsewhere
   const { referencedBlockIds, hasReferencedBlocks } = useReferencedBlocks(documentId);
-  const [showReferencedBlocks, setShowReferencedBlocks] = useState(false);
   const [backlinksOpen, setBacklinksOpen] = useState(false);
-
-  const handleToggleReferences = () => {
-    if (showReferencedBlocks) {
-      setShowReferencedBlocks(false);
-    } else {
-      setShowReferencedBlocks(true);
-      setBacklinksOpen(true);
-    }
-  };
 
   // Protect referenced blocks from accidental deletion
   const onReferencedBlocksDeleted = (blockIds: string[]) => {
@@ -383,17 +374,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{document.name}</h1>
           <TagInlineStrip tags={document.tags ?? []} />
-          {hasReferencedBlocks && (
-            <button
-              type="button"
-              onClick={handleToggleReferences}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-2"
-              title={showReferencedBlocks ? "Hide referenced blocks" : "Show referenced blocks"}
-            >
-              {showReferencedBlocks ? <Link2 className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
-              References
-            </button>
-          )}
         </div>
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} />
@@ -410,6 +390,27 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }
             />
           )}
+          <button
+            type="button"
+            onClick={() => setBacklinksOpen((open) => !open)}
+            disabled={!hasReferencedBlocks}
+            aria-pressed={backlinksOpen}
+            className={cn(
+              "inline-flex items-center justify-center rounded-md p-1.5 transition-colors disabled:opacity-40 disabled:pointer-events-none",
+              backlinksOpen
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+            )}
+            title={
+              !hasReferencedBlocks
+                ? "No referenced blocks"
+                : backlinksOpen
+                  ? "Hide referenced blocks"
+                  : "Show referenced blocks"
+            }
+          >
+            <Link2 className="size-4" />
+          </button>
           {commentsEnabled && <CommentsToggleButton />}
           {document && (
             <DocumentActionsMenu
@@ -494,10 +495,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
           }}
         >
         <DocumentSpotlightFrame>
-          <ReferencedBlocksHighlight
-            blockIds={referencedBlockIds}
-            active={showReferencedBlocks}
-          />
+          <ReferencedBlocksHighlight blockIds={referencedBlockIds} />
           <BlockNoteViewEditor />
           {cellRefDialog && (
             <CellRefDialog
