@@ -6,6 +6,8 @@ NEXT STEPS:
 
 - add a dependency view to tasks
 
+- embed diagrams in chats (snapshot?)
+
 - explore pdf reading, annotation and embedding
 
 - external ticketing system??: 
