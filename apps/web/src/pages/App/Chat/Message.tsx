@@ -5,6 +5,7 @@ import type { MessageWithAuthor } from "@ripple/shared/types/channel";
 import { useMutation } from "convex/react";
 import { CornerUpLeft, Loader2, Pencil, Plus, Trash2, X as XIcon } from "lucide-react";
 import React, { Suspense, useContext, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import {
   ContextMenu,
@@ -133,6 +134,13 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
     setLightboxUrl(fullUrl);
   };
 
+  const navigate = useNavigate();
+  const { workspaceId } = useParams<{ workspaceId: string }>();
+  const handleDiagramOpen = (diagramId: string) => {
+    if (!workspaceId) return;
+    void navigate(`/workspaces/${workspaceId}/diagrams/${diagramId}`);
+  };
+
   const formattedTime = new Date(_creationTime).toLocaleTimeString(undefined, { timeStyle: 'short' });
 
   const initials = author
@@ -214,7 +222,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                   {messageHasImages ? (
                     <>
                       <div className="overflow-hidden rounded-t-[inherit]">
-                        <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                        <MessageRenderer blocks={blocks} onImageClick={handleImageClick} onDiagramOpen={handleDiagramOpen} />
                       </div>
                       <div className="flex items-end gap-3 px-2 py-1">
                         <MessageReactions messageId={message._id} />
@@ -223,7 +231,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                     </>
                   ) : hasReactions ? (
                     <>
-                      <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                      <MessageRenderer blocks={blocks} onImageClick={handleImageClick} onDiagramOpen={handleDiagramOpen} />
                       <div className="flex items-end gap-3 pt-1 pb-1.5">
                         <MessageReactions messageId={message._id} />
                         <span className={cn("ml-auto shrink-0 text-[10px] leading-none select-none", userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60")}>{formattedTime}</span>
@@ -232,7 +240,7 @@ export function Message({ message, groupInfo = DEFAULT_GROUP_INFO, index = 0 }: 
                   ) : (
                     <div className="flex items-end gap-2">
                       <div className="min-w-0 flex-1">
-                        <MessageRenderer blocks={blocks} onImageClick={handleImageClick} />
+                        <MessageRenderer blocks={blocks} onImageClick={handleImageClick} onDiagramOpen={handleDiagramOpen} />
                       </div>
                       <span className={cn("shrink-0 self-end translate-y-0.5 text-[10px] leading-none select-none", userIsAuthor ? "text-message-own-foreground/50" : "text-muted-foreground/60")}>{formattedTime}</span>
                     </div>

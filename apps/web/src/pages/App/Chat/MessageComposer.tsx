@@ -5,8 +5,10 @@ import { useCreateBlockNote, useEditorChange, SuggestionMenuController } from "@
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useConvex } from "convex/react";
+import { toast } from "sonner";
 import { Button } from "../../../components/ui/button";
 import { useChatContext } from "./ChatContext";
 import { TaskMention } from "./CustomInlineContent/TaskMention";
@@ -30,8 +32,16 @@ import { useUploadFile, type ImageUploadResult } from "../../../hooks/use-upload
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
+import { generateThumbnail } from "@/lib/image-thumbnail";
+import { snapshotDiagramToBlob, EmptyDiagramSnapshotError } from "@/lib/exporters/diagram-snapshot";
 import { FormattingToolbar } from "./FormattingToolbar";
 import { Kbd } from "../../../components/ui/kbd";
+
+// Heavy (pulls Excalidraw for the frame thumbnails) — load only when a user
+// actually picks a diagram to snapshot, keeping it out of the chat entry chunk.
+const FramePickerDialog = lazy(() =>
+  import("../Document/FramePickerDialog").then((m) => ({ default: m.FramePickerDialog })),
+);
 
 interface MessageComposerProps {
   handleSubmit: (content: string, plainText: string) => void;
@@ -84,6 +94,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const currentUser = useViewer();
 
   const fileUpload = useUploadFile(workspaceId);
+  const convex = useConvex();
 
   const { userNames, projectNames } = useMemo(() => {
     const u = new Map<string, string>();
@@ -118,6 +129,13 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const [imageUrls, setImageUrls] = useState<ImageUploadResult | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
+  // When the attached image is a diagram snapshot, carry the source so the
+  // sent message can deep-link back to the live diagram (click-to-open).
+  const [imageDiagram, setImageDiagram] = useState<{ id: Id<"diagrams">; name: string } | null>(null);
+  // Target diagram for the frame picker; null when the picker is closed.
+  const [framePickerTarget, setFramePickerTarget] = useState<{ id: Id<"diagrams">; name: string } | null>(null);
+  // True while capturing/exporting a snapshot, before the preview blob exists.
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
 
   const editor = useCreateBlockNote(editorConfig);
 
@@ -129,6 +147,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     setImagePreview(null);
     setImageUrls(null);
     setIsUploadingImage(false);
+    setImageDiagram(null);
+    setIsCapturingSnapshot(false);
     if (editingMessage.id && editingMessage.body) {
       try {
         const blocks: any[] = JSON.parse(editingMessage.body);
@@ -138,6 +158,12 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           const fullUrl = (imageBlock.props.fullUrl as string) || url;
           setImagePreview(url);
           setImageUrls({ url, fullUrl });
+          if (imageBlock.props.diagramId) {
+            setImageDiagram({
+              id: imageBlock.props.diagramId as Id<"diagrams">,
+              name: (imageBlock.props.diagramName as string) || "",
+            });
+          }
         }
       } catch { /* malformed body — leave image state cleared */ }
     }
@@ -161,13 +187,15 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   }, [editingMessage]);
 
   const hasImage = !!imagePreview;
-  const canSend = (!isEmpty || !!imageUrls) && !isUploadingImage;
+  const canSend = (!isEmpty || !!imageUrls) && !isUploadingImage && !isCapturingSnapshot;
 
   const clearImage = useCallback(() => {
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
     setImageUrls(null);
     setIsUploadingImage(false);
+    setImageDiagram(null);
+    setIsCapturingSnapshot(false);
   }, [imagePreview]);
 
   const handleImagePreview = useCallback((blobUrl: string) => {
@@ -183,6 +211,48 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const handleImageUploadFailed = useCallback(() => {
     clearImage();
   }, [clearImage]);
+
+  // Snapshot a diagram (whole canvas or a single frame) into a static PNG and
+  // hand it to the shared image-attachment lifecycle. The sent message keeps
+  // `diagramId`/`diagramName` on the image block so it stays click-to-open.
+  const captureDiagramSnapshot = async (
+    diagram: { id: Id<"diagrams">; name: string },
+    frameId: string | null,
+  ) => {
+    if (!fileUpload) return;
+    setIsCapturingSnapshot(true);
+    try {
+      const snapshotUrl = await convex.query(api.snapshots.getSnapshotUrl, {
+        resourceType: "diagram",
+        resourceId: diagram.id,
+      });
+      if (!snapshotUrl) {
+        toast.error("That diagram has no saved content to snapshot yet.");
+        setIsCapturingSnapshot(false);
+        return;
+      }
+      const res = await fetch(snapshotUrl);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const blob = await snapshotDiagramToBlob(bytes, frameId);
+      // `File` here is the lucide icon import — use the DOM constructor.
+      const file = new globalThis.File([blob], `${diagram.name || "diagram"}.png`, { type: "image/png" });
+      const { thumbnail, previewUrl, isOriginal } = await generateThumbnail(file);
+      // Switch from the "capturing" indicator to the normal image preview.
+      setIsCapturingSnapshot(false);
+      handleImagePreview(previewUrl);
+      setImageDiagram(diagram);
+      const urls = await fileUpload.uploadImageWithThumbnail(file, thumbnail, isOriginal);
+      handleImageReady(urls);
+    } catch (err) {
+      if (err instanceof EmptyDiagramSnapshotError) {
+        toast.error("That diagram is empty — nothing to snapshot.");
+      } else {
+        console.error("Diagram snapshot failed:", err);
+        toast.error("Couldn't capture the diagram snapshot.");
+      }
+      clearImage();
+    }
+  };
 
   const getMemberItems = useMemberSuggestions({
     members: workspaceMembers,
@@ -251,11 +321,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       diagrams?.filter(d => d.name.toLowerCase().includes(q)).slice(0, 5).forEach(d => {
         items.push({
           title: d.name,
+          // Selecting a diagram embeds a static snapshot (whole canvas or a
+          // chosen frame) rather than an inline reference chip — open the frame
+          // picker to choose what to capture.
           onItemClick: () => {
-            editor.insertInlineContent([
-              { type: "resourceReference", props: { resourceId: d._id, resourceType: "diagram", resourceName: d.name } },
-              " ",
-            ]);
+            setFramePickerTarget({ id: d._id, name: d.name });
           },
           icon: <PenTool className="h-4 w-4" />,
           group: "Diagrams",
@@ -284,10 +354,19 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     if (!canSend || !editor) return;
     const blocks: any[] = [...editor.document];
     if (imageUrls) {
-      blocks.unshift({ type: "image", props: { url: imageUrls.url, fullUrl: imageUrls.fullUrl } });
+      blocks.unshift({
+        type: "image",
+        props: {
+          url: imageUrls.url,
+          fullUrl: imageUrls.fullUrl,
+          ...(imageDiagram ? { diagramId: imageDiagram.id, diagramName: imageDiagram.name } : {}),
+        },
+      });
     }
     const body = JSON.stringify(blocks);
-    const plainText = blocksToPlainText(editor.document, userNames, projectNames);
+    let plainText = blocksToPlainText(editor.document, userNames, projectNames);
+    // Give snapshot-only messages searchable/quotable text (the diagram name).
+    if (!plainText && imageDiagram) plainText = imageDiagram.name;
 
     handleSubmit(body, plainText);
     editorClear(editor);
@@ -365,6 +444,25 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           }}
           onCancel={() => setReplyingTo(null)}
         />
+      )}
+      {isCapturingSnapshot && (
+        <div className="flex w-fit items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+          <RippleSpinner size={16} />
+          Capturing diagram…
+        </div>
+      )}
+      {framePickerTarget && (
+        <Suspense fallback={null}>
+          <FramePickerDialog
+            open
+            diagramId={framePickerTarget.id}
+            diagramName={framePickerTarget.name}
+            onOpenChange={(open) => { if (!open) setFramePickerTarget(null); }}
+            onInsert={(frameId) => {
+              if (framePickerTarget) void captureDiagramSnapshot(framePickerTarget, frameId);
+            }}
+          />
+        </Suspense>
       )}
       {hasImage && (
         <div className="relative w-fit">
