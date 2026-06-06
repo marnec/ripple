@@ -3,11 +3,8 @@
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { JSDOM } from "jsdom";
-import { BlockNoteEditor } from "@blocknote/core";
-import { blocksToYDoc } from "@blocknote/core/yjs";
-import * as Y from "yjs";
-import { transcriptToMarkdown } from "./transcriptFormat";
+import { markdownToYjsUpdate } from "./lib/headlessEditor";
+import { hintFromUrl, transcriptToMarkdown } from "./transcriptFormat";
 
 /**
  * Ingest a finished call's transcript into a new Ripple document.
@@ -19,10 +16,10 @@ import { transcriptToMarkdown } from "./transcriptFormat";
  * the document survives every client leaving the call — including the host
  * leaving early or everyone closing their tab.
  *
- * Reuses the proven headless seed pipeline (`@blocknote/core` + JSDOM →
- * `blocksToYDoc` → Yjs snapshot in `_storage`; see `seedDescriptionAction`):
- * documents are collaborative Yjs docs, so "saving" the transcript means
- * producing the cold-start snapshot that PartyKit's `onLoad` hydrates from.
+ * Seeds via the headless editor (`lib/headlessEditor` → `markdownToYjsUpdate`,
+ * shared with task-description and comment seeding): documents are collaborative
+ * Yjs docs, so "saving" the transcript means producing the cold-start snapshot
+ * that PartyKit's `onLoad` hydrates from.
  */
 export const ingestTranscript = internalAction({
   args: {
@@ -68,17 +65,7 @@ export const ingestTranscript = internalAction({
       );
     }
     const raw = await res.text();
-    const lower = transcriptDownloadUrl.toLowerCase();
-    const hint = lower.includes(".csv")
-      ? "csv"
-      : lower.includes(".vtt")
-        ? "vtt"
-        : lower.includes(".srt")
-          ? "srt"
-          : lower.includes(".json")
-            ? "json"
-            : undefined;
-    const markdown = transcriptToMarkdown(raw, hint);
+    const markdown = transcriptToMarkdown(raw, hintFromUrl(transcriptDownloadUrl));
     if (markdown.trim().length === 0) {
       console.warn(
         `ingestTranscript: empty transcript for meeting ${cloudflareMeetingId}; skipping.`,
@@ -97,34 +84,15 @@ export const ingestTranscript = internalAction({
       minute: "2-digit",
     });
     const name = `${channel.name} call — ${stamp}`;
-    const docMarkdown = markdown;
 
-    // Headless markdown → BlockNote blocks → Yjs snapshot. BlockNote's parser
-    // walks the DOM, so install a transient document/window for the conversion.
-    const dom = new JSDOM(
-      "<!DOCTYPE html><html><head></head><body></body></html>",
+    // Markdown → Yjs cold-start snapshot via the headless editor (it owns the
+    // JSDOM shim + BlockNote/Yjs encoding). `null` would mean the markdown
+    // produced no blocks; it's non-empty here, so that's vanishingly unlikely.
+    const update = await markdownToYjsUpdate(markdown);
+    if (!update) return null;
+    const storageId = await ctx.storage.store(
+      new Blob([update as BlobPart], { type: "application/octet-stream" }),
     );
-    const prevWindow = (globalThis as { window?: unknown }).window;
-    const prevDocument = (globalThis as { document?: unknown }).document;
-    (globalThis as { window?: unknown }).window = dom.window;
-    (globalThis as { document?: unknown }).document = dom.window.document;
-
-    let storageId;
-    try {
-      const editor = BlockNoteEditor.create();
-      const blocks = await editor.tryParseMarkdownToBlocks(docMarkdown);
-      if (blocks.length === 0) return null;
-      const ydoc = blocksToYDoc(editor, blocks, "document-store");
-      const update = Y.encodeStateAsUpdate(ydoc);
-      storageId = await ctx.storage.store(
-        new Blob([update as BlobPart], {
-          type: "application/octet-stream",
-        }),
-      );
-    } finally {
-      (globalThis as { window?: unknown }).window = prevWindow;
-      (globalThis as { document?: unknown }).document = prevDocument;
-    }
 
     const documentId = await ctx.runMutation(
       internal.documents.createForTranscript,

@@ -10,36 +10,35 @@ import {
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireUser } from "./authHelpers";
-
-export const CF_API_BASE = "https://api.cloudflare.com/client/v4/accounts";
+import {
+  realtimeKitFromEnv,
+  type RealtimeKitClient,
+} from "./lib/realtimeKit";
 
 /**
  * Race-safe wrapper that returns the Cloudflare meetingId for a channel.
  *
  * The race: two parallel callers both see `getActiveSession` return null,
- * both POST to Cloudflare to create a meeting, both try to persist. Only
- * one `createSession` mutation wins — the loser's CF meeting is orphaned
- * and burns quota until CF idle-cleans it.
+ * both create a meeting on Cloudflare, both try to persist. Only one
+ * `createSession` mutation wins — the loser's CF meeting is orphaned and
+ * burns quota until CF idle-cleans it.
  *
  * Fix: if we lose the race (createSession returns the winner's id instead
- * of null), DELETE our orphan on Cloudflare. Fire-and-forget; a failed
+ * of null), delete our orphan via the client. Fire-and-forget; a failed
  * cleanup logs to console but does not fail the join.
+ *
+ * Takes the `RealtimeKitClient` as a parameter (rather than reaching for env)
+ * so the race recovery can be exercised against a fake client in tests.
  */
 export async function ensureMeetingForChannel(
   ctx: ActionCtx,
   channelId: Id<"channels">,
-  cf: { accountId: string; appId: string; apiToken: string },
+  rtk: RealtimeKitClient,
   transcribe: boolean,
   // ISO 639-1 code (`en`, `es`, …). Only meaningful when `transcribe` is true
-  // and we're creating the meeting. NOTE: `"multi"` (Whisper auto-detect) is
-  // NOT usable here — see the create body below.
+  // and we're creating the meeting (the client documents the `"multi"` trap).
   transcriptionLanguage?: string,
 ): Promise<{ meetingId: string; transcribe: boolean }> {
-  const headers = {
-    Authorization: `Bearer ${cf.apiToken}`,
-    "Content-Type": "application/json",
-  };
-
   const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
     channelId,
   });
@@ -51,42 +50,17 @@ export async function ensureMeetingForChannel(
       transcribe: session.transcribe ?? false,
     };
 
-  const createRes = await fetch(
-    `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings`,
-    {
-      method: "POST",
-      headers,
-      // `transcribe_on_end` produces the consolidated end-of-call transcript
-      // (Whisper) that the `meeting.transcript` webhook delivers. On Cloudflare
-      // a meeting is either real-time-transcribed OR end-of-meeting-transcribed,
-      // never both — we chose end-of-meeting (server-side, survives everyone
-      // leaving). Independent of recording.
-      //
-      // `ai_config.transcription.language` pins the Whisper language (ISO 639-1,
-      // e.g. `es`). Without it the Whisper path defaults to English and blanks
-      // other languages.
-      //
-      // Do NOT pass `"multi"` (auto-detect) here: verified 2026-06-06 that CF
-      // accepts it at meeting-create (echoes it back) but its end-of-meeting
-      // Whisper pipeline then silently produces no transcript and never fires
-      // the `meeting.transcript` webhook. `"multi"` is a real-time-only
-      // (Deepgram) value; there is no auto-detect for end-of-meeting transcription.
-      body: JSON.stringify({
-        title: `Channel call ${channelId}`,
-        transcribe_on_end: transcribe,
-        ...(transcribe && transcriptionLanguage
-          ? { ai_config: { transcription: { language: transcriptionLanguage } } }
-          : {}),
-      }),
-    },
-  );
-  if (!createRes.ok) {
-    const err = await createRes.text();
-    console.error("Cloudflare create-meeting failed:", createRes.status, err);
+  let ourMeetingId: string;
+  try {
+    ({ id: ourMeetingId } = await rtk.createMeeting({
+      title: `Channel call ${channelId}`,
+      transcribeOnEnd: transcribe,
+      transcriptionLanguage,
+    }));
+  } catch (e) {
+    console.error("Cloudflare create-meeting failed:", e);
     throw new Error("Could not start the call");
   }
-  const createData = (await createRes.json()) as { data: { id: string } };
-  const ourMeetingId = createData.data.id;
 
   const winner = await ctx.runMutation(internal.callSessions.createSession, {
     channelId,
@@ -98,10 +72,7 @@ export async function ensureMeetingForChannel(
     // We lost the race — our CF meeting is orphaned. Clean it up so it
     // doesn't tie up Cloudflare participant / meeting quota. The winner's
     // transcription mode wins (ours never took effect).
-    void fetch(
-      `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings/${ourMeetingId}`,
-      { method: "DELETE", headers },
-    ).catch((e) => console.error("Orphan meeting cleanup failed:", e));
+    void rtk.deleteMeeting(ourMeetingId);
     return { meetingId: winner.cloudflareMeetingId, transcribe: winner.transcribe };
   }
   return { meetingId: ourMeetingId, transcribe };
@@ -226,26 +197,13 @@ export const joinCall = action({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const appId = process.env.CLOUDFLARE_RTK_APP_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-
-    if (!accountId || !appId || !apiToken) {
-      throw new Error(
-        "Missing Cloudflare RealtimeKit environment variables. Set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_RTK_APP_ID, and CLOUDFLARE_API_TOKEN.",
-      );
-    }
-
-    const headers = {
-      Authorization: `Bearer ${apiToken}`,
-      "Content-Type": "application/json",
-    };
+    const rtk = realtimeKitFromEnv();
 
     const { meetingId, transcribe: effectiveTranscribe } =
       await ensureMeetingForChannel(
         ctx,
         channelId,
-        { accountId, appId, apiToken },
+        rtk,
         transcribe ?? false,
         transcriptionLanguage,
       );
@@ -253,30 +211,12 @@ export const joinCall = action({
     // Add this user as a participant. The preset must match the call's mode so
     // a late joiner to a transcribed call also gets captions and feeds the
     // live transcript.
-    const participantRes = await fetch(
-      `${CF_API_BASE}/${accountId}/realtime/kit/${appId}/meetings/${meetingId}/participants`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          name: userName,
-          picture: userImage,
-          preset_name: effectiveTranscribe
-            ? PRESET_TRANSCRIBE
-            : PRESET_NO_TRANSCRIBE,
-          custom_participant_id: userId,
-        }),
-      },
-    );
-
-    if (!participantRes.ok) {
-      const err = await participantRes.text();
-      throw new Error(`Failed to add participant: ${err}`);
-    }
-
-    const participantData = await participantRes.json();
-    const authToken = (participantData as { data: { token: string } }).data
-      .token;
+    const { token: authToken } = await rtk.addParticipant(meetingId, {
+      name: userName,
+      picture: userImage,
+      presetName: effectiveTranscribe ? PRESET_TRANSCRIBE : PRESET_NO_TRANSCRIBE,
+      customParticipantId: userId,
+    });
 
     return { authToken, meetingId, transcribe: effectiveTranscribe };
   },

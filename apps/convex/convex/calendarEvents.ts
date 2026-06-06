@@ -24,7 +24,11 @@ import { assertOrganizer } from "./utils/eventAuth";
 import { loadInviteeRows } from "./utils/eventInvitees";
 import { dispatchEventNotifications } from "./utils/eventNotifications";
 import { rateLimiter } from "./rateLimits";
-import { CF_API_BASE, ensureMeetingForChannel } from "./callSessions";
+import { ensureMeetingForChannel } from "./callSessions";
+import {
+  realtimeKitFromEnv,
+  type RealtimeKitClient,
+} from "./lib/realtimeKit";
 import { GUEST_SUB_PREFIX } from "@ripple/shared/shareTypes";
 import { triggers } from "./dbTriggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
@@ -1444,34 +1448,23 @@ export const _patchInviteeGuestName = internalMutation({
 async function ensureMeetingForEvent(
   ctx: ActionCtx,
   eventId: Id<"calendarEvents">,
-  cf: { accountId: string; appId: string; apiToken: string },
+  rtk: RealtimeKitClient,
 ): Promise<string> {
-  const headers = {
-    Authorization: `Bearer ${cf.apiToken}`,
-    "Content-Type": "application/json",
-  };
-
   // Cheap path: already provisioned.
   const existing = await ctx.runQuery(internal.calendarEvents._getEventForJoinPublic, {
     eventId,
   });
   if (existing?.cloudflareMeetingId) return existing.cloudflareMeetingId;
 
-  const createRes = await fetch(
-    `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ title: `Event call ${eventId}` }),
-    },
-  );
-  if (!createRes.ok) {
-    const err = await createRes.text();
-    console.error("Cloudflare create-meeting failed:", createRes.status, err);
+  let ourMeetingId: string;
+  try {
+    ({ id: ourMeetingId } = await rtk.createMeeting({
+      title: `Event call ${eventId}`,
+    }));
+  } catch (e) {
+    console.error("Cloudflare create-meeting failed:", e);
     throw new Error("Could not start the call");
   }
-  const createData = (await createRes.json()) as { data: { id: string } };
-  const ourMeetingId = createData.data.id;
 
   const winner = await ctx.runMutation(internal.calendarEvents._setEventMeetingId, {
     eventId,
@@ -1479,10 +1472,7 @@ async function ensureMeetingForEvent(
   });
 
   if (winner && winner !== ourMeetingId) {
-    void fetch(
-      `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings/${ourMeetingId}`,
-      { method: "DELETE", headers },
-    ).catch((e) => console.error("Orphan event meeting cleanup failed:", e));
+    void rtk.deleteMeeting(ourMeetingId);
     return winner;
   }
   return ourMeetingId;
@@ -1531,50 +1521,25 @@ export const joinEventCall = action({
       throw new ConvexError("This call is not open yet");
     }
 
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const appId = process.env.CLOUDFLARE_RTK_APP_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-    if (!accountId || !appId || !apiToken) {
-      throw new Error(
-        "Missing Cloudflare RealtimeKit environment variables. Set CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_RTK_APP_ID, and CLOUDFLARE_API_TOKEN.",
-      );
-    }
-
-    const cf = { accountId, appId, apiToken };
+    const rtk = realtimeKitFromEnv();
 
     let meetingId: string;
     if (event.channelId) {
       // Channel-tied event: reuse the channel's persistent meeting.
       // Event calls don't expose a transcription toggle yet → off.
-      meetingId = (await ensureMeetingForChannel(ctx, event.channelId, cf, false))
+      meetingId = (await ensureMeetingForChannel(ctx, event.channelId, rtk, false))
         .meetingId;
     } else {
-      meetingId = await ensureMeetingForEvent(ctx, eventId, cf);
+      meetingId = await ensureMeetingForEvent(ctx, eventId, rtk);
     }
 
-    const headers = {
-      Authorization: `Bearer ${apiToken}`,
-      "Content-Type": "application/json",
-    };
-    const participantRes = await fetch(
-      `${CF_API_BASE}/${accountId}/realtime/kit/${appId}/meetings/${meetingId}/participants`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          name: userName,
-          picture: userImage,
-          preset_name: "group_call_host",
-          custom_participant_id: userId,
-        }),
-      },
-    );
-    if (!participantRes.ok) {
-      const err = await participantRes.text();
-      throw new Error(`Failed to add participant: ${err}`);
-    }
-    const data = (await participantRes.json()) as { data: { token: string } };
-    return { authToken: data.data.token, meetingId };
+    const { token: authToken } = await rtk.addParticipant(meetingId, {
+      name: userName,
+      picture: userImage,
+      presetName: "group_call_host",
+      customParticipantId: userId,
+    });
+    return { authToken, meetingId };
   },
 });
 
@@ -1618,22 +1583,14 @@ export const getGuestEventCallToken = action({
       throws: true,
     });
 
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const appId = process.env.CLOUDFLARE_RTK_APP_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-    if (!accountId || !appId || !apiToken) {
-      throw new ConvexError(
-        "Missing Cloudflare RealtimeKit environment variables",
-      );
-    }
-    const cf = { accountId, appId, apiToken };
+    const rtk = realtimeKitFromEnv();
 
     let meetingId: string;
     if (data.channelId) {
-      meetingId = (await ensureMeetingForChannel(ctx, data.channelId, cf, false))
+      meetingId = (await ensureMeetingForChannel(ctx, data.channelId, rtk, false))
         .meetingId;
     } else {
-      meetingId = await ensureMeetingForEvent(ctx, data.eventId, cf);
+      meetingId = await ensureMeetingForEvent(ctx, data.eventId, rtk);
     }
 
     // Stable Cloudflare custom_participant_id: prefer the per-invitee guestSub
@@ -1641,33 +1598,18 @@ export const getGuestEventCallToken = action({
     // recognised as the same participant). Fall back to the client-provided
     // value for backwards compatibility.
     const fullSub = `${GUEST_SUB_PREFIX}${data.inviteeGuestSub ?? sub}`;
-    const headers = {
-      Authorization: `Bearer ${apiToken}`,
-      "Content-Type": "application/json",
-    };
-    const participantRes = await fetch(
-      `${CF_API_BASE}/${accountId}/realtime/kit/${appId}/meetings/${meetingId}/participants`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          name,
-          preset_name: "group_call_participant",
-          custom_participant_id: fullSub,
-        }),
-      },
-    );
-    if (!participantRes.ok) {
-      const err = await participantRes.text();
-      console.error(
-        "Cloudflare add-participant failed:",
-        participantRes.status,
-        err,
-      );
+    let authToken: string;
+    try {
+      ({ token: authToken } = await rtk.addParticipant(meetingId, {
+        name,
+        presetName: "group_call_participant",
+        customParticipantId: fullSub,
+      }));
+    } catch (e) {
+      console.error("Cloudflare add-participant failed:", e);
       throw new ConvexError("Could not join the call");
     }
-    const json = (await participantRes.json()) as { data: { token: string } };
-    return { authToken: json.data.token, meetingId, guestSub: sub };
+    return { authToken, meetingId, guestSub: sub };
   },
 });
 

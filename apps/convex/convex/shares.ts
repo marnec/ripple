@@ -13,7 +13,8 @@ import { logActivity } from "./auditLog";
 import { generateShareId, sanitizeGuestName } from "./utils/shareIds";
 import { signToken } from "./tokenSigning";
 import { rateLimiter } from "./rateLimits";
-import { CF_API_BASE, ensureMeetingForChannel } from "./callSessions";
+import { ensureMeetingForChannel } from "./callSessions";
+import { realtimeKitFromEnv } from "./lib/realtimeKit";
 import { WorkspaceRole } from "@ripple/shared/enums";
 import {
   GUEST_SUB_PREFIX,
@@ -590,19 +591,7 @@ export const getGuestCallToken = action({
       throws: true,
     });
 
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const appId = process.env.CLOUDFLARE_RTK_APP_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
-    if (!accountId || !appId || !apiToken) {
-      throw new ConvexError(
-        "Missing Cloudflare RealtimeKit environment variables",
-      );
-    }
-
-    const headers = {
-      Authorization: `Bearer ${apiToken}`,
-      "Content-Type": "application/json",
-    };
+    const rtk = realtimeKitFromEnv();
 
     const channelId = share.resourceId as Id<"channels">;
 
@@ -612,37 +601,27 @@ export const getGuestCallToken = action({
     const { meetingId } = await ensureMeetingForChannel(
       ctx,
       channelId,
-      { accountId, appId, apiToken },
+      rtk,
       false,
     );
 
     const fullSub = `${GUEST_SUB_PREFIX}${sub}`;
-    const participantRes = await fetch(
-      `${CF_API_BASE}/${accountId}/realtime/kit/${appId}/meetings/${meetingId}/participants`,
-      {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          name,
-          preset_name: "group_call_participant",
-          custom_participant_id: fullSub,
-        }),
-      },
-    );
-    if (!participantRes.ok) {
-      const err = await participantRes.text();
-      console.error("Cloudflare add-participant failed:", participantRes.status, err);
+    let authToken: string;
+    try {
+      ({ token: authToken } = await rtk.addParticipant(meetingId, {
+        name,
+        presetName: "group_call_participant",
+        customParticipantId: fullSub,
+      }));
+    } catch (e) {
+      console.error("Cloudflare add-participant failed:", e);
       throw new ConvexError("Could not join the call");
     }
-
-    const participantData = (await participantRes.json()) as {
-      data: { token: string };
-    };
 
     await ctx.runMutation(internal.shares.bumpLastUsed, { shareId });
 
     return {
-      authToken: participantData.data.token,
+      authToken,
       meetingId,
       guestSub: sub,
       channelId,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { transcriptToMarkdown } from "../convex/transcriptFormat";
+import { transcriptToMarkdown, hintFromUrl } from "../convex/transcriptFormat";
 
 describe("transcriptToMarkdown", () => {
   it("formats a JSON array of {name, transcript} entries", () => {
@@ -96,5 +96,18 @@ describe("transcriptToMarkdown", () => {
 
   it("returns empty string for blank input", () => {
     expect(transcriptToMarkdown("   \n  ")).toBe("");
+  });
+});
+
+describe("hintFromUrl", () => {
+  it("maps known extensions to hints (case-insensitive, with query strings)", () => {
+    expect(hintFromUrl("https://cf/transcript.csv")).toBe("csv");
+    expect(hintFromUrl("https://cf/T.VTT?sig=abc")).toBe("vtt");
+    expect(hintFromUrl("https://cf/x.srt")).toBe("srt");
+    expect(hintFromUrl("https://cf/x.json")).toBe("json");
+  });
+
+  it("returns undefined for unknown/extensionless urls", () => {
+    expect(hintFromUrl("https://cf/download")).toBeUndefined();
   });
 });

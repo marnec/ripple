@@ -38,6 +38,20 @@ export function transcriptToMarkdown(raw: string, hint?: TranscriptHint): string
   return trimmed;
 }
 
+/**
+ * Derive a format hint from a transcript download URL's file extension.
+ * Cloudflare's URL carries the format (`…/transcript.csv`), so this seeds
+ * `transcriptToMarkdown`'s `hint` before it falls back to content sniffing.
+ */
+export function hintFromUrl(url: string): TranscriptHint {
+  const lower = url.toLowerCase();
+  if (lower.includes(".csv")) return "csv";
+  if (lower.includes(".vtt")) return "vtt";
+  if (lower.includes(".srt")) return "srt";
+  if (lower.includes(".json")) return "json";
+  return undefined;
+}
+
 type TranscriptEntry = {
   name?: string;
   speaker?: string;

@@ -1,10 +1,17 @@
 NEXT STEPS:
 
+- unifiorm all settings sections to the workspace and project layout
+- split the project layout integration settings section in integration and status automation
+- add a (workpook) background job backoffice center (of the workspace, admin only)
+- build a cross-workspace admin app, only accessible to my own account, with jobs, activity log and other useful info
+
 - calendar;
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
     - recurrent events
 
 - add a dependency view to tasks
+- add gantt with frappegantt
+
 
 - explore pdf reading, annotation and embedding
 

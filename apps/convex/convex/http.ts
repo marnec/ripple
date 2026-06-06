@@ -2,6 +2,7 @@ import { createFunctionHandle, httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal, components } from "./_generated/api";
 import { auth } from "./auth";
+import { parseTranscriptWebhook } from "./transcriptWebhook";
 
 const http = httpRouter();
 
@@ -200,48 +201,24 @@ http.route({
       return new Response("Unauthorized", { status: 401 });
     }
 
-    let body: Record<string, unknown>;
-    try {
-      body = JSON.parse(await request.text()) as Record<string, unknown>;
-    } catch {
-      return new Response("Bad Request", { status: 400 });
+    const result = parseTranscriptWebhook(await request.text());
+    switch (result.kind) {
+      case "malformed":
+        return new Response("Bad Request", { status: 400 });
+      case "ignore":
+        // Ack unrelated events so Cloudflare doesn't retry them.
+        return new Response("OK", { status: 200 });
+      case "invalid":
+        console.error("transcript-webhook: missing required fields");
+        return new Response("Bad Request (missing fields)", { status: 400 });
+      case "deliver":
+        await ctx.scheduler.runAfter(0, internal.transcripts.ingestTranscript, {
+          cloudflareMeetingId: result.meetingId,
+          cloudflareSessionId: result.sessionId,
+          transcriptDownloadUrl: result.transcriptDownloadUrl,
+        });
+        return new Response("OK", { status: 200 });
     }
-
-    const event = (body.event ?? body.type) as string | undefined;
-    if (event && event !== "meeting.transcript") {
-      // Ack unrelated events so Cloudflare doesn't retry them.
-      return new Response("OK", { status: 200 });
-    }
-
-    // Actual RealtimeKit payload shape (verified 2026-06-06):
-    //   { event, meeting: { id, sessionId, ... }, transcriptDownloadUrl, ... }
-    // The meeting id is `meeting.id` (NOT a top-level `meetingId`) and the
-    // download URL is top-level. We also accept a couple of fallbacks for safety.
-    const meeting = (body.meeting as Record<string, unknown> | undefined) ?? {};
-    const asStr = (x: unknown): string | undefined =>
-      typeof x === "string" ? x : undefined;
-    const meetingId = asStr(meeting.id) ?? asStr(body.meetingId);
-    const sessionId = asStr(meeting.sessionId) ?? asStr(body.sessionId);
-    const transcriptDownloadUrl =
-      asStr(body.transcriptDownloadUrl) ?? asStr(meeting.transcriptDownloadUrl);
-
-    if (!meetingId || !transcriptDownloadUrl) {
-      console.error("transcript-webhook: missing fields", {
-        event,
-        hasMeeting: !!body.meeting,
-        meetingId,
-        hasUrl: !!transcriptDownloadUrl,
-      });
-      return new Response("Bad Request (missing fields)", { status: 400 });
-    }
-
-    await ctx.scheduler.runAfter(0, internal.transcripts.ingestTranscript, {
-      cloudflareMeetingId: meetingId,
-      cloudflareSessionId:
-        typeof sessionId === "string" ? sessionId : undefined,
-      transcriptDownloadUrl,
-    });
-    return new Response("OK", { status: 200 });
   }),
 });
 
