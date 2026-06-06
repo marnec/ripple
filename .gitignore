@@ -29,3 +29,4 @@ dist-ssr
 .wrangler
 .turbo/*
 *.pem
+*.dev.vars
