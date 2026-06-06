@@ -3258,6 +3258,17 @@ export declare const api: {
       { inviteId: Id<"workspaceInvites"> },
       null
     >;
+    getPublic: FunctionReference<
+      "query",
+      "public",
+      { inviteId: string },
+      {
+        email: string;
+        inviterName: string;
+        status: string;
+        workspaceName: string;
+      } | null
+    >;
     listByEmail: FunctionReference<
       "query",
       "public",

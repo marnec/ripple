@@ -72,6 +72,41 @@ export const create = mutation({
   },
 });
 
+export const getPublic = query({
+  args: {
+    inviteId: v.string(),
+  },
+  returns: v.union(
+    v.object({
+      email: v.string(),
+      workspaceName: v.string(),
+      inviterName: v.string(),
+      status: v.string(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { inviteId }) => {
+    // The invite id doubles as the secret token in the URL; anyone holding it
+    // already received the invite email, so exposing the bound email is safe
+    // and lets the sign-up form lock it. Normalize defensively for bad tokens.
+    const normalizedId = ctx.db.normalizeId("workspaceInvites", inviteId);
+    if (!normalizedId) return null;
+
+    const invite = await ctx.db.get(normalizedId);
+    if (!invite) return null;
+
+    const workspace = await ctx.db.get(invite.workspaceId);
+    const inviter = await ctx.db.get(invite.invitedBy);
+
+    return {
+      email: invite.email,
+      workspaceName: workspace?.name ?? "a workspace",
+      inviterName: inviter?.name ?? inviter?.email ?? "Someone",
+      status: invite.status,
+    };
+  },
+});
+
 export const listByEmail = query({
   args: {},
   returns: v.array(v.object({

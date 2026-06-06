@@ -1,11 +1,12 @@
 import { toast } from "sonner";
 import { SignInForm } from "@/pages/Authentication/SignInForm";
 import { AuthLayout } from "@/pages/Authentication/AuthLayout";
-import { Authenticated, Unauthenticated, useMutation } from "convex/react";
+import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
 import { RippleSpinner } from "@/components/RippleSpinner";
 
 function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
@@ -69,6 +70,61 @@ function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
   );
 }
 
+function InviteSignIn({ inviteId }: { inviteId: string }) {
+  const invite = useQuery(api.workspaceInvites.getPublic, { inviteId });
+
+  // Loading — blocking section load, spinner is acceptable per UX guidelines.
+  if (invite === undefined) {
+    return (
+      <div className="flex justify-center py-8">
+        <RippleSpinner size={48} />
+      </div>
+    );
+  }
+
+  if (invite === null) {
+    return (
+      <div className="text-center space-y-4 py-8">
+        <h1 className="text-xl font-semibold tracking-tight">Invitation not found</h1>
+        <p className="text-sm text-muted-foreground">
+          This invitation link is invalid or has expired.
+        </p>
+        <Link to="/" className="inline-block text-sm font-medium text-primary underline underline-offset-4">
+          Go to Home
+        </Link>
+      </div>
+    );
+  }
+
+  if (invite.status !== InviteStatus.PENDING) {
+    return (
+      <div className="text-center space-y-4 py-8">
+        <h1 className="text-xl font-semibold tracking-tight">Invitation no longer active</h1>
+        <p className="text-sm text-muted-foreground">
+          This invitation to {invite.workspaceName} has already been{" "}
+          {invite.status === InviteStatus.ACCEPTED ? "accepted" : "declined"}.
+        </p>
+        <Link to="/" className="inline-block text-sm font-medium text-primary underline underline-offset-4">
+          Go to Home
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="mb-6">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{invite.inviterName}</span> invited
+          you to join <span className="font-medium text-foreground">{invite.workspaceName}</span>.
+          Create your account to accept.
+        </p>
+      </div>
+      <SignInForm lockedEmail={invite.email} defaultFlow="signUp" />
+    </>
+  );
+}
+
 export function InviteAcceptPage() {
   const { inviteId } = useParams();
 
@@ -84,12 +140,7 @@ export function InviteAcceptPage() {
         {inviteId && <AutoAcceptInvite inviteId={inviteId} />}
       </Authenticated>
       <Unauthenticated>
-        <div className="mb-6">
-          <p className="text-sm text-muted-foreground">
-            Sign in to accept your workspace invitation
-          </p>
-        </div>
-        <SignInForm />
+        {inviteId && <InviteSignIn inviteId={inviteId} />}
       </Unauthenticated>
     </AuthLayout>
   );

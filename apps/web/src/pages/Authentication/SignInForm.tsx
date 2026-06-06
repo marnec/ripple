@@ -12,7 +12,14 @@ import { EmailVerification } from "./EmailVerification";
 type Step = "auth" | "linkSent" | { email: string };
 type Flow = "signIn" | "signUp" | "forgot";
 
-export function SignInForm() {
+type SignInFormProps = {
+  /** When set, the email is pre-filled and locked (e.g. arriving via an invite). */
+  lockedEmail?: string;
+  /** Which flow to show first. Defaults to "signIn". */
+  defaultFlow?: Flow;
+};
+
+export function SignInForm({ lockedEmail, defaultFlow = "signIn" }: SignInFormProps = {}) {
   const [step, setStep] = useState<Step>("auth");
 
   if (step === "linkSent") {
@@ -21,13 +28,23 @@ export function SignInForm() {
   if (typeof step === "object") {
     return <EmailVerification email={step.email} />;
   }
-  return <AuthCard setStep={setStep} />;
+  return <AuthCard setStep={setStep} lockedEmail={lockedEmail} defaultFlow={defaultFlow} />;
 }
 
-function AuthCard({ setStep }: { setStep: (s: Step) => void }) {
+function AuthCard({
+  setStep,
+  lockedEmail,
+  defaultFlow,
+}: {
+  setStep: (s: Step) => void;
+  lockedEmail?: string;
+  defaultFlow: Flow;
+}) {
   const { signIn } = useAuthActions();
-  const [flow, setFlow] = useState<Flow>("signIn");
-  const [email, setEmail] = useState("");
+  const [flow, setFlow] = useState<Flow>(defaultFlow);
+  const [email, setEmail] = useState(lockedEmail ?? "");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -36,10 +53,23 @@ function AuthCard({ setStep }: { setStep: (s: Step) => void }) {
   }
 
   const isSignUp = flow === "signUp";
+  const passwordsMismatch =
+    isSignUp && confirmPassword.length > 0 && password !== confirmPassword;
+
+  const switchFlow = (next: Flow) => {
+    setFlow(next);
+    setConfirmPassword("");
+  };
 
   const handlePasswordSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
+    if (isSignUp && password !== confirmPassword) {
+      toast.error("Passwords do not match", {
+        description: "Re-enter the same password in both fields.",
+      });
+      return;
+    }
     setSubmitting(true);
     const formData = new FormData(event.currentTarget as HTMLFormElement);
     formData.set("flow", isSignUp ? "signUp" : "signIn");
@@ -135,10 +165,20 @@ function AuthCard({ setStep }: { setStep: (s: Step) => void }) {
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-11 bg-white/5 border-white/15 text-white placeholder:text-white/35 focus-visible:border-white/40 focus-visible:ring-white/20"
+            readOnly={!!lockedEmail}
+            aria-readonly={!!lockedEmail}
+            className={
+              "h-11 bg-white/5 border-white/15 text-white placeholder:text-white/35 focus-visible:border-white/40 focus-visible:ring-white/20" +
+              (lockedEmail ? " cursor-not-allowed text-white/70 focus-visible:ring-0" : "")
+            }
             autoComplete="email"
             required
           />
+          {lockedEmail && (
+            <p className="text-xs text-white/45">
+              This invitation is tied to this email address.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -163,6 +203,8 @@ function AuthCard({ setStep }: { setStep: (s: Step) => void }) {
               type={showPassword ? "text" : "password"}
               placeholder={isSignUp ? "At least 8 characters" : "Your password"}
               minLength={isSignUp ? 8 : undefined}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="h-11 bg-white/5 border-white/15 text-white placeholder:text-white/35 pr-10 focus-visible:border-white/40 focus-visible:ring-white/20"
               autoComplete={isSignUp ? "new-password" : "current-password"}
               required
@@ -182,9 +224,37 @@ function AuthCard({ setStep }: { setStep: (s: Step) => void }) {
           </div>
         </div>
 
+        {isSignUp && (
+          <div className="space-y-2">
+            <label htmlFor="confirmPassword" className="text-sm font-medium">
+              Confirm password
+            </label>
+            <Input
+              name="confirmPassword"
+              id="confirmPassword"
+              type={showPassword ? "text" : "password"}
+              placeholder="Re-enter your password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className={
+                "h-11 bg-white/5 border-white/15 text-white placeholder:text-white/35 focus-visible:border-white/40 focus-visible:ring-white/20" +
+                (passwordsMismatch
+                  ? " border-destructive/70 focus-visible:border-destructive/70 focus-visible:ring-destructive/30"
+                  : "")
+              }
+              autoComplete="new-password"
+              aria-invalid={passwordsMismatch}
+              required
+            />
+            {passwordsMismatch && (
+              <p className="text-xs text-destructive">Passwords do not match.</p>
+            )}
+          </div>
+        )}
+
         <Button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || passwordsMismatch}
           className="h-11 bg-white text-black hover:bg-white/90 font-medium"
         >
           {submitting
@@ -210,7 +280,7 @@ function AuthCard({ setStep }: { setStep: (s: Step) => void }) {
         <button
           type="button"
           className="font-medium text-white underline underline-offset-4 cursor-pointer"
-          onClick={() => setFlow(isSignUp ? "signIn" : "signUp")}
+          onClick={() => switchFlow(isSignUp ? "signIn" : "signUp")}
         >
           {isSignUp ? "Sign in" : "Create an account"}
         </button>
