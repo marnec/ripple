@@ -212,6 +212,40 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     clearImage();
   }, [clearImage]);
 
+  // Shared image-attachment flow used by both the toolbar's file picker and
+  // clipboard paste: show a local preview immediately, upload in the
+  // background, then swap in the hosted URLs.
+  const attachImageFile = async (file: File) => {
+    if (!fileUpload) return;
+    try {
+      const { thumbnail, previewUrl, isOriginal } = await generateThumbnail(file);
+      handleImagePreview(previewUrl);
+      const urls = await fileUpload.uploadImageWithThumbnail(file, thumbnail, isOriginal);
+      handleImageReady(urls);
+    } catch (err) {
+      console.error("Image upload failed:", err);
+      handleImageUploadFailed();
+    }
+  };
+
+  // Paste an image straight from the clipboard. Runs in the capture phase
+  // (see onPasteCapture below) so it intercepts the image before BlockNote
+  // tries to handle the paste. Ignored while another image is mid-upload to
+  // avoid racing two uploads into the single attachment slot.
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageItem = Array.from(items).find(
+      (it) => it.kind === "file" && it.type.startsWith("image/"),
+    );
+    if (!imageItem) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!fileUpload || isUploadingImage || isCapturingSnapshot) return;
+    const file = imageItem.getAsFile();
+    if (file) void attachImageFile(file);
+  };
+
   // Snapshot a diagram (whole canvas or a single frame) into a static PNG and
   // hand it to the shared image-attachment lifecycle. The sent message keeps
   // `diagramId`/`diagramName` on the image block so it stays click-to-open.
@@ -421,10 +455,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       <div className="flex justify-between items-center">
         <FormattingToolbar
           editor={editor}
-          uploadImageWithThumbnail={fileUpload?.uploadImageWithThumbnail}
-          onImagePreview={handleImagePreview}
-          onImageReady={handleImageReady}
-          onImageUploadFailed={handleImageUploadFailed}
+          canAttachImage={!!fileUpload}
+          onAttachImage={(file) => void attachImageFile(file)}
         />
         {showCallButton && (
           <Button variant="ghost" size="icon" onClick={() => void navigate("videocall")} title="Start a call" className="sm:w-18 sm:gap-1.5 sm:px-3">
@@ -481,7 +513,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           </button>
         </div>
       )}
-      <div className="flex gap-2 sm:mb-3">
+      <div className="flex gap-2 sm:mb-3" onPasteCapture={handlePaste}>
         <BlockNoteView
           id="message-composer"
           editor={editor}
