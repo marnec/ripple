@@ -1,4 +1,4 @@
-import { ArrowLeft, Phone } from "lucide-react";
+import { ArrowLeft, Captions, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import {
@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../components/ui/select";
+import { Switch } from "../../../components/ui/switch";
 import { useAudioLevel } from "../../../hooks/use-audio-level";
 import { useMediaDevices } from "../../../hooks/use-media-devices";
 import { useUserMedia } from "../../../hooks/use-user-media";
@@ -24,6 +25,13 @@ export interface DevicePreferences {
   audioOutputDeviceId?: string;
   userName?: string;
   userImage?: string;
+  /**
+   * Per-call: transcribe this call (saves a transcript document when the call
+   * ends, via Cloudflare end-of-meeting transcription). Deliberately NOT
+   * persisted to localStorage — defaults off each time so transcription is
+   * never silently always-on (privacy + cost).
+   */
+  transcribe?: boolean;
 }
 
 function loadPreferences(): DevicePreferences {
@@ -54,6 +62,8 @@ export function CallLobby({
   onBack: () => void;
 }) {
   const [prefs, setPrefs] = useState<DevicePreferences>(loadPreferences);
+  // Per-call, deliberately ephemeral (not in `prefs`, so never persisted).
+  const [transcribe, setTranscribe] = useState(false);
 
   const { audioInputs, videoInputs, audioOutputs, refresh } =
     useMediaDevices();
@@ -227,6 +237,20 @@ export function CallLobby({
               </Select>
             </div>
           </div>
+
+          {/* Transcription toggle (per-call) */}
+          <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+            <span className="flex items-center gap-2.5">
+              <Captions className="h-4 w-4 text-muted-foreground" />
+              <span className="flex flex-col">
+                <span className="text-sm font-medium">Transcribe this call</span>
+                <span className="text-xs text-muted-foreground">
+                  Saves a transcript document when the call ends
+                </span>
+              </span>
+            </span>
+            <Switch checked={transcribe} onCheckedChange={setTranscribe} />
+          </label>
         </div>
 
         {/* Action buttons */}
@@ -235,7 +259,7 @@ export function CallLobby({
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
-          <Button onClick={() => onJoin(prefs)} className="gap-2">
+          <Button onClick={() => onJoin({ ...prefs, transcribe })} className="gap-2">
             <Phone className="h-4 w-4" />
             Join Call
           </Button>

@@ -166,6 +166,86 @@ http.route({
 });
 
 /**
+ * POST /realtime/transcript-webhook?secret=...
+ *
+ * Cloudflare RealtimeKit `meeting.transcript` webhook. Fires once after a
+ * transcribed call's session ends, carrying a short-lived download URL for the
+ * consolidated transcript. We resolve the meeting back to its channel and seed
+ * a new document from it (`internal.transcripts.ingestTranscript`).
+ *
+ * Auth: RealtimeKit's webhook signature scheme is undocumented at time of
+ * writing, so we gate on a secret token carried in the URL (Cloudflare lets you
+ * register an arbitrary webhook URL). Register the hook URL as
+ * `https://<convex-site>/realtime/transcript-webhook?secret=<CLOUDFLARE_RTK_WEBHOOK_SECRET>`
+ * and set that env var. Any `x-webhook-signature*` header is logged for future
+ * hardening once Cloudflare documents the scheme.
+ *
+ * Set the secret with: npx convex env set CLOUDFLARE_RTK_WEBHOOK_SECRET <value>
+ */
+http.route({
+  path: "/realtime/transcript-webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const secret = process.env.CLOUDFLARE_RTK_WEBHOOK_SECRET ?? "";
+    const url = new URL(request.url);
+    const provided =
+      url.searchParams.get("secret") ??
+      request.headers.get("x-webhook-secret") ??
+      "";
+    if (!secret || provided !== secret) {
+      console.error("transcript-webhook: secret mismatch", {
+        hasEnvSecret: !!secret,
+        providedPresent: !!provided,
+      });
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(await request.text()) as Record<string, unknown>;
+    } catch {
+      return new Response("Bad Request", { status: 400 });
+    }
+
+    const event = (body.event ?? body.type) as string | undefined;
+    if (event && event !== "meeting.transcript") {
+      // Ack unrelated events so Cloudflare doesn't retry them.
+      return new Response("OK", { status: 200 });
+    }
+
+    // Actual RealtimeKit payload shape (verified 2026-06-06):
+    //   { event, meeting: { id, sessionId, ... }, transcriptDownloadUrl, ... }
+    // The meeting id is `meeting.id` (NOT a top-level `meetingId`) and the
+    // download URL is top-level. We also accept a couple of fallbacks for safety.
+    const meeting = (body.meeting as Record<string, unknown> | undefined) ?? {};
+    const asStr = (x: unknown): string | undefined =>
+      typeof x === "string" ? x : undefined;
+    const meetingId = asStr(meeting.id) ?? asStr(body.meetingId);
+    const sessionId = asStr(meeting.sessionId) ?? asStr(body.sessionId);
+    const transcriptDownloadUrl =
+      asStr(body.transcriptDownloadUrl) ?? asStr(meeting.transcriptDownloadUrl);
+
+    if (!meetingId || !transcriptDownloadUrl) {
+      console.error("transcript-webhook: missing fields", {
+        event,
+        hasMeeting: !!body.meeting,
+        meetingId,
+        hasUrl: !!transcriptDownloadUrl,
+      });
+      return new Response("Bad Request (missing fields)", { status: 400 });
+    }
+
+    await ctx.scheduler.runAfter(0, internal.transcripts.ingestTranscript, {
+      cloudflareMeetingId: meetingId,
+      cloudflareSessionId:
+        typeof sessionId === "string" ? sessionId : undefined,
+      transcriptDownloadUrl,
+    });
+    return new Response("OK", { status: 200 });
+  }),
+});
+
+/**
  * GET /integrations/github/setup
  *
  * GitHub App "Setup URL" callback. After an admin installs the App, GitHub

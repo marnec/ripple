@@ -1545,7 +1545,9 @@ export const joinEventCall = action({
     let meetingId: string;
     if (event.channelId) {
       // Channel-tied event: reuse the channel's persistent meeting.
-      meetingId = await ensureMeetingForChannel(ctx, event.channelId, cf);
+      // Event calls don't expose a transcription toggle yet → off.
+      meetingId = (await ensureMeetingForChannel(ctx, event.channelId, cf, false))
+        .meetingId;
     } else {
       meetingId = await ensureMeetingForEvent(ctx, eventId, cf);
     }
@@ -1628,7 +1630,8 @@ export const getGuestEventCallToken = action({
 
     let meetingId: string;
     if (data.channelId) {
-      meetingId = await ensureMeetingForChannel(ctx, data.channelId, cf);
+      meetingId = (await ensureMeetingForChannel(ctx, data.channelId, cf, false))
+        .meetingId;
     } else {
       meetingId = await ensureMeetingForEvent(ctx, data.eventId, cf);
     }

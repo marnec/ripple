@@ -1,4 +1,5 @@
-if (import.meta.env.DEV) {
+// why-did-you-render is noisy; opt in with VITE_PROFILER=1.
+if (import.meta.env.DEV && import.meta.env.VITE_PROFILER === "1") {
   await import("./wdyr");
 }
 // Install Temporal on globalThis for @schedule-x/calendar (which reads it as a global).

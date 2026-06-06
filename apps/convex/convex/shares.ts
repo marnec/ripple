@@ -606,11 +606,15 @@ export const getGuestCallToken = action({
 
     const channelId = share.resourceId as Id<"channels">;
 
-    const meetingId = await ensureMeetingForChannel(ctx, channelId, {
-      accountId,
-      appId,
-      apiToken,
-    });
+    // Guests join via a public share link — they don't start calls in
+    // practice, so inherit the active call's transcription mode (this `false`
+    // only applies if the guest somehow opens a brand-new call).
+    const { meetingId } = await ensureMeetingForChannel(
+      ctx,
+      channelId,
+      { accountId, appId, apiToken },
+      false,
+    );
 
     const fullSub = `${GUEST_SUB_PREFIX}${sub}`;
     const participantRes = await fetch(

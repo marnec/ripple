@@ -277,7 +277,12 @@ export declare const api: {
     joinCall: FunctionReference<
       "action",
       "public",
-      { channelId: Id<"channels">; userImage?: string; userName: string },
+      {
+        channelId: Id<"channels">;
+        transcribe?: boolean;
+        userImage?: string;
+        userName: string;
+      },
       { authToken: string; meetingId: string }
     >;
   };
@@ -3622,11 +3627,25 @@ export declare const internal: {
     >;
   };
   callSessions: {
+    attachTranscriptDocument: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        cloudflareSessionId?: string;
+        documentId: Id<"documents">;
+        sessionId: Id<"callSessions">;
+      },
+      boolean
+    >;
     createSession: FunctionReference<
       "mutation",
       "internal",
-      { channelId: Id<"channels">; cloudflareMeetingId: string },
-      null | string
+      {
+        channelId: Id<"channels">;
+        cloudflareMeetingId: string;
+        transcribe: boolean;
+      },
+      null | { cloudflareMeetingId: string; transcribe: boolean }
     >;
     getActiveSession: FunctionReference<
       "query",
@@ -3638,6 +3657,30 @@ export declare const internal: {
         active: boolean;
         channelId: Id<"channels">;
         cloudflareMeetingId: string;
+        cloudflareSessionId?: string;
+        transcribe?: boolean;
+        transcriptDocumentId?: Id<"documents">;
+      } | null
+    >;
+    getChannelForTranscript: FunctionReference<
+      "query",
+      "internal",
+      { channelId: Id<"channels"> },
+      { name: string; workspaceId: Id<"workspaces"> } | null
+    >;
+    getSessionByMeeting: FunctionReference<
+      "query",
+      "internal",
+      { cloudflareMeetingId: string },
+      {
+        _creationTime: number;
+        _id: Id<"callSessions">;
+        active: boolean;
+        channelId: Id<"channels">;
+        cloudflareMeetingId: string;
+        cloudflareSessionId?: string;
+        transcribe?: boolean;
+        transcriptDocumentId?: Id<"documents">;
       } | null
     >;
   };
@@ -3760,6 +3803,18 @@ export declare const internal: {
       "internal",
       { blockId: string; documentId: Id<"documents"> },
       null
+    >;
+  };
+  documents: {
+    createForTranscript: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        channelId: Id<"channels">;
+        name: string;
+        workspaceId: Id<"workspaces">;
+      },
+      Id<"documents">
     >;
   };
   emails: {
@@ -5659,6 +5714,18 @@ export declare const internal: {
       "action",
       "internal",
       { reassignToStatusId: Id<"taskStatuses">; statusId: Id<"taskStatuses"> },
+      null
+    >;
+  };
+  transcripts: {
+    ingestTranscript: FunctionReference<
+      "action",
+      "internal",
+      {
+        cloudflareMeetingId: string;
+        cloudflareSessionId?: string;
+        transcriptDownloadUrl: string;
+      },
       null
     >;
   };

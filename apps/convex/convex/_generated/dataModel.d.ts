@@ -281,6 +281,9 @@ export type DataModel = {
       active: boolean;
       channelId: Id<"channels">;
       cloudflareMeetingId: string;
+      cloudflareSessionId?: string;
+      transcribe?: boolean;
+      transcriptDocumentId?: Id<"documents">;
       _id: Id<"callSessions">;
       _creationTime: number;
     };
@@ -289,11 +292,16 @@ export type DataModel = {
       | "_id"
       | "active"
       | "channelId"
-      | "cloudflareMeetingId";
+      | "cloudflareMeetingId"
+      | "cloudflareSessionId"
+      | "transcribe"
+      | "transcriptDocumentId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_channel_active: ["channelId", "active", "_creationTime"];
+      by_meeting: ["cloudflareMeetingId", "_creationTime"];
+      by_transcript_document: ["transcriptDocumentId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -574,7 +582,8 @@ export type DataModel = {
         | "mentions"
         | "belongs_to"
         | "hosted_in"
-        | "invites";
+        | "invites"
+        | "transcript_of";
       frameId?: string;
       sourceId: string;
       sourceNodeId?: Id<"nodes">;

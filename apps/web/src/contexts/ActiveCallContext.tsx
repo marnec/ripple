@@ -108,6 +108,7 @@ export function ActiveCallProvider({
       audioOutputDeviceId: prefs.audioOutputDeviceId,
       userName: prefs.userName ?? "Anonymous",
       userImage: prefs.userImage,
+      transcribe: prefs.transcribe,
     });
   };
 

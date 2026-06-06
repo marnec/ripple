@@ -184,8 +184,20 @@ triggers.register("documents", async (ctx, change) => {
     await syncNode(ctx, change.id,
       change.newDoc.name, change.newDoc.tags ?? [],
       change.oldDoc.name, change.oldDoc.tags ?? []);
+  } else if (change.operation === "delete") {
+    // Clear the transcript FK on any call session that linked to this doc, so
+    // `callSessions.transcriptDocumentId` never dangles after a deletion.
+    const sessions = await ctx.db
+      .query("callSessions")
+      .withIndex("by_transcript_document", (q) =>
+        q.eq("transcriptDocumentId", change.id as Id<"documents">),
+      )
+      .collect();
+    for (const s of sessions) {
+      await ctx.db.patch(s._id, { transcriptDocumentId: undefined });
+    }
   }
-  // delete: node + edge cleanup handled by cascade rules
+  // node + edge cleanup handled by cascade rules
 });
 
 triggers.register("diagrams", async (ctx, change) => {

@@ -534,8 +534,22 @@ export default defineSchema({
     channelId: v.id("channels"),
     cloudflareMeetingId: v.string(),
     active: v.boolean(),
+    // Whether this call was started with transcription on. Decided by the first
+    // joiner (who creates the Cloudflare meeting with `transcribe_on_end`) and
+    // reused by everyone who joins the same call. Drives the meeting's
+    // transcribe_on_end flag and the participant preset.
+    transcribe: v.optional(v.boolean()),
+    // Cloudflare session id, learned from the `meeting.transcript` webhook.
+    cloudflareSessionId: v.optional(v.string()),
+    // The document seeded from this call's transcript. Set once by the webhook
+    // ingest; doubles as the idempotency guard against duplicate deliveries.
+    transcriptDocumentId: v.optional(v.id("documents")),
   })
-    .index("by_channel_active", ["channelId", "active"]),
+    .index("by_channel_active", ["channelId", "active"])
+    .index("by_meeting", ["cloudflareMeetingId"])
+    // Lets the documents delete-trigger clear this FK when a transcript doc is
+    // removed, keeping `transcriptDocumentId` consistent (no dangling links).
+    .index("by_transcript_document", ["transcriptDocumentId"]),
 
   spreadsheetCellRefs: defineTable({
     spreadsheetId: v.id("spreadsheets"),
@@ -800,6 +814,11 @@ export default defineSchema({
       // is the same physical write path. Edge presence tracks row presence
       // regardless of RSVP status; declined invitees stay edged.
       v.literal("invites"),
+      // document → channel: this document is the transcript of a call held in
+      // the channel. Created in `documents.createForTranscript` alongside the
+      // transcript doc; cascades away when either the doc or channel is deleted.
+      // Visible link in the workspace graph (like hosted_in, not filtered).
+      v.literal("transcript_of"),
     ),
     workspaceId: v.id("workspaces"),
     sourceNodeId: v.optional(v.id("nodes")),

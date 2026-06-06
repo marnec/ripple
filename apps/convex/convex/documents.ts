@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { DEFAULT_DOC_NAME } from "@ripple/shared/constants";
 import { auditLog, logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
@@ -52,6 +52,69 @@ export const create = mutation({
       url: `/workspaces/${workspaceId}/documents/${documentId}`,
     });
 
+    return documentId;
+  },
+});
+
+/**
+ * System-created document, used by the call-transcript webhook ingest (which
+ * runs with no authenticated user). Mirrors `create`'s insert but skips the
+ * auth check, activity log, and notification — the transcript action owns
+ * naming and the subsequent snapshot seed. Still goes through
+ * `writerWithTriggers` so denormalised indexes (tags etc.) stay consistent.
+ */
+export const createForTranscript = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    name: v.string(),
+    channelId: v.id("channels"),
+  },
+  returns: v.id("documents"),
+  handler: async (ctx, { workspaceId, name, channelId }) => {
+    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    // `transcript` tag (not the name) marks these docs. The denormalized
+    // `tags` column drives the doc's own display + the graph `nodes.tags`
+    // (via dbTriggers); `syncTagsForResource` reconciles the `entityTags`
+    // join + workspace `tags` dictionary, reusing a preexisting `transcript`
+    // tag rather than creating a duplicate (get-or-create on by_workspace_name).
+    const documentId = await db.insert("documents", {
+      workspaceId,
+      name,
+      tags: ["transcript"],
+    });
+    await syncTagsForResource(ctx, {
+      workspaceId,
+      resourceType: "document",
+      resourceId: documentId,
+      nextTagNames: ["transcript"],
+    });
+
+    // Graph edge: document --transcript_of--> channel (mirrors the
+    // calendarEvent--hosted_in-->channel convention). The document's `nodes`
+    // row was just created by the documents insert-trigger above; the channel's
+    // node already exists. Cascades away when either side is deleted (cascade
+    // rules cover edges by_source/by_target on both documents and channels).
+    const [docNode, channelNode] = await Promise.all([
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", documentId))
+        .first(),
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource", (q) => q.eq("resourceId", channelId))
+        .first(),
+    ]);
+    await ctx.db.insert("edges", {
+      sourceType: "document",
+      sourceId: documentId,
+      targetType: "channel",
+      targetId: channelId,
+      edgeType: "transcript_of",
+      workspaceId,
+      sourceNodeId: docNode?._id,
+      targetNodeId: channelNode?._id,
+      createdAt: Date.now(),
+    });
     return documentId;
   },
 });

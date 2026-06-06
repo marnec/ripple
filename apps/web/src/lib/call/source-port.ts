@@ -29,6 +29,13 @@ export interface CallJoinPreferences {
   audioOutputDeviceId?: string;
   userName: string;
   userImage?: string;
+  /**
+   * Whether to transcribe this call (saves an end-of-call transcript document
+   * via Cloudflare end-of-meeting transcription). Only honoured when this caller
+   * starts the call; joiners of an existing call inherit its mode. Channel calls
+   * only — event sources ignore it.
+   */
+  transcribe?: boolean;
 }
 
 /** Result from the source's token-minting backend action. */

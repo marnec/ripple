@@ -29,7 +29,8 @@ export async function ensureMeetingForChannel(
   ctx: ActionCtx,
   channelId: Id<"channels">,
   cf: { accountId: string; appId: string; apiToken: string },
-): Promise<string> {
+  transcribe: boolean,
+): Promise<{ meetingId: string; transcribe: boolean }> {
   const headers = {
     Authorization: `Bearer ${cf.apiToken}`,
     "Content-Type": "application/json",
@@ -38,14 +39,28 @@ export async function ensureMeetingForChannel(
   const session = await ctx.runQuery(internal.callSessions.getActiveSession, {
     channelId,
   });
-  if (session) return session.cloudflareMeetingId;
+  // An active call already exists — its transcription mode was fixed when the
+  // first joiner created the meeting; we reuse it (a late joiner can't flip it).
+  if (session)
+    return {
+      meetingId: session.cloudflareMeetingId,
+      transcribe: session.transcribe ?? false,
+    };
 
   const createRes = await fetch(
     `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings`,
     {
       method: "POST",
       headers,
-      body: JSON.stringify({ title: `Channel call ${channelId}` }),
+      // `transcribe_on_end` produces the consolidated end-of-call transcript
+      // (Whisper) that the `meeting.transcript` webhook delivers. On Cloudflare
+      // a meeting is either real-time-transcribed OR end-of-meeting-transcribed,
+      // never both — we chose end-of-meeting (server-side, survives everyone
+      // leaving). Independent of recording.
+      body: JSON.stringify({
+        title: `Channel call ${channelId}`,
+        transcribe_on_end: transcribe,
+      }),
     },
   );
   if (!createRes.ok) {
@@ -56,21 +71,23 @@ export async function ensureMeetingForChannel(
   const createData = (await createRes.json()) as { data: { id: string } };
   const ourMeetingId = createData.data.id;
 
-  const winnerMeetingId = await ctx.runMutation(
-    internal.callSessions.createSession,
-    { channelId, cloudflareMeetingId: ourMeetingId },
-  );
+  const winner = await ctx.runMutation(internal.callSessions.createSession, {
+    channelId,
+    cloudflareMeetingId: ourMeetingId,
+    transcribe,
+  });
 
-  if (winnerMeetingId && winnerMeetingId !== ourMeetingId) {
+  if (winner && winner.cloudflareMeetingId !== ourMeetingId) {
     // We lost the race — our CF meeting is orphaned. Clean it up so it
-    // doesn't tie up Cloudflare participant / meeting quota.
+    // doesn't tie up Cloudflare participant / meeting quota. The winner's
+    // transcription mode wins (ours never took effect).
     void fetch(
       `${CF_API_BASE}/${cf.accountId}/realtime/kit/${cf.appId}/meetings/${ourMeetingId}`,
       { method: "DELETE", headers },
     ).catch((e) => console.error("Orphan meeting cleanup failed:", e));
-    return winnerMeetingId;
+    return { meetingId: winner.cloudflareMeetingId, transcribe: winner.transcribe };
   }
-  return ourMeetingId;
+  return { meetingId: ourMeetingId, transcribe };
 }
 
 const callSessionValidator = v.object({
@@ -79,6 +96,9 @@ const callSessionValidator = v.object({
   channelId: v.id("channels"),
   cloudflareMeetingId: v.string(),
   active: v.boolean(),
+  transcribe: v.optional(v.boolean()),
+  cloudflareSessionId: v.optional(v.string()),
+  transcriptDocumentId: v.optional(v.id("documents")),
 });
 
 export const getActiveSession = internalQuery({
@@ -98,9 +118,15 @@ export const createSession = internalMutation({
   args: {
     channelId: v.id("channels"),
     cloudflareMeetingId: v.string(),
+    transcribe: v.boolean(),
   },
-  returns: v.union(v.null(), v.string()),
-  handler: async (ctx, { channelId, cloudflareMeetingId }) => {
+  // null = we won the race (our meeting is now the active session). An object
+  // = we lost; the returned row is the winner whose transcription mode applies.
+  returns: v.union(
+    v.null(),
+    v.object({ cloudflareMeetingId: v.string(), transcribe: v.boolean() }),
+  ),
+  handler: async (ctx, { channelId, cloudflareMeetingId, transcribe }) => {
     // Check inside the mutation (transactional) to prevent duplicate sessions
     const existing = await ctx.db
       .query("callSessions")
@@ -110,13 +136,17 @@ export const createSession = internalMutation({
       .first();
 
     if (existing) {
-      return existing.cloudflareMeetingId;
+      return {
+        cloudflareMeetingId: existing.cloudflareMeetingId,
+        transcribe: existing.transcribe ?? false,
+      };
     }
 
     await ctx.db.insert("callSessions", {
       channelId,
       cloudflareMeetingId,
       active: true,
+      transcribe,
     });
     return null;
   },
@@ -142,17 +172,30 @@ export const endSession = mutation({
   },
 });
 
+/**
+ * RealtimeKit presets (configured in the Cloudflare dashboard). They differ
+ * only in their `transcription_enabled` flag, which gates real-time captions
+ * and whether a participant's audio feeds the live transcript. The per-call
+ * toggle picks between them; the end-of-call transcript doc is driven
+ * separately by `transcribe_on_end` on the meeting.
+ */
+const PRESET_TRANSCRIBE = "group_call_host";
+const PRESET_NO_TRANSCRIBE = "group_call_host_notranscript";
+
 export const joinCall = action({
   args: {
     channelId: v.id("channels"),
     userName: v.string(),
     userImage: v.optional(v.string()),
+    // The starter's lobby choice. Only honoured when this caller creates the
+    // meeting; joiners of an existing call inherit that call's mode.
+    transcribe: v.optional(v.boolean()),
   },
   returns: v.object({
     authToken: v.string(),
     meetingId: v.string(),
   }),
-  handler: async (ctx, { channelId, userName, userImage }) => {
+  handler: async (ctx, { channelId, userName, userImage, transcribe }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -171,13 +214,17 @@ export const joinCall = action({
       "Content-Type": "application/json",
     };
 
-    const meetingId = await ensureMeetingForChannel(ctx, channelId, {
-      accountId,
-      appId,
-      apiToken,
-    });
+    const { meetingId, transcribe: effectiveTranscribe } =
+      await ensureMeetingForChannel(
+        ctx,
+        channelId,
+        { accountId, appId, apiToken },
+        transcribe ?? false,
+      );
 
-    // Add this user as a participant
+    // Add this user as a participant. The preset must match the call's mode so
+    // a late joiner to a transcribed call also gets captions and feeds the
+    // live transcript.
     const participantRes = await fetch(
       `${CF_API_BASE}/${accountId}/realtime/kit/${appId}/meetings/${meetingId}/participants`,
       {
@@ -186,7 +233,9 @@ export const joinCall = action({
         body: JSON.stringify({
           name: userName,
           picture: userImage,
-          preset_name: "group_call_host",
+          preset_name: effectiveTranscribe
+            ? PRESET_TRANSCRIBE
+            : PRESET_NO_TRANSCRIBE,
           custom_participant_id: userId,
         }),
       },
@@ -202,5 +251,67 @@ export const joinCall = action({
       .token;
 
     return { authToken, meetingId };
+  },
+});
+
+/**
+ * Look up a call session by its Cloudflare meeting id. Used by the transcript
+ * webhook ingest to resolve a `meeting.transcript` delivery back to its channel
+ * and workspace. The row persists after the call ends (`active: false`), so
+ * this resolves even though the call is over by the time the webhook fires.
+ */
+export const getSessionByMeeting = internalQuery({
+  args: { cloudflareMeetingId: v.string() },
+  returns: v.union(callSessionValidator, v.null()),
+  handler: async (ctx, { cloudflareMeetingId }) => {
+    return await ctx.db
+      .query("callSessions")
+      .withIndex("by_meeting", (q) =>
+        q.eq("cloudflareMeetingId", cloudflareMeetingId),
+      )
+      .first();
+  },
+});
+
+/**
+ * Channel name + workspace for the transcript ingest (no auth — invoked from
+ * the webhook action, which has already resolved the session by meeting id).
+ */
+export const getChannelForTranscript = internalQuery({
+  args: { channelId: v.id("channels") },
+  returns: v.union(
+    v.object({ name: v.string(), workspaceId: v.id("workspaces") }),
+    v.null(),
+  ),
+  handler: async (ctx, { channelId }) => {
+    const channel = await ctx.db.get(channelId);
+    if (!channel) return null;
+    return { name: channel.name, workspaceId: channel.workspaceId };
+  },
+});
+
+/**
+ * Attach the seeded transcript document to its call session. Idempotency guard
+ * for the webhook: returns false if a document was already attached (a
+ * duplicate delivery), so the caller can discard its freshly-built doc.
+ */
+export const attachTranscriptDocument = internalMutation({
+  args: {
+    sessionId: v.id("callSessions"),
+    documentId: v.id("documents"),
+    cloudflareSessionId: v.optional(v.string()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, { sessionId, documentId, cloudflareSessionId }) => {
+    const session = await ctx.db.get(sessionId);
+    if (!session) return false;
+    // Already linked → genuine duplicate. The documents delete-trigger keeps
+    // this FK consistent (cleared on doc deletion), so it never dangles.
+    if (session.transcriptDocumentId) return false;
+    await ctx.db.patch(sessionId, {
+      transcriptDocumentId: documentId,
+      ...(cloudflareSessionId ? { cloudflareSessionId } : {}),
+    });
+    return true;
   },
 });
