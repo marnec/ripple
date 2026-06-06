@@ -14,7 +14,6 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog";
-import { RippleSpinner } from "@/components/RippleSpinner";
 import { useDiagramScene } from "@/hooks/use-diagram-scene";
 import { frameViewElements, orderFrames } from "@/pages/App/Diagram/frames";
 import type { Id } from "@convex/_generated/dataModel";
@@ -116,8 +115,15 @@ export function FramePickerDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isLoading, frames.length]);
 
+  // Defer showing the dialog until the scene has loaded AND has frames worth
+  // choosing between. While loading we keep the hook running (open → enabled)
+  // but render nothing, so a frameless diagram resolves straight to the
+  // whole-diagram embed via the effect above — no one-frame flash of the
+  // dialog before it realises there's nothing to pick.
+  const visible = open && !isLoading && frames.length > 0;
+
   return (
-    <ResponsiveDialog open={open} onOpenChange={onOpenChange} direction="top">
+    <ResponsiveDialog open={visible} onOpenChange={onOpenChange} direction="top">
       <ResponsiveDialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle className="flex items-center gap-2">
@@ -129,45 +135,39 @@ export function FramePickerDialog({
           </ResponsiveDialogDescription>
         </ResponsiveDialogHeader>
         <ResponsiveDialogBody>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <RippleSpinner size={32} />
-            </div>
-          ) : (
-            <div className="space-y-1 py-2">
+          <div className="space-y-1 py-2">
+            <button
+              type="button"
+              onClick={() => select(null)}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted"
+            >
+              <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded border bg-background">
+                <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Whole diagram</p>
+                <p className="text-xs text-muted-foreground">
+                  Embed the entire canvas
+                </p>
+              </div>
+            </button>
+            {frames.map((frame, i) => (
               <button
+                key={frame.id}
                 type="button"
-                onClick={() => select(null)}
+                onClick={() => select(frame.id)}
                 className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted"
               >
-                <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded border bg-background">
-                  <LayoutGrid className="h-5 w-5 text-muted-foreground" />
-                </div>
+                <FrameThumbnail elements={elements} frame={frame} isDark={isDark} />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Whole diagram</p>
-                  <p className="text-xs text-muted-foreground">
-                    Embed the entire canvas
+                  <p className="truncate text-sm font-medium">
+                    {frame.name || `Frame ${i + 1}`}
                   </p>
+                  <p className="text-xs text-muted-foreground">Frame</p>
                 </div>
               </button>
-              {frames.map((frame, i) => (
-                <button
-                  key={frame.id}
-                  type="button"
-                  onClick={() => select(frame.id)}
-                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted"
-                >
-                  <FrameThumbnail elements={elements} frame={frame} isDark={isDark} />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {frame.name || `Frame ${i + 1}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Frame</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </ResponsiveDialogBody>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
