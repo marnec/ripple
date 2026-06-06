@@ -128,6 +128,17 @@ export function CallSurface({
     );
   }
 
+  // Leaving — the user hit Leave and we're navigating away. `status` reads
+  // `idle` here, but rendering the lobby would flash the join screen on the
+  // way out, so show the transition spinner instead.
+  if (callCtx.isLeaving) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <RippleSpinner size={64} />
+      </div>
+    );
+  }
+
   if (callCtx.status === "lobby" || callCtx.status === "idle") {
     return (
       <CallLobby

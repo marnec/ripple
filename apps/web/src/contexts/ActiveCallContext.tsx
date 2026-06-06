@@ -38,6 +38,13 @@ interface ActiveCallContextValue {
   error: string | null;
   /** True while the active call is being transcribed (end-of-call document). */
   isTranscribing: boolean;
+  /**
+   * True during the leave transition (after the user hit Leave, before the
+   * navigation away lands). `status` reports `idle` here so other consumers
+   * stay "joined-ish", but surfaces use this to avoid flashing the lobby on
+   * the way out.
+   */
+  isLeaving: boolean;
   isFloating: boolean;
   isPipDismissed: boolean;
   dismissPip: () => void;
@@ -119,8 +126,18 @@ export function ActiveCallProvider({
     // Capture the leave destination before `session.leaveCall()` clears
     // the source — otherwise we lose the route to navigate to.
     const dest = session.source?.descriptor.leaveDestination ?? null;
-    await session.leaveCall();
+
+    // Order matters. `session.leaveCall()` synchronously dispatches
+    // LEAVE_REQUESTED (status → `leaving`, public `idle`) before its first
+    // await, so kicking it off then navigating in the SAME tick lets the
+    // route change commit alongside the leaving state — the surface unmounts
+    // immediately. The async RTK teardown (m.leave + RTK_LEFT → idle) then
+    // finishes off-screen, so the user never sees the post-leave idle/lobby
+    // frame on the way out. PiP stays hidden throughout because `leaving`
+    // maps to public `idle`, not `joined`.
+    const leaving = session.leaveCall();
     if (dest) void navigate(dest);
+    await leaving;
   };
 
   const switchCall = async (next: CallSourcePort): Promise<void> => {
@@ -145,6 +162,7 @@ export function ActiveCallProvider({
         status: publicStatus,
         error: session.state.error?.message ?? null,
         isTranscribing: publicStatus === "joined" && session.state.transcribe,
+        isLeaving: session.state.status === "leaving",
         isFloating,
         isPipDismissed,
         dismissPip: () => setIsPipDismissed(true),
