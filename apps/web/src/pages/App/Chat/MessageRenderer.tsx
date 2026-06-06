@@ -39,26 +39,35 @@ export function MessageRenderer({ blocks, onImageClick, onDiagramOpen }: Message
   return (
     <>
       {thumbnailUrl && (
-        <button
-          type="button"
-          className="group relative block cursor-pointer"
-          onClick={() =>
-            diagramId ? onDiagramOpen?.(diagramId) : onImageClick?.(thumbnailUrl, fullUrl!)
-          }
-        >
-          <img
-            src={thumbnailUrl}
-            alt={imageProps?.diagramName ?? ""}
-            className="max-w-xs sm:max-w-sm max-h-80 hover:brightness-90 transition-[filter]"
-            loading="lazy"
-          />
+        <div className="group relative block w-fit">
+          <button
+            type="button"
+            aria-label="Open image"
+            className="block cursor-pointer"
+            onClick={() => onImageClick?.(thumbnailUrl, fullUrl!)}
+          >
+            <img
+              src={thumbnailUrl}
+              alt={imageProps?.diagramName ?? ""}
+              className="max-w-xs sm:max-w-sm max-h-80 hover:brightness-90 transition-[filter]"
+              loading="lazy"
+            />
+          </button>
           {diagramId && (
+            // pointer-events-none lets clicks fall through to the image button
+            // below; only the name link re-enables them to open the diagram.
             <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-linear-to-t from-black/60 to-transparent px-2.5 pb-1.5 pt-6 text-xs font-medium text-white">
               <PenTool className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{imageProps?.diagramName || "Open diagram"}</span>
+              <button
+                type="button"
+                className="pointer-events-auto truncate hover:underline"
+                onClick={() => onDiagramOpen?.(diagramId)}
+              >
+                {imageProps?.diagramName || "Open diagram"}
+              </button>
             </span>
           )}
-        </button>
+        </div>
       )}
       {hasText && (
         <div className={thumbnailUrl ? "px-3 pb-2 pt-1.5" : undefined}>

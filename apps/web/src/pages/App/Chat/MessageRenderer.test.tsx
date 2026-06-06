@@ -8,7 +8,7 @@ afterEach(cleanup);
 const imageBlock = (props: Record<string, unknown>): Block => ({ type: "image", props });
 
 describe("MessageRenderer diagram snapshots", () => {
-  it("a diagram-snapshot image opens the diagram (not the lightbox) and shows the badge", async () => {
+  it("a diagram-snapshot image opens the lightbox like any image; the name label opens the diagram", async () => {
     const onImageClick = vi.fn();
     const onDiagramOpen = vi.fn();
     render(
@@ -19,11 +19,14 @@ describe("MessageRenderer diagram snapshots", () => {
       />,
     );
 
-    expect(screen.getByText("Flowchart")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button"));
-
+    // Clicking the name label opens the live diagram.
+    await userEvent.click(screen.getByRole("button", { name: "Flowchart" }));
     expect(onDiagramOpen).toHaveBeenCalledWith("d1");
     expect(onImageClick).not.toHaveBeenCalled();
+
+    // Clicking the image itself opens the lightbox.
+    await userEvent.click(screen.getByRole("button", { name: "Open image" }));
+    expect(onImageClick).toHaveBeenCalledWith("thumb.png", "full.png");
   });
 
   it("a plain image opens the lightbox and shows no diagram badge", async () => {
