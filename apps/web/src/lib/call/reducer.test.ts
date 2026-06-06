@@ -31,6 +31,28 @@ describe("callReducer", () => {
       expect(state.error).toBeNull();
     });
 
+    it("TOKEN_OK carries the call's transcribe mode into state", () => {
+      const transcribed = run([
+        { type: "ENTER_LOBBY" },
+        { type: "JOIN_REQUESTED" },
+        { type: "TOKEN_OK", authToken: "tok", meetingId: "m1", transcribe: true },
+        { type: "RTK_JOINED" },
+      ]);
+      expect(transcribed.transcribe).toBe(true);
+
+      // Omitted transcribe defaults to false (e.g. event calls).
+      const plain = run([
+        { type: "ENTER_LOBBY" },
+        { type: "JOIN_REQUESTED" },
+        { type: "TOKEN_OK", authToken: "tok", meetingId: "m1" },
+      ]);
+      expect(plain.transcribe).toBe(false);
+
+      // Leaving clears it back to the initial (false) state.
+      const left = run([{ type: "LEAVE_REQUESTED" }, { type: "RTK_LEFT" }], transcribed);
+      expect(left.transcribe).toBe(false);
+    });
+
     it("leave from joined returns to idle and clears credentials", () => {
       const joined = run([
         { type: "ENTER_LOBBY" },

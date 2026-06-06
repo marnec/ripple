@@ -280,10 +280,11 @@ export declare const api: {
       {
         channelId: Id<"channels">;
         transcribe?: boolean;
+        transcriptionLanguage?: string;
         userImage?: string;
         userName: string;
       },
-      { authToken: string; meetingId: string }
+      { authToken: string; meetingId: string; transcribe: boolean }
     >;
   };
   channelMembers: {

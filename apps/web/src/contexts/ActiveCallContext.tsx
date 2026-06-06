@@ -36,6 +36,8 @@ interface ActiveCallContextValue {
   descriptor: CallSourceDescriptor | null;
   status: CallStatus;
   error: string | null;
+  /** True while the active call is being transcribed (end-of-call document). */
+  isTranscribing: boolean;
   isFloating: boolean;
   isPipDismissed: boolean;
   dismissPip: () => void;
@@ -109,6 +111,7 @@ export function ActiveCallProvider({
       userName: prefs.userName ?? "Anonymous",
       userImage: prefs.userImage,
       transcribe: prefs.transcribe,
+      transcriptionLanguage: prefs.transcriptionLanguage,
     });
   };
 
@@ -141,6 +144,7 @@ export function ActiveCallProvider({
         descriptor: session.source?.descriptor ?? null,
         status: publicStatus,
         error: session.state.error?.message ?? null,
+        isTranscribing: publicStatus === "joined" && session.state.transcribe,
         isFloating,
         isPipDismissed,
         dismissPip: () => setIsPipDismissed(true),

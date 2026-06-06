@@ -30,6 +30,10 @@ export async function ensureMeetingForChannel(
   channelId: Id<"channels">,
   cf: { accountId: string; appId: string; apiToken: string },
   transcribe: boolean,
+  // ISO 639-1 code (`en`, `es`, …). Only meaningful when `transcribe` is true
+  // and we're creating the meeting. NOTE: `"multi"` (Whisper auto-detect) is
+  // NOT usable here — see the create body below.
+  transcriptionLanguage?: string,
 ): Promise<{ meetingId: string; transcribe: boolean }> {
   const headers = {
     Authorization: `Bearer ${cf.apiToken}`,
@@ -57,9 +61,22 @@ export async function ensureMeetingForChannel(
       // a meeting is either real-time-transcribed OR end-of-meeting-transcribed,
       // never both — we chose end-of-meeting (server-side, survives everyone
       // leaving). Independent of recording.
+      //
+      // `ai_config.transcription.language` pins the Whisper language (ISO 639-1,
+      // e.g. `es`). Without it the Whisper path defaults to English and blanks
+      // other languages.
+      //
+      // Do NOT pass `"multi"` (auto-detect) here: verified 2026-06-06 that CF
+      // accepts it at meeting-create (echoes it back) but its end-of-meeting
+      // Whisper pipeline then silently produces no transcript and never fires
+      // the `meeting.transcript` webhook. `"multi"` is a real-time-only
+      // (Deepgram) value; there is no auto-detect for end-of-meeting transcription.
       body: JSON.stringify({
         title: `Channel call ${channelId}`,
         transcribe_on_end: transcribe,
+        ...(transcribe && transcriptionLanguage
+          ? { ai_config: { transcription: { language: transcriptionLanguage } } }
+          : {}),
       }),
     },
   );
@@ -190,12 +207,22 @@ export const joinCall = action({
     // The starter's lobby choice. Only honoured when this caller creates the
     // meeting; joiners of an existing call inherit that call's mode.
     transcribe: v.optional(v.boolean()),
+    // ISO 639-1 code or `"multi"`. Like `transcribe`, only applied when this
+    // caller creates the meeting (it's baked into the Whisper config at
+    // creation; late joiners can't change the meeting's language).
+    transcriptionLanguage: v.optional(v.string()),
   },
   returns: v.object({
     authToken: v.string(),
     meetingId: v.string(),
+    // The call's effective transcription mode (the starter's choice, which a
+    // late joiner inherits). Surfaced so the UI can show a "transcribing" pill.
+    transcribe: v.boolean(),
   }),
-  handler: async (ctx, { channelId, userName, userImage, transcribe }) => {
+  handler: async (
+    ctx,
+    { channelId, userName, userImage, transcribe, transcriptionLanguage },
+  ) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
@@ -220,6 +247,7 @@ export const joinCall = action({
         channelId,
         { accountId, appId, apiToken },
         transcribe ?? false,
+        transcriptionLanguage,
       );
 
     // Add this user as a participant. The preset must match the call's mode so
@@ -250,7 +278,7 @@ export const joinCall = action({
     const authToken = (participantData as { data: { token: string } }).data
       .token;
 
-    return { authToken, meetingId };
+    return { authToken, meetingId, transcribe: effectiveTranscribe };
   },
 });
 

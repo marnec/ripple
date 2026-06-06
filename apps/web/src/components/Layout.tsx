@@ -1,7 +1,7 @@
 import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
 import type { QueryParams } from "@ripple/shared/types/routes";
-import { Phone } from "lucide-react";
+import { Captions, Phone } from "lucide-react";
 import { Profiler, useEffect, useState } from "react";
 import { onRenderCallback } from "../lib/profiler-logger";
 import { Outlet, useLocation, useParams } from "react-router-dom";
@@ -18,21 +18,50 @@ import { WorkspaceMembersProvider } from "../contexts/WorkspaceMembersContext";
 import { WorkspaceSidebarProvider } from "../contexts/WorkspaceSidebarContext";
 import { DynamicBreadcrumb } from "./Breadcrumb";
 import { FollowModeIndicator } from "./FollowModeIndicator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 import { AppSidebar } from "@/pages/App/AppSidebar";
 
 function CallIndicator() {
-  const { status, returnToCall } = useActiveCall();
+  const { status, isTranscribing, returnToCall } = useActiveCall();
   if (status !== "joined") return null;
 
   return (
-    <button
-      onClick={returnToCall}
-      className="flex items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-medium text-green-600 dark:text-green-400"
-      title="In call"
-    >
-      <Phone className="h-3 w-3" />
-      <span className="hidden sm:inline">In call</span>
-    </button>
+    <>
+      <button
+        onClick={returnToCall}
+        className="flex items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-1 text-xs font-medium text-green-600 dark:text-green-400"
+        title="In call"
+      >
+        <Phone className="h-3 w-3" />
+        <span className="hidden sm:inline">In call</span>
+      </button>
+      {isTranscribing && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="flex cursor-default items-center gap-1.5 rounded-full bg-blue-500/15 px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400" />
+              }
+            >
+              <Captions className="h-3 w-3" />
+              <span className="hidden sm:inline">Transcribing</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs">
+                This call is being transcribed. The transcript document is
+                generated after the call ends and may take a little while to
+                appear.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </>
   );
 }
 

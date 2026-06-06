@@ -1,4 +1,4 @@
-import { ArrowLeft, Captions, Phone } from "lucide-react";
+import { ArrowLeft, Captions, Phone, Settings2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "../../../components/ui/button";
 import {
@@ -32,7 +32,26 @@ export interface DevicePreferences {
    * never silently always-on (privacy + cost).
    */
   transcribe?: boolean;
+  /**
+   * Transcription language — ISO 639-1 code (`en`, `es`, …). Per-call,
+   * ephemeral (not persisted): paired with `transcribe`. No auto-detect option:
+   * `"multi"` is unsupported by CF's end-of-meeting Whisper path (see
+   * `callSessions.ensureMeetingForChannel`).
+   */
+  transcriptionLanguage?: string;
 }
+
+/**
+ * Languages offered for end-of-meeting (Whisper) transcription. ISO 639-1
+ * codes; a pragmatic common set, not exhaustive of Whisper's languages. No
+ * `"multi"`/auto-detect entry — CF's end-of-meeting path silently drops it.
+ */
+const TRANSCRIPTION_LANGUAGES: { code: string; label: string }[] = [
+  { code: "en", label: "English" },
+  { code: "it", label: "Italian" },
+];
+
+const DEFAULT_TRANSCRIPTION_LANGUAGE = "en";
 
 function loadPreferences(): DevicePreferences {
   try {
@@ -64,6 +83,13 @@ export function CallLobby({
   const [prefs, setPrefs] = useState<DevicePreferences>(loadPreferences);
   // Per-call, deliberately ephemeral (not in `prefs`, so never persisted).
   const [transcribe, setTranscribe] = useState(false);
+  const [transcriptionLanguage, setTranscriptionLanguage] = useState(
+    DEFAULT_TRANSCRIPTION_LANGUAGE,
+  );
+  // Device pickers are advanced (defaults work for most) — collapsed by default
+  // so the lobby stays compact, especially on mobile. Revealed via the gear in
+  // the control row.
+  const [showDevices, setShowDevices] = useState(false);
 
   const { audioInputs, videoInputs, audioOutputs, refresh } =
     useMediaDevices();
@@ -103,11 +129,11 @@ export function CallLobby({
 
   return (
     <div className="flex h-full w-full items-center justify-center overflow-y-auto p-4">
-      <div className="flex w-full max-w-3xl flex-col gap-5 rounded-xl border bg-card p-5 shadow-lg sm:p-6">
+      <div className="flex w-full max-w-3xl flex-col gap-4 rounded-xl border bg-card p-4 shadow-lg sm:gap-5 sm:p-6">
         <h2 className="text-center text-lg font-semibold">Ready to join?</h2>
 
         {/* Preview + settings stacked */}
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3 sm:gap-4">
           {/* Video preview + audio level + toggles */}
           <div className="flex flex-col gap-3">
             <VideoPreview
@@ -145,11 +171,28 @@ export function CallLobby({
                   updatePrefs({ videoEnabled: !prefs.videoEnabled })
                 }
               />
+              <Button
+                variant="secondary"
+                size="icon"
+                className={`h-11 w-11 md:h-9 md:w-9 ${
+                  showDevices ? "ring-2 ring-ring ring-offset-2 ring-offset-card" : ""
+                }`}
+                onClick={() => setShowDevices((v) => !v)}
+                title="Audio & video settings"
+                aria-expanded={showDevices}
+                aria-controls="lobby-device-settings"
+              >
+                <Settings2 className="h-5 w-5" />
+              </Button>
             </div>
           </div>
 
-          {/* Device selectors */}
-          <div className="flex flex-col gap-3">
+          {/* Device selectors — collapsed by default (advanced) */}
+          {showDevices && (
+          <div
+            id="lobby-device-settings"
+            className="flex flex-col gap-3 duration-200 animate-in fade-in slide-in-from-top-1"
+          >
             {/* Microphone */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground">
@@ -237,20 +280,55 @@ export function CallLobby({
               </Select>
             </div>
           </div>
+          )}
 
           {/* Transcription toggle (per-call) */}
-          <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-            <span className="flex items-center gap-2.5">
-              <Captions className="h-4 w-4 text-muted-foreground" />
-              <span className="flex flex-col">
-                <span className="text-sm font-medium">Transcribe this call</span>
-                <span className="text-xs text-muted-foreground">
-                  Saves a transcript document when the call ends
+          <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
+            <label className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2.5">
+                <Captions className="h-4 w-4 text-muted-foreground" />
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium">
+                    Transcribe this call
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Saves a transcript document when the call ends
+                  </span>
                 </span>
               </span>
-            </span>
-            <Switch checked={transcribe} onCheckedChange={setTranscribe} />
-          </label>
+              <Switch checked={transcribe} onCheckedChange={setTranscribe} />
+            </label>
+
+            {/* Language picker — only relevant once transcription is on */}
+            {transcribe && (
+              <div className="flex flex-col gap-1 border-t pt-3">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Spoken language
+                </label>
+                <Select
+                  value={transcriptionLanguage}
+                  onValueChange={(v) =>
+                    setTranscriptionLanguage(v || DEFAULT_TRANSCRIPTION_LANGUAGE)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue>
+                      {TRANSCRIPTION_LANGUAGES.find(
+                        (l) => l.code === transcriptionLanguage,
+                      )?.label ?? "English"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRANSCRIPTION_LANGUAGES.map((l) => (
+                      <SelectItem key={l.code} value={l.code}>
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Action buttons */}
@@ -259,7 +337,18 @@ export function CallLobby({
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
-          <Button onClick={() => onJoin({ ...prefs, transcribe })} className="gap-2">
+          <Button
+            onClick={() =>
+              onJoin({
+                ...prefs,
+                transcribe,
+                transcriptionLanguage: transcribe
+                  ? transcriptionLanguage
+                  : undefined,
+              })
+            }
+            className="gap-2"
+          >
             <Phone className="h-4 w-4" />
             Join Call
           </Button>

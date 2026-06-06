@@ -47,13 +47,20 @@ export interface CallState {
   status: CallStatus;
   authToken: string | null;
   meetingId: string | null;
+  /** Whether the joined call is being transcribed. Set on TOKEN_OK. */
+  transcribe: boolean;
   error: CallError | null;
 }
 
 export type CallEvent =
   | { type: "ENTER_LOBBY" }
   | { type: "JOIN_REQUESTED" }
-  | { type: "TOKEN_OK"; authToken: string; meetingId: string }
+  | {
+      type: "TOKEN_OK";
+      authToken: string;
+      meetingId: string;
+      transcribe?: boolean;
+    }
   | { type: "RTK_JOINED" }
   | { type: "JOIN_FAILED"; reason: CallErrorReason; message: string }
   | { type: "LEAVE_REQUESTED" }
@@ -65,6 +72,7 @@ export const initialCallState: CallState = {
   status: "idle",
   authToken: null,
   meetingId: null,
+  transcribe: false,
   error: null,
 };
 
@@ -83,6 +91,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
           status: "lobby",
           authToken: null,
           meetingId: null,
+          transcribe: false,
           error: null,
         };
       }
@@ -100,6 +109,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
         ...state,
         authToken: event.authToken,
         meetingId: event.meetingId,
+        transcribe: event.transcribe ?? false,
       };
 
     case "RTK_JOINED":
@@ -115,6 +125,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
         status: "error",
         authToken: null,
         meetingId: null,
+        transcribe: false,
         error: { reason: event.reason, message: event.message },
       };
 
@@ -146,6 +157,7 @@ export function callReducer(state: CallState, event: CallEvent): CallState {
         status: "error",
         authToken: state.authToken,
         meetingId: state.meetingId,
+        transcribe: state.transcribe,
         error: { reason: event.reason, message: event.message },
       };
 

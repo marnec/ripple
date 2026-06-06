@@ -36,12 +36,25 @@ export interface CallJoinPreferences {
    * only — event sources ignore it.
    */
   transcribe?: boolean;
+  /**
+   * Transcription language as an ISO 639-1 code (`en`, `es`, …). Forwarded to
+   * Cloudflare as `ai_config.transcription.language` at meeting creation, so —
+   * like `transcribe` — it's only honoured when this caller starts the call.
+   * (No `"multi"` auto-detect: unsupported by CF's end-of-meeting Whisper path.)
+   */
+  transcriptionLanguage?: string;
 }
 
 /** Result from the source's token-minting backend action. */
 export interface CallToken {
   authToken: string;
   meetingId: string;
+  /**
+   * Whether this call is being transcribed (the starter's choice, inherited by
+   * joiners). Optional: only channel calls report it; event calls omit it
+   * (treated as not transcribing).
+   */
+  transcribe?: boolean;
 }
 
 /**
