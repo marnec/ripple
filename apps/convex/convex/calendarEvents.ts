@@ -91,6 +91,11 @@ const inviteeValidator = v.object({
   status: rsvpStatusValidator,
   respondedAt: v.optional(v.number()),
   shareId: v.optional(v.string()),
+  // ICS REPLY idempotency keys, written by the email RSVP path
+  // (calendarEventInvitees.recordEmailRsvp). Persisted on the row, so they
+  // must be in the validator or `get` fails once an email RSVP lands.
+  lastRsvpDtstamp: v.optional(v.number()),
+  lastRsvpSequence: v.optional(v.number()),
   // Denormalized for cheap rendering in EventDetailSheet (avoids a per-row
   // join on the client). Filled by the resolver, never persisted.
   userName: v.optional(v.string()),

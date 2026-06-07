@@ -282,6 +282,37 @@ describe("calendarEventInvitees.recordEmailRsvp", () => {
     expect(row?.lastRsvpDtstamp).toBe(2_000);
   });
 
+  it("calendarEvents.get succeeds after an email RSVP populates idempotency fields", async () => {
+    // Regression: recordEmailRsvp writes lastRsvpDtstamp/lastRsvpSequence onto
+    // the invitee row. calendarEvents.get returns the full row, so its return
+    // validator must include those fields — otherwise the event becomes
+    // unopenable (ReturnsValidationError) the moment anyone RSVPs by email.
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const memberEmail = "alice@test.com";
+    const memberId = await inviteMember(t, workspaceId, memberEmail);
+    const eventId = await asUser.mutation(api.calendarEvents.create, {
+      workspaceId: workspaceId as any,
+      title: "Sync",
+      startsAt: Date.now() + ONE_HOUR,
+      endsAt: Date.now() + 2 * ONE_HOUR,
+      timezone: "UTC",
+      invitees: { userIds: [memberId as any], guestEmails: [] },
+    });
+
+    await t.mutation(internal.calendarEventInvitees.recordEmailRsvp, {
+      uid: uidFor(eventId),
+      attendeeEmail: memberEmail,
+      partstat: "ACCEPTED",
+      dtstamp: Date.now(),
+      sequence: 0,
+    });
+
+    const detail = await asUser.query(api.calendarEvents.get, { eventId });
+    const memberRow = detail.invitees.find((i) => i.userId === memberId);
+    expect(memberRow?.status).toBe("accepted");
+    expect(memberRow?.lastRsvpSequence).toBe(0);
+  });
+
   it("attendee email is matched case-insensitively", async () => {
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const memberId = await inviteMember(t, workspaceId, "alice@test.com");

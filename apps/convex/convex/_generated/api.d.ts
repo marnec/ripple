@@ -116,6 +116,8 @@ export declare const api: {
           guestEmail?: string;
           guestName?: string;
           guestSub?: string;
+          lastRsvpDtstamp?: number;
+          lastRsvpSequence?: number;
           respondedAt?: number;
           shareId?: string;
           status: "pending" | "accepted" | "declined" | "tentative";
