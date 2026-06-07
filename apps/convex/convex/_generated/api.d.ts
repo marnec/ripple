@@ -1066,6 +1066,16 @@ export declare const api: {
         }>;
       }
     >;
+    listTaskDependenciesByProject: FunctionReference<
+      "query",
+      "public",
+      { projectId: Id<"projects"> },
+      Array<{
+        edgeId: Id<"edges">;
+        sourceId: Id<"tasks">;
+        targetId: Id<"tasks">;
+      }>
+    >;
     removeEdge: FunctionReference<
       "mutation",
       "public",

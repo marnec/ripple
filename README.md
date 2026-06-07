@@ -6,12 +6,9 @@ NEXT STEPS:
 - build a cross-workspace admin app, only accessible to my own account, with jobs, activity log and other useful info
 ---
 
-
 - recurrent events in calendar
 
 - add a dependency view to tasks
-- add gantt with frappegantt
-
 
 - explore pdf reading, annotation and embedding
 

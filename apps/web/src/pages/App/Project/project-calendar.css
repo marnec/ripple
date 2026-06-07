@@ -219,9 +219,11 @@
   outline: none;
 }
 
+/* The calendar toolbar now lives in the shared ScheduleHeader (rendered above
+   the view, shared with the Gantt). Hide schedule-x's built-in header band so
+   it doesn't render an empty/duplicate toolbar row. */
 .sx__calendar-header {
-  padding-inline: 0;
-  padding-block: 8px;
+  display: none;
 }
 
 /* When the unscheduled sidebar is open it floats over the inset's right edge,

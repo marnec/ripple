@@ -1324,3 +1324,46 @@ describe("user nodes (via workspaceMembers trigger)", () => {
     expect(userNode!.name).toBe("Alice Updated");
   });
 });
+
+describe("listTaskDependenciesByProject", () => {
+  it("returns intra-project blocks edges and excludes relates_to + cross-project", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
+    const other = await setupProject(t, { workspaceId, userId });
+
+    const mkTask = (projId: Id<"projects">, statusId: Id<"taskStatuses">, title: string) =>
+      createTask(t, { projectId: projId, workspaceId, statusId, userId, title });
+
+    const a = await mkTask(projectId, todoId, "A");
+    const b = await mkTask(projectId, todoId, "B");
+    const c = await mkTask(projectId, todoId, "C");
+    const d = await mkTask(other.projectId, other.todoId, "D"); // different project
+
+    await asUser.mutation(api.edges.createEdge, { taskId: a, dependsOnTaskId: b, type: "blocks" });
+    await asUser.mutation(api.edges.createEdge, { taskId: b, dependsOnTaskId: c, type: "blocks" });
+    // relates_to must not appear as a dependency
+    await asUser.mutation(api.edges.createEdge, { taskId: a, dependsOnTaskId: c, type: "relates_to" });
+    // cross-project blocks edge must be filtered out (target not in project)
+    await asUser.mutation(api.edges.createEdge, { taskId: a, dependsOnTaskId: d, type: "blocks" });
+
+    const pairs = await asUser.query(api.edges.listTaskDependenciesByProject, { projectId });
+
+    expect(pairs).toHaveLength(2);
+    const asPairs = pairs.map((p) => ({ sourceId: p.sourceId, targetId: p.targetId }));
+    expect(asPairs).toContainEqual({ sourceId: a, targetId: b });
+    expect(asPairs).toContainEqual({ sourceId: b, targetId: c });
+    expect(pairs.every((p) => typeof p.edgeId === "string")).toBe(true);
+  });
+
+  it("returns [] for a non-member", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProject(t, { workspaceId, userId });
+
+    // Unauthenticated caller (no identity) is not a workspace member.
+    const pairs = await t.query(api.edges.listTaskDependenciesByProject, { projectId });
+    expect(pairs).toEqual([]);
+  });
+});

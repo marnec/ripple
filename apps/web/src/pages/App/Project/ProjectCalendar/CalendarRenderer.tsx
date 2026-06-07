@@ -6,25 +6,24 @@ import {
   type BackgroundEvent,
   type CalendarApp,
 } from "@schedule-x/calendar";
-import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
+import type { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
 import { ScheduleXCalendar } from "@schedule-x/react";
 import { useCalendarSync } from "../useCalendarSync";
 import type { TaskCalendarEvent } from "./calendar-events";
 import { CALENDARS_CONFIG } from "./calendar-events";
-import { CalendarInternalContext } from "./calendar-contexts";
-import {
-  CustomEventContent,
-  CalendarHeaderContent,
-} from "./CalendarEventContent";
+import { CustomEventContent } from "./CalendarEventContent";
 
 // Stable reference — must not be defined inline in the JSX below.
 // ScheduleXCalendar's useEffect has `customComponents` as a dependency and calls
 // calendarApp.render() on change, which replays the slide-in animation on every
 // CalendarRenderer re-render.
+//
+// NOTE: `headerContent` is deliberately NOT provided here — the toolbar lives
+// outside schedule-x now (ScheduleHeader, shared with the Gantt view) and the
+// built-in `.sx__calendar-header` is hidden via project-calendar.css.
 const CALENDAR_CUSTOM_COMPONENTS = {
   dateGridEvent: CustomEventContent,
   monthGridEvent: CustomEventContent,
-  headerContent: CalendarHeaderContent,
 };
 
 const BG_EVENT_SELECTOR = [
@@ -38,6 +37,9 @@ export function CalendarRenderer({
   bgEvents,
   defaultView,
   isDark,
+  calendarControls,
+  rangeVersion,
+  onRangeUpdate,
   onEventClick,
   onClickDate,
   onClickCycle,
@@ -47,12 +49,17 @@ export function CalendarRenderer({
   bgEvents: BackgroundEvent[];
   defaultView: string;
   isDark: boolean;
+  /** Owned by the orchestrator so the shared header can drive navigation. */
+  calendarControls: ReturnType<typeof createCalendarControlsPlugin>;
+  /** Bumped by the orchestrator on range change; drives the anti-FOUC fade. */
+  rangeVersion: number;
+  onRangeUpdate: () => void;
   onEventClick: (id: string | number) => void;
   onClickDate?: (date: string) => void;
   onClickCycle?: (name: string) => void;
   wrapperRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  // Stable ref so the event listener never needs to be re-registered.
+  // Stable ref so the cycle-click listener never needs to be re-registered.
   const onClickCycleRef = useRef(onClickCycle);
   useEffect(() => { onClickCycleRef.current = onClickCycle; });
 
@@ -68,9 +75,6 @@ export function CalendarRenderer({
     wrapper.addEventListener("click", handleClick, true);
     return () => wrapper.removeEventListener("click", handleClick, true);
   }, [wrapperRef]);
-  const [rangeVersion, setRangeVersion] = useState(0);
-
-  const [calendarControls] = useState(() => createCalendarControlsPlugin());
 
   const [calendarApp] = useState<CalendarApp>(() =>
     createCalendar({
@@ -90,7 +94,7 @@ export function CalendarRenderer({
           onClickDate?.(date);
         },
         onRangeUpdate() {
-          setRangeVersion((v) => v + 1);
+          onRangeUpdate();
         },
       },
     }),
@@ -112,14 +116,12 @@ export function CalendarRenderer({
   useCalendarSync(calendarApp, taskEvents, bgEvents);
 
   return (
-    <CalendarInternalContext.Provider value={{ calendarControls, rangeVersion }}>
-      <div style={{ height: "100%" }} ref={wrapperRef}>
-        <ScheduleXCalendar
-          calendarApp={calendarApp}
-          customComponents={CALENDAR_CUSTOM_COMPONENTS}
-        />
-      </div>
-    </CalendarInternalContext.Provider>
+    <div style={{ height: "100%" }} ref={wrapperRef}>
+      <ScheduleXCalendar
+        calendarApp={calendarApp}
+        customComponents={CALENDAR_CUSTOM_COMPONENTS}
+      />
+    </div>
   );
 }
 CalendarRenderer.whyDidYouRender = true;

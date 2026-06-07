@@ -33,7 +33,7 @@ const tabs = [
   { label: "Overview", icon: LayoutDashboard, to: ".", end: true },
   { label: "Tasks", icon: ListTodo, to: "tasks", end: false },
   { label: "Cycles", icon: RefreshCw, to: "cycles", end: false },
-  { label: "Calendar", icon: CalendarDays, to: "calendar", end: false },
+  { label: "Schedule", icon: CalendarDays, to: "calendar", end: false },
   { label: "Settings", icon: Settings, to: "settings", end: false },
 ];
 

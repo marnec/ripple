@@ -170,6 +170,9 @@ export function useCalendarInteractions({
 
     dayFocus,
     clearDayFocus: () => setDayFocus(null),
+    // Force-open the day picker for a date regardless of strategy — used by the
+    // gantt's empty-slot click (the calendar routes through onClickDate instead).
+    openDayDrawer: (date: string) => setDayFocus({ surface: "drawer", date: String(date) }),
     onClickDate: (date: string) => {
       // schedule-x may pass a Temporal.PlainDate object despite the string type annotation
       const target = strategy.resolveDayFocus(String(date));

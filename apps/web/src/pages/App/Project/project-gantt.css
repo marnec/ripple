@@ -1,0 +1,119 @@
+/* SVAR Gantt theming — remap the library's `--wx-*` variables onto the app's
+   oklch design tokens so the chart matches Ripple (and the schedule-x calendar)
+   instead of SVAR's stock Willow palette. Scoped under `.ripple-gantt` so it
+   only affects this chart. Both light/dark theme wrappers are covered because
+   the app tokens are themselves theme-aware. */
+.ripple-gantt .wx-theme {
+  /* Surfaces are opaque and match Ripple's page background. They must be opaque
+     (not transparent) so the sticky timeline header / grid header aren't
+     bled-through by bars scrolling underneath — but the color matches the page
+     so it still reads as seamless. */
+  --wx-background: var(--color-background);
+  --wx-background-alt: var(--color-background);
+  --wx-table-header-background: var(--color-background);
+
+  /* Grid line color.
+     CRITICAL: SVAR draws the chart *body* grid as a <canvas> PNG, and picks its
+     stroke color by reading `--wx-gantt-border` and slicing from the first '#'
+     (`value.substring(value.indexOf('#'))`). So this variable MUST contain a
+     literal hex — a `color-mix()`/`oklch()`/`oklab()` value has no '#', the
+     slice fails, and the canvas silently falls back to BLACK (that was the
+     invisible body grid). Hence per-theme hex values below (the header/grid
+     CSS borders read the same var, so everything stays uniform). The hexes
+     approximate Ripple's composited border ≈ the calendar's zinc grid line. */
+  --wx-border: 1px solid var(--wx-gantt-line);
+  --wx-gantt-border: 1px solid var(--wx-gantt-line);
+  --wx-gantt-border-color: var(--wx-gantt-line);
+  --wx-grid-body-row-border: 1px solid var(--wx-gantt-line);
+  --wx-timescale-border: 1px solid var(--wx-gantt-line);
+
+  /* Text + accents */
+  --wx-color-font: var(--color-foreground);
+  --wx-color-secondary-font: var(--color-muted-foreground);
+  --wx-color-primary: var(--color-primary);
+
+  /* Bars + links + highlights driven by app tokens */
+  --wx-gantt-task-color: var(--color-primary);
+  --wx-gantt-task-fill-color: var(--color-primary);
+  --wx-gantt-task-font-color: var(--color-primary-foreground, #fff);
+  --wx-gantt-link-color: color-mix(in oklch, var(--color-muted-foreground) 70%, transparent);
+  --wx-gantt-link-color-hovered: var(--color-primary);
+  --wx-gantt-select-color: color-mix(in oklch, var(--color-primary) 16%, transparent);
+  --wx-gantt-marker-color: color-mix(in oklch, var(--color-primary) 50%, transparent);
+  --wx-gantt-holiday-background: color-mix(in oklch, var(--color-muted) 40%, transparent);
+}
+
+/* Per-theme grid-line hex (must be a literal '#' value — see note above).
+   Same element carries `.wx-theme` + the theme class, so these feed the
+   `var(--wx-gantt-line)` references in the block above. Dark ≈ the calendar's
+   zinc grid line (rgb 39,39,42); light ≈ Ripple's composited border. */
+.ripple-gantt .wx-willow-dark-theme {
+  --wx-gantt-line: #27272a;
+}
+.ripple-gantt .wx-willow-theme {
+  --wx-gantt-line: #e6e6e6;
+}
+
+/* Height chain: container → theme wrapper → gantt root all fill. */
+.ripple-gantt,
+.ripple-gantt .wx-theme,
+.ripple-gantt .wx-gantt {
+  height: 100%;
+}
+
+/* Body grid alignment fix.
+   SVAR draws the chart-body grid as a single-DPR <canvas> PNG (generated at
+   scale 1 — the library never reads `devicePixelRatio`) and tiles it as a CSS
+   `background`. The DOM timeline header columns are snapped to the device-pixel
+   grid by the compositor, but the resampled PNG tile is not, so at any
+   fractional device-pixel ratio (HiDPI, fractional display scaling, non-100%
+   browser zoom) the body grid drifts left-to-right relative to the header — a
+   small, cumulative misalignment.
+
+   Replace the canvas tile with `repeating-linear-gradient`s. The grid lines and
+   the header's per-cell `border-right` are now both positioned at `k *
+   cellWidth` in the SAME CSS coordinate space, so the compositor rounds them to
+   identical device pixels and they stay aligned at every DPR. We target the
+   classless absolutely-positioned grid div by its inline `url(...)` background
+   (only that div carries one) and override just `background-image` so SVAR's
+   `background` shorthand still supplies position/repeat. `cellBorders` defaults
+   to "full", so we reproduce both axes: verticals every --gantt-cell-width,
+   horizontals every --gantt-cell-height (set inline by GanttView). The 1px line
+   sits in the last pixel of each band to match the header cells' right border. */
+.ripple-gantt .wx-area > div[style*="url("] {
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(var(--gantt-cell-width) - 1px),
+      var(--wx-gantt-line) calc(var(--gantt-cell-width) - 1px),
+      var(--wx-gantt-line) var(--gantt-cell-width)
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent calc(var(--gantt-cell-height) - 1px),
+      var(--wx-gantt-line) calc(var(--gantt-cell-height) - 1px),
+      var(--wx-gantt-line) var(--gantt-cell-height)
+    ) !important;
+}
+
+/* Edge vignette on the scrolling timeline so it's clear more can scroll into
+   view. The mask is applied to the chart viewport (not its scrolled content),
+   so both horizontal edges always feather regardless of scroll position. */
+.ripple-gantt .wx-chart {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+}

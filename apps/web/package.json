@@ -48,6 +48,7 @@
     "@schedule-x/scroll-controller": "4.5.0",
     "@schedule-x/theme-default": "4.5.0",
     "@schedule-x/theme-shadcn": "4.5.0",
+    "@svar-ui/react-gantt": "^2.7.0",
     "class-variance-authority": "0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

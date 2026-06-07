@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useQuery } from "convex-helpers/react/cache";
+import { createCalendarControlsPlugin } from "@schedule-x/calendar-controls";
 import { useTheme } from "next-themes";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -34,7 +35,6 @@ import {
 import {
   CalendarTaskMenuContext,
   type CalendarTaskMenuContextValue,
-  CalendarHeaderConfigContext,
 } from "./calendar-contexts";
 import { CalendarRenderer } from "./CalendarRenderer";
 import { CalendarGhostOverlay } from "./CalendarGhostOverlay";
@@ -45,6 +45,13 @@ import {
 } from "./CalendarSidebarLists";
 import { DayScheduleDrawer } from "./DayScheduleDrawer";
 import { CycleDetailSheet, EmptyCalendarOverlay } from "./CycleDetailSheet";
+import { TaskDetailSheet } from "../TaskDetailSheet";
+import {
+  ScheduleHeader,
+  type ScheduleView,
+  type GanttViewMode,
+} from "./ScheduleHeader";
+import { GanttView, type GanttApi } from "./GanttView";
 import "../project-calendar.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,6 +87,8 @@ function ProjectCalendarContent({
   const calendarWrapperRef = useRef<HTMLDivElement>(null);
   const tasks = useEagerProjectTasks(projectId);
   const calendarData = useQuery(api.cycles.listForCalendar, { projectId });
+  const dependencies =
+    useQuery(api.edges.listTaskDependenciesByProject, { projectId }) ?? [];
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
   const isDark = resolvedTheme === "dark";
@@ -92,6 +101,35 @@ function ProjectCalendarContent({
     cycles,
     dragContext: calendarDragContext,
   });
+
+  // View selection (calendar ↔ gantt) persisted in the URL so returning from a
+  // task detail page lands back on the same view. `replace` so toggling doesn't
+  // pollute history but the current entry's URL still carries the choice.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view: ScheduleView = searchParams.get("view") === "gantt" ? "gantt" : "calendar";
+  const setView = (next: ScheduleView) =>
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next === "calendar") p.delete("view");
+        else p.set("view", next);
+        return p;
+      },
+      { replace: true },
+    );
+
+  // Task detail sheet (opened from a calendar event / gantt bar click).
+  const [selectedTaskId, setSelectedTaskId] = useState<Id<"tasks"> | null>(null);
+
+  const [ganttViewMode, setGanttViewMode] = useState<GanttViewMode>("Week");
+  // Gantt's unscheduled sidebar starts closed (like the calendar's).
+  const [ganttDrawerOpen, setGanttDrawerOpen] = useState(false);
+  const ganttApiRef = useRef<GanttApi | null>(null);
+
+  // schedule-x navigation controls + range version, lifted here so the shared
+  // header (rendered outside schedule-x) can drive month navigation.
+  const [calendarControls] = useState(() => createCalendarControlsPlugin());
+  const [rangeVersion, setRangeVersion] = useState(0);
 
   const cycleTasks = useQuery(
     api.cycles.listCycleTasks,
@@ -170,100 +208,132 @@ function ProjectCalendarContent({
   const bgEvents = buildCycleBackgroundEvents(cycles ?? []);
   const hasScheduledTasks = allTasks.some((t) => !!t.plannedStartDate);
 
-  const navigate = useNavigate();
+  // Full-page navigation now lives inside TaskDetailSheet's expand button.
+  const openTask = (taskId: string) => setSelectedTaskId(taskId as Id<"tasks">);
   const taskMenuCallbacks: CalendarTaskMenuContextValue = {
-    onNavigate: (taskId) =>
-      void navigate(`/workspaces/${workspaceId}/projects/${projectId}/tasks/${taskId}`),
+    onNavigate: openTask,
     onUnschedule: (taskId) => ix.unscheduleTask(taskId as Id<"tasks">),
   };
 
+  // The unscheduled pool toggle in the shared header targets whichever pool is
+  // relevant for the active view.
+  const poolOpen = view === "calendar" ? ix.sidebar.open : ganttDrawerOpen;
+  const onPoolToggle =
+    view === "calendar" ? ix.sidebar.toggle : () => setGanttDrawerOpen((o) => !o);
+
   return (
     <CalendarTaskMenuContext.Provider value={taskMenuCallbacks}>
-    <CalendarHeaderConfigContext.Provider value={{
-      commitmentMode: ix.commitmentMode,
-      onCommitmentModeChange: ix.setCommitmentMode,
-      unscheduledCount: unscheduledTasks.length,
-      sidebarOpen: ix.sidebar.open,
-      onSidebarToggle: ix.sidebar.toggle,
-    }}>
     <div className="flex-1 flex flex-col min-h-0 px-4 pb-4 gap-2">
-      {/* Main area: calendar + right push sidebar (desktop only) */}
-      <CalendarSidebarProvider
-        open={ix.sidebar.open}
-        onOpenChange={ix.sidebar.onOpenChange}
-        className="flex-1 min-h-0"
-      >
-        <CalendarSidebarInset
-          onDragOver={ix.dragDrop.onDragOver}
-          onDragLeave={ix.dragDrop.onDragLeave}
-          onDrop={ix.dragDrop.onDrop}
-        >
-          <CalendarRenderer
-            key={String(isDark)}
-            taskEvents={taskEvents}
-            bgEvents={bgEvents}
-            defaultView="month-grid"
-            isDark={isDark}
-            onEventClick={ix.onEventClick}
-            onClickDate={ix.onClickDate}
-            onClickCycle={ix.cycleSheet.onCycleClick}
-            wrapperRef={calendarWrapperRef}
-          />
-          {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
-        </CalendarSidebarInset>
+      <ScheduleHeader
+        view={view}
+        onViewChange={setView}
+        calendarControls={calendarControls}
+        ganttViewMode={ganttViewMode}
+        onGanttViewModeChange={setGanttViewMode}
+        onGanttToday={() => ganttApiRef.current?.scrollToday()}
+        onGanttPrev={() => ganttApiRef.current?.prev()}
+        onGanttNext={() => ganttApiRef.current?.next()}
+        commitmentMode={ix.commitmentMode}
+        onCommitmentModeChange={ix.setCommitmentMode}
+        unscheduledCount={unscheduledTasks.length}
+        poolOpen={poolOpen}
+        onPoolToggle={onPoolToggle}
+      />
 
-        {/* Animated ghost overlay — rendered outside the inset so it can use
-            position:fixed and escape any overflow clipping. */}
-        <AnimatePresence>
-          {draggedTask && hoveredDropDate && (
-            <CalendarGhostOverlay
-              key={draggedTask._id}
-              task={draggedTask}
-              hoveredDropDate={hoveredDropDate}
-              multiplier={multiplier}
-              calendarId={getTaskCalendarId(draggedTask, multiplier, taskCycleDueDate)}
+      {view === "gantt" ? (
+        <GanttView
+          scheduledTasks={scheduledTasks}
+          unscheduledTasks={unscheduledTasks}
+          dependencies={dependencies}
+          viewMode={ganttViewMode}
+          multiplier={multiplier}
+          drawerOpen={ganttDrawerOpen}
+          onDrawerOpenChange={setGanttDrawerOpen}
+          apiRef={ganttApiRef}
+          onEmptyClick={(date) => ix.openDayDrawer(date)}
+          isDark={isDark}
+        />
+      ) : (
+        <CalendarSidebarProvider
+          open={ix.sidebar.open}
+          onOpenChange={ix.sidebar.onOpenChange}
+          className="flex-1 min-h-0"
+        >
+          <CalendarSidebarInset
+            onDragOver={ix.dragDrop.onDragOver}
+            onDragLeave={ix.dragDrop.onDragLeave}
+            onDrop={ix.dragDrop.onDrop}
+          >
+            <CalendarRenderer
+              key={String(isDark)}
+              taskEvents={taskEvents}
+              bgEvents={bgEvents}
+              defaultView="month-grid"
+              isDark={isDark}
+              calendarControls={calendarControls}
+              rangeVersion={rangeVersion}
+              onRangeUpdate={() => setRangeVersion((v) => v + 1)}
+              onEventClick={ix.onEventClick}
+              onClickDate={ix.onClickDate}
+              onClickCycle={ix.cycleSheet.onCycleClick}
               wrapperRef={calendarWrapperRef}
             />
-          )}
-        </AnimatePresence>
+            {tasks !== undefined && !hasScheduledTasks && <EmptyCalendarOverlay />}
+          </CalendarSidebarInset>
 
-        <CalendarSidebar side="right" className="hidden md:flex">
-          {/* Top section: unscheduled tasks (draggable) */}
-          <CalendarSidebarHeader>
-            <div className="flex items-center justify-between mt-1.5">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Unscheduled
-              </span>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {unscheduledTasks.length}
-              </span>
-            </div>
-          </CalendarSidebarHeader>
-          <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
-            <UnscheduledTaskList tasks={unscheduledTasks} />
-          </CalendarSidebarContent>
+          {/* Animated ghost overlay — rendered outside the inset so it can use
+              position:fixed and escape any overflow clipping. */}
+          <AnimatePresence>
+            {draggedTask && hoveredDropDate && (
+              <CalendarGhostOverlay
+                key={draggedTask._id}
+                task={draggedTask}
+                hoveredDropDate={hoveredDropDate}
+                multiplier={multiplier}
+                calendarId={getTaskCalendarId(draggedTask, multiplier, taskCycleDueDate)}
+                wrapperRef={calendarWrapperRef}
+              />
+            )}
+          </AnimatePresence>
 
-          {/* Bottom section: scheduled tasks with actual-time toggles */}
-          <div className="border-t shrink-0" />
-          <CalendarSidebarHeader>
-            <ScheduledSectionHeader
-              tasks={scheduledTasks}
-              visibleActualTaskIds={visibleActualTaskIds}
-              onSetAll={ix.actualView.setAll}
-              onClearAll={ix.actualView.clearAll}
-            />
-          </CalendarSidebarHeader>
-          <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
-            <ScheduledTaskList
-              tasks={scheduledTasks}
-              visibleActualTaskIds={visibleActualTaskIds}
-              onToggle={ix.actualView.toggle}
-            />
-          </CalendarSidebarContent>
-        </CalendarSidebar>
-      </CalendarSidebarProvider>
+          <CalendarSidebar side="right" className="hidden md:flex">
+            {/* Top section: unscheduled tasks (draggable) */}
+            <CalendarSidebarHeader>
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Unscheduled
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {unscheduledTasks.length}
+                </span>
+              </div>
+            </CalendarSidebarHeader>
+            <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
+              <UnscheduledTaskList tasks={unscheduledTasks} />
+            </CalendarSidebarContent>
 
-      {/* Mobile: day-tap bottom drawer */}
+            {/* Bottom section: scheduled tasks with actual-time toggles */}
+            <div className="border-t shrink-0" />
+            <CalendarSidebarHeader>
+              <ScheduledSectionHeader
+                tasks={scheduledTasks}
+                visibleActualTaskIds={visibleActualTaskIds}
+                onSetAll={ix.actualView.setAll}
+                onClearAll={ix.actualView.clearAll}
+              />
+            </CalendarSidebarHeader>
+            <CalendarSidebarContent className="flex-1 min-h-0 overflow-y-auto">
+              <ScheduledTaskList
+                tasks={scheduledTasks}
+                visibleActualTaskIds={visibleActualTaskIds}
+                onToggle={ix.actualView.toggle}
+              />
+            </CalendarSidebarContent>
+          </CalendarSidebar>
+        </CalendarSidebarProvider>
+      )}
+
+      {/* Mobile: day-tap bottom drawer (calendar only) */}
       <DayScheduleDrawer
         date={ix.dayFocus?.surface === "drawer" ? ix.dayFocus.date : null}
         open={ix.dayFocus?.surface === "drawer"}
@@ -279,8 +349,18 @@ function ProjectCalendarContent({
         tasks={cycleTasks}
         onClose={ix.cycleSheet.onClose}
       />
+
+      {/* Task detail — opens as the desktop side-sheet (full-screen on mobile)
+          from a calendar event or gantt bar click. Its expand button still
+          routes to the full task page. */}
+      <TaskDetailSheet
+        taskId={selectedTaskId}
+        open={selectedTaskId !== null}
+        onOpenChange={(open) => { if (!open) setSelectedTaskId(null); }}
+        workspaceId={workspaceId}
+        projectId={projectId}
+      />
     </div>
-    </CalendarHeaderConfigContext.Provider>
     </CalendarTaskMenuContext.Provider>
   );
 }
