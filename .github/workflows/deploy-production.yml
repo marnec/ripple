@@ -59,6 +59,12 @@ jobs:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: pnpm exec convex run migrations:runAll
 
+      - name: Stamp deployed version
+        working-directory: apps/convex
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: pnpm exec convex run version:set
+
       - name: Health check Convex
         run: |
           curl -f -s -o /dev/null -w "%{http_code}" "${{ secrets.VITE_CONVEX_URL }}" || exit 1
