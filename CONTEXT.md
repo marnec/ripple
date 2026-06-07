@@ -27,6 +27,17 @@ collaborative editor hydrates from on first load (via PartyKit's `onLoad`). The
 artifact [seeding](#) produces.
 _Avoid_: initial state, dump, backup
 
+**Timeline geometry**:
+The pure mapping between a task's ISO planned dates and the Gantt's pixel/column
+grid — range padding/fill, drop-date snapping, paging, and the Day/Week/Month
+**column resolution** (one visible column spans N day-units; Week renders 7-day
+cells so SVAR's lowest scale unit stays the day and month banners land on true
+calendar boundaries). Lives in `ganttTimeline.ts`; imports no React/SVAR/DOM, so
+its interface is the test surface (plain vitest, no jsdom). `GanttView` is the
+imperative shell that reads SVAR/DOM state and `today`, hands them in as plain
+values, and executes the returned plans (e.g. a `PageScrollPlan`).
+_Avoid_: gantt helpers, date math, svar utils, zoom level
+
 **RealtimeKit client**:
 The single adapter (`convex/lib/realtimeKit.ts`) through which Ripple talks to
 Cloudflare RealtimeKit — create meeting, add participant, delete orphan meeting.

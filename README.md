@@ -1,5 +1,7 @@
 NEXT STEPS:
 
+- fix layout and layout shifts (spinner) in login signup flow
+
 - add a (workpook) background job backoffice center (of the workspace, admin only)
 
 ---

@@ -1,12 +1,10 @@
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Gantt, Willow, WillowDark } from "@svar-ui/react-gantt";
-import type { IApi, ITask } from "@svar-ui/react-gantt";
-import { Temporal } from "temporal-polyfill";
+import type { IApi } from "@svar-ui/react-gantt";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { estimateToDays, addCalendarDays } from "@/lib/calendar-utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   CalendarSidebarProvider,
@@ -20,149 +18,34 @@ import { CalendarTaskMenuContext } from "./calendar-contexts";
 import { UnscheduledTaskList } from "./CalendarSidebarLists";
 import { type EnrichedTask } from "./calendar-events";
 import type { GanttViewMode } from "./ScheduleHeader";
+import {
+  type GanttDependency,
+  columnWidthPx,
+  scalesFor,
+  jsDateToISO,
+  dateFromOffset,
+  buildSvarTasks,
+  buildSvarLinks,
+} from "./ganttTimeline";
+import { useStableSvarGantt, type GanttApi } from "./useStableSvarGantt";
 import "@svar-ui/react-gantt/all.css";
 import "../project-gantt.css";
 
-// Imperative handle the shared header uses to drive navigation.
-export type GanttApi = {
-  scrollToday: () => void;
-  prev: () => void;
-  next: () => void;
-};
-
-export type GanttDependency = {
-  edgeId: string;
-  sourceId: string;
-  targetId: string;
-};
-
-// How far prev/next pages, in columns, per resolution (one column = one unit
-// of the active view mode).
-const PAGE_COLUMNS: Record<GanttViewMode, number> = { Day: 7, Week: 4, Month: 3 };
-
-// Visible column pixel width per resolution (one week column = 80px, etc).
-const CELL_WIDTH: Record<GanttViewMode, number> = { Day: 42, Week: 80, Month: 120 };
-
-// SVAR's lowest scale unit drives ALL of its geometry, so to keep month banners
-// aligned to days (not snapped to whole weeks — months don't tile weeks, which
-// made the upper row overlap + flex-shrink and drift), the Week view's lowest
-// unit is `day` (rendered every 7 days, see scalesFor). That makes SVAR's
-// `cellWidth` a *day* width, so the visible column = `cellWidth × unitsPerColumn`.
-// We hand SVAR `CELL_WIDTH / unitsPerColumn`; everything else here (pan, fill,
-// body-grid gradient) keeps using CELL_WIDTH, the visible column width.
-const UNITS_PER_COLUMN: Record<GanttViewMode, number> = { Day: 1, Week: 7, Month: 1 };
-const svarCellWidth = (mode: GanttViewMode) => CELL_WIDTH[mode] / UNITS_PER_COLUMN[mode];
-
-// Approx days per column, per resolution — used to translate a page of columns
-// into the date-range extension that lets prev/next pan past the task span.
-// (Month is variable; 31 is close enough for paging.)
-const UNIT_DAYS: Record<GanttViewMode, number> = { Day: 1, Week: 7, Month: 31 };
+// Dependency shape + navigation handle live in their own modules; re-export them
+// for the view's callers and the props below.
+export type { GanttDependency };
+export type { GanttApi };
 
 // Grid shows only the task name — drop SVAR's default Start date / Duration
 // columns (the timeline already conveys both) — and reserve little width for it.
 const GRID_COLUMNS = [{ id: "text", header: "Task name", flexgrow: 1, sort: true }];
 const GRID_WIDTH = 200;
 
-// Scale rows per resolution. The lowest row's unit drives bar granularity.
-function scalesFor(mode: GanttViewMode) {
-  if (mode === "Day")
-    return [
-      { unit: "month" as const, step: 1, format: "%F %Y" },
-      { unit: "day" as const, step: 1, format: "%j" },
-    ];
-  if (mode === "Week")
-    // Lower row is `day` with step 7 (not `week`) so SVAR's lowest unit is the
-    // day: month cells are then sized in exact days and land on their true
-    // calendar boundaries (mid-column), instead of being snapped to whole weeks.
-    // step 7 still renders one cell per week; start is week-aligned (see memo) so
-    // those cells are calendar weeks.
-    return [
-      { unit: "month" as const, step: 1, format: "%F %Y" },
-      { unit: "day" as const, step: 7, format: "%d %M" },
-    ];
-  return [
-    { unit: "year" as const, step: 1, format: "%Y" },
-    { unit: "month" as const, step: 1, format: "%M" },
-  ];
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pure builders
-// ─────────────────────────────────────────────────────────────────────────────
-
-function jsDateToISO(d: Date): string {
-  return Temporal.PlainDate.from({
-    year: d.getFullYear(),
-    month: d.getMonth() + 1,
-    day: d.getDate(),
-  }).toString();
-}
-
-function isoToJsDate(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
 // Escape a task id for safe use inside a `[data-id="…"]` attribute selector.
 // Convex ids are already selector-safe, but CSS.escape guards against any future
 // id shape (and keeps the rule from silently breaking on an exotic character).
 function cssEscapeId(id: string): string {
   return typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id;
-}
-
-// SVAR's horizontal scroller. It keeps the sticky timeline header in sync from
-// this element's native `scroll` event, so animating its scrollLeft directly
-// (smooth) pans header + body together — no need to tween via SVAR's state.
-function getChartScroller(container: HTMLElement | null): HTMLElement | null {
-  return container?.querySelector<HTMLElement>(".wx-chart") ?? null;
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-  );
-}
-
-// Scroll the chart to a pixel offset, animated unless reduced-motion is set.
-// Falls back to SVAR's exec if the DOM scroller isn't found.
-function scrollChartTo(container: HTMLElement | null, left: number, svarApi: IApi | null) {
-  const clamped = Math.max(0, left);
-  const chart = getChartScroller(container);
-  if (chart) {
-    chart.scrollTo({ left: clamped, behavior: prefersReducedMotion() ? "auto" : "smooth" });
-  } else {
-    void svarApi?.exec("scroll-chart", { left: clamped });
-  }
-}
-
-function buildSvarTasks(scheduled: EnrichedTask[], multiplier: 1 | 5): ITask[] {
-  return scheduled.map((t) => {
-    const days = estimateToDays(t.estimate, multiplier);
-    const start = isoToJsDate(t.plannedStartDate!);
-    const end = isoToJsDate(addCalendarDays(t.plannedStartDate!, days));
-    return {
-      id: t._id,
-      text: t.title,
-      start,
-      end,
-      duration: days,
-      progress: t.completed ? 100 : 0,
-      type: "task",
-      parent: 0,
-    };
-  });
-}
-
-function buildSvarLinks(deps: GanttDependency[]) {
-  // edge: source *blocks* target ⇒ source must finish before target starts
-  // ⇒ end-to-start link from source to target.
-  return deps.map((d) => ({
-    id: d.edgeId,
-    source: d.sourceId,
-    target: d.targetId,
-    type: "e2s" as const,
-  }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -211,57 +94,20 @@ export function GanttView({
   // Same action menu the calendar uses (View task details / Unschedule).
   const taskMenu = useContext(CalendarTaskMenuContext);
 
-  const svarApiRef = useRef<IApi | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Keep the chart hidden until SVAR has finished its first layout + scroll
-  // pass, then fade it in. Avoids showing the progressive render and the
-  // scroll-to-range jump (the "layout shift" on mount).
-  const [ready, setReady] = useState(false);
-
-  // Container width, tracked so we can keep the date range at least as wide as
-  // the chart area (see the start/end memo: prevents SVAR's fractional cellWidth
-  // stretch). Measuring the *outer* container — which the built-in grid splitter
-  // never resizes — means dragging that splitter can't reintroduce the stretch.
-  //
-  // Seeded with the window width (not 0): SVAR's *first* layout runs before the
-  // ResizeObserver fires, so a 0 seed would yield a too-narrow range and let SVAR
-  // stretch cellWidth on that first pass. That stretch is permanent — SVAR's
-  // `init()` only re-applies props that changed, and the cellWidth prop stays 80,
-  // so a fractional state.cellWidth is never reset (it just shifts on each
-  // resize-grid, which is the sidebar-dependent month/week misalignment). The
-  // window is always ≥ the chart area, so seeding it guarantees no first-pass
-  // stretch; the observer then refines to the real (smaller-or-equal) width.
-  const [containerWidth, setContainerWidth] = useState(() =>
-    typeof window === "undefined" ? 0 : window.innerWidth,
-  );
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      setContainerWidth(entries[0].contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Tiny parity nudge added to the cellWidth prop to force SVAR to re-apply it.
-  // A stretch is permanent (init() skips unchanged props), so if one ever slips
-  // through (e.g. a window-grow transient outpacing the fill), flipping this
-  // changes the prop value enough to re-apply the correct width. The nudge is
-  // ~1e-6px/day — utterly sub-pixel — so it never affects alignment itself.
-  const [cellWidthNudge, setCellWidthNudge] = useState(0);
-
-  // Manual pan extension (in days) added on top of the task-derived range so the
-  // prev/next arrows can scroll into empty time indefinitely — SVAR clamps
-  // scrolling to the content bounds, so reaching further means growing the range
-  // itself. Grown a page at a time by scrollByPage when it hits an edge.
-  const [panDays, setPanDays] = useState({ past: 0, future: 0 });
-  // Scroll move to apply once a pan-driven range growth has been committed (set
-  // by scrollByPage, consumed by the effect below after start/end update).
-  // `anchor` is snapped instantly to keep the view visually stable across the
-  // range growth; then we animate to `target` (one page over).
-  const pendingScrollRef = useRef<{ anchor: number; target: number } | null>(null);
+  // SVAR geometry stability + header navigation: range fill (anti cellWidth
+  // stretch), pan paging, the cellWidth backstop, and the mount fade-in. Returns
+  // the chart's start/end/cellWidth/ready props, the `onInit` to run inside
+  // <Gantt init>, and svarApiRef for this shell's own DOM reads.
+  const geom = useStableSvarGantt({
+    containerRef,
+    apiRef,
+    scheduledTasks,
+    previewTaskId,
+    multiplier,
+    resolution: viewMode,
+  });
 
   // Single-click context menu, anchored at the click position. Single click on
   // a bar fires SVAR's built-in `select-task` (which we leave untouched) — we
@@ -324,78 +170,10 @@ export function GanttView({
   const links = useMemo(() => buildSvarLinks(dependencies), [depSig]);
   const scales = useMemo(() => scalesFor(viewMode), [viewMode]);
 
-  // Chart range — padded around the scheduled tasks (and today) so there's room
-  // to scroll. Recomputed only when the spanning dates change.
-  //
-  // The in-flight drag preview is excluded: its date chases the cursor every
-  // column, so letting it drive the range would re-pad and re-layout the
-  // timeline mid-drag (most visible on an otherwise-empty chart, where the
-  // preview is the *only* task and the range would jump with it). The preview
-  // date is always within the already-rendered range anyway (it's derived from
-  // the live timeline), so the bar still shows. A committed/optimistic task
-  // (previewTaskId cleared) does drive the range, as it should.
-  const rangeTasks = previewTaskId
-    ? scheduledTasks.filter((t) => t._id !== previewTaskId)
-    : scheduledTasks;
-  const rangeSig = (() => {
-    if (rangeTasks.length === 0) return "empty";
-    let min = rangeTasks[0].plannedStartDate!;
-    let max = min;
-    for (const t of rangeTasks) {
-      const s = t.plannedStartDate!;
-      const e = addCalendarDays(s, estimateToDays(t.estimate, multiplier));
-      if (s < min) min = s;
-      if (e > max) max = e;
-    }
-    return `${min}|${max}`;
-  })();
-  const { start, end } = useMemo(() => {
-    const today = Temporal.Now.plainDateISO().toString();
-    let min = today;
-    let max = today;
-    for (const t of rangeTasks) {
-      const s = t.plannedStartDate!;
-      const e = addCalendarDays(s, estimateToDays(t.estimate, multiplier));
-      if (s < min) min = s;
-      if (e > max) max = e;
-    }
-    // Base padding around the tasks, plus any manual pan extension the arrows
-    // have accumulated (lets prev/next roam past the task span — see above).
-    let startISO = addCalendarDays(min, -14 - panDays.past);
-    // Week view's lower row is day/step-7; align start to the week start (Sunday)
-    // so those 7-day cells are calendar weeks, not start-relative buckets.
-    if (viewMode === "Week") {
-      startISO = addCalendarDays(startISO, -isoToJsDate(startISO).getDay());
-    }
-    let endISO = addCalendarDays(max, 30);
-
-    // SVAR auto-stretches cellWidth to a *fractional*, viewport-dependent value
-    // to fill the chart area when the date range is narrower than the available
-    // width — but only when BOTH start and end are provided (its `qs()`:
-    // `if (u < e) cellWidth = cellWidth * (e / u)`). A fractional column width
-    // can't be matched by the DOM header cells or our CSS grid lines, so they
-    // drift left-to-right, and the drift changes as the built-in grid splitter
-    // resizes the chart area. Prevent the stretch by extending the range so its
-    // pixel width always meets-or-exceeds the container: then `u >= e` and SVAR
-    // keeps the integer cellWidth we set. We keep the natural +30d padding when
-    // tasks already span wider than the viewport.
-    const cellWidth = CELL_WIDTH[viewMode];
-    if (containerWidth > 0) {
-      const minCols = Math.ceil(containerWidth / cellWidth) + 2;
-      const fillEndISO = addCalendarDays(startISO, minCols * UNIT_DAYS[viewMode]);
-      if (fillEndISO > endISO) endISO = fillEndISO;
-    }
-    // Future pan extension goes on top of whatever the fill required, so each
-    // next() reliably grows the range even when the viewport-fill dominates.
-    endISO = addCalendarDays(endISO, panDays.future);
-
-    return { start: isoToJsDate(startISO), end: isoToJsDate(endISO) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeSig, containerWidth, viewMode, panDays]);
-
   // Register store listeners exactly once (SVAR calls `init` a single time).
   const init = (svarApi: IApi) => {
-    svarApiRef.current = svarApi;
+    // Capture the api + schedule the fade-in reveal (geometry concerns).
+    geom.onInit(svarApi);
 
     // Reschedule / resize. Fires repeatedly while dragging (inProgress) and
     // once on release — persist only on release.
@@ -455,105 +233,7 @@ export function GanttView({
     // single click → action menu the only task interaction. The detail sheet is
     // still reachable via the menu's "View task details" item.
     svarApi.intercept("show-editor", () => false);
-
-    // Reveal once the chart has been laid out and painted. A double rAF waits
-    // one frame past SVAR's initial render/scroll so the fade-in shows the
-    // finished chart, not its intermediate states.
-    requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)));
   };
-
-  // Expose navigation to the shared header.
-  useEffect(() => {
-    // Page the chart by one page of columns. SVAR clamps scrolling to the
-    // content bounds, so when a page would land outside the current range we
-    // first grow the range by a page on that side (via panDays) and defer the
-    // scroll until the new range is committed (pendingScrollRef + effect below).
-    const scrollByPage = (dir: -1 | 1) => {
-      const svarApi = svarApiRef.current;
-      if (!svarApi) return;
-      const cw = CELL_WIDTH[viewMode];
-      const pageCols = PAGE_COLUMNS[viewMode];
-      const pageWidth = cw * pageCols;
-      const pageDays = pageCols * UNIT_DAYS[viewMode];
-      const state = svarApi.getState() as {
-        scrollLeft?: number;
-        _scales?: { width?: number };
-        _chartWidth?: number;
-      };
-      const scrollLeft = state.scrollLeft ?? 0;
-      const maxScroll = Math.max(0, (state._scales?.width ?? 0) - (state._chartWidth ?? 0));
-      const target = scrollLeft + dir * pageWidth;
-
-      if (dir < 0 && target < 0) {
-        // Past the left edge → grow the past side. Content shifts right by one
-        // page, so the current view will sit at scrollLeft + pageWidth in the
-        // new range (anchor); animate from there back one page to scrollLeft.
-        setPanDays((p) => ({ ...p, past: p.past + pageDays }));
-        pendingScrollRef.current = { anchor: scrollLeft + pageWidth, target: scrollLeft };
-      } else if (dir > 0 && target > maxScroll) {
-        // Past the right edge → grow the future side (added on the right only,
-        // so the view stays put; animate forward one page to target).
-        setPanDays((p) => ({ ...p, future: p.future + pageDays }));
-        pendingScrollRef.current = { anchor: scrollLeft, target };
-      } else {
-        // Within range → just animate the page.
-        scrollChartTo(containerRef.current, Math.min(target, maxScroll), svarApi);
-      }
-    };
-    apiRef.current = {
-      scrollToday: () => { void svarApiRef.current?.exec("scroll-chart", { date: new Date() }); },
-      prev: () => scrollByPage(-1),
-      next: () => scrollByPage(1),
-    };
-    return () => {
-      apiRef.current = null;
-    };
-  }, [apiRef, viewMode]);
-
-  // After a pan-driven range growth commits (start/end change), apply the scroll
-  // move scrollByPage stashed — deferred so SVAR has laid out the new range.
-  // The anchor MUST go through SVAR's `scroll-chart` exec, not a raw DOM scroll:
-  // a range change resets SVAR's internal scrollLeft to 0 and it force-syncs the
-  // DOM back to that, so a direct chart.scrollTo() gets clobbered (it wormholed
-  // to the range start). exec makes SVAR's state authoritative at the anchor;
-  // the subsequent native smooth scroll is then safe (no further range change,
-  // so onScroll keeps state in sync — same as the within-range path).
-  useEffect(() => {
-    const pending = pendingScrollRef.current;
-    if (!pending) return;
-    pendingScrollRef.current = null;
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const svarApi = svarApiRef.current;
-        if (!svarApi) return;
-        void svarApi.exec("scroll-chart", { left: Math.max(0, pending.anchor) });
-        requestAnimationFrame(() => {
-          scrollChartTo(containerRef.current, pending.target, svarApiRef.current);
-        });
-      }),
-    );
-  }, [start, end]);
-
-  // Stability guard: if SVAR ever stretches cellWidth (a fractional value it then
-  // never resets, which desyncs the 80px-period body grid from the week cells),
-  // detect the divergence after layout and flip cellWidthNudge to force a
-  // re-apply of the correct width. Runs after the changes that can trigger a
-  // stretch (range/resolution/container). The fill normally prevents stretches
-  // entirely; this is the backstop that makes the fractional cellWidth durable.
-  useEffect(() => {
-    const id = requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        const api = svarApiRef.current;
-        if (!api) return;
-        const actual = (api.getState() as { cellWidth?: number }).cellWidth;
-        const expected = svarCellWidth(viewMode);
-        if (actual != null && Math.abs(actual - expected) / expected > 0.01) {
-          setCellWidthNudge((n) => n + 1);
-        }
-      }),
-    );
-    return () => cancelAnimationFrame(id);
-  }, [start, end, viewMode, containerWidth]);
 
   // Snap a cursor X to the chart's unit grid → the date a drop lands on.
   // `originLeft` is the viewport x of timeline content-x 0. Prefer `.wx-bars`
@@ -562,7 +242,7 @@ export function GanttView({
   // (origin = its left minus scrollLeft) for the empty chart, where SVAR may not
   // mount a bars layer until there's a task.
   function dateFromDropX(clientX: number): string | null {
-    const svarApi = svarApiRef.current;
+    const svarApi = geom.svarApiRef.current;
     if (!svarApi) return null;
     const scaleState = (svarApi.getState() as { _scales?: { start: Date; lengthUnitWidth: number; lengthUnit: string } })._scales;
     if (!scaleState?.lengthUnitWidth) return null;
@@ -577,10 +257,11 @@ export function GanttView({
     } else {
       return null;
     }
-    const units = Math.floor(Math.max(0, clientX - originLeft) / scaleState.lengthUnitWidth);
-    const unit = scaleState.lengthUnit;
-    const unitDays = unit === "week" ? 7 : unit === "month" ? 30 : 1;
-    return addCalendarDays(jsDateToISO(scaleState.start), units * unitDays);
+    return dateFromOffset(clientX, originLeft, {
+      startISO: jsDateToISO(scaleState.start),
+      lengthUnitWidth: scaleState.lengthUnitWidth,
+      lengthUnit: scaleState.lengthUnit,
+    });
   }
 
   // Tentative scheduling preview. Rather than draw a floating element at the
@@ -667,7 +348,7 @@ export function GanttView({
             // any DPR. Must match the <Gantt> cellWidth/cellHeight props below.
             style={
               {
-                "--gantt-cell-width": `${CELL_WIDTH[viewMode]}px`,
+                "--gantt-cell-width": `${columnWidthPx(viewMode)}px`,
                 "--gantt-cell-height": "36px",
               } as React.CSSProperties
             }
@@ -688,7 +369,7 @@ export function GanttView({
                 could never be scheduled by drag (no `.wx-bars`/`_scales` to read
                 a date from). Reserve the full height while SVAR lays out (blank,
                 matching final dimensions — no skeleton), then fade it in. */}
-            <div className={`h-full ${ready ? "animate-fade-in" : "opacity-0"}`}>
+            <div className={`h-full ${geom.ready ? "animate-fade-in" : "opacity-0"}`}>
               <Theme>
                 <Gantt
                   init={init}
@@ -699,9 +380,9 @@ export function GanttView({
                   // Mobile: collapse the task-name grid so the timeline fills width
                   displayMode={isMobile ? "chart" : "all"}
                   scales={scales}
-                  start={start}
-                  end={end}
-                  cellWidth={svarCellWidth(viewMode) + (cellWidthNudge % 2) * 1e-6}
+                  start={geom.start}
+                  end={geom.end}
+                  cellWidth={geom.cellWidth}
                   cellHeight={36}
                   scaleHeight={36}
                 />
