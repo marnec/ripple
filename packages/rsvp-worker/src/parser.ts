@@ -14,20 +14,40 @@
 
 import PostalMime, { type Attachment, type Email, type RawEmail } from "postal-mime";
 import ICAL from "ical.js";
-import type { ParsedRsvp, Partstat } from "./types";
+import type { ParsedReply, ParsedRsvp, Partstat } from "./types";
 
 /**
- * Parse a raw inbound MIME stream and extract the RSVP. Returns null if the
- * mail isn't an ICS REPLY — caller logs and drops.
+ * Parse a raw inbound MIME stream and extract the RSVP plus the auth header.
+ * Returns null if the mail isn't an ICS REPLY — caller logs and drops.
+ *
+ * We read `Authentication-Results` from the parsed MIME here (not from
+ * `ForwardableEmailMessage.headers`) because Cloudflare doesn't expose that
+ * header via the Workers headers API — see ParsedReply.authResults.
  */
-export async function parseRsvp(raw: RawEmail): Promise<ParsedRsvp | null> {
+export async function parseRsvp(raw: RawEmail): Promise<ParsedReply | null> {
   const parser = new PostalMime();
   const email = await parser.parse(raw);
 
   const icsText = findIcsReply(email);
   if (!icsText) return null;
 
-  return extractRsvp(icsText);
+  const rsvp = extractRsvp(icsText);
+  if (!rsvp) return null;
+
+  return { rsvp, authResults: findAuthResults(email) };
+}
+
+/**
+ * First `Authentication-Results` header from the raw message. postal-mime
+ * preserves document order, and Cloudflare prepends its own line at the top,
+ * so the first match is Cloudflare's trusted verdict; any upstream lines sit
+ * below and are ignored (matches the security model in auth.ts).
+ */
+function findAuthResults(email: Email): string | null {
+  for (const h of email.headers) {
+    if (h.key.toLowerCase() === "authentication-results") return h.value;
+  }
+  return null;
 }
 
 function findIcsReply(email: Email): string | null {

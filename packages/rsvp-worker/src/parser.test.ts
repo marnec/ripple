@@ -99,8 +99,28 @@ describe("parseRsvp", () => {
     const mime = buildMimeReply(baseIcs({ partstat: "ACCEPTED" }));
     const r = await parseRsvp(mime);
     expect(r).not.toBeNull();
-    expect(r!.partstat).toBe("ACCEPTED");
-    expect(r!.attendeeEmail).toBe("alice@example.com");
+    expect(r!.rsvp.partstat).toBe("ACCEPTED");
+    expect(r!.rsvp.attendeeEmail).toBe("alice@example.com");
+  });
+
+  it("reads Authentication-Results from the raw MIME (not the headers API)", async () => {
+    // Regression: Cloudflare puts Authentication-Results only in message.raw,
+    // never in ForwardableEmailMessage.headers.get(). The worker must source it
+    // from the parsed MIME or every RSVP is dropped as `no_auth_results`.
+    const ar =
+      "mx.cloudflare.net; dkim=pass header.d=example.com; dmarc=pass header.from=example.com";
+    const mime =
+      `Authentication-Results: ${ar}\r\n` +
+      buildMimeReply(baseIcs({ partstat: "ACCEPTED" }));
+    const r = await parseRsvp(mime);
+    expect(r).not.toBeNull();
+    expect(r!.authResults).toBe(ar);
+  });
+
+  it("returns null authResults when the header is absent", async () => {
+    const mime = buildMimeReply(baseIcs({ partstat: "ACCEPTED" }));
+    const r = await parseRsvp(mime);
+    expect(r!.authResults).toBeNull();
   });
 
   it("returns null when the mail has no text/calendar part", async () => {
@@ -145,6 +165,6 @@ describe("parseRsvp", () => {
 
     const r = await parseRsvp(mime);
     expect(r).not.toBeNull();
-    expect(r!.partstat).toBe("TENTATIVE");
+    expect(r!.rsvp.partstat).toBe("TENTATIVE");
   });
 });

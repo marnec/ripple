@@ -16,6 +16,19 @@ export interface ParsedRsvp {
   sequence: number;
 }
 
+/** Output of a successful raw-MIME parse: the RSVP plus the auth header we can
+ *  only get from the raw message (see ParsedReply.authResults). */
+export interface ParsedReply {
+  rsvp: ParsedRsvp;
+  /** First (topmost) `Authentication-Results` header from the raw message.
+   *  Read from the parsed MIME, NOT `ForwardableEmailMessage.headers.get()`:
+   *  Cloudflare computes DKIM/DMARC and prepends this header to the raw stream
+   *  but does NOT expose it via the Workers headers API (known limitation —
+   *  community.cloudflare.com/t/686103). Topmost = Cloudflare's own line;
+   *  upstream/attacker-supplied lines sit below it and are ignored. */
+  authResults: string | null;
+}
+
 export interface AuthResult {
   ok: boolean;
   reason?:

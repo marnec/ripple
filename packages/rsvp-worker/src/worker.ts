@@ -30,24 +30,25 @@ export default {
       return;
     }
 
-    const auth = verifyAuth(
-      message.headers.get("Authentication-Results"),
-      message.from,
-      parsed.attendeeEmail,
-    );
+    const { rsvp, authResults } = parsed;
+
+    // Authenticity gate. `authResults` comes from the parsed raw MIME, not
+    // `message.headers` — Cloudflare doesn't surface Authentication-Results
+    // through the Workers headers API (see parser.ts findAuthResults).
+    const auth = verifyAuth(authResults, message.from, rsvp.attendeeEmail);
     if (!auth.ok) {
       console.warn("rsvp auth_fail", {
         reason: auth.reason,
         from: message.from,
-        attendee: parsed.attendeeEmail,
+        attendee: rsvp.attendeeEmail,
       });
       return;
     }
 
-    if (!parsed.uid.endsWith(`@${env.RSVP_DOMAIN}`)) {
+    if (!rsvp.uid.endsWith(`@${env.RSVP_DOMAIN}`)) {
       // Forwarded invite from a third-party calendar system whose UID
       // happens to land in our mailbox. Not ours; drop.
-      console.info("rsvp foreign_uid", { uid: parsed.uid });
+      console.info("rsvp foreign_uid", { uid: rsvp.uid });
       return;
     }
 
@@ -55,14 +56,14 @@ export default {
     // Convex latency. Cloudflare extends the worker lifetime to cover
     // waitUntil promises.
     ctx.waitUntil(
-      postRsvp(env, parsed)
+      postRsvp(env, rsvp)
         .then((ack) => {
-          console.info("rsvp applied", { uid: parsed.uid, ack });
+          console.info("rsvp applied", { uid: rsvp.uid, ack });
         })
         .catch((err) => {
           console.error("rsvp convex_error", {
             err: errorString(err),
-            uid: parsed.uid,
+            uid: rsvp.uid,
           });
         }),
     );
