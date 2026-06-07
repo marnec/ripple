@@ -18,7 +18,7 @@ import {
 import { calendarDragContext } from "../calendarDragContext";
 import { CalendarTaskMenuContext } from "./calendar-contexts";
 import { UnscheduledTaskList } from "./CalendarSidebarLists";
-import { type EnrichedTask, PRIORITY_COLORS, formatDayTitle } from "./calendar-events";
+import { type EnrichedTask } from "./calendar-events";
 import type { GanttViewMode } from "./ScheduleHeader";
 import "@svar-ui/react-gantt/all.css";
 import "../project-gantt.css";
@@ -41,6 +41,11 @@ export type GanttDependency = {
 const PAGE_COLUMNS: Record<GanttViewMode, number> = { Day: 7, Week: 4, Month: 3 };
 
 const CELL_WIDTH: Record<GanttViewMode, number> = { Day: 42, Week: 80, Month: 120 };
+
+// Approx days per column, per resolution — used to translate a page of columns
+// into the date-range extension that lets prev/next pan past the task span.
+// (Month is variable; 31 is close enough for paging.)
+const UNIT_DAYS: Record<GanttViewMode, number> = { Day: 1, Week: 7, Month: 31 };
 
 // Grid shows only the task name — drop SVAR's default Start date / Duration
 // columns (the timeline already conveys both) — and reserve little width for it.
@@ -80,6 +85,39 @@ function jsDateToISO(d: Date): string {
 function isoToJsDate(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+// Escape a task id for safe use inside a `[data-id="…"]` attribute selector.
+// Convex ids are already selector-safe, but CSS.escape guards against any future
+// id shape (and keeps the rule from silently breaking on an exotic character).
+function cssEscapeId(id: string): string {
+  return typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id;
+}
+
+// SVAR's horizontal scroller. It keeps the sticky timeline header in sync from
+// this element's native `scroll` event, so animating its scrollLeft directly
+// (smooth) pans header + body together — no need to tween via SVAR's state.
+function getChartScroller(container: HTMLElement | null): HTMLElement | null {
+  return container?.querySelector<HTMLElement>(".wx-chart") ?? null;
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+// Scroll the chart to a pixel offset, animated unless reduced-motion is set.
+// Falls back to SVAR's exec if the DOM scroller isn't found.
+function scrollChartTo(container: HTMLElement | null, left: number, svarApi: IApi | null) {
+  const clamped = Math.max(0, left);
+  const chart = getChartScroller(container);
+  if (chart) {
+    chart.scrollTo({ left: clamped, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  } else {
+    void svarApi?.exec("scroll-chart", { left: clamped });
+  }
 }
 
 function buildSvarTasks(scheduled: EnrichedTask[], multiplier: 1 | 5): ITask[] {
@@ -125,6 +163,9 @@ export function GanttView({
   onDrawerOpenChange,
   apiRef,
   onEmptyClick,
+  previewTaskId,
+  onPreviewChange,
+  onSchedule,
   isDark,
 }: {
   scheduledTasks: EnrichedTask[];
@@ -137,6 +178,14 @@ export function GanttView({
   apiRef: React.RefObject<GanttApi | null>;
   /** Click on an empty timeline slot → schedule picker for that date (mobile). */
   onEmptyClick: (date: string) => void;
+  /** Id of the task currently shown as a tentative (dashed) drag preview bar. */
+  previewTaskId?: string | null;
+  /** Report the tentative drop position upward so the parent can splice the
+   *  previewed task into the list (drives the in-grid preview bar). */
+  onPreviewChange?: (preview: { taskId: string; date: string } | null) => void;
+  /** Commit a pool drop. The parent persists it with an optimistic hold so the
+   *  bar stays on screen (solid) until Convex round-trips. */
+  onSchedule?: (taskId: string, date: string) => void;
   isDark: boolean;
 }) {
   const updateTask = useMutation(api.tasks.update);
@@ -168,6 +217,17 @@ export function GanttView({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Manual pan extension (in days) added on top of the task-derived range so the
+  // prev/next arrows can scroll into empty time indefinitely — SVAR clamps
+  // scrolling to the content bounds, so reaching further means growing the range
+  // itself. Grown a page at a time by scrollByPage when it hits an edge.
+  const [panDays, setPanDays] = useState({ past: 0, future: 0 });
+  // Scroll move to apply once a pan-driven range growth has been committed (set
+  // by scrollByPage, consumed by the effect below after start/end update).
+  // `anchor` is snapped instantly to keep the view visually stable across the
+  // range growth; then we animate to `target` (one page over).
+  const pendingScrollRef = useRef<{ anchor: number; target: number } | null>(null);
 
   // Single-click context menu, anchored at the click position. Single click on
   // a bar fires SVAR's built-in `select-task` (which we leave untouched) — we
@@ -254,7 +314,9 @@ export function GanttView({
       if (s < min) min = s;
       if (e > max) max = e;
     }
-    const startISO = addCalendarDays(min, -14);
+    // Base padding around the tasks, plus any manual pan extension the arrows
+    // have accumulated (lets prev/next roam past the task span — see above).
+    const startISO = addCalendarDays(min, -14 - panDays.past);
     let endISO = addCalendarDays(max, 30);
 
     // SVAR auto-stretches cellWidth to a *fractional*, viewport-dependent value
@@ -268,16 +330,18 @@ export function GanttView({
     // keeps the integer cellWidth we set. We keep the natural +30d padding when
     // tasks already span wider than the viewport.
     const cellWidth = CELL_WIDTH[viewMode];
-    const unitDays = viewMode === "Day" ? 1 : viewMode === "Week" ? 7 : 31;
     if (containerWidth > 0) {
       const minCols = Math.ceil(containerWidth / cellWidth) + 2;
-      const fillEndISO = addCalendarDays(startISO, minCols * unitDays);
+      const fillEndISO = addCalendarDays(startISO, minCols * UNIT_DAYS[viewMode]);
       if (fillEndISO > endISO) endISO = fillEndISO;
     }
+    // Future pan extension goes on top of whatever the fill required, so each
+    // next() reliably grows the range even when the viewport-fill dominates.
+    endISO = addCalendarDays(endISO, panDays.future);
 
     return { start: isoToJsDate(startISO), end: isoToJsDate(endISO) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeSig, containerWidth, viewMode]);
+  }, [rangeSig, containerWidth, viewMode, panDays]);
 
   // Register store listeners exactly once (SVAR calls `init` a single time).
   const init = (svarApi: IApi) => {
@@ -350,12 +414,41 @@ export function GanttView({
 
   // Expose navigation to the shared header.
   useEffect(() => {
+    // Page the chart by one page of columns. SVAR clamps scrolling to the
+    // content bounds, so when a page would land outside the current range we
+    // first grow the range by a page on that side (via panDays) and defer the
+    // scroll until the new range is committed (pendingScrollRef + effect below).
     const scrollByPage = (dir: -1 | 1) => {
       const svarApi = svarApiRef.current;
       if (!svarApi) return;
-      const state = svarApi.getState() as { scrollLeft?: number };
-      const left = (state.scrollLeft ?? 0) + dir * CELL_WIDTH[viewMode] * PAGE_COLUMNS[viewMode];
-      void svarApi.exec("scroll-chart", { left: Math.max(0, left) });
+      const cw = CELL_WIDTH[viewMode];
+      const pageCols = PAGE_COLUMNS[viewMode];
+      const pageWidth = cw * pageCols;
+      const pageDays = pageCols * UNIT_DAYS[viewMode];
+      const state = svarApi.getState() as {
+        scrollLeft?: number;
+        _scales?: { width?: number };
+        _chartWidth?: number;
+      };
+      const scrollLeft = state.scrollLeft ?? 0;
+      const maxScroll = Math.max(0, (state._scales?.width ?? 0) - (state._chartWidth ?? 0));
+      const target = scrollLeft + dir * pageWidth;
+
+      if (dir < 0 && target < 0) {
+        // Past the left edge → grow the past side. Content shifts right by one
+        // page, so the current view will sit at scrollLeft + pageWidth in the
+        // new range (anchor); animate from there back one page to scrollLeft.
+        setPanDays((p) => ({ ...p, past: p.past + pageDays }));
+        pendingScrollRef.current = { anchor: scrollLeft + pageWidth, target: scrollLeft };
+      } else if (dir > 0 && target > maxScroll) {
+        // Past the right edge → grow the future side (added on the right only,
+        // so the view stays put; animate forward one page to target).
+        setPanDays((p) => ({ ...p, future: p.future + pageDays }));
+        pendingScrollRef.current = { anchor: scrollLeft, target };
+      } else {
+        // Within range → just animate the page.
+        scrollChartTo(containerRef.current, Math.min(target, maxScroll), svarApi);
+      }
     };
     apiRef.current = {
       scrollToday: () => { void svarApiRef.current?.exec("scroll-chart", { date: new Date() }); },
@@ -367,49 +460,87 @@ export function GanttView({
     };
   }, [apiRef, viewMode]);
 
-  // Drop an unscheduled task onto the chart → schedule at the dropped date.
+  // After a pan-driven range growth commits (start/end change), apply the scroll
+  // move scrollByPage stashed — deferred so SVAR has laid out the new range.
+  // The anchor MUST go through SVAR's `scroll-chart` exec, not a raw DOM scroll:
+  // a range change resets SVAR's internal scrollLeft to 0 and it force-syncs the
+  // DOM back to that, so a direct chart.scrollTo() gets clobbered (it wormholed
+  // to the range start). exec makes SVAR's state authoritative at the anchor;
+  // the subsequent native smooth scroll is then safe (no further range change,
+  // so onScroll keeps state in sync — same as the within-range path).
+  useEffect(() => {
+    const pending = pendingScrollRef.current;
+    if (!pending) return;
+    pendingScrollRef.current = null;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const svarApi = svarApiRef.current;
+        if (!svarApi) return;
+        void svarApi.exec("scroll-chart", { left: Math.max(0, pending.anchor) });
+        requestAnimationFrame(() => {
+          scrollChartTo(containerRef.current, pending.target, svarApiRef.current);
+        });
+      }),
+    );
+  }, [start, end]);
+
+  // Snap a cursor X to the chart's unit grid → the date a drop lands on.
+  // Measuring the `.wx-bars` container (rather than `.wx-chart` + scrollLeft) is
+  // the single source of truth that already folds in the left task-name grid
+  // width AND the horizontal scroll.
   function dateFromDropX(clientX: number): string | null {
     const svarApi = svarApiRef.current;
-    const chart = containerRef.current?.querySelector<HTMLElement>(".wx-chart");
-    if (!svarApi || !chart) return null;
+    const bars = containerRef.current?.querySelector<HTMLElement>(".wx-bars");
+    if (!svarApi || !bars) return null;
     const scaleState = (svarApi.getState() as { _scales?: { start: Date; lengthUnitWidth: number; lengthUnit: string } })._scales;
     if (!scaleState?.lengthUnitWidth) return null;
-    const rect = chart.getBoundingClientRect();
-    const x = Math.max(0, clientX - rect.left + chart.scrollLeft);
-    const units = Math.floor(x / scaleState.lengthUnitWidth);
-    const base = scaleState.start;
-    const baseISO = jsDateToISO(base);
+    const barsRect = bars.getBoundingClientRect();
+    const units = Math.floor(Math.max(0, clientX - barsRect.left) / scaleState.lengthUnitWidth);
     const unit = scaleState.lengthUnit;
-    const days = unit === "day" ? units : unit === "week" ? units * 7 : unit === "month" ? units * 30 : units;
-    return addCalendarDays(baseISO, days);
+    const unitDays = unit === "week" ? 7 : unit === "month" ? 30 : 1;
+    return addCalendarDays(jsDateToISO(scaleState.start), units * unitDays);
   }
 
-  // Ghost card that follows the cursor while dragging an unscheduled task over
-  // the chart (mirrors the schedule-x calendar's drag ghost).
-  const [dragGhost, setDragGhost] = useState<{ taskId: string; x: number; y: number; date: string | null } | null>(null);
-  const ghostTask = dragGhost ? unscheduledTasks.find((t) => t._id === dragGhost.taskId) : undefined;
+  // Tentative scheduling preview. Rather than draw a floating element at the
+  // cursor, we report the dragged task + snapped date upward; the parent splices
+  // it into the task list at its real position, so SVAR renders the preview bar
+  // in the *exact* row the committed task will occupy (its row is fixed by task
+  // order, not by where the cursor is — and may fall between two existing rows).
+  // We only emit when the snapped date actually changes, so the parent re-renders
+  // at most once per column crossing, not per mousemove.
+  const lastPreviewRef = useRef<{ taskId: string; date: string } | null>(null);
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const taskId = calendarDragContext.currentTaskId;
     if (!taskId) return;
-    setDragGhost({ taskId, x: e.clientX, y: e.clientY, date: dateFromDropX(e.clientX) });
+    const date = dateFromDropX(e.clientX);
+    if (!date) return;
+    const last = lastPreviewRef.current;
+    if (last?.taskId === taskId && last.date === date) return;
+    lastPreviewRef.current = { taskId, date };
+    onPreviewChange?.({ taskId, date });
   }
 
   function handleDragLeave(e: React.DragEvent<HTMLDivElement>) {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragGhost(null);
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      lastPreviewRef.current = null;
+      onPreviewChange?.(null);
+    }
   }
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
-    setDragGhost(null);
+    lastPreviewRef.current = null;
     const taskId = e.dataTransfer.getData("task-id");
     calendarDragContext.clearDragTask();
-    if (!taskId) return;
-    const date = dateFromDropX(e.clientX);
-    if (!date) return;
-    void updateTask({ taskId: taskId as Id<"tasks">, plannedStartDate: date });
+    const date = taskId ? dateFromDropX(e.clientX) : null;
+    // Hand off to the parent's optimistic commit: it clears the dashed drag
+    // preview and holds a solid bar (via pendingSchedule) through the round-trip,
+    // so the bar never flashes out between drop and the Convex update.
+    onPreviewChange?.(null);
+    if (taskId && date) onSchedule?.(taskId, date);
   }
 
   // Click an empty timeline slot → open the unscheduled-task picker for that
@@ -521,22 +652,13 @@ export function GanttView({
         </CalendarSidebar>
       </CalendarSidebarProvider>
 
-      {/* Drag ghost — follows the cursor over the chart while dropping an
-          unscheduled task, previewing the target date. */}
-      {dragGhost && ghostTask && (
-        <div
-          className="pointer-events-none fixed z-50 flex items-center gap-2 rounded-md border bg-popover px-2.5 py-1.5 text-xs shadow-md"
-          style={{ left: dragGhost.x + 14, top: dragGhost.y + 14 }}
-        >
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: PRIORITY_COLORS[ghostTask.priority] ?? "#6b7280" }}
-          />
-          <span className="max-w-50 truncate font-medium text-foreground">{ghostTask.title}</span>
-          {dragGhost.date && (
-            <span className="shrink-0 text-muted-foreground">{formatDayTitle(dragGhost.date)}</span>
-          )}
-        </div>
+      {/* Tentative drag preview. The previewed task is spliced into the task
+          list by the parent, so SVAR renders a real bar in the correct row;
+          this only restyles that one bar as dashed + translucent to mark it as
+          not-yet-committed. Targeting `data-id` (SVAR stamps it with the task
+          id) scopes the rule to exactly the preview bar. */}
+      {previewTaskId && (
+        <style>{`.ripple-gantt .wx-bar[data-id="${cssEscapeId(previewTaskId)}"]{opacity:.6;outline:2px dashed var(--wx-color-primary,#6366f1);outline-offset:-2px;}.ripple-gantt .wx-bar[data-id="${cssEscapeId(previewTaskId)}"] .wx-progress-percent{opacity:0;}`}</style>
       )}
 
       {/* Single-click action menu — same items as the calendar's event menu,

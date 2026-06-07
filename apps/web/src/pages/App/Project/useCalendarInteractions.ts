@@ -118,6 +118,16 @@ export function useCalendarInteractions({
     }
   }
 
+  // Persist a schedule while optimistically holding the task at (taskId, date)
+  // until the Convex query catches up — shared by the calendar's grid drop and
+  // the gantt's pool drop so both hand off seamlessly to the real event/bar.
+  function scheduleOptimistic(taskId: Id<"tasks">, date: string) {
+    setPendingSchedule({ taskId, date });
+    void updateTask({ taskId, plannedStartDate: date }).catch(() => {
+      setPendingSchedule(null);
+    });
+  }
+
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     hoveredDropDateRef.current = null;
@@ -129,11 +139,7 @@ export function useCalendarInteractions({
     if (!taskId) return;
     const date = findDateAtPoint(e.clientX, e.clientY);
     if (!date) return;
-    // Optimistically show the task at its new position before the server responds.
-    setPendingSchedule({ taskId, date });
-    void updateTask({ taskId, plannedStartDate: date }).catch(() => {
-      setPendingSchedule(null);
-    });
+    scheduleOptimistic(taskId, date);
   }
 
   return {
@@ -193,6 +199,8 @@ export function useCalendarInteractions({
       draggedTaskId,
       pendingSchedule,
       clearPendingSchedule: () => setPendingSchedule(null),
+      // Commit a drop with optimistic hold (gantt pool drop routes through this).
+      scheduleOptimistic,
       onDragOver: handleDragOver,
       onDragLeave: handleDragLeave,
       onDrop: handleDrop,

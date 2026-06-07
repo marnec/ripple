@@ -149,11 +149,37 @@ function ProjectCalendarContent({
 
   const scheduledTasks: EnrichedTask[] = allTasks.filter((t) => !!t.plannedStartDate);
 
+  // Gantt drag preview: the dragged task + its snapped drop date, reported by
+  // GanttView while a drag is in flight (cleared on drop/leave). Combined with
+  // the post-drop optimistic `pendingSchedule` below to build the gantt task
+  // list — see `ganttScheduledTasks`.
+  const [ganttPreview, setGanttPreview] = useState<{ taskId: string; date: string } | null>(null);
+
   const taskCycleDueDate = new Map<string, string>(
     (calendarData?.taskCycleDueDatePairs ?? []).map(({ taskId, cycleDueDate }) => [taskId, cycleDueDate])
   );
 
   const { draggedTaskId, hoveredDropDate, pendingSchedule, clearPendingSchedule } = ix.dragDrop;
+
+  // Gantt task list with both schedule overrides applied at each task's natural
+  // `allTasks` position (so SVAR locks the bar to the row it'll really occupy):
+  //  - `ganttPreview`: the dashed, in-flight drag preview
+  //  - `pendingSchedule`: the solid, just-dropped bar held until Convex catches
+  //    up — reusing the calendar's optimistic mechanism so the bar never flashes
+  //    out and back in on release.
+  // ganttPreview wins if both name the same task (active drag supersedes).
+  const ganttScheduleOverrides = new Map<string, string>();
+  if (pendingSchedule) ganttScheduleOverrides.set(pendingSchedule.taskId, pendingSchedule.date);
+  if (ganttPreview) ganttScheduleOverrides.set(ganttPreview.taskId, ganttPreview.date);
+  const ganttScheduledTasks: EnrichedTask[] =
+    ganttScheduleOverrides.size === 0
+      ? scheduledTasks
+      : allTasks
+          .map((t) => {
+            const date = ganttScheduleOverrides.get(t._id);
+            return date ? { ...t, plannedStartDate: date } : t;
+          })
+          .filter((t) => !!t.plannedStartDate);
 
   // Resolve the task being dragged (scheduled or unscheduled) for the ghost overlay.
   const draggedTask =
@@ -242,7 +268,7 @@ function ProjectCalendarContent({
 
       {view === "gantt" ? (
         <GanttView
-          scheduledTasks={scheduledTasks}
+          scheduledTasks={ganttScheduledTasks}
           unscheduledTasks={unscheduledTasks}
           dependencies={dependencies}
           viewMode={ganttViewMode}
@@ -251,6 +277,9 @@ function ProjectCalendarContent({
           onDrawerOpenChange={setGanttDrawerOpen}
           apiRef={ganttApiRef}
           onEmptyClick={(date) => ix.openDayDrawer(date)}
+          previewTaskId={ganttPreview?.taskId ?? null}
+          onPreviewChange={setGanttPreview}
+          onSchedule={(taskId, date) => ix.dragDrop.scheduleOptimistic(taskId as Id<"tasks">, date)}
           isDark={isDark}
         />
       ) : (
