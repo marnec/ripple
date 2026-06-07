@@ -40,7 +40,18 @@ export type GanttDependency = {
 // of the active view mode).
 const PAGE_COLUMNS: Record<GanttViewMode, number> = { Day: 7, Week: 4, Month: 3 };
 
+// Visible column pixel width per resolution (one week column = 80px, etc).
 const CELL_WIDTH: Record<GanttViewMode, number> = { Day: 42, Week: 80, Month: 120 };
+
+// SVAR's lowest scale unit drives ALL of its geometry, so to keep month banners
+// aligned to days (not snapped to whole weeks — months don't tile weeks, which
+// made the upper row overlap + flex-shrink and drift), the Week view's lowest
+// unit is `day` (rendered every 7 days, see scalesFor). That makes SVAR's
+// `cellWidth` a *day* width, so the visible column = `cellWidth × unitsPerColumn`.
+// We hand SVAR `CELL_WIDTH / unitsPerColumn`; everything else here (pan, fill,
+// body-grid gradient) keeps using CELL_WIDTH, the visible column width.
+const UNITS_PER_COLUMN: Record<GanttViewMode, number> = { Day: 1, Week: 7, Month: 1 };
+const svarCellWidth = (mode: GanttViewMode) => CELL_WIDTH[mode] / UNITS_PER_COLUMN[mode];
 
 // Approx days per column, per resolution — used to translate a page of columns
 // into the date-range extension that lets prev/next pan past the task span.
@@ -60,9 +71,14 @@ function scalesFor(mode: GanttViewMode) {
       { unit: "day" as const, step: 1, format: "%j" },
     ];
   if (mode === "Week")
+    // Lower row is `day` with step 7 (not `week`) so SVAR's lowest unit is the
+    // day: month cells are then sized in exact days and land on their true
+    // calendar boundaries (mid-column), instead of being snapped to whole weeks.
+    // step 7 still renders one cell per week; start is week-aligned (see memo) so
+    // those cells are calendar weeks.
     return [
       { unit: "month" as const, step: 1, format: "%F %Y" },
-      { unit: "week" as const, step: 1, format: "%d %M" },
+      { unit: "day" as const, step: 7, format: "%d %M" },
     ];
   return [
     { unit: "year" as const, step: 1, format: "%Y" },
@@ -207,7 +223,18 @@ export function GanttView({
   // the chart area (see the start/end memo: prevents SVAR's fractional cellWidth
   // stretch). Measuring the *outer* container — which the built-in grid splitter
   // never resizes — means dragging that splitter can't reintroduce the stretch.
-  const [containerWidth, setContainerWidth] = useState(0);
+  //
+  // Seeded with the window width (not 0): SVAR's *first* layout runs before the
+  // ResizeObserver fires, so a 0 seed would yield a too-narrow range and let SVAR
+  // stretch cellWidth on that first pass. That stretch is permanent — SVAR's
+  // `init()` only re-applies props that changed, and the cellWidth prop stays 80,
+  // so a fractional state.cellWidth is never reset (it just shifts on each
+  // resize-grid, which is the sidebar-dependent month/week misalignment). The
+  // window is always ≥ the chart area, so seeding it guarantees no first-pass
+  // stretch; the observer then refines to the real (smaller-or-equal) width.
+  const [containerWidth, setContainerWidth] = useState(() =>
+    typeof window === "undefined" ? 0 : window.innerWidth,
+  );
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -217,6 +244,13 @@ export function GanttView({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Tiny parity nudge added to the cellWidth prop to force SVAR to re-apply it.
+  // A stretch is permanent (init() skips unchanged props), so if one ever slips
+  // through (e.g. a window-grow transient outpacing the fill), flipping this
+  // changes the prop value enough to re-apply the correct width. The nudge is
+  // ~1e-6px/day — utterly sub-pixel — so it never affects alignment itself.
+  const [cellWidthNudge, setCellWidthNudge] = useState(0);
 
   // Manual pan extension (in days) added on top of the task-derived range so the
   // prev/next arrows can scroll into empty time indefinitely — SVAR clamps
@@ -292,11 +326,22 @@ export function GanttView({
 
   // Chart range — padded around the scheduled tasks (and today) so there's room
   // to scroll. Recomputed only when the spanning dates change.
+  //
+  // The in-flight drag preview is excluded: its date chases the cursor every
+  // column, so letting it drive the range would re-pad and re-layout the
+  // timeline mid-drag (most visible on an otherwise-empty chart, where the
+  // preview is the *only* task and the range would jump with it). The preview
+  // date is always within the already-rendered range anyway (it's derived from
+  // the live timeline), so the bar still shows. A committed/optimistic task
+  // (previewTaskId cleared) does drive the range, as it should.
+  const rangeTasks = previewTaskId
+    ? scheduledTasks.filter((t) => t._id !== previewTaskId)
+    : scheduledTasks;
   const rangeSig = (() => {
-    if (scheduledTasks.length === 0) return "empty";
-    let min = scheduledTasks[0].plannedStartDate!;
+    if (rangeTasks.length === 0) return "empty";
+    let min = rangeTasks[0].plannedStartDate!;
     let max = min;
-    for (const t of scheduledTasks) {
+    for (const t of rangeTasks) {
       const s = t.plannedStartDate!;
       const e = addCalendarDays(s, estimateToDays(t.estimate, multiplier));
       if (s < min) min = s;
@@ -308,7 +353,7 @@ export function GanttView({
     const today = Temporal.Now.plainDateISO().toString();
     let min = today;
     let max = today;
-    for (const t of scheduledTasks) {
+    for (const t of rangeTasks) {
       const s = t.plannedStartDate!;
       const e = addCalendarDays(s, estimateToDays(t.estimate, multiplier));
       if (s < min) min = s;
@@ -316,7 +361,12 @@ export function GanttView({
     }
     // Base padding around the tasks, plus any manual pan extension the arrows
     // have accumulated (lets prev/next roam past the task span — see above).
-    const startISO = addCalendarDays(min, -14 - panDays.past);
+    let startISO = addCalendarDays(min, -14 - panDays.past);
+    // Week view's lower row is day/step-7; align start to the week start (Sunday)
+    // so those 7-day cells are calendar weeks, not start-relative buckets.
+    if (viewMode === "Week") {
+      startISO = addCalendarDays(startISO, -isoToJsDate(startISO).getDay());
+    }
     let endISO = addCalendarDays(max, 30);
 
     // SVAR auto-stretches cellWidth to a *fractional*, viewport-dependent value
@@ -484,18 +534,50 @@ export function GanttView({
     );
   }, [start, end]);
 
+  // Stability guard: if SVAR ever stretches cellWidth (a fractional value it then
+  // never resets, which desyncs the 80px-period body grid from the week cells),
+  // detect the divergence after layout and flip cellWidthNudge to force a
+  // re-apply of the correct width. Runs after the changes that can trigger a
+  // stretch (range/resolution/container). The fill normally prevents stretches
+  // entirely; this is the backstop that makes the fractional cellWidth durable.
+  useEffect(() => {
+    const id = requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        const api = svarApiRef.current;
+        if (!api) return;
+        const actual = (api.getState() as { cellWidth?: number }).cellWidth;
+        const expected = svarCellWidth(viewMode);
+        if (actual != null && Math.abs(actual - expected) / expected > 0.01) {
+          setCellWidthNudge((n) => n + 1);
+        }
+      }),
+    );
+    return () => cancelAnimationFrame(id);
+  }, [start, end, viewMode, containerWidth]);
+
   // Snap a cursor X to the chart's unit grid → the date a drop lands on.
-  // Measuring the `.wx-bars` container (rather than `.wx-chart` + scrollLeft) is
-  // the single source of truth that already folds in the left task-name grid
-  // width AND the horizontal scroll.
+  // `originLeft` is the viewport x of timeline content-x 0. Prefer `.wx-bars`
+  // (its rect already folds in the left task-name grid width AND the horizontal
+  // scroll — a single source of truth). Fall back to the `.wx-chart` scroller
+  // (origin = its left minus scrollLeft) for the empty chart, where SVAR may not
+  // mount a bars layer until there's a task.
   function dateFromDropX(clientX: number): string | null {
     const svarApi = svarApiRef.current;
-    const bars = containerRef.current?.querySelector<HTMLElement>(".wx-bars");
-    if (!svarApi || !bars) return null;
+    if (!svarApi) return null;
     const scaleState = (svarApi.getState() as { _scales?: { start: Date; lengthUnitWidth: number; lengthUnit: string } })._scales;
     if (!scaleState?.lengthUnitWidth) return null;
-    const barsRect = bars.getBoundingClientRect();
-    const units = Math.floor(Math.max(0, clientX - barsRect.left) / scaleState.lengthUnitWidth);
+    const container = containerRef.current;
+    const bars = container?.querySelector<HTMLElement>(".wx-bars");
+    const chart = container?.querySelector<HTMLElement>(".wx-chart");
+    let originLeft: number;
+    if (bars) {
+      originLeft = bars.getBoundingClientRect().left;
+    } else if (chart) {
+      originLeft = chart.getBoundingClientRect().left - chart.scrollLeft;
+    } else {
+      return null;
+    }
+    const units = Math.floor(Math.max(0, clientX - originLeft) / scaleState.lengthUnitWidth);
     const unit = scaleState.lengthUnit;
     const unitDays = unit === "week" ? 7 : unit === "month" ? 30 : 1;
     return addCalendarDays(jsDateToISO(scaleState.start), units * unitDays);
@@ -579,7 +661,7 @@ export function GanttView({
               background shows, accepts drops from the unscheduled pool. */}
           <div
             ref={containerRef}
-            className="ripple-gantt flex-1 min-h-0 overflow-hidden"
+            className="ripple-gantt relative flex-1 min-h-0 overflow-hidden"
             // Feed the CSS grid-line gradients (project-gantt.css) the active
             // resolution's cell size so the body grid aligns with the header at
             // any DPR. Must match the <Gantt> cellWidth/cellHeight props below.
@@ -601,32 +683,40 @@ export function GanttView({
             onDrop={handleDrop}
             onClick={handleChartClick}
           >
-            {scheduledTasks.length === 0 ? (
-              <div className="h-full flex items-center justify-center p-8 text-center text-sm text-muted-foreground">
-                No scheduled tasks yet. Drag a task from the Unscheduled pool
-                onto the timeline to schedule it.
-              </div>
-            ) : (
-              // Reserve the full height while SVAR lays out (blank, matching
-              // final dimensions — no skeleton), then fade the finished chart in.
-              <div className={`h-full ${ready ? "animate-fade-in" : "opacity-0"}`}>
-                <Theme>
-                  <Gantt
-                    init={init}
-                    tasks={tasks}
-                    links={links}
-                    columns={GRID_COLUMNS}
-                    gridWidth={GRID_WIDTH}
-                    // Mobile: collapse the task-name grid so the timeline fills width
-                    displayMode={isMobile ? "chart" : "all"}
-                    scales={scales}
-                    start={start}
-                    end={end}
-                    cellWidth={CELL_WIDTH[viewMode]}
-                    cellHeight={36}
-                    scaleHeight={36}
-                  />
-                </Theme>
+            {/* Always render the chart — even with zero tasks — so there's a
+                live timeline to map a drop against. Without it, the first task
+                could never be scheduled by drag (no `.wx-bars`/`_scales` to read
+                a date from). Reserve the full height while SVAR lays out (blank,
+                matching final dimensions — no skeleton), then fade it in. */}
+            <div className={`h-full ${ready ? "animate-fade-in" : "opacity-0"}`}>
+              <Theme>
+                <Gantt
+                  init={init}
+                  tasks={tasks}
+                  links={links}
+                  columns={GRID_COLUMNS}
+                  gridWidth={GRID_WIDTH}
+                  // Mobile: collapse the task-name grid so the timeline fills width
+                  displayMode={isMobile ? "chart" : "all"}
+                  scales={scales}
+                  start={start}
+                  end={end}
+                  cellWidth={svarCellWidth(viewMode) + (cellWidthNudge % 2) * 1e-6}
+                  cellHeight={36}
+                  scaleHeight={36}
+                />
+              </Theme>
+            </div>
+
+            {/* Empty hint, overlaid on the (empty) timeline. `pointer-events-none`
+                so drags still reach the chart underneath. Hidden the moment a
+                drag preview or a scheduled task populates the grid. */}
+            {scheduledTasks.length === 0 && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8 text-center text-sm text-muted-foreground">
+                <span className="max-w-xs rounded-md bg-background/70 px-3 py-2 backdrop-blur-sm">
+                  No scheduled tasks yet. Drag a task from the Unscheduled pool
+                  onto the timeline to schedule it.
+                </span>
               </div>
             )}
           </div>
