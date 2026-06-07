@@ -1,10 +1,14 @@
 import { DeleteWarningDialog } from "@/components/DeleteWarningDialog";
 import { RippleSpinner } from "@/components/RippleSpinner";
+import {
+  SettingsLayout,
+  useSettingsSection,
+  type SettingsSection,
+} from "@/components/SettingsLayout";
 import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
@@ -12,12 +16,28 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useViewer } from "../UserContext";
-import { Trash2 } from "lucide-react";
+import { SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+
+const SECTIONS: SettingsSection[] = [
+  {
+    value: "general",
+    label: "General",
+    icon: SlidersHorizontal,
+    description: "Document name and tags.",
+  },
+  {
+    value: "danger",
+    label: "Delete",
+    icon: Trash2,
+    title: "Delete document",
+    destructive: true,
+  },
+];
 
 type DocumentSettingsContentProps = {
   workspaceId: Id<"workspaces">;
@@ -41,6 +61,7 @@ function DocumentSettingsContent({
   // Local state
   const [documentName, setDocumentName] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const { active, setActive } = useSettingsSection(SECTIONS);
 
   if (document === undefined || currentUser === undefined) {
     return (
@@ -86,69 +107,64 @@ function DocumentSettingsContent({
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
+    <>
       <MobileHeaderTitle name={document.name} />
-      <h1 className="hidden md:block text-2xl font-bold mb-6">Document Settings</h1>
+      <SettingsLayout
+        eyebrow="Document"
+        sections={SECTIONS}
+        active={active}
+        onChange={setActive}
+      >
+        {active.value === "general" && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="document-name">Document Name</Label>
+              <Input
+                id="document-name"
+                value={displayName}
+                onChange={(e) => setDocumentName(e.target.value)}
+                placeholder="Enter document name"
+              />
+              {hasChanges && (
+                <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
+              )}
+            </div>
 
-      {/* Details Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Details</h2>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="document-name">Document Name</Label>
-            <Input
-              id="document-name"
-              value={displayName}
-              onChange={(e) => setDocumentName(e.target.value)}
-              placeholder="Enter document name"
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <TagInput
+                value={document.tags ?? []}
+                onChange={(tags) => void updateTags({ id: documentId, tags })}
+                workspaceId={workspaceId}
+                placeholder="Add tags to organize this document..."
+              />
+            </div>
+          </div>
+        )}
+
+        {active.value === "danger" && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete the document and all its content. This
+              cannot be undone.
+            </p>
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Document
+            </Button>
+            <DeleteWarningDialog
+              open={deleteDialogOpen}
+              onOpenChange={setDeleteDialogOpen}
+              onConfirm={() => void handleDeleteDocument()}
+              resourceId={documentId}
+              workspaceId={workspaceId}
+              resourceType="document"
+              resourceName={document.name}
             />
           </div>
-
-          {hasChanges && (
-            <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
-          )}
-        </div>
-      </section>
-
-      {/* Tags Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Tags</h2>
-        <TagInput
-          value={document.tags ?? []}
-          onChange={(tags) => void updateTags({ id: documentId, tags })}
-          workspaceId={workspaceId}
-          placeholder="Add tags to organize this document..."
-        />
-      </section>
-
-      <Separator className="my-6" />
-
-      {/* Danger Zone */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 text-destructive">
-          Danger Zone
-        </h2>
-        <Button
-          variant="destructive"
-          onClick={() => setDeleteDialogOpen(true)}
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          Delete Document
-        </Button>
-        <p className="text-sm text-muted-foreground mt-2">
-          This will permanently delete the document and all its content.
-        </p>
-        <DeleteWarningDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          onConfirm={() => void handleDeleteDocument()}
-          resourceId={documentId}
-          workspaceId={workspaceId}
-          resourceType="document"
-          resourceName={document.name}
-        />
-      </section>
-    </div>
+        )}
+      </SettingsLayout>
+    </>
   );
 }
 

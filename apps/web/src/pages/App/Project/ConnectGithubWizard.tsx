@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GitBranch, Inbox, Loader2, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,7 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
     projectId,
   });
   const unlink = useMutation(api.integrations.core.links.unlinkLink);
+  const [, setSearchParams] = useSearchParams();
   const [open, setOpen] = useState(false);
   const [disconnectingId, setDisconnectingId] =
     useState<Id<"projectIntegrationLinks"> | null>(null);
@@ -95,10 +97,17 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
     }
   };
 
-  const scrollToEffects = () => {
-    document
-      .getElementById("status-effects")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Status effects now live on their own "Status automation" settings tab,
+  // so jump there rather than scrolling within this panel.
+  const goToStatusAutomation = () => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", "status-automation");
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   return (
@@ -217,7 +226,7 @@ export function ConnectGithubCard({ workspaceId, projectId }: Props) {
               size="sm"
               variant="outline"
               className="border-amber-400 bg-transparent hover:bg-amber-100 dark:hover:bg-amber-900/40"
-              onClick={scrollToEffects}
+              onClick={goToStatusAutomation}
             >
               Set up status effects →
             </Button>

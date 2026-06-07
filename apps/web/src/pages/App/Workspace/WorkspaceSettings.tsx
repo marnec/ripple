@@ -22,52 +22,74 @@ import {
 } from "@ripple/shared/notificationCategories";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { Bell, Plug, SlidersHorizontal, Users } from "lucide-react";
+import { useViewer } from "../UserContext";
+import { Bell, Mail, Plug, SlidersHorizontal, Users } from "lucide-react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { WorkspaceIntegrationsSection } from "./WorkspaceIntegrationsSection";
+import { WorkspaceInvitationsSection } from "./WorkspaceInvitationsSection";
 import { WorkspaceMembersSection } from "./WorkspaceMembersSection";
-
-const SECTIONS: SettingsSection[] = [
-  {
-    value: "general",
-    label: "General",
-    icon: SlidersHorizontal,
-    description: "Your workspace name and description.",
-  },
-  {
-    value: "members",
-    label: "Members",
-    icon: Users,
-    description: "Manage who can access this workspace and their roles.",
-  },
-  {
-    value: "integrations",
-    label: "Integrations",
-    icon: Plug,
-    description:
-      "Audit and control repositories linked across this workspace. Connect new repositories from a project's settings.",
-  },
-  {
-    value: "notifications",
-    label: "Notifications",
-    icon: Bell,
-    description:
-      "Choose which workspace notifications you receive. Chat and task notifications live in each channel's and project's settings.",
-  },
-];
 
 export function WorkspaceSettings() {
   const { workspaceId } = useParams();
   const id = workspaceId as Id<"workspaces">;
   const workspace = useQuery(api.workspaces.get, { id });
+  const members = useQuery(api.workspaceMembers.membersWithRoles, { workspaceId: id });
+  const currentUser = useViewer();
   const updateWorkspace = useMutation(api.workspaces.update);
   const [nameOverride, setNameOverride] = useState<string | null>(null);
   const [descriptionOverride, setDescriptionOverride] = useState<string | null>(null);
-  const { active, setActive } = useSettingsSection(SECTIONS);
+
+  // Invitation management is admin-only — mirror the gate to the backend
+  // (`workspaceInvites.*` require the ADMIN role and would otherwise throw).
+  const isAdmin =
+    !!members &&
+    !!currentUser &&
+    members.find((m) => m.userId === currentUser._id)?.role === "admin";
+
+  const sections: SettingsSection[] = [
+    {
+      value: "general",
+      label: "General",
+      icon: SlidersHorizontal,
+      description: "Your workspace name and description.",
+    },
+    {
+      value: "members",
+      label: "Members",
+      icon: Users,
+      description: "Manage who can access this workspace and their roles.",
+    },
+    ...(isAdmin
+      ? [
+          {
+            value: "invitations",
+            label: "Invitations",
+            icon: Mail,
+            description:
+              "Invite people to this workspace and manage invitations that haven't been accepted yet.",
+          } satisfies SettingsSection,
+        ]
+      : []),
+    {
+      value: "integrations",
+      label: "Integrations",
+      icon: Plug,
+      description:
+        "Audit and control repositories linked across this workspace. Connect new repositories from a project's settings.",
+    },
+    {
+      value: "notifications",
+      label: "Notifications",
+      icon: Bell,
+      description:
+        "Choose which workspace notifications you receive. Chat and task notifications live in each channel's and project's settings.",
+    },
+  ];
+  const { active, setActive } = useSettingsSection(sections);
 
   if (workspace === undefined) {
     return (
@@ -104,7 +126,7 @@ export function WorkspaceSettings() {
       <MobileHeaderTitle name={workspace.name} />
       <SettingsLayout
         eyebrow="Workspace"
-        sections={SECTIONS}
+        sections={sections}
         active={active}
         onChange={setActive}
       >
@@ -135,6 +157,10 @@ export function WorkspaceSettings() {
         )}
 
         {active.value === "members" && <WorkspaceMembersSection workspaceId={id} />}
+
+        {active.value === "invitations" && isAdmin && (
+          <WorkspaceInvitationsSection workspaceId={id} />
+        )}
 
         {active.value === "integrations" && (
           <WorkspaceIntegrationsSection workspaceId={id} />

@@ -67,9 +67,7 @@ export function ChannelMembersSection({
   };
 
   return (
-    <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-4">Members</h2>
-
+    <div>
       {channelType === "closed" && isAdmin && availableMembers.length > 0 && (
         <AddMemberSelect
           availableMembers={availableMembers}
@@ -101,7 +99,7 @@ export function ChannelMembersSection({
           </p>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 

@@ -3292,6 +3292,30 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
       }>
     >;
+    listByWorkspace: FunctionReference<
+      "query",
+      "public",
+      { workspaceId: Id<"workspaces"> },
+      Array<{
+        _creationTime: number;
+        _id: Id<"workspaceInvites">;
+        email: string;
+        invitedBy: Id<"users">;
+        inviterName: string;
+      }>
+    >;
+    resend: FunctionReference<
+      "mutation",
+      "public",
+      { inviteId: Id<"workspaceInvites"> },
+      null
+    >;
+    revoke: FunctionReference<
+      "mutation",
+      "public",
+      { inviteId: Id<"workspaceInvites"> },
+      null
+    >;
   };
   workspaceMembers: {
     byWorkspace: FunctionReference<

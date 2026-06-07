@@ -1,9 +1,13 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
+import {
+  SettingsLayout,
+  useSettingsSection,
+  type SettingsSection,
+} from "@/components/SettingsLayout";
 import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
@@ -12,12 +16,28 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useViewer } from "../UserContext";
-import { Trash2 } from "lucide-react";
+import { SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+
+const SECTIONS: SettingsSection[] = [
+  {
+    value: "general",
+    label: "General",
+    icon: SlidersHorizontal,
+    description: "Spreadsheet name and tags.",
+  },
+  {
+    value: "danger",
+    label: "Delete",
+    icon: Trash2,
+    title: "Delete spreadsheet",
+    destructive: true,
+  },
+];
 
 type SpreadsheetSettingsContentProps = {
   workspaceId: Id<"workspaces">;
@@ -44,6 +64,7 @@ function SpreadsheetSettingsContent({
 
   // Local state
   const [spreadsheetName, setSpreadsheetName] = useState<string | null>(null);
+  const { active, setActive } = useSettingsSection(SECTIONS);
 
   if (spreadsheet === undefined || currentUser === undefined) {
     return (
@@ -77,61 +98,59 @@ function SpreadsheetSettingsContent({
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
+    <>
       <MobileHeaderTitle name={spreadsheet.name} />
-      <h1 className="hidden md:block text-2xl font-bold mb-6">Spreadsheet Settings</h1>
+      <SettingsLayout
+        eyebrow="Spreadsheet"
+        sections={SECTIONS}
+        active={active}
+        onChange={setActive}
+      >
+        {active.value === "general" && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="spreadsheet-name">Spreadsheet Name</Label>
+              <Input
+                id="spreadsheet-name"
+                value={displayName}
+                onChange={(e) => setSpreadsheetName(e.target.value)}
+                placeholder="Enter spreadsheet name"
+              />
+              {hasChanges && (
+                <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
+              )}
+            </div>
 
-      {/* Details Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Details</h2>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="spreadsheet-name">Spreadsheet Name</Label>
-            <Input
-              id="spreadsheet-name"
-              value={displayName}
-              onChange={(e) => setSpreadsheetName(e.target.value)}
-              placeholder="Enter spreadsheet name"
-            />
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <TagInput
+                value={spreadsheet.tags ?? []}
+                onChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
+                workspaceId={workspaceId}
+                placeholder="Add tags to organize this spreadsheet..."
+              />
+            </div>
           </div>
+        )}
 
-          {hasChanges && (
-            <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
-          )}
-        </div>
-      </section>
-
-      {/* Tags Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Tags</h2>
-        <TagInput
-          value={spreadsheet.tags ?? []}
-          onChange={(tags) => void updateTags({ id: spreadsheetId, tags })}
-          workspaceId={workspaceId}
-          placeholder="Add tags to organize this spreadsheet..."
-        />
-      </section>
-
-      <Separator className="my-6" />
-
-      {/* Danger Zone */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 text-destructive">
-          Danger Zone
-        </h2>
-        <Button
-          variant="destructive"
-          onClick={() => void requestDelete(spreadsheetId, spreadsheet.name)}
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          Delete Spreadsheet
-        </Button>
-        <p className="text-sm text-muted-foreground mt-2">
-          This will permanently delete the spreadsheet and all its content.
-        </p>
-        {deleteDialog}
-      </section>
-    </div>
+        {active.value === "danger" && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete the spreadsheet and all its content.
+              This cannot be undone.
+            </p>
+            <Button
+              variant="destructive"
+              onClick={() => void requestDelete(spreadsheetId, spreadsheet.name)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Spreadsheet
+            </Button>
+            {deleteDialog}
+          </div>
+        )}
+      </SettingsLayout>
+    </>
   );
 }
 

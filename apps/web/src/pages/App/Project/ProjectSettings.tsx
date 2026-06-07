@@ -19,7 +19,7 @@ import {
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useViewer } from "../UserContext";
-import { Bell, Plug, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Bell, Plug, SlidersHorizontal, Trash2, Workflow } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -93,11 +93,18 @@ function ProjectSettingsContent({
     ...(isCreator
       ? [
           {
+            value: "status-automation",
+            label: "Status automation",
+            icon: Workflow,
+            description:
+              "Define what each status does — where new and imported tasks land, what counts as started or completed, and how completion maps to GitHub close reasons.",
+          } satisfies SettingsSection,
+          {
             value: "integrations",
             label: "Integrations",
             icon: Plug,
             description:
-              "Connect a repository and map status changes between this project and GitHub or GitLab.",
+              "Connect a repository so issues, branches, and pull requests stay in sync with this project.",
           } satisfies SettingsSection,
         ]
       : []),
@@ -244,10 +251,14 @@ function ProjectSettingsContent({
         </div>
       )}
 
-      {/* Status effects + repo integrations — creator only */}
+      {/* Status effects — creator only */}
+      {active.value === "status-automation" && isCreator && (
+        <StatusEffectMatrix projectId={projectId} />
+      )}
+
+      {/* Repo integrations — creator only */}
       {active.value === "integrations" && isCreator && (
         <div className="space-y-6">
-          <StatusEffectMatrix projectId={projectId} />
           <ConnectGithubCard workspaceId={workspaceId} projectId={projectId} />
           <ConnectGitlabCard workspaceId={workspaceId} projectId={projectId} />
           <RepoTagRoutingSection

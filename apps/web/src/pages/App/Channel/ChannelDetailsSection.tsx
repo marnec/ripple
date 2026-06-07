@@ -45,9 +45,7 @@ export function ChannelDetailsSection({
   };
 
   return (
-    <section className="mb-8">
-      <h2 className="text-lg font-semibold mb-4">Details</h2>
-      <div className="space-y-4">
+    <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="channel-name">Channel Name</Label>
           <Input
@@ -84,7 +82,6 @@ export function ChannelDetailsSection({
         {hasChanges && isAdmin && (
           <Button onClick={() => void handleSave()}>Save Changes</Button>
         )}
-      </div>
-    </section>
+    </div>
   );
 }

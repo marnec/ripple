@@ -37,20 +37,15 @@ export function ChannelDangerZone({ channelId, workspaceId }: ChannelDangerZoneP
   };
 
   return (
-    <section>
-      <h2 className="text-lg font-semibold mb-4 text-destructive">
-        Danger Zone
-      </h2>
-      <Button
-        variant="destructive"
-        onClick={() => void handleDelete()}
-      >
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        This will permanently delete the channel and all its messages. This
+        cannot be undone.
+      </p>
+      <Button variant="destructive" onClick={() => void handleDelete()}>
         <Trash2 className="w-4 h-4 mr-2" />
         Delete Channel
       </Button>
-      <p className="text-sm text-muted-foreground mt-2">
-        This will permanently delete the channel and all its messages.
-      </p>
-    </section>
+    </div>
   );
 }

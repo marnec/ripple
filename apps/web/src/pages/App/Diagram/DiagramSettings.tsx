@@ -1,9 +1,13 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
+import {
+  SettingsLayout,
+  useSettingsSection,
+  type SettingsSection,
+} from "@/components/SettingsLayout";
 import { TagInput } from "@/components/TagInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useConfirmedDelete } from "@/hooks/useConfirmedDelete";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
@@ -12,12 +16,28 @@ import type { QueryParams } from "@ripple/shared/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useViewer } from "../UserContext";
-import { Trash2 } from "lucide-react";
+import { SlidersHorizontal, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+
+const SECTIONS: SettingsSection[] = [
+  {
+    value: "general",
+    label: "General",
+    icon: SlidersHorizontal,
+    description: "Diagram name and tags.",
+  },
+  {
+    value: "danger",
+    label: "Delete",
+    icon: Trash2,
+    title: "Delete diagram",
+    destructive: true,
+  },
+];
 
 type DiagramSettingsContentProps = {
   workspaceId: Id<"workspaces">;
@@ -44,6 +64,7 @@ function DiagramSettingsContent({
 
   // Local state
   const [diagramName, setDiagramName] = useState<string | null>(null);
+  const { active, setActive } = useSettingsSection(SECTIONS);
 
   if (diagram === undefined || currentUser === undefined) {
     return (
@@ -77,61 +98,59 @@ function DiagramSettingsContent({
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl animate-fade-in">
+    <>
       <MobileHeaderTitle name={diagram.name} />
-      <h1 className="hidden md:block text-2xl font-bold mb-6">Diagram Settings</h1>
+      <SettingsLayout
+        eyebrow="Diagram"
+        sections={SECTIONS}
+        active={active}
+        onChange={setActive}
+      >
+        {active.value === "general" && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="diagram-name">Diagram Name</Label>
+              <Input
+                id="diagram-name"
+                value={displayName}
+                onChange={(e) => setDiagramName(e.target.value)}
+                placeholder="Enter diagram name"
+              />
+              {hasChanges && (
+                <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
+              )}
+            </div>
 
-      {/* Details Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Details</h2>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="diagram-name">Diagram Name</Label>
-            <Input
-              id="diagram-name"
-              value={displayName}
-              onChange={(e) => setDiagramName(e.target.value)}
-              placeholder="Enter diagram name"
-            />
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <TagInput
+                value={diagram.tags ?? []}
+                onChange={(tags) => void updateTags({ id: diagramId, tags })}
+                workspaceId={workspaceId}
+                placeholder="Add tags to organize this diagram..."
+              />
+            </div>
           </div>
+        )}
 
-          {hasChanges && (
-            <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
-          )}
-        </div>
-      </section>
-
-      {/* Tags Section */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Tags</h2>
-        <TagInput
-          value={diagram.tags ?? []}
-          onChange={(tags) => void updateTags({ id: diagramId, tags })}
-          workspaceId={workspaceId}
-          placeholder="Add tags to organize this diagram..."
-        />
-      </section>
-
-      <Separator className="my-6" />
-
-      {/* Danger Zone */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4 text-destructive">
-          Danger Zone
-        </h2>
-        <Button
-          variant="destructive"
-          onClick={() => void requestDelete(diagramId, diagram.name)}
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          Delete Diagram
-        </Button>
-        <p className="text-sm text-muted-foreground mt-2">
-          This will permanently delete the diagram and all its content.
-        </p>
-        {deleteDialog}
-      </section>
-    </div>
+        {active.value === "danger" && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete the diagram and all its content. This
+              cannot be undone.
+            </p>
+            <Button
+              variant="destructive"
+              onClick={() => void requestDelete(diagramId, diagram.name)}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Diagram
+            </Button>
+            {deleteDialog}
+          </div>
+        )}
+      </SettingsLayout>
+    </>
   );
 }
 

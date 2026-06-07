@@ -158,6 +158,115 @@ export const listByEmail = query({
   },
 });
 
+export const listByWorkspace = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("workspaceInvites"),
+      _creationTime: v.number(),
+      email: v.string(),
+      invitedBy: v.id("users"),
+      inviterName: v.string(),
+    }),
+  ),
+  handler: async (ctx, { workspaceId }) => {
+    await requireWorkspaceMember(ctx, workspaceId, { role: WorkspaceRole.ADMIN });
+
+    const invites = await ctx.db
+      .query("workspaceInvites")
+      .withIndex("by_workspace_by_email_by_status", (q) =>
+        q.eq("workspaceId", workspaceId),
+      )
+      .collect();
+
+    const pending = invites.filter((i) => i.status === InviteStatus.PENDING);
+
+    return Promise.all(
+      pending.map(async (invite) => {
+        const inviter = await ctx.db.get(invite.invitedBy);
+        return {
+          _id: invite._id,
+          _creationTime: invite._creationTime,
+          email: invite.email,
+          invitedBy: invite.invitedBy,
+          inviterName: inviter?.name ?? inviter?.email ?? "Someone",
+        };
+      }),
+    );
+  },
+});
+
+export const revoke = mutation({
+  args: {
+    inviteId: v.id("workspaceInvites"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { inviteId }) => {
+    const invite = await ctx.db.get(inviteId);
+    if (!invite) throw new ConvexError("Invite not found");
+
+    const { userId } = await requireWorkspaceMember(ctx, invite.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    if (invite.status !== InviteStatus.PENDING) {
+      throw new ConvexError("Only pending invites can be revoked");
+    }
+
+    // Log before delete so the audit row still has the invite to reference.
+    await logActivity(ctx, {
+      userId, resourceType: "workspaceInvites", resourceId: inviteId,
+      action: "revoked", oldValue: invite.email, resourceName: invite.email,
+      scope: invite.workspaceId,
+    });
+
+    // Deleting the row invalidates the invite link: `getPublic` returns null
+    // and `accept` throws "Invite not found".
+    await ctx.db.delete(inviteId);
+
+    return null;
+  },
+});
+
+export const resend = mutation({
+  args: {
+    inviteId: v.id("workspaceInvites"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { inviteId }) => {
+    const invite = await ctx.db.get(inviteId);
+    if (!invite) throw new ConvexError("Invite not found");
+
+    const { userId } = await requireWorkspaceMember(ctx, invite.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+
+    if (invite.status !== InviteStatus.PENDING) {
+      throw new ConvexError("Only pending invites can be resent");
+    }
+
+    const workspace = await ctx.db.get(invite.workspaceId);
+    const inviter = await ctx.db.get(userId);
+
+    await ctx.scheduler.runAfter(0, internal.emails.sendWorkspaceInvite, {
+      inviteId,
+      workspaceName: workspace!.name,
+      inviterName: inviter!.name ?? inviter!.email!,
+      recipientEmail: invite.email,
+    });
+
+    await logActivity(ctx, {
+      userId, resourceType: "workspaceInvites", resourceId: inviteId,
+      action: "resent", newValue: invite.email, resourceName: invite.email,
+      scope: invite.workspaceId,
+    });
+
+    return null;
+  },
+});
+
 export const accept = mutation({
   args: {
     inviteId: v.id("workspaceInvites"),
