@@ -123,3 +123,56 @@ jobs:
           echo "Cloudflare Workers deployed (frontend + collaboration DOs)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Production URL: https://ripple.conduits.space" >> $GITHUB_STEP_SUMMARY
+
+  deploy-rsvp-worker:
+    needs: deploy-convex
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Wrangler secrets persist across deploys, so this only matters when
+      # rotating. Guarded so a missing/empty CI secret SKIPS rather than
+      # clobbering the manually-set worker secret with an empty value (which
+      # would 401 every inbound RSVP).
+      - name: Set wrangler secrets
+        working-directory: packages/rsvp-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RSVP_WORKER_SECRET: ${{ secrets.RSVP_WORKER_SECRET }}
+        run: |
+          if [ -z "$RSVP_WORKER_SECRET" ]; then
+            echo "RSVP_WORKER_SECRET not set in CI; skipping (worker keeps its existing secret)."
+            exit 0
+          fi
+          printf '%s' "$RSVP_WORKER_SECRET" | pnpm exec wrangler secret put RSVP_WORKER_SECRET
+
+      - name: Deploy RSVP email worker
+        working-directory: packages/rsvp-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy
+
+      - name: Deployment summary
+        run: |
+          echo "# RSVP Worker Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ripple-rsvp email worker deployed (CONVEX_HTTP_URL -> prod)" >> $GITHUB_STEP_SUMMARY

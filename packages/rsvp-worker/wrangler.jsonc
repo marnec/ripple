@@ -21,6 +21,11 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     "RSVP_DOMAIN": "conduits.space",
-    "CONVEX_HTTP_URL": "https://dutiful-pika-875.convex.site"
+    // Must be the PRODUCTION Convex .site URL. There is a single shared
+    // conduits.space RSVP mailbox + one worker, and both dev and prod mint
+    // ICS UIDs with the same EMAIL_RSVP_DOMAIN, so the worker can only forward
+    // to one deployment — it has to be prod (where real users/events live).
+    // dutiful-pika-875 (dev) silently dropped every prod RSVP as unknown_event.
+    "CONVEX_HTTP_URL": "https://groovy-fly-450.convex.site"
   }
 }

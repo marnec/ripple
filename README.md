@@ -2,8 +2,10 @@ NEXT STEPS:
 
 - unifiorm all settings sections to the workspace and project layout
 - split the project layout integration settings section in integration and status automation
+- add an invitation management section to the workspace settings where you can revoke or resend inviations
 - add a (workpook) background job backoffice center (of the workspace, admin only)
 - build a cross-workspace admin app, only accessible to my own account, with jobs, activity log and other useful info
+
 
 - calendar;
     - ics accept/decline sync with ripple invitation status; we need to deploy in order to test this
