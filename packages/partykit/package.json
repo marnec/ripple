@@ -14,9 +14,9 @@
   },
   "dependencies": {
     "@ripple/shared": "workspace:^",
-    "partyserver": "0.5.5",
+    "partyserver": "0.5.6",
     "y-partyserver": "2.2.0",
-    "yjs": "13.6.30"
+    "yjs": "13.6.31"
   },
   "devDependencies": {
     "wrangler": "4.87.0"

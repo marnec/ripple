@@ -179,11 +179,27 @@ export const { auth, signIn, signOut, store } = convexAuth({
         ((provider.type === "oauth" || provider.type === "oidc") &&
           provider.allowDangerousEmailAccountLinking !== false);
       const phoneVerified = profilePhoneVerified ?? false;
-      const shouldLink = args.shouldLink ?? false;
+      // Convex Auth's *default* createOrUpdateUser reads `shouldLinkViaEmail` /
+      // `shouldLinkViaPhone` off `args` (see the library's
+      // implementation/users.js). The public callback type only advertises the
+      // older single `shouldLink`, so this override had silently diverged from
+      // the default: the `Password({ verify })` provider passes
+      // `shouldLinkViaEmail: true` on signup, which a `shouldLink`-only read
+      // ignored — creating a *duplicate* user on email/password signup instead
+      // of linking the password to the existing verified-email (e.g. OAuth)
+      // account. Read the per-channel flags, falling back to `shouldLink`.
+      const linkArgs = args as typeof args & {
+        shouldLinkViaEmail?: boolean;
+        shouldLinkViaPhone?: boolean;
+      };
       const shouldLinkViaEmail =
-        shouldLink || emailVerified || provider.type === "email";
+        (linkArgs.shouldLinkViaEmail ?? linkArgs.shouldLink ?? false) ||
+        emailVerified ||
+        provider.type === "email";
       const shouldLinkViaPhone =
-        shouldLink || phoneVerified || provider.type === "phone";
+        (linkArgs.shouldLinkViaPhone ?? linkArgs.shouldLink ?? false) ||
+        phoneVerified ||
+        provider.type === "phone";
 
       let userId = existingUserId;
       if (existingUserId === null) {
@@ -224,6 +240,19 @@ export const { auth, signIn, signOut, store } = convexAuth({
       }
 
       return await ctx.db.insert("users", userData);
+    },
+
+    /**
+     * Reject sign-in for accounts disabled from the admin app
+     * (`users.disabled`, toggled by `admin/users.setDisabled`). Runs on every
+     * sign-in flow right before the session is persisted; disabling also
+     * invalidates live sessions, so this only has to block new logins.
+     */
+    async beforeSessionCreation(ctx, { userId }) {
+      const user = await ctx.db.get(userId);
+      if (user?.disabled) {
+        throw new ConvexError("This account has been disabled.");
+      }
     },
   },
 });

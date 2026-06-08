@@ -1909,6 +1909,7 @@ export type DataModel = {
       image?: string;
       isAnonymous?: boolean;
       isBot?: boolean;
+      isPlatformAdmin?: boolean;
       name?: string;
       phone?: string;
       phoneVerificationTime?: number;
@@ -1926,6 +1927,7 @@ export type DataModel = {
       | "image"
       | "isAnonymous"
       | "isBot"
+      | "isPlatformAdmin"
       | "name"
       | "phone"
       | "phoneVerificationTime";

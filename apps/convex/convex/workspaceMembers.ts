@@ -172,7 +172,13 @@ export const changeRole = mutation({
   },
 });
 
-async function removeMembershipCascade(
+/**
+ * Remove a user's membership from one workspace, cascading channel membership,
+ * DM cleanup, sole-admin reassignment and join requests. Exported so the admin
+ * account-delete path (`admin/users.deleteAccount`) can reuse the exact same
+ * cascade per workspace rather than reimplementing it.
+ */
+export async function removeMembershipCascade(
   ctx: MutationCtx,
   {
     workspaceId,

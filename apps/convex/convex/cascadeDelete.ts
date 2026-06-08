@@ -23,6 +23,40 @@ function asId(id: string): Id<TableNames> {
 // and aggregate counts; all delete-time cleanup lives here.
 
 export const cascadeRules = defineCascadeRules({
+  // ── workspaces ──────────────────────────────────────────────────────
+  // Root for full workspace deletion (admin/workspaces.remove). Lists only
+  // the DIRECT workspace children — the lib recurses into each child's own
+  // rules (channels→messages, projects→tasks, …) and dedupes shared rows via
+  // a visited set, so polymorphic tables reached both here and via a resource
+  // (edges/nodes/favorites/entityTags/recentActivity/notificationSubscriptions)
+  // are safe to also list for sweeping any workspace-level stragglers.
+  workspaces: [
+    { to: "channels", via: "by_workspace", field: "workspaceId" },
+    { to: "projects", via: "by_workspace", field: "workspaceId" },
+    { to: "documents", via: "by_workspace", field: "workspaceId" },
+    { to: "diagrams", via: "by_workspace", field: "workspaceId" },
+    { to: "spreadsheets", via: "by_workspace", field: "workspaceId" },
+    { to: "calendarEvents", via: "by_workspace_starts", field: "workspaceId" },
+    { to: "workspaceMembers", via: "by_workspace", field: "workspaceId" },
+    { to: "workspaceInvites", via: "by_workspace", field: "workspaceId" },
+    { to: "workspaceIntegrations", via: "by_workspace", field: "workspaceId" },
+    { to: "workspaceMemberExternalIdentity", via: "by_workspace_provider_login", field: "workspaceId" },
+    { to: "workspaceEntitlements", via: "by_workspace_feature", field: "workspaceId" },
+    { to: "integrationInstallStates", via: "by_workspace", field: "workspaceId" },
+    { to: "projectIntegrationLinks", via: "by_workspace", field: "workspaceId" },
+    { to: "pullRequests", via: "by_workspace", field: "workspaceId" },
+    { to: "tags", via: "by_workspace", field: "workspaceId" },
+    { to: "medias", via: "by_workspace", field: "workspaceId" },
+    { to: "favorites", via: "by_workspace_user", field: "workspaceId" },
+    { to: "entityTags", via: "by_workspace_tag", field: "workspaceId" },
+    { to: "recentActivity", via: "by_workspace", field: "workspaceId" },
+    // scope holds the workspace id for workspace-scoped subscriptions (channel-
+    // scoped ones are already removed via the channel cascade above).
+    { to: "notificationSubscriptions", via: "by_scope_category", field: "scope" },
+    { to: "nodes", via: "by_workspace", field: "workspaceId" },
+    { to: "edges", via: "by_workspace", field: "workspaceId" },
+  ],
+
   // ── projects ────────────────────────────────────────────────────────
   projects: [
     { to: "tasks", via: "by_project", field: "projectId" },
@@ -143,6 +177,13 @@ async function deleteWithSnapshotCleanup(ctx: MutationCtx, id: string, doc: Snap
   await deleteWithTriggers(ctx, id);
 }
 
+/** Media rows own a `_storage` blob; drop it before deleting the row. */
+async function deleteMediaWithBlob(ctx: MutationCtx, id: string, doc: SnapshotDoc) {
+  const storageId = (doc as unknown as { storageId?: Id<"_storage"> }).storageId;
+  if (storageId) await ctx.storage.delete(storageId);
+  await deleteWithTriggers(ctx, id);
+}
+
 const deleters: Record<string, (ctx: MutationCtx, id: string, doc: SnapshotDoc) => Promise<void>> = {
   tasks: deleteWithSnapshotCleanup,
   documents: deleteWithSnapshotCleanup,
@@ -151,6 +192,8 @@ const deleters: Record<string, (ctx: MutationCtx, id: string, doc: SnapshotDoc) 
   projects: (ctx, id) => deleteWithTriggers(ctx, id),
   channels: (ctx, id) => deleteWithTriggers(ctx, id),
   calendarEvents: (ctx, id) => deleteWithTriggers(ctx, id),
+  medias: deleteMediaWithBlob,
+  workspaces: (ctx, id) => deleteWithTriggers(ctx, id),
 };
 
 // ── Audit log hooks ───────────────────────────────────────────────────

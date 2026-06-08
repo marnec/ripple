@@ -1,0 +1,76 @@
+@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+/* ── Operator-console theme ──────────────────────────────────────────────
+   Warm-dark canvas (stone), hairline borders, a single amber signal accent.
+   Data — IDs, counts, metrics — is set in IBM Plex Mono; UI chrome in the
+   Hanken Grotesk grotesque. No component library: every surface here is
+   hand-built Tailwind so the bundle carries no Radix/base-ui weight. */
+@theme {
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --color-accent: oklch(0.82 0.16 78);
+  --color-accent-dim: oklch(0.82 0.16 78 / 0.12);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html {
+    font-family: var(--font-sans);
+  }
+  body {
+    margin: 0;
+    background: var(--color-stone-950);
+    color: var(--color-stone-200);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 28%, transparent);
+    color: var(--color-stone-50);
+  }
+  /* Thin, unobtrusive scrollbars in keeping with the dense console feel. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-stone-700) transparent;
+  }
+}
+
+/* Faint engineering-grid backdrop — atmosphere without noise. */
+.console-grid {
+  background-image:
+    radial-gradient(
+      circle at 1px 1px,
+      color-mix(in oklab, var(--color-stone-700) 55%, transparent) 1px,
+      transparent 0
+    );
+  background-size: 22px 22px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-rise {
+  animation: rise 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-overlay {
+  animation: overlay-in 0.18s ease-out both;
+}

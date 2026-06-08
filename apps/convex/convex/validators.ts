@@ -59,6 +59,12 @@ export const userValidator = v.object({
   // same reasoning as githubLogin above — must pass through full-user-row returns.
   gitlabUserId: v.optional(v.string()),
   gitlabLogin: v.optional(v.string()),
+  // Platform-admin flag (see schema.ts). Surfaced on the user row so the admin
+  // app can gate its UI; the server still re-checks on every admin function.
+  isPlatformAdmin: v.optional(v.boolean()),
+  // Account-disabled flag (see schema.ts). Surfaced so the admin app can show a
+  // disabled badge; sign-in enforcement is server-side in auth.ts.
+  disabled: v.optional(v.boolean()),
 });
 
 export const referenceValidator = v.object({

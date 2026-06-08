@@ -45,6 +45,17 @@ export default defineSchema({
     // users who never signed in via GitLab. Mirrors the GitHub pair above.
     gitlabUserId: v.optional(v.string()),
     gitlabLogin: v.optional(v.string()),
+    // Platform-level admin flag. Distinct from per-workspace WorkspaceRole.ADMIN:
+    // this grants access to the separate admin web app (apps/admin), which is
+    // backed by this same deployment. Set manually via the Convex dashboard —
+    // there is no mutation that flips it, so it can't be self-granted through
+    // either frontend. Absent (falsy) for all normal users.
+    isPlatformAdmin: v.optional(v.boolean()),
+    // Account-disabled flag, toggled from the admin app (admin/users.setDisabled).
+    // When true, `auth.ts`'s beforeSessionCreation callback rejects sign-in and
+    // existing sessions are invalidated. Reversible (reactivate clears it).
+    // Content authored by the user is preserved — mirrors member-removal policy.
+    disabled: v.optional(v.boolean()),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
@@ -938,7 +949,10 @@ export default defineSchema({
     .index("by_user_workspace", ["userId", "workspaceId"])
     .index("by_user_workspace_visited", ["userId", "workspaceId", "visitedAt"])
     .index("by_user_resource", ["userId", "resourceId"])
-    .index("by_resource_id", ["resourceId"]),
+    .index("by_resource_id", ["resourceId"])
+    // For workspace cascade-delete: workspace-scoped rows have no owning
+    // resource so they aren't reached via a resource cascade.
+    .index("by_workspace", ["workspaceId"]),
 
   // Per-workspace feature capability rows. Single chokepoint for "is this
   // workspace allowed to use feature X?" via `hasFeature`. v1 sources rows
@@ -1025,7 +1039,10 @@ export default defineSchema({
     // `code_challenge` in the authorize URL. Unused for the GitHub App flow,
     // which doesn't use PKCE (the App installation is the auth).
     codeVerifier: v.optional(v.string()),
-  }).index("by_nonce", ["nonce"]),
+  })
+    .index("by_nonce", ["nonce"])
+    // For workspace cascade-delete (these are short-lived but tidy up anyway).
+    .index("by_workspace", ["workspaceId"]),
 
   // Per-(workspace, member) mapping of internal users to provider-side
   // identities. Looked up by the inbound integration code to match a GitHub

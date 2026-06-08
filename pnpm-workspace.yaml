@@ -4,8 +4,8 @@ packages:
 
 overrides:
   vite: 7.3.1
-  vitest: 4.1.5
+  vitest: 4.1.8
   typescript: 6.0.3
   "@excalidraw/excalidraw": 0.18.1
-  react: 19.2.5
-  react-dom: 19.2.5
+  react: 19.2.7
+  react-dom: 19.2.7

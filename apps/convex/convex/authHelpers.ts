@@ -46,6 +46,30 @@ export async function requireUser(ctx: Ctx): Promise<Id<"users">> {
   return userId;
 }
 
+// ─── Platform admin ──────────────────────────────────────────────────
+
+/**
+ * Authenticate + require the platform-admin flag. Throws on failure.
+ * This is the single gate for the separate admin app (apps/admin); every
+ * admin-only function must call it, because both frontends hit this same
+ * deployment and client-side gating is only cosmetic. The flag is set manually
+ * via the Convex dashboard (no mutation grants it), so it can't be self-granted.
+ */
+export async function requirePlatformAdmin(ctx: Ctx): Promise<Id<"users">> {
+  const userId = await requireUser(ctx);
+  const user = await ctx.db.get(userId);
+  if (!user?.isPlatformAdmin) throw new ConvexError("Not authorized");
+  return userId;
+}
+
+/** Soft variant for queries — returns whether the caller is a platform admin. */
+export async function checkPlatformAdmin(ctx: Ctx): Promise<boolean> {
+  const userId = await getUser(ctx);
+  if (!userId) return false;
+  const user = await ctx.db.get(userId);
+  return Boolean(user?.isPlatformAdmin);
+}
+
 // ─── Workspace membership ────────────────────────────────────────────
 
 /**

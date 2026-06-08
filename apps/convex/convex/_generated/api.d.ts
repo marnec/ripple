@@ -20,6 +20,133 @@ import type { GenericId as Id } from "convex/values";
  * ```
  */
 export declare const api: {
+  admin: {
+    access: {
+      amIAdmin: FunctionReference<"query", "public", {}, boolean>;
+    };
+    stats: {
+      overview: FunctionReference<
+        "query",
+        "public",
+        {},
+        {
+          admins: number;
+          bots: number;
+          channels: number;
+          documents: number;
+          messages: number;
+          pendingInvites: number;
+          projects: number;
+          recentSignups: Array<{
+            _id: Id<"users">;
+            createdAt: number;
+            email?: string;
+            name?: string;
+          }>;
+          tasks: number;
+          users: number;
+          workspaces: number;
+        }
+      >;
+    };
+    users: {
+      get: FunctionReference<
+        "query",
+        "public",
+        { userId: Id<"users"> },
+        null | {
+          _id: Id<"users">;
+          createdAt: number;
+          email?: string;
+          emailVerified: boolean;
+          githubLogin?: string;
+          gitlabLogin?: string;
+          image?: string;
+          isAnonymous: boolean;
+          isBot: boolean;
+          isPlatformAdmin: boolean;
+          name?: string;
+          providers: Array<string>;
+          workspaces: Array<{
+            _id: Id<"workspaces">;
+            isOwner: boolean;
+            name: string;
+            role: string;
+          }>;
+        }
+      >;
+      list: FunctionReference<
+        "query",
+        "public",
+        {},
+        Array<{
+          _id: Id<"users">;
+          createdAt: number;
+          email?: string;
+          emailVerified: boolean;
+          image?: string;
+          isAnonymous: boolean;
+          isBot: boolean;
+          isPlatformAdmin: boolean;
+          name?: string;
+          providers: Array<string>;
+          workspaceCount: number;
+        }>
+      >;
+      setPlatformAdmin: FunctionReference<
+        "mutation",
+        "public",
+        { userId: Id<"users">; value: boolean },
+        null
+      >;
+    };
+    workspaces: {
+      get: FunctionReference<
+        "query",
+        "public",
+        { workspaceId: Id<"workspaces"> },
+        null | {
+          _id: Id<"workspaces">;
+          counts: {
+            channels: number;
+            diagrams: number;
+            documents: number;
+            integrations: number;
+            projects: number;
+            tasks: number;
+          };
+          createdAt: number;
+          description?: string;
+          members: Array<{
+            email?: string;
+            isOwner: boolean;
+            name?: string;
+            role: string;
+            userId: Id<"users">;
+          }>;
+          name: string;
+          ownerId: Id<"users">;
+        }
+      >;
+      list: FunctionReference<
+        "query",
+        "public",
+        {},
+        Array<{
+          _id: Id<"workspaces">;
+          channelCount: number;
+          createdAt: number;
+          description?: string;
+          memberCount: number;
+          name: string;
+          ownerEmail?: string;
+          ownerId: Id<"users">;
+          ownerName?: string;
+          projectCount: number;
+        }>
+      >;
+    };
+  };
   auth: {
     signIn: FunctionReference<
       "action",
@@ -660,6 +787,7 @@ export declare const api: {
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
+          isPlatformAdmin?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2544,6 +2672,7 @@ export declare const api: {
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
+          isPlatformAdmin?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2643,6 +2772,7 @@ export declare const api: {
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
+          isPlatformAdmin?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2721,6 +2851,7 @@ export declare const api: {
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
+          isPlatformAdmin?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2804,6 +2935,7 @@ export declare const api: {
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
+          isPlatformAdmin?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -2938,6 +3070,7 @@ export declare const api: {
             image?: string;
             isAnonymous?: boolean;
             isBot?: boolean;
+            isPlatformAdmin?: boolean;
             name?: string;
           } | null;
           assigneeId?: Id<"users">;
@@ -3009,6 +3142,7 @@ export declare const api: {
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
+          isPlatformAdmin?: boolean;
           name?: string;
         } | null;
         assigneeId?: Id<"users">;
@@ -3198,6 +3332,7 @@ export declare const api: {
         image?: string;
         isAnonymous?: boolean;
         isBot?: boolean;
+        isPlatformAdmin?: boolean;
         name?: string;
       } | null
     >;
@@ -3218,6 +3353,7 @@ export declare const api: {
           image?: string;
           isAnonymous?: boolean;
           isBot?: boolean;
+          isPlatformAdmin?: boolean;
           name?: string;
         }
       >
@@ -3243,6 +3379,7 @@ export declare const api: {
         image?: string;
         isAnonymous?: boolean;
         isBot?: boolean;
+        isPlatformAdmin?: boolean;
         name?: string;
       } | null
     >;
@@ -3371,6 +3508,7 @@ export declare const api: {
         image?: string;
         isAnonymous?: boolean;
         isBot?: boolean;
+        isPlatformAdmin?: boolean;
         name?: string;
       }>
     >;
