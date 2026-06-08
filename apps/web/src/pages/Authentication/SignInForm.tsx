@@ -17,28 +17,95 @@ type SignInFormProps = {
   lockedEmail?: string;
   /** Which flow to show first. Defaults to "signIn". */
   defaultFlow?: Flow;
+  /**
+   * Hide the GitHub/GitLab buttons. Used on invite pages: an OAuth account's
+   * email is only known after the round-trip and may not match the invited
+   * email, leaving the user with an orphan account that can't accept the
+   * invite. Forcing email/password (locked to the invited email) guarantees a
+   * match; OAuth can still be linked later by signing in with the same email.
+   */
+  hideOAuth?: boolean;
 };
 
-export function SignInForm({ lockedEmail, defaultFlow = "signIn" }: SignInFormProps = {}) {
-  const [step, setStep] = useState<Step>("auth");
+// Persist a pending email-verification step so a page reload returns the user
+// to the code-entry screen instead of dropping them back on sign-up. Without
+// this, re-registering generates a *new* code that invalidates the one already
+// emailed, leaving two codes in the inbox where only the newest verifies.
+const PENDING_VERIFICATION_KEY = "ripple:pending-email-verification";
+
+function loadPersistedStep(lockedEmail?: string): Step | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_VERIFICATION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { email?: unknown };
+    if (typeof parsed.email !== "string") return null;
+    // Ignore a stale verification for a different (invite-locked) email.
+    if (lockedEmail && parsed.email !== lockedEmail) return null;
+    return { email: parsed.email };
+  } catch {
+    return null;
+  }
+}
+
+function persistStep(step: Step) {
+  try {
+    if (typeof step === "object") {
+      sessionStorage.setItem(
+        PENDING_VERIFICATION_KEY,
+        JSON.stringify({ email: step.email }),
+      );
+    } else {
+      sessionStorage.removeItem(PENDING_VERIFICATION_KEY);
+    }
+  } catch {
+    // Ignore storage failures (private mode, quota) — persistence is best-effort.
+  }
+}
+
+export function SignInForm({
+  lockedEmail,
+  defaultFlow = "signIn",
+  hideOAuth = false,
+}: SignInFormProps = {}) {
+  const [step, setStepState] = useState<Step>(() => loadPersistedStep(lockedEmail) ?? "auth");
+
+  const setStep = (next: Step) => {
+    persistStep(next);
+    setStepState(next);
+  };
 
   if (step === "linkSent") {
     return <LinkSentStep onBack={() => setStep("auth")} />;
   }
   if (typeof step === "object") {
-    return <EmailVerification email={step.email} />;
+    return (
+      <EmailVerification
+        email={step.email}
+        onBack={() => setStep("auth")}
+        onVerified={() => persistStep("auth")}
+      />
+    );
   }
-  return <AuthCard setStep={setStep} lockedEmail={lockedEmail} defaultFlow={defaultFlow} />;
+  return (
+    <AuthCard
+      setStep={setStep}
+      lockedEmail={lockedEmail}
+      defaultFlow={defaultFlow}
+      hideOAuth={hideOAuth}
+    />
+  );
 }
 
 function AuthCard({
   setStep,
   lockedEmail,
   defaultFlow,
+  hideOAuth,
 }: {
   setStep: (s: Step) => void;
   lockedEmail?: string;
   defaultFlow: Flow;
+  hideOAuth: boolean;
 }) {
   const { signIn } = useAuthActions();
   const [flow, setFlow] = useState<Flow>(defaultFlow);
@@ -119,36 +186,40 @@ function AuthCard({
         </p>
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
-        onClick={() => void signIn("github")}
-      >
-        <GitHubLogoIcon className="mr-2 size-4" />
-        Continue with GitHub
-      </Button>
+      {!hideOAuth && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
+            onClick={() => void signIn("github")}
+          >
+            <GitHubLogoIcon className="mr-2 size-4" />
+            Continue with GitHub
+          </Button>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
-        onClick={() => void signIn("gitlab")}
-      >
-        <GitlabMark className="mr-2 size-4" />
-        Continue with GitLab
-      </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
+            onClick={() => void signIn("gitlab")}
+          >
+            <GitlabMark className="mr-2 size-4" />
+            Continue with GitLab
+          </Button>
 
-      <div className="relative" aria-hidden="true">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-white/15" />
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="bg-black px-3 text-white/45 tracking-wider uppercase">
-            or
-          </span>
-        </div>
-      </div>
+          <div className="relative" aria-hidden="true">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-white/15" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-black px-3 text-white/45 tracking-wider uppercase">
+                or
+              </span>
+            </div>
+          </div>
+        </>
+      )}
 
       <form
         onSubmit={(e) => void handlePasswordSubmit(e)}

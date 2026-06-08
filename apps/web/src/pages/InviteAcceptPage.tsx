@@ -63,8 +63,7 @@ function AutoAcceptInvite({ inviteId }: { inviteId: string }) {
   }
 
   return (
-    <div className="text-center space-y-4 py-8">
-      <RippleSpinner size={48} />
+    <div className="text-center py-8">
       <h1 className="text-xl font-semibold tracking-tight">Accepting invitation...</h1>
     </div>
   );
@@ -120,7 +119,7 @@ function InviteSignIn({ inviteId }: { inviteId: string }) {
           Create your account to accept.
         </p>
       </div>
-      <SignInForm lockedEmail={invite.email} defaultFlow="signUp" />
+      <SignInForm lockedEmail={invite.email} defaultFlow="signUp" hideOAuth />
     </>
   );
 }
