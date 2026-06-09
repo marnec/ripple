@@ -40,7 +40,7 @@
     "convex-helpers": "0.1.118",
     "convex-webhook-receiver": "^1.0.6",
     "fractional-indexing": "3.2.0",
-    "jsdom": "^28.1.0",
+    "jsdom": "^25.0.1",
     "oslo": "1.2.1",
     "resend": "6.12.4",
     "web-push": "3.6.7",
@@ -48,7 +48,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@types/jsdom": "^28.0.3",
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^20.14.9",
     "@types/web-push": "3.6.4",
     "convex-test": "0.0.53",

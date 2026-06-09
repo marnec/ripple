@@ -733,6 +733,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_nonce: ["nonce", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1225,6 +1226,7 @@ export type DataModel = {
         "visitedAt",
         "_creationTime",
       ];
+      by_workspace: ["workspaceId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};
@@ -1901,6 +1903,7 @@ export type DataModel = {
   };
   users: {
     document: {
+      disabled?: boolean;
       email?: string;
       emailVerificationTime?: number;
       githubLogin?: string;
@@ -1919,6 +1922,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "disabled"
       | "email"
       | "emailVerificationTime"
       | "githubLogin"

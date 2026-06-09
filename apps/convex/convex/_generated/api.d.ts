@@ -50,6 +50,12 @@ export declare const api: {
       >;
     };
     users: {
+      deleteAccount: FunctionReference<
+        "mutation",
+        "public",
+        { userId: Id<"users"> },
+        null
+      >;
       get: FunctionReference<
         "query",
         "public",
@@ -57,6 +63,7 @@ export declare const api: {
         null | {
           _id: Id<"users">;
           createdAt: number;
+          disabled: boolean;
           email?: string;
           emailVerified: boolean;
           githubLogin?: string;
@@ -82,6 +89,7 @@ export declare const api: {
         Array<{
           _id: Id<"users">;
           createdAt: number;
+          disabled: boolean;
           email?: string;
           emailVerified: boolean;
           image?: string;
@@ -92,6 +100,12 @@ export declare const api: {
           providers: Array<string>;
           workspaceCount: number;
         }>
+      >;
+      setDisabled: FunctionReference<
+        "mutation",
+        "public",
+        { userId: Id<"users">; value: boolean },
+        null
       >;
       setPlatformAdmin: FunctionReference<
         "mutation",
@@ -144,6 +158,12 @@ export declare const api: {
           ownerName?: string;
           projectCount: number;
         }>
+      >;
+      remove: FunctionReference<
+        "mutation",
+        "public",
+        { workspaceId: Id<"workspaces"> },
+        null
       >;
     };
   };
@@ -779,6 +799,7 @@ export declare const api: {
         assignee: {
           _creationTime: number;
           _id: Id<"users">;
+          disabled?: boolean;
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
@@ -2664,6 +2685,7 @@ export declare const api: {
         assignee: {
           _creationTime: number;
           _id: Id<"users">;
+          disabled?: boolean;
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
@@ -2764,6 +2786,7 @@ export declare const api: {
         assignee: {
           _creationTime: number;
           _id: Id<"users">;
+          disabled?: boolean;
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
@@ -2843,6 +2866,7 @@ export declare const api: {
         assignee: {
           _creationTime: number;
           _id: Id<"users">;
+          disabled?: boolean;
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
@@ -2927,6 +2951,7 @@ export declare const api: {
         assignee: {
           _creationTime: number;
           _id: Id<"users">;
+          disabled?: boolean;
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
@@ -3062,6 +3087,7 @@ export declare const api: {
           assignee: {
             _creationTime: number;
             _id: Id<"users">;
+            disabled?: boolean;
             email?: string;
             emailVerificationTime?: number;
             githubLogin?: string;
@@ -3134,6 +3160,7 @@ export declare const api: {
         assignee: {
           _creationTime: number;
           _id: Id<"users">;
+          disabled?: boolean;
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
@@ -3324,6 +3351,7 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"users">;
+        disabled?: boolean;
         email?: string;
         emailVerificationTime?: number;
         githubLogin?: string;
@@ -3345,6 +3373,7 @@ export declare const api: {
         {
           _creationTime: number;
           _id: Id<"users">;
+          disabled?: boolean;
           email?: string;
           emailVerificationTime?: number;
           githubLogin?: string;
@@ -3371,6 +3400,7 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"users">;
+        disabled?: boolean;
         email?: string;
         emailVerificationTime?: number;
         githubLogin?: string;
@@ -3500,6 +3530,7 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"users">;
+        disabled?: boolean;
         email?: string;
         emailVerificationTime?: number;
         githubLogin?: string;

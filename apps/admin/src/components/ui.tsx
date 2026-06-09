@@ -299,10 +299,16 @@ export function TypeToConfirmDialog({
   onCancel: () => void;
 }) {
   const [typed, setTyped] = useState("");
+  // Reset the typed phrase when the dialog (re)opens — done during render via
+  // the previous-value pattern rather than in an effect (no setState-in-effect).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setTyped("");
+  }
 
   useEffect(() => {
     if (!open) return;
-    setTyped("");
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
     };
