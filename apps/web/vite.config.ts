@@ -76,6 +76,11 @@ export default defineConfig({
     exclude: ["@ripple/shared"],
   },
   resolve: {
+    // The monorepo holds two React copies (web pins 19.2.7, admin pins 19.2.5),
+    // so Excalidraw's react peer can resolve to a different copy than the app —
+    // producing "Invalid hook call / more than one copy of React" on the diagram
+    // page. Dedupe forces every react/react-dom import to a single instance.
+    dedupe: ["react", "react-dom"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@shared": path.resolve(__dirname, "../../packages/shared/src"),

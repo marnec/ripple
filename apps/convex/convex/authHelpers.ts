@@ -58,7 +58,11 @@ export async function requireUser(ctx: Ctx): Promise<Id<"users">> {
 export async function requirePlatformAdmin(ctx: Ctx): Promise<Id<"users">> {
   const userId = await requireUser(ctx);
   const user = await ctx.db.get(userId);
-  if (!user?.isPlatformAdmin) throw new ConvexError("Not authorized");
+  // `disabled` is re-checked here (not just at sign-in) so a disabled admin
+  // loses access on the next request rather than lingering until their already
+  // -issued access JWT expires — the session/refresh invalidation in
+  // `setDisabled` doesn't revoke a live access token.
+  if (!user?.isPlatformAdmin || user.disabled) throw new ConvexError("Not authorized");
   return userId;
 }
 
@@ -67,7 +71,7 @@ export async function checkPlatformAdmin(ctx: Ctx): Promise<boolean> {
   const userId = await getUser(ctx);
   if (!userId) return false;
   const user = await ctx.db.get(userId);
-  return Boolean(user?.isPlatformAdmin);
+  return Boolean(user?.isPlatformAdmin) && !user?.disabled;
 }
 
 // ─── Workspace membership ────────────────────────────────────────────

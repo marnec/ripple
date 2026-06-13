@@ -24,6 +24,7 @@ import {
   TypeToConfirmDialog,
 } from "../components/ui";
 import { navigate } from "../hooks/useHashRoute";
+import { errorMessage } from "../lib/errors";
 import { fmtDate, fmtNum, shortId } from "../lib/format";
 
 function ProviderBadges({ providers }: { providers: string[] }) {
@@ -187,12 +188,13 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
     );
   }
 
-  const isSelf = viewer?._id === user._id;
+  // Until `viewer` resolves (undefined = loading, null = not yet available) we
+  // don't know who "self" is — treat it as possibly-self so the self-targeting
+  // destructive buttons stay disabled rather than briefly enabling an action
+  // the server would reject.
+  const isSelf = viewer == null || viewer._id === user._id;
 
-  const onError = (err: unknown) => {
-    const msg = err instanceof Error ? err.message : "Action failed.";
-    toast.error(msg.replace(/^.*ConvexError:\s*/, "").split("\n")[0]);
-  };
+  const onError = (err: unknown) => toast.error(errorMessage(err));
 
   const applyAdmin = (value: boolean) => {
     setBusy(true);

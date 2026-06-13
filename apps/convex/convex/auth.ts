@@ -245,8 +245,10 @@ export const { auth, signIn, signOut, store } = convexAuth({
     /**
      * Reject sign-in for accounts disabled from the admin app
      * (`users.disabled`, toggled by `admin/users.setDisabled`). Runs on every
-     * sign-in flow right before the session is persisted; disabling also
-     * invalidates live sessions, so this only has to block new logins.
+     * sign-in flow right before the session is persisted. This blocks NEW
+     * sessions; live sessions + refresh tokens are deleted by setDisabled, but
+     * an already-issued access JWT remains valid until expiry (~1h), so
+     * sensitive surfaces also re-check `disabled` per request.
      */
     async beforeSessionCreation(ctx, { userId }) {
       const user = await ctx.db.get(userId);

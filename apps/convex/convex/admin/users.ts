@@ -179,10 +179,13 @@ export const setPlatformAdmin = mutation({
 });
 
 /**
- * Deactivate or reactivate an account (reversible). Disabling sets the flag,
- * which `auth.ts`'s beforeSessionCreation rejects on the next sign-in, and
- * clears any live sessions so the user is signed out immediately. You can't
- * disable yourself (lock-out guard). Content is preserved either way.
+ * Deactivate or reactivate an account (reversible). Disabling sets the flag
+ * (rejected by `auth.ts` beforeSessionCreation on any new sign-in) and deletes
+ * the user's sessions + refresh tokens, so they can't mint new tokens. NOTE: an
+ * already-issued access JWT stays valid until it expires (~1h) — Convex
+ * validates JWTs statelessly — so this is not instant revocation. Sensitive
+ * surfaces re-check `disabled` per request (see `requirePlatformAdmin`). You
+ * can't disable yourself (lock-out guard). Content is preserved either way.
  */
 export const setDisabled = mutation({
   args: { userId: v.id("users"), value: v.boolean() },

@@ -16,6 +16,7 @@ import {
   TypeToConfirmDialog,
 } from "../components/ui";
 import { navigate } from "../hooks/useHashRoute";
+import { errorMessage } from "../lib/errors";
 import { fmtDate, fmtNum } from "../lib/format";
 
 // ── List ─────────────────────────────────────────────────────────────────
@@ -127,10 +128,7 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
         toast.success("Workspace deletion started.");
         navigate("/workspaces");
       })
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Action failed.";
-        toast.error(msg.replace(/^.*ConvexError:\s*/, "").split("\n")[0]);
-      })
+      .catch((err: unknown) => toast.error(errorMessage(err)))
       .finally(() => setBusy(false));
   };
 
