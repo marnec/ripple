@@ -1,0 +1,65 @@
+diff --git a/dist/y-excalidraw.cjs b/dist/y-excalidraw.cjs
+index 169b24a1a2df8de816dfecf721e80871bebd8a15..586cab103c7d041f743cd6101f8dde2f93f2add8 100644
+--- a/dist/y-excalidraw.cjs
++++ b/dist/y-excalidraw.cjs
+@@ -75,6 +75,16 @@ var yjsToExcalidraw = (yArray) => {
+ // src/diff.ts
+ var import_fractional_indexing = require("fractional-indexing");
+ var Y = __toESM(require("yjs"), 1);
++// [ripple patch] See dist/y-excalidraw.js for rationale. Guards the move-loop
++// generateKeyBetween against reversed neighbors (left >= right) so a combined
++// append+reorder change cannot throw out of Excalidraw's onChange.
++var safeGenerateKeyBetween = (a, b) => {
++  try {
++    return (0, import_fractional_indexing.generateKeyBetween)(a, b);
++  } catch {
++    return (0, import_fractional_indexing.generateKeyBetween)(a ?? null, null);
++  }
++};
+ var getDeltaOperationsForElements = (lastKnownElements, newElements, bulkify = true) => {
+   const updateOperations = [];
+   const appendOperations = [];
+@@ -152,7 +162,7 @@ var getDeltaOperationsForElements = (lastKnownElements, newElements, bulkify = t
+         leftSortIndex = opsTracker.idMap[opsTracker.elementIds[toIndex - 1]]?.pos || null;
+         rightSortIndex = opsTracker.idMap[opsTracker.elementIds[toIndex]]?.pos || null;
+       }
+-      const newSortIndex = (0, import_fractional_indexing.generateKeyBetween)(leftSortIndex, rightSortIndex);
++      const newSortIndex = safeGenerateKeyBetween(leftSortIndex, rightSortIndex);
+       opsTracker.elementIds = moveArrayItem(opsTracker.elementIds, fromIndex, toIndex, true);
+       opsTracker.idMap[id].pos = newSortIndex;
+       _updateIdIndexLookup();
+diff --git a/dist/y-excalidraw.js b/dist/y-excalidraw.js
+index 84ad536f718996f6a3ecb60468eca2a80913ace8..7ecd12e993170ba9873feb17cdf4ad042bcb724a 100644
+--- a/dist/y-excalidraw.js
++++ b/dist/y-excalidraw.js
+@@ -41,6 +41,21 @@ var yjsToExcalidraw = (yArray) => {
+ // src/diff.ts
+ import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
+ import * as Y from "yjs";
++// [ripple patch] When a change both appends and reorders elements at once,
++// freshly-appended elements still carry a placeholder pos of "" during the move
++// loop, which desyncs elementIds ordering from the real pos values. The move
++// neighbors then come out reversed (left >= right) and generateKeyBetween throws
++// `${left} >= ${right}`, propagating out of Excalidraw's onChange and tearing
++// down the route. Guard it: on inconsistent ordering, place the element just
++// after the left neighbor. Self-heals on the next clean diff (lastKnownElements
++// is re-derived sorted). See excalidraw/excalidraw#8295.
++var safeGenerateKeyBetween = (a, b) => {
++  try {
++    return generateKeyBetween(a, b);
++  } catch {
++    return generateKeyBetween(a ?? null, null);
++  }
++};
+ var getDeltaOperationsForElements = (lastKnownElements, newElements, bulkify = true) => {
+   const updateOperations = [];
+   const appendOperations = [];
+@@ -118,7 +133,7 @@ var getDeltaOperationsForElements = (lastKnownElements, newElements, bulkify = t
+         leftSortIndex = opsTracker.idMap[opsTracker.elementIds[toIndex - 1]]?.pos || null;
+         rightSortIndex = opsTracker.idMap[opsTracker.elementIds[toIndex]]?.pos || null;
+       }
+-      const newSortIndex = generateKeyBetween(leftSortIndex, rightSortIndex);
++      const newSortIndex = safeGenerateKeyBetween(leftSortIndex, rightSortIndex);
+       opsTracker.elementIds = moveArrayItem(opsTracker.elementIds, fromIndex, toIndex, true);
+       opsTracker.idMap[id].pos = newSortIndex;
+       _updateIdIndexLookup();

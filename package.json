@@ -39,5 +39,10 @@
     "turbo": "2.5.8",
     "typescript": "6.0.3",
     "typescript-eslint": "8.59.1"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "y-excalidraw@2.0.12": "patches/y-excalidraw@2.0.12.patch"
+    }
   }
 }
