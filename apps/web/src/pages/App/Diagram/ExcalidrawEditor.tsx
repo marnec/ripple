@@ -15,6 +15,7 @@ import { ExcalidrawBinding, yjsToExcalidraw } from "y-excalidraw";
 import type { Awareness } from "y-protocols/awareness";
 import type YProvider from "y-partyserver/provider";
 import * as Y from "yjs";
+import { createSyncGuard } from "@/lib/excalidraw-sync-guard";
 
 
 interface ImportedScene {
@@ -30,6 +31,12 @@ interface ExcalidrawEditorProps {
   onExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void;
   viewModeEnabled?: boolean;
   importedScene?: ImportedScene | null;
+  /**
+   * Called when the Yjs sync layer starts/stops failing. Editing continues
+   * either way — this only drives the "changes are local-only" indicator.
+   * Pass a stable setter.
+   */
+  onSyncDegradedChange?: (degraded: boolean) => void;
 }
 
 export function ExcalidrawEditor({
@@ -40,11 +47,22 @@ export function ExcalidrawEditor({
   onExcalidrawAPI,
   viewModeEnabled,
   importedScene,
+  onSyncDegradedChange,
 }: ExcalidrawEditorProps) {
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI>();
   const { resolvedTheme } = useTheme();
   const bindingRef = useRef<ExcalidrawBinding | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Every call into the Yjs sync layer goes through this guard, so a broken
+  // sync system can never unmount the canvas. See excalidraw-sync-guard.ts.
+  const [syncDegraded, setSyncDegraded] = useState(false);
+  const [syncGuard] = useState(() =>
+    createSyncGuard({ onStatusChange: (status) => setSyncDegraded(status.degraded) }),
+  );
+  useEffect(() => {
+    onSyncDegradedChange?.(syncDegraded);
+  }, [syncDegraded, onSyncDegradedChange]);
 
   // Seed an imported .excalidraw upload synchronously during first render,
   // BEFORE Excalidraw mounts. Excalidraw's internal initializeScene runs more
@@ -80,8 +98,9 @@ export function ExcalidrawEditor({
         yAssets.set(fileId, file);
       }
     };
-    if (doc) doc.transact(seed);
-    else seed();
+    // Writing into the shared doc runs during render: a malformed import must
+    // degrade to "nothing seeded" rather than kill the route.
+    syncGuard.run("scene.import", () => (doc ? doc.transact(seed) : seed()), undefined);
     window.history.replaceState({}, "");
     return null;
   });
@@ -96,22 +115,30 @@ export function ExcalidrawEditor({
   // - Bidirectional element/asset sync
   // - Awareness → Excalidraw collaborators map (cursors, selections)
   // - selectedElementIds → awareness (on onChange)
+  // The constructor reads the whole Y document and pushes it into the scene;
+  // if it throws we simply end up without a binding — the canvas mounts and
+  // edits locally rather than taking the route down with it.
   useEffect(() => {
     if (!excalidrawAPI || !provider || !yElements || !yAssets || !awareness) return;
 
-    const binding = new ExcalidrawBinding(
-      yElements,
-      yAssets,
-      excalidrawAPI,
-      provider.awareness
+    const binding = syncGuard.run(
+      "binding.create",
+      () =>
+        new ExcalidrawBinding(
+          yElements,
+          yAssets,
+          syncGuard.guardApi(excalidrawAPI),
+          provider.awareness
+        ),
+      null,
     );
     bindingRef.current = binding;
 
     return () => {
-      binding.destroy();
+      syncGuard.run("binding.destroy", () => binding?.destroy(), undefined);
       bindingRef.current = null;
     };
-  }, [excalidrawAPI, provider, yElements, yAssets, awareness]);
+  }, [excalidrawAPI, provider, yElements, yAssets, awareness, syncGuard]);
 
   // Fit the diagram into view once on open. yElements may be empty at mount
   // if the user is opening a diagram cold (no IndexedDB cache) — in that case
@@ -146,9 +173,14 @@ export function ExcalidrawEditor({
   // Broadcast pointer position to other users via awareness
   // (The binding exposes onPointerUpdate but doesn't auto-connect it)
   const handlePointerUpdate = (payload: { pointer: { x: number; y: number; tool: "pointer" | "laser" }; button: "down" | "up" }) => {
-    if (bindingRef.current) {
-      bindingRef.current.onPointerUpdate(payload);
-    }
+    if (!bindingRef.current) return;
+    // Fires from Excalidraw's pointer handling — a throw here would surface as
+    // a dead cursor/canvas, so it is contained like the rest of the sync path.
+    syncGuard.run(
+      "binding.onPointerUpdate",
+      () => bindingRef.current?.onPointerUpdate(payload),
+      undefined,
+    );
   };
 
   // Frame tool button injected into Excalidraw's native toolbar.
@@ -304,7 +336,11 @@ export function ExcalidrawEditor({
         isCollaborating={true}
         theme={resolvedTheme as Theme}
         initialData={{
-          elements: yElements ? yjsToExcalidraw(yElements) : [],
+          // Reading the Y document happens during render: a malformed doc must
+          // open an empty canvas, not crash the route.
+          elements: yElements
+            ? syncGuard.run("scene.initial", () => yjsToExcalidraw(yElements), [])
+            : [],
           appState: { viewBackgroundColor: "transparent" },
         }}
         onPointerUpdate={handlePointerUpdate}

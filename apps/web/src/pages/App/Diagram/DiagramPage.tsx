@@ -1,4 +1,5 @@
 import { BacklinksDrawerTrigger } from "@/components/BacklinksDrawer";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import {
   TagInlineStrip,
@@ -33,6 +34,7 @@ import { ConnectionStatus } from "../Document/ConnectionStatus";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import { getCameraFromAppState } from "@/lib/canvas-coordinates";
+import { runGuarded } from "@/lib/excalidraw-sync-guard";
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { Theme } from "@excalidraw/excalidraw/element/types";
 import { yjsToExcalidraw } from "y-excalidraw";
@@ -57,6 +59,9 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
     elements: readonly ExcalidrawElement[];
     files: BinaryFiles;
   } | null>(null);
+  // Set by the editor when the Yjs binding starts throwing. Editing keeps
+  // working; this only tells the user their changes aren't being shared.
+  const [syncDegraded, setSyncDegraded] = useState(false);
   const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
   const isAdmin = myRole === "admin";
 
@@ -149,7 +154,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
   });
 
   const snapshotElements = snapshotDoc
-    ? yjsToExcalidraw(snapshotDoc.getArray("elements"))
+    ? runGuarded("snapshot.decode", () => yjsToExcalidraw(snapshotDoc.getArray("elements")), [])
     : null;
 
   // Jump to user's cursor position
@@ -228,7 +233,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           <BacklinksDrawerTrigger resourceId={diagramId} workspaceId={workspaceId} />
         </div>
         <div className="flex h-8 items-center gap-3">
-          <ConnectionStatus isConnected={isConnected} />
+          <ConnectionStatus isConnected={isConnected} hasSyncError={syncDegraded} />
           {isConnected && (
             <ActiveUsers
               remoteUsers={remotePointers.map((p) => ({
@@ -291,16 +296,33 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
 
       {/* Canvas */}
       <div className="flex-1 overflow-hidden">
-        {!isLoading && (
-          <ExcalidrawEditor
-            yElements={yElements}
-            yAssets={yAssets}
-            awareness={awareness}
-            provider={provider}
-            onExcalidrawAPI={setExcalidrawAPI}
-            importedScene={importedScene}
-          />
-        )}
+        {/* Last resort: anything the sync guard doesn't contain takes down the
+            canvas only, and remounts it from the (intact) Yjs document instead
+            of forcing a full page reload. */}
+        <ErrorBoundary
+          fallback={({ reset }) => (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                The canvas stopped unexpectedly. Your diagram is saved.
+              </p>
+              <Button variant="outline" size="sm" onClick={reset}>
+                Reload canvas
+              </Button>
+            </div>
+          )}
+        >
+          {!isLoading && (
+            <ExcalidrawEditor
+              yElements={yElements}
+              yAssets={yAssets}
+              awareness={awareness}
+              provider={provider}
+              onExcalidrawAPI={setExcalidrawAPI}
+              importedScene={importedScene}
+              onSyncDegradedChange={setSyncDegraded}
+            />
+          )}
+        </ErrorBoundary>
       </div>
 
       {presentationScene && (
