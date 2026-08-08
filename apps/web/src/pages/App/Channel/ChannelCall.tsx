@@ -4,7 +4,7 @@ import { CallSurface } from "@/components/call/CallSurface";
 import { useChannelCallSource } from "@/lib/call/sources/channel";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { Id } from "@convex/_generated/dataModel";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 
 import { FollowParticipantOverlay } from "./FollowParticipantOverlay";
 import { ShareCallButton } from "./ShareCallButton";

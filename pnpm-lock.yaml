@@ -129,7 +129,7 @@ importers:
         version: 0.2.1(convex@1.43.0(react@19.2.8))
       convex-helpers:
         specifier: ^0.1.114
-        version: 0.1.115(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.8))(hono@4.12.16)(react@19.2.8)(typescript@6.0.3)(zod@4.4.3)
+        version: 0.1.115(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.8))(hono@4.12.16)(react@19.2.8)(typescript@6.0.3)(zod@4.4.2)
     devDependencies:
       '@convex-dev/eslint-plugin':
         specifier: ^1.1.1
@@ -754,9 +754,6 @@ importers:
 
   packages/shared:
     dependencies:
-      '@ripple/convex':
-        specifier: workspace:*
-        version: link:../../apps/convex
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -15004,7 +15001,7 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  convex-helpers@0.1.115(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.8))(hono@4.12.16)(react@19.2.8)(typescript@6.0.3)(zod@4.4.3):
+  convex-helpers@0.1.115(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.8))(hono@4.12.16)(react@19.2.8)(typescript@6.0.3)(zod@4.4.2):
     dependencies:
       convex: 1.43.0(react@19.2.8)
     optionalDependencies:
@@ -15012,7 +15009,7 @@ snapshots:
       hono: 4.12.16
       react: 19.2.8
       typescript: 6.0.3
-      zod: 4.4.3
+      zod: 4.4.2
 
   convex-helpers@0.1.122(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.8))(hono@4.12.16)(react@19.2.8)(typescript@6.0.3)(zod@4.4.3):
     dependencies:

@@ -1,6 +1,6 @@
 import { SidebarInset, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { Captions, Phone } from "lucide-react";
 import { Profiler, useEffect, useState } from "react";
 import { onRenderCallback } from "../lib/profiler-logger";

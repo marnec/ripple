@@ -3,7 +3,7 @@ import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Message } from "@/pages/App/Chat/Message";
 import { MessageList } from "@/pages/App/Chat/MessageList";
-import type { MessageWithAuthor } from "@ripple/shared/types/channel";
+import type { MessageWithAuthor } from "@convex/types/channel";
 import { useMutation, usePaginatedQuery } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { SearchIcon, Settings } from "lucide-react";

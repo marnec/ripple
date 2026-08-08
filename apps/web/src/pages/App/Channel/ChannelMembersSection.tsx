@@ -9,7 +9,7 @@ import {
 import { toast } from "sonner";
 import { ChannelRole } from "@ripple/shared/enums";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import type { ChannelMember } from "@ripple/shared/types/channel";
+import type { ChannelMember } from "@convex/types/channel";
 import type { Values } from "@ripple/shared/types/object";
 import { useMutation } from "convex/react";
 import { ConvexError } from "convex/values";

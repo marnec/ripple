@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;

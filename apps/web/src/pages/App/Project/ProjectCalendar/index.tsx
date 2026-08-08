@@ -16,7 +16,7 @@ import {
 import { calendarDragContext } from "../calendarDragContext";
 import { useEagerProjectTasks } from "../useDualProjectTasks";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import {
   CalendarSidebarProvider,
   CalendarSidebar,

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban, Plus } from "lucide-react";
 import { useRef, useState } from "react";

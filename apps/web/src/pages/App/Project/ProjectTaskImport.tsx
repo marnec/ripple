@@ -25,7 +25,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { TaskRow } from "./TaskRow";
 
 export function ProjectTaskImport() {

@@ -1,4 +1,4 @@
-import type { MessageWithAuthor } from "@ripple/shared/types/channel";
+import type { MessageWithAuthor } from "@convex/types/channel";
 
 export type GroupPosition = "solo" | "first" | "middle" | "last";
 

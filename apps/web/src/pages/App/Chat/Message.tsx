@@ -1,7 +1,7 @@
 import { UserContext } from "@/pages/App/UserContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import type { MessageWithAuthor } from "@ripple/shared/types/channel";
+import type { MessageWithAuthor } from "@convex/types/channel";
 import { useMutation } from "convex/react";
 import { CornerUpLeft, Loader2, Pencil, Plus, Trash2, X as XIcon } from "lucide-react";
 import React, { Suspense, useContext, useEffect, useRef, useState } from "react";

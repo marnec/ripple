@@ -10,14 +10,6 @@
     "./protocol": "./src/protocol/index.ts",
     "./enums": "./src/enums/index.ts"
   },
-  "peerDependencies": {
-    "@ripple/convex": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@ripple/convex": {
-      "optional": true
-    }
-  },
   "dependencies": {
     "zod": "4.4.3"
   }

@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { MentionedUser, MentionedTask, MentionedProject, MentionedResource, MentionedEvent } from "@ripple/shared/types/channel";
+import type { MentionedUser, MentionedTask, MentionedProject, MentionedResource, MentionedEvent } from "@convex/types/channel";
 
 export const MentionedUsersContext = createContext<Record<string, MentionedUser>>({});
 export const MentionedTasksContext = createContext<Record<string, MentionedTask>>({});

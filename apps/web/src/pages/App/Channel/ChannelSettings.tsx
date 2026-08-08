@@ -15,7 +15,7 @@ import {
   DEFAULT_CHANNEL_CHAT_PREFERENCES,
   type ChatNotificationCategory,
 } from "@ripple/shared/notificationCategories";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";

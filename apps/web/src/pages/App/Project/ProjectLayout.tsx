@@ -2,7 +2,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { ProjectColorTag } from "@/components/ProjectColorTag";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";

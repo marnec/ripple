@@ -1,4 +1,4 @@
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { ResourceListPage } from "../Resources/ResourceListPage";

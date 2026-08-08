@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 
 // Placeholder destination for the workspace dashboard's "Tags" counter.
 // There's no real tag-management surface yet; this just acknowledges that

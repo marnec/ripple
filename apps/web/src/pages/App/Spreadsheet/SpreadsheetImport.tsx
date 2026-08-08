@@ -1,6 +1,6 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@/components/ui/button";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import { useEffect, useState } from "react";

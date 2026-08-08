@@ -29,7 +29,7 @@ import { useViewer } from "@/pages/App/UserContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import "../Project/project-calendar.css";
 
 import { type MemberCalendarMember } from "./MemberCalendarFilter";

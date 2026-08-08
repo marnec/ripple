@@ -1,4 +1,4 @@
-import type { MessageWithAuthor } from "@ripple/shared/types/channel";
+import type { MessageWithAuthor } from "@convex/types/channel";
 import { ArrowDown } from "lucide-react";
 import type React from "react";
 import { type PropsWithChildren, useEffect, useLayoutEffect, useRef, useState } from "react"

@@ -1,5 +1,5 @@
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "@convex/_generated/api";

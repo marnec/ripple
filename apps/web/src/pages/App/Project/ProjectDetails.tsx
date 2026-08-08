@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { useQuery } from "convex-helpers/react/cache";
 import { LayoutList, Kanban } from "lucide-react";
 import { useRef, useState } from "react";

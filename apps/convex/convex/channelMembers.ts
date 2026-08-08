@@ -1,7 +1,7 @@
 import { ChannelRole, ChannelType } from "@ripple/shared/enums";
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { ChannelMember } from "@ripple/shared/types/channel";
+import type { ChannelMember } from "./types/channel";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { channelRoleSchema } from "./schema";
 import { logActivity } from "./auditLog";

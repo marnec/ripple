@@ -4,7 +4,7 @@ import { CallSurface } from "@/components/call/CallSurface";
 import { useEventCallSource } from "@/lib/call/sources/event";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { Id } from "@convex/_generated/dataModel";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 
 /**
  * Authenticated calendar-event call route. The polymorphic

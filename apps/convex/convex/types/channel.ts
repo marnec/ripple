@@ -1,4 +1,4 @@
-import { Doc } from "@ripple/convex/_generated/dataModel";
+import type { Doc } from "../_generated/dataModel";
 
 export interface ChannelMember extends Doc<"channelMembers"> {
   name: string;

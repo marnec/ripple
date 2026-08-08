@@ -24,7 +24,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import { WorkspaceTimeline } from "./WorkspaceTimeline";
 import { getNodeColor } from "./graphConstants";
 

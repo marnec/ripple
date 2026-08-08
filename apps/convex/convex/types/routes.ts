@@ -1,4 +1,4 @@
-import { Id } from "@ripple/convex/_generated/dataModel"
+import type { Id } from "../_generated/dataModel";
 
 export type QueryParams = {
   workspaceId: Id<"workspaces">

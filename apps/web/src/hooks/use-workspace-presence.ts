@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import PartySocket from "partysocket";
 import { api } from "@convex/_generated/api";
-import type { QueryParams } from "@ripple/shared/types/routes";
+import type { QueryParams } from "@convex/types/routes";
 import type {
   PresenceSnapshotMessage,
   PresenceChangedMessage,
