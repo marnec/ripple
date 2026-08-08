@@ -1,4 +1,4 @@
-import { BacklinksDrawerTrigger } from "@/components/BacklinksDrawer";
+import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { TagPickerButton } from "@/components/TagPickerButton";
 import { TaskCode } from "@/components/TaskCode";
@@ -183,7 +183,7 @@ function TaskDetailPageContent({
                 collapsible
               />
 
-              <BacklinksDrawerTrigger resourceId={taskId} workspaceId={workspaceId} />
+              <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
 
               <div className="space-y-2 animate-fade-in lg:flex lg:flex-1 lg:flex-col lg:min-h-0">
                 <div className="flex items-center justify-between lg:shrink-0">

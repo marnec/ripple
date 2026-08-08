@@ -5,7 +5,9 @@ import { Link } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
+import { getSourceLink, type Reference } from "@/components/embed-references";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Sheet,
@@ -27,16 +29,6 @@ type BacklinksDrawerProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type Backlink = {
-  _id: string;
-  sourceType: string;
-  sourceId: string;
-  sourceName: string;
-  edgeType: string;
-  workspaceId: string;
-  projectId?: string;
-};
-
 const EDGE_TYPE_LABELS: Record<string, string> = {
   embeds: "Embedded",
   blocks: "Blocks",
@@ -44,26 +36,7 @@ const EDGE_TYPE_LABELS: Record<string, string> = {
   mentions: "Mentioned",
 };
 
-function getSourceLink(ref: Backlink): string {
-  if (ref.sourceType === "document") {
-    return `/workspaces/${ref.workspaceId}/documents/${ref.sourceId}`;
-  }
-  if (ref.sourceType === "task" && ref.projectId) {
-    return `/workspaces/${ref.workspaceId}/projects/${ref.projectId}/tasks/${ref.sourceId}`;
-  }
-  if (ref.sourceType === "diagram") {
-    return `/workspaces/${ref.workspaceId}/diagrams/${ref.sourceId}`;
-  }
-  if (ref.sourceType === "spreadsheet") {
-    return `/workspaces/${ref.workspaceId}/spreadsheets/${ref.sourceId}`;
-  }
-  if (ref.sourceType === "channel") {
-    return `/workspaces/${ref.workspaceId}/channels/${ref.sourceId}`;
-  }
-  return "#";
-}
-
-function BacklinksList({ backlinks }: { backlinks: Backlink[] }) {
+function BacklinksList({ backlinks }: { backlinks: Reference[] }) {
   if (backlinks.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-4 text-center">
@@ -153,43 +126,70 @@ export function BacklinksDrawer({
   );
 }
 
-/** Small trigger button for pages that don't have an existing references toggle. */
-export function BacklinksDrawerTrigger({
+/**
+ * Toolbar toggle for a resource's references, shared by the document, diagram
+ * and spreadsheet headers. Disabled — not hidden — when nothing references the
+ * resource, so the control keeps a stable position in every toolbar.
+ */
+export function BacklinksButton({
   resourceId,
   workspaceId,
+  onOpenChange,
 }: {
   resourceId: string;
   workspaceId: Id<"workspaces">;
+  /** Notified on every toggle, for pages that mirror the state (e.g. spreadsheet cell highlights). */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const backlinks = useQuery(api.edges.getBacklinks, {
     targetId: resourceId,
     workspaceId,
   });
   const [open, setOpen] = useState(false);
+  const count = backlinks?.length ?? 0;
+  const hasBacklinks = count > 0;
 
-  if (!backlinks || backlinks.length === 0) return null;
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        title="Show references"
+        onClick={() => handleOpenChange(!open)}
+        disabled={!hasBacklinks}
+        aria-pressed={open}
+        className={cn(
+          "inline-flex items-center justify-center gap-1.5 rounded-md p-1.5 transition-colors disabled:opacity-40 disabled:pointer-events-none",
+          open
+            ? "bg-accent text-accent-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        )}
+        title={
+          !hasBacklinks
+            ? "No references"
+            : open
+              ? "Hide references"
+              : "Show references"
+        }
       >
-        <Link2 className="h-3.5 w-3.5" />
-        <Badge
-          variant="secondary"
-          className="h-4 px-1 text-[10px] font-mono tabular-nums"
-        >
-          {backlinks.length}
-        </Badge>
+        <Link2 className="size-4" />
+        {hasBacklinks && (
+          <Badge
+            variant="secondary"
+            className="h-4 px-1 text-[10px] font-mono tabular-nums"
+          >
+            {count}
+          </Badge>
+        )}
       </button>
       <BacklinksDrawer
         resourceId={resourceId}
         workspaceId={workspaceId}
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
       />
     </>
   );

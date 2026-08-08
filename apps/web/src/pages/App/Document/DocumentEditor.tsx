@@ -1,6 +1,6 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
-import { BacklinksDrawer } from "@/components/BacklinksDrawer";
+import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { DocumentActionsMenu } from "./DocumentActionsMenu";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import {
   TagPickerButton,
 } from "@/components/TagPickerButton";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
-import { cn } from "@/lib/utils";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAutoHideScrollbar } from "@/hooks/use-autohide-scrollbar";
@@ -23,7 +22,7 @@ import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { Link2, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -304,8 +303,7 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
   useEmbedDeleteProtection(editor);
 
   // Track which blocks in this document are referenced by embeds elsewhere
-  const { referencedBlockIds, hasReferencedBlocks } = useReferencedBlocks(documentId);
-  const [backlinksOpen, setBacklinksOpen] = useState(false);
+  const { referencedBlockIds } = useReferencedBlocks(documentId);
 
   // Protect referenced blocks from accidental deletion
   const onReferencedBlocksDeleted = (blockIds: string[]) => {
@@ -390,27 +388,10 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
               }
             />
           )}
-          <button
-            type="button"
-            onClick={() => setBacklinksOpen((open) => !open)}
-            disabled={!hasReferencedBlocks}
-            aria-pressed={backlinksOpen}
-            className={cn(
-              "inline-flex items-center justify-center rounded-md p-1.5 transition-colors disabled:opacity-40 disabled:pointer-events-none",
-              backlinksOpen
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-            )}
-            title={
-              !hasReferencedBlocks
-                ? "No referenced blocks"
-                : backlinksOpen
-                  ? "Hide referenced blocks"
-                  : "Show referenced blocks"
-            }
-          >
-            <Link2 className="size-4" />
-          </button>
+          <BacklinksButton
+            resourceId={documentId}
+            workspaceId={document.workspaceId}
+          />
           {commentsEnabled && <CommentsToggleButton />}
           {document && (
             <DocumentActionsMenu
@@ -537,14 +518,6 @@ export function DocumentEditor({ documentId }: { documentId: Id<"documents"> }) 
                 if (!framePickerDialog) return;
                 handleFramePickerInsert(frameId, framePickerDialog);
               }}
-            />
-          )}
-          {document && (
-            <BacklinksDrawer
-              resourceId={documentId}
-              workspaceId={document.workspaceId}
-              open={backlinksOpen}
-              onOpenChange={setBacklinksOpen}
             />
           )}
         </DocumentSpotlightFrame>

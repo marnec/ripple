@@ -1,5 +1,5 @@
 
-import { BacklinksDrawer } from "@/components/BacklinksDrawer";
+import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import {
   TagInlineStrip,
@@ -25,7 +25,7 @@ import { useViewer } from "../UserContext";
 import "jspreadsheet-ce/dist/jspreadsheet.css";
 import "jspreadsheet-ce/dist/jspreadsheet.themes.css";
 import "jsuites/dist/jsuites.css";
-import { Circle, Link2, Link2Off, Settings, WifiOff } from "lucide-react";
+import { Circle, Settings, WifiOff } from "lucide-react";
 import { useSelectionFormulaHighlights } from "@/hooks/use-selection-formula-highlights";
 import { SpreadsheetActionsMenu } from "./SpreadsheetActionsMenu";
 import { memo, useEffect, useRef, useState } from "react";
@@ -253,8 +253,8 @@ function SpreadsheetEditor({
   useRecordVisit(spreadsheet?.workspaceId, "spreadsheet", spreadsheetId, spreadsheet?.name);
   const viewer = useViewer();
   const rawRefs = useQuery(api.spreadsheetCellRefs.listBySpreadsheet, { spreadsheetId });
+  // Cell highlights mirror the references drawer: on while it's open.
   const [showRefHighlights, setShowRefHighlights] = useState(false);
-  const [backlinksOpen, setBacklinksOpen] = useState(false);
   const [selection, setSelection] = useState<{ row: number; col: number } | null>(null);
   const [isCellEditing, setIsCellEditing] = useState(false);
   const [binding, setBinding] = useState<SpreadsheetYjsBinding | null>(null);
@@ -277,8 +277,6 @@ function SpreadsheetEditor({
     selection,
     suppressed: formulaBarFocused || isCellEditing,
   });
-
-  const hasRefs = (rawRefs?.length ?? 0) > 0;
 
   const {
     yDoc,
@@ -324,22 +322,6 @@ function SpreadsheetEditor({
           />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{spreadsheet.name}</h1>
           <TagInlineStrip tags={spreadsheet.tags ?? []} />
-          {hasRefs && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowRefHighlights((v) => {
-                  if (!v) setBacklinksOpen(true);
-                  return !v;
-                });
-              }}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-2"
-              title={showRefHighlights ? "Hide reference highlights" : "Show reference highlights"}
-            >
-              {showRefHighlights ? <Link2 className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
-              References
-            </button>
-          )}
         </div>
         <FormulaBar
           binding={binding}
@@ -360,6 +342,11 @@ function SpreadsheetEditor({
               }
             />
           )}
+          <BacklinksButton
+            resourceId={spreadsheetId}
+            workspaceId={spreadsheet.workspaceId}
+            onOpenChange={setShowRefHighlights}
+          />
           <SpreadsheetActionsMenu
             spreadsheetId={spreadsheetId}
             spreadsheetName={spreadsheet.name}
@@ -390,12 +377,6 @@ function SpreadsheetEditor({
         </HeaderSlot>
       )}
       <MobileHeaderTitle name={spreadsheet.name} />
-      <BacklinksDrawer
-        resourceId={spreadsheetId}
-        workspaceId={spreadsheet.workspaceId}
-        open={backlinksOpen}
-        onOpenChange={setBacklinksOpen}
-      />
 
       <div className="flex-1 overflow-hidden">
         <JSpreadsheetGrid

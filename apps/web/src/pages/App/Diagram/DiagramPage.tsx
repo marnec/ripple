@@ -1,4 +1,4 @@
-import { BacklinksDrawerTrigger } from "@/components/BacklinksDrawer";
+import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import {
@@ -230,7 +230,6 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
           />
           <h1 className="hidden sm:block text-lg font-semibold truncate">{diagram?.name}</h1>
           <TagInlineStrip tags={diagram?.tags ?? []} />
-          <BacklinksDrawerTrigger resourceId={diagramId} workspaceId={workspaceId} />
         </div>
         <div className="flex h-8 items-center gap-3">
           <ConnectionStatus isConnected={isConnected} hasSyncError={syncDegraded} />
@@ -244,6 +243,7 @@ function DiagramPageContent({ diagramId, workspaceId }: { diagramId: Id<"diagram
               onUserClick={handleJumpToUser}
             />
           )}
+          <BacklinksButton resourceId={diagramId} workspaceId={workspaceId} />
           {diagram && (
             <button
               type="button"
