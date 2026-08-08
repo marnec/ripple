@@ -4,6 +4,13 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist";
 
+/* Height-based variants. The auth page is constrained vertically, not
+   horizontally, so its breakpoints key off viewport height: `short` is a
+   typical phone with the browser toolbar showing, `squat` is a small phone or a
+   landscape/split-screen window where decoration has to give way entirely. */
+@custom-variant short (@media (max-height: 720px));
+@custom-variant squat (@media (max-height: 600px));
+
 /* BlockNote's shadcn variant ships Tailwind utility classes (e.g. `w-[300px]`
    on comment cards, `gap`/`padding` on threads) inside its compiled output.
    Tailwind v4 does not scan `node_modules` by default, so arbitrary utilities
@@ -270,6 +277,18 @@ body {
   flex-direction: column;
   height: 100svh;
   overflow: hidden;
+}
+
+/* Escape hatch for document-like pages (auth, invites) that are taller than a
+   phone viewport. The app shell above pins the body so panes can own their own
+   scroll, but that leaves a plain page with no scroller and silently clips
+   anything past the fold. Opting back into root scrolling — rather than adding
+   a nested scroller — is what lets mobile browsers retract the URL bar, since
+   they only do that for the root scroller. Toggled by AuthLayout. */
+body.document-scroll {
+  height: auto;
+  min-height: 100svh;
+  overflow: visible;
 }
 
 .h1 {

@@ -133,7 +133,7 @@ export function WorkspaceDetails() {
               {workspace?.name ?? "\u00A0"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              {workspace?.description || "No description available."}
+              {workspace?.description || "-"}
             </p>
           </div>
           <Button size="sm" variant="outline" render={<Link to={`/workspaces/${workspaceId}/settings`} />} className="inline-flex items-center gap-1.5">

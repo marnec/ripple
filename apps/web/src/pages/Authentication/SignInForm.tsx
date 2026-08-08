@@ -174,9 +174,9 @@ function AuthCard({
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 short:gap-3 sm:gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">
           {isSignUp ? "Create your account" : "Welcome back"}
         </h1>
         <p className="mt-1 text-sm text-white/60">
@@ -188,25 +188,34 @@ function AuthCard({
 
       {!hideOAuth && (
         <>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
-            onClick={() => void signIn("github")}
-          >
-            <GitHubLogoIcon className="mr-2 size-4" />
-            Continue with GitHub
-          </Button>
+          {/* Two peer options, so they sit side by side and read as a pair.
+              They only stretch to full width from `sm:` up, where the row would
+              otherwise leave two stubby buttons stranded in a wide column. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-1 sm:gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Continue with GitHub"
+              className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
+              onClick={() => void signIn("github")}
+            >
+              <GitHubLogoIcon className="mr-2 size-4" />
+              <span className="sm:hidden">GitHub</span>
+              <span className="hidden sm:inline">Continue with GitHub</span>
+            </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
-            onClick={() => void signIn("gitlab")}
-          >
-            <GitlabMark className="mr-2 size-4" />
-            Continue with GitLab
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Continue with GitLab"
+              className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
+              onClick={() => void signIn("gitlab")}
+            >
+              <GitlabMark className="mr-2 size-4" />
+              <span className="sm:hidden">GitLab</span>
+              <span className="hidden sm:inline">Continue with GitLab</span>
+            </Button>
+          </div>
 
           <div className="relative" aria-hidden="true">
             <div className="absolute inset-0 flex items-center">
@@ -223,9 +232,9 @@ function AuthCard({
 
       <form
         onSubmit={(e) => void handlePasswordSubmit(e)}
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-4 short:gap-3"
       >
-        <div className="space-y-2">
+        <div className="space-y-2 short:space-y-1">
           <label htmlFor="email" className="text-sm font-medium">
             Email
           </label>
@@ -252,7 +261,7 @@ function AuthCard({
           )}
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 short:space-y-1">
           <div className="flex items-center justify-between">
             <label htmlFor="password" className="text-sm font-medium">
               Password
@@ -296,7 +305,7 @@ function AuthCard({
         </div>
 
         {isSignUp && (
-          <div className="space-y-2">
+          <div className="space-y-2 short:space-y-1">
             <label htmlFor="confirmPassword" className="text-sm font-medium">
               Confirm password
             </label>
