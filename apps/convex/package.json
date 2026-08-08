@@ -27,12 +27,12 @@
   "dependencies": {
     "@auth/core": "0.41.3",
     "@blocknote/core": "0.51.4",
-    "@convex-dev/action-retrier": "^0.3.0",
-    "@convex-dev/aggregate": "0.2.1",
+    "@convex-dev/action-retrier": "^0.3.1",
+    "@convex-dev/aggregate": "0.2.2",
     "@convex-dev/auth": "0.0.94",
-    "@convex-dev/migrations": "0.3.4",
+    "@convex-dev/migrations": "0.3.6",
     "@convex-dev/rate-limiter": "0.3.2",
-    "@convex-dev/workpool": "0.4.6",
+    "@convex-dev/workpool": "0.4.9",
     "@ripple/shared": "workspace:*",
     "convex": "1.43.0",
     "convex-audit-log": "workspace:*",
@@ -44,7 +44,7 @@
     "oslo": "1.2.1",
     "resend": "6.12.4",
     "web-push": "3.6.7",
-    "yjs": "13.6.31",
+    "yjs": "13.6.32",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -53,6 +53,6 @@
     "@types/web-push": "3.6.4",
     "convex-test": "0.0.55",
     "typescript": "6.0.3",
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   }
 }
