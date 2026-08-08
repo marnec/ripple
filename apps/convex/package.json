@@ -34,10 +34,10 @@
     "@convex-dev/rate-limiter": "0.3.2",
     "@convex-dev/workpool": "0.4.6",
     "@ripple/shared": "workspace:*",
-    "convex": "1.37.0",
+    "convex": "1.43.0",
     "convex-audit-log": "workspace:*",
     "convex-cascading-delete": "workspace:*",
-    "convex-helpers": "0.1.118",
+    "convex-helpers": "0.1.122",
     "convex-webhook-receiver": "^1.0.6",
     "fractional-indexing": "3.2.0",
     "jsdom": "^25.0.1",
@@ -51,7 +51,7 @@
     "@types/jsdom": "^21.1.7",
     "@types/node": "^20.14.9",
     "@types/web-push": "3.6.4",
-    "convex-test": "0.0.53",
+    "convex-test": "0.0.55",
     "typescript": "6.0.3",
     "vitest": "4.1.8"
   }

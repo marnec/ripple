@@ -6,6 +6,12 @@ patchedDependencies:
   y-excalidraw@2.0.12: patches/y-excalidraw@2.0.12.patch
 
 overrides:
+  # Convex components (@convex-dev/*, plus the vendored convex-audit-log and
+  # convex-cascading-delete) declare `convex` as a peer with a caret range, so
+  # each could otherwise resolve its own copy. Component `_generated` types cross
+  # package boundaries, and two convex instances produce mismatched types and a
+  # split client — pin one version for the whole graph.
+  convex: 1.43.0
   vite: 7.3.1
   vitest: 4.1.8
   typescript: 6.0.3
