@@ -168,6 +168,7 @@ export declare const api: {
     };
   };
   auth: {
+    isAuthenticated: FunctionReference<"query", "public", {}, any>;
     signIn: FunctionReference<
       "action",
       "public",

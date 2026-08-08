@@ -25,11 +25,11 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@auth/core": "0.37.0",
+    "@auth/core": "0.41.3",
     "@blocknote/core": "0.51.4",
     "@convex-dev/action-retrier": "^0.3.0",
     "@convex-dev/aggregate": "0.2.1",
-    "@convex-dev/auth": "0.0.93",
+    "@convex-dev/auth": "0.0.94",
     "@convex-dev/migrations": "0.3.4",
     "@convex-dev/rate-limiter": "0.3.2",
     "@convex-dev/workpool": "0.4.6",

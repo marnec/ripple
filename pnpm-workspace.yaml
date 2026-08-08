@@ -2,6 +2,9 @@ packages:
   - "apps/*"
   - "packages/*"
 
+patchedDependencies:
+  y-excalidraw@2.0.12: patches/y-excalidraw@2.0.12.patch
+
 overrides:
   vite: 7.3.1
   vitest: 4.1.8

@@ -95,7 +95,14 @@ async function findVerifiedPhoneUser(ctx: QueryCtx, phone: string) {
   return users.length === 1 ? users[0] : null;
 }
 
-export const { auth, signIn, signOut, store } = convexAuth({
+// `isAuthenticated` is part of Convex Auth's recommended public endpoint set
+// (since 0.0.76) — a trivial `ctx.auth.getUserIdentity() !== null` query. Nothing
+// in this repo calls it: the React clients use the reactive `useConvexAuth()` /
+// `<Authenticated>` from convex/react, and backend code needs the *id* rather
+// than a boolean, so it goes through `requireUser` in `authHelpers.ts`. It's
+// exported for the framework surface — server-side callers that can't hold a
+// subscription (Next.js middleware, or any future SSR/edge check) call it.
+export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
     // Customize the profile map to retain the GitHub `login`. The default
     // provider drops it (it only feeds `name`), but we persist it as
