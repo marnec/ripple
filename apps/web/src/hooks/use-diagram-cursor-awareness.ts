@@ -1,8 +1,9 @@
 import type { Awareness } from "y-protocols/awareness";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { getExcalidrawCollaboratorColor } from "@/lib/user-colors";
 import type { AwarenessUser } from "@/lib/awareness-types";
+import type { ActivitySignal } from "@/lib/awareness-activity";
 
 export interface RemotePointer {
   clientId: number;
@@ -12,8 +13,8 @@ export interface RemotePointer {
   pointer: { x: number; y: number } | null;
   // Element IDs locked by this user (lock-on-select)
   lockedElements: string[];
-  lastUpdate: number; // timestamp of last awareness change for this client
-  isIdle: boolean; // true if pointer hasn't moved in 30s
+  /** Self-reported by that client: tab hidden, or no input for a while. */
+  isIdle: boolean;
 }
 
 interface AwarenessState {
@@ -25,160 +26,97 @@ interface AwarenessState {
   lockedElements?: {
     elementIds: string[];
   };
+  activity?: ActivitySignal;
 }
-
-interface PointerPosition {
-  x: number;
-  y: number;
-}
-
-// Match Phase 12 timeouts for consistency
-const STALE_TIMEOUT = 10000; // 10 seconds - remove stale clients
-const IDLE_TIMEOUT = 30000; // 30 seconds - fade idle cursors
 
 /**
- * Hook to observe Yjs Awareness state and return remote pointers with positions.
+ * Observe Yjs Awareness and return the collaborators present on this diagram.
  *
- * Features:
- * - Filters out stale clients (>10s since last update) to handle unclean disconnects
- * - Tracks idle state (>30s since pointer position changed) for fade effect
- * - Tracks locked element IDs for conflict prevention
- * - Listens to awareness change events for real-time updates
+ * Same model as `useCursorAwareness`: presence is membership of the awareness
+ * map (a tab holding the diagram open belongs here even while its user is
+ * still), departures are retired by the server and the client heartbeat, and
+ * idleness is self-reported rather than inferred from pointer movement.
  */
 export function useDiagramCursorAwareness(awareness: Awareness | null) {
   const [remotePointers, setRemotePointers] = useState<RemotePointer[]>([]);
-  const clientTimestampsRef = useRef<Map<number, number>>(new Map());
-  const pointerPositionsRef = useRef<Map<number, { position: PointerPosition; timestamp: number }>>(new Map());
   const { resolvedTheme } = useTheme();
   const isDarkTheme = resolvedTheme === "dark";
 
-  const updateRemotePointers = useCallback(() => {
+  useEffect(() => {
     if (!awareness) return;
 
-    const states = awareness.getStates();
-    const now = Date.now();
-    const localClientId = awareness.clientID;
-    const pointers: RemotePointer[] = [];
+    const sync = () => {
+      const localClientId = awareness.clientID;
+      const pointers: RemotePointer[] = [];
 
-    states.forEach((state: AwarenessState, clientId: number) => {
-      if (clientId === localClientId) return;
-
-      const lastUpdate = clientTimestampsRef.current.get(clientId) ?? now;
-
-      // Filter out stale clients (>10s since last update)
-      if (now - lastUpdate > STALE_TIMEOUT) return;
-
-      const user = state.user;
-      const pointer = state.pointer ?? null;
-      const lockedElements = state.lockedElements?.elementIds || [];
-
-      if (user) {
-        let isIdle = false;
-        if (pointer) {
-          const pointerData = pointerPositionsRef.current.get(clientId);
-          if (pointerData) {
-            const positionChanged =
-              pointerData.position.x !== pointer.x ||
-              pointerData.position.y !== pointer.y;
-
-            if (!positionChanged) {
-              isIdle = now - pointerData.timestamp > IDLE_TIMEOUT;
-            }
-          }
-        }
+      awareness.getStates().forEach((state: AwarenessState, clientId: number) => {
+        if (clientId === localClientId) return;
+        const user = state.user;
+        if (!user) return;
 
         pointers.push({
           clientId,
           name: user.name,
           color: getExcalidrawCollaboratorColor(clientId, isDarkTheme),
-          pointer,
-          lockedElements,
-          lastUpdate,
-          isIdle,
+          pointer: state.pointer ?? null,
+          lockedElements: state.lockedElements?.elementIds ?? [],
+          isIdle: state.activity?.idle === true,
         });
-      }
-    });
+      });
 
-    // Use functional update to bail out if the visible data hasn't changed.
-    // This prevents re-renders from the 1-second interval or remote awareness
-    // events that don't actually change any displayed value (same position, same idle state, etc).
-    setRemotePointers((prev) => {
-      if (
-        prev.length === pointers.length &&
-        prev.every((p, i) => {
-          const n = pointers[i];
-          return (
-            p.clientId === n.clientId &&
-            p.pointer?.x === n.pointer?.x &&
-            p.pointer?.y === n.pointer?.y &&
-            p.isIdle === n.isIdle &&
-            p.lastUpdate === n.lastUpdate &&
-            p.lockedElements.length === n.lockedElements.length
-          );
-        })
-      ) {
-        return prev; // Same reference → React bails out
-      }
-      return pointers;
-    });
-  }, [awareness, isDarkTheme]);
+      // Bail out when nothing displayed actually changed, so remote awareness
+      // noise doesn't re-render the diagram page.
+      setRemotePointers((prev) => {
+        if (
+          prev.length === pointers.length &&
+          prev.every((p, i) => {
+            const n = pointers[i];
+            return (
+              p.clientId === n.clientId &&
+              p.pointer?.x === n.pointer?.x &&
+              p.pointer?.y === n.pointer?.y &&
+              p.isIdle === n.isIdle &&
+              p.color === n.color &&
+              p.lockedElements.length === n.lockedElements.length
+            );
+          })
+        ) {
+          return prev; // Same reference → React bails out
+        }
+        return pointers;
+      });
+    };
 
-  useEffect(() => {
-    if (!awareness) return;
-
-    const handleAwarenessChange = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
-      const localClientId = awareness.clientID;
-
+    const handleAwarenessChange = ({
+      added,
+      updated,
+      removed,
+    }: {
+      added: number[];
+      updated: number[];
+      removed: number[];
+    }) => {
       // If only the local client changed (e.g. local cursor move), skip entirely —
-      // local state is filtered out in updateRemotePointers anyway, and calling
-      // setRemotePointers with a new array reference would re-render DiagramPageContent
-      // on every single pointer move.
-      const nonLocalChanged = [...added, ...updated, ...removed].filter((id) => id !== localClientId);
+      // local state is filtered out in sync() anyway, and calling setRemotePointers
+      // with a new array reference would re-render DiagramPageContent on every
+      // single pointer move.
+      const localClientId = awareness.clientID;
+      const nonLocalChanged = [...added, ...updated, ...removed].filter(
+        (id) => id !== localClientId,
+      );
       if (nonLocalChanged.length === 0) return;
 
-      const now = Date.now();
-
-      // Update timestamps for changed remote clients
-      [...added, ...updated].filter((id) => id !== localClientId).forEach((clientId) => {
-        clientTimestampsRef.current.set(clientId, now);
-
-        // Track pointer position changes
-        const state = awareness.getStates().get(clientId) as AwarenessState | undefined;
-        if (state?.pointer) {
-          const existingPointer = pointerPositionsRef.current.get(clientId);
-          const positionChanged = !existingPointer ||
-            existingPointer.position.x !== state.pointer.x ||
-            existingPointer.position.y !== state.pointer.y;
-
-          if (positionChanged) {
-            pointerPositionsRef.current.set(clientId, {
-              position: { x: state.pointer.x, y: state.pointer.y },
-              timestamp: now,
-            });
-          }
-        }
-      });
-
-      // Remove data for removed clients
-      removed.forEach((clientId) => {
-        clientTimestampsRef.current.delete(clientId);
-        pointerPositionsRef.current.delete(clientId);
-      });
-
-      updateRemotePointers();
+      sync();
     };
 
     awareness.on("change", handleAwarenessChange);
-
-    // Re-evaluate staleness and idle state every second
-    const interval = setInterval(updateRemotePointers, 1000);
+    sync();
 
     return () => {
       awareness.off("change", handleAwarenessChange);
-      clearInterval(interval);
       setRemotePointers([]);
     };
-  }, [awareness, updateRemotePointers]);
+  }, [awareness, isDarkTheme]);
 
   return { remotePointers };
 }

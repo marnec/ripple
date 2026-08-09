@@ -9,6 +9,10 @@ import type {
   PresenceChangedMessage,
   UserLeftPresenceMessage,
 } from "@ripple/shared/protocol";
+import {
+  fetchCollaborationToken,
+  invalidateCollaborationToken,
+} from "@/lib/collaboration-token-cache";
 
 export interface PresenceEntry {
   userId: string;
@@ -79,6 +83,7 @@ export function useWorkspacePresence() {
 
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const roomKey = `presence-${workspaceId}`;
 
     const connect = async () => {
       if (!navigator.onLine) {
@@ -87,10 +92,14 @@ export function useWorkspacePresence() {
       }
 
       try {
-        const { token } = await getTokenRef.current({
-          resourceType: "presence",
-          resourceId: workspaceId,
-        });
+        // Reconnects (deploys, sleep/wake, brief drops) reuse a token that is
+        // still valid rather than re-running the access-check action.
+        const { token } = await fetchCollaborationToken(roomKey, () =>
+          getTokenRef.current({
+            resourceType: "presence",
+            resourceId: workspaceId,
+          }),
+        );
 
         if (cancelled) return;
 
@@ -176,6 +185,8 @@ export function useWorkspacePresence() {
                 return next;
               });
             } else if (msg.type === "auth_error") {
+              // Rejected — the backoff retry needs a freshly checked token.
+              invalidateCollaborationToken(roomKey);
               socket.close();
             }
           } catch {

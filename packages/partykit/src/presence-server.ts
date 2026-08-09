@@ -8,20 +8,12 @@ import type {
   UserLeftPresenceMessage,
 } from "@ripple/shared/protocol";
 import { verifyToken } from "./token-utils";
+import { PresenceRegistry } from "./presence-registry";
 
 interface ConnectionState {
   userId: string;
   userName: string;
   userImage: string | null;
-}
-
-interface PresenceEntry {
-  userId: string;
-  userName: string;
-  userImage: string | null;
-  currentPath: string;
-  resourceType?: string;
-  resourceId?: string;
 }
 
 interface Env {
@@ -34,12 +26,13 @@ interface Env {
  * One room per workspace (room ID = workspaceId). Pure in-memory broadcast —
  * no Yjs, no alarms, no persistence. Disconnection = automatic removal.
  *
- * Multi-tab support: tracks Set<connectionId> per userId. A user is only
- * removed from presence when their last tab disconnects.
+ * Multi-tab support: state is kept per connection and collapsed to one entry
+ * per user on read (see `PresenceRegistry`), so a user's tabs can't overwrite
+ * each other's location and closing one tab falls back to another rather than
+ * stranding the user on a page they left.
  */
 export default class PresenceServer extends Server {
-  private presenceMap: Map<string, PresenceEntry> = new Map();
-  private userConnections: Map<string, Set<string>> = new Map();
+  private registry = new PresenceRegistry();
 
   async onConnect(
     conn: Connection,
@@ -92,14 +85,12 @@ export default class PresenceServer extends Server {
     conn.setState(state);
 
     // Track this connection for the user
-    const conns = this.userConnections.get(userData.userId) ?? new Set();
-    conns.add(conn.id);
-    this.userConnections.set(userData.userId, conns);
+    this.registry.add(conn.id, state);
 
     // Send current presence snapshot to the new connection
     const snapshot: PresenceSnapshotMessage = {
       type: "presence_snapshot",
-      users: Array.from(this.presenceMap.values()),
+      users: this.registry.snapshot(),
     };
     conn.send(JSON.stringify(snapshot));
   }
@@ -112,28 +103,18 @@ export default class PresenceServer extends Server {
     try {
       const data = JSON.parse(message);
       if (data.type !== "presence_update") return;
+      if (typeof data.currentPath !== "string") return;
 
-      const entry: PresenceEntry = {
-        userId: state.userId,
-        userName: state.userName,
-        userImage: state.userImage,
+      const entry = this.registry.update(conn.id, {
         currentPath: data.currentPath,
         resourceType: data.resourceType,
         resourceId: data.resourceId,
-      };
+      });
+      if (!entry) return;
 
-      this.presenceMap.set(state.userId, entry);
-
-      // Broadcast to all OTHER connections
-      const changed: PresenceChangedMessage = {
-        type: "presence_changed",
-        userId: state.userId,
-        userName: state.userName,
-        userImage: state.userImage,
-        currentPath: data.currentPath,
-        resourceType: data.resourceType,
-        resourceId: data.resourceId,
-      };
+      // This connection just became the most recent writer, so the derived
+      // entry is its own — broadcast it to all OTHER connections.
+      const changed: PresenceChangedMessage = { type: "presence_changed", ...entry };
       this.broadcast(JSON.stringify(changed), [conn.id]);
     } catch {
       // Malformed message — ignore
@@ -147,24 +128,25 @@ export default class PresenceServer extends Server {
   }
 
   onClose(conn: Connection, _code: number, _reason: string, _wasClean: boolean) {
-    const state = conn.state as ConnectionState | undefined;
-    if (!state?.userId) return;
+    const removal = this.registry.remove(conn.id);
+    if (!removal) return;
 
-    // Remove this connection from the user's set
-    const conns = this.userConnections.get(state.userId);
-    if (conns) {
-      conns.delete(conn.id);
-      if (conns.size === 0) {
-        // Last connection for this user — remove from presence and broadcast
-        this.userConnections.delete(state.userId);
-        this.presenceMap.delete(state.userId);
-
-        const leftMsg: UserLeftPresenceMessage = {
-          type: "user_left_presence",
-          userId: state.userId,
-        };
-        this.broadcast(JSON.stringify(leftMsg));
-      }
+    if (removal.kind === "left") {
+      // Last connection for this user — they're gone from the workspace
+      const leftMsg: UserLeftPresenceMessage = {
+        type: "user_left_presence",
+        userId: removal.userId,
+      };
+      this.broadcast(JSON.stringify(leftMsg));
+      return;
     }
+
+    // Another tab of the same user is still open and now represents them —
+    // correct everyone's view instead of leaving the closed tab's location.
+    const changed: PresenceChangedMessage = {
+      type: "presence_changed",
+      ...removal.entry,
+    };
+    this.broadcast(JSON.stringify(changed));
   }
 }

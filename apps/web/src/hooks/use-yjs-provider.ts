@@ -6,6 +6,12 @@ import { api } from "@convex/_generated/api";
 import type { ResourceType, ErrorCode } from "@ripple/shared/protocol";
 import { ERROR_SEVERITY } from "@ripple/shared/protocol";
 import { guardAuthFailure } from "@/lib/yjs-auth-guard";
+import {
+  fetchCollaborationToken,
+  invalidateCollaborationToken,
+} from "@/lib/collaboration-token-cache";
+import { startAwarenessHeartbeat } from "@/lib/awareness-heartbeat";
+import { startActivityReporting } from "@/lib/awareness-activity";
 
 // Connection timeout: 4 seconds (within the 3-5s user decision range)
 const CONNECTION_TIMEOUT = 4000;
@@ -75,7 +81,12 @@ export function useYjsProvider(opts: {
         // creating a WebSocket connection that will just be rejected by the server.
         let initialToken: string;
         try {
-          const result = await getTokenRef.current({ resourceType, resourceId });
+          // Cached per room: navigating back to a resource, or remounting the
+          // task sheet, reuses a token that is still comfortably valid instead
+          // of running the access-check action again.
+          const result = await fetchCollaborationToken(roomId, () =>
+            getTokenRef.current({ resourceType, resourceId }),
+          );
           initialToken = result.token;
         } catch (err) {
           console.error("Failed to get collaboration token:", err);
@@ -118,7 +129,9 @@ export function useYjsProvider(opts: {
               pendingToken = null;
               return { token };
             }
-            const { token } = await getTokenRef.current({ resourceType, resourceId });
+            const { token } = await fetchCollaborationToken(roomId, () =>
+              getTokenRef.current({ resourceType, resourceId }),
+            );
             return { token };
           },
         });
@@ -165,6 +178,7 @@ export function useYjsProvider(opts: {
         // Destroy provider permanently (permission revoked — no recreation)
         const destroyProvider = (p: YProvider) => {
           recreationTriggered = true; // Prevent any other triggers
+          invalidateCollaborationToken(roomId);
           setIsConnected(false);
           p.shouldConnect = false;
           try { p.awareness.setLocalState(null); } catch { /* already destroyed */ }
@@ -179,6 +193,10 @@ export function useYjsProvider(opts: {
         const triggerRecreation = (p: YProvider) => {
           if (recreationTriggered) return;
           recreationTriggered = true;
+
+          // The server refused this connection — don't hand the retry the same
+          // token back out of the cache.
+          invalidateCollaborationToken(roomId);
 
           p.shouldConnect = false;
           try { p.awareness.setLocalState(null); } catch { /* already destroyed */ }
@@ -357,6 +375,21 @@ export function useYjsProvider(opts: {
   useEffect(() => {
     getTokenRef.current = getToken;
   });
+
+  // Re-publish our cursor periodically and retire peers that have gone silent
+  // — the provider disables y-protocols' own liveness loop, so without this a
+  // closed tab's cursor lingers in the document forever.
+  useEffect(() => {
+    if (!provider) return;
+    return startAwarenessHeartbeat(provider.awareness);
+  }, [provider]);
+
+  // Tell peers whether we're actually available, so they never have to guess it
+  // from our silence.
+  useEffect(() => {
+    if (!provider) return;
+    return startActivityReporting(provider.awareness);
+  }, [provider]);
 
   // Cleanup yDoc on unmount or resourceId change
   useEffect(() => {

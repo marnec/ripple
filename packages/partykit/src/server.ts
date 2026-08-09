@@ -1,6 +1,8 @@
 import { YServer } from "y-partyserver";
 import type { Connection, ConnectionContext } from "partyserver";
 import * as Y from "yjs";
+import { removeAwarenessStates } from "y-protocols/awareness";
+import { AwarenessOwnership } from "./awareness-ownership";
 import type { ServerMessage } from "@ripple/shared/protocol";
 import { parseCellName, parseRange } from "@ripple/shared/cellRef";
 import { parseStableRef, resolveStableRef } from "@ripple/shared/stableRef";
@@ -22,6 +24,16 @@ function resolveDisplayValue(
     if (computed !== undefined) return computed;
   }
   return rawValue;
+}
+
+/**
+ * The connection id behind an awareness update's origin, or null when the
+ * update did not come from a connection (server-side removals pass null).
+ */
+function connectionIdOf(origin: unknown): string | null {
+  if (!origin || typeof origin !== "object" || !("id" in origin)) return null;
+  const id = (origin as { id: unknown }).id;
+  return typeof id === "string" ? id : null;
 }
 
 // Constants
@@ -57,6 +69,13 @@ export default class CollaborationServer extends YServer {
 
   private permissionCheckScheduled = false;
 
+  // Which awareness clients (cursors) belong to which connection — the only
+  // reliable signal for retiring a cursor whose tab is gone. See
+  // `awareness-ownership.ts` for why neither the client nor y-protocols can be
+  // relied on for this.
+  private awarenessOwnership = new AwarenessOwnership();
+  private awarenessOwnershipAttached = false;
+
   // Whether a snapshot already backs this room — true if onLoad hydrated from
   // one, or once we've persisted real content. Used to avoid letting an idle,
   // never-edited session write an *empty* first snapshot that would clobber a
@@ -90,6 +109,8 @@ export default class CollaborationServer extends YServer {
     // MUST call super.onStart() — it calls onLoad(), sets up Yjs listeners,
     // and wires up the debounced onSave() callback.
     await super.onStart();
+
+    this.trackAwarenessOwnership();
 
     // Attach observers for specific room types
     const roomId = this.name;
@@ -270,6 +291,11 @@ export default class CollaborationServer extends YServer {
       shareId,
     });
 
+    // Before YServer replays the awareness map to this connection, drop any
+    // cursor left behind by a tab that is already gone — otherwise every
+    // reload hands the joiner the same ghosts again.
+    this.purgeGhostAwareness();
+
     // Delegate to YServer for Yjs sync setup
     try {
       await super.onConnect(conn, ctx);
@@ -309,8 +335,12 @@ export default class CollaborationServer extends YServer {
    * then schedule disconnect save if this was the last connection.
    */
   async onClose(conn: Connection, code: number, reason: string, wasClean: boolean) {
-    // YServer handles awareness cleanup
+    // YServer removes the awareness clients it tracked for this connection…
     void super.onClose(conn, code, reason, wasClean);
+    // …and this retires anything it missed, then sweeps cursors belonging to
+    // connections that vanished without an event at all.
+    this.retireAwarenessFor(conn.id);
+    this.purgeGhostAwareness();
 
     // Count remaining connections
     let connectionCount = 0;
@@ -330,10 +360,17 @@ export default class CollaborationServer extends YServer {
   /**
    * Connection-level error handler. Required by partyserver ≥0.5 to silence its
    * default "implement onError" complaint. "Network connection lost" with
-   * `retryable: true` is the expected outcome of an abrupt tab close — onClose
-   * will fire next and handle cleanup. Surface anything else.
+   * `retryable: true` is the expected outcome of an abrupt tab close, so it is
+   * not logged at all; anything else is surfaced. Cleanup is *not* left to onClose
+   * — whether a dead connection arrives here or there isn't guaranteed, so both
+   * paths retire the connection's cursors.
    */
-  onError(_conn: Connection, error: unknown) {
+  onError(conn: Connection, error: unknown) {
+    // An abrupt tab close can surface here instead of onClose, so retire this
+    // connection's cursors on the way through either handler.
+    this.retireAwarenessFor(conn.id);
+    this.purgeGhostAwareness();
+
     const msg = error instanceof Error ? error.message : String(error);
     if (msg.includes("Network connection lost")) return;
     console.error(`Connection error in room ${this.name}:`, error);
@@ -372,6 +409,9 @@ export default class CollaborationServer extends YServer {
       }
 
       if (connectionCount > 0) {
+        // Backstop for a connection that disappeared without firing either
+        // onClose or onError.
+        this.purgeGhostAwareness();
         await this.checkPermissions(roomId);
         // Reschedule
         await this.ctx.storage.put("alarmType", ALARM_TYPE_PERMISSION_CHECK);
@@ -380,6 +420,57 @@ export default class CollaborationServer extends YServer {
         this.permissionCheckScheduled = false;
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Awareness (remote cursor) lifecycle
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Attribute each awareness update to the connection that sent it. The origin
+   * is the Connection for client-sent updates and null for server-side
+   * removals — which is also what makes y-partyserver broadcast them onward.
+   */
+  private trackAwarenessOwnership(): void {
+    if (this.awarenessOwnershipAttached) return;
+    this.awarenessOwnershipAttached = true;
+
+    this.document.awareness.on(
+      "update",
+      (changes: { added: number[]; updated: number[]; removed: number[] }, origin: unknown) => {
+        const connectionId = connectionIdOf(origin);
+        if (connectionId) this.awarenessOwnership.record(connectionId, changes);
+      },
+    );
+  }
+
+  /** Retire the cursors of a connection that has gone away. */
+  private retireAwarenessFor(connectionId: string): void {
+    const clientIds = this.awarenessOwnership.release(connectionId);
+    if (clientIds.length === 0) return;
+    removeAwarenessStates(this.document.awareness, clientIds, null);
+  }
+
+  /**
+   * Drop every cursor whose owning connection is no longer live. Cheap enough
+   * to run on connect, on teardown, and on the permission tick — the awareness
+   * map holds one entry per open tab in the room.
+   */
+  private purgeGhostAwareness(): void {
+    const live: string[] = [];
+    for (const conn of this.getConnections()) live.push(conn.id);
+
+    const awareness = this.document.awareness;
+    const present: number[] = [];
+    for (const clientId of awareness.getStates().keys()) {
+      if (clientId !== awareness.clientID) present.push(clientId);
+    }
+
+    const ghosts = this.awarenessOwnership.ghosts(present, live);
+    if (ghosts.length === 0) return;
+
+    console.log(`Retiring ${ghosts.length} orphaned cursor(s) in room ${this.name}`);
+    removeAwarenessStates(awareness, ghosts, null);
   }
 
   // ---------------------------------------------------------------------------

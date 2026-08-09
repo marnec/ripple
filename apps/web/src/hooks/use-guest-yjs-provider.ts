@@ -6,6 +6,12 @@ import { api } from "@convex/_generated/api";
 import type { ShareResourceType } from "@ripple/shared/shareTypes";
 import { yjsResourceTypeForShare } from "@ripple/shared/shareTypes";
 import { guardAuthFailure } from "@/lib/yjs-auth-guard";
+import {
+  fetchCollaborationToken,
+  invalidateCollaborationToken,
+} from "@/lib/collaboration-token-cache";
+import { startAwarenessHeartbeat } from "@/lib/awareness-heartbeat";
+import { startActivityReporting } from "@/lib/awareness-activity";
 
 const CONNECTION_TIMEOUT = 4000;
 const BASE_RECREATION_DELAY = 2000;
@@ -44,6 +50,10 @@ export function useGuestYjsProvider(opts: {
 
   const yDoc = useMemo(() => new Y.Doc(), []);
 
+  // Guest tokens are minted per share *and* per guest identity, so the room id
+  // (which only comes back with the token) can't be the cache key.
+  const tokenCacheKey = `guest:${shareId}:${guestSub}:${guestName}`;
+
   useEffect(() => {
     getGuestTokenRef.current = getGuestToken;
   });
@@ -63,11 +73,9 @@ export function useGuestYjsProvider(opts: {
       let initialToken: string;
       let roomId: string;
       try {
-        const result = await getGuestTokenRef.current({
-          shareId,
-          guestSub,
-          guestName,
-        });
+        const result = await fetchCollaborationToken(tokenCacheKey, () =>
+          getGuestTokenRef.current({ shareId, guestSub, guestName }),
+        );
         initialToken = result.token;
         roomId = result.roomId;
       } catch (err) {
@@ -101,11 +109,9 @@ export function useGuestYjsProvider(opts: {
             pendingToken = null;
             return { token };
           }
-          const { token } = await getGuestTokenRef.current({
-            shareId,
-            guestSub,
-            guestName,
-          });
+          const { token } = await fetchCollaborationToken(tokenCacheKey, () =>
+            getGuestTokenRef.current({ shareId, guestSub, guestName }),
+          );
           return { token };
         },
       });
@@ -128,6 +134,9 @@ export function useGuestYjsProvider(opts: {
       const triggerRecreation = (p: YProvider) => {
         if (recreationTriggered) return;
         recreationTriggered = true;
+        // Refused by the server — the retry must re-check the share, not
+        // replay the token that was just rejected.
+        invalidateCollaborationToken(tokenCacheKey);
         p.shouldConnect = false;
         try {
           p.awareness.setLocalState(null);
@@ -156,6 +165,7 @@ export function useGuestYjsProvider(opts: {
           const msg = JSON.parse(event.data);
           if (msg.type === "permission_revoked") {
             recreationTriggered = true;
+            invalidateCollaborationToken(tokenCacheKey);
             setIsConnected(false);
             newProvider.shouldConnect = false;
             try {
@@ -230,6 +240,7 @@ export function useGuestYjsProvider(opts: {
     shareId,
     guestSub,
     guestName,
+    tokenCacheKey,
     resourceId,
     yjsType,
     enabled,
@@ -237,6 +248,18 @@ export function useGuestYjsProvider(opts: {
     reconnectTrigger,
     isConnected,
   ]);
+
+  // Same cursor-liveness loop the member hook runs — guests are just as able
+  // to leave a ghost cursor behind.
+  useEffect(() => {
+    if (!provider) return;
+    return startAwarenessHeartbeat(provider.awareness);
+  }, [provider]);
+
+  useEffect(() => {
+    if (!provider) return;
+    return startActivityReporting(provider.awareness);
+  }, [provider]);
 
   useEffect(() => {
     return () => {

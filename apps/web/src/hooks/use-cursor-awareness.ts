@@ -1,6 +1,7 @@
 import type { Awareness } from "y-protocols/awareness";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AwarenessUser } from "@/lib/awareness-types";
+import type { ActivitySignal } from "@/lib/awareness-activity";
 
 export interface RemoteUser {
   clientId: number;
@@ -8,8 +9,8 @@ export interface RemoteUser {
   color: string;
   // cursor may be null if user is present but not actively editing
   cursor: { anchor: number; head: number } | null;
-  lastUpdate: number; // timestamp of last awareness change for this client
-  isIdle: boolean; // true if cursor hasn't moved in 30s
+  /** Self-reported by that client: tab hidden, or no input for a while. */
+  isIdle: boolean;
 }
 
 interface AwarenessState {
@@ -18,132 +19,68 @@ interface AwarenessState {
     anchor: number;
     head: number;
   };
-}
-
-interface CursorPosition {
-  anchor: number;
-  head: number;
+  activity?: ActivitySignal;
 }
 
 /**
- * Hook to observe Yjs Awareness state and return remote users with cursor positions.
+ * Observe Yjs Awareness and return the collaborators present on this resource.
  *
- * Features:
- * - Filters out stale clients (>10s since last update) to handle unclean disconnects
- * - Tracks idle state (>30s since cursor position changed) for fade effect
- * - Listens to awareness change events for real-time updates
+ * Presence is membership of the awareness map, nothing more: while a tab holds
+ * the document open its user belongs here, whether or not they are typing.
+ * Departures are handled where they can be known accurately — the server
+ * retires the cursors of connections that go away (`AwarenessOwnership`), and
+ * `startAwarenessHeartbeat` sweeps peers that stop reporting entirely. Filtering
+ * on "have I heard from them lately" here would only re-hide people who are
+ * simply reading.
+ *
+ * Idleness is likewise not inferred: each client publishes its own `activity`
+ * (see `awareness-activity.ts`), which arrives as an ordinary awareness change.
  */
 export function useCursorAwareness(awareness: Awareness | null) {
   const [remoteUsers, setRemoteUsers] = useState<RemoteUser[]>([]);
-  const clientTimestampsRef = useRef<Map<number, number>>(new Map());
-  const cursorPositionsRef = useRef<Map<number, { position: CursorPosition; timestamp: number }>>(new Map());
-  /** Fingerprint of previous setRemoteUsers call to skip no-op updates */
+  /** Fingerprint of the previous setRemoteUsers call, to skip no-op updates. */
   const lastFingerprintRef = useRef("");
 
-  const updateRemoteUsers = useCallback(() => {
+  useEffect(() => {
     if (!awareness) return;
 
-    const states = awareness.getStates();
-    const now = Date.now();
-    const localClientId = awareness.clientID;
-    const users: RemoteUser[] = [];
+    const sync = () => {
+      const localClientId = awareness.clientID;
+      const users: RemoteUser[] = [];
 
-    states.forEach((state: AwarenessState, clientId: number) => {
-      if (clientId === localClientId) return;
-
-      const lastUpdate = clientTimestampsRef.current.get(clientId) ?? now;
-
-      // Filter out stale clients (>10s since last update)
-      if (now - lastUpdate > 10000) return;
-
-      const user = state.user;
-      const cursor = state.cursor ?? null;
-
-      if (user) {
-        let isIdle = false;
-        if (cursor) {
-          const cursorData = cursorPositionsRef.current.get(clientId);
-          if (cursorData) {
-            const positionChanged =
-              cursorData.position.anchor !== cursor.anchor ||
-              cursorData.position.head !== cursor.head;
-
-            if (!positionChanged) {
-              isIdle = now - cursorData.timestamp > 30000;
-            }
-          }
-        }
+      awareness.getStates().forEach((state: AwarenessState, clientId: number) => {
+        if (clientId === localClientId) return;
+        const user = state.user;
+        if (!user) return;
 
         users.push({
           clientId,
           name: user.name,
           color: user.color,
-          cursor,
-          lastUpdate,
-          isIdle,
+          cursor: state.cursor ?? null,
+          isIdle: state.activity?.idle === true,
         });
+      });
+
+      const fingerprint = users
+        .map((u) => `${u.clientId}:${u.name}:${u.isIdle}:${u.cursor?.anchor},${u.cursor?.head}`)
+        .join("|");
+
+      if (fingerprint !== lastFingerprintRef.current) {
+        lastFingerprintRef.current = fingerprint;
+        setRemoteUsers(users);
       }
-    });
-
-    // Build a fingerprint to avoid triggering React re-renders when nothing changed.
-    // Intentionally excludes lastUpdate (always changes) — only tracks identity + cursor + idle.
-    const fingerprint = users
-      .map(u => `${u.clientId}:${u.name}:${u.isIdle}:${u.cursor?.anchor},${u.cursor?.head}`)
-      .join("|");
-
-    if (fingerprint !== lastFingerprintRef.current) {
-      lastFingerprintRef.current = fingerprint;
-      setRemoteUsers(users);
-    }
-  }, [awareness]);
-
-  useEffect(() => {
-    if (!awareness) return;
-
-    const handleAwarenessChange = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
-      const now = Date.now();
-
-      // Update timestamps for changed clients
-      [...added, ...updated].forEach((clientId) => {
-        clientTimestampsRef.current.set(clientId, now);
-
-        // Track cursor position changes
-        const state = awareness.getStates().get(clientId) as AwarenessState | undefined;
-        if (state?.cursor) {
-          const existingCursor = cursorPositionsRef.current.get(clientId);
-          const positionChanged = !existingCursor ||
-            existingCursor.position.anchor !== state.cursor.anchor ||
-            existingCursor.position.head !== state.cursor.head;
-
-          if (positionChanged) {
-            cursorPositionsRef.current.set(clientId, {
-              position: { anchor: state.cursor.anchor, head: state.cursor.head },
-              timestamp: now,
-            });
-          }
-        }
-      });
-
-      // Remove data for removed clients
-      removed.forEach((clientId) => {
-        clientTimestampsRef.current.delete(clientId);
-        cursorPositionsRef.current.delete(clientId);
-      });
-
-      updateRemoteUsers();
     };
 
-    awareness.on("change", handleAwarenessChange);
-
-    // Re-evaluate staleness and idle state every second
-    const interval = setInterval(updateRemoteUsers, 1000);
+    awareness.on("change", sync);
+    sync();
 
     return () => {
-      awareness.off("change", handleAwarenessChange);
-      clearInterval(interval);
+      awareness.off("change", sync);
+      lastFingerprintRef.current = "";
       setRemoteUsers([]);
     };
-  }, [awareness, updateRemoteUsers]);
+  }, [awareness]);
 
   return { remoteUsers };
 }

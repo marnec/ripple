@@ -1,5 +1,6 @@
 import { Layout } from "@/components/Layout";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { clearCollaborationTokenCache } from "@/lib/collaboration-token-cache";
+import { Authenticated, Unauthenticated, useConvexAuth } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import React, { Suspense, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -23,6 +24,16 @@ export default function App() {
   const storedInviteId = useReadLocalStorage("inviteId");
 
   const navigate = useNavigate();
+  const { isAuthenticated } = useConvexAuth();
+
+  // Collaboration tokens carry the signed-in user's identity, so the session
+  // ending has to empty the cache — otherwise the next person to sign in on
+  // this tab could connect to a room as the previous one. Watched here rather
+  // than inside <Authenticated>, whose children unmount on sign-out and so
+  // never observe the transition.
+  useEffect(() => {
+    if (!isAuthenticated) clearCollaborationTokenCache();
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!user) return;
