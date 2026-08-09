@@ -130,6 +130,61 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Production URL: https://ripple.conduits.space" >> $GITHUB_STEP_SUMMARY
 
+  deploy-admin:
+    needs: deploy-convex
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # VITE_* values are inlined into the bundle at build time, so these MUST
+      # come from CI secrets: apps/admin/.env.local points at the dev Convex
+      # deployment, and a local build would ship an admin console wired to dev.
+      - name: Build admin app
+        env:
+          VITE_CONVEX_URL: ${{ secrets.VITE_CONVEX_URL }}
+          VITE_CONVEX_SITE_URL: ${{ secrets.VITE_CONVEX_SITE_URL }}
+        run: pnpm --filter @ripple/admin build
+
+      # Static assets only — no Worker script and no Durable Objects, so there
+      # are no wrangler secrets to set (unlike apps/web).
+      - name: Deploy to Cloudflare Workers (admin static assets)
+        working-directory: apps/admin
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy
+
+      - name: Health check admin
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L "https://admin.conduits.space")
+          echo "Admin responded with HTTP $STATUS"
+          if [ "$STATUS" = "000" ]; then echo "Admin unreachable" && exit 1; fi
+
+      - name: Deployment summary
+        run: |
+          echo "# Admin Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Admin console deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Admin URL: https://admin.conduits.space" >> $GITHUB_STEP_SUMMARY
+
   deploy-rsvp-worker:
     needs: deploy-convex
     runs-on: ubuntu-latest

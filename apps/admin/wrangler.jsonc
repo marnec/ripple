@@ -7,7 +7,11 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "single-page-application"
-  }
-  // Add your own hostname before deploying, e.g.:
-  // "routes": [{ "pattern": "admin.conduits.space", "custom_domain": true }]
+  },
+  "routes": [
+    {
+      "pattern": "admin.conduits.space",
+      "custom_domain": true
+    }
+  ]
 }
