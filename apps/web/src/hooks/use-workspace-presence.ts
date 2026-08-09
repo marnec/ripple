@@ -260,10 +260,13 @@ export function useWorkspacePresence() {
     };
     const handleOnline = () => {
       recreationCountRef.current = 0;
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
+      // Deliberately no `socketRef.current.close()` here. Since partysocket
+      // 1.2.0, `close()` dispatches its `close` event synchronously, so
+      // closing from this handler would run the "close" listener below while
+      // `cancelled` is still false — scheduling a second, delayed reconnect on
+      // top of the one this trigger causes. The connect effect's cleanup sets
+      // `cancelled = true` *before* closing, so letting it own the teardown
+      // keeps exactly one reconnect per online event.
       setReconnectTrigger((prev) => prev + 1);
     };
 

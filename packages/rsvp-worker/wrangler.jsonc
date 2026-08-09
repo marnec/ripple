@@ -14,7 +14,7 @@
 // `nodejs_compat` is enabled because postal-mime pulls in a few node Buffer
 // shims; without it imports fail at deploy time.
 {
-  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ripple-rsvp",
   "main": "src/worker.ts",
   "compatibility_date": "2026-02-07",

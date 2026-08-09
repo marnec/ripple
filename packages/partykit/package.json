@@ -10,15 +10,17 @@
     "./presence-server": "./src/presence-server.ts"
   },
   "scripts": {
-    "dev": "wrangler dev --port 1999"
+    "dev": "wrangler dev --port 1999",
+    "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@ripple/shared": "workspace:^",
-    "partyserver": "0.5.6",
+    "partyserver": "0.5.10",
     "y-partyserver": "2.2.0",
     "yjs": "13.6.32"
   },
   "devDependencies": {
-    "wrangler": "4.87.0"
+    "@cloudflare/workers-types": "4.20260608.1",
+    "wrangler": "4.120.0"
   }
 }
