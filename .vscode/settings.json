@@ -1,0 +1,34 @@
+{
+    "js/ts.tsdk.path": "node_modules/typescript/lib",
+    // One element per argument token — the extension passes these straight
+    // through to glslangValidator without shell splitting. The `-l` flag that
+    // `-D` requires is supplied by "glsllint.linkShader" (default true).
+    "glsllint.glslangValidatorArgs": ["--glsl-version", "300es", "-DGLSLLINT"],
+    // Wrangler config schemas are mapped here rather than via an inline
+    // "$schema" key in each wrangler.jsonc. A relative "$schema" is resolved
+    // against the *document's* URI scheme, so it breaks in VSCode's `git:`
+    // virtual documents (Source Control diffs, file history) — git has no
+    // node_modules to read from. These urls resolve against the workspace
+    // root instead, which is scheme-independent.
+    //
+    // pnpm does not hoist, so each package has its own wrangler install and
+    // therefore its own schema copy. Keep one entry per package.
+    "json.schemas": [
+        {
+            "fileMatch": ["/apps/web/wrangler.jsonc"],
+            "url": "./apps/web/node_modules/wrangler/config-schema.json"
+        },
+        {
+            "fileMatch": ["/apps/admin/wrangler.jsonc"],
+            "url": "./apps/admin/node_modules/wrangler/config-schema.json"
+        },
+        {
+            "fileMatch": ["/packages/partykit/wrangler.jsonc"],
+            "url": "./packages/partykit/node_modules/wrangler/config-schema.json"
+        },
+        {
+            "fileMatch": ["/packages/rsvp-worker/wrangler.jsonc"],
+            "url": "./packages/rsvp-worker/node_modules/wrangler/config-schema.json"
+        }
+    ]
+}

@@ -1,5 +1,4 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ripple",
   "main": "../../packages/partykit/src/worker.ts",
   "account_id": "ad8bc0499d2dec399dbc9d6f964b3da6",

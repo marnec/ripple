@@ -1,5 +1,4 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ripple-admin",
   "compatibility_date": "2026-02-07",
   // Static-asset-only deployment (no Worker script, no Durable Objects — unlike
