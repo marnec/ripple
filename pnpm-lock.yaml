@@ -401,14 +401,14 @@ importers:
         specifier: 0.51.4
         version: 0.51.4(@floating-ui/dom@1.7.6)(@types/hast@3.0.4)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(postcss@8.5.26)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tailwindcss@4.3.3)
       '@cloudflare/realtimekit':
-        specifier: 1.5.1
-        version: 1.5.1
+        specifier: 2.0.1
+        version: 2.0.1
       '@cloudflare/realtimekit-react':
-        specifier: 1.5.1
-        version: 1.5.1(react@19.2.8)
+        specifier: 2.0.1
+        version: 2.0.1(react@19.2.8)
       '@cloudflare/realtimekit-react-ui':
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 2.0.1
+        version: 2.0.1
       '@convex-dev/auth':
         specifier: 0.0.94
         version: 0.0.94(@auth/core@0.41.3)(convex@1.43.0(react@19.2.8))(react@19.2.8)
@@ -1507,19 +1507,19 @@ packages:
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
     engines: {node: '>=22.0.0'}
 
-  '@cloudflare/realtimekit-react-ui@1.2.0':
-    resolution: {integrity: sha512-aJoVPxpEboibpyQWgy+zgHbppQK4DlNDxwJkWu2f8gIWFFhr4QWLg7ovVvxfUhi8ONuTAzHao7ktAlg2Gr4onQ==}
+  '@cloudflare/realtimekit-react-ui@2.0.1':
+    resolution: {integrity: sha512-G0lU6VxCDfFfo4z6NPfYvgctefr5yce7xgUyDQY66pDWlESSJqRCJr4EKqSg0zA2JswuYDjp36S6Ya8SBwyHpQ==}
 
-  '@cloudflare/realtimekit-react@1.5.1':
-    resolution: {integrity: sha512-BqR1EWD92971wbmculNeotjRcJYUf6scDOet919e519QsCwJPG/PnXZGrX7BDyiVlVW7anHwzUl2exa8FuU+HQ==}
+  '@cloudflare/realtimekit-react@2.0.1':
+    resolution: {integrity: sha512-z5BL32ABEppwxofq7meV0enFyPa7XL3X3oyb2hcI9PE0WPx1VMVM7GdDjpBjF/r6Ff0LpFA64vlyzeto0/8Pew==}
     peerDependencies:
       react: 19.2.8
 
-  '@cloudflare/realtimekit-ui@1.2.0':
-    resolution: {integrity: sha512-/0cutQJgDXsVy8iuBMgq+9xu8lYjNH0yEkZrabTQCkysyuc61lN2gXjwE2rfQgmSS3tZQjz3r0MVl430sidNPQ==}
+  '@cloudflare/realtimekit-ui@2.0.1':
+    resolution: {integrity: sha512-F1Px1LJwpIw50QG76e2ViYjOv3utzd5wkoScRLqeMj7ZS8GtdX+vMVfG1+5jfvc9Ha/Qujauwsb13fam+7bfSg==}
 
-  '@cloudflare/realtimekit@1.5.1':
-    resolution: {integrity: sha512-3ymELEXoT2MbWlqnUrx3+XFm51oScby5WfrWaB8mqoQzlihAPrh+qGa9ag2Q1t4yL8vtMMI+jaJpHJgPSD6O1g==}
+  '@cloudflare/realtimekit@2.0.1':
+    resolution: {integrity: sha512-GDZpFWqC/+ZHUfVSCIc8dpZza2E4HsyyU+48ENmGY2bB2EYyzsr5YNGUXtqLkap8YiUmPS1ZA1YPUA5e8d5mNA==}
 
   '@cloudflare/unenv-preset@2.16.1':
     resolution: {integrity: sha512-ECxObrMfyTl5bhQf/lZCXwo5G6xX9IAUo+nDMKK4SZ8m4Jvvxp52vilxyySSWh2YTZz8+HQ07qGH/2rEom1vDw==}
@@ -10843,16 +10843,16 @@ snapshots:
 
   '@cloudflare/kv-asset-handler@0.5.0': {}
 
-  '@cloudflare/realtimekit-react-ui@1.2.0':
+  '@cloudflare/realtimekit-react-ui@2.0.1':
     dependencies:
-      '@cloudflare/realtimekit-ui': 1.2.0
+      '@cloudflare/realtimekit-ui': 2.0.1
 
-  '@cloudflare/realtimekit-react@1.5.1(react@19.2.8)':
+  '@cloudflare/realtimekit-react@2.0.1(react@19.2.8)':
     dependencies:
-      '@cloudflare/realtimekit': 1.5.1
+      '@cloudflare/realtimekit': 2.0.1
       react: 19.2.8
 
-  '@cloudflare/realtimekit-ui@1.2.0':
+  '@cloudflare/realtimekit-ui@2.0.1':
     dependencies:
       '@floating-ui/dom': 1.7.6
       hark: 1.2.3
@@ -10860,7 +10860,7 @@ snapshots:
       lodash-es: 4.18.1
       resize-observer-polyfill: 1.5.1
 
-  '@cloudflare/realtimekit@1.5.1':
+  '@cloudflare/realtimekit@2.0.1':
     dependencies:
       '@protobuf-ts/runtime': 2.11.1
       bowser: 2.14.1
