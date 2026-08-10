@@ -17,6 +17,12 @@ export default defineConfig({
     tailwindcss(),
     mkcert(),
   ],
+  optimizeDeps: {
+    // Same reason as apps/web: the workspace packages are raw TypeScript source,
+    // not built deps. Pre-bundling them would take their edits out of the HMR
+    // graph and turn every change into a dep re-optimize + full reload.
+    exclude: ["@ripple/shared", "@ripple/ui"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

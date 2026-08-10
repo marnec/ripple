@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5273 --open",
+    "dev": "vite --port 5273 --strictPort --open",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b && eslint . --report-unused-disable-directives --max-warnings 0",
