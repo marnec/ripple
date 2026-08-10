@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { Component, type ReactNode } from "react";
 
 /**
@@ -20,19 +21,19 @@ export class ErrorBoundary extends Component<
     if (!this.state.error) return this.props.children;
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 p-6 text-center">
-        <h1 className="text-lg font-semibold text-stone-100">Something went wrong</h1>
-        <p className="max-w-sm font-mono text-xs text-stone-500">
+        <h1 className="text-lg font-semibold">Something went wrong</h1>
+        <p className="max-w-sm font-mono text-xs text-muted-foreground">
           {this.state.error.message.split("\n")[0]}
         </p>
-        <button
+        <Button
+          variant="outline"
           onClick={() => {
             this.setState({ error: null });
             window.location.hash = "/";
           }}
-          className="rounded-md border border-stone-700 px-3 py-1.5 text-sm text-stone-200 hover:bg-stone-800"
         >
           Back to overview
-        </button>
+        </Button>
       </div>
     );
   }

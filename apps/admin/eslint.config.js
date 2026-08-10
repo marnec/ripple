@@ -5,7 +5,9 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", ".wrangler/**", "vite.config.ts"],
+    // `src/components/ui/**` is shadcn CLI output — linted upstream, and
+    // regenerated on `shadcn add`, so local fixes would be overwritten.
+    ignores: ["dist/**", ".wrangler/**", "vite.config.ts", "src/components/ui/**"],
   },
   {
     files: ["**/*.{ts,tsx}"],

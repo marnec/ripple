@@ -1,18 +1,20 @@
+import {
+  EmptyState,
+  LoadingPane,
+  PageHeader,
+  SectionLabel,
+  StatCard,
+  UserAvatar,
+} from "@/components/console";
+import { Card } from "@/components/ui/card";
+import { fmtNum, fmtRelative } from "@/lib/format";
 import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";
-import { Avatar, Card, EmptyState, SectionLabel, Spinner, StatCard } from "../components/ui";
-import { fmtNum, fmtRelative } from "../lib/format";
 
 export function OverviewPage() {
   const stats = useQuery(api.admin.stats.overview);
 
-  if (stats === undefined) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
+  if (stats === undefined) return <LoadingPane />;
 
   const cards = [
     { label: "Users", value: fmtNum(stats.users), sub: `${stats.admins} admin · ${stats.bots} bot`, accent: true },
@@ -27,10 +29,7 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-8">
-      <header className="animate-rise">
-        <h1 className="text-2xl font-semibold tracking-tight text-stone-100">Overview</h1>
-        <p className="mt-1 text-sm text-stone-500">Platform-wide totals across the deployment.</p>
-      </header>
+      <PageHeader title="Overview" subtitle="Platform-wide totals across the deployment." />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {cards.map((c, i) => (
@@ -47,19 +46,21 @@ export function OverviewPage() {
 
       <section className="animate-rise" style={{ animationDelay: "240ms" }}>
         <SectionLabel className="mb-3">Recent signups</SectionLabel>
-        <Card>
+        <Card className="gap-0 py-0">
           {stats.recentSignups.length === 0 ? (
-            <EmptyState>No signups yet.</EmptyState>
+            <EmptyState title="No signups yet" />
           ) : (
-            <ul className="divide-y divide-stone-800">
+            <ul className="divide-y divide-border">
               {stats.recentSignups.map((u) => (
                 <li key={u._id} className="flex items-center gap-3 px-4 py-2.5">
-                  <Avatar name={u.name} email={u.email} />
+                  <UserAvatar name={u.name} email={u.email} />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-stone-200">{u.name ?? "Unnamed"}</div>
-                    <div className="truncate font-mono text-xs text-stone-500">{u.email ?? "—"}</div>
+                    <div className="truncate text-sm">{u.name ?? "Unnamed"}</div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {u.email ?? "—"}
+                    </div>
                   </div>
-                  <span className="shrink-0 font-mono text-xs text-stone-500">
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
                     {fmtRelative(u.createdAt)}
                   </span>
                 </li>

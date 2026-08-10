@@ -24,6 +24,41 @@ export declare const api: {
     access: {
       amIAdmin: FunctionReference<"query", "public", {}, boolean>;
     };
+    invites: {
+      list: FunctionReference<
+        "query",
+        "public",
+        {},
+        {
+          invites: Array<{
+            _id: Id<"workspaceInvites">;
+            createdAt: number;
+            email: string;
+            invitedBy: Id<"users">;
+            inviterEmail?: string;
+            inviterName?: string;
+            recipientIsMember: boolean;
+            recipientUserId: Id<"users"> | null;
+            status: string;
+            workspaceId: Id<"workspaces">;
+            workspaceName: string | null;
+          }>;
+          siteUrl: string | null;
+        }
+      >;
+      resend: FunctionReference<
+        "mutation",
+        "public",
+        { inviteId: Id<"workspaceInvites"> },
+        null
+      >;
+      revoke: FunctionReference<
+        "mutation",
+        "public",
+        { inviteId: Id<"workspaceInvites"> },
+        null
+      >;
+    };
     stats: {
       overview: FunctionReference<
         "query",

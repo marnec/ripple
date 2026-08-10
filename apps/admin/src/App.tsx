@@ -1,16 +1,20 @@
+import { AppShell } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
 import { Authenticated, AuthLoading, Unauthenticated, useQuery } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { AppShell } from "./components/AppShell";
 
 export function App() {
   return (
     <main className="min-h-dvh">
       <AuthLoading>
         <Centered>
-          <Spinner />
+          <Spinner className="size-6 text-muted-foreground" />
         </Centered>
       </AuthLoading>
       <Unauthenticated>
@@ -35,7 +39,7 @@ function AdminGate() {
   if (isAdmin === undefined) {
     return (
       <Centered>
-        <Spinner />
+        <Spinner className="size-6 text-muted-foreground" />
       </Centered>
     );
   }
@@ -45,17 +49,14 @@ function AdminGate() {
       <Centered>
         <div className="flex flex-col items-center gap-4 text-center">
           <h1 className="text-lg font-semibold">Not authorized</h1>
-          <p className="max-w-sm text-sm text-stone-400">
-            This account doesn&apos;t have admin access. Ask an existing admin to
-            set <code className="text-stone-300">isPlatformAdmin</code> on your
-            user in the Convex dashboard.
+          <p className="max-w-sm text-sm text-muted-foreground">
+            This account doesn&apos;t have admin access. Ask an existing admin to set{" "}
+            <code className="font-mono text-foreground">isPlatformAdmin</code> on your user in the
+            Convex dashboard.
           </p>
-          <button
-            onClick={() => void signOut()}
-            className="rounded-md border border-stone-700 px-3 py-1.5 text-sm hover:bg-stone-800"
-          >
+          <Button variant="outline" onClick={() => void signOut()}>
             Sign out
-          </button>
+          </Button>
         </div>
       </Centered>
     );
@@ -70,57 +71,46 @@ function SignIn() {
 
   return (
     <Centered>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          setSubmitting(true);
-          const formData = new FormData(e.currentTarget);
-          formData.set("flow", "signIn");
-          void signIn("password", formData)
-            .catch(() => {
-              toast.error("Sign in failed. Check your email and password.");
-            })
-            .finally(() => setSubmitting(false));
-        }}
-        className="flex w-full max-w-sm flex-col gap-3"
-      >
-        <h1 className="mb-2 text-lg font-semibold">Ripple Admin</h1>
-        <input
-          name="email"
-          type="email"
-          required
-          placeholder="Email"
-          autoComplete="email"
-          className="rounded-md border border-stone-700 bg-stone-900 px-3 py-2 text-sm outline-none focus:border-stone-500"
-        />
-        <input
-          name="password"
-          type="password"
-          required
-          placeholder="Password"
-          autoComplete="current-password"
-          className="rounded-md border border-stone-700 bg-stone-900 px-3 py-2 text-sm outline-none focus:border-stone-500"
-        />
-        <button
-          type="submit"
-          disabled={submitting}
-          className="mt-1 rounded-md bg-stone-100 px-3 py-2 text-sm font-medium text-stone-900 hover:bg-white disabled:opacity-60"
+      <Card className="console-grid w-full max-w-sm p-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSubmitting(true);
+            const formData = new FormData(e.currentTarget);
+            formData.set("flow", "signIn");
+            void signIn("password", formData)
+              .catch(() => {
+                toast.error("Sign in failed. Check your email and password.");
+              })
+              .finally(() => setSubmitting(false));
+          }}
+          className="flex flex-col gap-3"
         >
-          {submitting ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
+          <div className="mb-2">
+            <h1 className="text-lg font-semibold">Ripple Admin</h1>
+            <p className="font-mono text-[10px] tracking-[0.22em] text-primary uppercase">
+              Operator access
+            </p>
+          </div>
+          <Input name="email" type="email" required placeholder="Email" autoComplete="email" className="h-9" />
+          <Input
+            name="password"
+            type="password"
+            required
+            placeholder="Password"
+            autoComplete="current-password"
+            className="h-9"
+          />
+          <Button type="submit" size="lg" disabled={submitting} className="mt-1">
+            {submitting ? <Spinner /> : null}
+            {submitting ? "Signing in…" : "Sign in"}
+          </Button>
+        </form>
+      </Card>
     </Centered>
   );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-dvh items-center justify-center p-6">{children}</div>
-  );
-}
-
-function Spinner() {
-  return (
-    <div className="size-6 animate-spin rounded-full border-2 border-stone-700 border-t-stone-300" />
-  );
+  return <div className="flex min-h-dvh items-center justify-center p-6">{children}</div>;
 }

@@ -1,31 +1,39 @@
+import {
+  ConfirmDialog,
+  EmptyState,
+  LoadingPane,
+  PageHeader,
+  SearchInput,
+  SectionLabel,
+  TypeToConfirmDialog,
+  UserAvatar,
+} from "@/components/console";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { navigate } from "@/hooks/useHashRoute";
+import { errorMessage } from "@/lib/errors";
+import { fmtDate, fmtNum, shortId } from "@/lib/format";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
-import { toast } from "sonner";
 import {
   ArrowLeftIcon,
   BotIcon,
   ChevronRightIcon,
   CrownIcon,
-  SearchIcon,
-  ShieldIcon,
-} from "../components/icons";
-import {
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  ConfirmDialog,
-  EmptyState,
-  Input,
-  SectionLabel,
-  Spinner,
-  TypeToConfirmDialog,
-} from "../components/ui";
-import { navigate } from "../hooks/useHashRoute";
-import { errorMessage } from "../lib/errors";
-import { fmtDate, fmtNum, shortId } from "../lib/format";
+  ShieldCheckIcon,
+} from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 function ProviderBadges({ providers }: { providers: string[] }) {
   const labelMap: Record<string, string> = {
@@ -34,11 +42,11 @@ function ProviderBadges({ providers }: { providers: string[] }) {
     password: "PWD",
     resend: "OTP",
   };
-  if (providers.length === 0) return <span className="text-stone-600">—</span>;
+  if (providers.length === 0) return <span className="text-muted-foreground">—</span>;
   return (
     <div className="flex flex-wrap gap-1">
       {providers.map((p) => (
-        <Badge key={p} variant="outline">
+        <Badge key={p} variant="outline" className="font-mono text-[10.5px] uppercase">
           {labelMap[p] ?? p}
         </Badge>
       ))}
@@ -63,97 +71,80 @@ export function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <header className="animate-rise flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-100">Users</h1>
-          <p className="mt-1 text-sm text-stone-500">
-            {users ? `${fmtNum(users.length)} accounts` : " "}
-          </p>
-        </div>
-        <div className="w-full max-w-xs">
-          <Input
-            icon={<SearchIcon className="size-4" />}
-            placeholder="Search name, email, id…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-      </header>
+      <PageHeader title="Users" subtitle={users ? `${fmtNum(users.length)} accounts` : ""}>
+        <SearchInput value={q} onValueChange={setQ} placeholder="Search name, email, id…" />
+      </PageHeader>
 
-      <Card className="animate-rise overflow-hidden" style={{ animationDelay: "60ms" }}>
+      <Card className="animate-rise gap-0 py-0" style={{ animationDelay: "60ms" }}>
         {filtered === undefined ? (
-          <div className="flex min-h-[200px] items-center justify-center">
-            <Spinner />
-          </div>
+          <LoadingPane className="min-h-50" />
         ) : filtered.length === 0 ? (
-          <EmptyState>No users match “{q}”.</EmptyState>
+          <EmptyState title="No matches">No users match “{q}”.</EmptyState>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-stone-800 font-mono text-[11px] uppercase tracking-wider text-stone-500">
-                <th className="px-4 py-2.5 font-medium">User</th>
-                <th className="px-4 py-2.5 font-medium">Providers</th>
-                <th className="px-4 py-2.5 text-right font-medium">Workspaces</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium">Joined</th>
-                <th className="w-8" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-800/70">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Providers</TableHead>
+                <TableHead className="text-right">Workspaces</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead className="w-8" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((u) => (
-                <tr
+                <TableRow
                   key={u._id}
                   onClick={() => navigate(`/users/${u._id}`)}
-                  className="cursor-pointer transition-colors hover:bg-stone-800/40"
+                  className="cursor-pointer"
                 >
-                  <td className="px-4 py-2.5">
+                  <TableCell>
                     <div className="flex items-center gap-3">
-                      <Avatar name={u.name} email={u.email} image={u.image} />
+                      <UserAvatar name={u.name} email={u.email} image={u.image} />
                       <div className="min-w-0">
-                        <div className="truncate text-stone-200">{u.name ?? "Unnamed"}</div>
-                        <div className="truncate font-mono text-xs text-stone-500">
+                        <div className="truncate">{u.name ?? "Unnamed"}</div>
+                        <div className="truncate font-mono text-xs text-muted-foreground">
                           {u.email ?? shortId(u._id)}
                         </div>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </TableCell>
+                  <TableCell>
                     <ProviderBadges providers={u.providers} />
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono tabular-nums text-stone-300">
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">
                     {u.workspaceCount}
-                  </td>
-                  <td className="px-4 py-2.5">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {u.disabled && <Badge variant="danger">disabled</Badge>}
+                      {u.disabled && <Badge variant="destructive">disabled</Badge>}
                       {u.isPlatformAdmin && (
-                        <Badge variant="accent">
-                          <ShieldIcon className="size-3" /> admin
+                        <Badge className="bg-primary/15 text-primary">
+                          <ShieldCheckIcon /> admin
                         </Badge>
                       )}
                       {u.isBot && (
-                        <Badge variant="muted">
-                          <BotIcon className="size-3" /> bot
+                        <Badge variant="secondary">
+                          <BotIcon /> bot
                         </Badge>
                       )}
-                      {!u.emailVerified && !u.isBot && (
-                        <Badge variant="outline">unverified</Badge>
-                      )}
+                      {!u.emailVerified && !u.isBot && <Badge variant="outline">unverified</Badge>}
                       {!u.isPlatformAdmin && !u.isBot && !u.disabled && u.emailVerified && (
-                        <span className="text-stone-600">—</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-stone-500">
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
                     {fmtDate(u.createdAt)}
-                  </td>
-                  <td className="px-2 text-stone-600">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     <ChevronRightIcon className="size-4" />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </Card>
     </div>
@@ -171,19 +162,13 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  if (user === undefined) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
+  if (user === undefined) return <LoadingPane />;
 
   if (user === null) {
     return (
       <div className="space-y-6">
         <BackLink />
-        <EmptyState>User not found.</EmptyState>
+        <EmptyState title="User not found" />
       </div>
     );
   }
@@ -232,20 +217,26 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
 
       <header className="animate-rise flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Avatar name={user.name} email={user.email} image={user.image} className="size-14 text-base" />
+          <UserAvatar
+            name={user.name}
+            email={user.email}
+            image={user.image}
+            size="lg"
+            className="size-14"
+          />
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-semibold text-stone-100">{user.name ?? "Unnamed"}</h1>
+              <h1 className="text-xl font-semibold">{user.name ?? "Unnamed"}</h1>
               {user.isPlatformAdmin && (
-                <Badge variant="accent">
-                  <ShieldIcon className="size-3" /> admin
+                <Badge className="bg-primary/15 text-primary">
+                  <ShieldCheckIcon /> admin
                 </Badge>
               )}
-              {user.disabled && <Badge variant="danger">disabled</Badge>}
-              {user.isBot && <Badge variant="muted">bot</Badge>}
+              {user.disabled && <Badge variant="destructive">disabled</Badge>}
+              {user.isBot && <Badge variant="secondary">bot</Badge>}
             </div>
-            <div className="mt-1 font-mono text-sm text-stone-400">{user.email ?? "—"}</div>
-            <div className="mt-0.5 font-mono text-[11px] text-stone-600">{user._id}</div>
+            <div className="mt-1 font-mono text-sm text-muted-foreground">{user.email ?? "—"}</div>
+            <div className="mt-0.5 font-mono text-[11px] text-muted-foreground/70">{user._id}</div>
           </div>
         </div>
 
@@ -254,7 +245,6 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
             {user.isPlatformAdmin ? (
               <Button
                 variant="outline"
-                size="sm"
                 disabled={isSelf || busy}
                 title={isSelf ? "You can't revoke your own admin access" : undefined}
                 onClick={() => setConfirming(true)}
@@ -262,14 +252,13 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
                 Revoke admin
               </Button>
             ) : (
-              <Button variant="accent" size="sm" disabled={busy} onClick={() => applyAdmin(true)}>
-                <ShieldIcon className="size-4" /> Grant admin
+              <Button disabled={busy} onClick={() => applyAdmin(true)}>
+                <ShieldCheckIcon /> Grant admin
               </Button>
             )}
 
             <Button
               variant="outline"
-              size="sm"
               disabled={busy || (isSelf && !user.disabled)}
               title={isSelf && !user.disabled ? "You can't disable your own account" : undefined}
               onClick={() => toggleDisabled(!user.disabled)}
@@ -278,8 +267,7 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
             </Button>
 
             <Button
-              variant="danger"
-              size="sm"
+              variant="destructive"
               disabled={busy || isSelf}
               title={isSelf ? "You can't delete your own account" : undefined}
               onClick={() => setDeleting(true)}
@@ -292,7 +280,7 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
 
       <section className="animate-rise space-y-3" style={{ animationDelay: "60ms" }}>
         <SectionLabel>Identity</SectionLabel>
-        <Card className="divide-y divide-stone-800">
+        <Card className="gap-0 divide-y divide-border py-0">
           <DetailRow label="Providers">
             {user.providers.length ? (
               <div className="flex gap-1">
@@ -315,25 +303,25 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
 
       <section className="animate-rise space-y-3" style={{ animationDelay: "120ms" }}>
         <SectionLabel>Workspaces ({user.workspaces.length})</SectionLabel>
-        <Card>
+        <Card className="gap-0 py-0">
           {user.workspaces.length === 0 ? (
-            <EmptyState>Not a member of any workspace.</EmptyState>
+            <EmptyState title="No workspaces">Not a member of any workspace.</EmptyState>
           ) : (
-            <ul className="divide-y divide-stone-800">
+            <ul className="divide-y divide-border">
               {user.workspaces.map((w) => (
                 <li
                   key={w._id}
                   onClick={() => navigate(`/workspaces/${w._id}`)}
-                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-stone-800/40"
+                  className="flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent"
                 >
-                  <span className="flex-1 truncate text-sm text-stone-200">{w.name}</span>
+                  <span className="flex-1 truncate text-sm">{w.name}</span>
                   {w.isOwner && (
-                    <Badge variant="accent">
-                      <CrownIcon className="size-3" /> owner
+                    <Badge className="bg-primary/15 text-primary">
+                      <CrownIcon /> owner
                     </Badge>
                   )}
-                  <Badge variant="muted">{w.role}</Badge>
-                  <ChevronRightIcon className="size-4 text-stone-600" />
+                  <Badge variant="secondary">{w.role}</Badge>
+                  <ChevronRightIcon className="size-4 text-muted-foreground" />
                 </li>
               ))}
             </ul>
@@ -368,20 +356,19 @@ export function UserDetailPage({ userId }: { userId: Id<"users"> }) {
 
 function BackLink() {
   return (
-    <button
-      onClick={() => navigate("/users")}
-      className="inline-flex items-center gap-1.5 text-sm text-stone-400 transition-colors hover:text-stone-200"
-    >
-      <ArrowLeftIcon className="size-4" /> Users
-    </button>
+    <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate("/users")}>
+      <ArrowLeftIcon /> Users
+    </Button>
   );
 }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-      <span className="font-mono text-xs uppercase tracking-wider text-stone-500">{label}</span>
-      <span className="text-sm text-stone-200">{children}</span>
+      <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
+        {label}
+      </span>
+      <span className="text-sm">{children}</span>
     </div>
   );
 }
