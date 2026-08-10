@@ -7,6 +7,13 @@ export function RouteErrorFallback() {
 
   const is404 = isRouteErrorResponse(error) && error.status === 404;
 
+  // React Router swallows the error once it renders this element. Without an
+  // explicit log a render crash shows the fallback and leaves the console
+  // empty, which makes the failure effectively undebuggable.
+  if (!is404) {
+    console.error("[RouteErrorFallback]", error);
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-full p-8 text-center">
       <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />

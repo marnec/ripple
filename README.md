@@ -1,8 +1,6 @@
 NEXT STEPS:
 
-- fix strange problem in documents: when the cursor hovers the sidebar for the first time, the left padding of the document shrinks or "slides under" the sidebar itself
-
-- add a (workpook) background job backoffice center (of the workspace, admin only)
+- add a (workpool) background job backoffice center (of the workspace, admin only)
 
 ---
 - build a cross-workspace admin app, only accessible to my own account, with jobs, activity log and other useful info

@@ -224,9 +224,17 @@
   --sidebar: oklch(0.205 0 0);
 }
 
-* {
-  border-color: var(--color-border);
-  outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
+/* Default border/outline colours. MUST stay inside `@layer base`: unlayered
+   declarations outrank every cascade layer regardless of specificity, so an
+   unlayered `*` here beats `.border-destructive`, `.border-transparent` and
+   every other border-colour utility in `@layer utilities` — silently flattening
+   them all to the neutral border token. (`shadcn/tailwind.css` already sets the
+   same default in `@layer base`; this block also overrides its outline-color.) */
+@layer base {
+  * {
+    border-color: var(--color-border);
+    outline-color: color-mix(in oklab, var(--color-ring) 50%, transparent);
+  }
 }
 
 body {

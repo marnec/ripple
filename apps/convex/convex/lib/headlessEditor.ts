@@ -32,6 +32,13 @@ type ParsedBlocks = Awaited<
  *     artifact (no tree-shaking on externals), blowing Convex's ~43 MiB ceiling.
  *     The headless core has everything the conversion needs and none of the UI.
  *
+ *     Since BlockNote 0.52 Yjs is decoupled from core: `yjs`/`y-prosemirror` are
+ *     *optional* peers, not dependencies. Convex npm-installs externalPackages
+ *     on its own side, and that install skips optional peers — so both must be
+ *     listed in `convex.json` → `node.externalPackages` or the push fails with
+ *     "Cannot find package 'y-prosemirror'" the moment anything imports
+ *     `@blocknote/core/yjs`.
+ *
  * Markdown import only yields default block types. Every client schema
  * (`taskDescriptionSchema`, `taskCommentSchema`, the document schema) is a
  * superset of the defaults, so the output loads cleanly without replicating the

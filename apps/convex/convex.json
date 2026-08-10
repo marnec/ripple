@@ -5,6 +5,6 @@
     "staticDataModel": true
   },
   "node": {
-    "externalPackages": ["@blocknote/core", "jsdom", "yjs"]
+    "externalPackages": ["@blocknote/core", "jsdom", "y-prosemirror", "yjs"]
   }
 }

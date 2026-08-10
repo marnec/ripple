@@ -1,5 +1,6 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
+import { withCollaboration } from "@blocknote/core/yjs";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
@@ -40,7 +41,7 @@ export function GuestDocumentView({
   const localAwareness = useMemo(() => new Awareness(yDoc), [yDoc]);
 
   const editor = useCreateBlockNote(
-    {
+    withCollaboration({
       schema: documentSchema,
       collaboration: {
         provider: provider ?? { awareness: localAwareness },
@@ -50,7 +51,7 @@ export function GuestDocumentView({
           color: getUserColor(guestSub),
         },
       },
-    },
+    }),
     [provider, localAwareness, guestName, guestSub],
   );
 

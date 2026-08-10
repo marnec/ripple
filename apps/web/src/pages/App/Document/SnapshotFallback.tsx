@@ -1,3 +1,4 @@
+import { withCollaboration } from "@blocknote/core/yjs";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { Awareness } from "y-protocols/awareness";
@@ -18,14 +19,16 @@ export function SnapshotFallback({
   const fragment = snapshotDoc.getXmlFragment("document-store");
   const fakeProvider = { awareness: new Awareness(snapshotDoc) };
 
-  const snapshotEditor = useCreateBlockNote({
-    schema: documentSchema,
-    collaboration: {
-      fragment,
-      provider: fakeProvider,
-      user: { name: "", color: "" },
-    },
-  });
+  const snapshotEditor = useCreateBlockNote(
+    withCollaboration({
+      schema: documentSchema,
+      collaboration: {
+        fragment,
+        provider: fakeProvider,
+        user: { name: "", color: "" },
+      },
+    }),
+  );
 
   return (
     <div className="h-full flex-1 min-w-0 overflow-y-scroll scrollbar-stable">

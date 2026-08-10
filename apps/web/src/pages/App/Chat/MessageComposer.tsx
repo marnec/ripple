@@ -1,6 +1,6 @@
 import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import "@blocknote/core/fonts/inter.css";
-import { en } from '@blocknote/core/locales';
+import { en } from "@blocknote/core/locales";
 import { useCreateBlockNote, useEditorChange, SuggestionMenuController } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import "@blocknote/shadcn/style.css";
@@ -18,7 +18,18 @@ import { ProjectReference } from "../Project/CustomInlineContent/ProjectReferenc
 import { UserMention } from "../Project/CustomInlineContent/UserMention";
 import { MessageQuotePreview } from "./MessageQuotePreview";
 import { EditingBanner } from "./EditingBanner";
-import { Check, Command, CornerDownLeft, File, FolderKanban, PenTool, Phone, SendHorizonal, Table2, X } from "lucide-react";
+import {
+  Check,
+  Command,
+  CornerDownLeft,
+  File,
+  FolderKanban,
+  PenTool,
+  Phone,
+  SendHorizonal,
+  Table2,
+  X,
+} from "lucide-react";
 import { RippleSpinner } from "../../../components/RippleSpinner";
 import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
@@ -50,7 +61,12 @@ interface MessageComposerProps {
   showCallButton?: boolean;
 }
 
-const { audio: _audio, heading: _heading, image: _image, ...remainingBlockSpecs } = defaultBlockSpecs;
+const {
+  audio: _audio,
+  heading: _heading,
+  image: _image,
+  ...remainingBlockSpecs
+} = defaultBlockSpecs;
 const schema = BlockNoteSchema.create({
   blockSpecs: { ...remainingBlockSpecs },
   inlineContentSpecs: {
@@ -98,10 +114,10 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
 
   const { userNames, projectNames } = useMemo(() => {
     const u = new Map<string, string>();
-    workspaceMembers?.forEach(m => u.set(m._id, getUserDisplayName(m)));
+    workspaceMembers?.forEach((m) => u.set(m._id, getUserDisplayName(m)));
     if (currentUser) u.set(currentUser._id, getUserDisplayName(currentUser));
     const p = new Map<string, string>();
-    projects?.forEach(pr => p.set(pr._id, pr.name));
+    projects?.forEach((pr) => p.set(pr._id, pr.name));
     return { userNames: u, projectNames: p };
   }, [workspaceMembers, currentUser, projects]);
 
@@ -109,8 +125,13 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     if (!replyingTo) return "";
     if (replyingTo.body) {
       try {
-        return blocksToPlainText(JSON.parse(replyingTo.body), userNames, projectNames) || replyingTo.plainText;
-      } catch { /* fall through */ }
+        return (
+          blocksToPlainText(JSON.parse(replyingTo.body), userNames, projectNames) ||
+          replyingTo.plainText
+        );
+      } catch {
+        /* fall through */
+      }
     }
     return replyingTo.plainText;
   }, [replyingTo, userNames, projectNames]);
@@ -131,9 +152,14 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const [isEmpty, setIsEmpty] = useState(true);
   // When the attached image is a diagram snapshot, carry the source so the
   // sent message can deep-link back to the live diagram (click-to-open).
-  const [imageDiagram, setImageDiagram] = useState<{ id: Id<"diagrams">; name: string } | null>(null);
+  const [imageDiagram, setImageDiagram] = useState<{ id: Id<"diagrams">; name: string } | null>(
+    null,
+  );
   // Target diagram for the frame picker; null when the picker is closed.
-  const [framePickerTarget, setFramePickerTarget] = useState<{ id: Id<"diagrams">; name: string } | null>(null);
+  const [framePickerTarget, setFramePickerTarget] = useState<{
+    id: Id<"diagrams">;
+    name: string;
+  } | null>(null);
   // True while capturing/exporting a snapshot, before the preview blob exists.
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
 
@@ -165,7 +191,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             });
           }
         }
-      } catch { /* malformed body — leave image state cleared */ }
+      } catch {
+        /* malformed body — leave image state cleared */
+      }
     }
   }
 
@@ -180,10 +208,12 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         if (textBlocks.length > 0) {
           editor.replaceBlocks(editor.document, textBlocks);
         }
-      } catch { /* malformed body — leave editor cleared */ }
+      } catch {
+        /* malformed body — leave editor cleared */
+      }
       editor.focus();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingMessage]);
 
   const hasImage = !!imagePreview;
@@ -269,7 +299,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       const bytes = new Uint8Array(await res.arrayBuffer());
       const blob = await snapshotDiagramToBlob(bytes, frameId);
       // `File` here is the lucide icon import — use the DOM constructor.
-      const file = new globalThis.File([blob], `${diagram.name || "diagram"}.png`, { type: "image/png" });
+      const file = new globalThis.File([blob], `${diagram.name || "diagram"}.png`, {
+        type: "image/png",
+      });
       const { thumbnail, previewUrl, isOriginal } = await generateThumbnail(file);
       // Switch from the "capturing" indicator to the normal image preview.
       setIsCapturingSnapshot(false);
@@ -300,10 +332,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   // first (existing behaviour); events are grouped under "Upcoming" / "Recent".
   const getAtMentionItems = useMemo(() => {
     return async (query: string) => {
-      const [members, events] = await Promise.all([
-        getMemberItems(query),
-        getEventItems(query),
-      ]);
+      const [members, events] = await Promise.all([getMemberItems(query), getEventItems(query)]);
       return [...members, ...events];
     };
   }, [getMemberItems, getEventItems]);
@@ -311,74 +340,105 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const getResourceItems = useMemo(() => {
     return async (query: string) => {
       const q = query.toLowerCase();
-      const items: Array<{title: string; onItemClick: () => void; icon: React.JSX.Element; group: string}> = [];
+      const items: Array<{
+        title: string;
+        onItemClick: () => void;
+        icon: React.JSX.Element;
+        group: string;
+      }> = [];
 
-      tasks?.filter(t => t.title.toLowerCase().includes(q)).slice(0, 7).forEach(task => {
-        items.push({
-          title: task.title,
-          onItemClick: () => {
-            editor.insertInlineContent([
-              { type: "taskMention", props: { taskId: task._id, taskTitle: task.title } },
-              " ",
-            ]);
-          },
-          icon: <div className={cn("h-3 w-3 rounded-full", task.status?.color || "bg-gray-500")} />,
-          group: "Tasks",
+      tasks
+        ?.filter((t) => t.title.toLowerCase().includes(q))
+        .slice(0, 7)
+        .forEach((task) => {
+          items.push({
+            title: task.title,
+            onItemClick: () => {
+              editor.insertInlineContent([
+                { type: "taskMention", props: { taskId: task._id, taskTitle: task.title } },
+                " ",
+              ]);
+            },
+            icon: (
+              <div className={cn("h-3 w-3 rounded-full", task.status?.color || "bg-gray-500")} />
+            ),
+            group: "Tasks",
+          });
         });
-      });
 
-      projects?.filter(p => p.name.toLowerCase().includes(q)).slice(0, 5).forEach(p => {
-        items.push({
-          title: p.name,
-          onItemClick: () => {
-            editor.insertInlineContent([{ type: "projectReference", props: { projectId: p._id } }, " "]);
-          },
-          icon: <FolderKanban className="h-4 w-4" />,
-          group: "Projects",
+      projects
+        ?.filter((p) => p.name.toLowerCase().includes(q))
+        .slice(0, 5)
+        .forEach((p) => {
+          items.push({
+            title: p.name,
+            onItemClick: () => {
+              editor.insertInlineContent([
+                { type: "projectReference", props: { projectId: p._id } },
+                " ",
+              ]);
+            },
+            icon: <FolderKanban className="h-4 w-4" />,
+            group: "Projects",
+          });
         });
-      });
 
-      documents?.filter(d => d.name.toLowerCase().includes(q)).slice(0, 5).forEach(d => {
-        items.push({
-          title: d.name,
-          onItemClick: () => {
-            editor.insertInlineContent([
-              { type: "resourceReference", props: { resourceId: d._id, resourceType: "document", resourceName: d.name } },
-              " ",
-            ]);
-          },
-          icon: <File className="h-4 w-4" />,
-          group: "Documents",
+      documents
+        ?.filter((d) => d.name.toLowerCase().includes(q))
+        .slice(0, 5)
+        .forEach((d) => {
+          items.push({
+            title: d.name,
+            onItemClick: () => {
+              editor.insertInlineContent([
+                {
+                  type: "resourceReference",
+                  props: { resourceId: d._id, resourceType: "document", resourceName: d.name },
+                },
+                " ",
+              ]);
+            },
+            icon: <File className="h-4 w-4" />,
+            group: "Documents",
+          });
         });
-      });
 
-      diagrams?.filter(d => d.name.toLowerCase().includes(q)).slice(0, 5).forEach(d => {
-        items.push({
-          title: d.name,
-          // Selecting a diagram embeds a static snapshot (whole canvas or a
-          // chosen frame) rather than an inline reference chip — open the frame
-          // picker to choose what to capture.
-          onItemClick: () => {
-            setFramePickerTarget({ id: d._id, name: d.name });
-          },
-          icon: <PenTool className="h-4 w-4" />,
-          group: "Diagrams",
+      diagrams
+        ?.filter((d) => d.name.toLowerCase().includes(q))
+        .slice(0, 5)
+        .forEach((d) => {
+          items.push({
+            title: d.name,
+            // Selecting a diagram embeds a static snapshot (whole canvas or a
+            // chosen frame) rather than an inline reference chip — open the frame
+            // picker to choose what to capture.
+            onItemClick: () => {
+              setFramePickerTarget({ id: d._id, name: d.name });
+            },
+            icon: <PenTool className="h-4 w-4" />,
+            group: "Diagrams",
+          });
         });
-      });
 
-      spreadsheets?.filter(s => s.name.toLowerCase().includes(q)).slice(0, 5).forEach(s => {
-        items.push({
-          title: s.name,
-          onItemClick: () => {
-            editor.insertInlineContent([
-              { type: "resourceReference", props: { resourceId: s._id, resourceType: "spreadsheet", resourceName: s.name } },
-              " ",
-            ]);
-          },
-          icon: <Table2 className="h-4 w-4" />,
-          group: "Spreadsheets",
+      spreadsheets
+        ?.filter((s) => s.name.toLowerCase().includes(q))
+        .slice(0, 5)
+        .forEach((s) => {
+          items.push({
+            title: s.name,
+            onItemClick: () => {
+              editor.insertInlineContent([
+                {
+                  type: "resourceReference",
+                  props: { resourceId: s._id, resourceType: "spreadsheet", resourceName: s.name },
+                },
+                " ",
+              ]);
+            },
+            icon: <Table2 className="h-4 w-4" />,
+            group: "Spreadsheets",
+          });
         });
-      });
 
       return items;
     };
@@ -425,7 +485,7 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing]);
 
   useEditorChange(() => {
@@ -446,8 +506,10 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       }
     };
     tryFocus();
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId]);
 
   return (
@@ -459,7 +521,13 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           onAttachImage={(file) => void attachImageFile(file)}
         />
         {showCallButton && (
-          <Button variant="ghost" size="icon" onClick={() => void navigate("videocall")} title="Start a call" className="sm:w-18 sm:gap-1.5 sm:px-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => void navigate("videocall")}
+            title="Start a call"
+            className="sm:w-18 sm:gap-1.5 sm:px-3"
+          >
             <Phone className="h-4 w-4" />
             <span className="hidden sm:inline text-sm">Join</span>
           </Button>
@@ -489,7 +557,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             open
             diagramId={framePickerTarget.id}
             diagramName={framePickerTarget.name}
-            onOpenChange={(open) => { if (!open) setFramePickerTarget(null); }}
+            onOpenChange={(open) => {
+              if (!open) setFramePickerTarget(null);
+            }}
             onInsert={(frameId) => {
               if (framePickerTarget) void captureDiagramSnapshot(framePickerTarget, frameId);
             }}
@@ -514,30 +584,39 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         </div>
       )}
       <div className="flex gap-2 sm:mb-3" onPasteCapture={handlePaste}>
-        <BlockNoteView
-          id="message-composer"
-          editor={editor}
+        {/* Decoration lives on this wrapper, not on BlockNoteView's `className`.
+            BlockNoteView copies that prop onto BOTH the editor container and its
+            floating-UI portal element — an empty, in-flow sibling div. Border
+            classes there paint a stray hairline under the editor. (Only bites
+            when `renderEditor` is left on; DocumentEditor passes false, which is
+            why it never showed the artifact.) */}
+        <div
           className={cn(
             "w-full grow min-w-0 box-border border rounded-md px-2 transition-shadow focus-within:ring-2 focus-within:ring-offset-1",
             isEditing
               ? "border-amber-500/50 focus-within:ring-amber-500"
               : "focus-within:ring-ring",
           )}
-          theme={resolvedTheme === "dark" ? "dark" : "light"}
-          sideMenu={false}
-          emojiPicker={false}
-          slashMenu={false}
-          formattingToolbar={false}
-          onKeyDownCapture={(event) => {
-            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-              event.preventDefault();
-              sendMessage();
-            }
-          }}
         >
-          <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
-          <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
-        </BlockNoteView>
+          <BlockNoteView
+            id="message-composer"
+            editor={editor}
+            theme={resolvedTheme === "dark" ? "dark" : "light"}
+            sideMenu={false}
+            emojiPicker={false}
+            slashMenu={false}
+            formattingToolbar={false}
+            onKeyDownCapture={(event) => {
+              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                sendMessage();
+              }
+            }}
+          >
+            <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
+            <SuggestionMenuController triggerCharacter={"@"} getItems={getAtMentionItems} />
+          </BlockNoteView>
+        </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <Button
             disabled={!canSend}
@@ -545,7 +624,8 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
             size="icon"
             className={cn(
               "sm:w-18 sm:gap-1.5 sm:px-3 transition-transform active:scale-95",
-              isEditing && "bg-amber-600 hover:bg-amber-600/90 dark:bg-amber-500 dark:hover:bg-amber-500/90",
+              isEditing &&
+                "bg-amber-600 hover:bg-amber-600/90 dark:bg-amber-500 dark:hover:bg-amber-500/90",
             )}
           >
             {isEditing ? <Check className="h-4 w-4" /> : <SendHorizonal className="h-4 w-4" />}
@@ -553,7 +633,9 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           </Button>
           <div className="hidden sm:flex items-center gap-0.5">
             <Kbd>{isMac ? <Command /> : "Ctrl"}</Kbd>
-            <Kbd><CornerDownLeft /></Kbd>
+            <Kbd>
+              <CornerDownLeft />
+            </Kbd>
           </div>
         </div>
       </div>

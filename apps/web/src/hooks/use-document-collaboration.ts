@@ -1,6 +1,7 @@
-import type { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema } from "@blocknote/core";
-import { CommentsExtension, DefaultThreadStoreAuth, YjsThreadStore, type User } from "@blocknote/core/comments";
+import type { BlockNoteEditor, BlockNoteSchema, BlockSchema, InlineContentSchema, StyleSchema, User } from "@blocknote/core";
+import { CommentsExtension, DefaultThreadStoreAuth } from "@blocknote/core/comments";
 import { en } from "@blocknote/core/locales";
+import { withCollaboration, YjsThreadStore } from "@blocknote/core/yjs";
 import { useCreateBlockNote } from "@blocknote/react";
 import { useConvex } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
@@ -187,7 +188,7 @@ export function useDocumentCollaboration<
   // established from mount. When provider arrives later, editor recreates with
   // the real awareness (content is already in the fragment, so no visual pop).
   const editor = useCreateBlockNote(
-    {
+    withCollaboration({
       schema,
       uploadFile,
       dictionary,
@@ -200,7 +201,7 @@ export function useDocumentCollaboration<
           color: userColor,
         },
       },
-    },
+    }),
     [provider, localAwareness, userName, userColor, schema, uploadFile, dictionary, commentsExtension]
   );
 
