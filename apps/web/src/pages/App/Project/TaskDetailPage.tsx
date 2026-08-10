@@ -1,9 +1,7 @@
 import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { TagPickerButton } from "@/components/TagPickerButton";
-import { TaskCode } from "@/components/TaskCode";
 import { Button } from "@ripple/ui/components/button";
-import { Input } from "@ripple/ui/components/input";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
@@ -13,17 +11,19 @@ import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
-import { TaskActivityTimeline } from "./TaskActivityTimeline";
-import { TaskDeleteDialog } from "./TaskDeleteDialog";
-import { TaskDependencies } from "./TaskDependencies";
-import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
-import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
-import { TaskProperties } from "./TaskProperties";
-import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
+import {
+  TaskActivitySection,
+  TaskDeleteDialogSection,
+  TaskDependenciesSection,
+  TaskDescriptionSection,
+  TaskDetailProvider,
+  TaskGithubSection,
+  TaskIdentity,
+  TaskPropertiesSection,
+  TaskTitleField,
+} from "./TaskDetail";
+import { useTaskDetailContext } from "./taskDetailContext";
 import { TaskGithubActions } from "./TaskGithubActions";
-import { TaskIssueRef } from "./TaskIssueRef";
-import { TaskSyncIndicator } from "./TaskSyncIndicator";
-import { useTaskDetail } from "./useTaskDetail";
 
 export function TaskDetailPage() {
   const { workspaceId, projectId, taskId } = useParams<QueryParams>();
@@ -57,20 +57,37 @@ function TaskDetailPageContent({
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const { titleInputRef, ...detail } = useTaskDetail({
-    taskId,
-    workspaceId,
-    projectId,
-    collaborationEnabled: editorDeferred,
-  });
+  return (
+    <TaskDetailProvider
+      taskId={taskId}
+      workspaceId={workspaceId}
+      projectId={projectId}
+      collaborationEnabled={editorDeferred}
+    >
+      <PageShell workspaceId={workspaceId} projectId={projectId} taskId={taskId} />
+    </TaskDetailProvider>
+  );
+}
+
+/**
+ * Task detail as a full page. This file is layout only — every query, callback
+ * and load decision comes from the `TaskDetail` module, which the sheet
+ * surface consumes the same way.
+ */
+function PageShell({
+  workspaceId,
+  projectId,
+  taskId,
+}: {
+  workspaceId: Id<"workspaces">;
+  projectId: Id<"projects">;
+  taskId: Id<"tasks">;
+}) {
+  const detail = useTaskDetailContext();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  if (
-    detail.task === undefined ||
-    detail.statuses === undefined ||
-    detail.members === undefined
-  ) {
+  if (detail.loadState === "loading") {
     return (
       <div className="flex items-center justify-center h-full">
         <RippleSpinner />
@@ -78,7 +95,7 @@ function TaskDetailPageContent({
     );
   }
 
-  if (detail.task === null) {
+  if (detail.loadState === "deleted" || !detail.task) {
     return <ResourceDeleted resourceType="task" />;
   }
 
@@ -100,27 +117,10 @@ function TaskDetailPageContent({
           <TagPickerButton
             workspaceId={workspaceId}
             value={detail.task.labels ?? []}
-            onChange={detail.handleSetTags}
+            onChange={(labels) => void detail.patch({ labels })}
           />
-          <TaskCode task={detail.task} className="shrink-0 text-sm" />
-          <TaskIssueRef
-            repoFullName={detail.task.externalRefs?.[0]?.repoFullName}
-            issueNumber={detail.task.externalRefs?.[0]?.issueNumber}
-            url={detail.task.externalRefs?.[0]?.url}
-            deleted={detail.task.externalRefs?.[0]?.deleted}
-            provider={detail.task.externalRefs?.[0]?.provider}
-            className="text-sm"
-          />
-          <TaskSyncIndicator taskId={taskId} />
-          <Input
-            ref={titleInputRef}
-            value={detail.titleValue}
-            onChange={(e) => detail.setTitleValue(e.target.value)}
-            onBlur={detail.handleTitleBlur}
-            onKeyDown={detail.handleTitleKeyDown}
-            className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0"
-            placeholder="Task title"
-          />
+          <TaskIdentity className="text-sm" />
+          <TaskTitleField className="h-8 min-w-0 flex-1 border-0 bg-transparent px-2 text-lg font-semibold shadow-none focus-visible:ring-0" />
           <TaskGithubActions
             task={detail.task}
             projectId={projectId}
@@ -149,98 +149,45 @@ function TaskDetailPageContent({
             <div className="space-y-5 px-3 pt-2 pb-6 md:space-y-8 md:px-4 md:pt-6 lg:flex lg:flex-1 lg:flex-col lg:min-h-0 lg:pr-8">
               {isMobile && (
                 <div className="mb-4 md:mb-6">
-                  <Input
-                    ref={titleInputRef}
-                    value={detail.titleValue}
-                    onChange={(e) => detail.setTitleValue(e.target.value)}
-                    onBlur={detail.handleTitleBlur}
-                    onKeyDown={detail.handleTitleKeyDown}
-                    className="h-7 text-lg font-bold focus-visible:ring-0 md:h-10 md:text-2xl"
-                    placeholder="Task title"
-                  />
+                  <TaskTitleField className="h-7 text-lg font-bold focus-visible:ring-0 md:h-10 md:text-2xl" />
                 </div>
               )}
 
-              <TaskProperties
-                task={detail.task}
-                statuses={detail.statuses}
-                members={detail.members}
-                onStatusChange={detail.handleStatusChange}
-                onPriorityChange={detail.handlePriorityChange}
-                onAssigneeChange={detail.handleAssigneeChange}
-                onSetTags={detail.handleSetTags}
-                onRemoveTag={detail.handleRemoveTag}
-                onDueDateChange={detail.handleDueDateChange}
-                onStartDateChange={detail.handlePlannedStartDateChange}
-                onEstimateChange={detail.handleEstimateChange}
-              />
+              <TaskPropertiesSection />
 
-              <TaskGithubExternalInfo taskId={taskId} />
+              <TaskGithubSection />
 
-              <TaskDependencies
-                taskId={taskId}
-                workspaceId={workspaceId}
-                collapsible
-              />
+              <TaskDependenciesSection collapsible />
 
               <BacklinksButton resourceId={taskId} workspaceId={workspaceId} />
 
-              <div className="space-y-2 animate-fade-in lg:flex lg:flex-1 lg:flex-col lg:min-h-0">
-                <div className="flex items-center justify-between lg:shrink-0">
+              <TaskDescriptionSection
+                className="space-y-2 animate-fade-in lg:flex lg:flex-1 lg:flex-col lg:min-h-0"
+                headerClassName="lg:shrink-0"
+                heading={
                   <h3 className="text-sm font-semibold text-muted-foreground">
                     Description
                   </h3>
-                  <TaskDescriptionToolbar
-                    taskId={taskId}
-                    awaitingSeed={detail.awaitingSeed}
-                    provider={detail.linkedProvider}
-                    editor={detail.editor}
-                    isConnected={detail.isConnected}
-                    remoteUsers={detail.remoteUsers}
-                    currentUser={detail.currentUser}
-                  />
-                </div>
-                <TaskDescriptionEditor
-                  editor={detail.editor}
-                  documents={detail.documents}
-                  diagrams={detail.diagrams}
-                  spreadsheets={detail.spreadsheets}
-                  members={detail.members}
-                  workspaceId={workspaceId}
-                  className="min-h-50 md:min-h-75 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
-                  hideLabel
-                  loading={!detail.descriptionReady}
-                />
-              </div>
+                }
+                editorClassName="min-h-50 md:min-h-75 lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+              />
             </div>
           </div>
 
+          {/* The timeline needs a viewer to attribute comments to; without one
+              the whole column (and its border) stays out of the layout. */}
           {detail.currentUser && (
             <div className="min-w-0 border-t px-3 pt-6 pb-6 md:pl-6 md:pr-4 lg:flex lg:h-full lg:flex-1 lg:flex-col lg:border-t-0 lg:border-l lg:pt-6 lg:pb-6 lg:pl-8">
-              <TaskActivityTimeline
-                taskId={taskId}
-                currentUserId={detail.currentUser._id}
-                workspaceId={workspaceId}
-                members={detail.members}
-                provider={detail.linkedProvider}
-                fillHeight
-              />
+              <TaskActivitySection />
             </div>
           )}
         </div>
       </div>
 
-      <TaskDeleteDialog
-        open={detail.showDeleteDialog}
-        onOpenChange={detail.setShowDeleteDialog}
-        isGithubLinked={detail.isGithubLinked}
-        onConfirm={(closeGithubIssue) =>
-          detail.handleDelete(() => {
-            void navigate(
-              `/workspaces/${workspaceId}/projects/${projectId}`
-            );
-          }, closeGithubIssue)
-        }
+      <TaskDeleteDialogSection
+        onDeleted={() => {
+          void navigate(`/workspaces/${workspaceId}/projects/${projectId}`);
+        }}
       />
     </div>
   );

@@ -1,7 +1,5 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { TaskCode } from "@/components/TaskCode";
 import { Button } from "@ripple/ui/components/button";
-import { Input } from "@ripple/ui/components/input";
 import {
   Sheet,
   SheetContent,
@@ -13,17 +11,19 @@ import { Maximize2, Minimize2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Id } from "@convex/_generated/dataModel";
-import { TaskActivityTimeline } from "./TaskActivityTimeline";
-import { TaskDeleteDialog } from "./TaskDeleteDialog";
-import { TaskDependencies } from "./TaskDependencies";
-import { TaskDescriptionEditor } from "./TaskDescriptionEditor";
-import { TaskDescriptionToolbar } from "./TaskDescriptionToolbar";
-import { TaskGithubExternalInfo } from "./TaskGithubExternalInfo";
+import {
+  TaskActivitySection,
+  TaskDeleteDialogSection,
+  TaskDependenciesSection,
+  TaskDescriptionSection,
+  TaskDetailProvider,
+  TaskGithubSection,
+  TaskIdentity,
+  TaskPropertiesSection,
+  TaskTitleField,
+} from "./TaskDetail";
+import { useTaskDetailContext } from "./taskDetailContext";
 import { TaskGithubActions } from "./TaskGithubActions";
-import { TaskIssueRef } from "./TaskIssueRef";
-import { TaskProperties } from "./TaskProperties";
-import { TaskSyncIndicator } from "./TaskSyncIndicator";
-import { useTaskDetail } from "./useTaskDetail";
 
 // CSS-driven layout swap: animating `flex-grow` lets the two panels redistribute
 // space without the scale/projection distortion framer-motion's `layout` causes
@@ -43,6 +43,11 @@ type TaskDetailSheetProps = {
   projectId: Id<"projects">;
 };
 
+/**
+ * Task detail as a side sheet over the board. This file is layout only — every
+ * query, callback and load decision comes from the `TaskDetail` module, which
+ * the full-page surface consumes the same way.
+ */
 export function TaskDetailSheet({
   taskId,
   open,
@@ -61,13 +66,35 @@ export function TaskDetailSheet({
     return () => { cancelAnimationFrame(id); setEditorDeferred(false); };
   }, [open]);
 
-  const { titleInputRef, ...detail } = useTaskDetail({
-    taskId,
-    workspaceId,
-    projectId,
-    collaborationEnabled: editorDeferred,
-    suggestionDataEnabled: open,
-  });
+  return (
+    <TaskDetailProvider
+      taskId={taskId}
+      workspaceId={workspaceId}
+      projectId={projectId}
+      collaborationEnabled={editorDeferred}
+      suggestionDataEnabled={open}
+    >
+      <SheetShell
+        taskId={taskId}
+        open={open}
+        onOpenChange={onOpenChange}
+        workspaceId={workspaceId}
+        projectId={projectId}
+        editorDeferred={editorDeferred}
+      />
+    </TaskDetailProvider>
+  );
+}
+
+function SheetShell({
+  taskId,
+  open,
+  onOpenChange,
+  workspaceId,
+  projectId,
+  editorDeferred,
+}: TaskDetailSheetProps & { editorDeferred: boolean }) {
+  const detail = useTaskDetailContext();
   const navigate = useNavigate();
 
   // Description and Activity share the remaining vertical space in three states:
@@ -108,8 +135,7 @@ export function TaskDetailSheet({
     return () => { cancelAnimationFrame(id); setShowActivity(false); };
   }, [editorDeferred]);
 
-  const { task } = detail;
-  const isLoaded = !!taskId && !!task && detail.statuses !== undefined && detail.members !== undefined;
+  const { task, loadState } = detail;
 
   return (
     <>
@@ -120,24 +146,27 @@ export function TaskDetailSheet({
           finalFocus={false}
         >
           <SheetTitle className="sr-only">Task Details</SheetTitle>
-          {!isLoaded || !task ? (
+          {loadState === "loading" && (
             <div className="flex items-center justify-center py-12">
               <RippleSpinner />
             </div>
-          ) : (
+          )}
+          {/* A task deleted while the sheet is open (by a collaborator, or in
+              another tab) must not strand the sheet on a spinner — say so and
+              let the user dismiss it. */}
+          {loadState === "deleted" && (
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <p className="text-sm text-muted-foreground">This task was deleted.</p>
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+                Close
+              </Button>
+            </div>
+          )}
+          {loadState === "ready" && task && (
             <>
               <SheetHeader className="shrink-0 pr-28 gap-3">
                 <div className="flex items-center gap-2">
-                  <TaskCode task={task} className="text-sm"/>
-                  <TaskIssueRef
-                    className="text-sm"
-                    repoFullName={task.externalRefs?.[0]?.repoFullName}
-                    issueNumber={task.externalRefs?.[0]?.issueNumber}
-                    url={task.externalRefs?.[0]?.url}
-                    deleted={task.externalRefs?.[0]?.deleted}
-                    provider={task.externalRefs?.[0]?.provider}
-                  />
-                  <TaskSyncIndicator taskId={task._id} />
+                  <TaskIdentity className="text-sm" />
                   {/* Right-aligned action cluster, anchored clear of the
                       sheet's built-in close button. Flex so gaps close when the
                       GitHub affordances are absent (the common, native case). */}
@@ -171,45 +200,20 @@ export function TaskDetailSheet({
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
-                  <Input
-                    ref={titleInputRef}
-                    value={detail.titleValue}
-                    onChange={(e) => detail.setTitleValue(e.target.value)}
-                    onBlur={detail.handleTitleBlur}
-                    onKeyDown={detail.handleTitleKeyDown}
-                    className="text-lg font-semibold leading-none focus-visible:ring-0 px-2 h-full"
-                    placeholder="Task title"
-                  />
+                  <TaskTitleField className="text-lg font-semibold leading-none focus-visible:ring-0 px-2 h-full" />
                 </div>
               </SheetHeader>
 
               <div className="flex-1 min-h-0 flex flex-col gap-3 px-4 pb-4">
                 {/* Fixed top region — task properties + GitHub info never scroll. */}
                 <div className="shrink-0 space-y-5">
-                  <TaskProperties
-                    task={task}
-                    statuses={detail.statuses!}
-                    members={detail.members!}
-                    onStatusChange={detail.handleStatusChange}
-                    onPriorityChange={detail.handlePriorityChange}
-                    onAssigneeChange={detail.handleAssigneeChange}
-                    onSetTags={detail.handleSetTags}
-                    onRemoveTag={detail.handleRemoveTag}
-                    onDueDateChange={detail.handleDueDateChange}
-                    onStartDateChange={detail.handlePlannedStartDateChange}
-                    onEstimateChange={detail.handleEstimateChange}
-                  />
-
-                  <TaskGithubExternalInfo taskId={task._id} />
+                  <TaskPropertiesSection />
+                  <TaskGithubSection />
                 </div>
 
                 {/* Dependencies — collapsed by default to free vertical space. */}
                 <div className="shrink-0">
-                  <TaskDependencies
-                    taskId={taskId}
-                    workspaceId={workspaceId}
-                    collapsible
-                  />
+                  <TaskDependenciesSection collapsible />
                 </div>
 
                 {/* Description / Activity arena — three layout states:
@@ -220,15 +224,15 @@ export function TaskDetailSheet({
                     height; flex-grow flips between 0 and 1 with a CSS
                     transition driving the size swap. */}
                 <div className="flex-1 min-h-0 flex flex-col gap-3">
-                  <div
+                  <TaskDescriptionSection
+                    className="flex flex-col gap-2 min-w-0"
                     style={{
                       ...PANEL_TRANSITION_STYLE,
                       flexGrow: panelState === "activity" ? 0 : 1,
                       flexBasis: 0,
                     }}
-                    className="flex flex-col gap-2 min-w-0"
-                  >
-                    <div className="flex items-center justify-between gap-2 shrink-0">
+                    headerClassName="gap-2 shrink-0"
+                    heading={
                       <button
                         type="button"
                         onClick={toggleDescription}
@@ -250,56 +254,38 @@ export function TaskDetailSheet({
                           Description
                         </h3>
                       </button>
-                      {/* Toolbar stays mounted in all states so its min-h-8
-                          keeps the header row at a constant height — hiding
-                          it conditionally caused the header (and therefore
-                          the whole description block) to shift up when the
-                          activity panel expanded. Opacity + pointer-events
-                          handle the visual hide. */}
+                    }
+                    /* Toolbar stays mounted in all states so its min-h-8 keeps
+                       the header row at a constant height — hiding it
+                       conditionally caused the header (and therefore the whole
+                       description block) to shift up when the activity panel
+                       expanded. Opacity + pointer-events handle the visual hide. */
+                    toolbarClassName={cn(
+                      "transition-opacity duration-200",
+                      panelState === "activity" && "opacity-0 pointer-events-none",
+                    )}
+                    /* Editor stays mounted in all states. `contain: size` on this
+                       wrapper makes the browser size it as if empty, so the
+                       editor's chrome + content do NOT contribute to the
+                       section's min-content. Without this, BlockNote's intrinsic
+                       size keeps the section at ~100px even with flex-grow: 0.
+                       The editor still gets a real height from flex when
+                       expanded; when collapsed the wrapper is 0 and
+                       overflow-hidden clips the editor. */
+                    editorWrapper={(editor) => (
                       <div
-                        className={cn(
-                          "transition-opacity duration-200",
-                          panelState === "activity" && "opacity-0 pointer-events-none",
-                        )}
+                        className="flex-1 min-h-0 overflow-hidden"
+                        style={{ contain: "size" }}
                       >
-                        <TaskDescriptionToolbar
-                          taskId={taskId}
-                          awaitingSeed={detail.awaitingSeed}
-                          provider={detail.linkedProvider}
-                          editor={detail.editor}
-                          isConnected={detail.isConnected}
-                          remoteUsers={detail.remoteUsers}
-                          currentUser={detail.currentUser}
-                        />
+                        {editor}
                       </div>
-                    </div>
-                    {/* Editor stays mounted in all states. `contain: size` on
-                        this wrapper makes the browser size it as if empty,
-                        so the editor's chrome + content do NOT contribute to
-                        the section's min-content. Without this, BlockNote's
-                        intrinsic size keeps the section at ~100px even with
-                        flex-grow: 0. The editor still gets a real height
-                        from flex when expanded; when collapsed the wrapper
-                        is 0 and overflow-hidden clips the editor. */}
-                    <div
-                      className="flex-1 min-h-0 overflow-hidden"
-                      style={{ contain: "size" }}
-                    >
-                      <TaskDescriptionEditor
-                        editor={detail.editor}
-                        documents={detail.documents}
-                        diagrams={detail.diagrams}
-                        spreadsheets={detail.spreadsheets}
-                        members={detail.members}
-                        workspaceId={workspaceId}
-                        className="h-full overflow-y-auto"
-                        hideLabel
-                        loading={!detail.descriptionReady}
-                      />
-                    </div>
-                  </div>
+                    )}
+                    editorClassName="h-full overflow-y-auto"
+                  />
 
-                  {detail.currentUser && showActivity && (
+                  {/* Guarded on the viewer as well as the deferral: an empty
+                      activity panel would still claim half the arena's height. */}
+                  {showActivity && detail.currentUser && (
                     <div
                       style={{
                         ...PANEL_TRANSITION_STYLE,
@@ -308,18 +294,10 @@ export function TaskDetailSheet({
                       }}
                       className="flex flex-col min-w-0"
                     >
-                      <TaskActivityTimeline
-                        taskId={taskId}
-                        currentUserId={detail.currentUser._id}
-                        workspaceId={workspaceId}
-                        members={detail.members}
-                        provider={detail.linkedProvider}
-                        fillHeight
+                      <TaskActivitySection
                         collapsed={panelState === "description"}
                         onToggle={toggleActivity}
-                        toggleIcon={
-                          panelState === "activity" ? "minimize" : "maximize"
-                        }
+                        toggleIcon={panelState === "activity" ? "minimize" : "maximize"}
                       />
                     </div>
                   )}
@@ -330,15 +308,8 @@ export function TaskDetailSheet({
         </SheetContent>
       </Sheet>
 
-      {isLoaded && (
-        <TaskDeleteDialog
-          open={detail.showDeleteDialog}
-          onOpenChange={detail.setShowDeleteDialog}
-          isGithubLinked={detail.isGithubLinked}
-          onConfirm={(closeGithubIssue) =>
-            detail.handleDelete(() => onOpenChange(false), closeGithubIssue)
-          }
-        />
+      {loadState === "ready" && (
+        <TaskDeleteDialogSection onDeleted={() => onOpenChange(false)} />
       )}
     </>
   );

@@ -760,7 +760,7 @@ export declare const api: {
       "public",
       {
         resourceId: string;
-        resourceType: "doc" | "diagram" | "task" | "presence" | "spreadsheet";
+        resourceType: "doc" | "diagram" | "task" | "spreadsheet" | "presence";
       },
       { roomId: string; token: string }
     >;
@@ -3992,7 +3992,7 @@ export declare const internal: {
       "internal",
       {
         resourceId: string;
-        resourceType: "doc" | "diagram" | "task" | "presence" | "spreadsheet";
+        resourceType: "doc" | "diagram" | "task" | "spreadsheet" | "presence";
         userId: Id<"users">;
       },
       boolean

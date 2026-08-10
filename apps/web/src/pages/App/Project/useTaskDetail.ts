@@ -1,14 +1,13 @@
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
-import { toast } from "sonner";
-import { getErrorMessage } from "@/lib/errors";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { taskLabelsOptimisticUpdate } from "@/lib/tag-optimistic";
 import { useViewer } from "../UserContext";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { taskDescriptionSchema } from "./taskDescriptionSchema";
+import { createTaskPatch, taskDetailLoadState } from "./taskDetailModel";
 import { en as bnEn } from "@blocknote/core/locales";
 import { useDocumentCollaboration } from "../../../hooks/use-document-collaboration";
 import { useTaskGithubLink } from "./useTaskGithubLink";
@@ -56,7 +55,6 @@ export function useTaskDetail({
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [titleValue, setTitleValue] = useState("");
-  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const fileUpload = useUploadFile(workspaceId);
 
@@ -72,7 +70,7 @@ export function useTaskDetail({
   const linkedProvider = github.provider;
 
   // Collaborative editor - Yjs handles sync automatically
-  const { editor, isLoading: editorLoading, isConnected, isOffline, provider, yDoc, descriptionReady, awaitingSeed } = useDocumentCollaboration({
+  const { editor, isConnected, provider, yDoc, descriptionReady, awaitingSeed } = useDocumentCollaboration({
     documentId: taskId ?? "",
     userName: currentUser?.name ?? "Anonymous",
     userId: currentUser?._id ?? "anonymous",
@@ -115,66 +113,26 @@ export function useTaskDetail({
     }
   }
 
+  // The one write path. Every property edit goes through it, so the error
+  // path (and the "no task selected" guard) is written once instead of nine
+  // times — eight of which used to swallow rejections silently.
+  const patch = createTaskPatch({ taskId, updateTask });
+
   const handleTitleBlur = () => {
-    if (taskId && titleValue.trim() && titleValue !== task?.title) {
-      void updateTask({ taskId, title: titleValue });
+    if (titleValue.trim() && titleValue !== task?.title) {
+      void patch({ title: titleValue });
     }
   };
 
-  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+  // Blur the input the event came from rather than holding a ref to it. The
+  // ref used to be threaded out of this hook and every consumer had to
+  // destructure it away, because reading any member off a ref-carrying object
+  // trips the React Compiler's "no refs during render" rule.
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      titleInputRef.current?.blur();
+      e.currentTarget.blur();
     }
-  };
-
-  const handleStatusChange = (statusId: Id<"taskStatuses">) => {
-    if (taskId)
-      void updateTask({ taskId, statusId }).catch((err: unknown) => {
-        toast.error("Couldn't change status", {
-          description: getErrorMessage(err),
-        });
-      });
-  };
-
-  const handlePriorityChange = (
-    priority: "urgent" | "high" | "medium" | "low"
-  ) => {
-    if (taskId) void updateTask({ taskId, priority });
-  };
-
-  const handleAssigneeChange = (value: string) => {
-    if (!taskId) return;
-    if (value === "unassigned") {
-      void updateTask({ taskId, assigneeId: null });
-    } else {
-      void updateTask({ taskId, assigneeId: value as Id<"users"> });
-    }
-  };
-
-  const handleSetTags = (tags: string[]) => {
-    if (taskId) {
-      void updateTask({ taskId, labels: tags });
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    if (taskId && task) {
-      const next = (task.labels || []).filter((t) => t !== tagToRemove);
-      void updateTask({ taskId, labels: next });
-    }
-  };
-
-  const handleDueDateChange = (date: string | null) => {
-    if (taskId) void updateTask({ taskId, dueDate: date });
-  };
-
-  const handlePlannedStartDateChange = (date: string | null) => {
-    if (taskId) void updateTask({ taskId, plannedStartDate: date });
-  };
-
-  const handleEstimateChange = (value: number | null) => {
-    if (taskId) void updateTask({ taskId, estimate: value });
   };
 
   const handleDelete = (onDeleted: () => void, closeGithubIssue = false) => {
@@ -195,30 +153,20 @@ export function useTaskDetail({
     spreadsheets,
     currentUser,
     editor,
-    editorLoading,
     descriptionReady,
     awaitingSeed,
     isConnected,
-    isOffline,
-    provider,
     linkedProvider,
     remoteUsers,
     titleValue,
     setTitleValue,
-    titleInputRef,
     handleTitleBlur,
     handleTitleKeyDown,
-    handleStatusChange,
-    handlePriorityChange,
-    handleAssigneeChange,
-    handleSetTags,
-    handleRemoveTag,
+    patch,
     showDeleteDialog,
     setShowDeleteDialog,
     handleDelete,
     isGithubLinked,
-    handleDueDateChange,
-    handlePlannedStartDateChange,
-    handleEstimateChange,
+    loadState: taskDetailLoadState({ task, statuses, members }),
   };
 }
