@@ -57,7 +57,7 @@ none of them have a build step.
 /packages
   /ui                  # shadcn primitives shared by web + admin — see its README
   /shared              # Types/enums shared between frontend and backend
-    /src/enums/roles.ts  # WorkspaceRole, ChannelRole, DocumentRole
+    /src/enums/roles.ts  # WorkspaceRole, ChannelRole, ChannelType
   /partykit            # Collaboration server (Cloudflare Durable Objects)
 ```
 
@@ -78,16 +78,18 @@ none of them have a build step.
   the next `shadcn add` doesn't silently drop them.
 
 ### Data Model
-- **Workspaces** contain channels, documents, and diagrams
-- **Members** have roles (admin/member) at workspace, channel, and document levels
-- **Channels** can be public or private within a workspace
+- **Workspaces** contain channels, documents, diagrams, spreadsheets, projects and tasks
+- **Members** have roles (admin/member) at the **workspace** and **channel** levels only — there is no per-document role
+- **Channels** are one of three types (`ChannelType`): `open`, `closed`, or `dm`
 - Messages have full-text search via `searchIndex`
 
 ### Permissions & Collaboration
-- **Channels/Documents**: Access via per-resource membership tables (`channelMembers`, `documentMembers`)
-- **Diagrams**: Access via **workspace membership** (all workspace members can access all diagrams)
-- **Tasks/Projects**: Access via **workspace membership** (all workspace members can access all projects and tasks)
-- Collaboration tokens (`convex/collaboration.ts`) must match the same access model as the resource's query functions — e.g. `diagrams.get` checks workspace membership, so `checkDiagramAccess` must too
+There are exactly **two** access rules. Every gate is one of them — if you are writing a third, you are writing a bug.
+
+- **Channels and their messages**: the **channel** rule, via `requireChannelAccess` (`authHelpers.ts`). Open channels are readable by any workspace member; **closed** and **dm** channels require a `channelMembers` row. Workspace membership alone is NOT sufficient — gating chat on `requireWorkspaceMember` lets any colleague read and post in a private channel or someone else's DM. There is no `documentMembers` table; per-resource membership exists only for channels.
+- **Documents, diagrams, spreadsheets, tasks, projects, cycles**: the **workspace** rule, via `requireResourceMember` / `checkResourceMember` (all workspace members reach all of them).
+- **Every path to the same bytes must use the same rule.** A resource's Yjs state is reachable three ways — the query (`documents.get`), the collaboration token (`collaboration.checkAccess`), and the signed snapshot blob (`snapshots.getSnapshotUrl`). The latter two share `hasResourceAccess`; `getSnapshotUrl` hands out a storage URL for the *full* document, so authenticating without authorizing it is a cross-workspace read. Adding a new resource type means adding it to `hasResourceAccess`, not just to the query.
+- Regression tests for both rules: `tests/messages.access.test.ts`, `tests/snapshots.access.test.ts`.
 - Real-time collaboration uses partyserver (Cloudflare Durable Objects + Yjs sync). Token flow: client calls `getCollaborationToken` action → receives one-time token → connects to partyserver with token → server verifies via Convex HTTP endpoint
 - Server code lives in `partykit/` directory: `worker.ts` (entry point), `server.ts` (YServer for Yjs collab), `presence-server.ts` (Server for workspace presence)
 - Dev config: `wrangler-partykit.jsonc` (DOs only, port 1999). Prod config: `wrangler.jsonc` (DOs + static assets)

@@ -1,7 +1,23 @@
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
-import { getUser } from "./authHelpers";
+import {
+  collabResourceValidator,
+  getUser,
+  hasResourceAccess,
+} from "./authHelpers";
+
+/**
+ * Tables that carry a `yjsSnapshotId`. Narrowing the id to this union (rather
+ * than branching per type at each call site) lets one `ctx.db.get` serve every
+ * room kind: the field is common to all four, so the union of docs still has it.
+ */
+type SnapshotTable = "documents" | "diagrams" | "spreadsheets" | "tasks";
+
+/** The resource id as it arrives on the wire — a string — typed for its table. */
+function snapshotId(resourceId: string): Id<SnapshotTable> {
+  return resourceId as Id<SnapshotTable>;
+}
 
 /**
  * Save a Yjs snapshot to Convex file storage and link it to a resource.
@@ -11,28 +27,13 @@ import { getUser } from "./authHelpers";
  */
 export const saveSnapshot = internalMutation({
   args: {
-    resourceType: v.union(
-      v.literal("doc"),
-      v.literal("diagram"),
-      v.literal("task"),
-      v.literal("spreadsheet")
-    ),
+    resourceType: collabResourceValidator,
     resourceId: v.string(),
     storageId: v.id("_storage"),
   },
   returns: v.null(),
   handler: async (ctx, { resourceType, resourceId, storageId }) => {
-    // Get the resource document - cast resourceId to appropriate table type
-    let resource;
-    if (resourceType === "doc") {
-      resource = await ctx.db.get(resourceId as Id<"documents">);
-    } else if (resourceType === "diagram") {
-      resource = await ctx.db.get(resourceId as Id<"diagrams">);
-    } else if (resourceType === "spreadsheet") {
-      resource = await ctx.db.get(resourceId as Id<"spreadsheets">);
-    } else {
-      resource = await ctx.db.get(resourceId as Id<"tasks">);
-    }
+    const resource = await ctx.db.get(snapshotId(resourceId));
 
     if (!resource) {
       console.warn(
@@ -56,23 +57,7 @@ export const saveSnapshot = internalMutation({
     }
 
     // Update resource with new snapshot ID
-    if (resourceType === "doc") {
-      await ctx.db.patch(resourceId as Id<"documents">, {
-        yjsSnapshotId: storageId,
-      });
-    } else if (resourceType === "diagram") {
-      await ctx.db.patch(resourceId as Id<"diagrams">, {
-        yjsSnapshotId: storageId,
-      });
-    } else if (resourceType === "spreadsheet") {
-      await ctx.db.patch(resourceId as Id<"spreadsheets">, {
-        yjsSnapshotId: storageId,
-      });
-    } else {
-      await ctx.db.patch(resourceId as Id<"tasks">, {
-        yjsSnapshotId: storageId,
-      });
-    }
+    await ctx.db.patch(snapshotId(resourceId), { yjsSnapshotId: storageId });
 
     return null;
   },
@@ -166,28 +151,12 @@ export const markSeedStatus = internalMutation({
  */
 export const getSnapshot = internalQuery({
   args: {
-    resourceType: v.union(
-      v.literal("doc"),
-      v.literal("diagram"),
-      v.literal("task"),
-      v.literal("spreadsheet")
-    ),
+    resourceType: collabResourceValidator,
     resourceId: v.string(),
   },
   returns: v.union(v.id("_storage"), v.null()),
-  handler: async (ctx, { resourceType, resourceId }) => {
-    // Get the resource document - cast resourceId to appropriate table type
-    let resource;
-    if (resourceType === "doc") {
-      resource = await ctx.db.get(resourceId as Id<"documents">);
-    } else if (resourceType === "diagram") {
-      resource = await ctx.db.get(resourceId as Id<"diagrams">);
-    } else if (resourceType === "spreadsheet") {
-      resource = await ctx.db.get(resourceId as Id<"spreadsheets">);
-    } else {
-      resource = await ctx.db.get(resourceId as Id<"tasks">);
-    }
-
+  handler: async (ctx, { resourceId }) => {
+    const resource = await ctx.db.get(snapshotId(resourceId));
     if (!resource) {
       return null;
     }
@@ -201,15 +170,17 @@ export const getSnapshot = internalQuery({
  *
  * This is a PUBLIC query that clients can call for cold-start fallback
  * when IndexedDB is empty and PartyKit is unreachable.
+ *
+ * Access must match the collaboration-token path (`collaboration.checkAccess`),
+ * because this returns the same Yjs state that path guards: a signed URL to the
+ * resource's full snapshot. Authentication alone is not enough — without the
+ * membership check any signed-in user could read another workspace's documents
+ * from an id alone. Denial returns null rather than throwing, matching the
+ * existing not-signed-in contract that callers treat as "no snapshot".
  */
 export const getSnapshotUrl = query({
   args: {
-    resourceType: v.union(
-      v.literal("doc"),
-      v.literal("diagram"),
-      v.literal("task"),
-      v.literal("spreadsheet")
-    ),
+    resourceType: collabResourceValidator,
     resourceId: v.string(),
   },
   returns: v.union(v.string(), v.null()),
@@ -218,18 +189,11 @@ export const getSnapshotUrl = query({
     const userId = await getUser(ctx);
     if (!userId) return null;
 
-    // Get the resource document - cast resourceId to appropriate table type
-    let resource;
-    if (resourceType === "doc") {
-      resource = await ctx.db.get(resourceId as Id<"documents">);
-    } else if (resourceType === "diagram") {
-      resource = await ctx.db.get(resourceId as Id<"diagrams">);
-    } else if (resourceType === "spreadsheet") {
-      resource = await ctx.db.get(resourceId as Id<"spreadsheets">);
-    } else {
-      resource = await ctx.db.get(resourceId as Id<"tasks">);
-    }
+    // Authorization check — same rule as the collaboration token path.
+    const allowed = await hasResourceAccess(ctx, userId, resourceType, resourceId);
+    if (!allowed) return null;
 
+    const resource = await ctx.db.get(snapshotId(resourceId));
     if (!resource || !resource.yjsSnapshotId) return null;
 
     // Get the URL for the stored blob

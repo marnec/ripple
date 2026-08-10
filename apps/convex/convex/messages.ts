@@ -9,7 +9,7 @@ import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "./dbTriggers";
-import { requireUser, requireWorkspaceMember } from "./authHelpers";
+import { requireUser, requireChannelAccess } from "./authHelpers";
 import { notify } from "./utils/notify";
 
 const mentionedUsersValidator = v.record(v.string(), v.object({
@@ -412,10 +412,7 @@ export const list = query({
     pageStatus: v.optional(v.union(v.literal("SplitRecommended"), v.literal("SplitRequired"), v.null())),
   }),
   handler: async (ctx, { channelId, paginationOpts }) => {
-    const channel = await ctx.db.get(channelId);
-    if (!channel) throw new ConvexError(`Channel not found with id="${channelId}"`);
-
-    await requireWorkspaceMember(ctx, channel.workspaceId);
+    const { channel } = await requireChannelAccess(ctx, channelId);
 
     // Grab the most recent messages
     const messagesPage = await ctx.db
@@ -454,10 +451,7 @@ export const send = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { body, channelId, plainText, isomorphicId, replyToId }) => {
-    const channel = await ctx.db.get(channelId);
-    if (!channel) throw new ConvexError("Channel not found");
-
-    const { userId } = await requireWorkspaceMember(ctx, channel.workspaceId);
+    const { userId, channel } = await requireChannelAccess(ctx, channelId);
 
     const user: Doc<"users"> | null = await ctx.db.get(userId);
     if (!user) throw new ConvexError(`No users found with id=${userId}`);
@@ -546,10 +540,7 @@ export const search = query({
   },
   returns: v.array(enrichedMessageValidator),
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
-    const channel = await ctx.db.get(channelId);
-    if (!channel) throw new ConvexError(`Channel not found with id="${channelId}"`);
-
-    await requireWorkspaceMember(ctx, channel.workspaceId);
+    const { channel } = await requireChannelAccess(ctx, channelId);
 
     // Search for messages
     const searchResults = await ctx.db
@@ -588,10 +579,7 @@ export const getMessageContext = query({
     const targetMessage = await ctx.db.get(messageId);
     if (!targetMessage) throw new ConvexError(`Message not found`);
 
-    const channel = await ctx.db.get(targetMessage.channelId);
-    if (!channel) throw new ConvexError(`Channel not found`);
-
-    await requireWorkspaceMember(ctx, channel.workspaceId);
+    const { channel } = await requireChannelAccess(ctx, targetMessage.channelId);
 
     // Get messages before and after the target message
     const messagesBefore = await ctx.db

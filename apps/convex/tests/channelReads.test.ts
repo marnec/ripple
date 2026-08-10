@@ -217,6 +217,11 @@ describe("channelReads", () => {
       );
 
       await insertMessage(t, { channelId, userId });
+      // `convex-test` keeps `_creationTime` strictly increasing, so an insert
+      // in the current millisecond is stamped just *above* the wall clock that
+      // `markRead` then reads from `Date.now()` — making the message look newer
+      // than the read that followed it. Let the clock move on first.
+      await new Promise((resolve) => setTimeout(resolve, 5));
       // Reading the channel records a lastReadAt newer than the message.
       await asUser.mutation(api.channelReads.markRead, { channelId });
 

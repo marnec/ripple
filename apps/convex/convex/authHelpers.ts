@@ -1,8 +1,9 @@
-import { ConvexError } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { WorkspaceRole, ChannelRole } from "@ripple/shared/enums";
+import type { YjsShareRoom } from "@ripple/shared/shareTypes";
 
 // ─── Result types ────────────────────────────────────────────────────
 
@@ -112,13 +113,92 @@ export async function checkWorkspaceMember(
 // ─── Resource access (fetch + membership in one step) ────────────────
 
 /** Tables whose rows carry a workspaceId field. */
-type WorkspaceResource =
+export type WorkspaceResource =
   | "documents"
   | "diagrams"
   | "spreadsheets"
   | "projects"
   | "tasks"
   | "cycles";
+
+/**
+ * The one place a collaborative resource's two spellings are tied together:
+ * the name it goes by on the wire (room ids, tokens, snapshot blobs) and the
+ * table it actually lives in.
+ *
+ * This mapping used to be re-derived per call site, and the copies drifted —
+ * `spreadsheets` reached the token path but never the snapshot path, which is
+ * how an unauthorized cross-workspace read shipped. `satisfies` makes pointing
+ * a room kind at a non-workspace table a compile error, so a new resource is
+ * one edit here rather than a grep.
+ *
+ * `presence` is deliberately absent: it is keyed by workspace id directly and
+ * has no row of its own (see `hasResourceAccess`).
+ */
+export const COLLAB_RESOURCE_TABLES = {
+  doc: "documents",
+  diagram: "diagrams",
+  task: "tasks",
+  spreadsheet: "spreadsheets",
+} as const satisfies Record<string, WorkspaceResource>;
+
+/** Wire name of a resource that has a Yjs room. */
+export type CollabResource = keyof typeof COLLAB_RESOURCE_TABLES;
+
+/**
+ * Compile-time proof that every room a guest share can point at is a room this
+ * module knows how to authorize. `packages/shared` owns the shareable subset
+ * and can't import Convex table names (it must not depend on the backend), so
+ * this is where the two halves are pinned together: add a shareable surface in
+ * `shareTypes.ts` without giving its room a table here and the build fails.
+ */
+type Extends<A extends B, B> = A;
+type _ShareRoomsAreCollabRooms = Extends<YjsShareRoom, CollabResource>;
+
+/** A room kind, including the workspace-level presence room. */
+export type CollabRoom = CollabResource | "presence";
+
+/**
+ * Argument validators for the two vocabularies above. Use these instead of
+ * spelling the union out again — the hand-written copies had already drifted
+ * apart (the token path accepted `spreadsheet`, the snapshot path did not),
+ * and every such gap is a resource whose access rule is missing somewhere.
+ */
+export const collabResourceValidator = v.union(
+  v.literal("doc"),
+  v.literal("diagram"),
+  v.literal("task"),
+  v.literal("spreadsheet"),
+);
+
+export const collabRoomValidator = v.union(
+  collabResourceValidator,
+  v.literal("presence"),
+);
+
+type ResourceAccess<T extends WorkspaceResource> =
+  | { ok: true; resource: Doc<T>; membership: Doc<"workspaceMembers"> }
+  | { ok: false; reason: "not-found" | "not-member" };
+
+/**
+ * The workspace rule, once: a resource is reachable by the members of the
+ * workspace that owns it. Every public variant below is a projection of this —
+ * throwing, nullable, or boolean — so the three cannot disagree about who gets in.
+ */
+async function resourceAccess<T extends WorkspaceResource>(
+  ctx: { db: QueryCtx["db"] },
+  resourceId: Id<T>,
+  userId: Id<"users">,
+): Promise<ResourceAccess<T>> {
+  const resource = await ctx.db.get(resourceId);
+  if (!resource) return { ok: false, reason: "not-found" };
+
+  const workspaceId = (resource as unknown as { workspaceId: Id<"workspaces"> }).workspaceId;
+  const membership = await getWorkspaceMembership(ctx, workspaceId, userId);
+  if (!membership) return { ok: false, reason: "not-member" };
+
+  return { ok: true, resource, membership };
+}
 
 /**
  * Authenticate + fetch resource + verify workspace membership. Throws on failure.
@@ -132,41 +212,41 @@ export async function requireResourceMember<T extends WorkspaceResource>(
 ): Promise<{ userId: Id<"users">; resource: Doc<T>; membership: Doc<"workspaceMembers"> }> {
   const userId = await requireUser(ctx);
 
-  const resource = await ctx.db.get(resourceId);
-  if (!resource) {
-    throw new ConvexError(`${table.slice(0, -1)} not found`);
+  const access = await resourceAccess<T>(ctx, resourceId, userId);
+  if (!access.ok) {
+    throw new ConvexError(
+      access.reason === "not-found"
+        ? `${table.slice(0, -1)} not found`
+        : "Not a member of this workspace",
+    );
   }
-
-  const workspaceId = (resource as unknown as { workspaceId: Id<"workspaces"> }).workspaceId;
-  const membership = await getWorkspaceMembership(ctx, workspaceId, userId);
-  if (!membership) throw new ConvexError("Not a member of this workspace");
-  if (opts?.role && membership.role !== opts.role) {
+  if (opts?.role && access.membership.role !== opts.role) {
     throw new ConvexError("Insufficient permissions");
   }
 
-  return { userId, resource: resource, membership };
+  return { userId, resource: access.resource, membership: access.membership };
 }
 
 /**
  * Soft variant — returns null if resource missing or user not a member.
  * For queries that should return null/[] on unauthorized.
+ *
+ * `_table` is unused at runtime (the row carries its own workspaceId) but is
+ * what binds `T`, so `resourceId` is still checked against the named table at
+ * every call site. Dropping the parameter would silently widen the type.
  */
 export async function checkResourceMember<T extends WorkspaceResource>(
   ctx: Ctx,
-  table: T,
+  _table: T,
   resourceId: Id<T>,
 ): Promise<{ userId: Id<"users">; resource: Doc<T>; membership: Doc<"workspaceMembers"> } | null> {
   const userId = await getUser(ctx);
   if (!userId) return null;
 
-  const resource = await ctx.db.get(resourceId);
-  if (!resource) return null;
+  const access = await resourceAccess<T>(ctx, resourceId, userId);
+  if (!access.ok) return null;
 
-  const workspaceId = (resource as unknown as { workspaceId: Id<"workspaces"> }).workspaceId;
-  const membership = await getWorkspaceMembership(ctx, workspaceId, userId);
-  if (!membership) return null;
-
-  return { userId, resource: resource, membership };
+  return { userId, resource: access.resource, membership: access.membership };
 }
 
 // ─── Channel access ──────────────────────────────────────────────────
@@ -240,10 +320,11 @@ export function requireCreator(
 export async function hasResourceAccess(
   ctx: { db: QueryCtx["db"] },
   userId: Id<"users">,
-  resourceType: "doc" | "diagram" | "task" | "spreadsheet" | "presence",
+  resourceType: CollabRoom,
   resourceId: string,
 ): Promise<boolean> {
   if (resourceType === "presence") {
+    // Presence rooms are keyed by workspace id directly — there is no row.
     const member = await getWorkspaceMembership(
       ctx,
       resourceId as Id<"workspaces">,
@@ -252,18 +333,8 @@ export async function hasResourceAccess(
     return member !== null;
   }
 
-  const _tableMap = {
-    doc: "documents",
-    diagram: "diagrams",
-    task: "tasks",
-    spreadsheet: "spreadsheets",
-  } as const;
-
-  const resource = await ctx.db.get(resourceId as Id<(typeof _tableMap)[typeof resourceType]>);
-  if (!resource) return false;
-
-  const workspaceId = (resource as unknown as { workspaceId: Id<"workspaces"> }).workspaceId;
-  const member = await getWorkspaceMembership(ctx, workspaceId, userId);
-  return member !== null;
+  type Table = (typeof COLLAB_RESOURCE_TABLES)[typeof resourceType];
+  const access = await resourceAccess<Table>(ctx, resourceId as Id<Table>, userId);
+  return access.ok;
 }
 

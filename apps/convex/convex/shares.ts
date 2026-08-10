@@ -19,6 +19,7 @@ import { WorkspaceRole } from "@ripple/shared/enums";
 import {
   GUEST_SUB_PREFIX,
   isValidAccessLevelForResource,
+  shareResourceTypeForYjs,
   yjsResourceTypeForShare,
   type ShareAccessLevel,
   type ShareResourceType,
@@ -468,12 +469,7 @@ export const checkGuestAccess = internalQuery({
   },
   returns: v.boolean(),
   handler: async (ctx, { shareId, resourceType, resourceId, accessLevel }) => {
-    const expectedResourceType: ShareResourceType =
-      resourceType === "doc"
-        ? "document"
-        : resourceType === "diagram"
-          ? "diagram"
-          : "spreadsheet";
+    const expectedResourceType = shareResourceTypeForYjs(resourceType);
     const share = await loadShareByShareId(ctx, shareId);
     if (!share) return false;
     if (!isShareActive(share, Date.now())) return false;

@@ -11,15 +11,50 @@
  * translate between them.
  */
 
-export const SHARE_RESOURCE_TYPES = [
-  "document",
-  "diagram",
-  "spreadsheet",
-  "channel",
-  "calendarEvent",
-] as const;
+/**
+ * Every shareable surface, mapped to the Yjs room kind it collaborates through
+ * — or `null` when it has no collaborative document at all (channel and
+ * calendarEvent shares grant call/RSVP access only).
+ *
+ * This map is the single source of truth for *both* directions of the
+ * translation. Deriving the inverse rather than hand-writing it is the point:
+ * a cascade going the other way ends in an implicit `else`, so a new room kind
+ * would silently take the last branch instead of failing to compile.
+ */
+export const SHARE_RESOURCE_YJS_ROOMS = {
+  document: "doc",
+  diagram: "diagram",
+  spreadsheet: "spreadsheet",
+  channel: null,
+  calendarEvent: null,
+} as const;
 
-export type ShareResourceType = (typeof SHARE_RESOURCE_TYPES)[number];
+export type ShareResourceType = keyof typeof SHARE_RESOURCE_YJS_ROOMS;
+
+export const SHARE_RESOURCE_TYPES = Object.keys(
+  SHARE_RESOURCE_YJS_ROOMS,
+) as ShareResourceType[];
+
+/** The room kinds reachable through a guest share — a subset of all rooms. */
+export type YjsShareRoom = NonNullable<
+  (typeof SHARE_RESOURCE_YJS_ROOMS)[ShareResourceType]
+>;
+
+/**
+ * The inverse map, derived. Key remapping to `never` drops the entries whose
+ * room is `null`, so this contains exactly the shareable rooms.
+ */
+export type ShareResourceTypeByYjsRoom = {
+  [K in ShareResourceType as NonNullable<
+    (typeof SHARE_RESOURCE_YJS_ROOMS)[K]
+  >]: K;
+};
+
+const SHARE_RESOURCE_BY_YJS_ROOM = Object.fromEntries(
+  Object.entries(SHARE_RESOURCE_YJS_ROOMS)
+    .filter(([, room]) => room !== null)
+    .map(([shareType, room]) => [room, shareType]),
+) as ShareResourceTypeByYjsRoom;
 
 export const SHARE_ACCESS_LEVELS = ["view", "edit", "join"] as const;
 
@@ -34,18 +69,19 @@ export type ShareAccessLevel = (typeof SHARE_ACCESS_LEVELS)[number];
  */
 export function yjsResourceTypeForShare(
   resourceType: ShareResourceType,
-): "doc" | "diagram" | "spreadsheet" | null {
-  switch (resourceType) {
-    case "document":
-      return "doc";
-    case "diagram":
-      return "diagram";
-    case "spreadsheet":
-      return "spreadsheet";
-    case "channel":
-    case "calendarEvent":
-      return null;
-  }
+): YjsShareRoom | null {
+  return SHARE_RESOURCE_YJS_ROOMS[resourceType];
+}
+
+/**
+ * The inverse of `yjsResourceTypeForShare`: which shareable surface a Yjs room
+ * belongs to. Total by construction — the parameter type only admits rooms that
+ * appear in the map, so there is no fallback branch to get wrong.
+ */
+export function shareResourceTypeForYjs<R extends YjsShareRoom>(
+  room: R,
+): ShareResourceTypeByYjsRoom[R] {
+  return SHARE_RESOURCE_BY_YJS_ROOM[room];
 }
 
 export function isValidAccessLevelForResource(

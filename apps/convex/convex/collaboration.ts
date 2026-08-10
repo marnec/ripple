@@ -2,7 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 import { action, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { hasResourceAccess } from "./authHelpers";
+import { collabRoomValidator, hasResourceAccess } from "./authHelpers";
 import { signToken } from "./tokenSigning";
 
 // ---------------------------------------------------------------------------
@@ -24,7 +24,7 @@ import { signToken } from "./tokenSigning";
  */
 export const getCollaborationToken = action({
   args: {
-    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence"), v.literal("spreadsheet")),
+    resourceType: collabRoomValidator,
     resourceId: v.string(),
   },
   returns: v.object({ token: v.string(), roomId: v.string() }),
@@ -109,7 +109,7 @@ export const getUserInfo = internalQuery({
 export const checkAccess = internalQuery({
   args: {
     userId: v.id("users"),
-    resourceType: v.union(v.literal("doc"), v.literal("diagram"), v.literal("task"), v.literal("presence"), v.literal("spreadsheet")),
+    resourceType: collabRoomValidator,
     resourceId: v.string(),
   },
   returns: v.boolean(),

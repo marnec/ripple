@@ -2,9 +2,6 @@ NEXT STEPS:
 
 - add a (workpool) background job backoffice center (of the workspace, admin only)
 
----
-- build a cross-workspace admin app, only accessible to my own account, with jobs, activity log and other useful info
----
 
 - recurrent events in calendar
 
