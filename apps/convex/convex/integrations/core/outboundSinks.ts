@@ -1,7 +1,7 @@
 import type { ActionCtx } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
-import type { OutboundRecorderSink } from "./outboundRecorderSink";
+import type { OutboundRecorderSink } from "./outboundPort";
 
 /**
  * Concrete `OutboundRecorderSink`s for each outbound op. Each closes over an

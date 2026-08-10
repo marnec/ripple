@@ -21,11 +21,11 @@ import {
  *
  * Each handler is one call to `runProviderOutbound` (`core/runOutboundAction`):
  * it resolves the GitHub gateway (or records a permanent failure if credentials
- * are missing) and hands the op's single gateway call to the orchestrator. All
- * the repeated machinery — env/JWT/client construction, response
+ * are missing) and runs the op's single gateway call. All the repeated
+ * machinery — env/JWT/client construction, response
  * classification, the 404/429 special cases, multi-request fan-out, and the
  * retrier's return-vs-throw contract — lives behind the gateway
- * (`outboundGateway.ts`) and `core/outboundOrchestrator.ts`, each written and
+ * (`outboundGateway.ts`) and `core/runOutboundAction.ts`, each written and
  * tested exactly once. The only per-op variation that stays here is the sink
  * (which row to mirror onto) and the one gateway method to call.
  *

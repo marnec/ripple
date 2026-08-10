@@ -1,17 +1,21 @@
 /**
- * The driven port for outbound integration sync (Ripple → external provider).
+ * Both ports of outbound integration sync (Ripple → external provider): the
+ * driven `OutboundGateway` (what we call out to) and the driving
+ * `OutboundRecorderSink` (where the outcome is persisted). They live together
+ * because they are the two halves of one interface — `runProviderOutbound`
+ * (`core/runOutboundAction.ts`) is defined entirely in terms of this pair.
  *
  * This module is intentionally free of Convex runtime imports (`_generated`,
- * `convex/server`) so the orchestrator and its tests can consume it without a
- * Convex action context. The GitHub adapter (`github/outboundGateway.ts`)
- * implements `OutboundGateway`; a future GitLab adapter would implement the
- * same port and the orchestrator would not change.
+ * `convex/server`) so the runner and its tests can consume it without a Convex
+ * action context. `github/outboundGateway.ts` and `gitlab/outboundGateway.ts`
+ * implement `OutboundGateway`; a third provider implements the same port and
+ * the runner does not change.
  *
  * Each gateway method performs 1+ HTTP requests and folds the result(s) into a
- * single `OutboundOutcome`. All GitHub-specific HTTP semantics — response
+ * single `OutboundOutcome`. All provider-specific HTTP semantics — response
  * classification, multi-request fan-out (labels = POST adds + DELETE removes),
  * the 404-on-DELETE-is-benign rule, and the 429 `Retry-After` pre-sleep — live
- * behind this boundary, invisible to the orchestrator.
+ * behind this boundary, invisible to the runner.
  */
 
 /**
@@ -53,6 +57,19 @@ export type OutboundOutcome =
   | { kind: "success"; meta: OutboundSuccessMeta }
   | { kind: "permanent_fail"; message: string; httpStatus?: number }
   | { kind: "retryable"; message: string };
+
+/**
+ * The driving port for persistence. The runner writes an op's outcome through
+ * this sink without knowing which recorder mutation runs or which row it
+ * targets (taskId vs commentId vs commentLinkId). Concrete sinks are built in
+ * `core/outboundSinks.ts`, each closing over an `ActionCtx` and a
+ * `FunctionReference` to an `internal` recorder mutation — that closure is the
+ * only place the mutation↔action boundary is crossed.
+ */
+export interface OutboundRecorderSink {
+  recordSuccess(meta: OutboundSuccessMeta): Promise<void>;
+  recordPermanentFailure(message: string, httpStatus?: number): Promise<void>;
+}
 
 /**
  * Provider-neutral addressing for a single issue/MR. `projectRef` identifies

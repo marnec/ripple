@@ -13,7 +13,7 @@ import type { RunId } from "@convex-dev/action-retrier";
  * from `integration.provider` and routes through it.
  *
  * Adding a provider is a data change here (register its `<provider>/syncOutAction`
- * suite) — `runOutboundOp`, the sinks, and the dispatch gates stay untouched.
+ * suite) — `runProviderOutbound`, the sinks, and the dispatch gates stay untouched.
  * An unregistered provider resolves to `null`; dispatch then refuses to push
  * rather than silently falling back to GitHub.
  */
