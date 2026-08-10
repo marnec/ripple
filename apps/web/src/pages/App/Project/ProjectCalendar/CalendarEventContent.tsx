@@ -1,7 +1,7 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import type { CalendarEventExternal } from "@schedule-x/calendar";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@ripple/ui/components/tooltip";
 import {
   ResponsiveDropdownMenu,
   ResponsiveDropdownMenuTrigger,

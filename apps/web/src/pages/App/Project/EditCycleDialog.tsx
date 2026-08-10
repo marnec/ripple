@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -8,9 +8,9 @@ import {
   ResponsiveDialogTitle,
   useResponsiveDialog,
 } from "@/components/ui/responsive-dialog";
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@ripple/ui/components/textarea";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { Trash2 } from "lucide-react";

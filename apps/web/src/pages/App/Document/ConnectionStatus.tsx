@@ -1,4 +1,4 @@
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@ripple/ui/components/tooltip";
 import { CloudOff, TriangleAlert } from "lucide-react";
 
 interface ConnectionStatusProps {

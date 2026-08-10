@@ -14,14 +14,14 @@
 // Any failure short-circuits with a Sonner toast; the "Show details" action
 // opens ImportTasksValidationDialog for the phase-2 per-row drill-down.
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ripple/ui/components/tooltip";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import {

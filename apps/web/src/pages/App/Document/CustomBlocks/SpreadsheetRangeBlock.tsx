@@ -4,7 +4,7 @@ import {
   type ReactCustomBlockRenderProps,
 } from "@blocknote/react";
 import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { RepointCellRefDialog } from "@/pages/App/Document/RepointCellRefDialog";
 import { parseRange } from "@ripple/shared/cellRef";
 import { useQuery } from "convex-helpers/react/cache";

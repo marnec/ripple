@@ -3,7 +3,7 @@ import { useAction } from "convex/react";
 import { Check, ChevronsUpDown, GitBranch, Loader2, RefreshCw } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   Command,
   CommandEmpty,

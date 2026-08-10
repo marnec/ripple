@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { cn } from "@/lib/utils";
 import { Pencil, Plus } from "lucide-react";
 import type { CycleStatus } from "@ripple/shared/types/cycles";

@@ -1,12 +1,12 @@
 import { UserAvatar } from "@/components/UserAvatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@ripple/ui/components/badge";
+import { Button } from "@ripple/ui/components/button";
 import {
   Command,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { TagPickerButton } from "@/components/TagPickerButton";
 import { ExternalAssigneeAvatars, type ExternalAssignee } from "./ExternalAssignees";
 import {

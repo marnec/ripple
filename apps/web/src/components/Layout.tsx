@@ -23,7 +23,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "./ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 import { AppSidebar } from "@/pages/App/AppSidebar";
 
 function CallIndicator() {

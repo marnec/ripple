@@ -4,7 +4,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { CalendarDays, Video } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { joinWindowStatus } from "../App/Dashboard/dashboard-calendar-utils";
 import { useJoinStatusTick } from "../App/Calendar/useJoinStatusTick";

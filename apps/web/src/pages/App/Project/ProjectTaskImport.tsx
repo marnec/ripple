@@ -9,7 +9,7 @@
 // in the same project are invisible here.
 
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Progress } from "@/components/ui/progress";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { useIsMobile } from "@/hooks/use-mobile";

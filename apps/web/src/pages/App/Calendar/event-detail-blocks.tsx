@@ -31,9 +31,9 @@ import {
 } from "lucide-react";
 
 import { UserAvatar } from "@/components/UserAvatar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
+import { Textarea } from "@ripple/ui/components/textarea";
 import { cn } from "@/lib/utils";
 import { InviteeMultiSelect } from "@/components/InviteeMultiSelect";
 

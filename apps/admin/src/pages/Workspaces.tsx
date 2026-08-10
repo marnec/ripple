@@ -7,9 +7,9 @@ import {
   TypeToConfirmDialog,
   UserAvatar,
 } from "@/components/console";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Badge } from "@ripple/ui/components/badge";
+import { Button } from "@ripple/ui/components/button";
+import { Card } from "@ripple/ui/components/card";
 import {
   Table,
   TableBody,

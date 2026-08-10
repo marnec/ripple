@@ -10,15 +10,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
+import { Card } from "@ripple/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@/components/ui/input-group";
+} from "@ripple/ui/components/input-group";
 import { Spinner } from "@/components/ui/spinner";
 import { initials } from "@/lib/format";
 import { cn } from "@/lib/utils";

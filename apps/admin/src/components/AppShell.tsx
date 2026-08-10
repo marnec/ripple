@@ -1,12 +1,12 @@
 import { UserAvatar } from "@/components/console";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@ripple/ui/components/button";
+import { Separator } from "@ripple/ui/components/separator";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 import { navigate, useRouteSegments } from "@/hooks/useHashRoute";
 import { cn } from "@/lib/utils";
 import { InvitesPage } from "@/pages/Invites";

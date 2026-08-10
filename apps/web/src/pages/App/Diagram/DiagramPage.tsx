@@ -5,7 +5,7 @@ import {
   TagInlineStrip,
   TagPickerButton,
 } from "@/components/TagPickerButton";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";

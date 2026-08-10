@@ -5,7 +5,7 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@/components/ui/avatar";
+} from "@ripple/ui/components/avatar";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { useMentionedUsers } from "./MentionedUsersContext";
 

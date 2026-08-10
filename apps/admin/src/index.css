@@ -3,6 +3,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* The shared primitives in `@ripple/ui` are raw .tsx consumed straight from the
+   workspace, and Tailwind v4 does not scan node_modules — without this the
+   utility classes used only by those components are never generated. Their
+   colour tokens stay per-app: the package names tokens, this file supplies the
+   values. */
+@source "../../../packages/ui/src";
+
+
 /* ── Operator-console theme ──────────────────────────────────────────────
    Warm-dark canvas (stone), hairline borders, a single amber signal accent.
    Data — IDs, counts, metrics — is set in IBM Plex Mono; UI chrome in the

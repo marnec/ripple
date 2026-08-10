@@ -3,8 +3,8 @@ import { Check, Plus, Tag as TagIcon, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
+import { Badge } from "@ripple/ui/components/badge";
+import { Button } from "@ripple/ui/components/button";
 import {
   Popover,
   PopoverContent,

@@ -10,7 +10,7 @@ import {
 } from "@radix-ui/react-icons";
 import { ImageIcon } from "lucide-react";
 import { useRef, useState } from "react";
-import { Button } from "../../../components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Toggle } from "../../../components/ui/toggle";
 
 type StyleKey = "bold" | "italic" | "underline" | "strike" | "code";

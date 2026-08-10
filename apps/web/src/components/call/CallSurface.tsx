@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 
 import { CallBusyScreen } from "@/components/CallBusyScreen";
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { useActiveCall } from "@/contexts/ActiveCallContext";
 import {
   isCallBusyForOtherResource,

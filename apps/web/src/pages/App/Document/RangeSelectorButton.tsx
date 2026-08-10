@@ -1,11 +1,11 @@
 import { BoxSelect } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 
 interface RangeSelectorButtonProps {
   onClick: () => void;

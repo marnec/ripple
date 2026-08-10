@@ -1,5 +1,5 @@
 import { Pencil, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Kbd } from "@/components/ui/kbd";
 
 type EditingBannerProps = {

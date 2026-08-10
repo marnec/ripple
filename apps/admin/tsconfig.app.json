@@ -29,5 +29,5 @@
       "@convex/*": ["../convex/convex/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../../packages/ui/src"]
 }

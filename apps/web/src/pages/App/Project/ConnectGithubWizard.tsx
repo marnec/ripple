@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -7,7 +7,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@ripple/ui/components/dialog";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -16,7 +16,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog";
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { IntegrationWarning } from "@/components/IntegrationWarning";
@@ -27,7 +27,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GitBranch, Inbox, Loader2, Search } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@ripple/ui/components/badge";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { BranchStatusMapEditor } from "../Workspace/BranchStatusMapEditor";

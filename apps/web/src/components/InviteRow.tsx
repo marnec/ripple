@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { useMutation } from "convex/react";
 import { Check, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";

@@ -22,7 +22,7 @@ import * as z from "zod";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useViewer } from "../UserContext";
-import { Button } from "../../../components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -32,7 +32,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "../../../components/ui/responsive-dialog";
-import { Input } from "../../../components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";

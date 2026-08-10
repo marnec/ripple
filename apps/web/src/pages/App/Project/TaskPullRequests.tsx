@@ -8,13 +8,13 @@ import {
   GitPullRequestDraft,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@ripple/ui/components/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 
 type Props = { taskId: Id<"tasks"> };
 

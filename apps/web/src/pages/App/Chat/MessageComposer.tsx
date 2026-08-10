@@ -9,7 +9,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 import { useNavigate } from "react-router-dom";
 import { useConvex } from "convex/react";
 import { toast } from "sonner";
-import { Button } from "../../../components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { useChatContext } from "./ChatContext";
 import { TaskMention } from "./CustomInlineContent/TaskMention";
 import { ResourceReference } from "./CustomInlineContent/ResourceReference";

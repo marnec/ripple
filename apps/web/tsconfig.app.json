@@ -30,5 +30,5 @@
       "@convex/*": ["../convex/convex/*"]
     }
   },
-  "include": ["src", "../../packages/shared/src", "../convex/convex/types", "../convex/convex/utils/blocknote.ts", "public/service-worker.js"]
+  "include": ["src", "../../packages/shared/src", "../../packages/ui/src", "../convex/convex/types", "../convex/convex/utils/blocknote.ts", "public/service-worker.js"]
 }

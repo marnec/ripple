@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 
 type Member = {

@@ -1,4 +1,4 @@
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,

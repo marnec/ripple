@@ -5,14 +5,14 @@ import { useNavigate } from "react-router-dom";
 import { useActiveCall } from "@/contexts/ActiveCallContext";
 import type { CallSourcePort } from "@/lib/call/source-port";
 
-import { Button } from "./ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "./ui/card";
+} from "@ripple/ui/components/card";
 
 /**
  * Rendered by a call surface when the user navigates to its route while

@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/AppShell";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ripple/ui/components/button";
+import { Card } from "@ripple/ui/components/card";
+import { Input } from "@ripple/ui/components/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";

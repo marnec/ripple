@@ -1,13 +1,13 @@
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { SwipeToReveal } from "@/components/SwipeToReveal";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@ripple/ui/components/badge";
+import { Button } from "@ripple/ui/components/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@ripple/ui/components/card";
 import { useAnimatedQuery } from "@/hooks/use-animated-query";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ChannelVisibilityFilter, FavoriteFilter } from "@/hooks/use-debounced-search";

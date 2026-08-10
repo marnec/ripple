@@ -10,7 +10,7 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogTrigger,
 } from "../../../components/ui/responsive-dialog";
-import { Input } from "../../../components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { SearchIcon, MessageSquareIcon } from "lucide-react";
 import { SafeHtml } from "@/components/ui/safe-html";

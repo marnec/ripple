@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
 import { useActiveCall } from "../contexts/ActiveCallContext";
 import { useFollowMode } from "../contexts/FollowModeContext";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "./ui/button";
+import { Button } from "@ripple/ui/components/button";
 
 const PIP_WIDTH_LG = 320;
 const PIP_WIDTH_SM = 240;

@@ -6,7 +6,7 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-} from "@/components/ui/tabs";
+} from "@ripple/ui/components/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import type { QueryParams } from "@convex/types/routes";

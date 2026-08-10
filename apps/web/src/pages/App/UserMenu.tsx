@@ -28,8 +28,8 @@ import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import { PendingInvitesDialog } from "./Workspace/PendingInvites";
 import { UserSettingsDialog } from "./UserSettingsDialog";
 import { usePendingInvites } from "@/hooks/use-pending-invites";
-import { Badge } from "../../components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "../../components/ui/avatar";
+import { Badge } from "@ripple/ui/components/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import {
   SidebarMenu,
   SidebarMenuButton,

@@ -11,9 +11,9 @@ import React, { Fragment, Suspense, useContext, useEffect, useRef, useState } fr
 import { Link, useParams } from "react-router-dom";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "../../../components/ui/button";
-import { Input } from "../../../components/ui/input";
-import { Separator } from "../../../components/ui/separator";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
+import { Separator } from "@ripple/ui/components/separator";
 import { toast } from "sonner";
 import "./message-composer.css";
 import { MessageContext } from "./MessageContext";

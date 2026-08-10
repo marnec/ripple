@@ -5,11 +5,11 @@ import { useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/_generated/api";
 import { UserSettingsDialog } from "@/pages/App/UserSettingsDialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Separator } from "@ripple/ui/components/separator";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { BadgeCheck, CalendarDays, LogOut, Mail, Settings, ShieldAlert } from "lucide-react";
 

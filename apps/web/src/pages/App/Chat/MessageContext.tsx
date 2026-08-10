@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { Message } from "./Message";
-import { Button } from "../../../components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { ReactionsContext } from "./ReactionsContext";

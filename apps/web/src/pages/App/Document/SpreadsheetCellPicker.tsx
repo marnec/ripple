@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@ripple/ui/components/dialog";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
 import { useViewer } from "../UserContext";

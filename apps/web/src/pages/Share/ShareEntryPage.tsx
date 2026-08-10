@@ -1,6 +1,6 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
 import { useQuery } from "convex-helpers/react/cache";
 import { useEffect, useState } from "react";

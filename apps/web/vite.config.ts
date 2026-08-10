@@ -73,7 +73,7 @@ export default defineConfig({
   build: { sourcemap: true },
   optimizeDeps: {
     esbuildOptions: { sourcemap: true },
-    exclude: ["@ripple/shared"],
+    exclude: ["@ripple/shared", "@ripple/ui"],
   },
   resolve: {
     // The monorepo holds two React copies (web pins 19.2.7, admin pins 19.2.5),

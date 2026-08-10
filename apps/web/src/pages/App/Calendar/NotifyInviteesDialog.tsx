@@ -21,7 +21,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 
 export type RescheduleChoice = "send" | "silent" | "revert";
 

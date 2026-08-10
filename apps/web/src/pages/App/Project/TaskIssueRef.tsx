@@ -4,7 +4,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 import { cn } from "@/lib/utils";
 
 type Props = {

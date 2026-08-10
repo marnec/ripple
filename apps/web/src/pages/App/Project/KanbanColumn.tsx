@@ -1,5 +1,5 @@
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@ripple/ui/components/badge";
+import { Button } from "@ripple/ui/components/button";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import {
   Select,
   SelectContent,

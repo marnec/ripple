@@ -8,7 +8,7 @@
 // SAME schema from @ripple/shared/taskImportSchema — there's no separate
 // "row schema" — so a successful phase-2 implies a fixable phase-1 too.
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@ripple/ui/components/dialog";
 import {
   TASK_IMPORT_HEADERS,
   taskImportRowSchema,

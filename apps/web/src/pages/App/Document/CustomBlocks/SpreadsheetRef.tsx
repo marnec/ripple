@@ -11,7 +11,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 import { useSpreadsheetCellPreview } from "@/hooks/use-spreadsheet-cell-preview";
 import { RepointCellRefDialog } from "@/pages/App/Document/RepointCellRefDialog";
 

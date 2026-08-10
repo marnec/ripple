@@ -1,5 +1,5 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import type { QueryParams } from "@convex/types/routes";
 import { useMutation } from "convex/react";
 import { makeFunctionReference } from "convex/server";

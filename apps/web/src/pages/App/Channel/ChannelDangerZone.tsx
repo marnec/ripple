@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { Trash2 } from "lucide-react";

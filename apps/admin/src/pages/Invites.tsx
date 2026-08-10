@@ -5,10 +5,10 @@ import {
   PageHeader,
   SearchInput,
 } from "@/components/console";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@ripple/ui/components/badge";
+import { Button } from "@ripple/ui/components/button";
+import { Card } from "@ripple/ui/components/card";
+import { Tabs, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
 import {
   Table,
   TableBody,
@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ripple/ui/components/tooltip";
 import { navigate } from "@/hooks/useHashRoute";
 import { errorMessage } from "@/lib/errors";
 import { fmtNum, fmtRelative } from "@/lib/format";

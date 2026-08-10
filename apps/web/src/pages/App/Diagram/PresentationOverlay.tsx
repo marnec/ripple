@@ -4,7 +4,7 @@ import type { ExcalidrawImperativeAPI, BinaryFiles } from "@excalidraw/excalidra
 import type { ExcalidrawElement, Theme } from "@excalidraw/excalidraw/element/types";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { orderFrames } from "./frames";
 
 interface PresentationOverlayProps {

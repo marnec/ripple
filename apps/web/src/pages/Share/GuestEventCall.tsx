@@ -10,7 +10,7 @@ import { LogOut, Monitor, MonitorOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api } from "@convex/_generated/api";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { CameraToggle, MicToggle } from "@/pages/App/GroupVideoCall/MediaToggle";
 import { VideoTile } from "@/pages/App/GroupVideoCall/VideoTile";

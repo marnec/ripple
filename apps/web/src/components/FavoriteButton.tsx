@@ -3,7 +3,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { Star } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "./ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { cn } from "@/lib/utils";
 import type { FavoritableResourceType as ResourceType } from "@ripple/shared/types/resources";
 

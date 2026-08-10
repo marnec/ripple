@@ -15,7 +15,7 @@ import {
   Maximize2,
   Trash2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   Sheet,
   SheetContent,

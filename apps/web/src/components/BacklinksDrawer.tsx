@@ -6,7 +6,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { RESOURCE_TYPE_ICONS } from "@/lib/resource-icons";
 import { getSourceLink, type Reference } from "@/components/embed-references";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@ripple/ui/components/badge";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {

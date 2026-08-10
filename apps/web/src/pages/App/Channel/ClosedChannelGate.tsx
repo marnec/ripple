@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Lock, Users } from "lucide-react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";

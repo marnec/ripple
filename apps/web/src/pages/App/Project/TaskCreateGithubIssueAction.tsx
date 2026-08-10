@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CircleDot } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import type { Id } from "@convex/_generated/dataModel";
 import { useGithubIssueEligibility } from "./useGithubIssueEligibility";
 import { CreateGithubIssueDialog } from "./CreateGithubIssueDialog";

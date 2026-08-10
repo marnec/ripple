@@ -5,7 +5,7 @@ import {
 import { LogOut, Monitor, MonitorOff } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { useActiveCall } from "@/contexts/ActiveCallContext";
 import { CameraToggle, MicToggle } from "@/pages/App/GroupVideoCall/MediaToggle";
 

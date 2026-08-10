@@ -16,7 +16,7 @@ import { useContext } from "react";
 import { Temporal } from "temporal-polyfill";
 import { CalendarCheck, CalendarDays, CalendarRange, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 
 import { MemberCalendarFilter } from "./MemberCalendarFilter";
 import { CalendarHeaderContext } from "./calendar-header-context";

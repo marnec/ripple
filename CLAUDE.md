@@ -33,23 +33,49 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 - **Compiler**: React Compiler (`babel-plugin-react-compiler`) is active — **do not use `useCallback` or `useMemo`** for performance optimization. The compiler handles memoization automatically. Only use these hooks if there is a semantic reason beyond caching (which is essentially never with React Compiler).
 
 ### Directory Structure
-```
-/src                    # React frontend
-  /pages/App/          # Main app pages
-    /Channel/          # Chat channels, video calls
-    /Document/         # Collaborative documents (BlockNote)
-    /Diagram/          # Excalidraw diagrams
-    /Workspace/        # Workspace management
-  /components/ui/      # shadcn/ui components (auto-generated, don't edit)
-  /routes.tsx          # React Router configuration
 
-/convex                # Backend functions
-  /schema.ts           # Database schema with indexes
-  /_generated/         # Auto-generated types (don't edit)
+pnpm workspaces + turbo. Every package is consumed as raw TypeScript source —
+none of them have a build step.
 
-/shared                # Types/enums shared between frontend and backend
-  /enums/roles.ts      # WorkspaceRole, ChannelRole, DocumentRole
 ```
+/apps
+  /web                 # The product (React + Vite)
+    /src/pages/App/    # Main app pages
+      /Channel/        # Chat channels, video calls
+      /Document/       # Collaborative documents (BlockNote)
+      /Diagram/        # Excalidraw diagrams
+      /Workspace/      # Workspace management
+    /src/components/ui/  # App-specific compositions only (see below)
+    /src/index.css     # This app's design tokens
+    /src/routes.tsx    # React Router configuration
+  /admin               # Platform-admin console, same Convex deployment
+    /src/index.css     # This app's design tokens (dark-only console theme)
+  /convex              # Backend functions
+    /convex/schema.ts  # Database schema with indexes
+    /convex/_generated/  # Auto-generated types (don't edit)
+
+/packages
+  /ui                  # shadcn primitives shared by web + admin — see its README
+  /shared              # Types/enums shared between frontend and backend
+    /src/enums/roles.ts  # WorkspaceRole, ChannelRole, DocumentRole
+  /partykit            # Collaboration server (Cloudflare Durable Objects)
+```
+
+### Shared UI vs app-local UI
+
+- `@ripple/ui` owns **component shape**; each app's `index.css` owns **token
+  values**. Never put a colour in the package — that separation is what lets
+  admin be a dark amber console and web a light/dark product off one set of
+  primitives.
+- Both apps' `components.json` point `ui` at `@ripple/ui/components`, so
+  `shadcn add <x>` from either app installs into the package.
+- App-specific compositions (`responsive-dialog`, `sidebar`, `safe-html`, admin's
+  `console`) stay in that app's `src/components/ui/`.
+- Both apps must keep `@source "../../../packages/ui/src"` in `index.css` —
+  Tailwind v4 does not scan `node_modules`, so without it the package's utility
+  classes are never generated.
+- Deviations from stock shadcn output carry an inline `LOCAL PATCH` comment, so
+  the next `shadcn add` doesn't silently drop them.
 
 ### Data Model
 - **Workspaces** contain channels, documents, and diagrams
@@ -71,8 +97,12 @@ Ripple is a real-time collaborative workspace built on Convex (serverless backen
 - **Union, by design**: when signals reference *different* issues (e.g. branch `42-foo` but body `Closes #99`), the PR links to **both** tasks and both advance on merge — there is no precedence between signals. This matches GitHub's own multi-issue-close semantics. Scoped to same-repo/same-project, and status moves are forward-only, which bounds the blast radius of a stray reference. Do not add precedence/dedup-to-one — it would break legitimate multi-issue PRs.
 
 ### Path Aliases
-- `@/*` → `./src/*`
-- `@shared/*` → `./shared/*`
+- `@/*` → that app's `./src/*`
+- `@shared/*` → `packages/shared/src/*`
+- `@convex/*` → `apps/convex/convex/*`
+- `@ripple/ui/components/*`, `@ripple/ui/lib/utils` — the shared primitives
+  package, imported by package name rather than an alias. Each app's
+  `@/lib/utils` re-exports `cn` from it so there is one instance.
 
 ## PartyKit / Yjs Snapshot Encoding
 

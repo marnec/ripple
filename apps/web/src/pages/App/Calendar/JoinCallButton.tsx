@@ -1,5 +1,5 @@
 import { Video } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import type { JoinWindowStatus } from "../Dashboard/dashboard-calendar-utils";
 import { cn } from "@/lib/utils";
 

@@ -6,7 +6,7 @@ import {
   StatCard,
   UserAvatar,
 } from "@/components/console";
-import { Card } from "@/components/ui/card";
+import { Card } from "@ripple/ui/components/card";
 import { fmtNum, fmtRelative } from "@/lib/format";
 import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";

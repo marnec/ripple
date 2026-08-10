@@ -13,7 +13,7 @@
 import { type KeyboardEvent, useLayoutEffect, useRef, useState } from "react";
 import { CalendarIcon, Check, ChevronsUpDown, Hash } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Command,

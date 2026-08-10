@@ -2,7 +2,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "../../components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   InputOTP,
   InputOTPGroup,

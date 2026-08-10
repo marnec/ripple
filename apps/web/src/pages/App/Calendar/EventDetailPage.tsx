@@ -18,7 +18,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { HeaderSlot, MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";

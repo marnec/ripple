@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,

@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@ripple/ui/components/button";
+import { Badge } from "@ripple/ui/components/badge";
 import { Switch } from "@/components/ui/switch";
 import {
   ResponsiveDialog,

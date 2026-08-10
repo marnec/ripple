@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import type { QueryParams } from "@convex/types/routes";

@@ -1,5 +1,5 @@
 import { CalendarDays, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 
 /**
  * Centered empty-state overlay shown over the calendar grid when the

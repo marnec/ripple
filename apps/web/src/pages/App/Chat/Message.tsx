@@ -17,7 +17,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "../../../components/ui/context-menu";
-import { Dialog, DialogClose, DialogOverlay, DialogPortal } from "../../../components/ui/dialog";
+import { Dialog, DialogClose, DialogOverlay, DialogPortal } from "@ripple/ui/components/dialog";
 import { useChatContext } from "./ChatContext";
 import { MentionedUsersContext, MentionedTasksContext, MentionedProjectsContext, MentionedResourcesContext, MentionedEventsContext } from "./MentionedUsersContext";
 import { MessageReactions } from "./MessageReactions";
@@ -26,7 +26,7 @@ import { useReactions } from "./ReactionsContext";
 import { hasImageBlocks } from "./messageUtils";
 import type { GroupPosition, MessageGroupInfo } from "./messageGrouping";
 import { MessageQuotePreview } from "./MessageQuotePreview";
-import { Avatar, AvatarFallback, AvatarImage } from "../../../components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { isMessageEditable } from "@shared/constants";
 
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));

@@ -1,6 +1,6 @@
 import { UserAvatar } from "@/components/UserAvatar";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@ripple/ui/components/badge";
+import { Card, CardContent, CardHeader } from "@ripple/ui/components/card";
 import { TaskCode } from "@/components/TaskCode";
 import { TaskIssueRef } from "./TaskIssueRef";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 
 const PR_STATE_META: Record<
   "draft" | "open" | "merged" | "closed",

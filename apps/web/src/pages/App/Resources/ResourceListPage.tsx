@@ -2,8 +2,8 @@ import { ChannelVisibilityFilterButton } from "@/components/ChannelVisibilityFil
 import { FavoriteFilterButton } from "@/components/FavoriteFilterButton";
 import { ResourceSearchInput, TagFilterStrip } from "@/components/ResourceSearchInput";
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@ripple/ui/components/button";
+import { Tabs, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { favoriteFilterToBoolean, useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useIsMobile } from "@/hooks/use-mobile";

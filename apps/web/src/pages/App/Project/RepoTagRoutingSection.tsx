@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { GitBranch } from "lucide-react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Separator } from "@/components/ui/separator";
+import { Separator } from "@ripple/ui/components/separator";
 import { TagPills } from "@/components/TagPills";
 
 type Props = {

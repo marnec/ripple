@@ -1,7 +1,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { TooltipProvider } from "../../../components/ui/tooltip";
+import { TooltipProvider } from "@ripple/ui/components/tooltip";
 import { MessageReactionPill } from "./MessageReactionPill";
 import { useReactions, type Reaction } from "./ReactionsContext";
 

@@ -1,4 +1,4 @@
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { useCellPicker } from "@/hooks/use-cell-picker";
 import { extractCellRefs } from "@/lib/spreadsheet-formula-refs";
 import {

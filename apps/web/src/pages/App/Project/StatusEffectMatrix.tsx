@@ -1,11 +1,11 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";

@@ -3,7 +3,7 @@ import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Switch } from "@/components/ui/switch";
 import { GitBranchPlus } from "lucide-react";
 import { BranchPicker } from "./BranchPicker";

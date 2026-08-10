@@ -21,7 +21,7 @@ import { AnimatePresence, m } from "framer-motion";
 import { useTheme } from "next-themes";
 import { Check, MessageSquare, MessageSquarePlus, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { isBlocksEmpty } from "@/lib/editor-utils";
 import {
   Drawer,

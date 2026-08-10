@@ -1,7 +1,7 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@ripple/ui/components/button";
+import { Tabs, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
 import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;

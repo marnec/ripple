@@ -4,13 +4,13 @@ import { useMutation } from "convex/react";
 import { GitBranch, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useEditorChange } from "@blocknote/react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 import { isBlocksEmpty } from "@/lib/editor-utils";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 

@@ -5,8 +5,8 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-} from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+} from "@ripple/ui/components/tabs";
+import { Button } from "@ripple/ui/components/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";

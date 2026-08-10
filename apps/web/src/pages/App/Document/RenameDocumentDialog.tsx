@@ -3,7 +3,7 @@ import { useQuery } from "convex-helpers/react/cache";;
 import { type FormEvent, useState } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Button } from "../../../components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -13,7 +13,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "../../../components/ui/responsive-dialog";
-import { Input } from "../../../components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { toast } from "sonner";
 
 export function RenameDocumentDialog({

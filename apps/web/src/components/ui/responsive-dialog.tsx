@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@ripple/ui/components/dialog";
 import {
   Drawer,
   DrawerClose,

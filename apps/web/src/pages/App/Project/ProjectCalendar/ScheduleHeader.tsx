@@ -12,8 +12,8 @@ import {
   PanelRightOpen,
   TrendingUp,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@ripple/ui/components/button";
+import { Tabs, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
 
 export type ScheduleView = "calendar" | "gantt";
 export type GanttViewMode = "Day" | "Week" | "Month";

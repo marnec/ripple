@@ -6,8 +6,8 @@ import {
   type SettingsSection,
 } from "@/components/SettingsLayout";
 import { TagInput } from "@/components/TagInput";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";

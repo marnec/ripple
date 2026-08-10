@@ -4,11 +4,11 @@ import {
   useSettingsSection,
   type SettingsSection,
 } from "@/components/SettingsLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@ripple/ui/components/textarea";
 import { MobileHeaderTitle } from "@/contexts/HeaderSlotContext";
 import { ResourceDeleted } from "@/pages/ResourceDeleted";
 import {

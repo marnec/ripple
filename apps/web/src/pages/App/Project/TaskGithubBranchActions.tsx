@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAction, useMutation } from "convex/react";
 import { toast } from "sonner";
 import { Check, GitBranchPlus, GitPullRequestCreate, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,

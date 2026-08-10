@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ResponsiveDialog,
@@ -9,7 +9,7 @@ import {
   ResponsiveDialogTitle,
   ResponsiveDialogBody,
 } from "@/components/ui/responsive-dialog";
-import { Input } from "@/components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";

@@ -1,4 +1,4 @@
-import { Button } from "../../../components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   ResponsiveDialog,
   ResponsiveDialogBody,
@@ -8,7 +8,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "../../../components/ui/responsive-dialog";
-import { Input } from "../../../components/ui/input";
+import { Input } from "@ripple/ui/components/input";
 import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import { type FormEvent, useState } from "react";

@@ -3,7 +3,7 @@ import "@blocknote/shadcn/style.css";
 import { BacklinksButton } from "@/components/BacklinksDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { DocumentActionsMenu } from "./DocumentActionsMenu";
-import { Button } from "@/components/ui/button";
+import { Button } from "@ripple/ui/components/button";
 import {
   TagInlineStrip,
   TagPickerButton,

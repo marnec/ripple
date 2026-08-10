@@ -3,7 +3,7 @@ import { getUserDisplayName } from "@ripple/shared/displayName";
 import { useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../../../components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ripple/ui/components/tooltip";
 
 type Props = {
   messageId: Id<"messages">;

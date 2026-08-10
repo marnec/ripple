@@ -3,7 +3,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@ripple/ui/components/tooltip";
 import { Copy, Eye, EyeOff, Table } from "lucide-react";
 
 interface SpreadsheetRangeToolbarProps {

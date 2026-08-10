@@ -23,3 +23,11 @@ overrides:
   # what broke `tsc` in apps/web/src/wdyr.ts. Pin one copy for the whole graph.
   "@types/react": 19.2.18
   "@types/react-dom": 19.2.4
+  # `@hookform/resolvers` v5 does NOT declare `zod` as a peer dependency, so pnpm
+  # never builds a zod-specific instance of it — its internal `from "zod"` type
+  # imports resolve to whichever copy lands in the hoisted `.pnpm/node_modules`.
+  # `@modelcontextprotocol/sdk` drags in zod 3.25.76, and when that one wins the
+  # hoist, `zodResolver(schema)` stops type-checking against the app's zod 4
+  # schemas ("Property 'typeName' is missing", "_zod.version.minor 4 vs 0").
+  # Pin one zod for the whole graph so the hoist is unambiguous.
+  zod: 4.4.3

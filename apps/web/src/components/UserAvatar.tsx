@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 
 /**
  * Canonical avatar initials: the first letters of the first two words, else the

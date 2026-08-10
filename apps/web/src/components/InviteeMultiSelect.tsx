@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Check, Mail, Plus } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@ripple/ui/components/button";
+import { Input } from "@ripple/ui/components/input";
 import {
   Command,
   CommandEmpty,
@@ -16,7 +16,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { cn } from "@/lib/utils";
 import type { Id } from "@convex/_generated/dataModel";
 

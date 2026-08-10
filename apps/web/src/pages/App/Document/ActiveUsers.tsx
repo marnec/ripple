@@ -1,5 +1,5 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback } from "@ripple/ui/components/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@ripple/ui/components/tooltip";
 import { cn } from "@/lib/utils";
 import type { RemoteUser } from "@/hooks/use-cursor-awareness";
 

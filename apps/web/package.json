@@ -39,6 +39,7 @@
     "@ripple/convex": "workspace:*",
     "@ripple/partykit": "workspace:*",
     "@ripple/shared": "workspace:*",
+    "@ripple/ui": "workspace:*",
     "@schedule-x/calendar": "4.5.0",
     "@schedule-x/calendar-controls": "4.5.0",
     "@schedule-x/current-time": "4.5.0",
