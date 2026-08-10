@@ -1,12 +1,11 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./functions";
 import { DEFAULT_DIAGRAM_NAME } from "@ripple/shared/constants";
 import { getEnrichedBacklinks } from "./edges";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { deletionResultValidator } from "./validators";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
@@ -105,8 +104,7 @@ export const updateTags = mutation({
       nextTagNames: tags,
     });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { tags: normalized });
+    await ctx.db.patch(id, { tags: normalized });
     return null;
   },
 });
@@ -135,8 +133,7 @@ export const create = mutation({
     const time = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     const diagramName = name || `${DEFAULT_DIAGRAM_NAME} ${date} ${time}`;
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const diagramId = await db.insert("diagrams", {
+    const diagramId = await ctx.db.insert("diagrams", {
       workspaceId,
       name: diagramName,
     });
@@ -172,8 +169,7 @@ export const rename = mutation({
       action: "renamed", oldValue: diagram.name, newValue: name, resourceName: name, scope: diagram.workspaceId,
     });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { name });
+    await ctx.db.patch(id, { name });
     return null;
   },
 });

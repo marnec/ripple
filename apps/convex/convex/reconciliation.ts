@@ -24,7 +24,8 @@
  * `sourceType + sourceId`. Add cases to this file when needed.
  */
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
+import { internalMutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 
 const SCAN_LIMIT = 2048;

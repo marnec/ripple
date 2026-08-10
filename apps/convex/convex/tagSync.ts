@@ -1,10 +1,8 @@
 import { ConvexError, v } from "convex/values";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { mutation } from "./_generated/server";
+import { mutation } from "./functions";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireWorkspaceMember } from "./authHelpers";
-import { triggers } from "./dbTriggers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 
 const TAG_NAME_MAX_LENGTH = 100;
@@ -58,7 +56,7 @@ export function normalizeTagList(raw: readonly string[]): string[] {
  * Reconcile the central `tags` + `entityTags` tables with `nextTagNames` for
  * one workspace-scoped resource. The caller still owns patching the
  * resource's denormalized `tags` column — this lets the caller batch the
- * patch with other field updates and fire `writerWithTriggers` once.
+ * patch with other field updates into a single write.
  *
  * Tasks use `syncTaskTags` instead — they're project-scoped and live in the
  * `taskTags` table, which has tighter indexes for project-bounded queries.
@@ -74,7 +72,6 @@ export async function syncTagsForResource(
     nextTagNames: readonly string[];
   },
 ): Promise<string[]> {
-  const db = writerWithTriggers(ctx, ctx.db, triggers);
   const normalized = normalizeTagList(args.nextTagNames);
 
   // Read existing entityTags rows for this resource. The single-field
@@ -91,13 +88,13 @@ export async function syncTagsForResource(
 
   for (const et of existing) {
     if (desired.has(et.tagName)) continue;
-    await db.delete(et._id);
+    await ctx.db.delete(et._id);
   }
 
   for (const name of normalized) {
     if (existingNames.has(name)) continue;
     const tagId = await ensureTagDictionaryRow(ctx, args.workspaceId, name);
-    await db.insert("entityTags", {
+    await ctx.db.insert("entityTags", {
       workspaceId: args.workspaceId,
       tagId,
       tagName: name,
@@ -133,7 +130,6 @@ export async function syncTaskTags(
     nextTagNames: readonly string[];
   },
 ): Promise<string[]> {
-  const db = writerWithTriggers(ctx, ctx.db, triggers);
   const normalized = normalizeTagList(args.nextTagNames);
 
   const existing = await ctx.db
@@ -146,13 +142,13 @@ export async function syncTaskTags(
 
   for (const tt of existing) {
     if (desired.has(tt.tagName)) continue;
-    await db.delete(tt._id);
+    await ctx.db.delete(tt._id);
   }
 
   for (const name of normalized) {
     if (existingNames.has(name)) continue;
     const tagId = await ensureTagDictionaryRow(ctx, args.workspaceId, name);
-    await db.insert("taskTags", {
+    await ctx.db.insert("taskTags", {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
       taskId: args.taskId,
@@ -181,8 +177,7 @@ async function ensureTagDictionaryRow(
     )
     .unique();
   if (existing) return existing._id;
-  const db = writerWithTriggers(ctx, ctx.db, triggers);
-  return db.insert("tags", { workspaceId, name });
+  return ctx.db.insert("tags", { workspaceId, name });
 }
 
 // ── Public mutations ──────────────────────────────────────────────────
@@ -209,8 +204,7 @@ export const createTag = mutation({
       )
       .unique();
     if (existing) return existing._id;
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    return db.insert("tags", { workspaceId, name: normalized });
+    return ctx.db.insert("tags", { workspaceId, name: normalized });
   },
 });
 
@@ -228,8 +222,6 @@ export const deleteTag = mutation({
     if (!tag) throw new ConvexError("Tag not found");
     await requireWorkspaceMember(ctx, tag.workspaceId, { role: WorkspaceRole.ADMIN });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-
     // Strip from non-task resources via entityTags.
     const entityJoins = await ctx.db
       .query("entityTags")
@@ -239,7 +231,7 @@ export const deleteTag = mutation({
       .collect();
     for (const join of entityJoins) {
       await stripTagFromResource(ctx, join.resourceType, join.resourceId, tag.name);
-      await db.delete(join._id);
+      await ctx.db.delete(join._id);
     }
 
     // Strip from tasks via taskTags.
@@ -251,10 +243,10 @@ export const deleteTag = mutation({
       .collect();
     for (const join of taskJoins) {
       await stripTagFromTask(ctx, join.taskId, tag.name);
-      await db.delete(join._id);
+      await ctx.db.delete(join._id);
     }
 
-    await db.delete(tagId);
+    await ctx.db.delete(tagId);
     return null;
   },
 });

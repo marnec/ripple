@@ -1,13 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
+import { mutation } from "./functions";
 import { ChannelRole, ChannelType } from "@ripple/shared/enums";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { internal } from "./_generated/api";
-import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete } from "./cascadeDelete";
 import { requireWorkspaceMember, checkWorkspaceMember, requireChannelAccess, requireUser } from "./authHelpers";
 import { notify } from "./utils/notify";
@@ -24,8 +23,7 @@ export const create = mutation({
   handler: async (ctx, { name, type, workspaceId }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const channelId = await db.insert("channels", {
+    const channelId = await ctx.db.insert("channels", {
       name,
       workspaceId,
       type,
@@ -33,7 +31,7 @@ export const create = mutation({
 
     if (type !== ChannelType.OPEN) {
       const creator = await ctx.db.get(userId);
-      await db.insert("channelMembers", {
+      await ctx.db.insert("channelMembers", {
         channelId,
         userId,
         role: ChannelRole.ADMIN,
@@ -186,8 +184,7 @@ export const update = mutation({
           action: "renamed", oldValue: channel.name, newValue: name, resourceName: name, scope: channel.workspaceId,
         });
       }
-      const db = writerWithTriggers(ctx, ctx.db, triggers);
-      await db.patch(id, updates);
+      await ctx.db.patch(id, updates);
     }
 
     return null;
@@ -404,14 +401,13 @@ export const createDm = mutation({
     const [first, second] = [callerName, otherName].sort();
     const dmName = `${first} × ${second}`;
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const channelId = await db.insert("channels", {
+    const channelId = await ctx.db.insert("channels", {
       name: dmName,
       workspaceId,
       type: ChannelType.DM,
     });
 
-    await db.insert("channelMembers", {
+    await ctx.db.insert("channelMembers", {
       channelId,
       userId,
       role: ChannelRole.MEMBER,
@@ -420,7 +416,7 @@ export const createDm = mutation({
       name: callerName,
     });
 
-    await db.insert("channelMembers", {
+    await ctx.db.insert("channelMembers", {
       channelId,
       userId: otherUserId,
       role: ChannelRole.MEMBER,
@@ -702,8 +698,7 @@ export const approveJoinRequest = mutation({
 
     if (!alreadyMember) {
       const targetUser = await ctx.db.get(request.userId);
-      const db = writerWithTriggers(ctx, ctx.db, triggers);
-      await db.insert("channelMembers", {
+      await ctx.db.insert("channelMembers", {
         userId: request.userId,
         channelId: request.channelId,
         workspaceId: request.workspaceId,
@@ -824,5 +819,4 @@ export const findDm = query({
     return null;
   },
 });
-
 

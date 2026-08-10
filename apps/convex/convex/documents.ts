@@ -1,11 +1,10 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { internalMutation, mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { DEFAULT_DOC_NAME } from "@ripple/shared/constants";
 import { auditLog, logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { requireResourceMember, requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTagsForResource } from "./tagSync";
@@ -19,7 +18,6 @@ export const create = mutation({
   },
   returns: v.id("documents"),
   handler: async (ctx, { workspaceId, name }) => {
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
     let documentName: string;
@@ -31,7 +29,7 @@ export const create = mutation({
       documentName = `${DEFAULT_DOC_NAME} ${date} ${time}`;
     }
 
-    const documentId = await db.insert("documents", {
+    const documentId = await ctx.db.insert("documents", {
       workspaceId,
       name: documentName,
     });
@@ -60,8 +58,7 @@ export const create = mutation({
  * System-created document, used by the call-transcript webhook ingest (which
  * runs with no authenticated user). Mirrors `create`'s insert but skips the
  * auth check, activity log, and notification — the transcript action owns
- * naming and the subsequent snapshot seed. Still goes through
- * `writerWithTriggers` so denormalised indexes (tags etc.) stay consistent.
+ * naming and the subsequent snapshot seed.
  */
 export const createForTranscript = internalMutation({
   args: {
@@ -71,13 +68,12 @@ export const createForTranscript = internalMutation({
   },
   returns: v.id("documents"),
   handler: async (ctx, { workspaceId, name, channelId }) => {
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
     // `transcript` tag (not the name) marks these docs. The denormalized
     // `tags` column drives the doc's own display + the graph `nodes.tags`
     // (via dbTriggers); `syncTagsForResource` reconciles the `entityTags`
     // join + workspace `tags` dictionary, reusing a preexisting `transcript`
     // tag rather than creating a duplicate (get-or-create on by_workspace_name).
-    const documentId = await db.insert("documents", {
+    const documentId = await ctx.db.insert("documents", {
       workspaceId,
       name,
       tags: ["transcript"],
@@ -142,8 +138,7 @@ export const rename = mutation({
       action: "renamed", oldValue: document.name, newValue: name, resourceName: name, scope: document.workspaceId,
     });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { name });
+    await ctx.db.patch(id, { name });
     return null;
   },
 });
@@ -239,8 +234,7 @@ export const updateTags = mutation({
       nextTagNames: tags,
     });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { tags: normalized });
+    await ctx.db.patch(id, { tags: normalized });
     return null;
   },
 });

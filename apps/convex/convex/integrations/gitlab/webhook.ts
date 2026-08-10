@@ -16,14 +16,10 @@
  */
 
 import { v } from "convex/values";
-import {
-  internalAction,
-  internalMutation,
-  type MutationCtx,
-} from "../../_generated/server";
+import { internalAction, type MutationCtx } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import type { Doc } from "../../_generated/dataModel";
-import { withTriggers } from "../../dbTriggers";
 import { effectiveLinkStatus } from "../core/entitlements";
 import { applyNormalizedEvent } from "../core/syncIn";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
@@ -392,7 +388,7 @@ export const handleGitlabWebhookMutation = internalMutation({
   args: { payload: v.any(), token: v.optional(v.string()) },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await handleGitlabWebhook(withTriggers(ctx), {
+    await handleGitlabWebhook(ctx, {
       payload: args.payload,
       token: args.token,
     });

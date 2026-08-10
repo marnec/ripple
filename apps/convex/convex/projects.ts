@@ -1,11 +1,10 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./functions";
 import { WorkspaceRole } from "@ripple/shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { projectValidator } from "./validators";
 import { requireWorkspaceMember, requireUser, requireCreator, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
@@ -44,8 +43,7 @@ export const create = mutation({
     }
 
     // Create the project
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const projectId = await db.insert("projects", {
+    const projectId = await ctx.db.insert("projects", {
       name,
       color,
       workspaceId,
@@ -236,8 +234,7 @@ export const update = mutation({
           action: "renamed", oldValue: project.name, newValue: name, resourceName: name, scope: project.workspaceId,
         });
       }
-      const db = writerWithTriggers(ctx, ctx.db, triggers);
-      await db.patch(id, patch);
+      await ctx.db.patch(id, patch);
     }
 
     return null;

@@ -1,8 +1,7 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 import { applyImportBatch } from "../core/importJob";
 import type { NormalizedIssueEvent } from "../core/types";
-import { withTriggers } from "../../dbTriggers";
 
 /**
  * V8-isolate mutations called from the Node-only `drainImportBatch` action
@@ -18,7 +17,7 @@ export const applyBatch = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await applyImportBatch(withTriggers(ctx), {
+    await applyImportBatch(ctx, {
       jobId: args.jobId,
       events: args.events as NormalizedIssueEvent[],
       batchStartIndex: args.batchStartIndex,

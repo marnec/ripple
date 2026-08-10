@@ -1,14 +1,13 @@
 import { ConvexError, v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./functions";
 import { paginationOptsValidator } from "convex/server";
 import { getAll } from "convex-helpers/server/relationships";
 import { extractEventMentionIds, extractMentionedUserIds, extractPlainTextFromBody, extractProjectIds, extractResourceReferenceIds, extractTaskMentionIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { triggers } from "./dbTriggers";
 import { requireUser, requireChannelAccess } from "./authHelpers";
 import { notify } from "./utils/notify";
 
@@ -456,8 +455,7 @@ export const send = mutation({
     const user: Doc<"users"> | null = await ctx.db.get(userId);
     if (!user) throw new ConvexError(`No users found with id=${userId}`);
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.insert("messages", {
+    await ctx.db.insert("messages", {
       body,
       userId,
       channelId,
@@ -508,8 +506,7 @@ export const update = mutation({
     if (message.userId !== userId) throw new ConvexError("Not authorized to update this message");
     if (!isMessageEditable(message._creationTime)) throw new ConvexError("Edit window has expired");
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { body, plainText });
+    await ctx.db.patch(id, { body, plainText });
 
     return null;
   },
@@ -525,8 +522,7 @@ export const remove = mutation({
     if (!message) throw new ConvexError("Message not found");
     if (message.userId !== userId) throw new ConvexError("Not authorized to delete this message");
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(id, { deleted: true });
+    await ctx.db.patch(id, { deleted: true });
 
     return null;
   },

@@ -14,12 +14,10 @@
 //      before each insert so a single bad row doesn't abort the job.
 
 import { ConvexError, v } from "convex/values";
-import { internalAction, internalMutation, mutation, query } from "./_generated/server";
+import { internalAction, query } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import { generateKeyBetween } from "fractional-indexing";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
-
-import { triggers } from "./dbTriggers";
 import { logTaskActivity } from "./auditLog";
 import { requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags } from "./tagSync";
@@ -425,8 +423,7 @@ export const createImportedTask = internalMutation({
     // The CSV column is "tags" (user-facing), but the underlying task field
     // is still `labels` (denormalized storage that syncs into `tags` /
     // `taskTags`). syncTaskTags is the source of truth for tag membership.
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const taskId = await db.insert("tasks", {
+    const taskId = await ctx.db.insert("tasks", {
       projectId: job.projectId,
       workspaceId: job.workspaceId,
       title: row.title,
@@ -458,7 +455,7 @@ export const createImportedTask = internalMutation({
         normalized.length !== row.tags.length ||
         normalized.some((t: string, i: number) => t !== row.tags![i])
       ) {
-        await db.patch(taskId, { labels: normalized });
+        await ctx.db.patch(taskId, { labels: normalized });
       }
     }
 

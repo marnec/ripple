@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation } from "../../_generated/server";
+import { internalMutation, mutation } from "../../functions";
 import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 

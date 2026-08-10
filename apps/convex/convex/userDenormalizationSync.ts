@@ -22,10 +22,8 @@
  * becomes a problem (rare — typical users are in tens of channels).
  */
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation } from "./functions";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { triggers } from "./dbTriggers";
 
 export const syncToChannelMembers = internalMutation({
   args: { userId: v.id("users") },
@@ -52,10 +50,8 @@ export const syncToChannelMembers = internalMutation({
       }
     }
 
-    // 2. Recompute DM channel names. The channels trigger will sync the new
-    //    channel name to the node in the `nodes` table, so we use
-    //    writerWithTriggers for the channel patch.
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
+    // 2. Recompute DM channel names. The channels trigger syncs the new
+    //    channel name onto the row in the `nodes` table.
     for (const m of memberships) {
       const channel = await ctx.db.get(m.channelId);
       if (channel?.type !== "dm") continue;
@@ -81,7 +77,7 @@ export const syncToChannelMembers = internalMutation({
       const newDmName = names.length === 2 ? `${names[0]} × ${names[1]}` : names.join(" × ");
 
       if (channel.name !== newDmName) {
-        await db.patch(m.channelId, { name: newDmName });
+        await ctx.db.patch(m.channelId, { name: newDmName });
       }
     }
 

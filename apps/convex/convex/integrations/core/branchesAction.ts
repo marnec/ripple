@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { action, internalMutation, internalQuery } from "../../_generated/server";
+import { action, internalQuery } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import { getIntegrationForLink } from "./integrationLookups";
 import { logTaskIntegrationActivity } from "./integrationActivity";

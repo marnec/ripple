@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalQuery } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { requireUser } from "./authHelpers";
 
 export const registerSubscription = mutation({

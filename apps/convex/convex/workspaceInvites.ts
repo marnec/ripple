@@ -2,10 +2,9 @@ import { ConvexError, v } from "convex/values";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
 import { internal } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./functions";
 import { logActivity } from "./auditLog";
-import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { requireWorkspaceMember, requireUser, getUser } from "./authHelpers";
 
 export const create = mutation({
@@ -295,8 +294,7 @@ export const accept = mutation({
     }
 
     // Add user to workspace members
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.insert("workspaceMembers", {
+    await ctx.db.insert("workspaceMembers", {
       userId,
       workspaceId: invite.workspaceId,
       role: WorkspaceRole.MEMBER,

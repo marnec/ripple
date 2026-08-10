@@ -1,10 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import {
-  internalMutation,
-  mutation,
-  query,
-  type MutationCtx,
-} from "../../_generated/server";
+import { query, type MutationCtx } from "../../_generated/server";
+import { internalMutation, mutation } from "../../functions";
 import type { Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import {

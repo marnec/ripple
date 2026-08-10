@@ -135,6 +135,34 @@ export const myQuery = query({
 - `query`, `mutation`, `action` → Public API (exposed to clients)
 - `internalQuery`, `internalMutation`, `internalAction` → Private (only callable from other Convex functions)
 
+### Writes: one way in
+
+`mutation` and `internalMutation` come from **`convex/functions.ts`**, never from
+`./_generated/server`. They are `customMutation(raw, customCtx(triggers.wrapDB))`,
+so the handler's `ctx.db` already fires the ~31 triggers in `dbTriggers.ts` — the
+workspace aggregates, the `nodes` index, the `taskTags` join columns the
+tag-filtered board queries partition on, the tag uniqueness invariants, the
+notification-subscription view. `query`, `action` and the `*Ctx` types still come
+from `_generated/server`.
+
+- Just write `ctx.db.patch(...)`. There is nothing to remember and no wrapper to
+  apply — that is the point. This replaced a convention re-derived at 58 call
+  sites, which three sites had silently forgotten (a kanban drag left
+  `taskTags.completed` stale, so the task vanished from a tag-filtered board).
+- **Never re-wrap.** `writerWithTriggers(ctx, ctx.db, triggers)` or
+  `withTriggers(ctx)` inside a handler does not just double-fire the triggers:
+  both layers take convex-helpers' module-level `outerWriteLock`, so the inner
+  write waits on a lock the outer write holds and the mutation **deadlocks**.
+- Two deliberate exceptions, both pinned by allowlists in
+  `tests/triggerWriteGuard.test.ts` (which enforces all of the above — `apps/convex`'s
+  lint step is `tsc` only): `auth.ts`'s Convex Auth callbacks aren't our mutations
+  so they apply `withTriggers` by hand, and `migrations.ts` stays on the raw
+  builder because it is the *repair* path for trigger-maintained state
+  (`backfill*Aggregates` calls `insertIfDoesNotExist` itself).
+- Aggregates register `idempotentTrigger()`, not `trigger()`, so a row that was
+  never counted (data predating an aggregate, a raw-seeded test fixture) self-heals
+  on its first write instead of throwing `DELETE_MISSING_KEY`.
+
 ### Query Best Practices
 - Use `withIndex()` instead of `filter()` for queries
 - Define indexes in schema.ts with descriptive names (e.g., `by_workspace_user`)

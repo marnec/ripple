@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation } from "./functions";
 import { components } from "./_generated/api";
 import {
   CascadingDelete,
@@ -7,12 +7,11 @@ import {
   makeBatchDeleteHandler,
 } from "convex-cascading-delete";
 import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id, TableNames } from "./_generated/dataModel";
 
 // The cascade component passes IDs as plain strings. This helper narrows
-// to a branded Id<TableNames> for writerWithTriggers, which requires it.
+// to a branded Id<TableNames>, which the trigger-aware writer requires.
 // Safe because the ID originates from ctx.db queries inside the component.
 function asId(id: string): Id<TableNames> {
   return id as Id<TableNames>;
@@ -163,13 +162,14 @@ export const cascadeRules = defineCascadeRules({
 });
 
 // ── Custom deleters ────────────────────────────────────────────────────
-// Two concerns: (1) yjsSnapshotId blob cleanup, (2) aggregate triggers via writerWithTriggers.
-// Edge/node cleanup is handled by cascade rules above.
+// One concern: yjsSnapshotId blob cleanup. The aggregate triggers fire off
+// the plain `ctx.db.delete` (see functions.ts); edge/node cleanup is handled
+// by the cascade rules above.
 
 type SnapshotDoc = Pick<Doc<"tasks">, "yjsSnapshotId">;
 
 async function deleteWithTriggers(ctx: MutationCtx, id: string) {
-  await writerWithTriggers(ctx, ctx.db, triggers).delete(asId(id));
+  await ctx.db.delete(asId(id));
 }
 
 async function deleteWithSnapshotCleanup(ctx: MutationCtx, id: string, doc: SnapshotDoc) {

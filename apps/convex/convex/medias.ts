@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./functions";
 import { requireUser, requireWorkspaceMember } from "./authHelpers";
 
 export const generateUploadUrl = mutation({

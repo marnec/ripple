@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { requireResourceMember } from "./authHelpers";
 
 const preferencesValidator = v.object({

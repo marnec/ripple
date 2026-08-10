@@ -7,6 +7,7 @@ import { APP_NAME, EMAIL_FROM_DOMAIN } from "@ripple/shared/constants";
 import { ConvexError } from "convex/values";
 import { alphabet, generateRandomString } from "oslo/crypto";
 import type { QueryCtx } from "./_generated/server";
+import { withTriggers } from "./dbTriggers";
 
 // Helper to send emails via Resend API using fetch (avoids Node-only dependencies)
 async function sendResendEmail(
@@ -234,6 +235,13 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         ...profile,
       };
 
+      // This callback is Convex Auth's, not one of our mutations, so `ctx.db`
+      // is the raw writer — see `functions.ts`. Wrap it explicitly: a provider
+      // that fills in a previously-empty name, or changes the account's email,
+      // has to reach the `users` trigger, or the display name mirrored onto
+      // `nodes.name` and `channelMembers.name` silently goes stale.
+      const db = withTriggers(ctx).db;
+
       if (userId !== null) {
         // Preserve an already-set name across provider refreshes and
         // account linking. Applies whether the name was manually set via
@@ -242,11 +250,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         if (existingUser?.name && "name" in userData) {
           delete userData.name;
         }
-        await ctx.db.patch(userId, userData);
+        await db.patch(userId, userData);
         return userId;
       }
 
-      return await ctx.db.insert("users", userData);
+      return await db.insert("users", userData);
     },
 
     /**

@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { mutation } from "../../_generated/server";
+import { mutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import { auditLog } from "../../auditLog";
 import { requireWorkspaceMember } from "../../authHelpers";

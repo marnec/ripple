@@ -12,7 +12,7 @@
 // The web-app RSVP path (`calendarEvents.respond` / `respondAsGuest`)
 // stays where it is — this file is the parallel email path.
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation } from "./functions";
 import type { Doc, Id } from "./_generated/dataModel";
 import { EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants";
 import { notify } from "./utils/notify";

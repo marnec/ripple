@@ -1,11 +1,6 @@
 import { v, ConvexError } from "convex/values";
-import {
-  action,
-  internalMutation,
-  internalQuery,
-  mutation,
-  query,
-} from "./_generated/server";
+import { action, internalQuery, query } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { requireUser, requireWorkspaceMember } from "./authHelpers";

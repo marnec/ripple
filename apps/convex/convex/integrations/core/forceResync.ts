@@ -1,9 +1,8 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 import type { Id } from "../../_generated/dataModel";
 import { applyNormalizedEvent } from "./syncIn";
 import type { NormalizedIssueEvent } from "./types";
-import { withTriggers } from "../../dbTriggers";
 
 interface ExternalAuthor {
   login: string;
@@ -147,9 +146,8 @@ export const applyOneIssueReconciliation = internalMutation({
       github: args.issue,
     });
 
-    const tctx = withTriggers(ctx);
     for (const event of events) {
-      await applyNormalizedEvent(tctx, { event, link });
+      await applyNormalizedEvent(ctx, { event, link });
     }
     return null;
   },

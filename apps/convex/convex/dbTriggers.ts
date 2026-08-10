@@ -125,16 +125,25 @@ export function withTriggers(
   return { ...ctx, db: writerWithTriggers(ctx, ctx.db, triggers) };
 }
 
-// Aggregate triggers
-triggers.register("documents", documentsByWorkspace.trigger());
-triggers.register("diagrams", diagramsByWorkspace.trigger());
-triggers.register("spreadsheets", spreadsheetsByWorkspace.trigger());
-triggers.register("projects", projectsByWorkspace.trigger());
-triggers.register("channels", channelsByWorkspace.trigger());
-triggers.register("workspaceMembers", membersByWorkspace.trigger());
-triggers.register("tasks", tasksByWorkspace.trigger());
-triggers.register("calendarEvents", eventsByWorkspace.trigger());
-triggers.register("tags", tagsByWorkspace.trigger());
+// Aggregate triggers.
+//
+// `idempotentTrigger()` rather than `trigger()`: every mutation now writes
+// through this trigger set (see `functions.ts`), which widens coverage to rows
+// that were never counted — data that predates an aggregate, rows seeded
+// directly by a test fixture, and the write paths that still cannot use our
+// mutation builders (the `auth.ts` provider callbacks, the `migrations.ts`
+// runner). The strict trigger throws DELETE_MISSING_KEY on those; the
+// idempotent one self-heals on the first write. Counts stay exact either way —
+// what we give up is a loud failure when the aggregate genuinely loses a key.
+triggers.register("documents", documentsByWorkspace.idempotentTrigger());
+triggers.register("diagrams", diagramsByWorkspace.idempotentTrigger());
+triggers.register("spreadsheets", spreadsheetsByWorkspace.idempotentTrigger());
+triggers.register("projects", projectsByWorkspace.idempotentTrigger());
+triggers.register("channels", channelsByWorkspace.idempotentTrigger());
+triggers.register("workspaceMembers", membersByWorkspace.idempotentTrigger());
+triggers.register("tasks", tasksByWorkspace.idempotentTrigger());
+triggers.register("calendarEvents", eventsByWorkspace.idempotentTrigger());
+triggers.register("tags", tagsByWorkspace.idempotentTrigger());
 
 // ── Nodes sync triggers ──────────────────────────────────────────────
 // Keep the nodes table in sync on insert/update. Delete-time cleanup of
@@ -542,8 +551,8 @@ triggers.register("calendarEvents", async (ctx, change) => {
 // Mirrors each (eventId, userId) join row into the polymorphic graph as
 // an `invites` edge. The trigger is the single source of truth — both
 // `calendarEvents.addInvitees` and the organiser-only
-// `calendarEvents.selfInvite` route their writes through
-// writerWithTriggers, so neither mutation has to know about edges.
+// `calendarEvents.selfInvite` just write the join row, so neither mutation
+// has to know about edges.
 //
 // Guest invitees (rows with `guestEmail` instead of `userId`) are
 // skipped: guests don't have a workspace user node to link to. If a
@@ -681,7 +690,6 @@ triggers.register("messages", async (ctx, change) => {
 // ── Tag uniqueness invariants ───────────────────────────────────────
 // Convex has no DB-level unique constraints, so we enforce them in-trigger:
 // throwing aborts the transaction and rolls back the offending write.
-// Only fires for writes routed through writerWithTriggers (tagSync.ts).
 
 triggers.register("tags", async (ctx, change) => {
   if (change.operation !== "insert" && change.operation !== "update") return;

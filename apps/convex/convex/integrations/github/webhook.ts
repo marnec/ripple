@@ -1,12 +1,7 @@
 import { v } from "convex/values";
-import {
-  internalAction,
-  internalMutation,
-  type ActionCtx,
-  type MutationCtx,
-} from "../../_generated/server";
+import { internalAction, type ActionCtx, type MutationCtx } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 import { internal } from "../../_generated/api";
-import { withTriggers } from "../../dbTriggers";
 import { resolveActiveInboundLink } from "../core/inboundRouting";
 import {
   applyInstallationEvent,
@@ -335,7 +330,7 @@ export const handleGithubWebhookMutation = internalMutation({
   args: { eventName: v.string(), payload: v.any() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await handleGithubWebhook(withTriggers(ctx), args);
+    await handleGithubWebhook(ctx, args);
     return null;
   },
 });

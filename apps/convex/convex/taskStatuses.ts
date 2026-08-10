@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { internalAction, internalMutation, mutation, query } from "./_generated/server";
+import { internalAction, query } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import { taskStatusValidator } from "./validators";
 import { requireWorkspaceMember } from "./authHelpers";

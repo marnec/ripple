@@ -1,9 +1,8 @@
 import { v } from "convex/values";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
+import { mutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import { requireUser } from "./authHelpers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { triggers } from "./dbTriggers";
 import type { EmailCapableCategory } from "@ripple/shared/notificationCategories";
 import { prefersChannel } from "./utils/notificationChannels";
 
@@ -98,11 +97,10 @@ export const save = mutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
     if (existing) {
-      await db.patch(existing._id, args);
+      await ctx.db.patch(existing._id, args);
     } else {
-      await db.insert("notificationPreferences", { userId, ...args });
+      await ctx.db.insert("notificationPreferences", { userId, ...args });
     }
 
     return null;

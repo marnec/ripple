@@ -1,7 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
 import { internal } from "../_generated/api";
-import { mutation, query } from "../_generated/server";
+import { query } from "../_generated/server";
+import { mutation } from "../functions";
 import { logActivity } from "../auditLog";
 import { requirePlatformAdmin } from "../authHelpers";
 

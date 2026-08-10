@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "../../_generated/server";
+import { internalQuery } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 
 /**
  * Resolve the stored GitLab token a `credentialRef` points at (seam 2). The

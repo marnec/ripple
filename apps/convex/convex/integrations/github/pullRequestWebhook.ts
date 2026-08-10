@@ -1,13 +1,10 @@
 import { v } from "convex/values";
-import {
-  internalMutation,
-  type MutationCtx,
-} from "../../_generated/server";
+import { type MutationCtx } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 import { resolveActiveInboundLink } from "../core/inboundRouting";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
 import { collectReferencedIssueNumbers } from "../core/closingRefs";
 import type { NormalizedPullRequestEvent } from "../core/types";
-import { withTriggers } from "../../dbTriggers";
 
 // Re-exported from `core/closingRefs` — the number-path parsing is
 // provider-neutral and shared with the (future) GitLab adapter. Kept exported
@@ -175,7 +172,7 @@ export const handlePullRequestWebhookMutation = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await handlePullRequestWebhook(withTriggers(ctx), {
+    await handlePullRequestWebhook(ctx, {
       event: args.event as NormalizedPullRequestEvent,
       externalAccountId: args.externalAccountId,
       externalRepoId: args.externalRepoId,

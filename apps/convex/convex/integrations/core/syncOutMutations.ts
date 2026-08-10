@@ -1,5 +1,5 @@
 import { v, type Infer } from "convex/values";
-import { internalMutation } from "../../_generated/server";
+import { internalMutation } from "../../functions";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";

@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import { normalizeCellRef, isValidCellRef, exceedsMaxCells } from "@ripple/shared/cellRef";
 import { checkResourceMember, requireResourceMember, requireUser } from "./authHelpers";

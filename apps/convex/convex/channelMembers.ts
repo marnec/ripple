@@ -1,13 +1,12 @@
 import { ChannelRole, ChannelType } from "@ripple/shared/enums";
 import { ConvexError, v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./functions";
 import type { ChannelMember } from "./types/channel";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { channelRoleSchema } from "./schema";
 import { logActivity } from "./auditLog";
 import { requireUser } from "./authHelpers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { triggers } from "./dbTriggers";
 
 const channelMemberValidator = v.object({
   _id: v.id("channelMembers"),
@@ -147,8 +146,7 @@ export const addToChannel = mutation({
 
     const targetUser = await ctx.db.get(userId);
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const memberId = await db.insert("channelMembers", {
+    const memberId = await ctx.db.insert("channelMembers", {
       userId,
       channelId,
       workspaceId: channel.workspaceId,
@@ -275,8 +273,7 @@ export const removeFromChannel = mutation({
       action: "member_removed", oldValue: userId, resourceName: channel.name, scope: channel.workspaceId,
     });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.delete(channelMember._id);
+    await ctx.db.delete(channelMember._id);
     return null;
   },
 });

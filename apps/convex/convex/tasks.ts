@@ -1,12 +1,10 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { internalQuery, mutation, query } from "./_generated/server";
-
+import { internalQuery, query } from "./_generated/server";
+import { mutation } from "./functions";
 import { generateKeyBetween } from "fractional-indexing";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { auditLog, logTaskActivity } from "./auditLog";
-import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
@@ -186,8 +184,7 @@ export const create = mutation({
     await ctx.db.patch(args.projectId, { taskCounter: nextNumber });
 
     // Create task with all fields
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const taskId = await db.insert("tasks", {
+    const taskId = await ctx.db.insert("tasks", {
       projectId: args.projectId,
       workspaceId: project.workspaceId,
       title: args.title,
@@ -222,7 +219,7 @@ export const create = mutation({
         normalized.length !== (args.labels?.length ?? 0) ||
         normalized.some((t: string, i: number) => t !== args.labels?.[i])
       ) {
-        await db.patch(taskId, { labels: normalized });
+        await ctx.db.patch(taskId, { labels: normalized });
       }
     }
 
@@ -874,8 +871,7 @@ export const update = mutation({
     }
 
     if (Object.keys(patch).length > 0) {
-      const db = writerWithTriggers(ctx, ctx.db, triggers);
-      await db.patch(taskId, patch);
+      await ctx.db.patch(taskId, patch);
     }
 
     // Log activity for each changed field

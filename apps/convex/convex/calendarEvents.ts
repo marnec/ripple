@@ -1,16 +1,9 @@
 import { v, ConvexError } from "convex/values";
-import {
-  action,
-  internalMutation,
-  internalQuery,
-  mutation,
-  query,
-  type ActionCtx,
-} from "./_generated/server";
+import { action, internalQuery, query, type ActionCtx } from "./_generated/server";
+import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import {
   getWorkspaceMembership,
   requireChannelAccess,
@@ -30,7 +23,6 @@ import {
   type RealtimeKitClient,
 } from "./lib/realtimeKit";
 import { GUEST_SUB_PREFIX } from "@ripple/shared/shareTypes";
-import { triggers } from "./dbTriggers";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { syncTagsForResource } from "./tagSync";
 
@@ -716,10 +708,9 @@ export const create = mutation({
       if (!m) throw new ConvexError("Invitee is not a member of this workspace");
     }
 
-    // Insert event. Goes through writerWithTriggers so the calendarEvents
-    // trigger in dbTriggers.ts creates the matching `nodes` row.
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    const eventId = await db.insert("calendarEvents", {
+    // The calendarEvents trigger in dbTriggers.ts creates the matching
+    // `nodes` row off this insert.
+    const eventId = await ctx.db.insert("calendarEvents", {
       workspaceId: args.workspaceId,
       title,
       description,
@@ -734,7 +725,7 @@ export const create = mutation({
     // bare `ctx.db`) so the `calendarEventInvitees` trigger fires and
     // creates the matching `invites` edge in the graph.
     for (const uid of userIds) {
-      await db.insert("calendarEventInvitees", {
+      await ctx.db.insert("calendarEventInvitees", {
         eventId,
         workspaceId: args.workspaceId,
         userId: uid,
@@ -754,7 +745,7 @@ export const create = mutation({
         expiresAt: args.endsAt + SHARE_BUFFER_MS,
       });
       const guestSub = generateGuestSub();
-      await db.insert("calendarEventInvitees", {
+      await ctx.db.insert("calendarEventInvitees", {
         eventId,
         workspaceId: args.workspaceId,
         guestEmail: email,
@@ -819,8 +810,6 @@ export const update = mutation({
     if (!event) throw new ConvexError("Event not found");
     assertOrganizer(event, userId, "edit this event");
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-
     const patch: Partial<Doc<"calendarEvents">> = {};
     if (args.title !== undefined) patch.title = validateTitle(args.title);
     if (args.description !== undefined) {
@@ -848,7 +837,7 @@ export const update = mutation({
       }
     }
 
-    await db.patch(event._id, patch);
+    await ctx.db.patch(event._id, patch);
 
     const shouldNotify = args.notifyInvitees ?? true;
     // Past→past time edits are organizer history-cleanup, not real
@@ -874,7 +863,7 @@ export const update = mutation({
         const allInvitees = await loadInviteeRows(ctx, event._id);
         const newRangeLabel = formatRangeLabel(newStart, newEnd, event.timezone);
         const nextSequence = (event.sequence ?? 0) + 1;
-        await db.patch(event._id, { sequence: nextSequence });
+        await ctx.db.patch(event._id, { sequence: nextSequence });
         updatedEvent = (await ctx.db.get(event._id))!;
         guestRows = allInvitees.filter((r) => r.guestEmail !== undefined);
         action = {
@@ -909,9 +898,9 @@ export const update = mutation({
 
 /** Replace the tag set on an event. Mirrors `documents.updateTags` /
  *  `diagrams.updateTags`: reconciles the central `tags` + `entityTags`
- *  tables, then patches the denormalized `tags` column on the event row
- *  through `writerWithTriggers` so the dbTrigger forwards the change to
- *  the polymorphic `nodes` row in one write. Auth = organizer only. */
+ *  tables, then patches the denormalized `tags` column on the event row,
+ *  from which the dbTrigger forwards the change to the polymorphic `nodes`
+ *  row. Auth = organizer only. */
 export const updateEventTags = mutation({
   args: {
     eventId: v.id("calendarEvents"),
@@ -931,8 +920,7 @@ export const updateEventTags = mutation({
       nextTagNames: tags,
     });
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(eventId, { tags: normalized });
+    await ctx.db.patch(eventId, { tags: normalized });
     return null;
   },
 });
@@ -987,12 +975,10 @@ export const cancel = mutation({
     if (!event) throw new ConvexError("Event not found");
     assertOrganizer(event, userId, "cancel this event");
 
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-
     // Snapshot invitees + bump sequence so ICS recipients accept the CANCEL.
     const invitees = await loadInviteeRows(ctx, event._id);
     const nextSequence = (event.sequence ?? 0) + 1;
-    await db.patch(event._id, { sequence: nextSequence });
+    await ctx.db.patch(event._id, { sequence: nextSequence });
     const updatedEvent = (await ctx.db.get(event._id))!;
 
     const memberRecipientIds = invitees
@@ -1159,15 +1145,12 @@ export const addInvitees = mutation({
       throw new ConvexError(`Cannot invite more than ${MAX_INVITEES} people`);
     }
 
-    // Route invitee writes through writerWithTriggers so the
-    // `calendarEventInvitees` trigger fires and the matching `invites`
-    // edge in the graph is created for each member row.
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-
+    // The `calendarEventInvitees` trigger creates the matching `invites`
+    // edge in the graph for each member row inserted here.
     for (const uid of newUsers) {
       const m = await getWorkspaceMembership(ctx, event.workspaceId, uid);
       if (!m) throw new ConvexError("Invitee is not a member of this workspace");
-      await db.insert("calendarEventInvitees", {
+      await ctx.db.insert("calendarEventInvitees", {
         eventId: event._id,
         workspaceId: event.workspaceId,
         userId: uid,
@@ -1188,7 +1171,7 @@ export const addInvitees = mutation({
         expiresAt: event.endsAt + SHARE_BUFFER_MS,
       });
       const guestSub = generateGuestSub();
-      await db.insert("calendarEventInvitees", {
+      await ctx.db.insert("calendarEventInvitees", {
         eventId: event._id,
         workspaceId: event.workspaceId,
         guestEmail: email,
@@ -1267,11 +1250,10 @@ export const selfInvite = mutation({
     const m = await getWorkspaceMembership(ctx, event.workspaceId, userId);
     if (!m) throw new ConvexError("You are no longer a member of this workspace");
 
-    // Route through writerWithTriggers so the `calendarEventInvitees`
-    // trigger creates the matching `invites` edge for this organiser
-    // in the workspace graph. Same write path as `addInvitees`.
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.insert("calendarEventInvitees", {
+    // The `calendarEventInvitees` trigger creates the matching `invites`
+    // edge for this organiser in the workspace graph. Same write path as
+    // `addInvitees`.
+    await ctx.db.insert("calendarEventInvitees", {
       eventId,
       workspaceId: event.workspaceId,
       userId,
@@ -1306,11 +1288,9 @@ export const removeInvitee = mutation({
       }
     }
 
-    // Route the invitee delete through writerWithTriggers so the
-    // `calendarEventInvitees` trigger fires and tears down the
-    // matching `invites` edge in the graph.
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.delete(invitee._id);
+    // The `calendarEventInvitees` trigger tears down the matching
+    // `invites` edge in the graph off this delete.
+    await ctx.db.delete(invitee._id);
 
     await logActivity(ctx, {
       userId, resourceType: "calendarEvents", resourceId: event._id,
@@ -1422,11 +1402,9 @@ export const _setEventMeetingId = internalMutation({
       // the orphan Cloudflare meeting (mirrors callSessions.createSession).
       return event.cloudflareMeetingId;
     }
-    // writerWithTriggers so the calendarEvents trigger sees the patch (no-op
-    // for this field — title/tags unchanged — but keeps the access pattern
-    // uniform across mutations on this table).
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
-    await db.patch(eventId, { cloudflareMeetingId });
+    // The calendarEvents trigger sees this patch and no-ops on it
+    // (title/tags unchanged).
+    await ctx.db.patch(eventId, { cloudflareMeetingId });
     return null;
   },
 });

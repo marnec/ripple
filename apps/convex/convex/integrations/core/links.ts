@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, mutation, query } from "../../_generated/server";
+import { query } from "../../_generated/server";
+import { internalMutation, mutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
@@ -7,7 +8,6 @@ import { requireWorkspaceMember } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { canActivateIntegration } from "./activationGate";
-import { withTriggers } from "../../dbTriggers";
 import {
   clearTaskExternalLink,
   setTaskExternalLink,
@@ -710,21 +710,15 @@ export const drainDisconnectBatch = internalMutation({
     const provider = resolveProvider(integration);
     const disconnectedAt = Date.now();
 
-    // Task writes go through triggers so the aggregate/graph stay consistent;
-    // the link-row deletes below target non-triggered tables and stay on ctx.db.
-    const taskWriter = withTriggers(ctx).db;
-
     for (const taskLink of batch) {
       const task = await ctx.db.get(taskLink.taskId);
       if (task) {
         const ref = task.externalRefs?.[0];
         if (ref) {
           // Clears externalRefs + the lookup; snapshots the frozen ref in the
-          // same task write. Task write routes through triggers; the lookup
-          // delete inside stays on raw ctx.db.
+          // same task write.
           await clearTaskExternalLink(ctx, {
             taskId: taskLink.taskId,
-            writer: taskWriter,
             alsoPatch: {
               externalRefFrozen: {
                 provider,
@@ -798,9 +792,6 @@ export const drainReconnectBatch = internalMutation({
       .paginate({ cursor: args.cursor, numItems: RECONNECT_BATCH_SIZE });
 
     const now = Date.now();
-    // Task patches fire triggers (aggregate/graph); the link insert below
-    // targets a non-triggered table and stays on ctx.db.
-    const taskWriter = withTriggers(ctx).db;
     for (const task of page.page) {
       const frozen = task.externalRefFrozen;
       if (!frozen) continue;
@@ -816,11 +807,10 @@ export const drainReconnectBatch = internalMutation({
       if (existing) continue;
 
       // Restore externalRefs + the lookup from the frozen snapshot and clear
-      // the snapshot in the same (triggered) task write.
+      // the snapshot in the same task write.
       await setTaskExternalLink(ctx, {
         taskId: task._id,
         projectId: projectLink.projectId,
-        writer: taskWriter,
         alsoPatch: { externalRefFrozen: undefined },
         ref: {
           provider: frozen.provider,
@@ -859,7 +849,6 @@ export const drainReconnectBatch = internalMutation({
     return null;
   },
 });
-
 
 /**
  * Workspace integrations tab data. Returns every link (active, paused, or

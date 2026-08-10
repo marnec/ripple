@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
-import { mutation, query, type MutationCtx } from "../_generated/server";
+import { query, type MutationCtx } from "../_generated/server";
+import { mutation } from "../functions";
 import { auditLog } from "../auditLog";
 import { requirePlatformAdmin } from "../authHelpers";
 import { removeMembershipCascade } from "../workspaceMembers";

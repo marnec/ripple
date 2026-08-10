@@ -40,16 +40,6 @@ type TaskLinkPatch = Partial<
 >;
 
 /**
- * Writer for the TASK row. Defaults to raw `ctx.db`; the disconnect/reconnect
- * drains pass `withTriggers(ctx).db` so the task patch fires the aggregate/graph
- * triggers. The lookup reconcile always runs on raw `ctx.db` regardless — the
- * integration write paths live below the trigger boundary (the test fixtures
- * raw-insert tasks without registering the aggregate triggers), which is why
- * this is an explicit writer module and not a dbTriggers hook.
- */
-type TaskWriter = Pick<MutationCtx["db"], "patch">;
-
-/**
  * Set the single external link on an existing task: writes `[ref]` to
  * `tasks.externalRefs` and mirrors it into the lookup. `alsoPatch` is applied
  * in the same task write.
@@ -61,12 +51,10 @@ export async function setTaskExternalLink(
     projectId: Id<"projects">;
     ref: TaskExternalRef;
     alsoPatch?: TaskLinkPatch;
-    writer?: TaskWriter;
   },
 ): Promise<void> {
   const externalRefs = [args.ref];
-  const writer = args.writer ?? ctx.db;
-  await writer.patch(args.taskId, { ...args.alsoPatch, externalRefs });
+  await ctx.db.patch(args.taskId, { ...args.alsoPatch, externalRefs });
   await reconcileTaskExternalRefs(
     ctx,
     args.taskId,
@@ -115,11 +103,9 @@ export async function clearTaskExternalLink(
   args: {
     taskId: Id<"tasks">;
     alsoPatch?: TaskLinkPatch;
-    writer?: TaskWriter;
   },
 ): Promise<void> {
-  const writer = args.writer ?? ctx.db;
-  await writer.patch(args.taskId, {
+  await ctx.db.patch(args.taskId, {
     ...args.alsoPatch,
     externalRefs: undefined,
   });
@@ -134,16 +120,15 @@ export async function clearTaskExternalLink(
  */
 export async function markTaskExternalLinkDeleted(
   ctx: MutationCtx,
-  args: { taskId: Id<"tasks">; writer?: TaskWriter },
+  args: { taskId: Id<"tasks"> },
 ): Promise<void> {
   const task = await ctx.db.get(args.taskId);
   if (!task?.externalRefs) return;
-  const writer = args.writer ?? ctx.db;
   const externalRefs = task.externalRefs.map((ref) => ({
     ...ref,
     deleted: true,
   }));
-  await writer.patch(args.taskId, { externalRefs });
+  await ctx.db.patch(args.taskId, { externalRefs });
   await reconcileTaskExternalRefs(
     ctx,
     args.taskId,

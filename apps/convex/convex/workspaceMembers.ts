@@ -1,11 +1,10 @@
 import { ConvexError, v } from "convex/values";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { internalQuery, query } from "./_generated/server";
+import { mutation } from "./functions";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { WorkspaceRole, ChannelRole } from "@ripple/shared/enums";
 import { checkWorkspaceMember, requireWorkspaceMember } from "./authHelpers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
-import { triggers } from "./dbTriggers";
 import { logActivity } from "./auditLog";
 import { cascadeDelete } from "./cascadeDelete";
 import { userValidator } from "./validators";
@@ -206,12 +205,10 @@ export async function removeMembershipCascade(
     )
     .collect();
 
-  const db = writerWithTriggers(ctx, ctx.db, triggers);
-
   for (const cm of channelMemberships) {
     const channel = await ctx.db.get(cm.channelId);
     if (!channel) {
-      await db.delete(cm._id);
+      await ctx.db.delete(cm._id);
       continue;
     }
 
@@ -278,7 +275,7 @@ export async function removeMembershipCascade(
       }
     }
 
-    await db.delete(cm._id);
+    await ctx.db.delete(cm._id);
   }
 
   // Delete any lingering channel join requests by this user in this workspace
@@ -292,7 +289,7 @@ export async function removeMembershipCascade(
     }
   }
 
-  await db.delete(targetMembership._id);
+  await ctx.db.delete(targetMembership._id);
 }
 
 export const remove = mutation({

@@ -1,10 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
+import { mutation } from "./functions";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
-import { triggers } from "./dbTriggers";
-import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { requireUser, getUser, requireWorkspaceMember } from "./authHelpers";
 
 export const create = mutation({
@@ -14,7 +13,6 @@ export const create = mutation({
   },
   returns: v.id("workspaces"),
   handler: async (ctx, { name, description }) => {
-    const db = writerWithTriggers(ctx, ctx.db, triggers);
     const userId = await requireUser(ctx);
 
     const workspaceId = await ctx.db.insert("workspaces", {
@@ -23,7 +21,7 @@ export const create = mutation({
       ownerId: userId,
     });
 
-    await db.insert("workspaceMembers", {
+    await ctx.db.insert("workspaceMembers", {
       workspaceId,
       userId,
       role: WorkspaceRole.ADMIN,
