@@ -20,7 +20,7 @@ import { internalAction, type MutationCtx } from "../../_generated/server";
 import { internalMutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import type { Doc } from "../../_generated/dataModel";
-import { effectiveLinkStatus } from "../core/entitlements";
+import { resolveInboundLink } from "../core/inboundRouting";
 import { applyNormalizedEvent } from "../core/syncIn";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
 import type {
@@ -309,34 +309,34 @@ export function verifyGitlabToken(
 
 /**
  * Resolve the live, sync-active project link a GitLab delivery targets, or
- * `null` to drop it. GitLab's auth model is per-link, not central: there's no
- * App installation, so we resolve the link by the payload's project id
- * (`externalRepoId`) and then verify the delivery's `X-Gitlab-Token` against
- * THAT link's stored `webhookSecret` — inverting GitHub's verify-then-resolve
- * order. A missing/mismatched token, an unknown/disconnected project, or a
+ * `null` to drop it — GitLab's binding of `core/inboundRouting`.
+ *
+ * GitLab's auth model is per-link, not central: there's no App installation, so
+ * authentication can only happen once the link is resolved, and it IS the
+ * authorization step the shared resolver takes as a callback (inverting GitHub's
+ * verify-then-resolve order). Everything else — the non-disconnected pick, the
+ * freeze gate, the delivery receipt, the silent rename — comes from core, so
+ * GitLab can't drift from GitHub again.
+ *
+ * A missing/mismatched token, an unknown/disconnected project, or a
  * frozen/paused link all return `null`.
  */
 export async function resolveGitlabInboundLink(
   ctx: MutationCtx,
-  args: { externalRepoId: string; token: string | null | undefined },
+  args: {
+    externalRepoId: string;
+    token: string | null | undefined;
+    /** `project.path_with_namespace` — drives the silent rename. */
+    repoFullName?: string;
+  },
 ): Promise<Doc<"projectIntegrationLinks"> | null> {
-  const repoLinks = await ctx.db
-    .query("projectIntegrationLinks")
-    .withIndex("by_externalRepo", (q) =>
-      q.eq("externalRepoId", args.externalRepoId),
-    )
-    .collect();
-  const link = repoLinks.find((l) => l.status !== "disconnected") ?? null;
-  if (!link) return null; // unknown/disconnected project — drop silently
-
-  // Per-link secret IS the authentication (replaces GitHub's central HMAC).
-  if (!verifyGitlabToken(args.token, link.webhookSecret ?? "")) return null;
-
-  // Freeze gate.
-  if (effectiveLinkStatus(link) !== "active") return null;
-
-  await ctx.db.patch(link._id, { lastWebhookAt: Date.now() });
-  return link;
+  return resolveInboundLink(ctx, {
+    externalRepoId: args.externalRepoId,
+    repoFullName: args.repoFullName,
+    // Per-link secret IS the authentication (replaces GitHub's central HMAC).
+    authorize: (link) =>
+      verifyGitlabToken(args.token, link.webhookSecret ?? ""),
+  });
 }
 
 /**
@@ -351,11 +351,17 @@ export async function handleGitlabWebhook(
   args: { payload: unknown; token: string | null | undefined },
 ): Promise<void> {
   const { payload, token } = args;
-  const externalRepoId = String(
-    (payload as { project?: { id?: number | string } } | null)?.project?.id ??
-      "",
-  );
+  const project = (
+    payload as {
+      project?: { id?: number | string; path_with_namespace?: string };
+    } | null
+  )?.project;
+  const externalRepoId = String(project?.id ?? "");
   if (!externalRepoId) return;
+  // GitLab's `owner/repo` equivalent. Every project-scoped hook carries it, and
+  // it's what the silent rename refreshes when a project is renamed or moved
+  // between groups (the numeric id the link is resolved by never changes).
+  const repoFullName = project?.path_with_namespace;
   const kind = (payload as { object_kind?: string } | null)?.object_kind;
 
   if (kind === "merge_request") {
@@ -364,6 +370,7 @@ export async function handleGitlabWebhook(
     const link = await resolveGitlabInboundLink(ctx, {
       externalRepoId,
       token,
+      repoFullName,
     });
     if (!link) return;
     await applyPullRequestEvent(ctx, { event, link });
@@ -372,7 +379,11 @@ export async function handleGitlabWebhook(
 
   const event = normalize(payload);
   if (!event) return; // irrelevant issue/note action — drop
-  const link = await resolveGitlabInboundLink(ctx, { externalRepoId, token });
+  const link = await resolveGitlabInboundLink(ctx, {
+    externalRepoId,
+    token,
+    repoFullName,
+  });
   if (!link) return;
   // Per-link opt-out: stop auto-pulling issue/comment changes (PR sync stays on).
   if (link.inboundIssueSyncDisabled) return;

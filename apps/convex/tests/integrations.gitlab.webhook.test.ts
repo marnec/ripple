@@ -30,7 +30,11 @@ function issuePayload(
       avatar_url: "https://gitlab.com/octocat.png",
       web_url: "https://gitlab.com/octocat",
     },
-    project: { id: 42, web_url: "https://gitlab.com/acme/web" },
+    project: {
+      id: 42,
+      web_url: "https://gitlab.com/acme/web",
+      path_with_namespace: "acme/web",
+    },
     object_attributes: {
       id: 301,
       iid: 23,
@@ -428,6 +432,56 @@ describe("integrations/gitlab/webhook.handleGitlabWebhook", () => {
       handleGitlabWebhook(ctx, { payload, token: "s3cr3t" }),
     );
     expect(await countTasks(t, projectId)).toBe(0);
+  });
+
+  /**
+   * Silent rename. GitLab projects can be renamed or moved between groups; the
+   * link is resolved by the stable numeric project id, so the delivery still
+   * lands and the human-readable label must be refreshed in the same pass — the
+   * rule `core/inboundRouting` owns for every provider. Without it a renamed
+   * GitLab project shows its old path in workspace settings forever.
+   */
+  it("refreshes externalRepoFullName when the GitLab project was renamed", async () => {
+    const t = createTestContext();
+    const { projectId } = await setupGitlabInbound(t);
+    const payload = issuePayload("open");
+    (payload as { project: Record<string, unknown> }).project = {
+      id: 42,
+      web_url: "https://gitlab.com/acme/web-app",
+      path_with_namespace: "acme/web-app",
+    };
+
+    await t.run((ctx) =>
+      handleGitlabWebhook(ctx, { payload, token: "s3cr3t" }),
+    );
+
+    const link = await t.run(async (ctx) =>
+      ctx.db
+        .query("projectIntegrationLinks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .unique(),
+    );
+    expect(link?.externalRepoFullName).toBe("acme/web-app");
+    // The rename must not cost us the delivery.
+    expect(await countTasks(t, projectId)).toBe(1);
+  });
+
+  it("records the delivery receipt so the 'last webhook received' indicator advances", async () => {
+    const t = createTestContext();
+    const { projectId } = await setupGitlabInbound(t);
+    await t.run((ctx) =>
+      handleGitlabWebhook(ctx, {
+        payload: issuePayload("open"),
+        token: "s3cr3t",
+      }),
+    );
+    const link = await t.run(async (ctx) =>
+      ctx.db
+        .query("projectIntegrationLinks")
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
+        .unique(),
+    );
+    expect(link?.lastWebhookAt).toBeGreaterThan(0);
   });
 
   it("drops the delivery when the link is paused (freeze gate)", async () => {

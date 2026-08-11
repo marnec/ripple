@@ -4172,6 +4172,7 @@ export declare const internal: {
             issue: {
               assignees: Array<{
                 avatarUrl: string;
+                id?: string;
                 login: string;
                 url: string;
               }>;
@@ -4197,6 +4198,7 @@ export declare const internal: {
           "internal",
           { projectIntegrationLinkId: Id<"projectIntegrationLinks"> },
           null | {
+            externalRepoId: string;
             installationId: string;
             items: Array<{
               completed: boolean;
@@ -4679,6 +4681,17 @@ export declare const internal: {
             credentialRef: string;
             expiresAt: number;
             refreshToken: string;
+          },
+          null
+        >;
+      };
+      forceResyncAction: {
+        runForceResync: FunctionReference<
+          "action",
+          "internal",
+          {
+            offset?: number;
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
           },
           null
         >;

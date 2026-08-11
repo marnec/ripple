@@ -3,10 +3,15 @@ import { internalQuery } from "../../_generated/server";
 import { getIntegrationForLink } from "./integrationLookups";
 
 /**
- * Read-only context bundle the force-resync action needs to drive its
- * per-issue REST loop. Resolves:
- *  - the workspaceIntegrations installation id (REST auth)
- *  - the repo's `owner/repo` for path construction
+ * Read-only context bundle a force-resync action needs to drive its per-issue
+ * REST loop. Provider-neutral — every `<provider>/forceResyncAction` reads it.
+ * Resolves:
+ *  - `installationId`: the integration's `externalAccountId`. GitHub reads it as
+ *    the App installation id (REST auth); GitLab as the `credentialRef` its
+ *    token client resolves a bearer token from.
+ *  - `repoFullName`: the human-readable `owner/repo` — GitHub's REST path.
+ *  - `externalRepoId`: the stable provider-side repo id — GitLab's REST path
+ *    (a numeric project id, which survives the renames `repoFullName` doesn't).
  *  - the list of task-link rows under the project link, joined to each
  *    parent task's `completed` flag and `externalRefs[0].issueNumber`
  *
@@ -21,6 +26,7 @@ export const getResyncContext = internalQuery({
     v.object({
       installationId: v.string(),
       repoFullName: v.string(),
+      externalRepoId: v.string(),
       items: v.array(
         v.object({
           taskIntegrationLinkId: v.id("taskIntegrationLinks"),
@@ -68,6 +74,7 @@ export const getResyncContext = internalQuery({
     return {
       installationId: integration.externalAccountId,
       repoFullName: link.externalRepoFullName,
+      externalRepoId: link.externalRepoId,
       items,
     };
   },

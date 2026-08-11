@@ -13,6 +13,7 @@ import {
   setTaskExternalLink,
 } from "./taskExternalLink";
 import { getIntegrationForLink, resolveProvider } from "./integrationLookups";
+import { resolveResyncAdapter } from "./resyncAdapters";
 
 /**
  * Per-batch size for the disconnect cascade workpool drain. Each step
@@ -565,17 +566,23 @@ export const resumeLink = mutation({
 });
 
 /**
- * Force a per-link reconcile of open/close + labels + assignees against
- * GitHub current truth. The mutation gate enforces admin + sync-active
+ * Force a per-link reconcile of open/close + labels + assignees against the
+ * provider's current truth. The mutation gate enforces admin + sync-active
  * (disconnected and entitlement-frozen links cannot be resynced — those
  * have to be restored first). On success it writes an audit log entry
  * and schedules the actual reconciliation action.
  *
  * Force resync is the recovery path for missed webhooks / extended freeze
  * periods (PRD: ">24 h freeze banner suggests Force resync"). The action
- * itself fetches current GitHub state per linked issue and applies a
+ * itself fetches current provider state per linked issue and applies a
  * synthesized normalized event so the existing inbound code path drives
  * the reconciliation.
+ *
+ * The action is resolved through `core/resyncAdapters`, not hardcoded: this
+ * mutation is provider-agnostic, and scheduling GitHub's action for a GitLab
+ * link means asking for an App installation token for a GitLab credential ref
+ * — every fetch fails and the user sees a silent no-op. A provider with no
+ * registered adapter is refused loudly instead.
  */
 export const forceResync = mutation({
   args: { linkId: v.id("projectIntegrationLinks") },
@@ -597,6 +604,14 @@ export const forceResync = mutation({
       );
     }
 
+    const provider = resolveProvider(await getIntegrationForLink(ctx, link));
+    const adapter = resolveResyncAdapter(provider);
+    if (!adapter) {
+      throw new ConvexError(
+        `Force resync is not supported for ${provider} links`,
+      );
+    }
+
     try {
       await auditLog.log(ctx, {
         action: "integration.force_resync",
@@ -611,11 +626,9 @@ export const forceResync = mutation({
       console.error("[auditLog] failed to log integration.force_resync", err);
     }
 
-    await ctx.scheduler.runAfter(
-      0,
-      internal.integrations.github.forceResyncAction.runForceResync,
-      { projectIntegrationLinkId: args.linkId },
-    );
+    await ctx.scheduler.runAfter(0, adapter.runForceResync, {
+      projectIntegrationLinkId: args.linkId,
+    });
 
     return null;
   },

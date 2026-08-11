@@ -10,6 +10,15 @@ interface ExternalAuthor {
   url: string;
 }
 
+/**
+ * An assignee as the provider reports it. `id` is the provider-side numeric
+ * user id, present only for providers that address members by id (GitLab); the
+ * reconciler picks the match key per provider.
+ */
+interface ExternalAssignee extends ExternalAuthor {
+  id?: string;
+}
+
 export interface GithubIssueSnapshot {
   externalIssueId: string;
   issueNumber: number;
@@ -20,7 +29,7 @@ export interface GithubIssueSnapshot {
   url: string;
   externalAuthor: ExternalAuthor;
   labels: string[];
-  assignees: ExternalAuthor[];
+  assignees: ExternalAssignee[];
 }
 
 export interface RippleTaskSnapshot {
@@ -38,9 +47,15 @@ export interface RippleTaskSnapshot {
  * `applyNormalizedEvent` invocations per drifted issue — cheap relative to
  * the GitHub fetch this gets paired with.
  *
- * `now` is the synthesized event's `externalUpdatedAt` — must be newer than
- * any stored value or the inbound ordering guard will drop the event. The
+ * `now` is the first synthesized event's `externalUpdatedAt` — it must be newer
+ * than any stored value or the inbound ordering guard will drop the event. The
  * action body passes `Date.now()`.
+ *
+ * Each subsequent event is stamped one ms later. This is not cosmetic: applying
+ * an event advances the link mirror's `externalUpdatedAt` to that stamp, and the
+ * guard drops anything not *strictly* newer — so one shared `now` across the
+ * batch would converge the first facet and silently abandon the rest (a reopen
+ * would land and the assignee behind it never would).
  */
 export function synthesizeReconciliationEvents(input: {
   now: number;
@@ -49,12 +64,15 @@ export function synthesizeReconciliationEvents(input: {
 }): NormalizedIssueEvent[] {
   const { now, ripple, github } = input;
   const events: NormalizedIssueEvent[] = [];
+  // Monotonic stamp per emitted event, in emission order.
+  let stamp = now;
+  const nextStamp = () => stamp++;
   if (github.state === "open" && ripple.completed) {
     events.push({
       kind: "issue.reopened",
       externalIssueId: github.externalIssueId,
       issueNumber: github.issueNumber,
-      externalUpdatedAt: now,
+      externalUpdatedAt: nextStamp(),
       title: github.title,
       body: github.body,
       url: github.url,
@@ -66,7 +84,7 @@ export function synthesizeReconciliationEvents(input: {
       kind: "issue.closed",
       externalIssueId: github.externalIssueId,
       issueNumber: github.issueNumber,
-      externalUpdatedAt: now,
+      externalUpdatedAt: nextStamp(),
       title: github.title,
       body: github.body,
       url: github.url,
@@ -81,14 +99,14 @@ export function synthesizeReconciliationEvents(input: {
     kind: "issue.labels_changed",
     externalIssueId: github.externalIssueId,
     issueNumber: github.issueNumber,
-    externalUpdatedAt: now,
+    externalUpdatedAt: nextStamp(),
     labels: github.labels,
   });
   events.push({
     kind: "issue.assignees_changed",
     externalIssueId: github.externalIssueId,
     issueNumber: github.issueNumber,
-    externalUpdatedAt: now,
+    externalUpdatedAt: nextStamp(),
     assignees: github.assignees,
   });
   return events;
@@ -130,6 +148,11 @@ export const applyOneIssueReconciliation = internalMutation({
           login: v.string(),
           avatarUrl: v.string(),
           url: v.string(),
+          // Provider-side numeric user id, for providers that address members
+          // by id rather than login (GitLab). Absent for GitHub. Without it a
+          // GitLab resync's synthesized `issue.assignees_changed` can't match
+          // any member — see `syncIn.applyAssigneesChanged`.
+          id: v.optional(v.string()),
         }),
       ),
     }),

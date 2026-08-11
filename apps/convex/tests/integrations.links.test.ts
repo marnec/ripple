@@ -602,6 +602,104 @@ describe("integrations/core/links.forceResync", () => {
     expect(entry?.actorId).toBe(userId);
     expect(entry?.scope).toBe(workspaceId);
   });
+
+  /**
+   * Force resync is dispatched through `core/resyncAdapters`, not hardcoded to
+   * GitHub. These two assert the routing property the adapter table exists for:
+   * a link resyncs against its OWN provider, and a provider with no adapter is
+   * refused rather than pointed at GitHub's API.
+   */
+  const scheduledNames = (t: ReturnType<typeof createTestContext>) =>
+    t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).map(
+        (f) => f.name,
+      ),
+    );
+
+  it("schedules github's resync action for a github link", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await asUser.mutation(
+      api.integrations.core.links.createLink,
+      {
+        projectId,
+        workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      },
+    );
+
+    await asUser.mutation(api.integrations.core.links.forceResync, { linkId });
+
+    expect(await scheduledNames(t)).toContain(
+      "integrations/github/forceResyncAction:runForceResync",
+    );
+  });
+
+  it("schedules gitlab's resync action for a gitlab link (never github's)", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", { name: "GitLab" });
+      const integrationId = await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "gitlab",
+        externalAccountId: "gl-acct",
+        credentialToken: "glpat-xxx",
+      });
+      return ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        workspaceIntegrationId: integrationId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "42",
+      });
+    });
+
+    await asUser.mutation(api.integrations.core.links.forceResync, { linkId });
+
+    const names = await scheduledNames(t);
+    expect(names).toContain(
+      "integrations/gitlab/forceResyncAction:runForceResync",
+    );
+    expect(names).not.toContain(
+      "integrations/github/forceResyncAction:runForceResync",
+    );
+  });
+
+  it("refuses a link whose provider has no resync adapter (no fallback to github)", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    const linkId = await t.run(async (ctx) => {
+      const botUserId = await ctx.db.insert("users", { name: "Bucket" });
+      const integrationId = await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "bitbucket",
+        externalAccountId: "bb-acct",
+      });
+      return ctx.db.insert("projectIntegrationLinks", {
+        workspaceId,
+        projectId,
+        workspaceIntegrationId: integrationId,
+        status: "active",
+        pausedByBilling: false,
+        externalRepoFullName: "acme/web",
+        externalRepoId: "bb-1",
+      });
+    });
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.forceResync, { linkId }),
+    ).rejects.toThrow(/resync/i);
+    expect(
+      (await scheduledNames(t)).filter((n) => n.includes("forceResync")),
+    ).toEqual([]);
+  });
 });
 
 describe("integrations/core/links.listByWorkspace", () => {

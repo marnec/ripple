@@ -9,6 +9,7 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import { withTriggers } from "../convex/dbTriggers";
+import { WorkspaceRole } from "@ripple/shared/enums/roles";
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -245,6 +246,116 @@ describe("integrations/core/forceResync.synthesizeReconciliationEvents", () => {
     expect(task?.statusId).not.toBe(doneStatusId);
   });
 
+  /**
+   * Every synthesized event lands, not just the first. The inbound ordering
+   * guard drops an event whose `externalUpdatedAt` is not strictly newer than
+   * the link mirror's — and each applied event advances that mirror. So a
+   * synthesis that stamps all of its events with one identical `now` converges
+   * only its first facet and silently abandons the rest: an issue that drifted
+   * on state AND assignees would reopen but never get its assignee back.
+   */
+  it("end-to-end: an issue drifted on both state and assignees converges on both", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const { triageStatusId, taskId, link, memberId } = await t.run(
+      async (ctx) => {
+        const triageStatusId = await ctx.db.insert("taskStatuses", {
+          projectId,
+          name: "Triage",
+          color: "bg-amber-500",
+          order: 0,
+          isDefault: false,
+          isCompleted: false,
+          isTriage: true,
+        });
+        const doneStatusId = await ctx.db.insert("taskStatuses", {
+          projectId,
+          name: "Done",
+          color: "bg-green-500",
+          order: 1,
+          isDefault: false,
+          isCompleted: true,
+        });
+        const botUserId = await ctx.db.insert("users", { name: "GitHub" });
+        await ctx.db.insert("workspaceIntegrations", {
+          workspaceId,
+          botUserId,
+          provider: "github",
+          externalAccountId: "install-1",
+        });
+        // The GitHub assignee, resolvable as a workspace member by login.
+        const memberId = await ctx.db.insert("users", {
+          name: "Carol",
+          githubLogin: "carol",
+        });
+        await ctx.db.insert("workspaceMembers", {
+          userId: memberId,
+          workspaceId,
+          role: WorkspaceRole.MEMBER,
+        });
+        const linkId = await ctx.db.insert("projectIntegrationLinks", {
+          workspaceId,
+          projectId,
+          status: "active",
+          pausedByBilling: false,
+          externalRepoFullName: "acme/web",
+          externalRepoId: "R_kgDOACME",
+        });
+        const taskId = await withTriggers(ctx).db.insert("tasks", {
+          projectId,
+          workspaceId,
+          title: "Drifted task",
+          statusId: doneStatusId,
+          priority: "medium",
+          completed: true,
+          creatorId: botUserId,
+        });
+        await ctx.db.insert("taskIntegrationLinks", {
+          taskId,
+          projectIntegrationLinkId: linkId,
+          externalIssueId: "I_drifted",
+          externalState: "closed",
+          externalUpdatedAt: 1_000,
+          externalAuthor,
+        });
+        return {
+          triageStatusId,
+          taskId,
+          memberId,
+          link: (await ctx.db.get(linkId)) as Doc<"projectIntegrationLinks">,
+        };
+      },
+    );
+
+    const carol = {
+      login: "carol",
+      avatarUrl: "https://avatars.githubusercontent.com/u/2?v=4",
+      url: "https://github.com/carol",
+    };
+    const events = synthesizeReconciliationEvents({
+      now: 2_000_000_000_000,
+      ripple: { completed: true },
+      github: {
+        ...baseIssue,
+        externalIssueId: "I_drifted",
+        state: "open",
+        assignees: [carol],
+      },
+    });
+
+    await t.run(async (ctx) => {
+      for (const event of events) {
+        await applyNormalizedEvent(ctx, { event, link });
+      }
+    });
+
+    const task = await t.run((ctx) => ctx.db.get(taskId));
+    expect(task?.statusId).toBe(triageStatusId);
+    expect(task?.assigneeId).toBe(memberId);
+  });
+
   it("always emits issue.assignees_changed carrying the current GitHub assignee set", () => {
     const now = 1_700_000_000_000;
     const carol = {
@@ -257,13 +368,31 @@ describe("integrations/core/forceResync.synthesizeReconciliationEvents", () => {
       ripple: { completed: false },
       github: { ...baseIssue, state: "open", assignees: [carol] },
     });
-    expect(events).toContainEqual({
-      kind: "issue.assignees_changed",
+    const assignees = events.find((e) => e.kind === "issue.assignees_changed");
+    expect(assignees).toMatchObject({
       externalIssueId: "I_kw1",
       issueNumber: 42,
-      externalUpdatedAt: now,
       assignees: [carol],
     });
+    // Not `now` itself: stamps are strictly increasing in emission order so
+    // every facet clears the inbound ordering guard (see the both-drift test).
+    expect(assignees!.externalUpdatedAt).toBeGreaterThan(now);
+  });
+
+  it("stamps every emitted event with a strictly increasing externalUpdatedAt", () => {
+    const now = 1_700_000_000_000;
+    const events = synthesizeReconciliationEvents({
+      now,
+      // Drift on state as well, so all three event kinds are emitted.
+      ripple: { completed: true },
+      github: { ...baseIssue, state: "open", labels: ["bug"] },
+    });
+    const stamps = events.map((e) => e.externalUpdatedAt);
+    expect(stamps).toHaveLength(3);
+    expect(stamps[0]).toBe(now);
+    for (let i = 1; i < stamps.length; i++) {
+      expect(stamps[i]).toBeGreaterThan(stamps[i - 1]);
+    }
   });
 });
 

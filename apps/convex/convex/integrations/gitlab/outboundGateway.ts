@@ -227,18 +227,16 @@ export function buildGitlabGateway(gl: GitlabRequester): OutboundGateway {
 }
 
 /**
- * Production gateway. Builds a fetch-based requester that authenticates with the
- * stored GitLab token (PAT / project / group access token) via the
- * `Authorization: Bearer` header. Returns `null` when no token is configured —
- * the caller records that as a permanent failure (mirrors the GitHub
- * "credentials not configured" affordance).
+ * The one place that knows how to talk to GitLab's REST API: base URL, bearer
+ * auth, retry-after parsing, JSON decoding. Both GitLab callers bind through it
+ * — the outbound gateway below, and `gitlab/forceResyncAction`'s issue GET —
+ * so neither re-derives the auth header or the rate-limit translation.
  */
-export function makeGitlabGateway(
+export function makeGitlabRequester(
   token: string,
   apiBase: string = GITLAB_API_BASE,
-): OutboundGateway | null {
-  if (!token) return null;
-  const requester: GitlabRequester = {
+): GitlabRequester {
+  return {
     request: async <T,>(args: {
       method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
       path: string;
@@ -269,5 +267,19 @@ export function makeGitlabGateway(
       };
     },
   };
-  return buildGitlabGateway(requester);
+}
+
+/**
+ * Production gateway. Builds a fetch-based requester that authenticates with the
+ * stored GitLab token (PAT / project / group access token) via the
+ * `Authorization: Bearer` header. Returns `null` when no token is configured —
+ * the caller records that as a permanent failure (mirrors the GitHub
+ * "credentials not configured" affordance).
+ */
+export function makeGitlabGateway(
+  token: string,
+  apiBase: string = GITLAB_API_BASE,
+): OutboundGateway | null {
+  if (!token) return null;
+  return buildGitlabGateway(makeGitlabRequester(token, apiBase));
 }
