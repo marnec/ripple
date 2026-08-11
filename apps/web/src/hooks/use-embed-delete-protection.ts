@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useEffect, useRef } from "react";
 import type { AnyEditor } from "./editor-types";
+import { tryGetChanges } from "./editor-changes";
 
 const EMBED_TYPES = new Set(["diagram", "spreadsheetRange", "documentBlockEmbed"]);
 
@@ -23,7 +24,8 @@ export function useEmbedDeleteProtection(editor: AnyEditor | null): void {
     if (!editor || !editor.isEditable) return;
 
     const unsub = editor.onBeforeChange(({ getChanges }) => {
-      const changes = getChanges();
+      const changes = tryGetChanges(getChanges);
+      if (!changes) return; // undescribable transaction — allow it through
 
       const embedDeletions = changes.filter((c) => {
         if (

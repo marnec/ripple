@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { useEffect, useEffectEvent, useRef } from "react";
 import type { AnyEditor } from "./editor-types";
+import { tryGetChanges } from "./editor-changes";
 
 const TOAST_DURATION = 5000;
 
@@ -26,7 +27,8 @@ export function useReferencedBlockDeleteProtection(
     if (!editor || !editor.isEditable) return;
 
     const unsub = editor.onBeforeChange(({ getChanges }) => {
-      const changes = getChanges();
+      const changes = tryGetChanges(getChanges);
+      if (!changes) return; // undescribable transaction — allow it through
 
       const refDeletions = changes.filter(
         (c) =>
