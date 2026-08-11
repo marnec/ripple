@@ -3,8 +3,22 @@ import { httpAction } from "./_generated/server";
 import { api, internal, components } from "./_generated/api";
 import { auth } from "./auth";
 import { parseTranscriptWebhook } from "./transcriptWebhook";
+import { COLLAB_RESOURCES, COLLAB_ROOMS } from "./authHelpers";
+import { YJS_SHARE_ROOMS, type YjsShareRoom } from "@ripple/shared/shareTypes";
+import type { Id } from "./_generated/dataModel";
+import {
+  guarded,
+  json,
+  parseRoomId,
+  requireSharedSecret,
+  roomIdError,
+} from "./httpAdapter";
 
 const http = httpRouter();
+
+/** Every PartyKit route authenticates with the same shared secret. */
+const partykitSecret = (request: Request) =>
+  requireSharedSecret(request, process.env.PARTYKIT_SECRET, "PARTYKIT_SECRET");
 
 auth.addHttpRoutes(http);
 
@@ -321,114 +335,29 @@ http.route({
 http.route({
   path: "/collaboration/snapshot",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      // Validate shared secret
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.PARTYKIT_SECRET;
+  handler: httpAction(
+    guarded("Snapshot save", async (ctx, request) => {
+      const denied = partykitSecret(request);
+      if (denied) return denied;
 
-      if (!expectedSecret) {
-        console.error(
-          "PARTYKIT_SECRET environment variable not configured"
-        );
-        return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
-          {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(
-          JSON.stringify({ error: "Missing authorization header" }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const providedSecret = authHeader.substring(7); // Remove "Bearer "
-      if (providedSecret !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // Extract roomId from query params
       const url = new URL(request.url);
-      const roomId = url.searchParams.get("roomId");
+      const room = parseRoomId(
+        url.searchParams.get("roomId"),
+        COLLAB_RESOURCES,
+      );
+      if (room.kind !== "ok") return roomIdError(room);
 
-      if (!roomId) {
-        return new Response(JSON.stringify({ error: "Missing roomId" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+      const storageId = await ctx.storage.store(await request.blob());
 
-      // Parse roomId to extract resourceType and resourceId
-      // Format: "{resourceType}-{resourceId}"
-      const dashIndex = roomId.indexOf("-");
-      if (dashIndex === -1) {
-        return new Response(
-          JSON.stringify({ error: "Invalid roomId format" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const resourceType = roomId.substring(0, dashIndex);
-      const resourceId = roomId.substring(dashIndex + 1);
-
-      // Validate resource type
-      if (
-        resourceType !== "doc" &&
-        resourceType !== "diagram" &&
-        resourceType !== "task" &&
-        resourceType !== "spreadsheet"
-      ) {
-        return new Response(
-          JSON.stringify({ error: "Invalid resource type" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      // Read binary snapshot data
-      const blob = await request.blob();
-
-      // Store in Convex file storage
-      const storageId = await ctx.storage.store(blob);
-
-      // Save snapshot reference to resource
       await ctx.runMutation(internal.snapshots.saveSnapshot, {
-        resourceType,
-        resourceId,
+        resourceType: room.resourceType,
+        resourceId: room.resourceId,
         storageId,
       });
 
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Snapshot save error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-  }),
+      return json({ success: true });
+    }),
+  ),
 });
 
 /**
@@ -450,127 +379,33 @@ http.route({
 http.route({
   path: "/collaboration/snapshot",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      // Validate shared secret
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.PARTYKIT_SECRET;
+  handler: httpAction(
+    guarded("Snapshot load", async (ctx, request) => {
+      const denied = partykitSecret(request);
+      if (denied) return denied;
 
-      if (!expectedSecret) {
-        console.error(
-          "PARTYKIT_SECRET environment variable not configured"
-        );
-        return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
-          {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(
-          JSON.stringify({ error: "Missing authorization header" }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const providedSecret = authHeader.substring(7); // Remove "Bearer "
-      if (providedSecret !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // Extract roomId from query params
       const url = new URL(request.url);
-      const roomId = url.searchParams.get("roomId");
+      const room = parseRoomId(
+        url.searchParams.get("roomId"),
+        COLLAB_RESOURCES,
+      );
+      if (room.kind !== "ok") return roomIdError(room);
 
-      if (!roomId) {
-        return new Response(JSON.stringify({ error: "Missing roomId" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // Parse roomId to extract resourceType and resourceId
-      const dashIndex = roomId.indexOf("-");
-      if (dashIndex === -1) {
-        return new Response(
-          JSON.stringify({ error: "Invalid roomId format" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const resourceType = roomId.substring(0, dashIndex);
-      const resourceId = roomId.substring(dashIndex + 1);
-
-      // Validate resource type
-      if (
-        resourceType !== "doc" &&
-        resourceType !== "diagram" &&
-        resourceType !== "task" &&
-        resourceType !== "spreadsheet"
-      ) {
-        return new Response(
-          JSON.stringify({ error: "Invalid resource type" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      // Get snapshot storage ID
       const storageId = await ctx.runQuery(internal.snapshots.getSnapshot, {
-        resourceType,
-        resourceId,
+        resourceType: room.resourceType,
+        resourceId: room.resourceId,
       });
+      if (!storageId) return json({ error: "No snapshot found" }, 404);
 
-      if (!storageId) {
-        return new Response(JSON.stringify({ error: "No snapshot found" }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // Retrieve blob from storage
       const blob = await ctx.storage.get(storageId);
+      if (!blob) return json({ error: "Snapshot file not found" }, 404);
 
-      if (!blob) {
-        return new Response(
-          JSON.stringify({ error: "Snapshot file not found" }),
-          {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      // Return binary snapshot data
       return new Response(blob, {
         status: 200,
         headers: { "Content-Type": "application/octet-stream" },
       });
-    } catch (error) {
-      console.error("Snapshot load error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-  }),
+    }),
+  ),
 });
 
 /**
@@ -593,146 +428,44 @@ http.route({
 http.route({
   path: "/collaboration/check-access",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      // Validate shared secret
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.PARTYKIT_SECRET;
+  handler: httpAction(
+    guarded("Permission check", async (ctx, request) => {
+      const denied = partykitSecret(request);
+      if (denied) return denied;
 
-      if (!expectedSecret) {
-        console.error(
-          "PARTYKIT_SECRET environment variable not configured"
-        );
-        return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
-          {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(
-          JSON.stringify({ error: "Missing authorization header" }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const providedSecret = authHeader.substring(7); // Remove "Bearer "
-      if (providedSecret !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // Extract query params
       const url = new URL(request.url);
-      const roomId = url.searchParams.get("roomId");
       const userId = url.searchParams.get("userId");
       const shareId = url.searchParams.get("shareId");
+      if (!userId) return json({ error: "Missing userId" }, 400);
 
-      if (!roomId || !userId) {
-        return new Response(
-          JSON.stringify({ error: "Missing roomId or userId" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      // Parse roomId to extract resourceType and resourceId
-      const dashIndex = roomId.indexOf("-");
-      if (dashIndex === -1) {
-        return new Response(
-          JSON.stringify({ error: "Invalid roomId format" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const resourceType = roomId.substring(0, dashIndex);
-      const resourceId = roomId.substring(dashIndex + 1);
-
-      // Validate resource type
-      if (
-        resourceType !== "doc" &&
-        resourceType !== "diagram" &&
-        resourceType !== "task" &&
-        resourceType !== "presence" &&
-        resourceType !== "spreadsheet"
-      ) {
-        return new Response(
-          JSON.stringify({ error: "Invalid resource type" }),
-          {
-            status: 400,
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-      }
+      const room = parseRoomId(url.searchParams.get("roomId"), COLLAB_ROOMS);
+      if (room.kind !== "ok") return roomIdError(room);
 
       // Guest connections carry a shareId and a `guest:<nanoid>` userId —
       // re-validate against the share row rather than workspace membership.
       if (userId.startsWith("guest:")) {
-        if (
-          resourceType !== "doc" &&
-          resourceType !== "diagram" &&
-          resourceType !== "spreadsheet"
-        ) {
-          return new Response(JSON.stringify({ hasAccess: false }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        if (!shareId) {
-          return new Response(JSON.stringify({ hasAccess: false }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-        const hasAccess = await ctx.runQuery(
-          internal.shares.checkGuestAccess,
-          {
-            shareId,
-            resourceType,
-            resourceId,
-          },
+        const shareable = (YJS_SHARE_ROOMS as string[]).includes(
+          room.resourceType,
         );
-        return new Response(JSON.stringify({ hasAccess }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
+        if (!shareable || !shareId) return json({ hasAccess: false });
+
+        const hasAccess = await ctx.runQuery(internal.shares.checkGuestAccess, {
+          shareId,
+          resourceType: room.resourceType as YjsShareRoom,
+          resourceId: room.resourceId,
         });
+        return json({ hasAccess });
       }
 
-      // Check if user has access
       const hasAccess = await ctx.runQuery(internal.collaboration.checkAccess, {
-        userId: userId as any,
-        resourceType: resourceType as any,
-        resourceId,
+        userId: userId as Id<"users">,
+        resourceType: room.resourceType,
+        resourceId: room.resourceId,
       });
 
-      return new Response(JSON.stringify({ hasAccess }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Permission check error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-  }),
+      return json({ hasAccess });
+    }),
+  ),
 });
 
 /**
@@ -752,33 +485,10 @@ http.route({
 http.route({
   path: "/collaboration/cell-values",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.PARTYKIT_SECRET;
-
-      if (!expectedSecret) {
-        console.error("PARTYKIT_SECRET environment variable not configured");
-        return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
-          { status: 500, headers: { "Content-Type": "application/json" } },
-        );
-      }
-
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(
-          JSON.stringify({ error: "Missing authorization header" }),
-          { status: 401, headers: { "Content-Type": "application/json" } },
-        );
-      }
-
-      const providedSecret = authHeader.substring(7);
-      if (providedSecret !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+  handler: httpAction(
+    guarded("Cell values update", async (ctx, request) => {
+      const denied = partykitSecret(request);
+      if (denied) return denied;
 
       const body = (await request.json()) as {
         spreadsheetId: string;
@@ -791,29 +501,17 @@ http.route({
       };
 
       if (!body.spreadsheetId || !Array.isArray(body.updates)) {
-        return new Response(
-          JSON.stringify({ error: "Invalid request body" }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        );
+        return json({ error: "Invalid request body" }, 400);
       }
 
       await ctx.runMutation(internal.spreadsheetCellRefs.upsertCellValues, {
-        spreadsheetId: body.spreadsheetId as any,
+        spreadsheetId: body.spreadsheetId as Id<"spreadsheets">,
         updates: body.updates,
       });
 
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Cell values update error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
-    }
-  }),
+      return json({ success: true });
+    }),
+  ),
 });
 
 /**
@@ -833,61 +531,23 @@ http.route({
 http.route({
   path: "/collaboration/cell-refs",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.PARTYKIT_SECRET;
-
-      if (!expectedSecret) {
-        console.error("PARTYKIT_SECRET environment variable not configured");
-        return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
-          { status: 500, headers: { "Content-Type": "application/json" } },
-        );
-      }
-
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(
-          JSON.stringify({ error: "Missing authorization header" }),
-          { status: 401, headers: { "Content-Type": "application/json" } },
-        );
-      }
-
-      const providedSecret = authHeader.substring(7);
-      if (providedSecret !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+  handler: httpAction(
+    guarded("Cell refs query", async (ctx, request) => {
+      const denied = partykitSecret(request);
+      if (denied) return denied;
 
       const url = new URL(request.url);
       const spreadsheetId = url.searchParams.get("spreadsheetId");
-
-      if (!spreadsheetId) {
-        return new Response(
-          JSON.stringify({ error: "Missing spreadsheetId" }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        );
-      }
+      if (!spreadsheetId) return json({ error: "Missing spreadsheetId" }, 400);
 
       const refs = await ctx.runQuery(
         internal.spreadsheetCellRefs.getReferencedCellRefs,
-        { spreadsheetId: spreadsheetId as any },
+        { spreadsheetId: spreadsheetId as Id<"spreadsheets"> },
       );
 
-      return new Response(JSON.stringify(refs), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Cell refs query error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
-    }
-  }),
+      return json(refs);
+    }),
+  ),
 });
 
 /**
@@ -899,45 +559,23 @@ http.route({
 http.route({
   path: "/collaboration/block-refs",
   method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.PARTYKIT_SECRET;
-
-      if (!expectedSecret || !authHeader || authHeader.substring(7) !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+  handler: httpAction(
+    guarded("Block refs query", async (ctx, request) => {
+      const denied = partykitSecret(request);
+      if (denied) return denied;
 
       const url = new URL(request.url);
       const documentId = url.searchParams.get("documentId");
-
-      if (!documentId) {
-        return new Response(
-          JSON.stringify({ error: "Missing documentId" }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        );
-      }
+      if (!documentId) return json({ error: "Missing documentId" }, 400);
 
       const refs = await ctx.runQuery(
         internal.documentBlockRefs.getReferencedBlockRefs,
-        { documentId: documentId as any },
+        { documentId: documentId as Id<"documents"> },
       );
 
-      return new Response(JSON.stringify(refs), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Block refs query error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
-    }
-  }),
+      return json(refs);
+    }),
+  ),
 });
 
 /**
@@ -949,47 +587,32 @@ http.route({
 http.route({
   path: "/collaboration/block-content",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.PARTYKIT_SECRET;
-
-      if (!expectedSecret || !authHeader || authHeader.substring(7) !== expectedSecret) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+  handler: httpAction(
+    guarded("Block content update", async (ctx, request) => {
+      const denied = partykitSecret(request);
+      if (denied) return denied;
 
       const body = (await request.json()) as {
         documentId: string;
-        updates: Array<{ blockId: string; blockType: string; textContent: string }>;
+        updates: Array<{
+          blockId: string;
+          blockType: string;
+          textContent: string;
+        }>;
       };
 
       if (!body.documentId || !Array.isArray(body.updates)) {
-        return new Response(
-          JSON.stringify({ error: "Invalid request body" }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        );
+        return json({ error: "Invalid request body" }, 400);
       }
 
       await ctx.runMutation(internal.documentBlockRefs.upsertBlockContent, {
-        documentId: body.documentId as any,
+        documentId: body.documentId as Id<"documents">,
         updates: body.updates,
       });
 
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("Block content update error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
-    }
-  }),
+      return json({ success: true });
+    }),
+  ),
 });
 
 /**
@@ -1020,29 +643,14 @@ http.route({
 http.route({
   path: "/calendar/rsvp",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      const authHeader = request.headers.get("Authorization");
-      const expectedSecret = process.env.RSVP_WORKER_SECRET;
-
-      if (!expectedSecret) {
-        console.error("RSVP_WORKER_SECRET environment variable not configured");
-        return new Response(
-          JSON.stringify({ error: "Server configuration error" }),
-          { status: 500, headers: { "Content-Type": "application/json" } },
-        );
-      }
-
-      if (
-        !authHeader ||
-        !authHeader.startsWith("Bearer ") ||
-        authHeader.substring(7) !== expectedSecret
-      ) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+  handler: httpAction(
+    guarded("RSVP ingest", async (ctx, request) => {
+      const denied = requireSharedSecret(
+        request,
+        process.env.RSVP_WORKER_SECRET,
+        "RSVP_WORKER_SECRET",
+      );
+      if (denied) return denied;
 
       const body = (await request.json()) as Partial<{
         uid: string;
@@ -1061,10 +669,7 @@ http.route({
         typeof body.dtstamp !== "number" ||
         typeof body.sequence !== "number"
       ) {
-        return new Response(JSON.stringify({ error: "Invalid body" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
+        return json({ error: "Invalid body" }, 400);
       }
 
       const result = await ctx.runMutation(
@@ -1078,18 +683,9 @@ http.route({
         },
       );
 
-      return new Response(JSON.stringify({ ok: true, ...result }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch (error) {
-      console.error("RSVP ingest error:", error);
-      return new Response(
-        JSON.stringify({ error: "Internal server error" }),
-        { status: 500, headers: { "Content-Type": "application/json" } },
-      );
-    }
-  }),
+      return json({ ok: true, ...result });
+    }),
+  ),
 });
 
 export default http;

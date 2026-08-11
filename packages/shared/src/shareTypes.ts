@@ -56,6 +56,15 @@ const SHARE_RESOURCE_BY_YJS_ROOM = Object.fromEntries(
     .map(([shareType, room]) => [room, shareType]),
 ) as ShareResourceTypeByYjsRoom;
 
+/**
+ * Every room kind a guest share can reach, as a runtime list. Derived from the
+ * inverse map for the same reason the map itself is: a hand-written copy is a
+ * copy that can drift.
+ */
+export const YJS_SHARE_ROOMS = Object.keys(
+  SHARE_RESOURCE_BY_YJS_ROOM,
+) as YjsShareRoom[];
+
 export const SHARE_ACCESS_LEVELS = ["view", "edit", "join"] as const;
 
 export type ShareAccessLevel = (typeof SHARE_ACCESS_LEVELS)[number];

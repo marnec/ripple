@@ -112,6 +112,7 @@ There are exactly **two** access rules. Every gate is one of them — if you are
 - Snapshots use V1 encoding: `Y.encodeStateAsUpdate` / `Y.applyUpdate`
 - `y-partyserver`'s `onLoad`/`onSave` hooks handle persistence — snapshots stored in Convex blob storage
 - Both read sites must stay in sync: `partykit/server.ts` (onLoad/onSave) and `use-snapshot-fallback.ts` (client cold-start)
+- The PartyKit-facing routes in `http.ts` go through the **route adapter** (`convex/httpAdapter.ts`) — `guarded` + `requireSharedSecret` + `parseRoomId` + `json`. A new route composes those; it does not re-derive the secret check or the roomId split (see CONTEXT.md)
 - To wipe snapshot data: locally delete `.wrangler/` state; in prod clear `yjsSnapshotId` fields + delete linked `_storage` blobs from Convex
 
 ## Convex Guidelines

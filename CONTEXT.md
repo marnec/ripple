@@ -45,3 +45,16 @@ Constructed from env via `realtimeKitFromEnv()`, or from explicit credentials
 (tests pass a fake). Every call surface — channel calls, event calls, guest
 share links, the voice agent — goes through it rather than calling `fetch`.
 _Avoid_: CF client, meeting API, RTK fetch helper
+
+**Route adapter**:
+The preamble every machine-to-machine HTTP route shares, as one module
+(`convex/httpAdapter.ts`): `requireSharedSecret` (the `Bearer` gate),
+`parseRoomId` (a room id split against a caller-supplied whitelist, returning a
+tagged union), `json` (the response shaping), and `guarded` (throw → logged 500).
+Imports nothing from Convex, so its interface is the test surface — the routes in
+`http.ts` are the imperative shell that reads env and query params and runs the
+one query the route exists for. Whitelists come from `COLLAB_RESOURCES` /
+`COLLAB_ROOMS` / `YJS_SHARE_ROOMS`, never from a spelled-out union at the call
+site: the seven hand-copied secret checks had already drifted into two shapes,
+two of them missing the `Bearer` guard.
+_Avoid_: http helpers, route utils, middleware

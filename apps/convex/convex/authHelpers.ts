@@ -159,6 +159,19 @@ type _ShareRoomsAreCollabRooms = Extends<YjsShareRoom, CollabResource>;
 export type CollabRoom = CollabResource | "presence";
 
 /**
+ * The two vocabularies as runtime lists, for the callers that have to *validate*
+ * a room kind off the wire rather than accept one already validated (the
+ * PartyKit HTTP routes parse room ids out of a query string). Derived from the
+ * map above so a new resource cannot reach the token path while the snapshot
+ * path still rejects it — the drift this file already exists to prevent.
+ */
+export const COLLAB_RESOURCES = Object.keys(
+  COLLAB_RESOURCE_TABLES,
+) as CollabResource[];
+
+export const COLLAB_ROOMS: CollabRoom[] = [...COLLAB_RESOURCES, "presence"];
+
+/**
  * Argument validators for the two vocabularies above. Use these instead of
  * spelling the union out again — the hand-written copies had already drifted
  * apart (the token path accepted `spreadsheet`, the snapshot path did not),
