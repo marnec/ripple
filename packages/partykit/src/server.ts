@@ -4,6 +4,7 @@ import * as Y from "yjs";
 import { removeAwarenessStates } from "y-protocols/awareness";
 import { AwarenessOwnership } from "./awareness-ownership";
 import type { ServerMessage } from "@ripple/shared/protocol";
+import { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
 import { parseCellName, parseRange } from "@ripple/shared/cellRef";
 import { parseStableRef, resolveStableRef } from "@ripple/shared/stableRef";
 import { extractBlocksFromFragment } from "@ripple/shared/blockRef";
@@ -239,7 +240,7 @@ export default class CollaborationServer extends YServer {
    * alone isn't a reliable emptiness signal — check for actual text content.
    */
   private hasTaskContent(): boolean {
-    const fragment = this.document.getXmlFragment("document-store");
+    const fragment = this.document.getXmlFragment(DOCUMENT_FRAGMENT);
     if (fragment.length === 0) return false;
     const text = fragment.toString().replace(/<[^>]*>/g, "");
     return text.trim().length > 0;
@@ -673,7 +674,7 @@ export default class CollaborationServer extends YServer {
   private setupBlockRefObserver(roomId: string): void {
     if (this.blockRefObserver) return; // Already attached
 
-    const fragment = this.document.getXmlFragment("document-store");
+    const fragment = this.document.getXmlFragment(DOCUMENT_FRAGMENT);
 
     this.blockRefObserver = () => {
       if (this.blockRefPushTimeout) clearTimeout(this.blockRefPushTimeout);
@@ -718,7 +719,7 @@ export default class CollaborationServer extends YServer {
     if (!this.trackedBlockRefs || this.trackedBlockRefs.length === 0) return;
 
     // Extract current block content from Yjs XML fragment
-    const fragment = this.document.getXmlFragment("document-store");
+    const fragment = this.document.getXmlFragment(DOCUMENT_FRAGMENT);
     const allBlocks = extractBlocksFromFragment(fragment);
     const blockMap = new Map(allBlocks.map((b) => [b.blockId, b]));
 
@@ -770,7 +771,7 @@ export default class CollaborationServer extends YServer {
 
   private cleanupBlockRefObserver(): void {
     if (this.blockRefObserver) {
-      this.document.getXmlFragment("document-store").unobserveDeep(this.blockRefObserver);
+      this.document.getXmlFragment(DOCUMENT_FRAGMENT).unobserveDeep(this.blockRefObserver);
       this.blockRefObserver = null;
     }
     if (this.blockRefPushTimeout) {

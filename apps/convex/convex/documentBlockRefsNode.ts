@@ -6,6 +6,7 @@ import { internalAction, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
+  DOCUMENT_FRAGMENT,
   extractBlocksFromFragment,
   isEmbeddableBlockType,
   extractTextFromXml,
@@ -38,7 +39,7 @@ export const populateFromSnapshot = internalAction({
 
     const yDoc = new Y.Doc();
     Y.applyUpdate(yDoc, new Uint8Array(arrayBuffer));
-    const fragment = yDoc.getXmlFragment("document-store");
+    const fragment = yDoc.getXmlFragment(DOCUMENT_FRAGMENT);
 
     // Find the specific block by ID
     const block = findBlockById(fragment, blockId);
@@ -101,7 +102,7 @@ export const getDocumentBlocks = action({
 
     const yDoc = new Y.Doc();
     Y.applyUpdate(yDoc, new Uint8Array(arrayBuffer));
-    const fragment = yDoc.getXmlFragment("document-store");
+    const fragment = yDoc.getXmlFragment(DOCUMENT_FRAGMENT);
 
     const blocks = extractBlocksFromFragment(fragment);
     yDoc.destroy();

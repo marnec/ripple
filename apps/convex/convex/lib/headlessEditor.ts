@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { BlockNoteEditor } from "@blocknote/core";
 import { blocksToYDoc } from "@blocknote/core/yjs";
 import * as Y from "yjs";
+import { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
 
 /** The block array a default-schema editor produces from markdown. */
 type ParsedBlocks = Awaited<
@@ -89,22 +90,23 @@ export async function markdownToBlocks(
 
 /**
  * Parse markdown and encode it as a Yjs document update (V1 `encodeStateAsUpdate`)
- * bound to the given fragment — the cold-start snapshot a collaborative doc
- * hydrates from. Returns `null` when there's nothing to seed (blank markdown or
- * zero blocks), so callers can skip storing an empty blob.
+ * — the cold-start snapshot a collaborative doc hydrates from. Returns `null`
+ * when there's nothing to seed (blank markdown or zero blocks), so callers can
+ * skip storing an empty blob.
  *
- * `fragment` defaults to `"document-store"`, the XML fragment every Ripple
- * collaborative editor binds to.
+ * The fragment is not a parameter. Every reader in the system — the editors,
+ * the PartyKit server — binds to `DOCUMENT_FRAGMENT`, so a snapshot written to
+ * any other fragment reads back empty, silently. There is one right answer
+ * here and no caller ever wanted a different one.
  */
 export async function markdownToYjsUpdate(
   markdown: string,
-  fragment = "document-store",
 ): Promise<Uint8Array | null> {
   if (markdown.trim().length === 0) return null;
   return withBlockNoteDom(async (editor) => {
     const blocks = await editor.tryParseMarkdownToBlocks(markdown);
     if (blocks.length === 0) return null;
-    const ydoc = blocksToYDoc(editor, blocks, fragment);
+    const ydoc = blocksToYDoc(editor, blocks, DOCUMENT_FRAGMENT);
     return Y.encodeStateAsUpdate(ydoc);
   });
 }

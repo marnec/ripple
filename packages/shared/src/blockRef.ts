@@ -48,7 +48,20 @@ export function extractTextFromXml(element: {
 }
 
 /**
- * Extract blocks from a Yjs XML fragment (the "document-store" fragment).
+ * The Yjs XML fragment every Ripple collaborative editor binds to.
+ *
+ * This is a stored wire format, not a preference: the frontend editors, the
+ * headless editor that writes cold-start snapshots, and the PartyKit server
+ * that reads them must all name the same fragment. A site that disagrees does
+ * not fail loudly — it writes or reads an empty document.
+ *
+ * Every existing document in storage is encoded against this exact value, so
+ * changing it would orphan all of them.
+ */
+export const DOCUMENT_FRAGMENT = "document-store";
+
+/**
+ * Extract blocks from a Yjs XML fragment (the {@link DOCUMENT_FRAGMENT}).
  * Returns only top-level embeddable text blocks.
  *
  * BlockNote/ProseMirror Yjs structure:

@@ -10,7 +10,7 @@ import { markdownToYjsUpdate } from "../../lib/headlessEditor";
  * body captured at creation (`taskIntegrationLinks.initialBodyMarkdown`).
  *
  * Task descriptions are Yjs documents, not Convex fields: the client editor
- * binds to `yDoc.getXmlFragment("document-store")` and the cold-start source
+ * binds to `yDoc.getXmlFragment(DOCUMENT_FRAGMENT)` and the cold-start source
  * is the binary snapshot in `_storage` referenced by `tasks.yjsSnapshotId`.
  * So "seeding" means producing that snapshot before any client connects. The
  * markdown → Yjs conversion runs through the shared headless editor

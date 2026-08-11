@@ -44,19 +44,17 @@ describe("headlessEditor", () => {
       expect(update).not.toBeNull();
       expect(update!.length).toBeGreaterThan(0);
 
-      // The update must apply cleanly and populate the default fragment that
-      // every Ripple collaborative editor binds to.
+      // The update must apply cleanly and populate the fragment every Ripple
+      // collaborative editor binds to.
+      //
+      // The name is spelled out here on purpose rather than imported from
+      // `DOCUMENT_FRAGMENT`. Using the constant would make this test agree with
+      // whatever the constant happens to say, including a changed value that
+      // would orphan every document already in storage. The literal is the
+      // independent record of the stored format.
       const doc = new Y.Doc();
       Y.applyUpdate(doc, update!);
       expect(doc.getXmlFragment("document-store").length).toBeGreaterThan(0);
-    });
-
-    it("honours a custom fragment name", async () => {
-      const update = await markdownToYjsUpdate("Hello", "custom-frag");
-      const doc = new Y.Doc();
-      Y.applyUpdate(doc, update!);
-      expect(doc.getXmlFragment("custom-frag").length).toBeGreaterThan(0);
-      expect(doc.getXmlFragment("document-store").length).toBe(0);
     });
 
     it("returns null for blank input (nothing to seed)", async () => {

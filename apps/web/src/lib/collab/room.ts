@@ -14,11 +14,11 @@ import { buildRoomId, type ResourceType } from "@ripple/shared/protocol";
 export type CollabResourceType = Exclude<ResourceType, "presence">;
 
 /**
- * The Y.Doc fragment BlockNote binds to. Shared with the Convex seeding action
- * and the partyserver snapshot reader — all three must agree or a seeded
- * document reads back empty.
+ * Re-exported so a collaboration surface reaches for the room descriptor and
+ * the fragment name from one place. The value itself is owned by
+ * `@ripple/shared`, because Convex and PartyKit bind to the same fragment.
  */
-export const DOCUMENT_FRAGMENT = "document-store";
+export { DOCUMENT_FRAGMENT } from "@ripple/shared/blockRef";
 
 export interface CollabRoom {
   resourceType: CollabResourceType;
