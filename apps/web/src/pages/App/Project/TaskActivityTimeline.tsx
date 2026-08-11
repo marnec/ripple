@@ -3,6 +3,7 @@ import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
 import { Button } from "@ripple/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@ripple/ui/components/tabs";
 import { isBlocksEmpty, parseCommentBody } from "@/lib/editor-utils";
+import { providerLabel } from "@ripple/shared/integrationProvider";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";;
 import {
@@ -110,15 +111,6 @@ function formatRelativeTimestamp(ts: number): string {
   return sameYear
     ? `${month} ${d.getDate()}`
     : `${month} ${d.getDate()}, ${String(d.getFullYear()).slice(2)}`;
-}
-
-const PROVIDER_LABEL: Record<string, string> = {
-  github: "GitHub",
-  gitlab: "GitLab",
-};
-
-function providerLabel(provider: string): string {
-  return PROVIDER_LABEL[provider] ?? "GitHub";
 }
 
 function getActivityIcon(type: string, provider: string) {

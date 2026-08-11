@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/responsive-dialog";
 import { GithubIssueFields } from "./GithubIssueFields";
 import { useGithubIssueDraft } from "./useGithubIssueDraft";
+import { providerLabel } from "@ripple/shared/integrationProvider";
 import { useGithubIssueEligibility } from "./useGithubIssueEligibility";
 
 type Props = {
@@ -45,7 +46,7 @@ export function CreateGithubIssueDialog({
   onOpenChange,
 }: Props) {
   const { links, provider } = useGithubIssueEligibility(projectId, workspaceId);
-  const providerLabel = provider === "gitlab" ? "GitLab" : "GitHub";
+  const label = providerLabel(provider);
   const draft = useGithubIssueDraft(taskTitle, links, taskLabels);
   const createIssue = useMutation(api.tasks.createGithubIssue);
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +66,7 @@ export function CreateGithubIssueDialog({
       body: "",
     })
       .then(() => {
-        toast.success(`Creating ${providerLabel} issue…`, {
+        toast.success(`Creating ${label} issue…`, {
           description: "The link will appear here once it's created.",
         });
         draft.reset();
@@ -83,7 +84,7 @@ export function CreateGithubIssueDialog({
     <ResponsiveDialog open={open} onOpenChange={handleOpenChange}>
       <ResponsiveDialogContent>
         <ResponsiveDialogHeader>
-          <ResponsiveDialogTitle>Create {providerLabel} issue</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle>Create {label} issue</ResponsiveDialogTitle>
           <ResponsiveDialogDescription>
             Create an issue on a connected repository and link it to this task.
             Merging a PR into a mapped branch will then move the task.

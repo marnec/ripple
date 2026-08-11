@@ -6,6 +6,7 @@ import {
   TooltipTrigger,
 } from "@ripple/ui/components/tooltip";
 import { cn } from "@/lib/utils";
+import { providerLabel } from "@ripple/shared/integrationProvider";
 
 type Props = {
   /** "owner/repo" (GitHub) or "namespace/path" (GitLab) of the linked issue. */
@@ -22,11 +23,6 @@ type Props = {
   /** Extra classes merged over the default `text-xs` chip (e.g. `text-sm` to
    *  match a larger task code on the full-page header). */
   className?: string;
-};
-
-const PROVIDER_LABEL: Record<string, string> = {
-  github: "GitHub",
-  gitlab: "GitLab",
 };
 
 /**
@@ -47,11 +43,11 @@ export function TaskIssueRef({
 }: Props) {
   if (issueNumber === undefined) return null;
 
-  const providerLabel = PROVIDER_LABEL[provider ?? "github"] ?? "GitHub";
+  const label = providerLabel(provider);
   const full = repoFullName ? `${repoFullName}#${issueNumber}` : `#${issueNumber}`;
   const tooltip = deleted
-    ? `${full} — deleted on ${providerLabel}`
-    : `Open ${full} on ${providerLabel}`;
+    ? `${full} — deleted on ${label}`
+    : `Open ${full} on ${label}`;
 
   // size-[1em] makes the mark track the chip's font size — the `className`
   // that sets text-xs/text-sm thus drives the icon too, no separate prop.

@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from "@ripple/ui/components/tooltip";
 import { isBlocksEmpty } from "@/lib/editor-utils";
+import { providerLabel } from "@ripple/shared/integrationProvider";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 
 type Props = {
@@ -54,16 +55,11 @@ function formatRelative(ts: number): string {
  * been edited (never for the unedited GitHub seed), and it is non-empty. The
  * gate lives entirely in this component (see the early returns below).
  */
-const PROVIDER_LABEL: Record<string, string> = {
-  github: "GitHub",
-  gitlab: "GitLab",
-};
-
 export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
   const { isLinked, descriptionLastSyncedAt, descriptionEdited, provider } =
     useTaskGithubLink(taskId);
   const sync = useMutation(api.tasks.syncDescriptionToGitHub);
-  const providerLabel = PROVIDER_LABEL[provider] ?? "GitHub";
+  const label = providerLabel(provider);
   const [isPushing, setIsPushing] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
 
@@ -115,7 +111,7 @@ export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
                 variant="outline"
                 disabled={isPushing}
                 onClick={handleClick}
-                aria-label={`Sync description to ${providerLabel}`}
+                aria-label={`Sync description to ${label}`}
                 className="h-7 gap-1.5 px-2 text-xs"
               />
             }
@@ -125,12 +121,12 @@ export function TaskDescriptionSyncButton({ taskId, editor }: Props) {
             ) : (
               <GitBranch className="h-3.5 w-3.5" aria-hidden />
             )}
-            <span>Sync description to {providerLabel}</span>
+            <span>Sync description to {label}</span>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs">
             Pushes the current Ripple description (rendered as markdown) to
-            the linked {providerLabel} issue body. Ripple is the source of
-            truth — {providerLabel}-side edits are not synced back.
+            the linked {label} issue body. Ripple is the source of
+            truth — {label}-side edits are not synced back.
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

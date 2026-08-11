@@ -5,10 +5,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@ripple/ui/components/tooltip";
-import { cn } from "@/lib/utils";
 import { useTaskGithubLink } from "./useTaskGithubLink";
 
-type Props = { taskId: Id<"tasks">; className?: string };
+type Props = { taskId: Id<"tasks"> };
 
 /**
  * Header affordance shown only when the linked GitHub issue was deleted
@@ -16,14 +15,14 @@ type Props = { taskId: Id<"tasks">; className?: string };
  * kept but no longer synced. Renders nothing for healthy / Ripple-native
  * tasks, so headers pay no layout cost when there's nothing to say.
  */
-export function TaskGithubDeletedIndicator({ taskId, className }: Props) {
+export function TaskGithubDeletedIndicator({ taskId }: Props) {
   const { issueDeleted } = useTaskGithubLink(taskId);
   if (!issueDeleted) return null;
 
   return (
     <Tooltip>
       <TooltipTrigger
-        render={<span className={cn("inline-flex", className)} />}
+        render={<span className="inline-flex" />}
         aria-label="GitHub issue deleted"
       >
         <Unlink className="h-4 w-4 text-amber-600 dark:text-amber-500" />

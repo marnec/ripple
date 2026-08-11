@@ -1,9 +1,5 @@
 import { GitBranch } from "lucide-react";
-
-const PROVIDER_LABEL: Record<string, string> = {
-  github: "GitHub",
-  gitlab: "GitLab",
-};
+import { providerLabel } from "@ripple/shared/integrationProvider";
 
 /**
  * Disclaimer shown next to the description editor while a task's description is
@@ -19,7 +15,7 @@ const PROVIDER_LABEL: Record<string, string> = {
  * not a timer — so this shows an indeterminate spinner rather than a countdown.
  */
 export function SeedingDescriptionNotice({ provider }: { provider: string }) {
-  const label = PROVIDER_LABEL[provider] ?? "GitHub";
+  const label = providerLabel(provider);
   return (
     <div className="flex items-center gap-1.5 text-xs text-muted-foreground animate-fade-in">
       <GitBranch className="h-3.5 w-3.5 shrink-0" />

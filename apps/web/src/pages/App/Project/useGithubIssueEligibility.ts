@@ -2,6 +2,7 @@ import { useQuery } from "convex-helpers/react/cache";
 import { api } from "@convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import type { Id } from "@convex/_generated/dataModel";
+import { providerLabel } from "@ripple/shared/integrationProvider";
 
 const GITHUB_FEATURE_KEY = "github_integration";
 const GITLAB_FEATURE_KEY = "gitlab_integration";
@@ -74,5 +75,55 @@ export function useGithubIssueEligibility(
     eligible: Boolean(providerFeatureEnabled) && activeLinks.length > 0,
     provider,
     links: activeLinks,
+  };
+}
+
+export interface CreateIssueAffordance {
+  /** Render the control at all. False collapses it to nothing. */
+  show: boolean;
+  /** Shown but inert — there is nothing to create right now. */
+  disabled: boolean;
+  /** Tooltip/`title` copy: the invitation when enabled, the why when not. */
+  reason: string;
+}
+
+/**
+ * The complete "offer to create an issue from this task" rule.
+ *
+ * Project-level eligibility (`useGithubIssueEligibility`) decides whether the
+ * control exists; task state decides whether it can fire. Once eligible the
+ * control stays in place and disables rather than disappearing — mirroring the
+ * create-branch button — so the header doesn't reflow the moment the task
+ * links. `isLinked` explains before `completed` because it is the more
+ * specific answer to "why can't I click this".
+ *
+ * Pure, so the rule reads in one place and tests without a Convex provider.
+ */
+export function deriveCreateIssueAffordance(input: {
+  eligible: boolean;
+  provider: string;
+  /** Task is already linked to a provider issue — nothing to create. */
+  isLinked: boolean;
+  /** Completed tasks can't spawn an issue (matches the dispatcher guard). */
+  completed: boolean;
+}): CreateIssueAffordance {
+  const label = providerLabel(input.provider);
+  if (!input.eligible) return { show: false, disabled: true, reason: "" };
+  if (input.isLinked)
+    return {
+      show: true,
+      disabled: true,
+      reason: `Already linked to a ${label} issue`,
+    };
+  if (input.completed)
+    return {
+      show: true,
+      disabled: true,
+      reason: "Completed tasks can't create an issue",
+    };
+  return {
+    show: true,
+    disabled: false,
+    reason: `Create ${label} issue from this task`,
   };
 }

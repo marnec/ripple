@@ -16,6 +16,7 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { providerLabel } from "@ripple/shared/integrationProvider";
 import { useGithubIssueEligibility } from "./useGithubIssueEligibility";
 import { GithubIssueFields } from "./GithubIssueFields";
 import { useGithubIssueDraft } from "./useGithubIssueDraft";
@@ -49,7 +50,7 @@ export function CreateTaskDialog({
     projectId,
     workspaceId,
   );
-  const providerLabel = provider === "gitlab" ? "GitLab" : "GitHub";
+  const label = providerLabel(provider);
   const draft = useGithubIssueDraft(title, links, tags);
 
   const reset = () => {
@@ -92,9 +93,9 @@ export function CreateTaskDialog({
               title: issueTitle,
               body: "",
             });
-            toast.success(`Task created — creating ${providerLabel} issue…`);
+            toast.success(`Task created — creating ${label} issue…`);
           } catch (err) {
-            toast.error(`Task created, but the ${providerLabel} issue failed`, {
+            toast.error(`Task created, but the ${label} issue failed`, {
               description:
                 err instanceof Error ? err.message : "Please try again",
             });
@@ -146,7 +147,7 @@ export function CreateTaskDialog({
                     disabled={isCreating}
                     onCheckedChange={(c) => setAlsoCreateIssue(c === true)}
                   />
-                  Also create a {providerLabel} issue
+                  Also create a {label} issue
                 </label>
                 {alsoCreateIssue && (
                   <GithubIssueFields
