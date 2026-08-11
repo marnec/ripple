@@ -6,5 +6,10 @@
   },
   "node": {
     "externalPackages": ["@blocknote/core", "jsdom", "y-prosemirror", "yjs"]
+  },
+  "aiFiles": {
+    "skills": {
+      "agents": []
+    }
   }
 }
