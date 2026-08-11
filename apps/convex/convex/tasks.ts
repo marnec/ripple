@@ -646,95 +646,94 @@ async function enrichTasks(
   );
 }
 
-export const listByWorkspace = query({
+/** Suggestions returned per call when the caller doesn't say. */
+const TASK_SUGGEST_DEFAULT_LIMIT = 7;
+
+const taskSuggestionValidator = v.object({
+  _id: v.id("tasks"),
+  title: v.string(),
+  completed: v.boolean(),
+  statusColor: v.optional(v.string()),
+  projectKey: v.optional(v.string()),
+  number: v.optional(v.number()),
+});
+
+/**
+ * Autocomplete feed for the two task pickers — chat's `#` mention menu and the
+ * dependency popover. Point-in-time (`convex.query`, not `useQuery`): both used
+ * to subscribe to `listByWorkspace`, i.e. every open task in the workspace,
+ * from every mounted channel.
+ *
+ * Searches the same `nodes.by_name` index as Ctrl+K, then hydrates only the
+ * handful of rows the menu actually shows.
+ */
+export const suggest = query({
   args: {
     workspaceId: v.id("workspaces"),
-    completed: v.boolean(),
-    // Optional server-side tag filter. Drives off `taskTags.by_workspace_tag_completed`
-    // so a tag filter doesn't pay for transferring every workspace task just to
-    // discard most. AND semantics across multiple tags.
-    tagNames: v.optional(v.array(v.string())),
+    query: v.optional(v.string()),
+    /** The dependency picker can target finished work ("blocked by the migration"). */
+    includeCompleted: v.optional(v.boolean()),
+    limit: v.optional(v.number()),
   },
-  returns: v.array(v.object({
-    ...baseTaskFields,
-    status: v.union(v.object({
-      name: v.string(),
-      color: v.string(),
-      isCompleted: v.boolean(),
-    }), v.null()),
-    projectKey: v.optional(v.string()),
-  })),
-  handler: async (ctx, { workspaceId, completed, tagNames }) => {
+  returns: v.array(taskSuggestionValidator),
+  handler: async (ctx, { workspaceId, query: searchText, includeCompleted, limit }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return [];
 
-    let tasks: Doc<"tasks">[];
+    const take = Math.max(1, Math.min(limit ?? TASK_SUGGEST_DEFAULT_LIMIT, 25));
+    const trimmed = (searchText ?? "").trim();
+    // Headroom: `completed` lives on the task row, not the node, so the
+    // completion filter thins the candidate set after the index has spoken.
+    const candidateLimit = includeCompleted ? take : take * 3;
 
-    if (tagNames && tagNames.length > 0) {
-      const required = normalizeTagList(tagNames);
-      if (required.length === 0) return [];
-
-      const tagRows = await Promise.all(
-        required.map((name) =>
-          ctx.db
-            .query("tags")
-            .withIndex("by_workspace_name", (q) =>
-              q.eq("workspaceId", workspaceId).eq("name", name),
+    const candidates =
+      trimmed.length > 0
+        ? await ctx.db
+            .query("nodes")
+            .withSearchIndex("by_name", (q) =>
+              q
+                .search("name", trimmed)
+                .eq("workspaceId", workspaceId)
+                .eq("resourceType", "task")
+                .eq("searchable", true),
             )
-            .unique(),
-        ),
-      );
-      if (tagRows.some((r) => r === null)) return [];
-      const tagIds = tagRows.map((r) => r!._id);
+            .take(candidateLimit)
+        : await ctx.db
+            .query("nodes")
+            .withIndex("by_workspace_type", (q) =>
+              q.eq("workspaceId", workspaceId).eq("resourceType", "task"),
+            )
+            .order("desc")
+            .take(candidateLimit);
 
-      const driverTagId = tagIds[0];
-      const joins = await ctx.db
-        .query("taskTags")
-        .withIndex("by_workspace_tag_completed", (q) =>
-          q.eq("workspaceId", workspaceId).eq("tagId", driverTagId).eq("completed", completed),
-        )
-        .collect();
-
-      const fetched = await getAll(ctx.db, joins.map((j) => j.taskId));
-      tasks = fetched.filter((t): t is NonNullable<typeof t> => t !== null);
-
-      if (tagIds.length > 1) {
-        tasks = tasks.filter(
-          (task) => task.labels !== undefined && required.every((n) => task.labels!.includes(n)),
-        );
-      }
-    } else {
-      tasks = await ctx.db
-        .query("tasks")
-        .withIndex("by_workspace_completed", (q) =>
-          q.eq("workspaceId", workspaceId).eq("completed", completed)
-        )
-        .collect();
-    }
-
-    // Batch project lookups via cache for efficiency
-    const projectCache = new Map<string, Doc<"projects"> | null>();
-    const getProject = async (projectId: Doc<"tasks">["projectId"]) => {
-      const key = projectId.toString();
-      if (!projectCache.has(key)) {
-        projectCache.set(key, await ctx.db.get(projectId));
-      }
-      return projectCache.get(key) ?? null;
-    };
-
-    return Promise.all(
-      tasks.map(async (task) => {
-        const status = await ctx.db.get(task.statusId);
-        const proj = await getProject(task.projectId);
-        return {
-          ...task,
-          status: status
-            ? { name: status.name, color: status.color, isCompleted: status.isCompleted }
-            : null,
-          projectKey: proj?.key,
-        };
-      })
+    const fetched = await getAll(
+      ctx.db,
+      candidates.map((n) => n.resourceId as Id<"tasks">),
     );
+    const tasks = fetched
+      .filter((t): t is Doc<"tasks"> => t !== null)
+      .filter((t) => includeCompleted || !t.completed)
+      .slice(0, take);
+
+    // Both joins are deduped: a page of suggestions is usually a handful of
+    // tasks sharing one project and two or three statuses.
+    const statusIds = [...new Set(tasks.map((t) => t.statusId))];
+    const projectIds = [...new Set(tasks.map((t) => t.projectId))];
+    const [statuses, projects] = await Promise.all([
+      getAll(ctx.db, statusIds),
+      getAll(ctx.db, projectIds),
+    ]);
+    const statusMap = new Map(statusIds.map((id, i) => [id, statuses[i]]));
+    const projectMap = new Map(projectIds.map((id, i) => [id, projects[i]]));
+
+    return tasks.map((t) => ({
+      _id: t._id,
+      title: t.title,
+      completed: t.completed,
+      statusColor: statusMap.get(t.statusId)?.color,
+      projectKey: projectMap.get(t.projectId)?.key,
+      number: t.number,
+    }));
   },
 });
 

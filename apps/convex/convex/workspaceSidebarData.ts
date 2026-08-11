@@ -14,39 +14,6 @@ export const get = query({
     includeHidden: v.optional(v.boolean()),
   },
   returns: v.object({
-    projects: v.array(
-      v.object({
-        _id: v.id("projects"),
-        _creationTime: v.number(),
-        name: v.string(),
-        color: v.string(),
-        key: v.optional(v.string()),
-      }),
-    ),
-    documents: v.array(
-      v.object({
-        _id: v.id("documents"),
-        _creationTime: v.number(),
-        name: v.string(),
-        tags: v.optional(v.array(v.string())),
-      }),
-    ),
-    diagrams: v.array(
-      v.object({
-        _id: v.id("diagrams"),
-        _creationTime: v.number(),
-        name: v.string(),
-        tags: v.optional(v.array(v.string())),
-      }),
-    ),
-    spreadsheets: v.array(
-      v.object({
-        _id: v.id("spreadsheets"),
-        _creationTime: v.number(),
-        name: v.string(),
-        tags: v.optional(v.array(v.string())),
-      }),
-    ),
     channels: v.array(
       v.object({
         _id: v.id("channels"),
@@ -64,34 +31,14 @@ export const get = query({
   handler: async (ctx, { workspaceId, includeHidden = false }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
-    // Fetch lists for sidebar navigation (limited — only need recent items)
-    const [
-      projects,
-      documents,
-      diagrams,
-      spreadsheets,
-      userChannelMemberships,
-      publicChannels,
-      userChannelStateRows,
-    ] = await Promise.all([
-      ctx.db
-        .query("projects")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .collect(),
-      ctx.db
-        .query("documents")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .collect(),
-      ctx.db
-        .query("diagrams")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .order("desc")
-        .collect(),
-      ctx.db
-        .query("spreadsheets")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .order("desc")
-        .collect(),
+    // Channels only. This query is mounted for the whole app shell, so every
+    // table it touches joins the invalidation set of every connected member —
+    // it used to `.collect()` the workspace's projects, documents, diagrams and
+    // spreadsheets in full, which nothing in the sidebar rendered. The `#`
+    // picker that did consume them is now on `nodes.suggest` / `tasks.suggest`,
+    // and the breadcrumb resolves names via `breadcrumb.getResourceNames`.
+    // Don't reintroduce a resource list here — add it to `nodes.suggest`.
+    const [userChannelMemberships, publicChannels, userChannelStateRows] = await Promise.all([
       ctx.db
         .query("channelMembers")
         .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
@@ -172,31 +119,6 @@ export const get = query({
       : enrichedChannels.filter((c) => !c.isHidden);
 
     return {
-      projects: projects.map((p) => ({
-        _id: p._id,
-        _creationTime: p._creationTime,
-        name: p.name,
-        color: p.color,
-        key: p.key,
-      })),
-      documents: documents.map((d) => ({
-        _id: d._id,
-        _creationTime: d._creationTime,
-        name: d.name,
-        tags: d.tags,
-      })),
-      diagrams: diagrams.map((d) => ({
-        _id: d._id,
-        _creationTime: d._creationTime,
-        name: d.name,
-        tags: d.tags,
-      })),
-      spreadsheets: spreadsheets.map((s) => ({
-        _id: s._id,
-        _creationTime: s._creationTime,
-        name: s.name,
-        tags: s.tags,
-      })),
       channels,
       hiddenChannelCount,
     };

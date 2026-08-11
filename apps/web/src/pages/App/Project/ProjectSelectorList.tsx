@@ -22,7 +22,6 @@ export interface ProjectSelectorListProps {
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects"> | undefined;
   onProjectSelect: (id: string | null) => void;
-  projects?: { _id: string; name: string; color: string; key?: string; _creationTime: number }[];
 }
 
 export const ProjectSelectorList = memo(function ProjectSelectorList({

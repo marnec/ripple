@@ -224,7 +224,6 @@ export function AppSidebar() {
                   <ProjectSelectorList
                     workspaceId={workspaceId}
                     projectId={projectId}
-                    projects={sidebarData?.projects}
                     onProjectSelect={handleProjectSelect}
                   />
                 </SidebarMenu>
@@ -242,7 +241,6 @@ export function AppSidebar() {
                   <DocumentSelectorList
                     workspaceId={workspaceId}
                     documentId={documentId}
-                    documents={sidebarData?.documents}
                     onDocumentSelect={handleDocumentSelect}
                   />
                 </SidebarMenu>
@@ -254,7 +252,6 @@ export function AppSidebar() {
                   <DiagramSelectorList
                     workspaceId={workspaceId}
                     diagramId={diagramId}
-                    diagrams={sidebarData?.diagrams}
                     onDiagramSelect={handleDiagramSelect}
                   />
                 </SidebarMenu>
@@ -266,7 +263,6 @@ export function AppSidebar() {
                   <SpreadsheetSelectorList
                     workspaceId={workspaceId}
                     spreadsheetId={spreadsheetId}
-                    spreadsheets={sidebarData?.spreadsheets}
                     onSpreadsheetSelect={handleSpreadsheetSelect}
                   />
                 </SidebarMenu>

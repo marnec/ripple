@@ -23,15 +23,11 @@ import {
   Command,
   CornerDownLeft,
   File,
-  FolderKanban,
-  PenTool,
   Phone,
   SendHorizonal,
-  Table2,
   X,
 } from "lucide-react";
 import { RippleSpinner } from "../../../components/RippleSpinner";
-import { useWorkspaceSidebar } from "@/contexts/WorkspaceSidebarContext";
 import { useQuery } from "convex-helpers/react/cache";
 import { api } from "@convex/_generated/api";
 import { useWorkspaceMembers } from "@/contexts/WorkspaceMembersContext";
@@ -42,6 +38,8 @@ import { getUserDisplayName } from "@ripple/shared/displayName";
 import { useUploadFile, type ImageUploadResult } from "../../../hooks/use-upload-file";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
 import { useEventSuggestions } from "../../../hooks/use-event-suggestions";
+import { useResourceSuggestions } from "../../../hooks/use-resource-suggestions";
+import { useTaskSuggestions } from "../../../hooks/use-task-suggestions";
 import { isEditorEmpty, editorClear, blocksToPlainText } from "@/lib/editor-utils";
 import { generateThumbnail } from "@/lib/image-thumbnail";
 import { snapshotDiagramToBlob, EmptyDiagramSnapshotError } from "@/lib/exporters/diagram-snapshot";
@@ -100,12 +98,11 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const { editingMessage, setEditingMessage, replyingTo, setReplyingTo } = useChatContext();
   const isEditing = !!editingMessage.id;
 
-  const sidebarData = useWorkspaceSidebar();
-  const projects = sidebarData?.projects;
-  const documents = sidebarData?.documents;
-  const diagrams = sidebarData?.diagrams;
-  const spreadsheets = sidebarData?.spreadsheets;
-  const tasks = useQuery(api.tasks.listByWorkspace, { workspaceId, completed: false });
+  // Only the reply-preview's plain-text rendering needs project names up front
+  // (`#name` for a projectReference chip); the `#` picker itself is
+  // search-backed. `projects.list` is one small workspace-scoped table, shared
+  // with the rest of the app through the cached `useQuery`.
+  const projects = useQuery(api.projects.list, { workspaceId });
   const workspaceMembers = useWorkspaceMembers();
   const currentUser = useViewer();
 
@@ -337,112 +334,29 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     };
   }, [getMemberItems, getEventItems]);
 
+  // `#` offers tasks first, then the four workspace resource groups. Both
+  // legs search server-side per keystroke (see the hooks) — this used to
+  // client-filter every open task plus four whole workspace tables held live
+  // in the app-shell subscription.
+  const getTaskItems = useTaskSuggestions({ workspaceId, editor });
+  const getWorkspaceResourceItems = useResourceSuggestions({
+    workspaceId,
+    editor,
+    // Selecting a diagram embeds a static snapshot (whole canvas or a chosen
+    // frame) rather than an inline reference chip — open the frame picker to
+    // choose what to capture.
+    onDiagramSelect: setFramePickerTarget,
+  });
+
   const getResourceItems = useMemo(() => {
     return async (query: string) => {
-      const q = query.toLowerCase();
-      const items: Array<{
-        title: string;
-        onItemClick: () => void;
-        icon: React.JSX.Element;
-        group: string;
-      }> = [];
-
-      tasks
-        ?.filter((t) => t.title.toLowerCase().includes(q))
-        .slice(0, 7)
-        .forEach((task) => {
-          items.push({
-            title: task.title,
-            onItemClick: () => {
-              editor.insertInlineContent([
-                { type: "taskMention", props: { taskId: task._id, taskTitle: task.title } },
-                " ",
-              ]);
-            },
-            icon: (
-              <div className={cn("h-3 w-3 rounded-full", task.status?.color || "bg-gray-500")} />
-            ),
-            group: "Tasks",
-          });
-        });
-
-      projects
-        ?.filter((p) => p.name.toLowerCase().includes(q))
-        .slice(0, 5)
-        .forEach((p) => {
-          items.push({
-            title: p.name,
-            onItemClick: () => {
-              editor.insertInlineContent([
-                { type: "projectReference", props: { projectId: p._id } },
-                " ",
-              ]);
-            },
-            icon: <FolderKanban className="h-4 w-4" />,
-            group: "Projects",
-          });
-        });
-
-      documents
-        ?.filter((d) => d.name.toLowerCase().includes(q))
-        .slice(0, 5)
-        .forEach((d) => {
-          items.push({
-            title: d.name,
-            onItemClick: () => {
-              editor.insertInlineContent([
-                {
-                  type: "resourceReference",
-                  props: { resourceId: d._id, resourceType: "document", resourceName: d.name },
-                },
-                " ",
-              ]);
-            },
-            icon: <File className="h-4 w-4" />,
-            group: "Documents",
-          });
-        });
-
-      diagrams
-        ?.filter((d) => d.name.toLowerCase().includes(q))
-        .slice(0, 5)
-        .forEach((d) => {
-          items.push({
-            title: d.name,
-            // Selecting a diagram embeds a static snapshot (whole canvas or a
-            // chosen frame) rather than an inline reference chip — open the frame
-            // picker to choose what to capture.
-            onItemClick: () => {
-              setFramePickerTarget({ id: d._id, name: d.name });
-            },
-            icon: <PenTool className="h-4 w-4" />,
-            group: "Diagrams",
-          });
-        });
-
-      spreadsheets
-        ?.filter((s) => s.name.toLowerCase().includes(q))
-        .slice(0, 5)
-        .forEach((s) => {
-          items.push({
-            title: s.name,
-            onItemClick: () => {
-              editor.insertInlineContent([
-                {
-                  type: "resourceReference",
-                  props: { resourceId: s._id, resourceType: "spreadsheet", resourceName: s.name },
-                },
-                " ",
-              ]);
-            },
-            icon: <Table2 className="h-4 w-4" />,
-            group: "Spreadsheets",
-          });
-        });
-
-      return items;
+      const [taskItems, resourceItems] = await Promise.all([
+        getTaskItems(query),
+        getWorkspaceResourceItems(query),
+      ]);
+      return [...taskItems, ...resourceItems];
     };
-  }, [tasks, projects, documents, diagrams, spreadsheets, editor]);
+  }, [getTaskItems, getWorkspaceResourceItems]);
 
   const sendMessage = () => {
     if (!canSend || !editor) return;

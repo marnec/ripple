@@ -4,6 +4,9 @@ import { checkWorkspaceMember } from "./authHelpers";
 
 // ── Public queries ────────────────────────────────────────────────────────────
 
+/** Suggestions shown per resource group when the caller doesn't say. */
+const SUGGEST_DEFAULT_PER_TYPE = 5;
+
 const nodeResultValidator = v.object({
   resourceId: v.string(),
   resourceType: v.string(),
@@ -55,6 +58,80 @@ export const search = query({
       resourceType: r.resourceType,
       name: r.name,
       tags: r.tags,
+    }));
+  },
+});
+
+/** Resource types the `#` reference picker can offer. */
+const suggestTypeValidator = v.union(
+  v.literal("project"),
+  v.literal("document"),
+  v.literal("diagram"),
+  v.literal("spreadsheet"),
+);
+
+const suggestionValidator = v.object({
+  resourceId: v.string(),
+  resourceType: suggestTypeValidator,
+  name: v.string(),
+});
+
+/**
+ * Autocomplete feed for the chat/document `#` reference picker.
+ *
+ * Point-in-time (called via `convex.query`, not `useQuery`) and bounded: the
+ * picker used to client-filter four whole workspace tables shipped down by
+ * `workspaceSidebarData.get`. Mirrors `calendarEvents.listForMentionAutocomplete`
+ * — FTS while the user types, a short recency browse for the empty query —
+ * over the same `nodes.by_name` index Ctrl+K already uses.
+ */
+export const suggest = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    types: v.array(suggestTypeValidator),
+    query: v.optional(v.string()),
+    perType: v.optional(v.number()),
+  },
+  returns: v.array(suggestionValidator),
+  handler: async (ctx, { workspaceId, types, query: searchText, perType }) => {
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
+
+    const limit = Math.max(1, Math.min(perType ?? SUGGEST_DEFAULT_PER_TYPE, 25));
+    const trimmed = (searchText ?? "").trim();
+
+    // One bounded scan per requested type rather than a single wider search:
+    // a workspace with 500 documents and 3 diagrams would otherwise let
+    // documents crowd every other group out of the result set.
+    const perTypeResults = await Promise.all(
+      types.map((resourceType) =>
+        trimmed.length > 0
+          ? ctx.db
+              .query("nodes")
+              .withSearchIndex("by_name", (q) =>
+                q
+                  .search("name", trimmed)
+                  .eq("workspaceId", workspaceId)
+                  .eq("resourceType", resourceType)
+                  .eq("searchable", true),
+              )
+              .take(limit)
+          : // Browse mode: an empty search string matches nothing, so the
+            // just-opened picker falls back to the newest rows of each type.
+            ctx.db
+              .query("nodes")
+              .withIndex("by_workspace_type", (q) =>
+                q.eq("workspaceId", workspaceId).eq("resourceType", resourceType),
+              )
+              .order("desc")
+              .take(limit),
+      ),
+    );
+
+    return perTypeResults.flat().map((n) => ({
+      resourceId: n.resourceId,
+      resourceType: n.resourceType as "project" | "document" | "diagram" | "spreadsheet",
+      name: n.name,
     }));
   },
 });

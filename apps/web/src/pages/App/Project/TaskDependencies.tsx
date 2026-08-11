@@ -256,15 +256,17 @@ function AddDependencyPopover({
   onAdd: (selectedTaskId: Id<"tasks">, type: "blocks" | "is_blocked_by" | "relates_to") => Promise<void>;
 }) {
   const [depType, setDepType] = useState<"blocks" | "is_blocked_by" | "relates_to">("blocks");
-  // Dependency picker can target either active or completed tasks (e.g.
-  // "depends on a completed migration"), so fire both queries when open.
-  const activeTasks = useQuery(api.tasks.listByWorkspace, open ? { workspaceId, completed: false } : "skip");
-  const completedTasks = useQuery(api.tasks.listByWorkspace, open ? { workspaceId, completed: true } : "skip");
-  const allTasks = activeTasks && completedTasks ? [...activeTasks, ...completedTasks] : undefined;
-
-  const availableTasks = (allTasks ?? []).filter(
-    (t: any) => !existingTaskIds.has(t._id)
+  // Server-side search over the workspace's tasks. This used to subscribe to
+  // both completion halves of `listByWorkspace` — i.e. every task in the
+  // workspace, enriched, just to client-filter it down to a popover list.
+  // `includeCompleted` keeps "blocked by the finished migration" reachable.
+  const [search, setSearch] = useState("");
+  const suggestions = useQuery(
+    api.tasks.suggest,
+    open ? { workspaceId, query: search, includeCompleted: true, limit: 20 } : "skip",
   );
+
+  const availableTasks = (suggestions ?? []).filter((t) => !existingTaskIds.has(t._id));
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -285,17 +287,23 @@ function AddDependencyPopover({
             </SelectContent>
           </Select>
         </div>
-        <Command>
-          <CommandInput placeholder="Search tasks..." />
+        {/* `shouldFilter={false}`: the server already matched the query, and
+            cmdk's own fuzzy pass would drop rows the search index kept. */}
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Search tasks..."
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
             <CommandEmpty>No tasks found</CommandEmpty>
-            {availableTasks.map((t: any) => {
+            {availableTasks.map((t) => {
               const tid = formatTaskId(t.projectKey, t.number);
               return (
                 <CommandItem
                   key={t._id}
                   value={`${tid ?? ""} ${t.title}`}
-                  onSelect={() => void onAdd(t._id as Id<"tasks">, depType)}
+                  onSelect={() => void onAdd(t._id, depType)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {tid && (

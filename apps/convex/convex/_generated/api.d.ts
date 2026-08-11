@@ -2057,6 +2057,21 @@ export declare const api: {
         tags: Array<string>;
       }>
     >;
+    suggest: FunctionReference<
+      "query",
+      "public",
+      {
+        perType?: number;
+        query?: string;
+        types: Array<"project" | "document" | "diagram" | "spreadsheet">;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{
+        name: string;
+        resourceId: string;
+        resourceType: "project" | "document" | "diagram" | "spreadsheet";
+      }>
+    >;
   };
   notificationPreferences: {
     get: FunctionReference<
@@ -3034,51 +3049,6 @@ export declare const api: {
         yjsSnapshotId?: Id<"_storage">;
       }>
     >;
-    listByWorkspace: FunctionReference<
-      "query",
-      "public",
-      {
-        completed: boolean;
-        tagNames?: Array<string>;
-        workspaceId: Id<"workspaces">;
-      },
-      Array<{
-        _creationTime: number;
-        _id: Id<"tasks">;
-        assigneeId?: Id<"users">;
-        completed: boolean;
-        creatorId: Id<"users">;
-        dueDate?: string;
-        estimate?: number;
-        externalAssignees?: Array<{
-          avatarUrl: string;
-          login: string;
-          url: string;
-        }>;
-        externalRefs?: Array<{
-          deleted?: boolean;
-          issueNumber: number;
-          provider: string;
-          repoFullName: string;
-          url: string;
-        }>;
-        importJobId?: Id<"taskImportJobs">;
-        labels?: Array<string>;
-        number?: number;
-        plannedStartDate?: string;
-        position?: string;
-        priority: "urgent" | "high" | "medium" | "low";
-        projectId: Id<"projects">;
-        projectKey?: string;
-        pullRequestState?: "draft" | "open" | "merged" | "closed";
-        status: { color: string; isCompleted: boolean; name: string } | null;
-        statusId: Id<"taskStatuses">;
-        title: string;
-        workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
-        workspaceId: Id<"workspaces">;
-        yjsSnapshotId?: Id<"_storage">;
-      }>
-    >;
     listCompletedByProject: FunctionReference<
       "query",
       "public",
@@ -3266,6 +3236,24 @@ export declare const api: {
       "public",
       { taskId: Id<"tasks"> },
       null
+    >;
+    suggest: FunctionReference<
+      "query",
+      "public",
+      {
+        includeCompleted?: boolean;
+        limit?: number;
+        query?: string;
+        workspaceId: Id<"workspaces">;
+      },
+      Array<{
+        _id: Id<"tasks">;
+        completed: boolean;
+        number?: number;
+        projectKey?: string;
+        statusColor?: string;
+        title: string;
+      }>
     >;
     syncDescriptionToGitHub: FunctionReference<
       "mutation",
@@ -3641,32 +3629,7 @@ export declare const api: {
           type: "open" | "closed" | "dm";
           workspaceId: Id<"workspaces">;
         }>;
-        diagrams: Array<{
-          _creationTime: number;
-          _id: Id<"diagrams">;
-          name: string;
-          tags?: Array<string>;
-        }>;
-        documents: Array<{
-          _creationTime: number;
-          _id: Id<"documents">;
-          name: string;
-          tags?: Array<string>;
-        }>;
         hiddenChannelCount: number;
-        projects: Array<{
-          _creationTime: number;
-          _id: Id<"projects">;
-          color: string;
-          key?: string;
-          name: string;
-        }>;
-        spreadsheets: Array<{
-          _creationTime: number;
-          _id: Id<"spreadsheets">;
-          name: string;
-          tags?: Array<string>;
-        }>;
       }
     >;
   };

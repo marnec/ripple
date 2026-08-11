@@ -17,7 +17,6 @@ export type SpreadsheetSelectorProps = {
   workspaceId: Id<"workspaces">;
   spreadsheetId: Id<"spreadsheets"> | undefined;
   onSpreadsheetSelect: (id: string | null) => void;
-  spreadsheets?: { _id: string; name: string; tags?: string[]; _creationTime: number }[];
 };
 
 export const SpreadsheetSelectorList = memo(function SpreadsheetSelectorList({

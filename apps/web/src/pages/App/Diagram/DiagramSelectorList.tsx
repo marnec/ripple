@@ -17,7 +17,6 @@ export type DiagramSelectorProps = {
   workspaceId: Id<"workspaces">;
   diagramId: Id<"diagrams"> | undefined;
   onDiagramSelect: (id: string | null) => void;
-  diagrams?: { _id: string; name: string; tags?: string[]; _creationTime: number }[];
 };
 
 export const DiagramSelectorList = memo(function DiagramSelectorList({

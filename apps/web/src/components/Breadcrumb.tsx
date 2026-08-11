@@ -33,12 +33,16 @@ const KNOWN_SUBPAGES = new Set([
   "events",
 ]);
 
-/** Category segment → which sidebar list contains that resource type. */
-const SIDEBAR_CATEGORY: Record<string, "projects" | "documents" | "diagrams" | "spreadsheets" | "channels"> = {
-  projects: "projects",
-  documents: "documents",
-  diagrams: "diagrams",
-  spreadsheets: "spreadsheets",
+/**
+ * Category segment → which sidebar list contains that resource type.
+ *
+ * Channels only: the sidebar query no longer ships the workspace's documents,
+ * diagrams, spreadsheets and projects (it collected all four tables in full on
+ * every app-shell mount). Those crumbs resolve through
+ * `breadcrumb.getResourceNames` below — the indexed path tasks and cycles have
+ * always taken.
+ */
+const SIDEBAR_CATEGORY: Record<string, "channels"> = {
   channels: "channels",
 };
 

@@ -17,7 +17,6 @@ export type DocumentSelectorProps = {
   workspaceId: Id<"workspaces">;
   documentId: Id<"documents"> | undefined;
   onDocumentSelect: (id: string | null) => void;
-  documents?: { _id: string; name: string; tags?: string[]; _creationTime: number }[];
 };
 
 export const DocumentSelectorList = memo(function DocumentSelectorList({
