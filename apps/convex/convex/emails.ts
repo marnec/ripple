@@ -5,6 +5,30 @@ import { internalAction } from "./_generated/server";
 import { Resend } from "resend";
 import { APP_NAME, EMAIL_FROM_DOMAIN, EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants"
 
+/**
+ * Escape a value for interpolation into the HTML body. The sibling of
+ * `icsEscapeText` below, which handles the same concern for the calendar
+ * attachment — every value these emails carry crosses both contexts, and only
+ * one of them had an escape.
+ *
+ * The rule this file keeps: **every** value interpolated into an HTML string
+ * goes through this, including server-constructed URLs that are safe today —
+ * so the invariant is a grep rather than a per-value argument about who can
+ * reach it. Two deliberate exceptions: `APP_NAME` and the `subhead`/`bodyHtml`
+ * a caller passes to `renderEventEmailLayout`, which are markup by design.
+ *
+ * Applies to HTML only. `subject` is plain text: escaping it would show
+ * `&amp;` to the recipient rather than hide markup from them.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export const sendWorkspaceInvite = internalAction({
   args: {
     inviteId: v.id("workspaceInvites"),
@@ -27,16 +51,16 @@ export const sendWorkspaceInvite = internalAction({
           <h1 style="margin:0 0 4px;font-size:20px;font-weight:600;color:#18181b;">${APP_NAME}</h1>
           <p style="margin:0 0 24px;font-size:14px;color:#71717a;">Workspace Invitation</p>
           <p style="margin:0 0 8px;font-size:15px;color:#27272a;line-height:1.5;">
-            <strong>${inviterName}</strong> invited you to join <strong>${workspaceName}</strong>.
+            <strong>${escapeHtml(inviterName)}</strong> invited you to join <strong>${escapeHtml(workspaceName)}</strong>.
           </p>
           <p style="margin:0 0 28px;font-size:14px;color:#52525b;line-height:1.5;">
             Accept the invitation to start collaborating.
           </p>
-          <a href="${url}" style="display:inline-block;padding:10px 28px;background-color:#18181b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;">
+          <a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 28px;background-color:#18181b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;">
             Accept Invitation
           </a>
           <p style="margin:24px 0 0;font-size:12px;color:#a1a1aa;line-height:1.5;">
-            Or copy this link: <a href="${url}" style="color:#71717a;">${url}</a>
+            Or copy this link: <a href="${escapeHtml(url)}" style="color:#71717a;">${escapeHtml(url)}</a>
           </p>
         </td></tr>
         <tr><td style="padding:16px 32px;border-top:1px solid #f4f4f5;">
@@ -350,14 +374,14 @@ export const sendEventInvite = internalAction({
       subhead: "Calendar invitation",
       bodyHtml: `
           <p style="margin:0 0 8px;font-size:15px;color:#27272a;line-height:1.5;">
-            <strong>${inviterName}</strong> invited you to <strong>${eventTitle}</strong>.
+            <strong>${escapeHtml(inviterName)}</strong> invited you to <strong>${escapeHtml(eventTitle)}</strong>.
           </p>
-          <p style="margin:0 0 24px;font-size:14px;color:#52525b;line-height:1.5;">${when}</p>
-          <a href="${targetUrl}" style="display:inline-block;padding:10px 28px;background-color:#18181b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;">
+          <p style="margin:0 0 24px;font-size:14px;color:#52525b;line-height:1.5;">${escapeHtml(when)}</p>
+          <a href="${escapeHtml(targetUrl)}" style="display:inline-block;padding:10px 28px;background-color:#18181b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;">
             View invitation
           </a>
           <p style="margin:24px 0 0;font-size:12px;color:#a1a1aa;line-height:1.5;">
-            Or copy this link: <a href="${targetUrl}" style="color:#71717a;">${targetUrl}</a>
+            Or copy this link: <a href="${escapeHtml(targetUrl)}" style="color:#71717a;">${escapeHtml(targetUrl)}</a>
           </p>`,
     });
 
@@ -427,12 +451,12 @@ export const sendEventReschedule = internalAction({
       subhead: "Event rescheduled",
       bodyHtml: `
           <p style="margin:0 0 16px;font-size:15px;color:#27272a;line-height:1.5;">
-            <strong>${inviterName}</strong> rescheduled <strong>${eventTitle}</strong>.
+            <strong>${escapeHtml(inviterName)}</strong> rescheduled <strong>${escapeHtml(eventTitle)}</strong>.
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
             <tr><td style="padding:12px 16px;background:#f4f4f5;border-radius:8px;">
               <p style="margin:0;font-size:13px;color:#71717a;line-height:1.4;">New time</p>
-              <p style="margin:4px 0 0;font-size:14px;color:#18181b;font-weight:500;line-height:1.4;">${newRangeLabel}</p>
+              <p style="margin:4px 0 0;font-size:14px;color:#18181b;font-weight:500;line-height:1.4;">${escapeHtml(newRangeLabel)}</p>
             </td></tr>
           </table>`,
     });
@@ -491,7 +515,7 @@ export const sendEventCancellation = internalAction({
       subhead: "Event cancelled",
       bodyHtml: `
           <p style="margin:0 0 8px;font-size:15px;color:#27272a;line-height:1.5;">
-            <strong>${inviterName}</strong> cancelled <strong>${eventTitle}</strong>.
+            <strong>${escapeHtml(inviterName)}</strong> cancelled <strong>${escapeHtml(eventTitle)}</strong>.
           </p>
           <p style="margin:0;font-size:14px;color:#52525b;line-height:1.5;">
             The previously shared invitation link is no longer valid.
