@@ -671,8 +671,10 @@ export default defineSchema({
     // dbTrigger forwards changes to the polymorphic `nodes` row.
     tags: v.optional(v.array(v.string())),
   })
+    // The complete candidate set for any time window: `validateTimes` caps
+    // event duration at 24h, so an event touching a window must start within
+    // 24h before it. Both calendar range queries scan only this index.
     .index("by_workspace_starts", ["workspaceId", "startsAt"])
-    .index("by_creator", ["createdBy"])
     .index("by_channel", ["channelId"])
     // For @event mention autocomplete: title search filtered to the active
     // workspace. Empty queries still use by_workspace_starts (browse mode).
@@ -710,7 +712,6 @@ export default defineSchema({
     .index("by_event", ["eventId"])
     .index("by_event_user", ["eventId", "userId"])
     .index("by_event_guest_email", ["eventId", "guestEmail"])
-    .index("by_user_workspace_event", ["userId", "workspaceId", "eventId"])
     .index("by_share", ["shareId"]),
 
   pushSubscriptions: defineTable({

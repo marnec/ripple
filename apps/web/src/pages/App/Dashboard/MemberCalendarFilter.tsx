@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, Users } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@ripple/ui/components/button";
 import {
@@ -20,6 +21,9 @@ import { cn } from "@/lib/utils";
 import type { Id } from "@convex/_generated/dataModel";
 
 import { memberHueFor } from "./member-calendar-colors";
+
+/** Keep in step with MAX_OVERLAY_MEMBERS in convex/calendarEvents.ts. */
+const MAX_OVERLAY_MEMBERS = 100;
 
 export type MemberCalendarMember = {
   userId: Id<"users">;
@@ -53,9 +57,17 @@ export function MemberCalendarFilter({
   const toggle = (userId: Id<"users">) => {
     if (selectedIds.includes(userId)) {
       onSelectedIdsChange(selectedIds.filter((id) => id !== userId));
-    } else {
-      onSelectedIdsChange([...selectedIds, userId]);
+      return;
     }
+    // `listForMembersInRange` refuses more than MAX_OVERLAY_MEMBERS ids
+    // rather than truncating silently, so stop at the same number here and
+    // say why — an overlay that quietly ignored the 101st pick would read as
+    // "that colleague has nothing booked".
+    if (selectedIds.length >= MAX_OVERLAY_MEMBERS) {
+      toast.error(`You can overlay at most ${MAX_OVERLAY_MEMBERS} calendars at once.`);
+      return;
+    }
+    onSelectedIdsChange([...selectedIds, userId]);
   };
 
   const count = selectedIds.length;

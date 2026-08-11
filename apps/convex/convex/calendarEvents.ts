@@ -1,5 +1,5 @@
 import { v, ConvexError } from "convex/values";
-import { action, internalQuery, query, type ActionCtx } from "./_generated/server";
+import { action, internalQuery, query, type ActionCtx, type QueryCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
@@ -34,6 +34,8 @@ const TITLE_MAX = 200;
 const DESCRIPTION_MAX = 4000;
 const MAX_INVITEES = 200;
 const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+/** Upper bound on colleagues the busy-block overlay will resolve in one call. */
+const MAX_OVERLAY_MEMBERS = 100;
 const JOIN_WINDOW_LEAD_MS = 5 * 60 * 1000; // join allowed from start − 5 min
 const JOIN_WINDOW_TAIL_MS = 15 * 60 * 1000; // until end + 15 min
 const SHARE_BUFFER_MS = 24 * 60 * 60 * 1000; // share expires endsAt + 24h
@@ -230,6 +232,48 @@ const eventInRangeValidator = v.object({
   nonOrganizerInviteeCount: v.number(),
 });
 
+/**
+ * Every event whose time intersects `[rangeStartMs, rangeEndMs)`.
+ *
+ * The lower bound leans on the MAX_DURATION_MS cap that `validateTimes`
+ * enforces at both write sites (create, update) — an event that ends inside
+ * the window cannot have started more than MAX_DURATION_MS before it. That
+ * makes this single index range the complete candidate set, which is what
+ * lets both calendar queries drop their per-user and per-member history
+ * scans. Widen the cap and this bound must widen with it.
+ */
+async function eventsTouchingWindow(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  rangeStartMs: number,
+  rangeEndMs: number,
+): Promise<Doc<"calendarEvents">[]> {
+  const candidates = await ctx.db
+    .query("calendarEvents")
+    .withIndex("by_workspace_starts", (q) =>
+      q
+        .eq("workspaceId", workspaceId)
+        .gte("startsAt", rangeStartMs - MAX_DURATION_MS)
+        .lt("startsAt", rangeEndMs),
+    )
+    .collect();
+
+  return candidates.filter((e) => e.endsAt > rangeStartMs && e.startsAt < rangeEndMs);
+}
+
+/** Single indexed lookup: does this user hold an invitee row for this event? */
+async function isInvitee(
+  ctx: QueryCtx,
+  eventId: Id<"calendarEvents">,
+  userId: Id<"users">,
+): Promise<boolean> {
+  const row = await ctx.db
+    .query("calendarEventInvitees")
+    .withIndex("by_event_user", (q) => q.eq("eventId", eventId).eq("userId", userId))
+    .first();
+  return row !== null;
+}
+
 export const listMineInRange = query({
   args: {
     workspaceId: v.id("workspaces"),
@@ -242,54 +286,31 @@ export const listMineInRange = query({
 
     if (rangeEndMs <= rangeStartMs) return [];
 
-    // Two scans: events I created + events I'm invited to. Dedupe by _id.
-    // Both scans range-filter on startsAt for cheap pre-filter, then
-    // cross-check endsAt > rangeStartMs so we keep events that started
-    // before the window but end inside it.
-    const created = await ctx.db
-      .query("calendarEvents")
-      .withIndex("by_workspace_starts", (q) =>
-        q
-          .eq("workspaceId", workspaceId)
-          .gte("startsAt", rangeStartMs - MAX_DURATION_MS)
-          .lt("startsAt", rangeEndMs),
+    // One scan, and it is provably complete: `validateTimes` caps every event
+    // at MAX_DURATION_MS on both write paths, so any event that touches the
+    // window must start within MAX_DURATION_MS before it. There is therefore
+    // no second scan of the caller's own invitee rows — that one carried no
+    // event the window scan misses, and it read the caller's entire invite
+    // history since signup to prove it.
+    const events = (
+      await eventsTouchingWindow(ctx, workspaceId, rangeStartMs, rangeEndMs)
+    ).sort((a, b) => a.startsAt - b.startsAt);
+
+    // "Mine" = organizer, or an invitee row for me. Organizer needs no read;
+    // the rest cost one `by_event_user` point lookup each, bounded by the
+    // events in the window rather than by the caller's tenure.
+    const mine = (
+      await Promise.all(
+        events.map(async (e) =>
+          e.createdBy === userId || (await isInvitee(ctx, e._id, userId)) ? e : null,
+        ),
       )
-      .collect();
+    ).filter((e): e is Doc<"calendarEvents"> => e !== null);
 
-    const invited = await ctx.db
-      .query("calendarEventInvitees")
-      .withIndex("by_user_workspace_event", (q) =>
-        q.eq("userId", userId).eq("workspaceId", workspaceId),
-      )
-      .collect();
-
-    const eventIds = new Set<Id<"calendarEvents">>();
-    const events: Doc<"calendarEvents">[] = [];
-
-    const pushIfRelevant = (e: Doc<"calendarEvents">) => {
-      if (eventIds.has(e._id)) return;
-      // Window intersection.
-      if (e.endsAt <= rangeStartMs) return;
-      if (e.startsAt >= rangeEndMs) return;
-      eventIds.add(e._id);
-      events.push(e);
-    };
-
-    for (const e of created) {
-      if (e.createdBy === userId) pushIfRelevant(e);
-    }
-    for (const row of invited) {
-      const e = await ctx.db.get(row.eventId);
-      if (e && e.workspaceId === workspaceId) pushIfRelevant(e);
-    }
-
-    events.sort((a, b) => a.startsAt - b.startsAt);
-
-    // Annotate each event with its non-organizer invitee count. One
-    // by_event index scan per event — cheap relative to the existing
-    // `invited` lookups already performed above.
-    const annotated = await Promise.all(
-      events.map(async (e) => {
+    // The invitee rows are read only for the caller's own events, and only
+    // for the count the reschedule prompt needs.
+    return await Promise.all(
+      mine.map(async (e) => {
         const invitees = await loadInviteeRows(ctx, e._id);
         const nonOrganizerInviteeCount = invitees.filter(
           (i) => i.userId !== e.createdBy,
@@ -297,8 +318,6 @@ export const listMineInRange = query({
         return { ...e, nonOrganizerInviteeCount };
       }),
     );
-
-    return annotated;
   },
 });
 
@@ -324,67 +343,51 @@ export const listForMembersInRange = query({
   handler: async (ctx, { workspaceId, memberIds, rangeStartMs, rangeEndMs }) => {
     const { userId: viewerId } = await requireWorkspaceMember(ctx, workspaceId);
     if (memberIds.length === 0 || rangeEndMs <= rangeStartMs) return [];
+    // Each id still costs one membership read, and the overlay is a
+    // hand-picked set of colleagues — nobody legitimately ticks a hundred.
+    // Refuse rather than silently truncate: a short lane is indistinguishable
+    // from a quiet colleague.
+    if (memberIds.length > MAX_OVERLAY_MEMBERS) {
+      throw new ConvexError(
+        `Too many members requested (max ${MAX_OVERLAY_MEMBERS})`,
+      );
+    }
 
     // Block cross-workspace probing — only return blocks for memberIds that
     // are actually members of this workspace. (The viewer is already
     // authorised; the requested members are not necessarily.)
-    const validMemberIds: Id<"users">[] = [];
+    const validMemberIds = new Set<Id<"users">>();
     for (const m of memberIds) {
       // Skip the viewer themselves — their own events are already in
       // listMineInRange and we don't want to draw a busy-block on top.
       if (m === viewerId) continue;
       const membership = await getWorkspaceMembership(ctx, workspaceId, m);
-      if (membership) validMemberIds.push(m);
+      if (membership) validMemberIds.add(m);
     }
+    if (validMemberIds.size === 0) return [];
+
+    // The same window scan `listMineInRange` runs, so the two queries share a
+    // read set and Convex serves both from one subscription. This replaced a
+    // pair of scans *per requested member*, one of which had no workspace key
+    // and so read that colleague's events in every workspace they belong to.
+    const events = await eventsTouchingWindow(ctx, workspaceId, rangeStartMs, rangeEndMs);
 
     const out: { startsAt: number; endsAt: number; memberId: Id<"users"> }[] = [];
-    const seen = new Set<string>(); // dedupe by `${eventId}:${memberId}`
 
-    // Helper: also skip events the viewer is already an invitee on, since
-    // those events render in their own foreground lane via listMineInRange.
-    async function viewerIsInvitee(eventId: Id<"calendarEvents">): Promise<boolean> {
-      const row = await ctx.db
-        .query("calendarEventInvitees")
-        .withIndex("by_event_user", (q) =>
-          q.eq("eventId", eventId).eq("userId", viewerId),
-        )
-        .first();
-      return row !== null;
-    }
+    for (const e of events) {
+      // Events the viewer already sees in their own foreground lane.
+      if (e.createdBy === viewerId) continue;
+      const invitees = await loadInviteeRows(ctx, e._id);
+      if (invitees.some((i) => i.userId === viewerId)) continue;
 
-    for (const memberId of validMemberIds) {
-      // Events the member organises…
-      const created = await ctx.db
-        .query("calendarEvents")
-        .withIndex("by_creator", (q) => q.eq("createdBy", memberId))
-        .collect();
-      for (const e of created) {
-        if (e.workspaceId !== workspaceId) continue;
-        if (e.endsAt <= rangeStartMs || e.startsAt >= rangeEndMs) continue;
-        if (e.createdBy === viewerId) continue;
-        if (await viewerIsInvitee(e._id)) continue;
-        const k = `${e._id}:${memberId}`;
-        if (seen.has(k)) continue;
-        seen.add(k);
-        out.push({ startsAt: e.startsAt, endsAt: e.endsAt, memberId });
+      // One block per (event, member) pair: the Set collapses a member who
+      // both organises the event and holds an invitee row on it.
+      const participants = new Set<Id<"users">>();
+      if (validMemberIds.has(e.createdBy)) participants.add(e.createdBy);
+      for (const i of invitees) {
+        if (i.userId && validMemberIds.has(i.userId)) participants.add(i.userId);
       }
-
-      // …and events the member is invited to.
-      const invited = await ctx.db
-        .query("calendarEventInvitees")
-        .withIndex("by_user_workspace_event", (q) =>
-          q.eq("userId", memberId).eq("workspaceId", workspaceId),
-        )
-        .collect();
-      for (const row of invited) {
-        const e = await ctx.db.get(row.eventId);
-        if (!e) continue;
-        if (e.endsAt <= rangeStartMs || e.startsAt >= rangeEndMs) continue;
-        if (e.createdBy === viewerId) continue;
-        if (await viewerIsInvitee(e._id)) continue;
-        const k = `${e._id}:${memberId}`;
-        if (seen.has(k)) continue;
-        seen.add(k);
+      for (const memberId of participants) {
         out.push({ startsAt: e.startsAt, endsAt: e.endsAt, memberId });
       }
     }

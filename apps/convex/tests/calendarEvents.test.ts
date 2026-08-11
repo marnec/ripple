@@ -1309,6 +1309,68 @@ describe("calendarEvents", () => {
       expect(blocks).toHaveLength(0);
     });
 
+    it("keeps a shared member's other-workspace events out of the overlay", async () => {
+      // Alice is a member of BOTH workspaces. The busy-block lane must show
+      // only what she is busy with *here* — her other workspace is none of
+      // this viewer's business.
+      const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
+      const { userId: aliceId } = await setupAuthenticatedUser(t, {
+        email: "alice@test.com",
+      });
+      await addMember(t, workspaceId, aliceId, WorkspaceRole.MEMBER);
+
+      const otherWs = await t.run(async (ctx) => {
+        const ws = await ctx.db.insert("workspaces", { name: "Other", ownerId: aliceId });
+        await ctx.db.insert("workspaceMembers", {
+          workspaceId: ws,
+          userId: aliceId,
+          role: WorkspaceRole.ADMIN,
+        });
+        return ws;
+      });
+
+      const now = Date.now();
+      await insertEvent(t, {
+        workspaceId: otherWs,
+        createdBy: aliceId,
+        title: "Elsewhere",
+        startsAt: now + ONE_HOUR,
+        endsAt: now + 2 * ONE_HOUR,
+      });
+      const hereId = await insertEvent(t, {
+        workspaceId,
+        createdBy: aliceId,
+        title: "Here",
+        startsAt: now + 3 * ONE_HOUR,
+        endsAt: now + 4 * ONE_HOUR,
+      });
+
+      const blocks = await asViewer.query(api.calendarEvents.listForMembersInRange, {
+        workspaceId: workspaceId as any,
+        memberIds: [aliceId as any],
+        rangeStartMs: now,
+        rangeEndMs: now + 24 * ONE_HOUR,
+      });
+
+      expect(blocks).toHaveLength(1);
+      const here = await t.run(async (ctx) => ctx.db.get(hereId as any));
+      expect(blocks[0]?.startsAt).toBe((here as any).startsAt);
+    });
+
+    it("refuses an unbounded memberIds list rather than scanning per id", async () => {
+      const { workspaceId, userId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
+      const memberIds = Array.from({ length: 101 }, () => userId);
+
+      await expect(
+        asViewer.query(api.calendarEvents.listForMembersInRange, {
+          workspaceId: workspaceId as any,
+          memberIds: memberIds as any,
+          rangeStartMs: Date.now(),
+          rangeEndMs: Date.now() + 24 * ONE_HOUR,
+        }),
+      ).rejects.toThrow(/too many members/i);
+    });
+
     it("returns [] for empty memberIds (no work, no auth surprise)", async () => {
       const { workspaceId, asUser: asViewer } = await setupWorkspaceWithAdmin(t);
       const blocks = await asViewer.query(
