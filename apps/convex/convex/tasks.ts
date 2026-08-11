@@ -12,7 +12,7 @@ import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, ch
 import { syncTaskTags, normalizeTagList } from "./tagSync";
 import { applyStatusSideEffects } from "./taskStatusSideEffects";
 import { getAll } from "convex-helpers/server/relationships";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { notify } from "./utils/notify";
 import {
@@ -34,6 +34,27 @@ function assertNotTriage(status: Doc<"taskStatuses">): void {
     throw new ConvexError(
       `"${status.name}" is a triage status, reserved for incoming issues from integrations. Tasks can't be moved there manually.`,
     );
+  }
+}
+
+/**
+ * `statusId` is a caller-supplied id that the workspace/resource gate never
+ * looks at — authorizing the task (or the workspace) says nothing about which
+ * project the status belongs to. Without this, a status from another project
+ * (in another workspace) is accepted: `applyStatusSideEffects` then derives
+ * `completed` from it and the taskTags trigger re-partitions every join row,
+ * so the task drops out of every kanban column (boards partition on statusId)
+ * while still counting in `by_project_completed`.
+ *
+ * Every user-facing mutation that writes `statusId` runs this next to
+ * `assertNotTriage`. Regression tests: tests/crossWorkspace.access.test.ts.
+ */
+function assertStatusInProject(
+  status: Doc<"taskStatuses">,
+  projectId: Id<"projects">,
+): void {
+  if (status.projectId !== projectId) {
+    throw new ConvexError("Status does not belong to this project");
   }
 }
 
@@ -132,9 +153,16 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const { userId } = await requireWorkspaceMember(ctx, args.workspaceId);
 
-    // Get project to access workspaceId
+    // Get project to access workspaceId. `requireWorkspaceMember` authorized
+    // `args.workspaceId`, which says nothing about who owns `args.projectId` —
+    // without this comparison a member of workspace A creates tasks in B's
+    // project, advancing B's taskCounter and entering B's aggregate. Same guard
+    // as taskImports.ts.
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new ConvexError("Project not found");
+    if (project.workspaceId !== args.workspaceId) {
+      throw new ConvexError("Project does not belong to this workspace");
+    }
 
     // If no statusId provided, fetch the default status for the project
     let statusId = args.statusId;
@@ -156,6 +184,7 @@ export const create = mutation({
     const status = await ctx.db.get(statusId);
     if (!status) throw new ConvexError("Status not found");
     assertNotTriage(status);
+    assertStatusInProject(status, args.projectId);
 
     // Calculate position if not provided
     let position = args.position;
@@ -859,6 +888,7 @@ export const update = mutation({
       const newStatus = await ctx.db.get(statusId);
       if (!newStatus) throw new ConvexError("Status not found");
       assertNotTriage(newStatus);
+      assertStatusInProject(newStatus, task.projectId);
 
       patch.statusId = statusId;
       // Canonical status side-effects: two-way `completed` sync + work-period
@@ -1059,6 +1089,7 @@ export const updatePosition = mutation({
     const newStatus = await ctx.db.get(statusId);
     if (!newStatus) throw new ConvexError("Status not found");
     assertNotTriage(newStatus);
+    assertStatusInProject(newStatus, task.projectId);
 
     const patchData: Record<string, any> = {
       statusId,

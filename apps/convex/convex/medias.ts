@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
-import { requireUser, requireWorkspaceMember } from "./authHelpers";
+import { checkWorkspaceMember, requireUser, requireWorkspaceMember } from "./authHelpers";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -47,7 +47,19 @@ export const getUrl = query({
   args: { storageId: v.id("_storage") },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
-    await requireUser(ctx);
+    // A Convex storage URL needs no further auth, so the return value IS a
+    // bearer capability to the bytes — `requireUser` alone made every uploaded
+    // image readable across workspaces. Resolve the owning `medias` row (it
+    // carries workspaceId, written by `saveMedia`) and apply the workspace
+    // rule, the same shape `snapshots.getSnapshotUrl` uses.
+    const media = await ctx.db
+      .query("medias")
+      .withIndex("by_storage_id", (q) => q.eq("storageId", args.storageId))
+      .first();
+    if (!media) return null;
+
+    const access = await checkWorkspaceMember(ctx, media.workspaceId);
+    if (!access) return null;
 
     return await ctx.storage.getUrl(args.storageId);
   },

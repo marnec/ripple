@@ -485,19 +485,6 @@ export declare const api: {
       { channelId: Id<"channels"> },
       boolean
     >;
-    byChannel: FunctionReference<
-      "query",
-      "public",
-      { channelId: Id<"channels"> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"channelMembers">;
-        channelId: Id<"channels">;
-        role: "admin" | "member";
-        userId: Id<"users">;
-        workspaceId: Id<"workspaces">;
-      }>
-    >;
     changeMemberRole: FunctionReference<
       "mutation",
       "public",
@@ -3387,16 +3374,8 @@ export declare const api: {
       {
         _creationTime: number;
         _id: Id<"users">;
-        disabled?: boolean;
-        email?: string;
-        emailVerificationTime?: number;
-        githubLogin?: string;
-        gitlabLogin?: string;
-        gitlabUserId?: string;
         image?: string;
-        isAnonymous?: boolean;
         isBot?: boolean;
-        isPlatformAdmin?: boolean;
         name?: string;
       } | null
     >;
@@ -3409,16 +3388,8 @@ export declare const api: {
         {
           _creationTime: number;
           _id: Id<"users">;
-          disabled?: boolean;
-          email?: string;
-          emailVerificationTime?: number;
-          githubLogin?: string;
-          gitlabLogin?: string;
-          gitlabUserId?: string;
           image?: string;
-          isAnonymous?: boolean;
           isBot?: boolean;
-          isPlatformAdmin?: boolean;
           name?: string;
         }
       >
@@ -3452,20 +3423,19 @@ export declare const api: {
   };
   version: {
     get: FunctionReference<"query", "public", {}, number | null>;
-    set: FunctionReference<"mutation", "public", {}, null>;
   };
   workspaceInvites: {
     accept: FunctionReference<
       "mutation",
       "public",
       { inviteId: Id<"workspaceInvites"> },
-      any
+      null
     >;
     create: FunctionReference<
       "mutation",
       "public",
       { email: string; workspaceId: Id<"workspaces"> },
-      any
+      Id<"workspaceInvites">
     >;
     decline: FunctionReference<
       "mutation",
@@ -3880,6 +3850,12 @@ export declare const internal: {
     >;
   };
   callSessions: {
+    assertChannelAccess: FunctionReference<
+      "query",
+      "internal",
+      { channelId: Id<"channels"> },
+      null
+    >;
     attachTranscriptDocument: FunctionReference<
       "mutation",
       "internal",
@@ -6002,6 +5978,9 @@ export declare const internal: {
       { userId: Id<"users"> },
       null
     >;
+  };
+  version: {
+    set: FunctionReference<"mutation", "internal", {}, null>;
   };
   workspaceMembers: {
     listUserIds: FunctionReference<

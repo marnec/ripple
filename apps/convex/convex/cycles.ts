@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { Id } from "./_generated/dataModel";
@@ -57,6 +57,14 @@ export const create = mutation({
   returns: v.id("cycles"),
   handler: async (ctx, args) => {
     const { userId } = await requireWorkspaceMember(ctx, args.workspaceId);
+
+    // `args.projectId` is a second caller-supplied id the workspace gate never
+    // sees — mirror of the tasks.create guard.
+    const project = await ctx.db.get(args.projectId);
+    if (!project) throw new ConvexError("Project not found");
+    if (project.workspaceId !== args.workspaceId) {
+      throw new ConvexError("Project does not belong to this workspace");
+    }
 
     const status = computeStatus(args.startDate, args.dueDate);
 
@@ -240,6 +248,16 @@ export const addTask = mutation({
   handler: async (ctx, { cycleId, taskId }) => {
     const { userId, resource: cycle } = await requireResourceMember(ctx, "cycles", cycleId);
 
+    // The gate above authorized the CYCLE; `taskId` is unrelated to it. The
+    // join row's projectId is copied from the cycle, so without this check a
+    // foreign task is filed into a local cycle and `listCycleTasks` then
+    // returns it enriched — including the assignee's email.
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new ConvexError("Task not found");
+    if (task.projectId !== cycle.projectId) {
+      throw new ConvexError("Task does not belong to this cycle's project");
+    }
+
     // Idempotent: skip if already in cycle
     const existing = await ctx.db
       .query("cycleTasks")
@@ -254,7 +272,6 @@ export const addTask = mutation({
       addedBy: userId,
     });
 
-    const task = await ctx.db.get(taskId);
     await logActivity(ctx, {
       userId, resourceType: "cycles", resourceId: cycleId,
       action: "task_added", newValue: task?.title,
@@ -393,9 +410,15 @@ export const listCycleTasks = query({
       .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
       .collect();
 
+    // Belt-and-braces against a join row pointing outside this workspace:
+    // `addTask` now refuses those, but the read side must not depend on the
+    // write side having been correct — rows predating that guard still exist.
     const tasks = (
       await Promise.all(cts.map((ct) => ctx.db.get(ct.taskId)))
-    ).filter((t): t is NonNullable<typeof t> => t !== null);
+    ).filter(
+      (t): t is NonNullable<typeof t> =>
+        t !== null && t.workspaceId === cycle.workspaceId,
+    );
 
     const shouldHideCompleted = hideCompleted ?? false;
     const filtered = shouldHideCompleted ? tasks.filter((t) => !t.completed) : tasks;

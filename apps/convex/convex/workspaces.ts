@@ -4,7 +4,12 @@ import { mutation } from "./functions";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
-import { requireUser, getUser, requireWorkspaceMember } from "./authHelpers";
+import {
+  requireUser,
+  getUser,
+  requireWorkspaceMember,
+  checkWorkspaceMember,
+} from "./authHelpers";
 
 export const create = mutation({
   args: {
@@ -75,6 +80,10 @@ export const get = query({
     v.null()
   ),
   handler: async (ctx, { id }) => {
+    // Was a bare `db.get`: unauthenticated, and it exposes `ownerId`, which
+    // chained into the (also ungated) `users.get` for the owner's email.
+    const access = await checkWorkspaceMember(ctx, id);
+    if (!access) return null;
     return await ctx.db.get(id);
   },
 });
@@ -91,7 +100,9 @@ export const overview = query({
     spreadsheets: v.number(),
   }),
   handler: async (ctx, { workspaceId }) => {
-    await requireUser(ctx);
+    // `workspaceId` is caller-chosen, so "is logged in" is not the rule here —
+    // these are six full-table scans over another tenant's data.
+    await requireWorkspaceMember(ctx, workspaceId);
 
     const [members, channels, projects, documents, diagrams, spreadsheets] =
       await Promise.all([

@@ -222,7 +222,6 @@ export const reorderColumns = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { statusIds }) => {
-    // Validate all statuses exist and belong to same project
     if (statusIds.length === 0) return null;
 
     const firstStatus = await ctx.db.get(statusIds[0]);
@@ -231,6 +230,18 @@ export const reorderColumns = mutation({
     const project = await ctx.db.get(firstStatus.projectId);
     if (!project) throw new ConvexError("Project not found");
     await requireWorkspaceMember(ctx, project.workspaceId);
+
+    // The membership check above only covered `statusIds[0]`. Every remaining
+    // id is still caller-supplied, so validate the whole batch before writing
+    // any of it — otherwise one owned status at index 0 authorizes reordering
+    // another workspace's board.
+    const statuses = await Promise.all(statusIds.map((id) => ctx.db.get(id)));
+    for (const status of statuses) {
+      if (!status) throw new ConvexError("Status not found");
+      if (status.projectId !== firstStatus.projectId) {
+        throw new ConvexError("All statuses must belong to the same project");
+      }
+    }
 
     // Reassign order values sequentially
     for (let i = 0; i < statusIds.length; i++) {

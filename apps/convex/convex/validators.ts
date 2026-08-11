@@ -67,6 +67,23 @@ export const userValidator = v.object({
   disabled: v.optional(v.boolean()),
 });
 
+/**
+ * The subset of a user row safe to hand to any authenticated caller purely on
+ * the strength of holding their id — avatars, @-mention chips, reaction
+ * facepiles. Deliberately omits `email`, `isPlatformAdmin` and `disabled`:
+ * `users.get`/`getByIds` are id-addressable with no workspace scoping, so
+ * returning the full `userValidator` there published an account-takeover
+ * targeting list. Email and admin flags stay behind the scoped endpoints
+ * (`users.viewer`, `workspaceMembers.membersByWorkspace`, `admin/*`).
+ */
+export const publicUserValidator = v.object({
+  _id: v.id("users"),
+  _creationTime: v.number(),
+  name: v.optional(v.string()),
+  image: v.optional(v.string()),
+  isBot: v.optional(v.boolean()),
+});
+
 export const referenceValidator = v.object({
   _id: v.id("edges"),
   sourceType: v.string(),

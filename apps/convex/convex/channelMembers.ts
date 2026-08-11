@@ -6,29 +6,12 @@ import type { ChannelMember } from "./types/channel";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { channelRoleSchema } from "./schema";
 import { logActivity } from "./auditLog";
-import { requireUser } from "./authHelpers";
+import { requireChannelAccess, requireUser } from "./authHelpers";
 
-const channelMemberValidator = v.object({
-  _id: v.id("channelMembers"),
-  _creationTime: v.number(),
-  channelId: v.id("channels"),
-  workspaceId: v.id("workspaces"),
-  userId: v.id("users"),
-  role: v.union(v.literal("admin"), v.literal("member")),
-});
-
-export const byChannel = query({
-  args: { channelId: v.id("channels") },
-  returns: v.array(channelMemberValidator),
-  handler: async (ctx, { channelId }) => {
-    await requireUser(ctx);
-
-    return ctx.db
-      .query("channelMembers")
-      .withIndex("by_channel", (q) => q.eq("channelId", channelId))
-      .collect();
-  },
-});
+// `byChannel` was removed: it had no callers anywhere in the monorepo, its
+// return validator omitted the `name`/`email` columns that `addToChannel`
+// writes (so it threw on any row created that way), and it carried the same
+// missing channel gate as `membersByChannel` below.
 
 export const membersByChannel = query({
   args: { channelId: v.id("channels") },
@@ -43,7 +26,11 @@ export const membersByChannel = query({
     email: v.optional(v.string()),
   })),
   handler: async (ctx, { channelId }) => {
-    await requireUser(ctx);
+    // The channel rule, not "is logged in": this returns userId + name + email
+    // for every member, so `requireUser` alone handed a closed channel's or a
+    // DM's roster to anyone with the channel id — including callers with no
+    // membership of the owning workspace at all.
+    await requireChannelAccess(ctx, channelId);
 
     const members = await ctx.db
       .query("channelMembers")

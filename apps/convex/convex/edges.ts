@@ -10,6 +10,44 @@ import { requireWorkspaceMember, requireResourceMember, getUser, checkWorkspaceM
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
+/**
+ * Authorize an edge-sync call against the SOURCE resource, not just the
+ * caller-supplied `workspaceId`.
+ *
+ * `sourceId` is an opaque string and the diff index (`by_source_edgetype`)
+ * has no workspace column, so a handler that only checks `args.workspaceId`
+ * will happily delete every edge belonging to another workspace's document —
+ * and insert forged ones attributed to a resource the caller cannot read,
+ * whose title then surfaces in their backlinks via `enrichEdges`.
+ *
+ * Resolving the source row and requiring membership of ITS workspace closes
+ * both directions. Regression tests: tests/crossWorkspace.access.test.ts.
+ */
+async function requireEdgeSourceAccess(
+  ctx: { db: GenericQueryCtx<DataModel>["db"]; auth: GenericQueryCtx<DataModel>["auth"] },
+  sourceType: "document" | "task",
+  sourceId: string,
+  workspaceId: Id<"workspaces">,
+): Promise<{ userId: Id<"users"> }> {
+  if (sourceType === "document") {
+    const id = ctx.db.normalizeId("documents", sourceId);
+    if (!id) throw new ConvexError("Source document not found");
+    const { userId, resource } = await requireResourceMember(ctx, "documents", id);
+    if (resource.workspaceId !== workspaceId) {
+      throw new ConvexError("Source does not belong to this workspace");
+    }
+    return { userId };
+  }
+
+  const id = ctx.db.normalizeId("tasks", sourceId);
+  if (!id) throw new ConvexError("Source task not found");
+  const { userId, resource } = await requireResourceMember(ctx, "tasks", id);
+  if (resource.workspaceId !== workspaceId) {
+    throw new ConvexError("Source does not belong to this workspace");
+  }
+  return { userId };
+}
+
 /** Resolve a resource ID to its node _id. Returns undefined if no node found. */
 async function getNodeId(
   ctx: GenericQueryCtx<DataModel>,
@@ -190,7 +228,7 @@ export const syncEdges = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { sourceType, sourceId, references, workspaceId }) => {
-    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+    const { userId } = await requireEdgeSourceAccess(ctx, sourceType, sourceId, workspaceId);
 
     const existingEmbeds = await ctx.db
       .query("edges")
@@ -265,7 +303,7 @@ export const syncMentionEdges = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { sourceType, sourceId, mentionedUserIds, mentionedEventIds, workspaceId }) => {
-    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
+    const { userId } = await requireEdgeSourceAccess(ctx, sourceType, sourceId, workspaceId);
 
     const existingMentions = await ctx.db
       .query("edges")

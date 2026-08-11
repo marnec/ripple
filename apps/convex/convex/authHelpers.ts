@@ -312,6 +312,47 @@ export async function requireChannelAccess(
   return { userId, channel, workspaceMembership, channelMembership };
 }
 
+/**
+ * Soft variant of `requireChannelAccess` — returns null instead of throwing,
+ * for queries that should degrade to `[]`/null rather than error. Same rule,
+ * same branching; the only difference is the failure mode.
+ *
+ * Use this rather than hand-rolling a `requireUser` check and reading the
+ * channel's rows anyway — that is the "third access rule" the codebase does
+ * not have.
+ */
+export async function checkChannelAccess(
+  ctx: Ctx,
+  channelId: Id<"channels">,
+): Promise<{
+  userId: Id<"users">;
+  channel: Doc<"channels">;
+  workspaceMembership: Doc<"workspaceMembers">;
+  channelMembership: Doc<"channelMembers"> | null;
+} | null> {
+  const userId = await getUser(ctx);
+  if (!userId) return null;
+
+  const channel = await ctx.db.get(channelId);
+  if (!channel) return null;
+
+  const workspaceMembership = await getWorkspaceMembership(ctx, channel.workspaceId, userId);
+  if (!workspaceMembership) return null;
+
+  let channelMembership: Doc<"channelMembers"> | null = null;
+  if (channel.type !== "open") {
+    channelMembership = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_user", (q) =>
+        q.eq("channelId", channelId).eq("userId", userId),
+      )
+      .first();
+    if (!channelMembership) return null;
+  }
+
+  return { userId, channel, workspaceMembership, channelMembership };
+}
+
 // ─── Creator-only ────────────────────────────────────────────────────
 
 /** Verify the authenticated user is the creator of a resource. Throws on mismatch. */

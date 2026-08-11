@@ -6,12 +6,27 @@ import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { logActivity } from "./auditLog";
 import { requireWorkspaceMember, requireUser, getUser } from "./authHelpers";
+import type { Doc } from "./_generated/dataModel";
+
+/**
+ * An invite is single-use. Every transition out of PENDING is terminal, so
+ * each mutation that consumes one asserts the state first — otherwise the row
+ * outlives its purpose as a replayable credential.
+ */
+function assertPending(invite: Doc<"workspaceInvites">, action: string): void {
+  if (invite.status !== InviteStatus.PENDING) {
+    throw new ConvexError(`This invite has already been ${invite.status} and cannot be ${action}ed`);
+  }
+}
 
 export const create = mutation({
   args: {
     workspaceId: v.id("workspaces"),
     email: v.string(),
   },
+  // Under static codegen a missing validator yields literal `any` on the
+  // client; every other function in this file declares one.
+  returns: v.id("workspaceInvites"),
   handler: async (ctx, { workspaceId, email }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId, { role: WorkspaceRole.ADMIN });
 
@@ -270,11 +285,18 @@ export const accept = mutation({
   args: {
     inviteId: v.id("workspaceInvites"),
   },
+  returns: v.null(),
   handler: async (ctx, { inviteId }) => {
     const userId = await requireUser(ctx);
 
     const invite = await ctx.db.get(inviteId);
     if (!invite) throw new ConvexError("Invite not found");
+
+    // Without this, an ACCEPTED row is a permanent re-entry credential: member
+    // removal (`workspaceMembers.removeMembershipCascade`) never touches the
+    // invites table, so a removed member could simply replay the same
+    // inviteId. `revoke` and `resend` have always guarded on PENDING.
+    assertPending(invite, "accept");
 
     const user = await ctx.db.get(userId);
     if (!user?.email || user.email !== invite.email) {
@@ -322,6 +344,7 @@ export const decline = mutation({
 
     const invite = await ctx.db.get(inviteId);
     if (!invite) throw new ConvexError("Invite not found");
+    assertPending(invite, "decline");
 
     const user = await ctx.db.get(userId);
     if (!user?.email || user.email !== invite.email) {

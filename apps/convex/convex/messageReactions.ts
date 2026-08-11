@@ -1,8 +1,16 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
-import { requireUser } from "./authHelpers";
+import { checkChannelAccess, requireChannelAccess } from "./authHelpers";
 
+/**
+ * A reaction is message data, so it inherits the message's channel rule.
+ * These three functions previously gated on `requireUser` alone and never
+ * loaded the `messages` row: the read side leaked the reacting userIds on any
+ * private message, and the write side let an outsider inject a reaction that
+ * renders for real channel members.
+ */
 export const toggle = mutation({
   args: {
     messageId: v.id("messages"),
@@ -11,7 +19,9 @@ export const toggle = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { messageId, emoji, emojiNative }) => {
-    const userId = await requireUser(ctx);
+    const message = await ctx.db.get(messageId);
+    if (!message) throw new ConvexError("Message not found");
+    const { userId } = await requireChannelAccess(ctx, message.channelId);
 
     // Check if user already reacted with this emoji
     const existing = await ctx.db
@@ -70,19 +80,36 @@ export const listForMessages = query({
   args: { messageIds: v.array(v.id("messages")) },
   returns: v.record(v.string(), v.array(reactionGroupValidator)),
   handler: async (ctx, { messageIds }) => {
-    const userId = await requireUser(ctx);
-
     const results: Record<string, { emoji: string; emojiNative: string; count: number; userIds: string[]; currentUserReacted: boolean }[]> = {};
 
+    // Resolve each message's channel first, then check each DISTINCT channel
+    // once — a batch normally spans a single channel, so this is one access
+    // check regardless of page size. Messages in an unreachable channel are
+    // dropped rather than throwing, so one stale id cannot blank the page.
+    const messages = await Promise.all(messageIds.map((id) => ctx.db.get(id)));
+    const channelIds = [
+      ...new Set(messages.filter((m) => m !== null).map((m) => m.channelId)),
+    ];
+    const accessByChannel = new Map<Id<"channels">, boolean>();
+    let userId: Id<"users"> | null = null;
+    for (const channelId of channelIds) {
+      const access = await checkChannelAccess(ctx, channelId);
+      accessByChannel.set(channelId, access !== null);
+      if (access) userId = access.userId;
+    }
+    if (!userId) return results;
+
+    const currentUserId = userId;
     await Promise.all(
-      messageIds.map(async (messageId) => {
+      messages.map(async (message) => {
+        if (!message || !accessByChannel.get(message.channelId)) return;
         const reactions = await ctx.db
           .query("messageReactions")
-          .withIndex("by_message", (q) => q.eq("messageId", messageId))
+          .withIndex("by_message", (q) => q.eq("messageId", message._id))
           .collect();
-        const grouped = groupReactions(reactions, userId);
+        const grouped = groupReactions(reactions, currentUserId);
         if (grouped.length > 0) {
-          results[messageId] = grouped;
+          results[message._id] = grouped;
         }
       }),
     );
@@ -95,13 +122,16 @@ export const listForMessage = query({
   args: { messageId: v.id("messages") },
   returns: v.array(reactionGroupValidator),
   handler: async (ctx, { messageId }) => {
-    const userId = await requireUser(ctx);
+    const message = await ctx.db.get(messageId);
+    if (!message) return [];
+    const access = await checkChannelAccess(ctx, message.channelId);
+    if (!access) return [];
 
     const reactions = await ctx.db
       .query("messageReactions")
       .withIndex("by_message", (q) => q.eq("messageId", messageId))
       .collect();
 
-    return groupReactions(reactions, userId);
+    return groupReactions(reactions, access.userId);
   },
 });

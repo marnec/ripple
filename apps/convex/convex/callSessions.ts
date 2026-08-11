@@ -4,7 +4,7 @@ import { action, internalQuery, type ActionCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { requireUser } from "./authHelpers";
+import { requireChannelAccess, requireUser } from "./authHelpers";
 import {
   realtimeKitFromEnv,
   type RealtimeKitClient,
@@ -84,6 +84,27 @@ const callSessionValidator = v.object({
   transcriptDocumentId: v.optional(v.id("documents")),
 });
 
+/**
+ * The channel rule, reachable from an action.
+ *
+ * `joinCall` is an action, so it cannot call `requireChannelAccess` directly —
+ * and for a long time it called nothing at all, checking only that the caller
+ * was signed in. That let any authenticated account join any DM or closed
+ * channel call, and (worse) *create* the Cloudflare meeting for a channel it
+ * could not read, since `channels.list` hands every workspace member the ids
+ * of all closed channels and DMs.
+ *
+ * Mirrors the shape `calendarEvents.joinEventCall` already uses.
+ */
+export const assertChannelAccess = internalQuery({
+  args: { channelId: v.id("channels") },
+  returns: v.null(),
+  handler: async (ctx, { channelId }) => {
+    await requireChannelAccess(ctx, channelId);
+    return null;
+  },
+});
+
 export const getActiveSession = internalQuery({
   args: { channelId: v.id("channels") },
   returns: v.union(callSessionValidator, v.null()),
@@ -139,7 +160,11 @@ export const endSession = mutation({
   args: { channelId: v.id("channels") },
   returns: v.null(),
   handler: async (ctx, { channelId }) => {
-    await requireUser(ctx);
+    // `requireUser` alone let any signed-in account terminate any call: the
+    // rows are patched inactive while the Cloudflare meeting keeps running,
+    // so the next joiner mints a second meeting and the original participants
+    // are stranded in the orphan.
+    await requireChannelAccess(ctx, channelId);
 
     const sessions = await ctx.db
       .query("callSessions")
@@ -191,6 +216,11 @@ export const joinCall = action({
   ) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
+
+    // Authorize BEFORE touching Cloudflare — `ensureMeetingForChannel` creates
+    // the meeting when none is active, so an unauthorized caller must not get
+    // that far.
+    await ctx.runQuery(internal.callSessions.assertChannelAccess, { channelId });
 
     const rtk = realtimeKitFromEnv();
 
