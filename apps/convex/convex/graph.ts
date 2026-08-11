@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { checkWorkspaceMember, getUser } from "./authHelpers";
+import { checkWorkspaceMember } from "./authHelpers";
 
 // ── Validators ──────────────────────────────────────────────────────
 
@@ -114,14 +114,19 @@ export const getNodeLabel = query({
   args: { id: v.string(), type: v.string() },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, { id, type }) => {
-    const userId = await getUser(ctx);
-    if (!userId) return null;
-
     const node = await ctx.db
       .query("nodes")
       .withIndex("by_resource", (q) => q.eq("resourceId", id))
       .first();
     if (!node) return null;
+
+    // The workspace rule, off the node's own workspace — this query takes no
+    // workspaceId, so there is nothing else to gate on. `getUser` ("is logged
+    // in") let any account resolve any document, task or channel name in any
+    // workspace from its id alone.
+    const auth = await checkWorkspaceMember(ctx, node.workspaceId);
+    if (!auth) return null;
+
     return type === "channel" ? `#${node.name}` : node.name;
   },
 });

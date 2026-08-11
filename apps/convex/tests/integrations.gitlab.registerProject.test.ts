@@ -148,3 +148,83 @@ describe("integrations/gitlab/registerProjectAction.registerProject", () => {
     expect(links[0].status).toBe("disconnected");
   });
 });
+
+/**
+ * T2's sixth site: both public actions authorize `args.workspaceId` (admin
+ * role) and then spend `args.externalAccountId` — a second caller-supplied id
+ * whose owning workspace was never compared. `getCredentialBundle` resolves it
+ * through `by_externalAccount`, a global index with no workspace column, so
+ * an admin of any workspace could spend another tenant's GitLab OAuth token.
+ *
+ * The correct gate already existed at `install.ts:216`
+ * (`assertWizardInstallation`), which GitHub's wizard actions use; the GitLab
+ * pair called the role-only `assertAdminForOAuth` instead.
+ *
+ * The assertion that matters is that `fetch` is never reached: authorization
+ * has to happen before GitLab is contacted with someone else's credential.
+ */
+describe("registerProjectAction — foreign externalAccountId", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    for (const [k, v] of Object.entries(ENV)) {
+      process.env[k] = v;
+    }
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const k of Object.keys(ENV)) {
+      delete process.env[k];
+    }
+  });
+
+  it("listMyProjects refuses an install belonging to another workspace", async () => {
+    const t = createTestContext();
+    // Victim: a workspace with a connected GitLab account.
+    await seedWorkspaceAndIntegration(t);
+    // Attacker: admin of their own, unconnected workspace.
+    const attacker = await setupWorkspaceWithAdmin(t, "Attacker workspace");
+
+    await expect(
+      attacker.asUser.action(
+        api.integrations.gitlab.registerProjectAction.listMyProjects,
+        {
+          workspaceId: attacker.workspaceId,
+          externalAccountId: "9999",
+        },
+      ),
+    ).rejects.toThrow();
+
+    expect(
+      fetchMock,
+      "GitLab must not be called with another tenant's token",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("registerProject refuses an install belonging to another workspace", async () => {
+    const t = createTestContext();
+    await seedWorkspaceAndIntegration(t);
+    const attacker = await setupWorkspaceWithAdmin(t, "Attacker workspace");
+    const attackerProject = await setupProject(t, {
+      workspaceId: attacker.workspaceId,
+      creatorId: attacker.userId,
+    });
+
+    await expect(
+      attacker.asUser.action(
+        api.integrations.gitlab.registerProjectAction.registerProject,
+        {
+          workspaceId: attacker.workspaceId,
+          projectId: attackerProject,
+          externalAccountId: "9999",
+          gitlabProjectId: 42,
+          pathWithNamespace: "victim/private-repo",
+        },
+      ),
+    ).rejects.toThrow();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

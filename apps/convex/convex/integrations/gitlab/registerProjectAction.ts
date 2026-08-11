@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { action, query } from "../../_generated/server";
-import { api, internal } from "../../_generated/api";
+import { api } from "../../_generated/api";
 import {
   createProjectHook,
   gitlabOAuthFromEnv,
@@ -35,10 +35,17 @@ export const listMyProjects = action({
     }),
   ),
   handler: async (ctx, args) => {
-    await ctx.runQuery(
-      internal.integrations.gitlab.oauthAction.assertAdminForOAuth,
-      { workspaceId: args.workspaceId },
-    );
+    // Admin of `args.workspaceId` AND owner of `args.externalAccountId`. The
+    // role-only `assertAdminForOAuth` used to stand here, which authorized the
+    // container but never compared the install's owning workspace — and
+    // `getCredentialBundle` resolves a credential through `by_externalAccount`,
+    // a global index. Any workspace admin could therefore spend another
+    // tenant's GitLab token. `assertWizardInstallation` is the same gate
+    // GitHub's wizard actions use (install.ts:216).
+    await ctx.runQuery(api.integrations.core.install.assertWizardInstallation, {
+      workspaceId: args.workspaceId,
+      externalAccountId: args.externalAccountId,
+    });
     const cfg = gitlabOAuthFromEnv();
     if (!cfg) {
       throw new ConvexError("GitLab OAuth is not configured");
@@ -90,10 +97,17 @@ export const registerProject = action({
   },
   returns: v.id("projectIntegrationLinks"),
   handler: async (ctx, args) => {
-    await ctx.runQuery(
-      internal.integrations.gitlab.oauthAction.assertAdminForOAuth,
-      { workspaceId: args.workspaceId },
-    );
+    // Admin of `args.workspaceId` AND owner of `args.externalAccountId`. The
+    // role-only `assertAdminForOAuth` used to stand here, which authorized the
+    // container but never compared the install's owning workspace — and
+    // `getCredentialBundle` resolves a credential through `by_externalAccount`,
+    // a global index. Any workspace admin could therefore spend another
+    // tenant's GitLab token. `assertWizardInstallation` is the same gate
+    // GitHub's wizard actions use (install.ts:216).
+    await ctx.runQuery(api.integrations.core.install.assertWizardInstallation, {
+      workspaceId: args.workspaceId,
+      externalAccountId: args.externalAccountId,
+    });
     const cfg = gitlabOAuthFromEnv();
     if (!cfg) {
       throw new ConvexError("GitLab OAuth is not configured");

@@ -178,7 +178,8 @@ export const removeCellRef = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { spreadsheetId, stableRef }) => {
-    await requireUser(ctx);
+    // The workspace rule, matching `ensureCellRef` above.
+    await requireResourceMember(ctx, "spreadsheets", spreadsheetId);
 
     const existing = await ctx.db
       .query("spreadsheetCellRefs")

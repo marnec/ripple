@@ -515,8 +515,11 @@ export const getBacklinks = query({
   },
   returns: v.array(backlinkValidator),
   handler: async (ctx, { targetId, workspaceId }) => {
-    const userId = await getUser(ctx);
-    if (!userId) return [];
+    // The workspace rule. `getUser` is "is logged in", and the backlink rows
+    // carry each source resource's name — so any account could read any
+    // workspace's link graph by naming its id.
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
     return getEnrichedBacklinks(ctx, targetId, workspaceId);
   },
 });
@@ -535,8 +538,9 @@ export const getFrameEmbeds = query({
   },
   returns: v.array(frameEmbedValidator),
   handler: async (ctx, { diagramId, workspaceId }) => {
-    const userId = await getUser(ctx);
-    if (!userId) return [];
+    // Same rule as `getBacklinks` above.
+    const auth = await checkWorkspaceMember(ctx, workspaceId);
+    if (!auth) return [];
 
     const allEdges = await ctx.db
       .query("edges")

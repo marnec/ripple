@@ -888,3 +888,168 @@ describe("unauthenticated public surface", () => {
     ).toBe(false);
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════
+   Shape 2 (continued) — the four T1 endpoints the first pass missed
+   ══════════════════════════════════════════════════════════════════════ */
+
+describe("edges.getBacklinks / getFrameEmbeds — any workspace's link graph", () => {
+  it("getBacklinks refuses a workspaceId the caller is not a member of", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+
+    const { documentB, diagramB } = await t.run(async (ctx) => {
+      const documentB = await ctx.db.insert("documents", {
+        workspaceId: bob.workspaceId,
+        name: "Project Bluebird",
+      });
+      const diagramB = await ctx.db.insert("diagrams", {
+        workspaceId: bob.workspaceId,
+        name: "Bluebird architecture",
+      });
+      await ctx.db.insert("edges", {
+        sourceType: "document",
+        sourceId: documentB,
+        targetType: "diagram",
+        targetId: diagramB,
+        edgeType: "embeds",
+        workspaceId: bob.workspaceId,
+        createdAt: 0,
+      });
+      return { documentB, diagramB };
+    });
+
+    // convex/edges.ts:511 — gates on `getUser`, then reads args.workspaceId.
+    // The backlink rows carry the source resource's *name*, so this is a
+    // title leak of exactly the kind breadcrumb.getResourceNames was fixed for.
+    const backlinks = await alice.asUser
+      .query(api.edges.getBacklinks, {
+        targetId: diagramB,
+        workspaceId: bob.workspaceId,
+      })
+      .catch(() => []);
+
+    expect(backlinks, "a foreign workspace's link graph must not resolve").toEqual([]);
+    expect(JSON.stringify(backlinks)).not.toContain("Bluebird");
+    expect(JSON.stringify(backlinks)).not.toContain(documentB);
+  });
+
+  it("getFrameEmbeds refuses a workspaceId the caller is not a member of", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+
+    const diagramB = await t.run(async (ctx) => {
+      const documentB = await ctx.db.insert("documents", {
+        workspaceId: bob.workspaceId,
+        name: "Secret doc",
+      });
+      const diagramB = await ctx.db.insert("diagrams", {
+        workspaceId: bob.workspaceId,
+        name: "Secret diagram",
+      });
+      await ctx.db.insert("edges", {
+        sourceType: "document",
+        sourceId: documentB,
+        targetType: "diagram",
+        targetId: diagramB,
+        edgeType: "embeds",
+        workspaceId: bob.workspaceId,
+        frameId: "frame-1",
+        createdAt: 0,
+      });
+      return diagramB;
+    });
+
+    // convex/edges.ts:531 — same gate, same leak.
+    const embeds = await alice.asUser
+      .query(api.edges.getFrameEmbeds, {
+        diagramId: diagramB,
+        workspaceId: bob.workspaceId,
+      })
+      .catch(() => []);
+
+    expect(embeds).toEqual([]);
+  });
+});
+
+describe("documentBlockRefs / spreadsheetCellRefs — cross-workspace deletes", () => {
+  it("removeBlockRef refuses a document owned by another workspace", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+
+    const documentB = await t.run(async (ctx) =>
+      ctx.db.insert("documents", { workspaceId: bob.workspaceId, name: "B doc" }),
+    );
+    const refId = await t.run(async (ctx) =>
+      ctx.db.insert("documentBlockRefs", {
+        documentId: documentB,
+        blockId: "block-1",
+        blockType: "paragraph",
+        textContent: "tracked",
+        updatedAt: 0,
+      }),
+    );
+
+    // convex/documentBlockRefs.ts:108 — `requireUser` only, then patches
+    // straight off args.documentId.
+    await alice.asUser
+      .mutation(api.documentBlockRefs.removeBlockRef, {
+        documentId: documentB,
+        blockId: "block-1",
+      })
+      .catch(() => null);
+
+    const survivor = await t.run(async (ctx) => ctx.db.get(refId));
+    expect(survivor, "another workspace's block ref must survive").not.toBeNull();
+  });
+
+  it("removeCellRef refuses a spreadsheet owned by another workspace", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+
+    const spreadsheetB = await t.run(async (ctx) =>
+      ctx.db.insert("spreadsheets", { workspaceId: bob.workspaceId, name: "B sheet" }),
+    );
+    const refId = await t.run(async (ctx) =>
+      ctx.db.insert("spreadsheetCellRefs", {
+        spreadsheetId: spreadsheetB,
+        cellRef: "A1",
+        stableRef: "{\"row\":0,\"col\":0}",
+        values: "[[\"42\"]]",
+        updatedAt: 0,
+      }),
+    );
+
+    // convex/spreadsheetCellRefs.ts:174 — same shape.
+    await alice.asUser
+      .mutation(api.spreadsheetCellRefs.removeCellRef, {
+        spreadsheetId: spreadsheetB,
+        stableRef: "{\"row\":0,\"col\":0}",
+      })
+      .catch(() => null);
+
+    const survivor = await t.run(async (ctx) => ctx.db.get(refId));
+    expect(survivor, "another workspace's cell ref must survive").not.toBeNull();
+  });
+});
+
+describe("graph.getNodeLabel — any node's name by id", () => {
+  it("refuses to resolve a node in another workspace", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+
+    // Real document → the dbTriggers node row the query reads.
+    const documentB = await bob.asUser.mutation(api.documents.create, {
+      workspaceId: bob.workspaceId,
+      name: "Project Bluebird",
+    });
+
+    // convex/graph.ts:113 — `getUser` only, and the query takes no
+    // workspaceId at all, so the owning workspace comes from the node row.
+    const label = await alice.asUser
+      .query(api.graph.getNodeLabel, { id: documentB, type: "document" })
+      .catch(() => null);
+
+    expect(label, "a foreign node's name must not resolve").toBeNull();
+  });
+});

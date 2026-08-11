@@ -112,7 +112,10 @@ export const removeBlockRef = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { documentId, blockId }) => {
-    await requireUser(ctx);
+    // The workspace rule, same as `ensureBlockRef` 50 lines up — `requireUser`
+    // is "is logged in", which let any account delete tracking rows under any
+    // workspace's document.
+    await requireResourceMember(ctx, "documents", documentId);
 
     const ref = await ctx.db
       .query("documentBlockRefs")
