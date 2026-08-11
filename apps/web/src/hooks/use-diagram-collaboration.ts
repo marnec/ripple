@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-import { IndexeddbPersistence } from "y-indexeddb";
+import { useEffect, useRef } from "react";
 import type { ExcalidrawBinding } from "y-excalidraw";
 import type * as Y from "yjs";
+import type { Awareness } from "y-protocols/awareness";
 import { getUserColor } from "../lib/user-colors";
-import { useYjsProvider } from "./use-yjs-provider";
+import { useResourceDoc } from "./use-collab-session";
+import type { CollaborativeDoc } from "./use-collaborative-doc";
 
 export interface UseDiagramCollaborationOptions {
   diagramId: string;
@@ -13,78 +14,45 @@ export interface UseDiagramCollaborationOptions {
 
 export interface UseDiagramCollaborationResult {
   yDoc: Y.Doc;
-  provider: ReturnType<typeof useYjsProvider>["provider"];
+  provider: CollaborativeDoc["provider"];
   isConnected: boolean;
   isOffline: boolean;
   isLoading: boolean;
   yElements: Y.Array<Y.Map<any>>;
   yAssets: Y.Map<any>;
-  awareness: ReturnType<typeof useYjsProvider>["provider"] extends null
-    ? null
-    : NonNullable<ReturnType<typeof useYjsProvider>["provider"]>["awareness"] | null;
+  awareness: Awareness;
   bindingRef: React.MutableRefObject<ExcalidrawBinding | null>;
 }
 
 /**
- * Hook to manage Excalidraw diagram collaboration with Yjs.
+ * Binds a diagram's collaborative document to Excalidraw's shape.
  *
- * Provides:
- * - Yjs document and PartyKit provider
- * - IndexedDB persistence for offline editing
- * - Awareness API for cursor tracking
- * - yElements and yAssets for y-excalidraw binding
+ * The document, the provider, offline persistence and teardown all belong to
+ * `useResourceDoc`; what's left here is the Yjs structures y-excalidraw expects
+ * and this user's cursor identity.
  *
- * Note: ExcalidrawBinding creation is handled in the component
- * (requires excalidrawAPI which is only available after mount).
+ * `ExcalidrawBinding` itself is created in the component — it needs the
+ * `excalidrawAPI`, which only exists after mount.
  */
 export function useDiagramCollaboration({
   diagramId,
   userName,
   userId,
 }: UseDiagramCollaborationOptions): UseDiagramCollaborationResult {
-  const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline } = useResourceDoc({
     resourceType: "diagram",
     resourceId: diagramId,
   });
 
-  const [indexedDbSynced, setIndexedDbSynced] = useState(false);
   const bindingRef = useRef<ExcalidrawBinding | null>(null);
 
-  // Create stable Yjs structures for Excalidraw elements and assets
   const yElements = yDoc.getArray<Y.Map<any>>("elements");
   const yAssets = yDoc.getMap("assets");
 
-  // Set up IndexedDB persistence for offline cache
-  // CRITICAL: Decouple from provider - IndexedDB initializes independently
-  useEffect(() => {
-    const persistence = new IndexeddbPersistence(`diagram-${diagramId}`, yDoc);
-
-    persistence.on("synced", () => {
-      setIndexedDbSynced(true);
-    });
-
-    // Cleanup on unmount or when diagramId changes
-    return () => {
-      void persistence.destroy();
-      setIndexedDbSynced(false);
-    };
-  }, [diagramId, yDoc]);
-
-  // Get deterministic user color
   const userColor = getUserColor(userId);
-
-  // Set awareness user info
   useEffect(() => {
-    if (!provider) return;
-
-    provider.awareness.setLocalStateField("user", {
-      name: userName,
-      color: userColor,
-    });
-  }, [provider, userName, userColor]);
-
-  // Loading completes when EITHER provider syncs OR IndexedDB syncs
-  const isLoading = providerLoading && !indexedDbSynced;
+    awareness.setLocalStateField("user", { name: userName, color: userColor });
+  }, [awareness, userName, userColor]);
 
   return {
     yDoc,
@@ -94,7 +62,7 @@ export function useDiagramCollaboration({
     isLoading,
     yElements,
     yAssets,
-    awareness: provider ? provider.awareness : null,
+    awareness,
     bindingRef,
   };
 }

@@ -12,6 +12,7 @@ import { useFormulaPicker } from "@/hooks/use-formula-picker";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useJSpreadsheetInstance } from "@/hooks/use-jspreadsheet-instance";
 import { useSpreadsheetCollaboration } from "@/hooks/use-spreadsheet-collaboration";
+import { useSnapshotHydration } from "@/hooks/use-snapshot-fallback";
 import { useSpreadsheetContextMenu } from "@/hooks/use-spreadsheet-context-menu";
 import { useRecordVisit } from "@/hooks/use-record-visit";
 import { tagsOptimisticUpdate } from "@/lib/tag-optimistic";
@@ -288,6 +289,17 @@ function SpreadsheetEditor({
     spreadsheetId: spreadsheetId,
     userName: viewer?.name ?? "Anonymous",
     userId: viewer?._id ?? "unknown",
+  });
+
+  // Cold start: offline on a device with no cached copy. The stored snapshot
+  // is merged straight into the live doc, so the grid below renders it exactly
+  // as it renders synced content.
+  useSnapshotHydration({
+    isOffline,
+    hasContent: !collabLoading,
+    resourceType: "spreadsheet",
+    resourceId: spreadsheetId,
+    yDoc,
   });
 
   const { remoteUsers } = useCursorAwareness(awareness);

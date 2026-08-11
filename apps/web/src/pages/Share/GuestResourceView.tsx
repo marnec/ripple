@@ -85,7 +85,6 @@ export function GuestResourceView() {
             shareId={shareId}
             guestSub={session.guestSub}
             guestName={session.guestName}
-            resourceId={info.resourceId}
             accessLevel={info.accessLevel}
           />
         )}
@@ -94,7 +93,6 @@ export function GuestResourceView() {
             shareId={shareId}
             guestSub={session.guestSub}
             guestName={session.guestName}
-            resourceId={info.resourceId}
             accessLevel={info.accessLevel}
           />
         )}
@@ -103,7 +101,6 @@ export function GuestResourceView() {
             shareId={shareId}
             guestSub={session.guestSub}
             guestName={session.guestName}
-            resourceId={info.resourceId}
             accessLevel={info.accessLevel}
           />
         )}

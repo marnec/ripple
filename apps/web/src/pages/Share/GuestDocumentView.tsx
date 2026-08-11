@@ -4,18 +4,16 @@ import { withCollaboration } from "@blocknote/core/yjs";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useTheme } from "next-themes";
-import { Awareness } from "y-protocols/awareness";
 import { documentSchema } from "@/pages/App/Document/schema";
-import { useGuestYjsProvider } from "@/hooks/use-guest-yjs-provider";
+import { useGuestDoc } from "@/hooks/use-collab-session";
+import { DOCUMENT_FRAGMENT } from "@/lib/collab/room";
 import { getUserColor } from "@/lib/user-colors";
 import type { ShareAccessLevel } from "@ripple/shared/shareTypes";
-import { useMemo } from "react";
 
 interface GuestDocumentViewProps {
   shareId: string;
   guestSub: string;
   guestName: string;
-  resourceId: string;
   accessLevel: ShareAccessLevel;
 }
 
@@ -23,36 +21,31 @@ export function GuestDocumentView({
   shareId,
   guestSub,
   guestName,
-  resourceId,
   accessLevel,
 }: GuestDocumentViewProps) {
   const { resolvedTheme } = useTheme();
   const editable = accessLevel === "edit";
 
-  const { yDoc, provider } = useGuestYjsProvider({
+  const { yDoc, provider, awareness } = useGuestDoc({
     shareId,
     guestSub,
     guestName,
     resourceType: "document",
-    resourceId,
   });
-
-  // Local awareness so the editor can bind before the provider connects
-  const localAwareness = useMemo(() => new Awareness(yDoc), [yDoc]);
 
   const editor = useCreateBlockNote(
     withCollaboration({
       schema: documentSchema,
       collaboration: {
-        provider: provider ?? { awareness: localAwareness },
-        fragment: yDoc.getXmlFragment("document-store"),
+        provider: provider ?? { awareness },
+        fragment: yDoc.getXmlFragment(DOCUMENT_FRAGMENT),
         user: {
           name: guestName,
           color: getUserColor(guestSub),
         },
       },
     }),
-    [provider, localAwareness, guestName, guestSub],
+    [provider, awareness, guestName, guestSub],
   );
 
   return (

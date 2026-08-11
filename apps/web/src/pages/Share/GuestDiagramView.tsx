@@ -1,5 +1,5 @@
 import { ExcalidrawEditor } from "@/pages/App/Diagram/ExcalidrawEditor";
-import { useGuestYjsProvider } from "@/hooks/use-guest-yjs-provider";
+import { useGuestDoc } from "@/hooks/use-collab-session";
 import { getUserColor } from "@/lib/user-colors";
 import { useEffect } from "react";
 import type { ShareAccessLevel } from "@ripple/shared/shareTypes";
@@ -10,7 +10,6 @@ interface GuestDiagramViewProps {
   shareId: string;
   guestSub: string;
   guestName: string;
-  resourceId: string;
   accessLevel: ShareAccessLevel;
 }
 
@@ -18,27 +17,24 @@ export function GuestDiagramView({
   shareId,
   guestSub,
   guestName,
-  resourceId,
   accessLevel,
 }: GuestDiagramViewProps) {
-  const { yDoc, provider } = useGuestYjsProvider({
+  const { yDoc, provider, awareness } = useGuestDoc({
     shareId,
     guestSub,
     guestName,
     resourceType: "diagram",
-    resourceId,
   });
 
   const yElements = yDoc.getArray<Y.Map<any>>("elements");
   const yAssets = yDoc.getMap("assets");
 
   useEffect(() => {
-    if (!provider) return;
-    provider.awareness.setLocalStateField("user", {
+    awareness.setLocalStateField("user", {
       name: guestName,
       color: getUserColor(guestSub),
     });
-  }, [provider, guestName, guestSub]);
+  }, [awareness, guestName, guestSub]);
 
   return (
     <div className="h-full w-full">

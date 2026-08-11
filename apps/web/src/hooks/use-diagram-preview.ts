@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useTheme } from "next-themes";
 import { IndexeddbPersistence } from "y-indexeddb";
+import { collabRoom } from "@/lib/collab/room";
 import { yjsToExcalidraw } from "y-excalidraw";
 import { exportToSvg } from "@excalidraw/excalidraw";
 import * as Y from "yjs";
@@ -191,7 +192,7 @@ export function useDiagramPreview(
     };
 
     // 1. Set up IndexedDB persistence (instant cached data)
-    const persistence = new IndexeddbPersistence(`diagram-${diagramId}`, yDoc);
+    const persistence = new IndexeddbPersistence(collabRoom("diagram", diagramId).persistenceKey, yDoc);
 
     persistence.on("synced", () => {
       if (cancelled) return;

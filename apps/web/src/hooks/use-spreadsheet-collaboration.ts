@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { IndexeddbPersistence } from "y-indexeddb";
+import { useEffect } from "react";
+import type { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 import { getUserColor } from "../lib/user-colors";
-import { useYjsProvider } from "./use-yjs-provider";
+import { useResourceDoc } from "./use-collab-session";
+import type { CollaborativeDoc } from "./use-collaborative-doc";
 
 export interface UseSpreadsheetCollaborationOptions {
   spreadsheetId: string;
@@ -12,82 +13,34 @@ export interface UseSpreadsheetCollaborationOptions {
 
 export interface UseSpreadsheetCollaborationResult {
   yDoc: Y.Doc;
-  provider: ReturnType<typeof useYjsProvider>["provider"];
-  awareness: NonNullable<ReturnType<typeof useYjsProvider>["provider"]>["awareness"] | null;
+  provider: CollaborativeDoc["provider"];
+  awareness: Awareness;
   isConnected: boolean;
   isOffline: boolean;
   isLoading: boolean;
 }
 
 /**
- * Hook to manage spreadsheet collaboration with Yjs.
+ * Binds a spreadsheet's collaborative document to this user's cursor identity.
  *
- * Provides:
- * - Yjs document and PartyKit provider
- * - IndexedDB persistence for offline editing
- * - Awareness API for cursor tracking
- *
- * The SpreadsheetYjsBinding class (created in the component)
- * handles the two-way sync between jspreadsheet-ce and the Yjs document.
+ * `SpreadsheetYjsBinding` (created in the component) does the two-way sync
+ * between jspreadsheet-ce and the Yjs document; everything about *getting* a
+ * synced document belongs to `useResourceDoc`.
  */
 export function useSpreadsheetCollaboration({
   spreadsheetId,
   userName,
   userId,
 }: UseSpreadsheetCollaborationOptions): UseSpreadsheetCollaborationResult {
-  const {
-    yDoc,
-    provider,
-    isConnected,
-    isLoading: providerLoading,
-    isOffline,
-  } = useYjsProvider({
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline } = useResourceDoc({
     resourceType: "spreadsheet",
     resourceId: spreadsheetId,
   });
 
-  const [indexedDbSynced, setIndexedDbSynced] = useState(false);
-
-  // Set up IndexedDB persistence for offline cache
-  // CRITICAL: Decouple from provider - IndexedDB initializes independently
-  useEffect(() => {
-    const persistence = new IndexeddbPersistence(
-      `spreadsheet-${spreadsheetId}`,
-      yDoc,
-    );
-
-    persistence.on("synced", () => {
-      setIndexedDbSynced(true);
-    });
-
-    return () => {
-      void persistence.destroy();
-      setIndexedDbSynced(false);
-    };
-  }, [spreadsheetId, yDoc]);
-
-  // Get deterministic user color
   const userColor = getUserColor(userId);
-
-  // Set awareness user info
   useEffect(() => {
-    if (!provider) return;
+    awareness.setLocalStateField("user", { name: userName, color: userColor });
+  }, [awareness, userName, userColor]);
 
-    provider.awareness.setLocalStateField("user", {
-      name: userName,
-      color: userColor,
-    });
-  }, [provider, userName, userColor]);
-
-  // Loading completes when EITHER provider syncs OR IndexedDB syncs
-  const isLoading = providerLoading && !indexedDbSynced;
-
-  return {
-    yDoc,
-    provider,
-    awareness: provider ? provider.awareness : null,
-    isConnected,
-    isOffline,
-    isLoading,
-  };
+  return { yDoc, provider, awareness, isConnected, isOffline, isLoading };
 }

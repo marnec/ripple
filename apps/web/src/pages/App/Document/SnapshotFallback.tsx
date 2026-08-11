@@ -5,6 +5,7 @@ import { Awareness } from "y-protocols/awareness";
 import type * as Y from "yjs";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { documentSchema } from "./schema";
+import { DOCUMENT_FRAGMENT } from "@/lib/collab/room";
 
 /** Read-only offline fallback for cold-start scenarios (no editor, no IndexedDB). */
 export function SnapshotFallback({
@@ -16,7 +17,7 @@ export function SnapshotFallback({
   documentName: string | undefined;
   resolvedTheme: string | undefined;
 }) {
-  const fragment = snapshotDoc.getXmlFragment("document-store");
+  const fragment = snapshotDoc.getXmlFragment(DOCUMENT_FRAGMENT);
   const fakeProvider = { awareness: new Awareness(snapshotDoc) };
 
   const snapshotEditor = useCreateBlockNote(

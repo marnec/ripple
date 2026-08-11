@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache";
 import { IndexeddbPersistence } from "y-indexeddb";
+import { collabRoom } from "@/lib/collab/room";
 import { yjsToExcalidraw } from "y-excalidraw";
 import * as Y from "yjs";
 import { api } from "@convex/_generated/api";
@@ -50,7 +51,7 @@ export function useDiagramScene(
       setIsLoading(false);
     };
 
-    const persistence = new IndexeddbPersistence(`diagram-${diagramId}`, yDoc);
+    const persistence = new IndexeddbPersistence(collabRoom("diagram", diagramId).persistenceKey, yDoc);
     persistence.on("synced", read);
 
     const yElements = yDoc.getArray<Y.Map<any>>("elements");

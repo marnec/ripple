@@ -4,16 +4,16 @@ import { en } from "@blocknote/core/locales";
 import { withCollaboration, YjsThreadStore } from "@blocknote/core/yjs";
 import { useCreateBlockNote } from "@blocknote/react";
 import { useConvex } from "convex/react";
-import { useEffect, useMemo, useState } from "react";
-import { Awareness } from "y-protocols/awareness";
-import { IndexeddbPersistence } from "y-indexeddb";
+import { useEffect, useMemo } from "react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { extractTextFromXml } from "@ripple/shared/blockRef";
 import { getUserColor } from "../lib/user-colors";
+import { DOCUMENT_FRAGMENT } from "../lib/collab/room";
 import { documentCommentSchema } from "../pages/App/Document/comment-schema";
 import { useDescriptionSeedGate, type DescriptionSeed } from "./use-description-seed-gate";
-import { useYjsProvider } from "./use-yjs-provider";
+import { useResourceDoc } from "./use-collab-session";
+import type { CollaborativeDoc } from "./use-collaborative-doc";
 
 export type { DescriptionSeed } from "./use-description-seed-gate";
 
@@ -56,8 +56,8 @@ export interface UseDocumentCollaborationResult<
   isLoading: boolean;
   isConnected: boolean;
   isOffline: boolean;
-  provider: ReturnType<typeof useYjsProvider>["provider"];
-  yDoc: ReturnType<typeof useYjsProvider>["yDoc"];
+  provider: CollaborativeDoc["provider"];
+  yDoc: CollaborativeDoc["yDoc"];
   /**
    * False only while a task editor is intentionally held back waiting for a
    * GitHub description seed to load. `true` for all other cases (no seed
@@ -89,59 +89,25 @@ export function useDocumentCollaboration<
   seed,
   enableComments = false,
 }: UseDocumentCollaborationOptions<BSchema, ISchema, SSchema>): UseDocumentCollaborationResult<BSchema, ISchema, SSchema> {
-  const { yDoc, provider, isConnected, isLoading: providerLoading, isOffline } = useYjsProvider({
-    resourceType,
-    resourceId: documentId,
-    enabled,
-  });
+  const { yDoc, provider, awareness, isConnected, isLoading, isOffline, isCacheLoaded } =
+    useResourceDoc({ resourceType, resourceId: documentId, enabled });
 
-  const [indexedDbSynced, setIndexedDbSynced] = useState(false);
-  // True when IndexedDB loaded AND the Yjs fragment has cached blocks (any
-  // block count). Used to show the editor from cache without waiting for the
-  // provider — valid for docs/diagrams whose content may be non-text.
-  const [cachedContentReady, setCachedContentReady] = useState(false);
+  // Derived, not stored: `isCacheLoaded` only flips once per document, and
+  // reading the fragment is what "did the cache have anything" means.
+  const cachedFragment = isCacheLoaded ? yDoc.getXmlFragment(DOCUMENT_FRAGMENT) : null;
+  // True when the cache replayed AND the fragment holds cached blocks (any
+  // count). Shows the editor from cache without waiting for the provider —
+  // valid for docs/diagrams whose content may be non-text.
+  const cachedContentReady = cachedFragment !== null && cachedFragment.length > 0;
   // Like above but requires actual TEXT. The seed gate must use this: BlockNote
   // seeds an empty doc with a blank paragraph (block count 1, no text), so the
   // plain count would falsely report "cached content" and unblock the editor
   // before the GitHub seed lands.
-  const [cachedTextReady, setCachedTextReady] = useState(false);
-
-  // Set up IndexedDB persistence for offline cache
-  // CRITICAL: Decouple from provider - IndexedDB initializes independently
-  useEffect(() => {
-    if (!enabled || !documentId) {
-      return;
-    }
-
-    const persistence = new IndexeddbPersistence(`${resourceType}-${documentId}`, yDoc);
-
-    persistence.on("synced", () => {
-      setIndexedDbSynced(true);
-      const fragment = yDoc.getXmlFragment("document-store");
-      if (fragment.length > 0) {
-        setCachedContentReady(true);
-      }
-      if (extractTextFromXml(fragment).trim().length > 0) {
-        setCachedTextReady(true);
-      }
-    });
-
-    // Cleanup on unmount or when documentId changes
-    return () => {
-      void persistence.destroy();
-      setIndexedDbSynced(false);
-      setCachedContentReady(false);
-      setCachedTextReady(false);
-    };
-  }, [documentId, resourceType, yDoc, enabled]);
+  const cachedTextReady =
+    cachedFragment !== null && extractTextFromXml(cachedFragment).trim().length > 0;
 
   // Get deterministic user color
   const userColor = getUserColor(userId);
-
-  // Local awareness fallback: allows the editor to bind to the Yjs fragment
-  // immediately (before the PartyKit provider connects). When IndexedDB syncs,
-  // content appears in the editor right away instead of showing an empty state.
-  const localAwareness = useMemo(() => new Awareness(yDoc), [yDoc]);
 
   const convex = useConvex();
 
@@ -194,15 +160,18 @@ export function useDocumentCollaboration<
       dictionary,
       extensions: commentsExtension ? [commentsExtension] : undefined,
       collaboration: {
-        provider: provider ?? { awareness: localAwareness },
-        fragment: yDoc.getXmlFragment("document-store"),
+        // `awareness` is the provider's once connected, and a local one before
+        // that — so the editor binds to the fragment at mount and cached
+        // content appears without waiting for a socket.
+        provider: provider ?? { awareness },
+        fragment: yDoc.getXmlFragment(DOCUMENT_FRAGMENT),
         user: {
           name: userName,
           color: userColor,
         },
       },
     }),
-    [provider, localAwareness, userName, userColor, schema, uploadFile, dictionary, commentsExtension]
+    [provider, awareness, userName, userColor, schema, uploadFile, dictionary, commentsExtension]
   );
 
   // Workaround for BlockNote #2244 / y-prosemirror #102: when ProseMirror
@@ -246,9 +215,6 @@ export function useDocumentCollaboration<
     hasCachedText: cachedTextReady,
     seed,
   });
-
-  // Loading completes when EITHER provider syncs OR IndexedDB syncs
-  const isLoading = providerLoading && !indexedDbSynced;
 
   return {
     // Gate editor on content readiness to prevent empty-editor flash:

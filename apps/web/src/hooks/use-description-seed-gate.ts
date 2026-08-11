@@ -4,6 +4,7 @@ import { useConvex } from "convex/react";
 import { extractTextFromXml } from "@ripple/shared/blockRef";
 import { api } from "@convex/_generated/api";
 import { SEED_ORIGIN } from "../lib/yjs-origins";
+import { DOCUMENT_FRAGMENT } from "@/lib/collab/room";
 
 /**
  * Task-only signals describing whether a GitHub description seed is pending.
@@ -128,7 +129,7 @@ export function useDescriptionSeedGate({
     void (async () => {
       try {
         const hasContent = () =>
-          extractTextFromXml(yDoc.getXmlFragment("document-store")).trim().length > 0;
+          extractTextFromXml(yDoc.getXmlFragment(DOCUMENT_FRAGMENT)).trim().length > 0;
         // onLoad may have already delivered content via the provider; only
         // fetch+apply when the live doc is still empty.
         if (!hasContent()) {
