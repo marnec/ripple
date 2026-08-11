@@ -25,6 +25,30 @@ import {
 } from "./integrations/core/outboundDispatch";
 
 /**
+ * Does this task have an inbound `blocks` edge?
+ *
+ * Five call sites hand-rolled this as a `by_target` collect plus a JS
+ * `.some(e => e.edgeType === "blocks")`, which reads *every* inbound edge of
+ * the task. That is unbounded in practice: `insertChannelMentionEdge`
+ * (dbTriggers.ts) writes a fresh `mentions` edge per message per referenced
+ * task with no existence check, so a much-discussed task accumulates thousands
+ * of inbound edges that every board render then scanned. `by_target_edgetype`
+ * answers it in 0-1 rows.
+ */
+export async function hasBlockingEdge(
+  ctx: QueryCtx,
+  taskId: Id<"tasks">,
+): Promise<boolean> {
+  const blocker = await ctx.db
+    .query("edges")
+    .withIndex("by_target_edgetype", (q) =>
+      q.eq("targetId", taskId).eq("edgeType", "blocks"),
+    )
+    .first();
+  return blocker !== null;
+}
+
+/**
  * Triage is reserved for externally-ingested issues — only the internal
  * sync paths in `core/syncIn` may place a task there. Every user-facing
  * mutation that writes `statusId` runs this guard.
@@ -189,19 +213,17 @@ export const create = mutation({
     // Calculate position if not provided
     let position = args.position;
     if (!position) {
-      // Find the last task in this project+status by position
-      const tasksInStatus = await ctx.db
+      // `position` is the third key of by_project_status_position, so the
+      // column's maximum is the index's last row — no need to collect the
+      // column and reduce. Fractional-index keys sort lexicographically,
+      // which is exactly the index order.
+      const lastTask = await ctx.db
         .query("tasks")
         .withIndex("by_project_status_position", (q) =>
           q.eq("projectId", args.projectId).eq("statusId", statusId)
         )
-        .collect();
-
-      const lastTask = tasksInStatus.length > 0
-        ? tasksInStatus.reduce((max, task) =>
-            (task.position ?? '') > (max.position ?? '') ? task : max
-          )
-        : null;
+        .order("desc")
+        .first();
 
       position = generateKeyBetween(lastTask?.position ?? null, null);
     }
@@ -289,12 +311,7 @@ export const get = query({
     const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
     const project = await ctx.db.get(task.projectId);
 
-    // Check if this task has any blockers (incoming "blocks" edges)
-    const blockerEdges = await ctx.db
-      .query("edges")
-      .withIndex("by_target", (q) => q.eq("targetId", taskId))
-      .collect();
-    const hasBlockers = blockerEdges.some((e) => e.edgeType === "blocks");
+    const hasBlockers = await hasBlockingEdge(ctx, taskId);
 
     return {
       ...task,
@@ -626,23 +643,17 @@ async function enrichTasks(
   const statusMap = new Map(statusIds.map((id, i) => [id, statuses[i]]));
   const assigneeMap = new Map(assigneeIds.map((id, i) => [id, assignees[i]]));
 
-  // Blocker presence stays one indexed `by_target` read per task (the index
-  // can't be range-batched across many target ids), but each returns only this
-  // task's inbound edges and they run concurrently.
+  // Blocker presence is one indexed read per task (the index can't be
+  // range-batched across many target ids), but it returns 0-1 rows and they
+  // run concurrently.
   return Promise.all(
-    tasks.map(async (task) => {
-      const blockerEdges = await ctx.db
-        .query("edges")
-        .withIndex("by_target", (q) => q.eq("targetId", task._id))
-        .collect();
-      return {
-        ...task,
-        status: statusMap.get(task.statusId) ?? null,
-        assignee: task.assigneeId ? assigneeMap.get(task.assigneeId) ?? null : null,
-        projectKey,
-        hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
-      };
-    }),
+    tasks.map(async (task) => ({
+      ...task,
+      status: statusMap.get(task.statusId) ?? null,
+      assignee: task.assigneeId ? assigneeMap.get(task.assigneeId) ?? null : null,
+      projectKey,
+      hasBlockers: await hasBlockingEdge(ctx, task._id),
+    })),
   );
 }
 
@@ -797,35 +808,38 @@ export const listByAssignee = query({
         );
       }
     } else {
-      const tasks = await ctx.db
+      workspaceTasks = await ctx.db
         .query("tasks")
-        .withIndex("by_assignee_completed", (q) =>
-          q.eq("assigneeId", userId).eq("completed", completed)
+        .withIndex("by_workspace_assignee_completed", (q) =>
+          q.eq("workspaceId", workspaceId).eq("assigneeId", userId).eq("completed", completed)
         )
         .collect();
-
-      // Filter to only tasks in the specified workspace
-      workspaceTasks = tasks.filter((task) => task.workspaceId === workspaceId);
     }
 
-    // Enrich with status, assignee, and project data
-    const enrichedTasks = await Promise.all(
-      workspaceTasks.map(async (task) => {
-        const status = await ctx.db.get(task.statusId);
-        const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        const project = await ctx.db.get(task.projectId);
+    // Deduped enrichment. Both branches select on `assigneeId = userId`, so
+    // the assignee is the caller for every row — one read, not one per task.
+    // (`enrichTasks` isn't reused here: it takes a single `projectKey` for a
+    // one-project page, and this view spans every project in the workspace.)
+    const statusIds = [...new Set(workspaceTasks.map((t) => t.statusId))];
+    const projectIds = [...new Set(workspaceTasks.map((t) => t.projectId))];
+    const [statuses, projects, assignee] = await Promise.all([
+      getAll(ctx.db, statusIds),
+      getAll(ctx.db, projectIds),
+      workspaceTasks.length > 0 ? ctx.db.get(userId) : Promise.resolve(null),
+    ]);
+    const statusMap = new Map(statusIds.map((id, i) => [id, statuses[i]]));
+    const projectMap = new Map(projectIds.map((id, i) => [id, projects[i]]));
 
-        return {
-          ...task,
-          status,
-          assignee,
-          project,
-          projectKey: project?.key,
-        };
-      })
-    );
-
-    return enrichedTasks;
+    return workspaceTasks.map((task) => {
+      const project = projectMap.get(task.projectId) ?? null;
+      return {
+        ...task,
+        status: statusMap.get(task.statusId) ?? null,
+        assignee: task.assigneeId ? assignee : null,
+        project,
+        projectKey: project?.key,
+      };
+    });
   },
 });
 
@@ -1168,16 +1182,12 @@ export const listUnscheduled = query({
       unscheduled.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
         const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        const blockerEdges = await ctx.db
-          .query("edges")
-          .withIndex("by_target", (q) => q.eq("targetId", task._id))
-          .collect();
         return {
           ...task,
           status,
           assignee,
           projectKey: project.key,
-          hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
+          hasBlockers: await hasBlockingEdge(ctx, task._id),
         };
       })
     );

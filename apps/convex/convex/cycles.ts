@@ -5,7 +5,7 @@ import { Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
 import type { CycleStatus } from "@ripple/shared/types/cycles";
 import { cycleStatusValidator, taskStatusValidator, userValidator } from "./validators";
-import { baseTaskFields } from "./tasks";
+import { baseTaskFields, hasBlockingEdge } from "./tasks";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
 
 const cycleWithProgressValidator = v.object({
@@ -428,16 +428,12 @@ export const listCycleTasks = query({
       filtered.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
         const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        const blockerEdges = await ctx.db
-          .query("edges")
-          .withIndex("by_target", (q) => q.eq("targetId", task._id))
-          .collect();
         return {
           ...task,
           status,
           assignee,
           projectKey: project?.key,
-          hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
+          hasBlockers: await hasBlockingEdge(ctx, task._id),
         };
       })
     );

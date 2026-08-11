@@ -98,8 +98,7 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_user", ["userId"])
-    .index("by_workspace_user", ["workspaceId", "userId"])
-    .index("by_workspace_user_and_role", ["workspaceId", "userId", "role"]),
+    .index("by_workspace_user", ["workspaceId", "userId"]),
 
   workspaceInvites: defineTable({
     workspaceId: v.id("workspaces"),
@@ -107,7 +106,6 @@ export default defineSchema({
     invitedBy: v.id("users"),
     status: v.union(...Object.values(InviteStatus).map((status) => v.literal(status))),
   })
-    .index("by_email", ["email"])
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_by_email_by_status", ["workspaceId", "email", "status"])
     .index("by_email_and_status", ["email", "status"]),
@@ -451,12 +449,18 @@ export default defineSchema({
     .index("by_project_completed_priority", ["projectId", "completed", "priority"])
     .index("by_project_completed_priority_dueDate", ["projectId", "completed", "priority", "dueDate"])
     .index("by_project_completed_priority_plannedStartDate", ["projectId", "completed", "priority", "plannedStartDate"])
-    .index("by_assignee", ["assigneeId"])
     .index("by_assignee_completed", ["assigneeId", "completed"])
+    // `listByAssignee` is workspace-scoped; without the workspace key it read
+    // the caller's tasks in every workspace and filtered in JS, which also
+    // made a foreign workspace's task write invalidate this subscription.
+    .index("by_workspace_assignee_completed", ["workspaceId", "assigneeId", "completed"])
     .index("by_project_status", ["projectId", "statusId"])
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_completed", ["workspaceId", "completed"])
     .index("by_project_status_position", ["projectId", "statusId", "position"])
+    // Intentionally unqueried today: reserved for `ENG-42` deep links. Kept on
+    // purpose, so the next dead-index sweep leaves it alone — the other three
+    // never-read indexes were dropped in the same pass.
     .index("by_project_number", ["projectId", "number"])
     .index("by_importJob", ["importJobId"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"]),

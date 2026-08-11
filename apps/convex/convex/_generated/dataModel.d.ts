@@ -1675,7 +1675,6 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_assignee: ["assigneeId", "_creationTime"];
       by_assignee_completed: ["assigneeId", "completed", "_creationTime"];
       by_importJob: ["importJobId", "_creationTime"];
       by_project: ["projectId", "_creationTime"];
@@ -1741,6 +1740,12 @@ export type DataModel = {
         "_creationTime",
       ];
       by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_assignee_completed: [
+        "workspaceId",
+        "assigneeId",
+        "completed",
+        "_creationTime",
+      ];
       by_workspace_completed: ["workspaceId", "completed", "_creationTime"];
       by_yjsSnapshotId: ["yjsSnapshotId", "_creationTime"];
     };
@@ -2022,7 +2027,6 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_email: ["email", "_creationTime"];
       by_email_and_status: ["email", "status", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_by_email_by_status: [
@@ -2093,12 +2097,6 @@ export type DataModel = {
       by_user: ["userId", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_user: ["workspaceId", "userId", "_creationTime"];
-      by_workspace_user_and_role: [
-        "workspaceId",
-        "userId",
-        "role",
-        "_creationTime",
-      ];
     };
     searchIndexes: {};
     vectorIndexes: {};

@@ -21,7 +21,7 @@ import { generateKeyBetween } from "fractional-indexing";
 import { logTaskActivity } from "./auditLog";
 import { requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags } from "./tagSync";
-import { enrichedTaskValidator } from "./tasks";
+import { enrichedTaskValidator, hasBlockingEdge } from "./tasks";
 import { scheduleTaskImport } from "./taskImportPool";
 import {
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
@@ -138,16 +138,12 @@ export const listJobTasks = query({
       tasks.map(async (task) => {
         const status = await ctx.db.get(task.statusId);
         const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        const blockerEdges = await ctx.db
-          .query("edges")
-          .withIndex("by_target", (q) => q.eq("targetId", task._id))
-          .collect();
         return {
           ...task,
           status,
           assignee,
           projectKey: project.key,
-          hasBlockers: blockerEdges.some((e) => e.edgeType === "blocks"),
+          hasBlockers: await hasBlockingEdge(ctx, task._id),
         };
       }),
     );
@@ -405,17 +401,16 @@ export const createImportedTask = internalMutation({
     // Position: append after the last task in the default status column.
     // Each new task computes off the live state so concurrent imports
     // across different projects don't interfere.
-    const tasksInStatus = await ctx.db
+    // Index order is position order, so the column maximum is its last row.
+    // Collecting the column instead made the import O(N**2) and put a hard
+    // read-cap failure at ~10k tasks in one column.
+    const lastTask = await ctx.db
       .query("tasks")
       .withIndex("by_project_status_position", (q) =>
         q.eq("projectId", job.projectId).eq("statusId", defaultStatus._id),
       )
-      .collect();
-    const lastTask = tasksInStatus.length > 0
-      ? tasksInStatus.reduce((max, t) =>
-          (t.position ?? "") > (max.position ?? "") ? t : max,
-        )
-      : null;
+      .order("desc")
+      .first();
     const position = generateKeyBetween(lastTask?.position ?? null, null);
 
     const taskNumber = job.numberRangeStart + rowIndex;
