@@ -224,6 +224,59 @@ describe("tasks.create — foreign projectId under an authorized workspaceId", (
   });
 });
 
+/**
+ * The assignee is a foreign child like any other. `v.id("users")` proves the
+ * string addresses the users table — every account in the deployment qualifies,
+ * including one that has never been in this workspace. The row is the damage:
+ * the board renders the foreign user, `by_assignee` returns the task for them,
+ * and the assignment push carries the task's title out of the tenant.
+ */
+describe("tasks.create / update — foreign assigneeId", () => {
+  it("create refuses an assignee who is not a member of the workspace", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+    const { projectId: projectA } = await setupProjectWithStatuses(t, {
+      workspaceId: alice.workspaceId,
+      userId: alice.userId,
+      key: "AAA",
+    });
+
+    await expect(
+      alice.asUser.mutation(api.tasks.create, {
+        workspaceId: alice.workspaceId,
+        projectId: projectA,
+        title: "Assigned to an outsider",
+        assigneeId: bob.userId,
+      }),
+      // convex/tasks.ts:243 — args.assigneeId is written and pushed unchecked
+    ).rejects.toThrow();
+  });
+
+  it("update refuses to reassign a task to a non-member", async () => {
+    const t = createTestContext();
+    const { alice, bob } = await setupTwoWorkspaces(t);
+    const { projectId: projectA } = await setupProjectWithStatuses(t, {
+      workspaceId: alice.workspaceId,
+      userId: alice.userId,
+      key: "AAA",
+    });
+
+    const taskId = await alice.asUser.mutation(api.tasks.create, {
+      workspaceId: alice.workspaceId,
+      projectId: projectA,
+      title: "Mine",
+    });
+
+    await expect(
+      alice.asUser.mutation(api.tasks.update, { taskId, assigneeId: bob.userId }),
+      // convex/tasks.ts:874 — the patch path has the same omission
+    ).rejects.toThrow();
+
+    const stored = await t.run((ctx) => ctx.db.get(taskId));
+    expect(stored?.assigneeId, "the foreign id must not reach the row").toBeUndefined();
+  });
+});
+
 describe("tasks.update / updatePosition — foreign statusId", () => {
   it("update refuses a statusId from another project", async () => {
     const t = createTestContext();

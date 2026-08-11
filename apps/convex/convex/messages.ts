@@ -8,8 +8,9 @@ import { extractEventMentionIds, extractMentionedUserIds, extractPlainTextFromBo
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
-import { requireUser, requireChannelAccess } from "./authHelpers";
+import { requireUser, requireChannelAccess, filterChannelRecipients } from "./authHelpers";
 import { notify } from "./utils/notify";
+import { normalizeIds } from "./utils/ids";
 
 const mentionedUsersValidator = v.record(v.string(), v.object({
   name: v.union(v.string(), v.null()),
@@ -440,6 +441,67 @@ export const list = query({
   },
 });
 
+/**
+ * The text a push notification shows for a message, read out of its body.
+ *
+ * `body` and `plainText` are independent args on `send` — the client composes
+ * both and nothing makes them agree — so taking the notification from
+ * `plainText` lets a sender put one thing in the channel and a different thing
+ * on every recipient's lock screen. Everything here comes from `body`, resolved
+ * through the same name maps `enrichWithReplyTo` builds so the preview reads
+ * "@Alice" rather than "@user".
+ *
+ * A snapshot-only message has no text at all; its label is the diagram name the
+ * composer wrote onto the image block, which is part of `body` too — so the
+ * empty case doesn't have to fall back to the untrusted arg.
+ */
+async function pushTextFromBody(
+  ctx: { db: DatabaseReader },
+  body: string,
+): Promise<string> {
+  const userIds = normalizeIds(ctx.db, "users", extractMentionedUserIds(body));
+  const projectIds = normalizeIds(ctx.db, "projects", extractProjectIds(body));
+  const eventIds = normalizeIds(ctx.db, "calendarEvents", extractEventMentionIds(body));
+
+  const userNames = new Map<string, string>();
+  if (userIds.length > 0) {
+    const users = await getAll(ctx.db, userIds);
+    users.forEach((u, i) => {
+      if (u) userNames.set(userIds[i], getUserDisplayName(u));
+    });
+  }
+
+  const projectNames = new Map<string, string>();
+  if (projectIds.length > 0) {
+    const projects = await getAll(ctx.db, projectIds);
+    projects.forEach((p, i) => {
+      if (p) projectNames.set(projectIds[i], p.name);
+    });
+  }
+
+  const eventTitles = new Map<string, string>();
+  if (eventIds.length > 0) {
+    const events = await getAll(ctx.db, eventIds);
+    events.forEach((e, i) => {
+      if (e) eventTitles.set(eventIds[i], e.title);
+    });
+  }
+
+  const text = extractPlainTextFromBody(body, userNames, projectNames, eventTitles);
+  return text || imageLabelFromBody(body);
+}
+
+/** The diagram name a snapshot message carries on its image block, if any. */
+function imageLabelFromBody(body: string): string {
+  try {
+    const blocks: { type: string; props?: { diagramName?: string } }[] = JSON.parse(body);
+    return blocks.find((b) => b.type === "image")?.props?.diagramName ?? "";
+  } catch {
+    // non-JSON body — nothing to label it with
+    return "";
+  }
+}
+
 export const send = mutation({
   args: {
     isomorphicId: v.string(),
@@ -465,19 +527,26 @@ export const send = mutation({
       replyToId,
     });
 
-    // Extract @mentions and schedule chat mention notifications
-    const mentionedUserIds = extractMentionedUserIds(body);
-    const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+    // What every push below says, read out of the stored body — never out of
+    // the `plainText` arg, which travels beside `body` and need not agree with it.
+    const pushText = await pushTextFromBody(ctx, body);
 
-    if (filteredMentions.length > 0) {
+    // Extract @mentions and schedule chat mention notifications. The mention
+    // list decides who receives the message's opening lines, so it goes through
+    // the channel rule before it reaches `notify` — the composer's @-picker is
+    // fed workspace members, which in a closed channel or DM is a wider set.
+    const mentionedUserIds = extractMentionedUserIds(body).filter(id => id !== userId);
+    const mentionRecipients = await filterChannelRecipients(ctx, channel, mentionedUserIds);
+
+    if (mentionRecipients.length > 0) {
       await notify(ctx, {
         category: "chatMention",
         userId,
         userName: getUserDisplayName(user),
-        recipientIds: filteredMentions,
+        recipientIds: mentionRecipients,
         resourceId: channelId,
         title: `${getUserDisplayName(user)} mentioned you in #${channel.name}`,
-        body: plainText.length > 100 ? plainText.slice(0, 97) + "..." : plainText,
+        body: pushText.length > 100 ? pushText.slice(0, 97) + "..." : pushText,
         url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
       });
     }
@@ -488,7 +557,7 @@ export const send = mutation({
       userName: getUserDisplayName(user),
       scope: channelId,
       title: getUserDisplayName(user),
-      body: plainText,
+      body: pushText,
       url: `/workspaces/${channel.workspaceId}/channels/${channelId}`,
     });
     return null;

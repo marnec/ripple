@@ -6,7 +6,7 @@ import { DEFAULT_DOC_NAME } from "@ripple/shared/constants";
 import { auditLog, logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
-import { requireResourceMember, requireWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { requireResourceMember, requireWorkspaceMember, checkResourceMember, filterWorkspaceRecipients } from "./authHelpers";
 import { syncTagsForResource } from "./tagSync";
 import { searchResourcesByTag, searchResourcesByFavorite } from "./resourceSearch";
 import { notify } from "./utils/notify";
@@ -293,8 +293,13 @@ export const reportMention = mutation({
   handler: async (ctx, { documentId, mentionedUserIds }) => {
     const { userId, resource: document } = await requireResourceMember(ctx, "documents", documentId);
 
-    // Filter out self-mentions
-    const filteredMentions = mentionedUserIds.filter((id) => id !== userId);
+    // Filter out self-mentions, then narrow to users this workspace admits —
+    // the ids come from the caller, and the push carries the document's name.
+    const filteredMentions = await filterWorkspaceRecipients(
+      ctx,
+      document.workspaceId,
+      mentionedUserIds.filter((id) => id !== userId),
+    );
     if (filteredMentions.length === 0) return null;
 
     // Rate limit: check if a document_mention was logged for this document recently

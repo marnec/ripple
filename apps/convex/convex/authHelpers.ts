@@ -4,6 +4,7 @@ import type { Id, Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { WorkspaceRole, ChannelRole } from "@ripple/shared/enums";
 import type { YjsShareRoom } from "@ripple/shared/shareTypes";
+import { normalizeIds } from "./utils/ids";
 
 // ─── Result types ────────────────────────────────────────────────────
 
@@ -351,6 +352,75 @@ export async function checkChannelAccess(
   }
 
   return { userId, channel, workspaceMembership, channelMembership };
+}
+
+/**
+ * The workspace rule applied to a list of *recipients* rather than to the caller.
+ *
+ * The twin of `filterChannelRecipients` below, for the resources that live under
+ * the workspace rule — documents, task descriptions, task comments. Their
+ * mention lists arrive as caller-supplied user ids, and `v.id("users")` proves
+ * only that a string addresses the table, never that the account has anything to
+ * do with this workspace.
+ */
+export async function filterWorkspaceRecipients(
+  ctx: { db: QueryCtx["db"] },
+  workspaceId: Id<"workspaces">,
+  candidateIds: string[],
+): Promise<Id<"users">[]> {
+  const candidates = [...new Set(normalizeIds(ctx.db, "users", candidateIds))];
+
+  const admitted = await Promise.all(
+    candidates.map(async (userId) =>
+      (await getWorkspaceMembership(ctx, workspaceId, userId)) ? userId : null,
+    ),
+  );
+
+  return admitted.filter((userId): userId is Id<"users"> => userId !== null);
+}
+
+/**
+ * The channel rule applied to a list of *recipients* rather than to the caller.
+ *
+ * Notification recipients are read out of a message body — client-authored
+ * strings naming whoever the sender's editor put there — so they are a request
+ * to notify, not a fact about who may be notified. Nothing downstream re-checks:
+ * `deliverPush` filters the list by each recipient's own *preferences* and
+ * sends. That makes this the access decision for the message's first ~100
+ * characters, and it is the same rule `requireChannelAccess` applies, with the
+ * same branching: an open channel admits every workspace member, a closed
+ * channel or DM only its `channelMembers`.
+ *
+ * Ids that don't resolve to a user are dropped rather than passed through.
+ */
+export async function filterChannelRecipients(
+  ctx: { db: QueryCtx["db"] },
+  channel: Doc<"channels">,
+  candidateIds: string[],
+): Promise<Id<"users">[]> {
+  const candidates = [...new Set(normalizeIds(ctx.db, "users", candidateIds))];
+
+  const admitted = await Promise.all(
+    candidates.map(async (userId) => {
+      const workspaceMembership = await getWorkspaceMembership(
+        ctx,
+        channel.workspaceId,
+        userId,
+      );
+      if (!workspaceMembership) return null;
+      if (channel.type === "open") return userId;
+
+      const channelMembership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", channel._id).eq("userId", userId),
+        )
+        .first();
+      return channelMembership ? userId : null;
+    }),
+  );
+
+  return admitted.filter((userId): userId is Id<"users"> => userId !== null);
 }
 
 // ─── Creator-only ────────────────────────────────────────────────────

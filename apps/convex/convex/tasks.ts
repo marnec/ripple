@@ -8,7 +8,7 @@ import { auditLog, logTaskActivity } from "./auditLog";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 
 import { priorityValidator, taskStatusValidator, userValidator, projectValidator } from "./validators";
-import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { requireWorkspaceMember, requireResourceMember, checkWorkspaceMember, checkResourceMember, filterWorkspaceRecipients, getWorkspaceMembership } from "./authHelpers";
 import { syncTaskTags, normalizeTagList } from "./tagSync";
 import { applyStatusSideEffects } from "./taskStatusSideEffects";
 import { getAll } from "convex-helpers/server/relationships";
@@ -79,6 +79,28 @@ function assertStatusInProject(
 ): void {
   if (status.projectId !== projectId) {
     throw new ConvexError("Status does not belong to this project");
+  }
+}
+
+/**
+ * `assigneeId` is the same shape of caller-supplied id as `statusId`, and
+ * `v.id("users")` proves only that the string addresses the users table — every
+ * account in the deployment satisfies it. The write is what does the damage, so
+ * this rejects rather than filters: a foreign assignee renders on the board,
+ * answers `by_assignee`, and takes the task's title out of the tenant on the
+ * assignment push.
+ *
+ * Every user-facing mutation that writes `assigneeId` runs this.
+ * Regression tests: tests/crossWorkspace.access.test.ts.
+ */
+async function assertAssigneeInWorkspace(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  assigneeId: Id<"users">,
+): Promise<void> {
+  const membership = await getWorkspaceMembership(ctx, workspaceId, assigneeId);
+  if (!membership) {
+    throw new ConvexError("Assignee is not a member of this workspace");
   }
 }
 
@@ -209,6 +231,10 @@ export const create = mutation({
     if (!status) throw new ConvexError("Status not found");
     assertNotTriage(status);
     assertStatusInProject(status, args.projectId);
+
+    if (args.assigneeId) {
+      await assertAssigneeInWorkspace(ctx, project.workspaceId, args.assigneeId);
+    }
 
     // Calculate position if not provided
     let position = args.position;
@@ -872,7 +898,12 @@ export const update = mutation({
 
     if (title !== undefined) patch.title = title;
     if (assigneeId === null) patch.assigneeId = undefined;
-    else if (assigneeId !== undefined) patch.assigneeId = assigneeId;
+    else if (assigneeId !== undefined) {
+      // Before the patch is built, not after — `syncTaskTags` below reads the
+      // incoming assignee to rebuild the join rows.
+      await assertAssigneeInWorkspace(ctx, task.workspaceId, assigneeId);
+      patch.assigneeId = assigneeId;
+    }
     if (priority !== undefined) patch.priority = priority;
     if (labels !== undefined) {
       patch.labels = await syncTaskTags(ctx, {
@@ -1048,7 +1079,14 @@ export const notifyDescriptionMentions = mutation({
   handler: async (ctx, { taskId, mentionedUserIds }) => {
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", taskId);
 
-    const filtered = mentionedUserIds.filter((id) => id !== userId);
+    // `v.id("users")` proves the string addresses the table, not that the
+    // account belongs here — the push carries the task's title, so the list is
+    // narrowed to the task's workspace before it becomes recipients.
+    const filtered = await filterWorkspaceRecipients(
+      ctx,
+      task.workspaceId,
+      mentionedUserIds.filter((id) => id !== userId),
+    );
     if (filtered.length === 0) return null;
 
     // Rate limit: check if a description_mention was logged for this task recently

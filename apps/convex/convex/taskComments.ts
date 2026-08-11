@@ -5,7 +5,7 @@ import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { logTaskActivity } from "./auditLog";
-import { requireResourceMember, requireUser } from "./authHelpers";
+import { requireResourceMember, requireUser, filterWorkspaceRecipients } from "./authHelpers";
 import { notify } from "./utils/notify";
 import {
   maybeEnqueueCommentCreate,
@@ -127,9 +127,15 @@ export const create = mutation({
       taskTitle: task.title,
     });
 
-    // Schedule mention notifications after database write
+    // Schedule mention notifications after database write. The ids come out of
+    // a client-authored body, so they are narrowed to the task's workspace
+    // before they become recipients — the push carries the task's title.
     const mentionedUserIds = extractMentionedUserIds(body);
-    const filteredMentions = mentionedUserIds.filter(id => id !== userId);
+    const filteredMentions = await filterWorkspaceRecipients(
+      ctx,
+      task.workspaceId,
+      mentionedUserIds.filter(id => id !== userId),
+    );
     const user = await ctx.db.get(userId);
 
     if (filteredMentions.length > 0) {
@@ -198,7 +204,11 @@ export const update = mutation({
     // Schedule mention notifications for newly added mentions after database write
     const oldMentions = new Set(comment.body ? extractMentionedUserIds(comment.body) : []);
     const newMentions = extractMentionedUserIds(body);
-    const addedMentions = newMentions.filter(id => !oldMentions.has(id) && id !== userId);
+    const addedMentions = await filterWorkspaceRecipients(
+      ctx,
+      taskDoc!.workspaceId,
+      newMentions.filter(id => !oldMentions.has(id) && id !== userId),
+    );
     if (addedMentions.length > 0) {
       const task = await ctx.db.get(comment.taskId);
       const user = await ctx.db.get(userId);
