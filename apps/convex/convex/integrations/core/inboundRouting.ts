@@ -30,6 +30,30 @@ import { effectiveLinkStatus } from "./entitlements";
  * without tripping the receiver's retry/DLQ. On success the returned link
  * already reflects any silent rename.
  */
+/**
+ * Every `projectIntegrationLinks` row for a provider-side repo id — live and
+ * historical.
+ *
+ * A repo id is NOT unique in this table. `createLink`'s reuse candidate is
+ * scoped to the target project, so linking the same repo to a second project
+ * inserts a row rather than reusing one, and unlinking retains the row at
+ * `status: "disconnected"` instead of deleting it. `.unique()` on
+ * `by_externalRepo` is therefore a latent throw on a perfectly ordinary
+ * history (link → unlink → link elsewhere), which is exactly the bug this
+ * function exists to keep from being rewritten a third time.
+ */
+export async function findRepoLinks(
+  ctx: MutationCtx,
+  externalRepoId: string,
+): Promise<Doc<"projectIntegrationLinks">[]> {
+  return await ctx.db
+    .query("projectIntegrationLinks")
+    .withIndex("by_externalRepo", (q) =>
+      q.eq("externalRepoId", externalRepoId),
+    )
+    .collect();
+}
+
 export async function resolveInboundLink(
   ctx: MutationCtx,
   args: {
@@ -47,15 +71,9 @@ export async function resolveInboundLink(
   },
 ): Promise<Doc<"projectIntegrationLinks"> | null> {
   // Resolve link via stable repo id (survives renames). A repo may have
-  // several rows here — disconnected historical links coexist with the live
-  // one (createLink only forbids *live* duplicates), so pick the single
+  // several rows here — see `findRepoLinks` — so pick the single
   // non-disconnected link rather than assuming uniqueness.
-  const repoLinks = await ctx.db
-    .query("projectIntegrationLinks")
-    .withIndex("by_externalRepo", (q) =>
-      q.eq("externalRepoId", args.externalRepoId),
-    )
-    .collect();
+  const repoLinks = await findRepoLinks(ctx, args.externalRepoId);
   const link = repoLinks.find((l) => l.status !== "disconnected") ?? null;
   if (!link) return null; // unknown/disconnected repo — drop silently
 

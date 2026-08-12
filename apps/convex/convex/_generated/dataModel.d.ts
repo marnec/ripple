@@ -1426,9 +1426,12 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
-      by_externalCommentId: ["externalCommentId", "_creationTime"];
       by_taskComment: ["taskCommentId", "_creationTime"];
-      by_taskIntegrationLink: ["taskIntegrationLinkId", "_creationTime"];
+      by_taskIntegrationLink_externalCommentId: [
+        "taskIntegrationLinkId",
+        "externalCommentId",
+        "_creationTime",
+      ];
     };
     searchIndexes: {};
     vectorIndexes: {};

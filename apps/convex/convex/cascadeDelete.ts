@@ -82,6 +82,28 @@ export const cascadeRules = defineCascadeRules({
     { to: "entityTags", via: "by_resource_id", field: "resourceId" },
     { to: "taskTags", via: "by_task", field: "taskId" },
     { to: "taskExternalRefs", via: "by_task", field: "taskId" },
+    // Without this the link row outlives the task and the external issue
+    // becomes invisible to Ripple forever: `syncIn` returns early on
+    // `issues.opened` because a link already exists, `forceResyncQueries`
+    // skips the null task, and re-import sees the issue as already imported.
+    // The only recovery was disconnecting and reconnecting the repo.
+    { to: "taskIntegrationLinks", via: "by_task", field: "taskId" },
+  ],
+
+  // Both parents of a comment link row cascade into it. The lib's visited set
+  // dedupes the overlap (a comment on a linked task is reached both ways).
+  taskComments: [
+    { to: "taskCommentIntegrationLinks", via: "by_taskComment", field: "taskCommentId" },
+  ],
+
+  taskIntegrationLinks: [
+    // `by_taskIntegrationLink_externalCommentId` is a composite; the cascade
+    // eq's only its first field, which is what this rule needs.
+    {
+      to: "taskCommentIntegrationLinks",
+      via: "by_taskIntegrationLink_externalCommentId",
+      field: "taskIntegrationLinkId",
+    },
   ],
 
   cycles: [

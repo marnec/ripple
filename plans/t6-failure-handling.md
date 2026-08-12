@@ -110,8 +110,8 @@ invite as permanently pending.
 - [x] `emails.sendWorkspaceInvite` is gone; `emails.ts` imports `escapeHtml` from `emailTemplates.ts`;
       no second copy of the escape exists. The two escaping regressions it carried moved to the new
       seam — the queued component record — with their assertions unchanged.
-- [ ] `RESEND_WEBHOOK_SECRET` set on dev and prod; a real Resend delivery event advances a real
-      invite row to `delivered`. **Needs the Resend dashboard — the only step not yet done.**
+- [x] `RESEND_WEBHOOK_SECRET` set on dev and prod; a real Resend delivery event advances a real
+      invite row to `delivered`.
 - [x] Retention cron (`emailMaintenance.pruneEmailRecords`, daily 04:30 UTC) runs both component
       cleanups; a record past the window is removed and one inside it is left alone.
 - [x] Invite lists render `bounced`/`failed` with the reason; `waiting`/`queued`/`sent` render as

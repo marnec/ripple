@@ -751,7 +751,7 @@ export const drainDisconnectBatch = internalMutation({
       // Comment links — fan out via the dedicated index.
       const commentLinks = await ctx.db
         .query("taskCommentIntegrationLinks")
-        .withIndex("by_taskIntegrationLink", (q) =>
+        .withIndex("by_taskIntegrationLink_externalCommentId", (q) =>
           q.eq("taskIntegrationLinkId", taskLink._id),
         )
         .collect();

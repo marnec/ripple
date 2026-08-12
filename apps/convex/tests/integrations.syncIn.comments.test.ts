@@ -176,14 +176,14 @@ describe("integrations/core/syncIn comment.created", () => {
       applyNormalizedEvent(ctx, { event, link }),
     );
 
-    const commentLink = await t.run((ctx) =>
-      ctx.db
+    const commentLink = await t.run(async (ctx) => {
+      const rows = await ctx.db
         .query("taskCommentIntegrationLinks")
-        .withIndex("by_externalCommentId", (q) =>
-          q.eq("externalCommentId", "IC_kwDOABC123_999"),
-        )
-        .unique(),
-    );
+        .collect();
+      return (
+        rows.find((r) => r.externalCommentId === "IC_kwDOABC123_999") ?? null
+      );
+    });
     expect(commentLink).not.toBeNull();
 
     const comment = await t.run((ctx) =>

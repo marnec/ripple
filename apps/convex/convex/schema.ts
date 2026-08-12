@@ -1373,8 +1373,17 @@ export default defineSchema({
     ),
   })
     .index("by_taskComment", ["taskCommentId"])
-    .index("by_taskIntegrationLink", ["taskIntegrationLinkId"])
-    .index("by_externalCommentId", ["externalCommentId"]),
+    // Scoped by the task link, NOT by `externalCommentId` alone. Comment ids
+    // are only unique within a provider's own namespace, and both providers
+    // hand us plain numbers — GitHub's numeric REST comment id and a GitLab
+    // note id live in the same string space here, so a bare lookup can resolve
+    // an edit/delete echo onto another repo's row. The link is in scope at all
+    // four call sites, so scoping costs nothing. The prefix also serves the
+    // cascade rule in `cascadeDelete.ts`, which eq's only the first field.
+    .index("by_taskIntegrationLink_externalCommentId", [
+      "taskIntegrationLinkId",
+      "externalCommentId",
+    ]),
 
   // One row per external pull/merge request (canonical state). Many-to-many
   // with tasks via `taskPullRequestLinks` — a PR can close several issues and

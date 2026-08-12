@@ -5,6 +5,7 @@ import { normalizeTagList, syncTaskTags } from "../../tagSync";
 import { diffSet, normalizeLoginList } from "./syncableSet";
 import { externalLoginToMember, externalUserIdToMember } from "./identity";
 import { getIntegrationForLink } from "./integrationLookups";
+import { findRepoLinks } from "./inboundRouting";
 import { logTaskIntegrationActivity } from "./integrationActivity";
 import {
   insertTaskWithExternalLink,
@@ -271,12 +272,12 @@ export async function applyNormalizedEvent(
 
     case "comment.edited":
       if (!existingLink) return;
-      await applyCommentEdited(ctx, { event });
+      await applyCommentEdited(ctx, { event, existingLink });
       return;
 
     case "comment.deleted":
       if (!existingLink) return;
-      await applyCommentDeleted(ctx, { event });
+      await applyCommentDeleted(ctx, { event, existingLink });
       return;
   }
 }
@@ -285,13 +286,16 @@ async function applyCommentDeleted(
   ctx: MutationCtx,
   args: {
     event: Extract<NormalizedIssueEvent, { kind: "comment.deleted" }>;
+    existingLink: Doc<"taskIntegrationLinks">;
   },
 ): Promise<void> {
-  const { event } = args;
+  const { event, existingLink } = args;
   const commentLink = await ctx.db
     .query("taskCommentIntegrationLinks")
-    .withIndex("by_externalCommentId", (q) =>
-      q.eq("externalCommentId", event.externalCommentId),
+    .withIndex("by_taskIntegrationLink_externalCommentId", (q) =>
+      q
+        .eq("taskIntegrationLinkId", existingLink._id)
+        .eq("externalCommentId", event.externalCommentId),
     )
     .unique();
   if (!commentLink) return;
@@ -316,13 +320,16 @@ async function applyCommentEdited(
   ctx: MutationCtx,
   args: {
     event: Extract<NormalizedIssueEvent, { kind: "comment.edited" }>;
+    existingLink: Doc<"taskIntegrationLinks">;
   },
 ): Promise<void> {
-  const { event } = args;
+  const { event, existingLink } = args;
   const commentLink = await ctx.db
     .query("taskCommentIntegrationLinks")
-    .withIndex("by_externalCommentId", (q) =>
-      q.eq("externalCommentId", event.externalCommentId),
+    .withIndex("by_taskIntegrationLink_externalCommentId", (q) =>
+      q
+        .eq("taskIntegrationLinkId", existingLink._id)
+        .eq("externalCommentId", event.externalCommentId),
     )
     .unique();
   // Edits for comments we never imported are dropped.
@@ -357,11 +364,15 @@ async function applyCommentCreated(
 ): Promise<void> {
   const { event, link, existingLink } = args;
 
-  // Idempotency: same externalCommentId arriving twice → no-op.
+  // Idempotency: same externalCommentId arriving twice → no-op. Also the
+  // recorder-first half of the outbound echo race (the recorder handles the
+  // webhook-first half; see `recordCommentCreateSuccess`).
   const dupe = await ctx.db
     .query("taskCommentIntegrationLinks")
-    .withIndex("by_externalCommentId", (q) =>
-      q.eq("externalCommentId", event.externalCommentId),
+    .withIndex("by_taskIntegrationLink_externalCommentId", (q) =>
+      q
+        .eq("taskIntegrationLinkId", existingLink._id)
+        .eq("externalCommentId", event.externalCommentId),
     )
     .unique();
   if (dupe) return;
@@ -810,20 +821,23 @@ export async function applyInstallationEvent(
   }
 
   // installation_repositories.removed — disconnect only the listed repos.
+  // Every live link for the repo, not "the" link: a repo id maps to many rows
+  // (`findRepoLinks` explains why), and two projects in one workspace may each
+  // hold a live link to it. `.unique()` here used to throw on that shape, which
+  // left the live link connected and the disconnect cascade unrun while
+  // outbound kept 404-ing against a repo the App no longer had.
   const targetIds = new Set(event.externalRepoIds);
   for (const repoId of targetIds) {
-    const link = await ctx.db
-      .query("projectIntegrationLinks")
-      .withIndex("by_externalRepo", (q) => q.eq("externalRepoId", repoId))
-      .unique();
-    if (!link) continue;
-    if (link.workspaceId !== integration.workspaceId) continue;
-    if (link.status === "disconnected") continue;
-    await ctx.db.patch(link._id, { status: "disconnected" });
-    await ctx.scheduler.runAfter(
-      0,
-      internal.integrations.core.links.drainDisconnectBatch,
-      { projectIntegrationLinkId: link._id },
-    );
+    const repoLinks = await findRepoLinks(ctx, repoId);
+    for (const link of repoLinks) {
+      if (link.workspaceId !== integration.workspaceId) continue;
+      if (link.status === "disconnected") continue;
+      await ctx.db.patch(link._id, { status: "disconnected" });
+      await ctx.scheduler.runAfter(
+        0,
+        internal.integrations.core.links.drainDisconnectBatch,
+        { projectIntegrationLinkId: link._id },
+      );
+    }
   }
 }

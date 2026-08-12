@@ -364,11 +364,58 @@ export const recordCommentCreateSuccess = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // Echo-race guard, mirroring `recordIssueCreateSuccess` above. On installs
+    // that impersonate the connecting user (GitLab OAuth) the bot login IS the
+    // human, so `syncIn`'s authorship echo guard is deliberately skipped —
+    // which means the inbound `comment.created` for the note we just POSTed
+    // routinely lands *before* this recorder. Unguarded, that leaves two
+    // `taskComments` rows and two link rows sharing one comment id, after which
+    // every later `comment.edited`/`deleted` throws on `.unique()`, burns all
+    // three receiver attempts and DLQs.
+    const byExternal = await ctx.db
+      .query("taskCommentIntegrationLinks")
+      .withIndex("by_taskIntegrationLink_externalCommentId", (q) =>
+        q
+          .eq("taskIntegrationLinkId", args.taskIntegrationLinkId)
+          .eq("externalCommentId", args.externalCommentId),
+      )
+      .unique();
+    if (byExternal) {
+      if (byExternal.taskCommentId !== args.commentId) {
+        // Lost the race: the webhook already built a link against a
+        // bot-authored copy of the comment the user wrote here. Repoint the
+        // one link row at the Ripple-native comment — clearing `externalAuthor`
+        // so the human's avatar wins, per the note below — then drop the
+        // duplicate. Its scheduled `seedCommentBody` no-ops on a missing row.
+        await ctx.db.patch(byExternal._id, {
+          taskCommentId: args.commentId,
+          externalAuthor: undefined,
+          externalUpdatedAt: Math.max(
+            byExternal.externalUpdatedAt,
+            args.externalUpdatedAt,
+          ),
+        });
+        await ctx.db.delete(byExternal.taskCommentId);
+      }
+      await ctx.db.patch(args.commentId, { lastSyncError: undefined });
+      return null;
+    }
+
+    // Double-submit guard: this comment already acquired a link some other way.
+    const byComment = await ctx.db
+      .query("taskCommentIntegrationLinks")
+      .withIndex("by_taskComment", (q) => q.eq("taskCommentId", args.commentId))
+      .unique();
+    if (byComment) {
+      await ctx.db.patch(args.commentId, { lastSyncError: undefined });
+      return null;
+    }
+
     // No `externalAuthor`: this comment originated in Ripple and already has a
     // real `userId`/avatar. The GitHub API returns our App bot as the comment
     // author, but writing that here would make the `list` query render the bot
     // chip and override the human's avatar. The link row still exists so
-    // inbound edit/delete echoes resolve by `externalCommentId`.
+    // inbound edit/delete echoes resolve by the (link, externalCommentId) pair.
     await ctx.db.insert("taskCommentIntegrationLinks", {
       taskCommentId: args.commentId,
       taskIntegrationLinkId: args.taskIntegrationLinkId,
