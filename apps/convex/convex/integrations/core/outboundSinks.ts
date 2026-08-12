@@ -17,6 +17,24 @@ import type { OutboundRecorderSink } from "./outboundPort";
  * unchanged; only their call sites collapse behind these builders.
  */
 
+/**
+ * Shared abandon path: the mirror could not be written after its bounded retry
+ * (`core/runOutboundAction.ts`), and the provider write it describes has
+ * already committed. `kind` names the op so the row says what to re-push;
+ * `key` is the row whose mirror is now stale. Every sink that has something to
+ * mirror supplies one — `issueCloseSink` is the sole exception, because its
+ * success path writes nothing that could fail.
+ */
+function abandonTo(ctx: ActionCtx, kind: string, key: string) {
+  return async (error: string): Promise<void> => {
+    await ctx.runMutation(internal.backgroundJobFailures.recordOutboundAbandoned, {
+      kind: `integrations.outbound:${kind}`,
+      key,
+      error,
+    });
+  };
+}
+
 /** Shared task-keyed permanent-failure path (status/description/labels/assignees). */
 function taskFailure(ctx: ActionCtx, taskId: Id<"tasks">) {
   return async (message: string, httpStatus?: number): Promise<void> => {
@@ -53,6 +71,7 @@ export function taskStateSink(
       );
     },
     recordPermanentFailure: taskFailure(ctx, args.taskId),
+    recordAbandoned: abandonTo(ctx, "state", args.taskId),
   };
 }
 
@@ -68,6 +87,7 @@ export function taskDescriptionSink(
       );
     },
     recordPermanentFailure: taskFailure(ctx, taskId),
+    recordAbandoned: abandonTo(ctx, "description", taskId),
   };
 }
 
@@ -83,6 +103,7 @@ export function taskLabelsSink(
       );
     },
     recordPermanentFailure: taskFailure(ctx, args.taskId),
+    recordAbandoned: abandonTo(ctx, "labels", args.taskId),
   };
 }
 
@@ -98,6 +119,7 @@ export function taskAssigneesSink(
       );
     },
     recordPermanentFailure: taskFailure(ctx, args.taskId),
+    recordAbandoned: abandonTo(ctx, "assignees", args.taskId),
   };
 }
 
@@ -140,6 +162,7 @@ export function issueCreateSink(
         },
       );
     },
+    recordAbandoned: abandonTo(ctx, "createIssue", args.taskId),
   };
 }
 
@@ -172,6 +195,7 @@ export function commentCreateSink(
         { commentId: args.commentId, message, httpStatus },
       );
     },
+    recordAbandoned: abandonTo(ctx, "commentCreate", args.commentId),
   };
 }
 
@@ -192,6 +216,7 @@ export function commentEditSink(
         { commentLinkId, message, httpStatus },
       );
     },
+    recordAbandoned: abandonTo(ctx, "commentEdit", commentLinkId),
   };
 }
 
@@ -243,5 +268,6 @@ export function commentDeleteSink(
         { commentLinkId, message, httpStatus },
       );
     },
+    recordAbandoned: abandonTo(ctx, "commentDelete", commentLinkId),
   };
 }

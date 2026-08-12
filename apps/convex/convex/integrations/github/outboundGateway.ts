@@ -4,6 +4,7 @@ import type {
   OutboundOutcome,
   OutboundSuccessMeta,
 } from "../core/outboundPort";
+import { extractRippleTaskId } from "../core/rippleMarker";
 import { githubClientFromEnv, type GithubResponse } from "./client";
 
 /**
@@ -69,8 +70,65 @@ async function foldResponse<T>(
   return { kind: "retryable", message: res.errorMessage ?? `HTTP ${res.status}` };
 }
 
+/**
+ * How far back the create-dedupe lookup looks. A retry lands seconds to
+ * minutes after the attempt it is deduping, so the issue in question is at the
+ * very top of a created-desc listing — one page is generous. Listing rather
+ * than searching is deliberate: GitHub's issue search index is asynchronous
+ * and routinely does not yet contain an issue created moments ago, which is
+ * the only issue this lookup ever cares about.
+ */
+const MARKER_SCAN_PER_PAGE = 50;
+
 export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
   return {
+    async findIssueByRippleTask({ projectRef, taskId }) {
+      const res = await gh.request<
+        {
+          node_id: string;
+          number: number;
+          body: string | null;
+          updated_at: string;
+          user: { login: string; avatar_url: string; html_url: string };
+          pull_request?: unknown;
+        }[]
+      >({
+        method: "GET",
+        path:
+          `/repos/${projectRef}/issues?state=all&sort=created&direction=desc` +
+          `&per_page=${MARKER_SCAN_PER_PAGE}`,
+      });
+
+      if (classifyResponse(toResponse(res)) !== "success" || !res.body) {
+        return {
+          kind: "unavailable",
+          message: res.errorMessage ?? `HTTP ${res.status}`,
+        };
+      }
+
+      // `/issues` also returns pull requests; a PR can carry a marker only by
+      // quoting one, and it is never the issue we created.
+      const hit = res.body.find(
+        (issue) =>
+          !issue.pull_request && extractRippleTaskId(issue.body) === taskId,
+      );
+      if (!hit) return { kind: "absent" };
+
+      return {
+        kind: "found",
+        meta: {
+          externalIssueId: hit.node_id,
+          issueNumber: hit.number,
+          externalUpdatedAt: Date.parse(hit.updated_at),
+          externalAuthor: {
+            login: hit.user.login,
+            avatarUrl: hit.user.avatar_url,
+            url: hit.user.html_url,
+          },
+        },
+      };
+    },
+
     async createIssue({ projectRef, title, body }) {
       const res = await gh.request<{
         node_id: string;

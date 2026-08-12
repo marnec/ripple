@@ -1,3 +1,24 @@
+// ── Email delivery env ──────────────────────────────────────────────
+// Invite mail is enqueued by `@convex-dev/resend` *inside* the mutation that
+// creates the invite, so every test that invites someone now runs the email
+// component. Two consequences this file settles once, rather than in each test:
+//
+//  - `RESEND_TEST_MODE` is required by `emailDelivery.ts` and must be a
+//    deliberate value; unset throws.
+//  - It is set to "false" here, which is the opposite of what a dev deployment
+//    wants, because the component's test mode *rejects* any address outside
+//    `{delivered,bounced,complained}@resend.dev` — and since the enqueue shares
+//    the caller's transaction, that rejection would roll back the invite and
+//    fail ~every existing invite test on its `@example.com` fixtures. Nothing
+//    is actually sent: enqueueing only writes the component's own rows, and the
+//    HTTP call happens in a scheduled component function no test drives.
+//
+// `tests/emailDelivery.spike.test.ts` overrides both per-test, since the point
+// there is the env handling itself.
+process.env.AUTH_RESEND_KEY ??= "re_test_key";
+process.env.RESEND_TEST_MODE ??= "false";
+process.env.SITE_URL ??= "https://ripple.test";
+
 // Suppress noise from convex-test's scheduler firing setTimeout(0) callbacks
 // after the test's transaction (and sometimes the whole Vitest environment) has
 // already been torn down. Mutations schedule side-effects (aggregate updates,

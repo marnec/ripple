@@ -59,6 +59,20 @@ export type OutboundOutcome =
   | { kind: "retryable"; message: string };
 
 /**
+ * The result of looking for an issue the host may already hold.
+ *
+ * Three cases rather than the four of `OutboundOutcome`, because the runner
+ * treats every way of *not knowing* identically: only a definite "found"
+ * changes what happens next, so a rate-limited lookup and a forbidden one fold
+ * into one `unavailable`. Keeping that collapse in the type stops a future
+ * caller from inventing a policy where a degraded lookup blocks a create.
+ */
+export type OutboundLookup =
+  | { kind: "found"; meta: OutboundSuccessMeta }
+  | { kind: "absent" }
+  | { kind: "unavailable"; message: string };
+
+/**
  * The driving port for persistence. The runner writes an op's outcome through
  * this sink without knowing which recorder mutation runs or which row it
  * targets (taskId vs commentId vs commentLinkId). Concrete sinks are built in
@@ -69,6 +83,16 @@ export type OutboundOutcome =
 export interface OutboundRecorderSink {
   recordSuccess(meta: OutboundSuccessMeta): Promise<void>;
   recordPermanentFailure(message: string, httpStatus?: number): Promise<void>;
+  /**
+   * Called when the recorder itself could not be persisted after its bounded
+   * retry. The provider write already succeeded, so this is the only trace
+   * that Ripple's mirror is behind reality — it goes to `backgroundJobFailures`,
+   * the same "work that gave up" surface every retried pool reports to. The
+   * runner never lets a failure here escape (see `runOutboundAction.ts`), so an
+   * implementation may throw; optional because a sink with nothing to mirror
+   * (`issueCloseSink`) has nothing to abandon.
+   */
+  recordAbandoned?(error: string): Promise<void>;
 }
 
 /**
@@ -79,6 +103,18 @@ export interface OutboundRecorderSink {
  * `iid`). The adapter knows how to turn these into concrete request paths.
  */
 export interface OutboundGateway {
+  /**
+   * Looks for an issue the given task already created on the host, identified
+   * by the `<!-- ripple-task: … -->` marker every Ripple-originated create
+   * appends to its body. This is what makes a retried `createIssue` converge
+   * instead of minting a duplicate — required rather than optional, so a new
+   * provider cannot quietly ship without the guard.
+   */
+  findIssueByRippleTask(a: {
+    projectRef: string;
+    taskId: string;
+  }): Promise<OutboundLookup>;
+
   /** Creates a new issue (task → provider). Success meta carries the stable id,
    *  number, author and `updated_at` needed to write the task↔issue link. */
   createIssue(a: {

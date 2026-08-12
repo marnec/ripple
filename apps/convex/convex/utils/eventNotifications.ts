@@ -1,6 +1,7 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
+import { scheduleEmail } from "../emailPool";
 import { notify } from "./notify";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +40,40 @@ async function loadRecipientEmails(
     if (doc?.email) out.push({ userId: userIds[i]!, email: doc.email });
   }
   return out;
+}
+
+/**
+ * The event's invitee rows, keyed both ways a recipient can be named at the
+ * send sites: guests by address, members by user id. Read once per dispatch
+ * rather than per recipient — a 200-invitee fan-out would otherwise be 200
+ * point lookups to answer a question one scan already covers.
+ *
+ * The id travels with the email so the send can record its own outcome on the
+ * row (`emailDelivery.recordCalendarAttempt`). A recipient with no row — a
+ * member notified by preference rather than by invitation — simply gets
+ * `undefined`, and their mail is sent untracked.
+ */
+async function loadInviteeIndex(
+  ctx: MutationCtx,
+  eventId: Id<"calendarEvents">,
+): Promise<{
+  byGuestEmail: Map<string, Id<"calendarEventInvitees">>;
+  byUserId: Map<Id<"users">, Id<"calendarEventInvitees">>;
+}> {
+  const rows = await ctx.db
+    .query("calendarEventInvitees")
+    .withIndex("by_event", (q) => q.eq("eventId", eventId))
+    .collect();
+
+  const byGuestEmail = new Map<string, Id<"calendarEventInvitees">>();
+  const byUserId = new Map<Id<"users">, Id<"calendarEventInvitees">>();
+  for (const row of rows) {
+    // Lower-cased because the send sites key off the address as the caller
+    // typed it, while the row holds it as it was first entered.
+    if (row.guestEmail) byGuestEmail.set(row.guestEmail.toLowerCase(), row._id);
+    if (row.userId) byUserId.set(row.userId, row._id);
+  }
+  return { byGuestEmail, byUserId };
 }
 
 async function getInviterName(
@@ -143,12 +178,14 @@ export async function dispatchEventNotifications(
         )
       : [];
   const memberEmails = await loadRecipientEmails(ctx, memberEmailRecipients);
+  const invitees = await loadInviteeIndex(ctx, event._id);
 
   if (action.kind === "invited") {
     // Guests use the share landing CTA; members use the in-app calendar CTA.
     for (const row of guestRows) {
       if (!row.guestEmail || !row.shareId) continue;
-      await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
+      await scheduleEmail(ctx, internal.emails.sendEventInvite, {
+        inviteeId: invitees.byGuestEmail.get(row.guestEmail.toLowerCase()),
         eventId: event._id,
         targetUrl: shareDeepLink(row.shareId),
         recipientEmail: row.guestEmail,
@@ -161,8 +198,9 @@ export async function dispatchEventNotifications(
         sequence: action.sequence,
       });
     }
-    for (const { email } of memberEmails) {
-      await ctx.scheduler.runAfter(0, internal.emails.sendEventInvite, {
+    for (const { userId, email } of memberEmails) {
+      await scheduleEmail(ctx, internal.emails.sendEventInvite, {
+        inviteeId: invitees.byUserId.get(userId),
         eventId: event._id,
         targetUrl: calendarDeepLink(event.workspaceId, event._id),
         recipientEmail: email,
@@ -181,7 +219,8 @@ export async function dispatchEventNotifications(
   if (action.kind === "updated-time") {
     for (const row of guestRows) {
       if (!row.guestEmail) continue;
-      await ctx.scheduler.runAfter(0, internal.emails.sendEventReschedule, {
+      await scheduleEmail(ctx, internal.emails.sendEventReschedule, {
+        inviteeId: invitees.byGuestEmail.get(row.guestEmail.toLowerCase()),
         eventId: event._id,
         eventTitle,
         recipientEmail: row.guestEmail,
@@ -192,8 +231,9 @@ export async function dispatchEventNotifications(
         sequence: action.sequence,
       });
     }
-    for (const { email } of memberEmails) {
-      await ctx.scheduler.runAfter(0, internal.emails.sendEventReschedule, {
+    for (const { userId, email } of memberEmails) {
+      await scheduleEmail(ctx, internal.emails.sendEventReschedule, {
+        inviteeId: invitees.byUserId.get(userId),
         eventId: event._id,
         eventTitle,
         recipientEmail: email,
@@ -210,7 +250,8 @@ export async function dispatchEventNotifications(
   // cancelled
   for (const row of guestRows) {
     if (!row.guestEmail) continue;
-    await ctx.scheduler.runAfter(0, internal.emails.sendEventCancellation, {
+    await scheduleEmail(ctx, internal.emails.sendEventCancellation, {
+      inviteeId: invitees.byGuestEmail.get(row.guestEmail.toLowerCase()),
       eventId: event._id,
       eventTitle,
       recipientEmail: row.guestEmail,
@@ -220,8 +261,9 @@ export async function dispatchEventNotifications(
       sequence: action.sequence,
     });
   }
-  for (const { email } of memberEmails) {
-    await ctx.scheduler.runAfter(0, internal.emails.sendEventCancellation, {
+  for (const { userId, email } of memberEmails) {
+    await scheduleEmail(ctx, internal.emails.sendEventCancellation, {
+      inviteeId: invitees.byUserId.get(userId),
       eventId: event._id,
       eventTitle,
       recipientEmail: email,

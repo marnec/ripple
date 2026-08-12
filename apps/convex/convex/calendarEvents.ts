@@ -11,6 +11,7 @@ import {
   requireWorkspaceMember,
 } from "./authHelpers";
 import { logActivity } from "./auditLog";
+import { emailDeliveryStatus } from "./schema";
 import { notify } from "./utils/notify";
 import { generateShareId, sanitizeGuestName } from "./utils/shareIds";
 import { assertOrganizer } from "./utils/eventAuth";
@@ -90,6 +91,14 @@ const inviteeValidator = v.object({
   // must be in the validator or `get` fails once an email RSVP lands.
   lastRsvpDtstamp: v.optional(v.number()),
   lastRsvpSequence: v.optional(v.number()),
+  // Email delivery, written by the send path and the Resend webhook. Same
+  // reason as the two above — persisted on the row, so `get` fails without
+  // them — and the same value as on a workspace invite: a guest who is
+  // `pending` because their invitation bounced looks exactly like one who
+  // simply has not answered.
+  deliveryEmailId: v.optional(v.string()),
+  deliveryStatus: v.optional(emailDeliveryStatus),
+  deliveryError: v.optional(v.string()),
   // Denormalized for cheap rendering in EventDetailSheet (avoids a per-row
   // join on the client). Filled by the resolver, never persisted.
   userName: v.optional(v.string()),
@@ -409,8 +418,13 @@ export const get = query({
     const inviteeRows = await loadInviteeRows(ctx, eventId);
 
     // Denormalize user fields for cheap rendering.
+    //
+    // `deliveryResendId` is dropped rather than declared: it is a correlation
+    // key for the webhook route, of no use to a client, and handing out the
+    // provider's message ids widens the surface for nothing. The delivery
+    // *status* and its reason do ship — those are what the UI renders.
     const invitees = await Promise.all(
-      inviteeRows.map(async (row) => {
+      inviteeRows.map(async ({ deliveryResendId: _resendId, ...row }) => {
         if (row.userId) {
           const user = await ctx.db.get(row.userId);
           return {

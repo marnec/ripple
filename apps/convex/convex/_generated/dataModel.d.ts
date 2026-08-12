@@ -184,8 +184,39 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  backgroundJobFailures: {
+    document: {
+      error: string;
+      failedAt: number;
+      key: string;
+      kind: string;
+      _id: Id<"backgroundJobFailures">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "error" | "failedAt" | "key" | "kind";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_kind: ["kind", "_creationTime"];
+      by_kind_key: ["kind", "key", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   calendarEventInvitees: {
     document: {
+      deliveryEmailId?: string;
+      deliveryError?: string;
+      deliveryResendId?: string;
+      deliveryStatus?:
+        | "waiting"
+        | "queued"
+        | "cancelled"
+        | "sent"
+        | "delivered"
+        | "delivery_delayed"
+        | "bounced"
+        | "failed";
       eventId: Id<"calendarEvents">;
       guestEmail?: string;
       guestName?: string;
@@ -203,6 +234,10 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "deliveryEmailId"
+      | "deliveryError"
+      | "deliveryResendId"
+      | "deliveryStatus"
       | "eventId"
       | "guestEmail"
       | "guestName"
@@ -217,6 +252,8 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_delivery_email: ["deliveryEmailId", "_creationTime"];
+      by_delivery_resend: ["deliveryResendId", "_creationTime"];
       by_event: ["eventId", "_creationTime"];
       by_event_guest_email: ["eventId", "guestEmail", "_creationTime"];
       by_event_user: ["eventId", "userId", "_creationTime"];
@@ -2022,6 +2059,17 @@ export type DataModel = {
   };
   workspaceInvites: {
     document: {
+      deliveryEmailId?: string;
+      deliveryError?: string;
+      deliveryStatus?:
+        | "waiting"
+        | "queued"
+        | "cancelled"
+        | "sent"
+        | "delivered"
+        | "delivery_delayed"
+        | "bounced"
+        | "failed";
       email: string;
       invitedBy: Id<"users">;
       status: "pending" | "accepted" | "declined";
@@ -2032,6 +2080,9 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "deliveryEmailId"
+      | "deliveryError"
+      | "deliveryStatus"
       | "email"
       | "invitedBy"
       | "status"
@@ -2039,6 +2090,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_delivery_email: ["deliveryEmailId", "_creationTime"];
       by_email_and_status: ["email", "status", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_by_email_by_status: [

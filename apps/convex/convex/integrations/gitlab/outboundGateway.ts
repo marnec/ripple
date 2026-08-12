@@ -4,6 +4,7 @@ import type {
   OutboundOutcome,
   OutboundSuccessMeta,
 } from "../core/outboundPort";
+import { extractRippleTaskId } from "../core/rippleMarker";
 
 /**
  * GitLab implementation of the outbound `OutboundGateway` port — the mirror of
@@ -92,8 +93,50 @@ async function foldResponse<T>(
   };
 }
 
+/** See the GitHub gateway's constant of the same name — identical reasoning. */
+const MARKER_SCAN_PER_PAGE = 50;
+
 export function buildGitlabGateway(gl: GitlabRequester): OutboundGateway {
   return {
+    async findIssueByRippleTask({ projectRef, taskId }) {
+      const res = await gl.request<
+        {
+          id: number;
+          iid: number;
+          description: string | null;
+          updated_at: string;
+          author: GitlabAuthor;
+        }[]
+      >({
+        method: "GET",
+        path:
+          `/projects/${proj(projectRef)}/issues?order_by=created_at&sort=desc` +
+          `&per_page=${MARKER_SCAN_PER_PAGE}`,
+      });
+
+      if (classifyResponse(toResponse(res)) !== "success" || !res.body) {
+        return {
+          kind: "unavailable",
+          message: res.errorMessage ?? `HTTP ${res.status}`,
+        };
+      }
+
+      const hit = res.body.find(
+        (issue) => extractRippleTaskId(issue.description) === taskId,
+      );
+      if (!hit) return { kind: "absent" };
+
+      return {
+        kind: "found",
+        meta: {
+          externalIssueId: String(hit.id),
+          issueNumber: hit.iid,
+          externalUpdatedAt: Date.parse(hit.updated_at),
+          externalAuthor: author(hit.author),
+        },
+      };
+    },
+
     async createIssue({ projectRef, title, body }) {
       const res = await gl.request<{
         id: number;

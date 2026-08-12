@@ -6,6 +6,7 @@ import { components, internal } from "./_generated/api";
 import { Triggers, writerWithTriggers } from "convex-helpers/server/triggers";
 import type { GenericMutationCtx } from "convex/server";
 import { extractMessageTargets } from "./utils/blocknote";
+import { scheduleSubscriptionDrain } from "./subscriptionPool";
 import {
   onChannelMemberInsert,
   onChannelMemberDelete,
@@ -797,24 +798,37 @@ triggers.register("workspaceMembers", async (ctx, change) => {
   }
 });
 
+// These three go through `subscriptionPool` rather than the scheduler: a
+// scheduled action is at-most-once, so a page that throws used to leave the
+// channel half-subscribed with nothing to notice it. The pool retries, and a
+// drain that exhausts its attempts records a `backgroundJobFailures` row.
+// Restart safety — a retry replays from the first page — is a property of the
+// pages themselves; see the note on `scheduleSubscriptionDrain`.
 triggers.register("channels", async (ctx, change) => {
   if (change.operation === "insert" && change.newDoc.type === "open") {
-    await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.publicChannelCreated, {
-      channelId: change.id,
-      workspaceId: change.newDoc.workspaceId,
-    });
+    await scheduleSubscriptionDrain(
+      ctx,
+      internal.notificationSubscriptionJobs.publicChannelCreated,
+      { kind: "notificationSubscriptionJobs:publicChannelCreated", key: change.id },
+      { channelId: change.id, workspaceId: change.newDoc.workspaceId },
+    );
   } else if (change.operation === "update") {
     const wasOpen = change.oldDoc.type === "open";
     const isOpen = change.newDoc.type === "open";
     if (wasOpen && !isOpen) {
-      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePrivate, {
-        channelId: change.id,
-      });
+      await scheduleSubscriptionDrain(
+        ctx,
+        internal.notificationSubscriptionJobs.channelMadePrivate,
+        { kind: "notificationSubscriptionJobs:channelMadePrivate", key: change.id },
+        { channelId: change.id },
+      );
     } else if (!wasOpen && isOpen) {
-      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePublic, {
-        channelId: change.id,
-        workspaceId: change.newDoc.workspaceId,
-      });
+      await scheduleSubscriptionDrain(
+        ctx,
+        internal.notificationSubscriptionJobs.channelMadePublic,
+        { kind: "notificationSubscriptionJobs:channelMadePublic", key: change.id },
+        { channelId: change.id, workspaceId: change.newDoc.workspaceId },
+      );
     }
   }
   // delete: handled by cascade rules in cascadeDelete.ts

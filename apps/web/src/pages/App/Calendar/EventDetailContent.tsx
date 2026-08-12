@@ -1,8 +1,9 @@
-import { Hash, Trash2, UserPlus } from "lucide-react";
+import { Hash, MailWarning, Trash2, UserPlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "convex/react";
 
 import { cn } from "@/lib/utils";
+import { inviteDeliveryNotice } from "@ripple/shared/inviteDelivery";
 import { TagInput } from "@/components/TagInput";
 
 import { api } from "@convex/_generated/api";
@@ -273,7 +274,9 @@ function InviteesSection({
               </button>
             </li>
           )}
-          {detail.invitees.map((inv) => (
+          {detail.invitees.map((inv) => {
+            const delivery = inviteDeliveryNotice(inv);
+            return (
             <li
               key={inv._id}
               className="group flex items-center gap-2 text-sm"
@@ -289,9 +292,32 @@ function InviteesSection({
                 guest={!inv.userId}
                 subtitle={inv.userId ? inv.userEmail : "Guest"}
               />
+              {/* Only failures are shown, and only as an icon: an invitee whose
+                  mail is merely in flight is not news, and "pending" is
+                  ambiguous precisely when delivery went wrong. The reason rides
+                  in the tooltip so the row stays one line. */}
+              {delivery && (
+                <span
+                  className={cn(
+                    "ml-auto shrink-0",
+                    delivery.tone === "error"
+                      ? "text-destructive"
+                      : "text-muted-foreground",
+                  )}
+                  title={
+                    delivery.detail
+                      ? `${delivery.label} · ${delivery.detail}`
+                      : delivery.label
+                  }
+                  aria-label={delivery.label}
+                >
+                  <MailWarning className="h-3.5 w-3.5" />
+                </span>
+              )}
               <span
                 className={cn(
-                  "ml-auto text-[11px] px-1.5 py-0.5 rounded font-medium",
+                  "text-[11px] px-1.5 py-0.5 rounded font-medium",
+                  delivery ? "" : "ml-auto",
                   RSVP_BADGE_CLASS[inv.status],
                 )}
               >
@@ -308,7 +334,8 @@ function InviteesSection({
                 </button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

@@ -5,6 +5,7 @@ import {
   PageHeader,
   SearchInput,
 } from "@/components/console";
+import { inviteDeliveryNotice } from "@ripple/shared/inviteDelivery";
 import { Badge } from "@ripple/ui/components/badge";
 import { Button } from "@ripple/ui/components/button";
 import { Card } from "@ripple/ui/components/card";
@@ -199,6 +200,7 @@ function InviteRow({
 }) {
   const pending = invite.status === "pending";
   const recipientUserId = invite.recipientUserId;
+  const delivery = inviteDeliveryNotice(invite);
 
   return (
     <TableRow className="group">
@@ -248,6 +250,23 @@ function InviteRow({
               title="Already a member — this invite is stale"
             >
               stale
+            </Badge>
+          )}
+          {/* The third explanation for a stuck invite, beside "already a
+              member": the mail never arrived. Same mapper the product app
+              uses, so the two consoles cannot disagree about what a delivery
+              state means. */}
+          {delivery && (
+            <Badge
+              variant="outline"
+              className={
+                delivery.tone === "error"
+                  ? "border-destructive/30 text-destructive"
+                  : "border-warning/30 text-warning"
+              }
+              title={delivery.detail ?? delivery.label}
+            >
+              {delivery.tone === "error" ? "undelivered" : "delayed"}
             </Badge>
           )}
         </div>

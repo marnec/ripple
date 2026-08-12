@@ -14,9 +14,5 @@ export async function scheduleTaskImport<
   fn: Fn,
   ...args: OptionalRestArgs<Fn>
 ): Promise<void> {
-  if (typeof process !== "undefined" && process.env?.VITEST) {
-    await ctx.scheduler.runAfter(0, fn, ...args);
-    return;
-  }
   await pool.enqueueAction(ctx, fn, ...args as [any]);
 }

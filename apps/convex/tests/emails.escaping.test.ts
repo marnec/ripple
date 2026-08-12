@@ -1,7 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { internal } from "../convex/_generated/api";
+import type { EmailId } from "@convex-dev/resend";
+import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
+import { readEmail } from "../convex/emailDelivery";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
-import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
 
 /**
  * Every string these emails interpolate is attacker-reachable: a display name
@@ -47,46 +49,55 @@ beforeEach(() => {
   process.env.SITE_URL = "https://ripple.test";
 });
 
-async function setupInvite(t: ReturnType<typeof createTestContext>) {
-  const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
-  const inviteId = await t.run((ctx) =>
-    ctx.db.insert("workspaceInvites", {
-      workspaceId,
-      email: "guest@example.com",
-      invitedBy: userId,
-      status: InviteStatus.PENDING,
-    }),
-  );
-  return { inviteId };
+/** The invite email as the component holds it, once the mutation has queued it. */
+async function queuedInvite(
+  t: ReturnType<typeof createTestContext>,
+  inviteId: Id<"workspaceInvites">,
+) {
+  const email = await t.run(async (ctx) => {
+    const invite = await ctx.db.get(inviteId);
+    return await readEmail(ctx, invite!.deliveryEmailId as EmailId);
+  });
+  expect(email, "the invite must have queued an email").not.toBeNull();
+  return email!;
 }
 
 describe("emails escape interpolated values", () => {
-  it("sendWorkspaceInvite does not render markup from the inviter's name", async () => {
+  /**
+   * The invite's seam moved: it is no longer an action handed to Resend but an
+   * email enqueued into `@convex-dev/resend` by the mutation itself, so the
+   * rendered body is read back off the component record. The two assertions are
+   * unchanged from when this covered `emails.sendWorkspaceInvite` — body
+   * escaped, subject not — because the property under test never was about
+   * which sender ran it.
+   */
+  it("the invite body does not render markup from the inviter's name", async () => {
     const t = createTestContext();
-    const { inviteId } = await setupInvite(t);
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t, "Acme");
+    await t.run((ctx) => ctx.db.patch(userId, { name: INJECTION }));
 
-    await t.action(internal.emails.sendWorkspaceInvite, {
-      inviteId,
-      workspaceName: "Acme",
-      inviterName: INJECTION,
-      recipientEmail: "guest@example.com",
+    const inviteId = await asUser.mutation(api.workspaceInvites.create, {
+      workspaceId,
+      email: "guest@example.com",
     });
 
-    expect(lastEmail().html).not.toContain("<a href=\"https://evil.example\"");
+    const email = await queuedInvite(t, inviteId);
+    expect(email.html).not.toContain("<a href=\"https://evil.example\"");
   });
 
-  it("sendWorkspaceInvite escapes the workspace name in the body but not the subject", async () => {
+  it("escapes the workspace name in the invite body but not the subject", async () => {
     const t = createTestContext();
-    const { inviteId } = await setupInvite(t);
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(
+      t,
+      `Sales & Marketing ${INJECTION}`,
+    );
 
-    await t.action(internal.emails.sendWorkspaceInvite, {
-      inviteId,
-      workspaceName: `Sales & Marketing ${INJECTION}`,
-      inviterName: "Alice",
-      recipientEmail: "guest@example.com",
+    const inviteId = await asUser.mutation(api.workspaceInvites.create, {
+      workspaceId,
+      email: "guest@example.com",
     });
 
-    const email = lastEmail();
+    const email = await queuedInvite(t, inviteId);
     expect(email.html).not.toContain("<a href=\"https://evil.example\"");
     expect(email.html).toContain("Sales &amp; Marketing");
     // The subject is plain text — escaping it shows the recipient "&amp;".

@@ -207,3 +207,106 @@ describe("buildGithubGateway.deleteComment", () => {
     expect(outcome).toEqual({ kind: "success", meta: {} });
   });
 });
+
+/**
+ * The create-dedupe lookup. A retried create must be able to see the issue a
+ * previous attempt already made, and the only thing tying that issue to the
+ * task is the `<!-- ripple-task: … -->` marker the create appended to its
+ * body. This scans the newest issues rather than asking GitHub's search API:
+ * search indexes asynchronously, so the issue created seconds ago — precisely
+ * the one this lookup exists to find — is routinely not yet findable.
+ */
+describe("buildGithubGateway.findIssueByRippleTask", () => {
+  const TASK_ID = "k5738j2h9wq1abcdefgh12345678";
+
+  it("requests the newest issues in the repo, both open and closed", async () => {
+    const { client, calls } = fakeClient(() => ({ status: 200, body: [] }));
+
+    await gw(client).findIssueByRippleTask({
+      projectRef: "acme/web",
+      taskId: TASK_ID,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe("GET");
+    const [path, query] = calls[0].path.split("?");
+    expect(path).toBe("/repos/acme/web/issues");
+    const params = new URLSearchParams(query);
+    expect(params.get("state")).toBe("all");
+    expect(params.get("sort")).toBe("created");
+    expect(params.get("direction")).toBe("desc");
+    expect(Number(params.get("per_page"))).toBeGreaterThanOrEqual(50);
+  });
+
+  it("returns the issue whose body carries this task's marker, with full create meta", async () => {
+    const updated = "2026-05-22T10:00:00Z";
+    const { client } = fakeClient(() => ({
+      status: 200,
+      body: [
+        { node_id: "I_other", number: 8, body: "unrelated", updated_at: updated,
+          user: { login: "human", avatar_url: "a", html_url: "u" } },
+        {
+          node_id: "I_mine",
+          number: 9,
+          body: `Seeded body\n\n<!-- ripple-task: ${TASK_ID} -->`,
+          updated_at: updated,
+          user: { login: "ripple[bot]", avatar_url: "av", html_url: "url" },
+        },
+      ],
+    }));
+
+    const found = await gw(client).findIssueByRippleTask({
+      projectRef: "acme/web",
+      taskId: TASK_ID,
+    });
+
+    expect(found).toEqual({
+      kind: "found",
+      meta: {
+        externalIssueId: "I_mine",
+        issueNumber: 9,
+        externalUpdatedAt: Date.parse(updated),
+        externalAuthor: { login: "ripple[bot]", avatarUrl: "av", url: "url" },
+      },
+    });
+  });
+
+  it("another task's marker is not this task's issue", async () => {
+    const { client } = fakeClient(() => ({
+      status: 200,
+      body: [
+        {
+          node_id: "I_theirs",
+          number: 8,
+          body: "<!-- ripple-task: zzzz8j2h9wq1abcdefgh12345678 -->",
+          updated_at: "2026-05-22T10:00:00Z",
+          user: { login: "ripple[bot]", avatar_url: "a", html_url: "u" },
+        },
+      ],
+    }));
+
+    expect(
+      await gw(client).findIssueByRippleTask({
+        projectRef: "acme/web",
+        taskId: TASK_ID,
+      }),
+    ).toEqual({ kind: "absent" });
+  });
+
+  it("an unusable response is `unavailable`, never `absent` — a create must not be skipped on a guess", async () => {
+    const rateLimited = fakeClient(() => ({
+      status: 429,
+      errorMessage: "rate limited",
+    }));
+    const forbidden = fakeClient(() => ({ status: 403, errorMessage: "no" }));
+    const bodyless = fakeClient(() => ({ status: 200 }));
+
+    for (const { client } of [rateLimited, forbidden, bodyless]) {
+      const outcome = await gw(client).findIssueByRippleTask({
+        projectRef: "acme/web",
+        taskId: TASK_ID,
+      });
+      expect(outcome.kind).toBe("unavailable");
+    }
+  });
+});

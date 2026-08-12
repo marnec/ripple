@@ -2,6 +2,7 @@ import { createFunctionHandle, httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal, components } from "./_generated/api";
 import { auth } from "./auth";
+import { handleResendWebhook } from "./emailDelivery";
 import { parseTranscriptWebhook } from "./transcriptWebhook";
 import { COLLAB_RESOURCES, COLLAB_ROOMS } from "./authHelpers";
 import { YJS_SHARE_ROOMS, type YjsShareRoom } from "@ripple/shared/shareTypes";
@@ -686,6 +687,28 @@ http.route({
       return json({ ok: true, ...result });
     }),
   ),
+});
+
+/**
+ * POST /resend-webhook
+ *
+ * Resend's delivery events (sent / delivered / bounced / complained / …). The
+ * component verifies the Svix signature against `RESEND_WEBHOOK_SECRET` itself
+ * and updates its own email records, then calls `emailEvents.recordEmailEvent`.
+ *
+ * Deliberately NOT behind the `httpAdapter` helpers the PartyKit routes share:
+ * those authenticate a caller *we* configured with a bearer secret, while this
+ * one is signature-verified by the component from the raw request body — the
+ * adapter's `json()` / `requireSharedSecret` would have nothing to do and
+ * reading the body here would consume it before the verifier sees it. Same
+ * reasoning as the GitHub webhook route above.
+ */
+http.route({
+  path: "/resend-webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    return await handleResendWebhook(ctx, request);
+  }),
 });
 
 export default http;

@@ -33,6 +33,16 @@ export declare const api: {
           invites: Array<{
             _id: Id<"workspaceInvites">;
             createdAt: number;
+            deliveryError?: string;
+            deliveryStatus?:
+              | "waiting"
+              | "queued"
+              | "cancelled"
+              | "sent"
+              | "delivered"
+              | "delivery_delayed"
+              | "bounced"
+              | "failed";
             email: string;
             invitedBy: Id<"users">;
             inviterEmail?: string;
@@ -59,6 +69,29 @@ export declare const api: {
         null
       >;
     };
+    jobs: {
+      dismiss: FunctionReference<
+        "mutation",
+        "public",
+        { failureId: Id<"backgroundJobFailures"> },
+        null
+      >;
+      list: FunctionReference<
+        "query",
+        "public",
+        {},
+        {
+          failures: Array<{
+            _id: Id<"backgroundJobFailures">;
+            error: string;
+            failedAt: number;
+            key: string;
+            kind: string;
+          }>;
+          truncated: boolean;
+        }
+      >;
+    };
     stats: {
       overview: FunctionReference<
         "query",
@@ -69,6 +102,7 @@ export declare const api: {
           bots: number;
           channels: number;
           documents: number;
+          failedJobs: number;
           messages: number;
           pendingInvites: number;
           projects: number;
@@ -295,6 +329,17 @@ export declare const api: {
         invitees: Array<{
           _creationTime: number;
           _id: Id<"calendarEventInvitees">;
+          deliveryEmailId?: string;
+          deliveryError?: string;
+          deliveryStatus?:
+            | "waiting"
+            | "queued"
+            | "cancelled"
+            | "sent"
+            | "delivered"
+            | "delivery_delayed"
+            | "bounced"
+            | "failed";
           eventId: Id<"calendarEvents">;
           guestEmail?: string;
           guestName?: string;
@@ -3470,6 +3515,16 @@ export declare const api: {
       Array<{
         _creationTime: number;
         _id: Id<"workspaceInvites">;
+        deliveryError?: string;
+        deliveryStatus?:
+          | "waiting"
+          | "queued"
+          | "cancelled"
+          | "sent"
+          | "delivered"
+          | "delivery_delayed"
+          | "bounced"
+          | "failed";
         email: string;
         invitedBy: Id<"users">;
         inviterName: string;
@@ -3733,6 +3788,27 @@ export declare const internal: {
             };
       },
       any
+    >;
+  };
+  backgroundJobFailures: {
+    recordOutboundAbandoned: FunctionReference<
+      "mutation",
+      "internal",
+      { error: string; key: string; kind: string },
+      null
+    >;
+    recordTerminalFailure: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        context: { key: string; kind: string };
+        result:
+          | { kind: "success"; returnValue: any }
+          | { error: string; kind: "failed" }
+          | { kind: "canceled" };
+        workId: string;
+      },
+      null
     >;
   };
   calendarEventInvitees: {
@@ -4009,6 +4085,402 @@ export declare const internal: {
       Id<"documents">
     >;
   };
+  emailDelivery: {
+    recordCalendarAttempt: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        emailId?: string;
+        error?: string;
+        inviteeId: Id<"calendarEventInvitees">;
+        resendId?: string;
+        status:
+          | "waiting"
+          | "queued"
+          | "cancelled"
+          | "sent"
+          | "delivered"
+          | "delivery_delayed"
+          | "bounced"
+          | "failed";
+      },
+      null
+    >;
+  };
+  emailEvents: {
+    recordEmailEvent: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        event:
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.sent";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.delivered";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.delivery_delayed";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.complained";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                bounce: { message: string; subType: string; type: string };
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.bounced";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                open: {
+                  ipAddress: string;
+                  timestamp: string;
+                  userAgent: string;
+                };
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.opened";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                click: {
+                  ipAddress: string;
+                  link: string;
+                  timestamp: string;
+                  userAgent: string;
+                };
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.clicked";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                failed: { reason: string };
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.failed";
+            };
+        id: string;
+      },
+      null
+    >;
+    recordEventByResendId: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        event:
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.sent";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.delivered";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.delivery_delayed";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.complained";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                bounce: { message: string; subType: string; type: string };
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.bounced";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                open: {
+                  ipAddress: string;
+                  timestamp: string;
+                  userAgent: string;
+                };
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.opened";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                click: {
+                  ipAddress: string;
+                  link: string;
+                  timestamp: string;
+                  userAgent: string;
+                };
+                created_at: string;
+                email_id: string;
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.clicked";
+            }
+          | {
+              created_at: string;
+              data: {
+                bcc?: string | Array<string>;
+                broadcast_id?: string;
+                cc?: string | Array<string>;
+                created_at: string;
+                email_id: string;
+                failed: { reason: string };
+                from: string | Array<string>;
+                headers?: Array<{ name: string; value: string }>;
+                message_id?: string;
+                reply_to?: string | Array<string>;
+                subject: string;
+                tags?:
+                  | Record<string, string>
+                  | Array<{ name: string; value: string }>;
+                to: string | Array<string>;
+              };
+              type: "email.failed";
+            };
+        resendId: string;
+      },
+      null
+    >;
+  };
+  emailMaintenance: {
+    pruneEmailRecords: FunctionReference<
+      "mutation",
+      "internal",
+      { abandonedOlderThanMs?: number; finalizedOlderThanMs?: number },
+      null
+    >;
+  };
   emails: {
     sendEventCancellation: FunctionReference<
       "action",
@@ -4017,6 +4489,7 @@ export declare const internal: {
         endsAt: number;
         eventId: string;
         eventTitle: string;
+        inviteeId?: Id<"calendarEventInvitees">;
         inviterName: string;
         recipientEmail: string;
         sequence: number;
@@ -4032,6 +4505,7 @@ export declare const internal: {
         eventDescription?: string;
         eventId: string;
         eventTitle: string;
+        inviteeId?: Id<"calendarEventInvitees">;
         inviterName: string;
         recipientEmail: string;
         sequence: number;
@@ -4048,22 +4522,12 @@ export declare const internal: {
         endsAt: number;
         eventId: string;
         eventTitle: string;
+        inviteeId?: Id<"calendarEventInvitees">;
         inviterName: string;
         newRangeLabel: string;
         recipientEmail: string;
         sequence: number;
         startsAt: number;
-      },
-      null
-    >;
-    sendWorkspaceInvite: FunctionReference<
-      "action",
-      "internal",
-      {
-        inviteId: Id<"workspaceInvites">;
-        inviterName: string;
-        recipientEmail: string;
-        workspaceName: string;
       },
       null
     >;
@@ -6009,8 +6473,11 @@ export declare const components: {
   convexCascadingDelete: import("convex-cascading-delete/_generated/component.js").ComponentApi<"convexCascadingDelete">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
   rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
   webhookReceiver: import("convex-webhook-receiver/_generated/component.js").ComponentApi<"webhookReceiver">;
+  emailPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"emailPool">;
   notificationPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"notificationPool">;
+  subscriptionPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"subscriptionPool">;
   taskReassignPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskReassignPool">;
   taskImportPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskImportPool">;
   documentsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"documentsByWorkspace">;

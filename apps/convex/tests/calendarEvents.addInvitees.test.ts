@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import {
@@ -6,8 +6,42 @@ import {
   setupAuthenticatedUser,
   setupWorkspaceWithAdmin,
 } from "./helpers";
+import { deliveredPushes, resetDeliveredPushes } from "./pushProbe";
 
 type TestContext = ReturnType<typeof createTestContext>;
+
+/**
+ * Calendar email is no longer a scheduled action with a greppable name — it is
+ * enqueued into `emailPool` (see `convex/emailPool.ts`), because a scheduled
+ * action runs at most once and these messages need retries. So the observable
+ * moved from a `_scheduled_functions` row to the send itself: drain the queue,
+ * count what reached Resend. The assertions below are unchanged in meaning.
+ */
+const sendEmail = vi.fn();
+
+vi.mock("../convex/utils/sendPushToUsers", async () => {
+  const probe = await import("./pushProbe");
+  return probe.pushDeliveryMock();
+});
+
+vi.mock("resend", () => ({
+  Resend: class {
+    emails = { send: (payload: unknown, options?: unknown) => sendEmail(payload, options) };
+  },
+}));
+
+/** Drain the pool and report how many calendar emails have actually been sent. */
+async function countCalendarEmails(t: TestContext): Promise<number> {
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return sendEmail.mock.calls.length;
+}
+
+/** Likewise for in-app push, which now drains through `notificationPool`. */
+async function countDeliveredPushes(t: TestContext): Promise<number> {
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return deliveredPushes.length;
+}
+
 
 const ONE_HOUR = 60 * 60 * 1000;
 
@@ -36,7 +70,16 @@ async function countScheduled(t: TestContext, predicate: (name: string) => boole
 describe("calendarEvents.addInvitees", () => {
   let t: TestContext;
   beforeEach(() => {
+    vi.useFakeTimers();
+    resetDeliveredPushes();
+    sendEmail.mockReset();
+    sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
+    process.env.AUTH_RESEND_KEY = "re_test_key";
+    process.env.RESEND_TEST_MODE = "false";
     t = createTestContext();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("adds a workspace member: row created, no share row, member email scheduled", async () => {
@@ -55,13 +98,13 @@ describe("calendarEvents.addInvitees", () => {
     });
     await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
 
-    const beforeInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const beforeInvite = await countCalendarEmails(t);
     await asUser.mutation(api.calendarEvents.addInvitees, {
       eventId,
       userIds: [memberId as any],
       guestEmails: [],
     });
-    const afterInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const afterInvite = await countCalendarEmails(t);
 
     const detail = await asUser.query(api.calendarEvents.get, { eventId });
     expect(detail.invitees).toHaveLength(1);
@@ -84,13 +127,13 @@ describe("calendarEvents.addInvitees", () => {
       invitees: { userIds: [], guestEmails: [] },
     });
 
-    const beforeInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const beforeInvite = await countCalendarEmails(t);
     await asUser.mutation(api.calendarEvents.addInvitees, {
       eventId,
       userIds: [],
       guestEmails: ["guest@x.com"],
     });
-    const afterInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const afterInvite = await countCalendarEmails(t);
 
     const detail = await asUser.query(api.calendarEvents.get, { eventId });
     expect(detail.invitees).toHaveLength(1);
@@ -126,13 +169,13 @@ describe("calendarEvents.addInvitees", () => {
       invitees: { userIds: [memberId as any], guestEmails: [] },
     });
 
-    const beforeInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const beforeInvite = await countCalendarEmails(t);
     await asUser.mutation(api.calendarEvents.addInvitees, {
       eventId,
       userIds: [memberId as any],
       guestEmails: [],
     });
-    const afterInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const afterInvite = await countCalendarEmails(t);
 
     const detail = await asUser.query(api.calendarEvents.get, { eventId });
     expect(detail.invitees).toHaveLength(1);
@@ -151,14 +194,14 @@ describe("calendarEvents.addInvitees", () => {
       invitees: { userIds: [], guestEmails: ["existing@x.com"] },
     });
 
-    const beforeInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const beforeInvite = await countCalendarEmails(t);
     await asUser.mutation(api.calendarEvents.addInvitees, {
       eventId,
       userIds: [],
       // Different casing — should normalise + skip.
       guestEmails: ["EXISTING@X.com"],
     });
-    const afterInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const afterInvite = await countCalendarEmails(t);
 
     const detail = await asUser.query(api.calendarEvents.get, { eventId });
     expect(detail.invitees).toHaveLength(1);
@@ -257,8 +300,8 @@ describe("calendarEvents.addInvitees", () => {
     });
     await addMember(t, workspaceId, newId, WorkspaceRole.MEMBER);
 
-    const beforePush = await countScheduled(t, (n) => n.includes("deliverPush"));
-    const beforeInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const beforePush = await countDeliveredPushes(t);
+    const beforeInvite = await countCalendarEmails(t);
 
     await asUser.mutation(api.calendarEvents.addInvitees, {
       eventId,
@@ -266,8 +309,8 @@ describe("calendarEvents.addInvitees", () => {
       guestEmails: [],
     });
 
-    const afterPush = await countScheduled(t, (n) => n.includes("deliverPush"));
-    const afterInvite = await countScheduled(t, (n) => n.includes("sendEventInvite"));
+    const afterPush = await countDeliveredPushes(t);
+    const afterInvite = await countCalendarEmails(t);
 
     // Only the brand-new invitee gets notified — the pre-existing one
     // is dedup'd out before any dispatch.

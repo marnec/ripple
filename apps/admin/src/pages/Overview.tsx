@@ -7,6 +7,7 @@ import {
   UserAvatar,
 } from "@/components/console";
 import { Card } from "@ripple/ui/components/card";
+import { navigate } from "@/hooks/useHashRoute";
 import { fmtNum, fmtRelative } from "@/lib/format";
 import { api } from "@convex/_generated/api";
 import { useQuery } from "convex/react";
@@ -25,6 +26,29 @@ export function OverviewPage() {
     { label: "Tasks", value: fmtNum(stats.tasks) },
     { label: "Documents", value: fmtNum(stats.documents) },
     { label: "Pending invites", value: fmtNum(stats.pendingInvites) },
+    // The one tile that is a health signal rather than a total: this is where
+    // an operator finds out something gave up without going looking for it.
+    // Zero is the expected reading, so it stays quiet until it isn't.
+    {
+      label: "Failed jobs",
+      value:
+        stats.failedJobs === 0 ? (
+          "0"
+        ) : (
+          <span className="text-destructive">{fmtNum(stats.failedJobs)}</span>
+        ),
+      sub:
+        stats.failedJobs > 0 ? (
+          <button
+            onClick={() => navigate("/jobs")}
+            className="text-destructive transition-opacity hover:opacity-80"
+          >
+            Triage →
+          </button>
+        ) : (
+          "nothing gave up"
+        ),
+    },
   ];
 
   return (

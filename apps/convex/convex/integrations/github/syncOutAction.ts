@@ -57,6 +57,14 @@ export const pushCreateIssue = internalAction({
         taskId: args.taskId,
         projectIntegrationLinkId: args.projectIntegrationLinkId,
       }),
+      // Creates are the one op a retry cannot safely repeat, so ask the host
+      // whether a previous attempt already made this issue before making
+      // another. `runProviderOutbound` only skips the POST on a definite hit.
+      precheck: (gateway) =>
+        gateway.findIssueByRippleTask({
+          projectRef: args.projectRef,
+          taskId: args.taskId,
+        }),
       call: (gateway) =>
         gateway.createIssue({
           projectRef: args.projectRef,

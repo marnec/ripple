@@ -247,7 +247,12 @@ export const deleteTag = mutation({
     // batches. Same shape as `taskStatuses.remove`.
     await ctx.db.patch(tagId, { pendingDeletion: true });
 
-    await scheduleTaskReassign(ctx, internal.tagSync.stripTagEverywhere, { tagId });
+    await scheduleTaskReassign(
+      ctx,
+      internal.tagSync.stripTagEverywhere,
+      { kind: "tagSync:stripTagEverywhere", key: tagId },
+      { tagId },
+    );
 
     return null;
   },
@@ -307,6 +312,13 @@ export const finalizeTagDelete = internalMutation({
   },
 });
 
+/**
+ * **Restart safety.** `taskReassignPool` retries this, and a retry re-enters at
+ * the first batch. Safe because each batch deletes the join rows it processed:
+ * a replay re-queries `entityTags` / `taskTags` for the tag and finds only what
+ * is genuinely left. Stripping a name from a `tags` array is itself idempotent,
+ * and `finalizeTagDelete` no-ops on a tag already gone.
+ */
 export const stripTagEverywhere = internalAction({
   args: { tagId: v.id("tags") },
   returns: v.null(),

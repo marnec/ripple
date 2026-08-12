@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import {
@@ -7,6 +7,24 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import { ChannelRole, WorkspaceRole } from "@ripple/shared/enums/roles";
+import {
+  deliveredPushes,
+  resetDeliveredPushes,
+  type DeliveredPush,
+} from "./pushProbe";
+
+// Push delivery goes through `notificationPool`, so the observable is what
+// reached the web-push helpers after the pool drains — see `pushProbe.ts`.
+vi.mock("../convex/utils/sendPushToUsers", async () => {
+  const probe = await import("./pushProbe");
+  return probe.pushDeliveryMock();
+});
+
+beforeEach(() => {
+  resetDeliveredPushes();
+  vi.useFakeTimers();
+});
+afterEach(() => vi.useRealTimers());
 
 /**
  * Message access follows the *channel* rule (`requireChannelAccess`), not the
@@ -152,23 +170,12 @@ function bodyMentioning(userIds: Id<"users">[], text = "look at this"): string {
   ]);
 }
 
-type PushJob = {
-  category: string;
-  recipientIds?: string[];
-  scope?: string;
-  body: string;
-};
-
-/** The `deliverPush` jobs queued so far, newest last. */
+/** The pushes delivered so far, newest last. */
 async function scheduledPushes(
   t: ReturnType<typeof createTestContext>,
-): Promise<PushJob[]> {
-  const rows = await t.run((ctx) =>
-    ctx.db.system.query("_scheduled_functions").collect(),
-  );
-  return rows
-    .filter((r) => String(r.name ?? "").includes("deliverPush"))
-    .map((r) => (r.args as unknown[])[0] as PushJob);
+): Promise<DeliveredPush[]> {
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return deliveredPushes;
 }
 
 /** Recipients of the `chatMention` push, flattened across jobs. */
@@ -178,7 +185,7 @@ async function mentionRecipients(
   const pushes = await scheduledPushes(t);
   return pushes
     .filter((p) => p.category === "chatMention")
-    .flatMap((p) => p.recipientIds ?? []);
+    .flatMap((p) => p.recipientIds);
 }
 
 describe("messages access", () => {

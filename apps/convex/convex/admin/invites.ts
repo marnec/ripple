@@ -4,6 +4,8 @@ import { internal } from "../_generated/api";
 import { query } from "../_generated/server";
 import { mutation } from "../functions";
 import { logActivity } from "../auditLog";
+import { sendWorkspaceInviteEmail } from "../emailDelivery";
+import { emailDeliveryStatus } from "../schema";
 import { requirePlatformAdmin } from "../authHelpers";
 
 /**
@@ -39,6 +41,12 @@ export const list = query({
         recipientUserId: v.union(v.id("users"), v.null()),
         /** That account is already in the workspace — a pending invite here is stale. */
         recipientIsMember: v.boolean(),
+        /**
+         * The third explanation for a stuck invite, alongside the two above:
+         * the mail never arrived. Absent on invites predating delivery tracking.
+         */
+        deliveryStatus: v.optional(emailDeliveryStatus),
+        deliveryError: v.optional(v.string()),
       }),
     ),
   }),
@@ -80,6 +88,8 @@ export const list = query({
             recipientIsMember: recipient
               ? membershipKeys.has(`${invite.workspaceId}:${recipient._id}`)
               : false,
+            deliveryStatus: invite.deliveryStatus,
+            deliveryError: invite.deliveryError,
           };
         }),
     };
@@ -145,7 +155,7 @@ export const resend = mutation({
     if (!workspace) throw new ConvexError("Workspace no longer exists");
     const inviter = await ctx.db.get(invite.invitedBy);
 
-    await ctx.scheduler.runAfter(0, internal.emails.sendWorkspaceInvite, {
+    await sendWorkspaceInviteEmail(ctx, {
       inviteId,
       workspaceName: workspace.name,
       inviterName: inviter?.name ?? inviter?.email ?? "Someone",

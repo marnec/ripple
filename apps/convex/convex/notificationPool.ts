@@ -1,3 +1,18 @@
+/**
+ * The push-delivery lane.
+ *
+ * **This pool does not retry, and that is the design.** A push notification has
+ * no dedupe key on the delivery side — the browser shows whatever arrives — so
+ * a retried `deliverPush` after a partially-successful fan-out re-notifies
+ * everyone it already reached. For a notification, a duplicate is worse than a
+ * miss: the missed one is invisible, the duplicate is a buzzing phone. Push is
+ * therefore deliberately at-most-once, and the retried background work of T6
+ * lives in other pools (`subscriptionPool`, `taskReassignPool`, `emailPool`) so
+ * that a backlog there cannot occupy the slots delivery needs.
+ *
+ * If a future caller needs a retried push, it needs a dedupe key first.
+ */
+
 import { Workpool } from "@convex-dev/workpool";
 import { components } from "./_generated/api";
 import type { MutationCtx } from "./_generated/server";
@@ -10,9 +25,6 @@ const pool = new Workpool(components.notificationPool, {
 /**
  * Schedule a notification action via the workpool.
  * Uses Workpool to avoid scheduler contention from bulk notifications.
- *
- * In test environments (convex-test), falls back to ctx.scheduler since
- * component mutations may not be fully supported.
  */
 export async function scheduleNotification<
   Fn extends FunctionReference<"action", "internal"> & SchedulableFunctionReference,
@@ -21,9 +33,5 @@ export async function scheduleNotification<
   fn: Fn,
   ...args: OptionalRestArgs<Fn>
 ): Promise<void> {
-  if (typeof process !== "undefined" && process.env?.VITEST) {
-    await ctx.scheduler.runAfter(0, fn, ...args);
-    return;
-  }
   await pool.enqueueAction(ctx, fn, ...args as [any]);
 }

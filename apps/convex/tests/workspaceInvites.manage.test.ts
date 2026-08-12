@@ -55,6 +55,59 @@ describe("workspaceInvites.listByWorkspace", () => {
     });
   });
 
+  /**
+   * A pending invite whose mail bounced looks exactly like one the recipient
+   * has not got round to answering — which is the whole defect T6 names. The
+   * list is where an admin would notice, so it has to carry the delivery state.
+   */
+  it("exposes the delivery state of an invite whose email bounced", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t, "Acme");
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceInvites", {
+        workspaceId,
+        email: "typo@example.com",
+        invitedBy: userId,
+        status: InviteStatus.PENDING,
+        deliveryEmailId: "email-1",
+        deliveryStatus: "bounced",
+        deliveryError: "The recipient's mailbox does not exist.",
+      });
+    });
+
+    const [invite] = await asUser.query(api.workspaceInvites.listByWorkspace, {
+      workspaceId,
+    });
+
+    expect(invite).toMatchObject({
+      email: "typo@example.com",
+      deliveryStatus: "bounced",
+      deliveryError: "The recipient's mailbox does not exist.",
+    });
+  });
+
+  it("leaves delivery fields absent for an invite that has not been mailed", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceInvites", {
+        workspaceId,
+        email: "legacy@example.com",
+        invitedBy: userId,
+        status: InviteStatus.PENDING,
+      });
+    });
+
+    const [invite] = await asUser.query(api.workspaceInvites.listByWorkspace, {
+      workspaceId,
+    });
+
+    expect(invite.deliveryStatus).toBeUndefined();
+    expect(invite.deliveryError).toBeUndefined();
+  });
+
   it("rejects a non-admin member", async () => {
     const t = createTestContext();
     const { workspaceId } = await setupWorkspaceWithAdmin(t);

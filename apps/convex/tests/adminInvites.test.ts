@@ -1,7 +1,9 @@
 import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { describe, expect, it } from "vitest";
+import type { EmailId } from "@convex-dev/resend";
 import { api } from "../convex/_generated/api";
+import { readEmail } from "../convex/emailDelivery";
 import type { Id } from "../convex/_generated/dataModel";
 import {
   createTestContext,
@@ -39,12 +41,53 @@ async function insertInvite(
   );
 }
 
-async function scheduledInviteEmails(t: T) {
-  const rows = await t.run((ctx) => ctx.db.system.query("_scheduled_functions").collect());
-  return rows.filter((r) => String(r.name ?? "").includes("sendWorkspaceInvite"));
+/**
+ * The invite email is no longer a scheduled action to grep for in
+ * `_scheduled_functions` — it is enqueued into `@convex-dev/resend` inside the
+ * mutation's own transaction, and the invite row carries the component's email
+ * id. So the observable is the queued email itself: recipient, subject, and the
+ * rendered body (which is where the inviter's name now lives, since rendering
+ * happens at enqueue time rather than inside a send action).
+ */
+async function queuedInviteEmail(t: T, inviteId: Id<"workspaceInvites">) {
+  return await t.run(async (ctx) => {
+    const invite = await ctx.db.get(inviteId);
+    if (!invite?.deliveryEmailId) return null;
+    return await readEmail(ctx, invite.deliveryEmailId as EmailId);
+  });
 }
 
 describe("admin.invites.list", () => {
+  /**
+   * The console's own reason for existing is explaining a stuck invite — it
+   * already surfaces "the address has an account" and "that account is already
+   * a member". A bounced email is the third explanation, and was the missing one.
+   */
+  it("carries the delivery state of each invite", async () => {
+    const t = createTestContext();
+    const { userId: ownerId, workspaceId } = await setupWorkspaceWithAdmin(t, "Acme");
+    await t.run(async (ctx) => {
+      await ctx.db.insert("workspaceInvites", {
+        workspaceId,
+        email: "typo@example.com",
+        invitedBy: ownerId,
+        status: InviteStatus.PENDING,
+        deliveryEmailId: "email-1",
+        deliveryStatus: "bounced",
+        deliveryError: "The recipient's mailbox does not exist.",
+      });
+    });
+
+    const { asAdmin } = await makePlatformAdmin(t);
+    const { invites } = await asAdmin.query(api.admin.invites.list, {});
+
+    expect(invites[0]).toMatchObject({
+      email: "typo@example.com",
+      deliveryStatus: "bounced",
+      deliveryError: "The recipient's mailbox does not exist.",
+    });
+  });
+
   it("returns every invite regardless of status, newest first, enriched", async () => {
     const t = createTestContext();
     const { userId: ownerId, workspaceId } = await setupWorkspaceWithAdmin(t, "Acme");
@@ -148,14 +191,13 @@ describe("admin.invites.resend", () => {
     const { asAdmin } = await makePlatformAdmin(t);
     await asAdmin.mutation(api.admin.invites.resend, { inviteId });
 
-    const scheduled = await scheduledInviteEmails(t);
-    expect(scheduled).toHaveLength(1);
-    expect(scheduled[0].args[0]).toMatchObject({
-      inviteId,
-      workspaceName: "Acme",
-      inviterName: "Test User",
-      recipientEmail: "x@example.com",
+    const email = await queuedInviteEmail(t, inviteId);
+    expect(email).toMatchObject({
+      to: ["x@example.com"],
+      subject: expect.stringContaining("Acme"),
     });
+    // The credit line: the *original* inviter, not the admin who resent it.
+    expect(email?.html).toContain("Test User");
   });
 
   it("refuses to resend an invite that is no longer pending", async () => {
@@ -172,6 +214,6 @@ describe("admin.invites.resend", () => {
     await expect(
       asAdmin.mutation(api.admin.invites.resend, { inviteId }),
     ).rejects.toThrow(/Only pending invites/);
-    expect(await scheduledInviteEmails(t)).toHaveLength(0);
+    expect(await queuedInviteEmail(t, inviteId)).toBeNull();
   });
 });

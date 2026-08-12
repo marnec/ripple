@@ -11,4 +11,14 @@ crons.cron(
   { cursor: null },
 );
 
+// Prune the email component's records daily at 4:30 AM UTC — after storage GC,
+// so the two heavy sweeps do not overlap. The component ships no cron of its
+// own; see `emailMaintenance.ts` for why both windows exist.
+crons.cron(
+  "email record retention",
+  "30 4 * * *",
+  internal.emailMaintenance.pruneEmailRecords,
+  {},
+);
+
 export default crons;

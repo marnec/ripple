@@ -21,6 +21,8 @@ export const overview = query({
     projects: v.number(),
     tasks: v.number(),
     pendingInvites: v.number(),
+    /** Background work that gave up — see `admin/jobs.ts`. Zero is the healthy case. */
+    failedJobs: v.number(),
     recentSignups: v.array(
       v.object({
         _id: v.id("users"),
@@ -42,6 +44,7 @@ export const overview = query({
       projects,
       tasks,
       invites,
+      failedJobs,
     ] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("workspaces").collect(),
@@ -51,6 +54,7 @@ export const overview = query({
       ctx.db.query("projects").collect(),
       ctx.db.query("tasks").collect(),
       ctx.db.query("workspaceInvites").collect(),
+      ctx.db.query("backgroundJobFailures").collect(),
     ]);
 
     const recentSignups = [...users]
@@ -75,6 +79,7 @@ export const overview = query({
       projects: projects.length,
       tasks: tasks.length,
       pendingInvites: invites.filter((i) => i.status === "pending").length,
+      failedJobs: failedJobs.length,
       recentSignups,
     };
   },

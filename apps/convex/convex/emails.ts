@@ -1,108 +1,25 @@
 "use node";
 
 import { ConvexError, v } from "convex/values";
-import { internalAction } from "./_generated/server";
+import { internalAction, type ActionCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { sendTrackedEmail } from "./emailDelivery";
 import { Resend } from "resend";
 import { APP_NAME, EMAIL_FROM_DOMAIN, EMAIL_RSVP_DOMAIN } from "@ripple/shared/constants"
-
-/**
- * Escape a value for interpolation into the HTML body. The sibling of
- * `icsEscapeText` below, which handles the same concern for the calendar
- * attachment — every value these emails carry crosses both contexts, and only
- * one of them had an escape.
- *
- * The rule this file keeps: **every** value interpolated into an HTML string
- * goes through this, including server-constructed URLs that are safe today —
- * so the invariant is a grep rather than a per-value argument about who can
- * reach it. Two deliberate exceptions: `APP_NAME` and the `subhead`/`bodyHtml`
- * a caller passes to `renderEventEmailLayout`, which are markup by design.
- *
- * Applies to HTML only. `subject` is plain text: escaping it would show
- * `&amp;` to the recipient rather than hide markup from them.
- */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-export const sendWorkspaceInvite = internalAction({
-  args: {
-    inviteId: v.id("workspaceInvites"),
-    workspaceName: v.string(),
-    inviterName: v.string(),
-    recipientEmail: v.string(),
-  },
-  returns: v.null(),
-  handler: async (_, { inviteId, workspaceName, inviterName, recipientEmail }) => {
-    const url = `${process.env.SITE_URL}/invite/${inviteId}`;
-
-    const emailContent = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:480px;background:#ffffff;border-radius:12px;overflow:hidden;">
-        <tr><td style="padding:32px 32px 24px;">
-          <h1 style="margin:0 0 4px;font-size:20px;font-weight:600;color:#18181b;">${APP_NAME}</h1>
-          <p style="margin:0 0 24px;font-size:14px;color:#71717a;">Workspace Invitation</p>
-          <p style="margin:0 0 8px;font-size:15px;color:#27272a;line-height:1.5;">
-            <strong>${escapeHtml(inviterName)}</strong> invited you to join <strong>${escapeHtml(workspaceName)}</strong>.
-          </p>
-          <p style="margin:0 0 28px;font-size:14px;color:#52525b;line-height:1.5;">
-            Accept the invitation to start collaborating.
-          </p>
-          <a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 28px;background-color:#18181b;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:500;">
-            Accept Invitation
-          </a>
-          <p style="margin:24px 0 0;font-size:12px;color:#a1a1aa;line-height:1.5;">
-            Or copy this link: <a href="${escapeHtml(url)}" style="color:#71717a;">${escapeHtml(url)}</a>
-          </p>
-        </td></tr>
-        <tr><td style="padding:16px 32px;border-top:1px solid #f4f4f5;">
-          <p style="margin:0;font-size:12px;color:#a1a1aa;">
-            If you didn't expect this invitation, you can ignore this email.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-
-    const resendKey = process.env.AUTH_RESEND_KEY;
-
-    if (!resendKey) {
-      throw new ConvexError("Missing Resend API key");
-    }
-
-    const resend = new Resend(resendKey);
-
-    const sent = await resend.emails.send({
-      from: `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>`,
-      to: recipientEmail,
-      subject: `Invitation to join ${workspaceName} on ${APP_NAME}`,
-      html: emailContent,
-    });
-
-    if (sent.error) {
-      throw new ConvexError(`Failed to send email: ${sent.error.message}`);
-    }
-
-    return null;
-  },
-});
+// The escape lives with the templates so both senders — this file and the
+// component-backed invite path — share one copy of the invariant it documents.
+import { escapeHtml } from "./emailTemplates";
 
 // ─── Calendar event invitations ──────────────────────────────────────────
-// Mirrors sendWorkspaceInvite. The "View invitation" CTA URL is supplied
-// by the caller via `targetUrl`: guests get the public /share/:shareId
-// entry, internal members get the in-app calendar deep-link. The action
-// does no queries — all event metadata is passed inline by the
-// scheduling mutation.
+// The "View invitation" CTA URL is supplied by the caller via `targetUrl`:
+// guests get the public /share/:shareId entry, internal members get the
+// in-app calendar deep-link. The action does no queries — all event metadata
+// is passed inline by the scheduling mutation.
+//
+// These are the last senders still holding their own Resend client. The
+// workspace invite moved to `@convex-dev/resend` (see `emailDelivery.ts`),
+// which cannot carry the ICS attachment these three depend on; they get the
+// same durability from a workpool in T6 phase 2.
 
 // ─── ICS (iCalendar) builder ─────────────────────────────────────────────
 // Minimal RFC 5545 generator used to attach a `text/calendar` part to
@@ -272,28 +189,51 @@ function renderEventEmailLayout(opts: {
  * API-key guard, client construction, and error mapping that was
  * duplicated across the three sendEvent* actions.
  */
-async function sendCalendarEmail(opts: {
-  to: string;
-  subject: string;
-  html: string;
-  ics: string;
-  method: IcsMethod;
-}): Promise<void> {
+async function sendCalendarEmail(
+  ctx: ActionCtx,
+  opts: {
+    inviteeId?: Id<"calendarEventInvitees">;
+    to: string;
+    subject: string;
+    html: string;
+    ics: string;
+    method: IcsMethod;
+  },
+): Promise<void> {
   const resendKey = process.env.AUTH_RESEND_KEY;
   if (!resendKey) throw new ConvexError("Missing Resend API key");
   const resend = new Resend(resendKey);
 
-  const sent = await resend.emails.send({
-    from: `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>`,
+  await sendTrackedEmail(ctx, {
+    inviteeId: opts.inviteeId,
     to: opts.to,
     subject: opts.subject,
-    html: opts.html,
-    attachments: [icsAttachment(opts.ics, opts.method)],
-  });
+    send: async (idempotencyKey) => {
+      const sent = await resend.emails.send(
+        {
+          from: `${APP_NAME} <noreply@${EMAIL_FROM_DOMAIN}>`,
+          to: opts.to,
+          subject: opts.subject,
+          html: opts.html,
+          attachments: [icsAttachment(opts.ics, opts.method)],
+        },
+        // Per-attempt, because the component mints a fresh id per attempt.
+        // Guards the one window a retry cannot otherwise cover: a send that
+        // succeeded whose response was lost.
+        { idempotencyKey },
+      );
 
-  if (sent.error) {
-    throw new ConvexError(`Failed to send email: ${sent.error.message}`);
-  }
+      if (sent.error) {
+        return {
+          kind: "error",
+          code: sent.error.name,
+          status: (sent.error as { statusCode?: number }).statusCode,
+          message: sent.error.message,
+        };
+      }
+      return { kind: "sent", resendId: sent.data!.id };
+    },
+  });
 }
 
 function formatEventDateTime(
@@ -337,10 +277,14 @@ export const sendEventInvite = internalAction({
     endsAt: v.number(),
     timezone: v.string(),
     sequence: v.number(),
+    /** The row this message is announcing, so the send can record its own
+     *  outcome. Optional: a recipient may have no invitee row (a member
+     *  notified by preference rather than by invitation). */
+    inviteeId: v.optional(v.id("calendarEventInvitees")),
   },
   returns: v.null(),
   handler: async (
-    _,
+    ctx,
     {
       eventId,
       targetUrl,
@@ -352,6 +296,7 @@ export const sendEventInvite = internalAction({
       endsAt,
       timezone,
       sequence,
+      inviteeId,
     },
   ) => {
     const when = formatEventDateTime(startsAt, endsAt, timezone);
@@ -385,7 +330,8 @@ export const sendEventInvite = internalAction({
           </p>`,
     });
 
-    await sendCalendarEmail({
+    await sendCalendarEmail(ctx, {
+      inviteeId,
       to: recipientEmail,
       subject: `Invitation: ${eventTitle}`,
       html,
@@ -420,10 +366,14 @@ export const sendEventReschedule = internalAction({
     startsAt: v.number(),
     endsAt: v.number(),
     sequence: v.number(),
+    /** The row this message is announcing, so the send can record its own
+     *  outcome. Optional: a recipient may have no invitee row (a member
+     *  notified by preference rather than by invitation). */
+    inviteeId: v.optional(v.id("calendarEventInvitees")),
   },
   returns: v.null(),
   handler: async (
-    _,
+    ctx,
     {
       eventId,
       eventTitle,
@@ -433,6 +383,7 @@ export const sendEventReschedule = internalAction({
       startsAt,
       endsAt,
       sequence,
+      inviteeId,
     },
   ) => {
     const ics = buildEventIcs({
@@ -461,7 +412,8 @@ export const sendEventReschedule = internalAction({
           </table>`,
     });
 
-    await sendCalendarEmail({
+    await sendCalendarEmail(ctx, {
+      inviteeId,
       to: recipientEmail,
       subject: `Rescheduled: ${eventTitle}`,
       html,
@@ -485,10 +437,14 @@ export const sendEventCancellation = internalAction({
     startsAt: v.number(),
     endsAt: v.number(),
     sequence: v.number(),
+    /** The row this message is announcing, so the send can record its own
+     *  outcome. Optional: a recipient may have no invitee row (a member
+     *  notified by preference rather than by invitation). */
+    inviteeId: v.optional(v.id("calendarEventInvitees")),
   },
   returns: v.null(),
   handler: async (
-    _,
+    ctx,
     {
       eventId,
       eventTitle,
@@ -497,6 +453,7 @@ export const sendEventCancellation = internalAction({
       startsAt,
       endsAt,
       sequence,
+      inviteeId,
     },
   ) => {
     const ics = buildEventIcs({
@@ -522,7 +479,8 @@ export const sendEventCancellation = internalAction({
           </p>`,
     });
 
-    await sendCalendarEmail({
+    await sendCalendarEmail(ctx, {
+      inviteeId,
       to: recipientEmail,
       subject: `Cancelled: ${eventTitle}`,
       html,

@@ -7,6 +7,7 @@ import auditLogComponent from "convex-audit-log/test";
 import aggregateComponent from "@convex-dev/aggregate/test";
 import cascadingDeleteComponent from "convex-cascading-delete/test";
 import rateLimiterComponent from "@convex-dev/rate-limiter/test";
+import resendComponent from "@convex-dev/resend/test";
 import webhookReceiverComponent from "convex-webhook-receiver/test";
 import workpoolComponent from "@convex-dev/workpool/test";
 
@@ -18,8 +19,11 @@ export function createTestContext() {
   auditLogComponent.register(t as any);
   cascadingDeleteComponent.register(t as any);
   rateLimiterComponent.register(t);
+  resendComponent.register(t as any);
   webhookReceiverComponent.register(t as any);
+  workpoolComponent.register(t, "emailPool");
   workpoolComponent.register(t, "notificationPool");
+  workpoolComponent.register(t, "subscriptionPool");
   workpoolComponent.register(t, "taskReassignPool");
   workpoolComponent.register(t, "taskImportPool");
   // Register workspace resource count aggregates

@@ -32,6 +32,7 @@
     "@convex-dev/auth": "0.0.94",
     "@convex-dev/migrations": "0.3.6",
     "@convex-dev/rate-limiter": "0.3.2",
+    "@convex-dev/resend": "0.2.6",
     "@convex-dev/workpool": "0.4.9",
     "@ripple/shared": "workspace:*",
     "convex": "1.43.0",

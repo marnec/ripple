@@ -238,3 +238,92 @@ describe("integrations/gitlab/outboundGateway.buildGitlabGateway", () => {
     expect(retry.kind).toBe("retryable");
   });
 });
+
+/**
+ * GitLab's half of the create-dedupe lookup. Same contract as GitHub's, same
+ * reason it lists rather than searches — one shape of answer for the runner,
+ * whichever provider the link points at.
+ */
+describe("integrations/gitlab/outboundGateway.findIssueByRippleTask", () => {
+  const TASK_ID = "k5738j2h9wq1abcdefgh12345678";
+
+  it("lists the project's newest issues, url-encoding the project path", async () => {
+    const { client, calls } = fakeClient(() => ({ status: 200, body: [] }));
+
+    await gw(client).findIssueByRippleTask({
+      projectRef: "acme/web",
+      taskId: TASK_ID,
+    });
+
+    expect(calls[0].method).toBe("GET");
+    const [path, query] = calls[0].path.split("?");
+    expect(path).toBe("/projects/acme%2Fweb/issues");
+    const params = new URLSearchParams(query);
+    expect(params.get("order_by")).toBe("created_at");
+    expect(params.get("sort")).toBe("desc");
+    expect(Number(params.get("per_page"))).toBeGreaterThanOrEqual(50);
+  });
+
+  it("matches the marker in `description` and returns GitLab's id/iid/author", async () => {
+    const ts = "2026-05-22T10:00:00Z";
+    const { client } = fakeClient(() => ({
+      status: 200,
+      body: [
+        {
+          id: 301,
+          iid: 7,
+          description: `body\n\n<!-- ripple-task: ${TASK_ID} -->`,
+          updated_at: ts,
+          author: {
+            username: "bot",
+            avatar_url: "https://gitlab.com/bot.png",
+            web_url: "https://gitlab.com/bot",
+          },
+        },
+      ],
+    }));
+
+    expect(
+      await gw(client).findIssueByRippleTask({
+        projectRef: "acme/web",
+        taskId: TASK_ID,
+      }),
+    ).toEqual({
+      kind: "found",
+      meta: {
+        externalIssueId: "301",
+        issueNumber: 7,
+        externalUpdatedAt: Date.parse(ts),
+        externalAuthor: {
+          login: "bot",
+          avatarUrl: "https://gitlab.com/bot.png",
+          url: "https://gitlab.com/bot",
+        },
+      },
+    });
+  });
+
+  it("no marker is `absent`; an unusable response is `unavailable`", async () => {
+    const empty = fakeClient(() => ({
+      status: 200,
+      body: [{ id: 1, iid: 1, description: null, updated_at: "2026-05-22T10:00:00Z",
+              author: { username: "a", avatar_url: "b", web_url: "c" } }],
+    }));
+    const denied = fakeClient(() => ({ status: 403, errorMessage: "forbidden" }));
+
+    expect(
+      await gw(empty.client).findIssueByRippleTask({
+        projectRef: "acme/web",
+        taskId: TASK_ID,
+      }),
+    ).toEqual({ kind: "absent" });
+    expect(
+      (
+        await gw(denied.client).findIssueByRippleTask({
+          projectRef: "acme/web",
+          taskId: TASK_ID,
+        })
+      ).kind,
+    ).toBe("unavailable");
+  });
+});

@@ -120,9 +120,12 @@ export const update = mutation({
     // drains in batches like `remove` below rather than running inline — the
     // column itself is already correct above, and the tasks converge behind it.
     if (isCompleted !== undefined) {
-      await scheduleTaskReassign(ctx, internal.taskStatuses.syncTasksCompleted, {
-        statusId,
-      });
+      await scheduleTaskReassign(
+        ctx,
+        internal.taskStatuses.syncTasksCompleted,
+        { kind: "taskStatuses:syncTasksCompleted", key: statusId },
+        { statusId },
+      );
     }
 
     return null;
@@ -284,10 +287,12 @@ export const remove = mutation({
 
     await ctx.db.patch(statusId, { pendingDeletion: true });
 
-    await scheduleTaskReassign(ctx, internal.taskStatuses.reassignTasksAndDelete, {
-      statusId,
-      reassignToStatusId,
-    });
+    await scheduleTaskReassign(
+      ctx,
+      internal.taskStatuses.reassignTasksAndDelete,
+      { kind: "taskStatuses:reassignTasksAndDelete", key: statusId },
+      { statusId, reassignToStatusId },
+    );
 
     return null;
   },
@@ -333,6 +338,12 @@ export const syncTasksCompletedBatch = internalMutation({
   },
 });
 
+/**
+ * **Restart safety.** `taskReassignPool` retries this, and a retry re-enters at
+ * the first batch. Safe because the batch reads the target off the status row
+ * and selects only the tasks that still disagree with it: a replayed batch over
+ * already-synced tasks matches nothing and returns 0. Nothing here accumulates.
+ */
 export const syncTasksCompleted = internalAction({
   args: { statusId: v.id("taskStatuses") },
   returns: v.null(),
@@ -391,6 +402,13 @@ export const finalizeStatusDelete = internalMutation({
   },
 });
 
+/**
+ * **Restart safety.** A retry re-enters at the first batch. Safe because the
+ * batch queries the status being emptied and moves what it finds: rows moved by
+ * an earlier attempt are no longer in that query, so a replay drains whatever
+ * is left and then finalizes. `finalizeStatusDelete` no-ops on a status already
+ * gone, so even the tail of the drain survives being run twice.
+ */
 export const reassignTasksAndDelete = internalAction({
   args: {
     statusId: v.id("taskStatuses"),

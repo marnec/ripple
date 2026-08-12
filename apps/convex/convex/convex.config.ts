@@ -5,6 +5,7 @@ import auditLog from "convex-audit-log/convex.config.js";
 import cascadingDelete from "convex-cascading-delete/convex.config.js";
 import migrations from "@convex-dev/migrations/convex.config.js";
 import rateLimiter from "@convex-dev/rate-limiter/convex.config.js";
+import resend from "@convex-dev/resend/convex.config";
 import webhookReceiver from "convex-webhook-receiver/convex.config";
 import workpool from "@convex-dev/workpool/convex.config";
 
@@ -15,8 +16,11 @@ app.use(auditLog);
 app.use(cascadingDelete);
 app.use(migrations);
 app.use(rateLimiter);
+app.use(resend);
 app.use(webhookReceiver);
+app.use(workpool, { name: "emailPool" });
 app.use(workpool, { name: "notificationPool" });
+app.use(workpool, { name: "subscriptionPool" });
 app.use(workpool, { name: "taskReassignPool" });
 app.use(workpool, { name: "taskImportPool" });
 

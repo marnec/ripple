@@ -17,6 +17,8 @@ import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { cn } from "@/lib/utils";
+import { inviteDeliveryNotice } from "@ripple/shared/inviteDelivery";
 
 export function WorkspaceInvitationsSection({
   workspaceId,
@@ -112,6 +114,7 @@ export function WorkspaceInvitationsSection({
           <div className="space-y-2">
             {invites.map((invite) => {
               const busy = pendingId === invite._id;
+              const delivery = inviteDeliveryNotice(invite);
               return (
                 <div
                   key={invite._id}
@@ -125,6 +128,20 @@ export function WorkspaceInvitationsSection({
                         Invited by {invite.inviterName} ·{" "}
                         {formatDistanceToNow(invite._creationTime, { addSuffix: true })}
                       </p>
+                      {delivery && (
+                        <p
+                          className={cn(
+                            "truncate text-xs",
+                            delivery.tone === "error"
+                              ? "text-destructive"
+                              : "text-muted-foreground",
+                          )}
+                          title={delivery.detail}
+                        >
+                          {delivery.label}
+                          {delivery.detail ? ` · ${delivery.detail}` : ""}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">

@@ -83,6 +83,12 @@ export const subscribeMembersPage = internalMutation({
  * Drains the fanout a page at a time, holding the cursor between calls. Same
  * shape as `taskStatuses.syncTasksCompleted` and `tagSync.stripTagEverywhere`:
  * one scheduled entry point, one transaction per page.
+ *
+ * **Restart safety.** This runs through `subscriptionPool`, which retries it,
+ * and a retry starts a fresh call — `cursor` is local, so every page replays.
+ * That is safe because `insertSubscription` reads before it writes: a replayed
+ * page re-derives the same rows instead of adding second copies. The cursor is
+ * an optimisation for one attempt, never a record of progress across attempts.
  */
 export const publicChannelCreated = internalAction({
   args: {
@@ -125,6 +131,11 @@ export const unsubscribeNonMembersPage = internalMutation({
   },
 });
 
+/**
+ * **Restart safety** as above, mirrored: `deleteSubscription` removes rows that
+ * exist and ignores those that do not, so a retry replaying an already-drained
+ * page finds nothing left to remove rather than failing on the second pass.
+ */
 export const channelMadePrivate = internalAction({
   args: { channelId: v.id("channels") },
   returns: v.null(),

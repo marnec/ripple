@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import {
@@ -6,8 +6,47 @@ import {
   setupAuthenticatedUser,
   setupWorkspaceWithAdmin,
 } from "./helpers";
+import { deliveredPushes, resetDeliveredPushes } from "./pushProbe";
 
 type TestContext = ReturnType<typeof createTestContext>;
+
+/**
+ * Calendar email is no longer a scheduled action with a greppable name — it is
+ * enqueued into `emailPool` (see `convex/emailPool.ts`), because a scheduled
+ * action runs at most once and these messages need retries. So the observable
+ * moved from a `_scheduled_functions` row to the send itself: drain the queue,
+ * count what reached Resend. The assertions below are unchanged in meaning.
+ */
+const sendEmail = vi.fn();
+
+vi.mock("../convex/utils/sendPushToUsers", async () => {
+  const probe = await import("./pushProbe");
+  return probe.pushDeliveryMock();
+});
+
+vi.mock("resend", () => ({
+  Resend: class {
+    emails = { send: (payload: unknown, options?: unknown) => sendEmail(payload, options) };
+  },
+}));
+
+/** Drain the pool and report how many calendar emails have actually been sent. */
+async function countCalendarEmails(t: TestContext): Promise<number> {
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return sendEmail.mock.calls.length;
+}
+
+/**
+ * The same move, one theme later, for in-app push: `deliverPush` is enqueued
+ * into `notificationPool` rather than the scheduler, so a `_scheduled_functions`
+ * row named `deliverPush` no longer exists. Drain, then count what reached
+ * delivery — see `pushProbe.ts`.
+ */
+async function countDeliveredPushes(t: TestContext): Promise<number> {
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return deliveredPushes.length;
+}
+
 
 const ONE_HOUR = 60 * 60 * 1000;
 
@@ -29,7 +68,16 @@ async function addMember(
 describe("calendarEvents", () => {
   let t: TestContext;
   beforeEach(() => {
+    vi.useFakeTimers();
+    resetDeliveredPushes();
+    sendEmail.mockReset();
+    sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
+    process.env.AUTH_RESEND_KEY = "re_test_key";
+    process.env.RESEND_TEST_MODE = "false";
     t = createTestContext();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe("create", () => {
@@ -262,13 +310,13 @@ describe("calendarEvents", () => {
         invitees: { userIds: [memberId as any], guestEmails: [] },
       });
 
-      const before = await countScheduled((n) => n.includes("deliverPush"));
+      const before = await countDeliveredPushes(t);
       await asUser.mutation(api.calendarEvents.update, {
         eventId,
         startsAt: Date.now() + 2 * ONE_HOUR,
         endsAt: Date.now() + 3 * ONE_HOUR,
       });
-      const after = await countScheduled((n) => n.includes("deliverPush"));
+      const after = await countDeliveredPushes(t);
       expect(after).toBeGreaterThan(before);
     });
 
@@ -288,16 +336,16 @@ describe("calendarEvents", () => {
         invitees: { userIds: [memberId as any], guestEmails: ["g@x.com"] },
       });
 
-      const beforeDeliver = await countScheduled((n) => n.includes("deliverPush"));
-      const beforeEmail = await countScheduled((n) => n.includes("sendEventReschedule"));
+      const beforeDeliver = await countDeliveredPushes(t);
+      const beforeEmail = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.update, {
         eventId,
         startsAt: Date.now() + 3 * ONE_HOUR,
         endsAt: Date.now() + 4 * ONE_HOUR,
         notifyInvitees: false,
       });
-      const afterDeliver = await countScheduled((n) => n.includes("deliverPush"));
-      const afterEmail = await countScheduled((n) => n.includes("sendEventReschedule"));
+      const afterDeliver = await countDeliveredPushes(t);
+      const afterEmail = await countCalendarEmails(t);
 
       expect(afterDeliver).toBe(beforeDeliver);
       expect(afterEmail).toBe(beforeEmail);
@@ -314,14 +362,14 @@ describe("calendarEvents", () => {
         invitees: { userIds: [], guestEmails: ["g@external.com"] },
       });
 
-      const before = await countScheduled((n) => n.includes("sendEventReschedule"));
+      const before = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.update, {
         eventId,
         startsAt: Date.now() + 5 * ONE_HOUR,
         endsAt: Date.now() + 6 * ONE_HOUR,
         notifyInvitees: true,
       });
-      const after = await countScheduled((n) => n.includes("sendEventReschedule"));
+      const after = await countCalendarEmails(t);
       expect(after).toBeGreaterThan(before);
     });
 
@@ -336,13 +384,13 @@ describe("calendarEvents", () => {
         invitees: { userIds: [], guestEmails: ["g@external.com"] },
       });
 
-      const before = await countScheduled((n) => n.includes("sendEventReschedule"));
+      const before = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.update, {
         eventId,
         title: "Renamed",
         notifyInvitees: true,
       });
-      const after = await countScheduled((n) => n.includes("sendEventReschedule"));
+      const after = await countCalendarEmails(t);
       // Reschedule emails are time-change-specific — title rename
       // does NOT trigger one.
       expect(after).toBe(before);
@@ -371,7 +419,7 @@ describe("calendarEvents", () => {
       });
       await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
 
-      const before = await countScheduled((n) => n.includes("sendEventInvite"));
+      const before = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
         title: "Onboarding",
@@ -380,7 +428,7 @@ describe("calendarEvents", () => {
         timezone: "UTC",
         invitees: { userIds: [memberId as any], guestEmails: [] },
       });
-      const after = await countScheduled((n) => n.includes("sendEventInvite"));
+      const after = await countCalendarEmails(t);
       // One member → one sendEventInvite scheduled (no guests).
       expect(after - before).toBe(1);
     });
@@ -418,7 +466,7 @@ describe("calendarEvents", () => {
         });
       });
 
-      const before = await countScheduled((n) => n.includes("sendEventInvite"));
+      const before = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
         title: "Onboarding",
@@ -427,7 +475,7 @@ describe("calendarEvents", () => {
         timezone: "UTC",
         invitees: { userIds: [memberId as any], guestEmails: [] },
       });
-      const after = await countScheduled((n) => n.includes("sendEventInvite"));
+      const after = await countCalendarEmails(t);
       // Member opted out + no guests → no email scheduled.
       expect(after).toBe(before);
     });
@@ -468,7 +516,7 @@ describe("calendarEvents", () => {
         });
       });
 
-      const before = await countScheduled((n) => n.includes("sendEventInvite"));
+      const before = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,
         title: "Onboarding",
@@ -477,7 +525,7 @@ describe("calendarEvents", () => {
         timezone: "UTC",
         invitees: { userIds: [memberId as any], guestEmails: [] },
       });
-      const after = await countScheduled((n) => n.includes("sendEventInvite"));
+      const after = await countCalendarEmails(t);
       expect(after - before).toBe(1);
     });
 
@@ -500,17 +548,13 @@ describe("calendarEvents", () => {
         },
       });
 
-      const before = await countScheduled((n) =>
-        n.includes("sendEventReschedule"),
-      );
+      const before = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.update, {
         eventId,
         startsAt: Date.now() + 5 * ONE_HOUR,
         endsAt: Date.now() + 6 * ONE_HOUR,
       });
-      const after = await countScheduled((n) =>
-        n.includes("sendEventReschedule"),
-      );
+      const after = await countCalendarEmails(t);
       // 1 guest + 1 member = 2 reschedule emails.
       expect(after - before).toBe(2);
     });
@@ -534,13 +578,9 @@ describe("calendarEvents", () => {
         },
       });
 
-      const before = await countScheduled((n) =>
-        n.includes("sendEventCancellation"),
-      );
+      const before = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.cancel, { eventId });
-      const after = await countScheduled((n) =>
-        n.includes("sendEventCancellation"),
-      );
+      const after = await countCalendarEmails(t);
       // 1 guest + 1 member = 2 cancellation emails.
       expect(after - before).toBe(2);
     });
@@ -575,10 +615,8 @@ describe("calendarEvents", () => {
         },
       });
 
-      const beforePush = await countScheduled((n) => n.includes("deliverPush"));
-      const beforeResched = await countScheduled((n) =>
-        n.includes("sendEventReschedule"),
-      );
+      const beforePush = await countDeliveredPushes(t);
+      const beforeResched = await countCalendarEmails(t);
 
       await asUser.mutation(api.calendarEvents.update, {
         eventId,
@@ -589,10 +627,8 @@ describe("calendarEvents", () => {
         notifyInvitees: true,
       });
 
-      const afterPush = await countScheduled((n) => n.includes("deliverPush"));
-      const afterResched = await countScheduled((n) =>
-        n.includes("sendEventReschedule"),
-      );
+      const afterPush = await countDeliveredPushes(t);
+      const afterResched = await countCalendarEmails(t);
 
       expect(afterPush).toBe(beforePush);
       expect(afterResched).toBe(beforeResched);
@@ -617,18 +653,14 @@ describe("calendarEvents", () => {
         },
       });
 
-      const beforeResched = await countScheduled((n) =>
-        n.includes("sendEventReschedule"),
-      );
+      const beforeResched = await countCalendarEmails(t);
       await asUser.mutation(api.calendarEvents.update, {
         eventId,
         // New start is in the future → not a historical reschedule.
         startsAt: Date.now() + 5 * ONE_HOUR,
         endsAt: Date.now() + 6 * ONE_HOUR,
       });
-      const afterResched = await countScheduled((n) =>
-        n.includes("sendEventReschedule"),
-      );
+      const afterResched = await countCalendarEmails(t);
 
       // Guest + member emails get scheduled.
       expect(afterResched - beforeResched).toBe(2);

@@ -5,6 +5,8 @@ import { internal } from "./_generated/api";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { logActivity } from "./auditLog";
+import { sendWorkspaceInviteEmail } from "./emailDelivery";
+import { emailDeliveryStatus } from "./schema";
 import { requireWorkspaceMember, requireUser, getUser } from "./authHelpers";
 import type { Doc } from "./_generated/dataModel";
 
@@ -74,8 +76,9 @@ export const create = mutation({
       action: "invited", newValue: email, resourceName: email, scope: workspaceId,
     });
 
-    // Send invite email
-    await ctx.scheduler.runAfter(0, internal.emails.sendWorkspaceInvite, {
+    // Enqueue the invite email. Durable and in this transaction — see
+    // `emailDelivery.ts`; the old scheduled action ran at most once.
+    await sendWorkspaceInviteEmail(ctx, {
       inviteId,
       workspaceName: workspace!.name,
       inviterName: inviter!.name ?? inviter!.email!,
@@ -183,6 +186,11 @@ export const listByWorkspace = query({
       email: v.string(),
       invitedBy: v.id("users"),
       inviterName: v.string(),
+      // A pending invite whose mail bounced is indistinguishable from one the
+      // recipient simply hasn't answered — this is what tells them apart.
+      // Absent on invites predating the delivery-tracking work.
+      deliveryStatus: v.optional(emailDeliveryStatus),
+      deliveryError: v.optional(v.string()),
     }),
   ),
   handler: async (ctx, { workspaceId }) => {
@@ -206,6 +214,8 @@ export const listByWorkspace = query({
           email: invite.email,
           invitedBy: invite.invitedBy,
           inviterName: inviter?.name ?? inviter?.email ?? "Someone",
+          deliveryStatus: invite.deliveryStatus,
+          deliveryError: invite.deliveryError,
         };
       }),
     );
@@ -264,7 +274,7 @@ export const resend = mutation({
     const workspace = await ctx.db.get(invite.workspaceId);
     const inviter = await ctx.db.get(userId);
 
-    await ctx.scheduler.runAfter(0, internal.emails.sendWorkspaceInvite, {
+    await sendWorkspaceInviteEmail(ctx, {
       inviteId,
       workspaceName: workspace!.name,
       inviterName: inviter!.name ?? inviter!.email!,

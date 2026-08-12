@@ -12,6 +12,27 @@ export const channelTypeSchema = v.union(
   ...Object.values(ChannelType).map((type) => v.literal(type)),
 );
 
+/**
+ * Mirrors `@convex-dev/resend`'s own `Status` union (`vStatus`), spelled out
+ * here rather than imported. A validator in this schema is a storage contract:
+ * importing the component's would let a version bump that adds a status make
+ * every historical row in this table fail validation. Kept deliberately
+ * identical — if the component gains a status, this list is where it lands.
+ *
+ * `waiting` → not yet batched, `queued` → batched and awaiting send, `sent` →
+ * handed to Resend with its fate unknown, and the rest are terminal.
+ */
+export const emailDeliveryStatus = v.union(
+  v.literal("waiting"),
+  v.literal("queued"),
+  v.literal("cancelled"),
+  v.literal("sent"),
+  v.literal("delivered"),
+  v.literal("delivery_delayed"),
+  v.literal("bounced"),
+  v.literal("failed"),
+);
+
 // The schema is normally optional, but Convex Auth
 // requires indexes defined on `authTables`.
 // The schema provides more precise TypeScript types.
@@ -105,10 +126,26 @@ export default defineSchema({
     email: v.string(),
     invitedBy: v.id("users"),
     status: v.union(...Object.values(InviteStatus).map((status) => v.literal(status))),
+    // ── Email delivery (the `@convex-dev/resend` component) ──────────
+    // `status` above is the *invite's* lifecycle (pending/accepted/…); these
+    // three are the lifecycle of the mail that announced it, which is a
+    // different question and used to have no answer at all: a Resend 429 left
+    // the row at `pending`, indistinguishable from "hasn't replied yet".
+    // `deliveryEmailId` is the component's own id, so `resend.status()` and the
+    // webhook remain the source of truth and these columns are the denormalized
+    // read the invite list renders from.
+    deliveryEmailId: v.optional(v.string()),
+    deliveryStatus: v.optional(emailDeliveryStatus),
+    // Set on bounce/failure only. A bounce is the failure class a send-side
+    // error column can never see, which is most of why delivery went through
+    // the component rather than a hand-rolled pool.
+    deliveryError: v.optional(v.string()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_by_email_by_status", ["workspaceId", "email", "status"])
-    .index("by_email_and_status", ["email", "status"]),
+    .index("by_email_and_status", ["email", "status"])
+    // The webhook arrives keyed by the component's email id and nothing else.
+    .index("by_delivery_email", ["deliveryEmailId"]),
 
   channels: defineTable({
     name: v.string(),
@@ -717,11 +754,35 @@ export default defineSchema({
     // not strictly newer than what we've already applied.
     lastRsvpDtstamp: v.optional(v.number()),
     lastRsvpSequence: v.optional(v.number()),
+    // ── Email delivery (the `@convex-dev/resend` component) ──────────
+    // The same three columns `workspaceInvites` carries, for the same reason,
+    // and they matter more here: `status` above stays `pending` whether the
+    // guest is thinking it over or never received the invitation. Guest
+    // addresses are hand-typed on a share link, so this is where bad addresses
+    // concentrate.
+    //
+    // Calendar mail is sent with `sendEmailManually` (the component's batch
+    // endpoint carries no attachments), which creates one component record per
+    // *attempt* — so this holds the newest attempt's id, and a read of delivery
+    // state is newest-wins, never `.unique()` over the component's records.
+    deliveryEmailId: v.optional(v.string()),
+    // Resend's *own* message id, which `workspaceInvites` has no need of.
+    // Calendar mail sends manually, and the component only dispatches its
+    // `onEmailEvent` callback when its `lastOptions` row exists — a row written
+    // exclusively by the batch path. A deployment that has never sent a
+    // workspace invite therefore drops every delivery event for manual sends,
+    // silently. Keeping Resend's id here lets the webhook route resolve events
+    // itself, so tracking does not depend on another sender having run first.
+    deliveryResendId: v.optional(v.string()),
+    deliveryStatus: v.optional(emailDeliveryStatus),
+    deliveryError: v.optional(v.string()),
   })
     .index("by_event", ["eventId"])
     .index("by_event_user", ["eventId", "userId"])
     .index("by_event_guest_email", ["eventId", "guestEmail"])
-    .index("by_share", ["shareId"]),
+    .index("by_share", ["shareId"])
+    .index("by_delivery_email", ["deliveryEmailId"])
+    .index("by_delivery_resend", ["deliveryResendId"]),
 
   pushSubscriptions: defineTable({
     userId: v.id("users"),
@@ -1373,4 +1434,23 @@ export default defineSchema({
     runId: v.string(),
     taskId: v.id("tasks"),
   }).index("by_runId", ["runId"]),
+
+  // Background work that exhausted its retries and gave up.
+  //
+  // One table rather than a column per drain: these jobs have no single row to
+  // hang a status off — a channel fanout spans every member of a workspace, a
+  // tag strip spans every tagged resource — and the surface the theme actually
+  // asks for is one list of "work that stopped", not a failure flag scattered
+  // across five tables nobody thinks to query together.
+  //
+  // `kind` is the drain (`module:function`), `key` the thing it was draining
+  // (a channel id, a tag id). Together they say what to re-run.
+  backgroundJobFailures: defineTable({
+    kind: v.string(),
+    key: v.string(),
+    error: v.string(),
+    failedAt: v.number(),
+  })
+    .index("by_kind", ["kind"])
+    .index("by_kind_key", ["kind", "key"]),
 });

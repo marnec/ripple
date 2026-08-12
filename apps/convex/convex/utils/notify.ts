@@ -44,6 +44,14 @@ type NotifyArgs = WithRecipients | WithScope;
  * - `recipientIds`: explicit list (mentions, assignee). Self is NOT auto-filtered.
  * - `scope`: broadcast via materialized subscriptions, excluding `userId`.
  */
+/**
+ * Delivery here is **at-most-once, on purpose**: `scheduleNotification` enqueues
+ * into a pool with no retry. A push has no dedupe key on the delivery side, so
+ * a retried fan-out re-notifies everyone the first attempt already reached, and
+ * a duplicate buzz is worse for the recipient than a notification they never
+ * knew about. The T6 retry work deliberately stopped at this boundary — see
+ * `notificationPool.ts`.
+ */
 export async function notify(
   ctx: MutationCtx,
   args: NotifyArgs,

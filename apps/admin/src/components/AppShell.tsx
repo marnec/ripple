@@ -10,6 +10,7 @@ import {
 import { navigate, useRouteSegments } from "@/hooks/useHashRoute";
 import { cn } from "@/lib/utils";
 import { InvitesPage } from "@/pages/Invites";
+import { JobsPage } from "@/pages/Jobs";
 import { OverviewPage } from "@/pages/Overview";
 import { UserDetailPage, UsersPage } from "@/pages/Users";
 import { WorkspaceDetailPage, WorkspacesPage } from "@/pages/Workspaces";
@@ -20,6 +21,7 @@ import { useQuery } from "convex/react";
 import {
   Building2Icon,
   GaugeIcon,
+  HeartPulseIcon,
   LogOutIcon,
   MailIcon,
   PlugIcon,
@@ -34,6 +36,7 @@ const NAV: NavItem[] = [
   { label: "Users", path: "/users", icon: UsersIcon },
   { label: "Workspaces", path: "/workspaces", icon: Building2Icon },
   { label: "Invites", path: "/invites", icon: MailIcon },
+  { label: "Jobs", path: "/jobs", icon: HeartPulseIcon },
 ];
 
 // Surfaced but inert — signals the roadmap without pretending to work.
@@ -72,6 +75,8 @@ function Routed({ segments }: { segments: string[] }) {
       );
     case "invites":
       return <InvitesPage />;
+    case "jobs":
+      return <JobsPage />;
     default:
       return <OverviewPage />;
   }

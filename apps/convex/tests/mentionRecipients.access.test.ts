@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import {
@@ -8,6 +8,20 @@ import {
   setupWorkspaceWithAdmin,
 } from "./helpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import { deliveredPushes, resetDeliveredPushes } from "./pushProbe";
+
+// Push delivery goes through `notificationPool`, so the observable is what
+// reached the web-push helpers after the pool drains — see `pushProbe.ts`.
+vi.mock("../convex/utils/sendPushToUsers", async () => {
+  const probe = await import("./pushProbe");
+  return probe.pushDeliveryMock();
+});
+
+beforeEach(() => {
+  resetDeliveredPushes();
+  vi.useFakeTimers();
+});
+afterEach(() => vi.useRealTimers());
 
 /**
  * Mentions in documents, task descriptions and task comments follow the
@@ -54,18 +68,10 @@ async function setupDocument(
   return t.run((ctx) => ctx.db.insert("documents", { workspaceId, name }));
 }
 
-/** Recipients of every `deliverPush` queued so far, flattened. */
+/** Recipients of every push delivered so far, flattened. */
 async function pushRecipients(t: TestContext): Promise<string[]> {
-  const rows = await t.run((ctx) =>
-    ctx.db.system.query("_scheduled_functions").collect(),
-  );
-  return rows
-    .filter((r) => String(r.name ?? "").includes("deliverPush"))
-    .flatMap(
-      (r) =>
-        ((r.args as unknown[])[0] as { recipientIds?: string[] }).recipientIds ??
-        [],
-    );
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  return deliveredPushes.flatMap((p) => p.recipientIds);
 }
 
 async function setupTask(
