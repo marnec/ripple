@@ -124,14 +124,30 @@ export const rename = mutation({
   handler: async (ctx, { id, name }) => {
     const { userId, resource: document } = await requireResourceMember(ctx, "documents", id);
 
-    const match = await ctx.db
+    // Exact match on (workspace, name), excluding this document.
+    //
+    // This used to run through the `by_name` SEARCH index, which is tokenized:
+    // it ORs over terms and matches prefixes, so "Plan A" → "Plan B" matched
+    // the document against itself and threw, and any document sharing a single
+    // word blocked the rename outright. `.take(2)` rather than `.unique()`
+    // because the constraint is not actually enforced anywhere else — `create`
+    // accepts any name — so two rows may already share one, and `.unique()`
+    // would throw on the pre-existing data instead of on the rename.
+    //
+    // Deliberately not extended to `create`, nor to `diagrams.rename` /
+    // `spreadsheets.rename`, which have no such check: this is the only
+    // name-uniqueness rule in the backend, and making it a real invariant is a
+    // product decision with a migration attached, not a bug fix.
+    const clash = await ctx.db
       .query("documents")
-      .withSearchIndex("by_name", (q) =>
-        q.search("name", name).eq("workspaceId", document.workspaceId),
+      .withIndex("by_workspace_name", (q) =>
+        q.eq("workspaceId", document.workspaceId).eq("name", name),
       )
-      .collect();
+      .take(2);
 
-    if (match.length) throw new ConvexError("Document name already exists");
+    if (clash.some((d) => d._id !== id)) {
+      throw new ConvexError("Document name already exists");
+    }
 
     await logActivity(ctx, {
       userId, resourceType: "documents", resourceId: id,

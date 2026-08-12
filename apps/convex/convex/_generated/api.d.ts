@@ -673,30 +673,6 @@ export declare const api: {
       { channelId: Id<"channels"> },
       { _creationTime: number; _id: Id<"channelJoinRequests"> } | null
     >;
-    list: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"channels">;
-        name: string;
-        type: "open" | "closed" | "dm";
-        workspaceId: Id<"workspaces">;
-      }>
-    >;
-    listByUserMembership: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"channels">;
-        name: string;
-        type: "open" | "closed" | "dm";
-        workspaceId: Id<"workspaces">;
-      }>
-    >;
     listHostable: FunctionReference<
       "query",
       "public",

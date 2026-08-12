@@ -223,6 +223,10 @@ export default defineSchema({
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_yjsSnapshotId", ["yjsSnapshotId"])
+    // Exact-name lookup for `rename`'s duplicate check. The `by_name` search
+    // index below cannot answer that question: it is tokenized, so it matches
+    // on any shared word and on prefixes. See `documents.rename`.
+    .index("by_workspace_name", ["workspaceId", "name"])
     .searchIndex("by_name", { searchField: "name", filterFields: ["workspaceId"] }),
 
   diagrams: defineTable({

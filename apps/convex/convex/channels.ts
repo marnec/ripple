@@ -3,7 +3,6 @@ import { paginationOptsValidator } from "convex/server";
 import { internalQuery, query } from "./_generated/server";
 import { mutation } from "./functions";
 import { ChannelRole, ChannelType } from "@ripple/shared/enums";
-import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { internal } from "./_generated/api";
@@ -58,33 +57,6 @@ export const create = mutation({
     });
 
     return channelId;
-  },
-});
-
-export const list = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(v.object({
-    _id: v.id("channels"),
-    _creationTime: v.number(),
-    name: v.string(),
-    workspaceId: v.id("workspaces"),
-    type: channelTypeSchema,
-  })),
-  handler: async (ctx, { workspaceId }) => {
-    const auth = await checkWorkspaceMember(ctx, workspaceId);
-    if (!auth) return [];
-
-    const channels = await ctx.db
-      .query("channels")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
-    return channels.map((c) => ({
-      _id: c._id,
-      _creationTime: c._creationTime,
-      name: c.name,
-      workspaceId: c.workspaceId,
-      type: c.type,
-    }));
   },
 });
 
@@ -293,41 +265,6 @@ export const getInternal = internalQuery({
       workspaceId: channel.workspaceId,
       type: channel.type,
     };
-  },
-});
-
-export const listByUserMembership = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(channelValidator),
-  handler: async (ctx, { workspaceId }) => {
-    const { userId } = await requireWorkspaceMember(ctx, workspaceId);
-
-    // Get user's closed/dm channel memberships in this workspace
-    const userMemberships = await ctx.db
-      .query("channelMembers")
-      .withIndex("by_workspace_user", (q) => q.eq("workspaceId", workspaceId).eq("userId", userId))
-      .collect();
-
-    // Use getAll helper to batch fetch closed/dm channels
-    const memberChannelIds = userMemberships.map((m) => m.channelId);
-    const memberChannels = (await getAll(ctx.db, memberChannelIds))
-      .filter((c): c is NonNullable<typeof c> => c !== null);
-
-    // Get open channels in the workspace
-    const openChannels = await ctx.db
-      .query("channels")
-      .withIndex("by_type_workspace", (q) => q.eq("type", ChannelType.OPEN).eq("workspaceId", workspaceId))
-      .collect();
-
-    return [...memberChannels, ...openChannels]
-      .sort((a, b) => b._creationTime - a._creationTime)
-      .map((c) => ({
-        _id: c._id,
-        _creationTime: c._creationTime,
-        name: c.name,
-        workspaceId: c.workspaceId,
-        type: c.type,
-      }));
   },
 });
 

@@ -57,8 +57,18 @@ export const get = query({
     const memberChannelIds = userChannelMemberships.map((m) => m.channelId);
     const memberChannels = (await getAll(ctx.db, memberChannelIds))
       .filter((c): c is NonNullable<typeof c> => c !== null);
-    const allChannels = [...memberChannels, ...publicChannels]
-      .sort((a, b) => b._creationTime - a._creationTime);
+    // Dedupe by `_id` before sorting: the two sets are NOT disjoint.
+    // `channelMembers.add` (`channelMembers.ts:107`) explicitly permits adding
+    // someone to an OPEN channel, and `channels.approveJoinRequest` is a second
+    // path to the same row — so such a channel arrives from both sides. Plain
+    // concatenation rendered it twice (duplicate React keys) and let
+    // `hiddenChannelCount` below count it twice.
+    const byId = new Map<string, (typeof memberChannels)[number]>();
+    for (const c of memberChannels) byId.set(c._id, c);
+    for (const c of publicChannels) byId.set(c._id, c);
+    const allChannels = [...byId.values()].sort(
+      (a, b) => b._creationTime - a._creationTime,
+    );
 
     // Map channelId → hiddenAt for cheap lookup.
     const hiddenAtByChannelId = new Map<string, number>();

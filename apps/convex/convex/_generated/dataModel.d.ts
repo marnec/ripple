@@ -591,6 +591,7 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_name: ["workspaceId", "name", "_creationTime"];
       by_yjsSnapshotId: ["yjsSnapshotId", "_creationTime"];
     };
     searchIndexes: {

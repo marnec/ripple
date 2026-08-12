@@ -91,8 +91,10 @@ const callSessionValidator = v.object({
  * and for a long time it called nothing at all, checking only that the caller
  * was signed in. That let any authenticated account join any DM or closed
  * channel call, and (worse) *create* the Cloudflare meeting for a channel it
- * could not read, since `channels.list` hands every workspace member the ids
- * of all closed channels and DMs.
+ * could not read. It was trivially exploitable rather than theoretical because
+ * `channels.list` handed every workspace member the ids of all closed channels
+ * and DMs; that query gated on workspace membership alone, had no callers, and
+ * has since been deleted.
  *
  * Mirrors the shape `calendarEvents.joinEventCall` already uses.
  */
