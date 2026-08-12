@@ -856,6 +856,13 @@ export const update = mutation({
 
     await ctx.db.patch(event._id, patch);
 
+    // Guest links expire against the event's end, so a reschedule has to move
+    // them or every existing guest is locked out. Above the notification gate
+    // on purpose — see `redateGuestShares`.
+    if (timeChanged) {
+      await redateGuestShares(ctx, { eventId: event._id, endsAt: newEnd });
+    }
+
     const shouldNotify = args.notifyInvitees ?? true;
     // Past→past time edits are organizer history-cleanup, not real
     // schedule changes. Suppress every notification channel even if
@@ -1616,6 +1623,50 @@ export const getGuestEventCallToken = action({
 // ---------------------------------------------------------------------------
 // Internal helpers (insert + recipient collection)
 // ---------------------------------------------------------------------------
+
+/**
+ * Re-date an event's guest share links after its time moved.
+ *
+ * A guest share is stamped `endsAt + SHARE_BUFFER_MS` when it is issued and
+ * was never touched again, so a reschedule left every existing guest holding a
+ * link that expires against the OLD end. What made this quiet is that the parts
+ * a guest sees first kept working: the corrected ICS still arrived and email
+ * RSVP still resolved. Only `/share/<id>`, `respondAsGuest` and
+ * `getGuestEventCallToken` failed — that is, the guest could not join the call
+ * they had just been re-invited to, with no way to tell why. `addInvitees`
+ * cannot reissue (it filters emails that already hold a row), so the only
+ * recovery was for the organizer to remove and re-add the guest.
+ *
+ * Runs on every time change, deliberately NOT gated on `notifyInvitees` or on
+ * the historical-reschedule predicate. Those two decide whether to *tell*
+ * anyone; a silent reschedule that leaves the links dead is precisely the case
+ * the guest cannot diagnose. Moving an event earlier shortens the window for
+ * the same reason it lengthens it on a later move — the link tracks the event.
+ *
+ * Scoped to shares an invitee row points at. A link created by hand through
+ * `shares.createShare` carries an operator-chosen expiry — possibly none at
+ * all — which is not ours to overwrite.
+ */
+async function redateGuestShares(
+  ctx: { db: import("./_generated/server").MutationCtx["db"] },
+  args: { eventId: Id<"calendarEvents">; endsAt: number },
+): Promise<void> {
+  const rows = await loadInviteeRows(ctx, args.eventId);
+  const nextExpiresAt = args.endsAt + SHARE_BUFFER_MS;
+  for (const row of rows) {
+    const shareId = row.shareId;
+    if (shareId === undefined) continue;
+    const share = await ctx.db
+      .query("resourceShares")
+      .withIndex("by_shareId", (q) => q.eq("shareId", shareId))
+      .first();
+    if (!share) continue;
+    // A revoked link stays revoked — the organizer took it away on purpose.
+    if (share.revokedAt !== undefined) continue;
+    if (share.expiresAt === nextExpiresAt) continue;
+    await ctx.db.patch(share._id, { expiresAt: nextExpiresAt });
+  }
+}
 
 async function insertGuestShare(
   ctx: { db: import("./_generated/server").MutationCtx["db"] },
