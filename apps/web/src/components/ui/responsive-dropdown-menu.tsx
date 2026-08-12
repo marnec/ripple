@@ -66,29 +66,12 @@ function ResponsiveDropdownMenuTrigger(
 ) {
   const { isMobile } = React.useContext(ResponsiveDropdownMenuContext);
   if (isMobile) {
-    const { render, children, ...rest } = props;
-    if (render) {
-      const triggerElement = React.cloneElement(
-        render as React.ReactElement,
-        {},
-        children,
-      );
-      return (
-        <DrawerTrigger
-          asChild
-          {...(rest as React.ComponentProps<typeof DrawerTrigger>)}
-        >
-          {triggerElement}
-        </DrawerTrigger>
-      );
-    }
-    return (
-      <DrawerTrigger
-        {...(rest as React.ComponentProps<typeof DrawerTrigger>)}
-      >
-        {children}
-      </DrawerTrigger>
-    );
+    // Both triggers are Base UI now, so `render` composes onto a custom
+    // element identically and the props pass straight through — except the
+    // detached-trigger `handle`/`payload` pair, which Base UI brands per
+    // component (a MenuHandle cannot drive a Drawer). Nothing passes them.
+    const { handle: _handle, payload: _payload, ...rest } = props;
+    return <DrawerTrigger {...rest} />;
   }
   return <DropdownMenuTrigger {...props} />;
 }

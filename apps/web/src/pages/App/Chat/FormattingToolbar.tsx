@@ -1,14 +1,14 @@
 import type { BlockNoteEditor } from "@blocknote/core";
 import { useEditorChange, useEditorSelectionChange } from "@blocknote/react";
 import {
+  BoldIcon,
   CodeIcon,
-  FontBoldIcon,
-  FontItalicIcon,
-  Link1Icon,
+  ImageIcon,
+  ItalicIcon,
+  LinkIcon,
   StrikethroughIcon,
   UnderlineIcon,
-} from "@radix-ui/react-icons";
-import { ImageIcon } from "lucide-react";
+} from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@ripple/ui/components/button";
 import { Toggle } from "../../../components/ui/toggle";
@@ -20,8 +20,8 @@ const STYLE_TOGGLES: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
 }[] = [
-  { key: "bold", icon: FontBoldIcon, title: "Bold (Ctrl + B)" },
-  { key: "italic", icon: FontItalicIcon, title: "Italic (Ctrl + I)" },
+  { key: "bold", icon: BoldIcon, title: "Bold (Ctrl + B)" },
+  { key: "italic", icon: ItalicIcon, title: "Italic (Ctrl + I)" },
   { key: "underline", icon: UnderlineIcon, title: "Underline (Ctrl + U)" },
   { key: "strike", icon: StrikethroughIcon, title: "Strikethrough (Ctrl + Shift + S)" },
   { key: "code", icon: CodeIcon, title: "Code (Ctrl + ?)" },
@@ -99,7 +99,7 @@ export function FormattingToolbar({
           editor.focus();
         }}
       >
-        <Link1Icon />
+        <LinkIcon />
       </Button>
 
       <Button

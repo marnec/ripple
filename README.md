@@ -2,8 +2,8 @@ NEXT STEPS:
 
 - tighten reconciliation logic with local-first content. for example what happens if I'm offline and I open a doc that I han't opened before? does it show empty? does it prevents me from editing? what happens if I write? what wins? research and add tests to cover all possible cases
 
-- latest blocknote release uses baseui flavor of shadcn, we can pension radix deps
-
+- [x] latest blocknote release uses baseui flavor of shadcn, we can pension radix deps — all 8 direct radix deps dropped from `apps/web`, `@base-ui/react` bumped to 1.7.0 to dedupe with `@blocknote/shadcn`, and `drawer.tsx` ported off vaul onto Base UI's Drawer. Radix now only enters transitively via `cmdk` (`react-dialog`) and `@excalidraw/excalidraw`; removing it entirely means replacing those two libs.
+does
 - add a (workpool) background job backoffice center (of the workspace, admin only)
 
 - recurrent events in calendar

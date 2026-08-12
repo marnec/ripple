@@ -82,7 +82,7 @@ export function WorkspaceSwitcher({
               <ChevronsUpDown className="ml-auto group-data-[collapsible=icon]:hidden" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            className="min-w-56 rounded-lg"
             align="start"
             side="right"
             sideOffset={4}

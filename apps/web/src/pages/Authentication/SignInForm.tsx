@@ -2,7 +2,7 @@ import { Button } from "@ripple/ui/components/button";
 import { Input } from "@ripple/ui/components/input";
 import { toast } from "sonner";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { GitHubLogoIcon } from "@radix-ui/react-icons";
+import { GithubMark } from "@/components/GithubMark";
 import { GitlabMark } from "@/components/GitlabMark";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { useState } from "react";
@@ -199,7 +199,7 @@ function AuthCard({
               className="h-11 bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white"
               onClick={() => void signIn("github")}
             >
-              <GitHubLogoIcon className="mr-2 size-4" />
+              <GithubMark className="mr-2 size-4" />
               <span className="sm:hidden">GitHub</span>
               <span className="hidden sm:inline">Continue with GitHub</span>
             </Button>

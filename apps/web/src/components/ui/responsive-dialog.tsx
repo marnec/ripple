@@ -47,7 +47,7 @@ function ResponsiveDialog({
   return (
     <ResponsiveDialogContext.Provider value={isMobile}>
       {isMobile ? (
-        <Drawer open={open} onOpenChange={onOpenChange} direction={direction} autoFocus>{children}</Drawer>
+        <Drawer open={open} onOpenChange={onOpenChange} direction={direction}>{children}</Drawer>
       ) : (
         <Dialog open={open} onOpenChange={onOpenChange}>{children}</Dialog>
       )}
@@ -60,17 +60,12 @@ function ResponsiveDialogTrigger(
 ) {
   const isMobile = React.useContext(ResponsiveDialogContext);
   if (isMobile) {
-    // Base UI DialogTrigger uses `render` to compose onto a custom element;
-    // vaul DrawerTrigger uses `asChild` + children for the same purpose.
-    const { render, ...rest } = props;
-    if (render) {
-      return (
-        <DrawerTrigger asChild {...(rest as React.ComponentProps<typeof DrawerTrigger>)}>
-          {render as React.ReactElement}
-        </DrawerTrigger>
-      );
-    }
-    return <DrawerTrigger {...(rest as React.ComponentProps<typeof DrawerTrigger>)} />;
+    // Both triggers are Base UI now, so `render` composes onto a custom
+    // element identically and the props pass straight through — except the
+    // detached-trigger `handle`/`payload` pair, which Base UI brands per
+    // component (a DialogHandle cannot drive a Drawer). Nothing passes them.
+    const { handle: _handle, payload: _payload, ...rest } = props;
+    return <DrawerTrigger {...rest} />;
   }
   return <DialogTrigger {...props} />;
 }
@@ -92,14 +87,14 @@ function ResponsiveDialogContent({
 
 /**
  * When a drawer with an input opens from another drawer (e.g. rename dialog
- * opened from a dropdown-menu drawer), the closing drawer's Radix FocusScope
- * fires onUnmountAutoFocus after a setTimeout(0) + 500ms exit animation,
- * which restores focus to the trigger button — stealing it from the input.
+ * opened from a dropdown-menu drawer), the closing drawer restores focus to
+ * its own trigger once its exit animation finishes — stealing focus from the
+ * input in the drawer that just opened.
  *
  * React's autoFocus sets focus during commit, but it gets stolen well after
  * mount. This guard watches for focus leaving an input/textarea inside the
- * container and re-asserts it, covering both immediate Radix FocusScope
- * effects and the delayed unmount focus restoration from other drawers.
+ * container and re-asserts it, covering both immediate focus-scope effects and
+ * the delayed close-time focus restoration from other drawers.
  */
 function AutoFocusGuard({ children }: { children: React.ReactNode }) {
   const ref = React.useRef<HTMLDivElement>(null);
