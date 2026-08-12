@@ -231,6 +231,7 @@ export default defineSchema({
   tags: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(), // canonical: trim().toLowerCase()
+    pendingDeletion: v.optional(v.boolean()), // true while the join drain runs via workpool
   })
     .index("by_workspace_name", ["workspaceId", "name"])
     .index("by_workspace", ["workspaceId"])
@@ -455,6 +456,10 @@ export default defineSchema({
     // made a foreign workspace's task write invalidate this subscription.
     .index("by_workspace_assignee_completed", ["workspaceId", "assigneeId", "completed"])
     .index("by_project_status", ["projectId", "statusId"])
+    // Read by the `isCompleted` drain: selecting the rows that still disagree
+    // with the column makes each batch's own patch move them out of the range,
+    // so `.take()` advances without a cursor and the loop is self-terminating.
+    .index("by_project_status_completed", ["projectId", "statusId", "completed"])
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_completed", ["workspaceId", "completed"])
     .index("by_project_status_position", ["projectId", "statusId", "position"])

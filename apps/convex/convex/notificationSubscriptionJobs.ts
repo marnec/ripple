@@ -8,13 +8,14 @@
 
 import { v } from "convex/values";
 import { internalMutation } from "./functions";
+import { internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 import {
   onWorkspaceMemberInsert,
   onWorkspaceMemberDelete,
-  onPublicChannelInsert,
-  onChannelMadePrivate,
-  onChannelMadePublic,
   onGlobalPreferencesChange,
+  subscribeChannelMembersPage,
+  unsubscribeNonChannelMembersPage,
 } from "./notificationSubscriptionSync";
 
 export const memberJoined = internalMutation({
@@ -51,46 +52,103 @@ export const memberLeft = internalMutation({
   },
 });
 
-export const publicChannelCreated = internalMutation({
+/**
+ * One page of the open-channel fanout. The `channel` guard is re-checked on
+ * every page, not just the first: pages are separate transactions, so a channel
+ * deleted or made private mid-drain stops the remaining work instead of
+ * subscribing people to something that no longer exists.
+ */
+export const subscribeMembersPage = internalMutation({
+  args: {
+    channelId: v.id("channels"),
+    workspaceId: v.id("workspaces"),
+    cursor: v.union(v.string(), v.null()),
+  },
+  returns: v.object({ cursor: v.union(v.string(), v.null()), isDone: v.boolean() }),
+  handler: async (ctx, args) => {
+    const channel = await ctx.db.get(args.channelId);
+    if (!channel || channel.type !== "open") {
+      return { cursor: null, isDone: true };
+    }
+    return subscribeChannelMembersPage(
+      ctx,
+      args.channelId,
+      args.workspaceId,
+      args.cursor,
+    );
+  },
+});
+
+/**
+ * Drains the fanout a page at a time, holding the cursor between calls. Same
+ * shape as `taskStatuses.syncTasksCompleted` and `tagSync.stripTagEverywhere`:
+ * one scheduled entry point, one transaction per page.
+ */
+export const publicChannelCreated = internalAction({
   args: {
     channelId: v.id("channels"),
     workspaceId: v.id("workspaces"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const channel = await ctx.db.get(args.channelId);
-    if (!channel || channel.type !== "open") return null;
-    await onPublicChannelInsert(ctx, args.channelId, args.workspaceId);
+    let cursor: string | null = null;
+    while (true) {
+      const result: { cursor: string | null; isDone: boolean } = await ctx.runMutation(
+        internal.notificationSubscriptionJobs.subscribeMembersPage,
+        { channelId: args.channelId, workspaceId: args.workspaceId, cursor },
+      );
+      if (result.isDone) break;
+      cursor = result.cursor;
+    }
     return null;
   },
 });
 
-export const channelMadePrivate = internalMutation({
+/**
+ * One page of the going-private cleanup. Like its sibling above, the channel is
+ * re-checked on every page: pages are separate transactions, so a channel made
+ * public again mid-drain stops the removals rather than stripping subscriptions
+ * the fanout is concurrently putting back.
+ */
+export const unsubscribeNonMembersPage = internalMutation({
   args: {
     channelId: v.id("channels"),
+    cursor: v.union(v.string(), v.null()),
   },
-  returns: v.null(),
+  returns: v.object({ cursor: v.union(v.string(), v.null()), isDone: v.boolean() }),
   handler: async (ctx, args) => {
     const channel = await ctx.db.get(args.channelId);
-    if (!channel || channel.type === "open") return null;
-    await onChannelMadePrivate(ctx, args.channelId);
+    if (!channel || channel.type === "open") {
+      return { cursor: null, isDone: true };
+    }
+    return unsubscribeNonChannelMembersPage(ctx, args.channelId, args.cursor);
+  },
+});
+
+export const channelMadePrivate = internalAction({
+  args: { channelId: v.id("channels") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    let cursor: string | null = null;
+    while (true) {
+      const result: { cursor: string | null; isDone: boolean } = await ctx.runMutation(
+        internal.notificationSubscriptionJobs.unsubscribeNonMembersPage,
+        { channelId: args.channelId, cursor },
+      );
+      if (result.isDone) break;
+      cursor = result.cursor;
+    }
     return null;
   },
 });
 
-export const channelMadePublic = internalMutation({
-  args: {
-    channelId: v.id("channels"),
-    workspaceId: v.id("workspaces"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const channel = await ctx.db.get(args.channelId);
-    if (!channel || channel.type !== "open") return null;
-    await onChannelMadePublic(ctx, args.channelId, args.workspaceId);
-    return null;
-  },
-});
+/**
+ * A channel becoming public subscribes exactly the set a newly created open
+ * channel does — the two handlers were byte-identical — so it runs the same
+ * paged drain rather than keeping a second copy that could be batched on only
+ * one side.
+ */
+export const channelMadePublic = publicChannelCreated;
 
 export const globalPreferencesChanged = internalMutation({
   args: {

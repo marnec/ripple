@@ -115,17 +115,14 @@ export const update = mutation({
       await ctx.db.patch(statusId, patch);
     }
 
-    // When toggling isCompleted, bulk-update all tasks in this status
+    // Toggling isCompleted rewrites every task in the column. That is unbounded
+    // work fanning out through the aggregate and taskTags triggers, so it
+    // drains in batches like `remove` below rather than running inline — the
+    // column itself is already correct above, and the tasks converge behind it.
     if (isCompleted !== undefined) {
-      const tasks = await ctx.db
-        .query("tasks")
-        .withIndex("by_project_status", (q) =>
-          q.eq("projectId", status.projectId).eq("statusId", statusId)
-        )
-        .collect();
-      await Promise.all(
-        tasks.map((task) => ctx.db.patch(task._id, { completed: isCompleted }))
-      );
+      await scheduleTaskReassign(ctx, internal.taskStatuses.syncTasksCompleted, {
+        statusId,
+      });
     }
 
     return null;
@@ -297,6 +294,59 @@ export const remove = mutation({
 });
 
 const REASSIGN_BATCH_SIZE = 100;
+
+/**
+ * One batch of the `isCompleted` drain.
+ *
+ * The target is read from the status row rather than carried as an argument,
+ * which is what makes two overlapping toggles safe: both drains converge on
+ * whatever the column currently says instead of fighting over a value captured
+ * when each was scheduled. Selecting only the rows that still disagree means
+ * this batch's own patches move them out of the index range, so the next
+ * `.take()` returns the next chunk — the same self-advancing shape as
+ * `fetchTasksForStatusBatch` below, which relies on patching `statusId`.
+ */
+export const syncTasksCompletedBatch = internalMutation({
+  args: { statusId: v.id("taskStatuses"), limit: v.number() },
+  returns: v.number(),
+  handler: async (ctx, { statusId, limit }) => {
+    const status = await ctx.db.get(statusId);
+    if (!status) return 0;
+
+    const stale = await ctx.db
+      .query("tasks")
+      .withIndex("by_project_status_completed", (q) =>
+        q
+          .eq("projectId", status.projectId)
+          .eq("statusId", statusId)
+          .eq("completed", !status.isCompleted),
+      )
+      .take(limit);
+
+    await Promise.all(
+      stale.map((task) =>
+        ctx.db.patch(task._id, { completed: status.isCompleted }),
+      ),
+    );
+
+    return stale.length;
+  },
+});
+
+export const syncTasksCompleted = internalAction({
+  args: { statusId: v.id("taskStatuses") },
+  returns: v.null(),
+  handler: async (ctx, { statusId }) => {
+    while (true) {
+      const patched: number = await ctx.runMutation(
+        internal.taskStatuses.syncTasksCompletedBatch,
+        { statusId, limit: REASSIGN_BATCH_SIZE },
+      );
+      if (patched === 0) break;
+    }
+    return null;
+  },
+});
 
 export const fetchTasksForStatusBatch = internalMutation({
   args: {

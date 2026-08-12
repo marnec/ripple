@@ -170,30 +170,57 @@ export async function onChannelMemberDelete(
 
 // ── Channel Sync ────────────────────────────────────────────────────
 
-export async function onPublicChannelInsert(
+/**
+ * Rows of `workspaceMembers` handled per transaction by the open-channel fanout.
+ *
+ * This is the only subscription path whose cost scales with workspace size:
+ * every member needs a preference read and a subscription insert, so an unpaged
+ * version puts O(members) reads and writes in one transaction and eventually
+ * trips Convex's per-transaction caps — turning "someone created a channel"
+ * into a thrown error at a size nobody can predict from reading the code.
+ */
+export const SUBSCRIPTION_PAGE_SIZE = 200;
+
+/**
+ * Subscribe one page of workspace members to an open channel.
+ *
+ * Returns where to resume rather than looping internally, so the caller owns the
+ * transaction boundary — see `notificationSubscriptionJobs.ts`. This one needs a
+ * real cursor, unlike the task and tag drains: those advance because each batch
+ * patches the very column it queries on, whereas this batch writes to a
+ * different table entirely and leaves `workspaceMembers` untouched.
+ *
+ * `insertSubscription` no-ops when the row already exists, so a replayed page is
+ * harmless — a retry cannot double-subscribe anyone.
+ */
+export async function subscribeChannelMembersPage(
   ctx: Ctx,
   channelId: Id<"channels">,
   workspaceId: Id<"workspaces">,
-): Promise<void> {
-  const members = await ctx.db
+  cursor: string | null,
+): Promise<{ cursor: string | null; isDone: boolean }> {
+  const page = await ctx.db
     .query("workspaceMembers")
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect();
+    .paginate({ numItems: SUBSCRIPTION_PAGE_SIZE, cursor });
 
   const prefs = await Promise.all(
-    members.map((m) => getGlobalPrefs(ctx, m.userId)),
+    page.page.map((m) => getGlobalPrefs(ctx, m.userId)),
   );
 
-  const inserts = members.flatMap((member, i) =>
-    BROADCAST_CHANNEL_CATEGORIES
-      .filter((cat) => isEnabled(prefs[i], cat, DEFAULT_CHANNEL_CHAT_PREFERENCES))
-      .map((cat) =>
-        insertSubscription(ctx, workspaceId, member.userId, cat, channelId),
-      ),
+  await Promise.all(
+    page.page.flatMap((member, i) =>
+      BROADCAST_CHANNEL_CATEGORIES
+        .filter((cat) => isEnabled(prefs[i], cat, DEFAULT_CHANNEL_CHAT_PREFERENCES))
+        .map((cat) =>
+          insertSubscription(ctx, workspaceId, member.userId, cat, channelId),
+        ),
+    ),
   );
 
-  await Promise.all(inserts);
+  return { cursor: page.continueCursor, isDone: page.isDone };
 }
+
 
 // ── Global Preference Sync ──────────────────────────────────────────
 
@@ -283,61 +310,45 @@ export async function onGlobalPreferencesChange(
 // ── Channel Visibility Toggle ────────────────────────────────────────
 
 /**
- * When a channel changes type: open → closed, remove subscriptions
- * for users who are NOT explicit channel members.
+ * Drop one page of subscriptions belonging to users who are not members of a
+ * channel that has just gone private.
+ *
+ * Paginated for the same reason the fanout is — the subscription set on an open
+ * channel is the whole workspace — and with a cursor for a reason that is *not*
+ * the same. This one deletes rows out of the very index it walks, which looks
+ * self-advancing, but the rows it keeps (the real channel members) stay in the
+ * range: a `.take()` loop would hand back those keepers forever and never reach
+ * the deletable rows behind them.
+ *
+ * Membership is a point lookup per row rather than one `by_channel` collect, so
+ * a page costs a bounded number of reads regardless of how many members the
+ * channel has.
  */
-export async function onChannelMadePrivate(
+export async function unsubscribeNonChannelMembersPage(
   ctx: Ctx,
   channelId: Id<"channels">,
-): Promise<void> {
-  // Get all current subscriptions for this channel
-  const subs = await ctx.db
+  cursor: string | null,
+): Promise<{ cursor: string | null; isDone: boolean }> {
+  const page = await ctx.db
     .query("notificationSubscriptions")
     .withIndex("by_scope_category", (q) => q.eq("scope", channelId as string))
-    .collect();
+    .paginate({ numItems: SUBSCRIPTION_PAGE_SIZE, cursor });
 
-  if (subs.length === 0) return;
-
-  // Get explicit channel members
-  const members = await ctx.db
-    .query("channelMembers")
-    .withIndex("by_channel", (q) => q.eq("channelId", channelId))
-    .collect();
-  const memberUserIds = new Set(members.map((m) => m.userId as string));
-
-  // Delete subscriptions for non-members
-  const toDelete = subs.filter((s) => !memberUserIds.has(s.userId as string));
-  await Promise.all(toDelete.map((s) => ctx.db.delete(s._id)));
-}
-
-/**
- * When a channel changes type: closed → open, create subscriptions
- * for all workspace members who don't already have them.
- */
-export async function onChannelMadePublic(
-  ctx: Ctx,
-  channelId: Id<"channels">,
-  workspaceId: Id<"workspaces">,
-): Promise<void> {
-  const members = await ctx.db
-    .query("workspaceMembers")
-    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect();
-
-  const prefs = await Promise.all(
-    members.map((m) => getGlobalPrefs(ctx, m.userId)),
+  await Promise.all(
+    page.page.map(async (sub) => {
+      const membership = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", channelId).eq("userId", sub.userId),
+        )
+        .first();
+      if (!membership) await ctx.db.delete(sub._id);
+    }),
   );
 
-  const inserts = members.flatMap((member, i) =>
-    BROADCAST_CHANNEL_CATEGORIES
-      .filter((cat) => isEnabled(prefs[i], cat, DEFAULT_CHANNEL_CHAT_PREFERENCES))
-      .map((cat) =>
-        insertSubscription(ctx, workspaceId, member.userId, cat, channelId),
-      ),
-  );
-
-  await Promise.all(inserts);
+  return { cursor: page.continueCursor, isDone: page.isDone };
 }
+
 
 // ── Channel Preference Sync ─────────────────────────────────────────
 

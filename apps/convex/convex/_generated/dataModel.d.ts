@@ -1331,11 +1331,17 @@ export type DataModel = {
   tags: {
     document: {
       name: string;
+      pendingDeletion?: boolean;
       workspaceId: Id<"workspaces">;
       _id: Id<"tags">;
       _creationTime: number;
     };
-    fieldPaths: "_creationTime" | "_id" | "name" | "workspaceId";
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "name"
+      | "pendingDeletion"
+      | "workspaceId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -1733,6 +1739,12 @@ export type DataModel = {
       ];
       by_project_number: ["projectId", "number", "_creationTime"];
       by_project_status: ["projectId", "statusId", "_creationTime"];
+      by_project_status_completed: [
+        "projectId",
+        "statusId",
+        "completed",
+        "_creationTime",
+      ];
       by_project_status_position: [
         "projectId",
         "statusId",

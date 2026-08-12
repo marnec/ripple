@@ -1,5 +1,8 @@
 import { ConvexError, v } from "convex/values";
-import { mutation } from "./functions";
+import { internalMutation, mutation } from "./functions";
+import { internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { scheduleTaskReassign } from "./taskReassignPool";
 import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { requireWorkspaceMember } from "./authHelpers";
@@ -176,7 +179,17 @@ async function ensureTagDictionaryRow(
       q.eq("workspaceId", workspaceId).eq("name", name),
     )
     .unique();
-  if (existing) return existing._id;
+  if (existing) {
+    // A retired row is not a row to hand back. Its drain is still walking the
+    // join tables and will delete it at the end, so a join created against it
+    // now would outlive it. Inserting a second row with this name is not an
+    // option either — the uniqueness trigger owns (workspaceId, name) — so the
+    // application fails loudly rather than dangling.
+    if (existing.pendingDeletion) {
+      throw new ConvexError(`Tag "${name}" is being deleted`);
+    }
+    return existing._id;
+  }
   return ctx.db.insert("tags", { workspaceId, name });
 }
 
@@ -221,32 +234,91 @@ export const deleteTag = mutation({
     const tag = await ctx.db.get(tagId);
     if (!tag) throw new ConvexError("Tag not found");
     await requireWorkspaceMember(ctx, tag.workspaceId, { role: WorkspaceRole.ADMIN });
+    if (tag.pendingDeletion) {
+      throw new ConvexError("Tag deletion already in progress");
+    }
 
-    // Strip from non-task resources via entityTags.
+    // Stripping the tag is one read, one patch and one join delete per tagged
+    // resource — plus, on tasks, the nodes trigger's labelsChanged branch. That
+    // is unbounded work in a user-facing mutation, and since Convex is atomic,
+    // crossing the cap would make a widely-applied tag permanently undeletable.
+    // So: retire the dictionary row now (it stops appearing in pickers and
+    // cannot be re-created underneath the drain), and strip the resources in
+    // batches. Same shape as `taskStatuses.remove`.
+    await ctx.db.patch(tagId, { pendingDeletion: true });
+
+    await scheduleTaskReassign(ctx, internal.tagSync.stripTagEverywhere, { tagId });
+
+    return null;
+  },
+});
+
+const STRIP_BATCH_SIZE = 100;
+
+/**
+ * One batch of the tag-delete drain: `entityTags` first, then `taskTags`.
+ *
+ * Self-advancing for the same reason `fetchTasksForStatusBatch` is — each batch
+ * deletes the join rows it just processed, so the next `.take()` returns the
+ * next chunk and the loop ends when both tables are empty for this tag.
+ */
+export const stripTagBatch = internalMutation({
+  args: { tagId: v.id("tags"), limit: v.number() },
+  returns: v.number(),
+  handler: async (ctx, { tagId, limit }) => {
+    const tag = await ctx.db.get(tagId);
+    if (!tag) return 0;
+
     const entityJoins = await ctx.db
       .query("entityTags")
       .withIndex("by_workspace_tag", (q) =>
         q.eq("workspaceId", tag.workspaceId).eq("tagId", tagId),
       )
-      .collect();
+      .take(limit);
     for (const join of entityJoins) {
       await stripTagFromResource(ctx, join.resourceType, join.resourceId, tag.name);
       await ctx.db.delete(join._id);
     }
+    if (entityJoins.length > 0) return entityJoins.length;
 
-    // Strip from tasks via taskTags.
     const taskJoins = await ctx.db
       .query("taskTags")
       .withIndex("by_workspace_tag", (q) =>
         q.eq("workspaceId", tag.workspaceId).eq("tagId", tagId),
       )
-      .collect();
+      .take(limit);
     for (const join of taskJoins) {
       await stripTagFromTask(ctx, join.taskId, tag.name);
       await ctx.db.delete(join._id);
     }
+    return taskJoins.length;
+  },
+});
 
+/** Drops the dictionary row once no join references it. */
+export const finalizeTagDelete = internalMutation({
+  args: { tagId: v.id("tags") },
+  returns: v.null(),
+  handler: async (ctx, { tagId }) => {
+    const tag = await ctx.db.get(tagId);
+    if (!tag) return null;
     await ctx.db.delete(tagId);
+    return null;
+  },
+});
+
+export const stripTagEverywhere = internalAction({
+  args: { tagId: v.id("tags") },
+  returns: v.null(),
+  handler: async (ctx, { tagId }) => {
+    while (true) {
+      const stripped: number = await ctx.runMutation(
+        internal.tagSync.stripTagBatch,
+        { tagId, limit: STRIP_BATCH_SIZE },
+      );
+      if (stripped === 0) break;
+    }
+    await ctx.runMutation(internal.tagSync.finalizeTagDelete, { tagId });
     return null;
   },
 });

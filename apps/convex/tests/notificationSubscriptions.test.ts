@@ -1,4 +1,4 @@
-import { expect, describe, it } from "vitest";
+import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import type { Id } from "../convex/_generated/dataModel";
 import {
   createTestContext,
@@ -10,6 +10,18 @@ import { triggers } from "../convex/dbTriggers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { ChannelRole } from "@ripple/shared/enums";
 import { CHAT_NOTIFICATION_CATEGORIES } from "@ripple/shared/notificationCategories";
+
+// These subscription fanouts are scheduled, not inline: a trigger-driven write
+// commits first and the deferred work runs after it, the way it does in
+// production. `drain` is what runs it — and it has to be called outside the
+// `t.run` that fired the trigger, since the scheduled function cannot start
+// while that transaction is still open.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+async function drain(t: ReturnType<typeof createTestContext>) {
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+}
 
 // ── Helper: seed subscription rows directly ─────────────────────────
 // Test helpers bypass triggers (they use ctx.db directly), so we insert
@@ -275,6 +287,7 @@ describe("notificationSubscriptions", () => {
           role: WorkspaceRole.ADMIN,
         });
       });
+      await drain(t);
 
       const subs = await t.run(async (ctx) => {
         return await ctx.db
@@ -334,6 +347,7 @@ describe("notificationSubscriptions", () => {
           userId, workspaceId, role: WorkspaceRole.ADMIN,
         });
       });
+      await drain(t);
 
       // Verify subscription exists
       const before = await t.run(async (ctx) => {
@@ -361,6 +375,7 @@ describe("notificationSubscriptions", () => {
           channelCreated: true, channelDeleted: true,
         });
       });
+      await drain(t);
 
       // Subscription should be deleted
       const afterDisable = await t.run(async (ctx) => {
@@ -384,6 +399,7 @@ describe("notificationSubscriptions", () => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.patch(prefsDoc!._id, { chatChannelMessage: true });
       });
+      await drain(t);
 
       // Subscription should be recreated — this is the bug #1 test
       const afterReenable = await t.run(async (ctx) => {
@@ -417,6 +433,7 @@ describe("notificationSubscriptions", () => {
           name: "general", workspaceId, type: "open" as const,
         });
       });
+      await drain(t);
 
       // Add both members (triggers schedule async subscription creation)
       await t.run(async (ctx) => {
@@ -424,6 +441,7 @@ describe("notificationSubscriptions", () => {
         await db.insert("workspaceMembers", { userId, workspaceId, role: WorkspaceRole.ADMIN });
         await db.insert("workspaceMembers", { userId: user2Id, workspaceId, role: WorkspaceRole.MEMBER });
       });
+      await drain(t);
 
       // Only user1 is a channel member (private channels need explicit membership)
       await t.run(async (ctx) => {
@@ -432,6 +450,7 @@ describe("notificationSubscriptions", () => {
           userId, channelId, workspaceId, role: ChannelRole.ADMIN,
         });
       });
+      await drain(t);
 
       // Both should have subscriptions for the public channel
       const beforeToggle = await t.run(async (ctx) => {
@@ -449,6 +468,7 @@ describe("notificationSubscriptions", () => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.patch(channelId, { type: "closed" as const });
       });
+      await drain(t);
 
       // After toggle: only user1 (channel member) should have subscription
       const afterToggle = await t.run(async (ctx) => {
@@ -480,6 +500,7 @@ describe("notificationSubscriptions", () => {
           name: "secret", workspaceId, type: "closed" as const,
         });
       });
+      await drain(t);
 
       // Add workspace members (schedules async subscription creation)
       await t.run(async (ctx) => {
@@ -487,6 +508,7 @@ describe("notificationSubscriptions", () => {
         await db.insert("workspaceMembers", { userId, workspaceId, role: WorkspaceRole.ADMIN });
         await db.insert("workspaceMembers", { userId: user2Id, workspaceId, role: WorkspaceRole.MEMBER });
       });
+      await drain(t);
 
       // Only user1 joins the private channel (inline, not scheduled)
       await t.run(async (ctx) => {
@@ -495,6 +517,7 @@ describe("notificationSubscriptions", () => {
           userId, channelId, workspaceId, role: ChannelRole.ADMIN,
         });
       });
+      await drain(t);
 
       // Only user1 should have subscription
       const beforeToggle = await t.run(async (ctx) => {
@@ -512,6 +535,7 @@ describe("notificationSubscriptions", () => {
         const db = writerWithTriggers(ctx, ctx.db, triggers);
         await db.patch(channelId, { type: "open" as const });
       });
+      await drain(t);
 
       // Both workspace members should now have subscriptions
       const afterToggle = await t.run(async (ctx) => {

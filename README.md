@@ -2,8 +2,9 @@ NEXT STEPS:
 
 - tighten reconciliation logic with local-first content. for example what happens if I'm offline and I open a doc that I han't opened before? does it show empty? does it prevents me from editing? what happens if I write? what wins? research and add tests to cover all possible cases
 
-- add a (workpool) background job backoffice center (of the workspace, admin only)
+- latest blocknote release uses baseui flavor of shadcn, we can pension radix deps
 
+- add a (workpool) background job backoffice center (of the workspace, admin only)
 
 - recurrent events in calendar
 

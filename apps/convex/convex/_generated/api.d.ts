@@ -5617,13 +5617,13 @@ export declare const internal: {
   };
   notificationSubscriptionJobs: {
     channelMadePrivate: FunctionReference<
-      "mutation",
+      "action",
       "internal",
       { channelId: Id<"channels"> },
       null
     >;
     channelMadePublic: FunctionReference<
-      "mutation",
+      "action",
       "internal",
       { channelId: Id<"channels">; workspaceId: Id<"workspaces"> },
       null
@@ -5647,10 +5647,26 @@ export declare const internal: {
       null
     >;
     publicChannelCreated: FunctionReference<
-      "mutation",
+      "action",
       "internal",
       { channelId: Id<"channels">; workspaceId: Id<"workspaces"> },
       null
+    >;
+    subscribeMembersPage: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        channelId: Id<"channels">;
+        cursor: string | null;
+        workspaceId: Id<"workspaces">;
+      },
+      { cursor: string | null; isDone: boolean }
+    >;
+    unsubscribeNonMembersPage: FunctionReference<
+      "mutation",
+      "internal",
+      { channelId: Id<"channels">; cursor: string | null },
+      { cursor: string | null; isDone: boolean }
     >;
   };
   projectNotificationPreferences: {
@@ -5845,6 +5861,26 @@ export declare const internal: {
       null
     >;
   };
+  tagSync: {
+    finalizeTagDelete: FunctionReference<
+      "mutation",
+      "internal",
+      { tagId: Id<"tags"> },
+      null
+    >;
+    stripTagBatch: FunctionReference<
+      "mutation",
+      "internal",
+      { limit: number; tagId: Id<"tags"> },
+      number
+    >;
+    stripTagEverywhere: FunctionReference<
+      "action",
+      "internal",
+      { tagId: Id<"tags"> },
+      null
+    >;
+  };
   taskComments: {
     setBodyFromMarkdown: FunctionReference<
       "mutation",
@@ -5920,6 +5956,18 @@ export declare const internal: {
       "internal",
       { reassignToStatusId: Id<"taskStatuses">; statusId: Id<"taskStatuses"> },
       null
+    >;
+    syncTasksCompleted: FunctionReference<
+      "action",
+      "internal",
+      { statusId: Id<"taskStatuses"> },
+      null
+    >;
+    syncTasksCompletedBatch: FunctionReference<
+      "mutation",
+      "internal",
+      { limit: number; statusId: Id<"taskStatuses"> },
+      number
     >;
   };
   transcripts: {

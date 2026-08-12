@@ -767,75 +767,54 @@ triggers.register("tasks", async (ctx, change) => {
 // delivery queries are a single indexed lookup.
 
 // ── Bulk operations: deferred to a separate transaction ─────────────
-// In production, these schedule internal mutations via ctx.scheduler.runAfter(0)
-// to avoid resource contention on user-facing mutations. The scheduled mutation
-// runs in its own transaction immediately after the current one commits.
-// In test environments (convex-test), run inline since the test framework
-// doesn't automatically execute scheduled functions.
-
-import {
-  onWorkspaceMemberInsert,
-  onWorkspaceMemberDelete,
-  onPublicChannelInsert,
-  onChannelMadePrivate,
-  onChannelMadePublic,
-  onGlobalPreferencesChange,
-} from "./notificationSubscriptionSync";
-
-const isTest = typeof process !== "undefined" && !!process.env?.VITEST;
+// These schedule internal mutations via ctx.scheduler.runAfter(0) to avoid
+// resource contention on user-facing mutations. The scheduled mutation runs in
+// its own transaction immediately after the current one commits.
+//
+// There is no test-environment branch here, deliberately. There used to be one
+// — under VITEST these ran inline instead of scheduling — on the grounds that
+// convex-test does not execute scheduled functions automatically. It does not,
+// but it hands the test an explicit driver (`finishAllScheduledFunctions`), and
+// running inline collapsed the very boundary these calls exist to create: the
+// fanout joined the caller's transaction, so it shared that transaction's
+// atomicity and saw its uncommitted writes. Tests therefore demonstrated the
+// opposite of production on the axis that matters — in production the caller
+// commits and the fanout can fail on its own. Tests that need the deferred work
+// to have happened now drive it, the way every other scheduled path in this
+// suite does.
 
 triggers.register("workspaceMembers", async (ctx, change) => {
   if (change.operation === "insert") {
-    if (isTest) {
-      await onWorkspaceMemberInsert(ctx, change.newDoc.userId, change.newDoc.workspaceId);
-    } else {
-      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.memberJoined, {
-        userId: change.newDoc.userId,
-        workspaceId: change.newDoc.workspaceId,
-      });
-    }
+    await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.memberJoined, {
+      userId: change.newDoc.userId,
+      workspaceId: change.newDoc.workspaceId,
+    });
   } else if (change.operation === "delete") {
-    if (isTest) {
-      await onWorkspaceMemberDelete(ctx, change.oldDoc.userId, change.oldDoc.workspaceId);
-    } else {
-      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.memberLeft, {
-        userId: change.oldDoc.userId,
-        workspaceId: change.oldDoc.workspaceId,
-      });
-    }
+    await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.memberLeft, {
+      userId: change.oldDoc.userId,
+      workspaceId: change.oldDoc.workspaceId,
+    });
   }
 });
 
 triggers.register("channels", async (ctx, change) => {
   if (change.operation === "insert" && change.newDoc.type === "open") {
-    if (isTest) {
-      await onPublicChannelInsert(ctx, change.id, change.newDoc.workspaceId);
-    } else {
-      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.publicChannelCreated, {
-        channelId: change.id,
-        workspaceId: change.newDoc.workspaceId,
-      });
-    }
+    await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.publicChannelCreated, {
+      channelId: change.id,
+      workspaceId: change.newDoc.workspaceId,
+    });
   } else if (change.operation === "update") {
     const wasOpen = change.oldDoc.type === "open";
     const isOpen = change.newDoc.type === "open";
     if (wasOpen && !isOpen) {
-      if (isTest) {
-        await onChannelMadePrivate(ctx, change.id);
-      } else {
-        await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePrivate, {
-          channelId: change.id,
-        });
-      }
+      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePrivate, {
+        channelId: change.id,
+      });
     } else if (!wasOpen && isOpen) {
-      if (isTest) {
-        await onChannelMadePublic(ctx, change.id, change.newDoc.workspaceId);
-      } else {
-        await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePublic, {
-          channelId: change.id,
-          workspaceId: change.newDoc.workspaceId,
-        });
-      }
+      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.channelMadePublic, {
+        channelId: change.id,
+        workspaceId: change.newDoc.workspaceId,
+      });
     }
   }
   // delete: handled by cascade rules in cascadeDelete.ts
@@ -843,25 +822,17 @@ triggers.register("channels", async (ctx, change) => {
 
 triggers.register("notificationPreferences", async (ctx, change) => {
   if (change.operation === "insert") {
-    if (isTest) {
-      await onGlobalPreferencesChange(ctx, change.newDoc.userId, null, change.newDoc);
-    } else {
-      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.globalPreferencesChanged, {
-        userId: change.newDoc.userId,
-        oldPrefs: undefined,
-        newPrefs: change.newDoc,
-      });
-    }
+    await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.globalPreferencesChanged, {
+      userId: change.newDoc.userId,
+      oldPrefs: undefined,
+      newPrefs: change.newDoc,
+    });
   } else if (change.operation === "update") {
-    if (isTest) {
-      await onGlobalPreferencesChange(ctx, change.newDoc.userId, change.oldDoc, change.newDoc);
-    } else {
-      await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.globalPreferencesChanged, {
-        userId: change.newDoc.userId,
-        oldPrefs: change.oldDoc,
-        newPrefs: change.newDoc,
-      });
-    }
+    await ctx.scheduler.runAfter(0, internal.notificationSubscriptionJobs.globalPreferencesChanged, {
+      userId: change.newDoc.userId,
+      oldPrefs: change.oldDoc,
+      newPrefs: change.newDoc,
+    });
   }
 });
 

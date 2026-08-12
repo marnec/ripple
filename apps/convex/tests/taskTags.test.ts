@@ -1,9 +1,13 @@
-import { expect, describe, it } from "vitest";
+import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { api } from "../convex/_generated/api";
 import { triggers } from "../convex/dbTriggers";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
+
+// Bulk tag/status rewrites drain on the scheduler; matches taskStatuses.test.ts.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 type Ctx = ReturnType<typeof createTestContext>;
 
@@ -188,6 +192,8 @@ describe("deleteTag spans entityTags + taskTags", () => {
     expect(allTags).toHaveLength(1);
 
     await asUser.mutation(api.tagSync.deleteTag, { tagId: allTags[0]._id });
+    // The strip drains on the scheduler now — see tagSync.test.ts.
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     // Both denormalized arrays cleared
     const doc = await t.run(async (ctx) => ctx.db.get(docId));

@@ -13,6 +13,11 @@ export const listWorkspaceTags = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .collect();
 
-    return dictionary.map((t) => t.name).sort();
+    // Mirrors taskStatuses.listByProject: a row draining its joins is already
+    // retired, so it must not be offered back to the picker that would re-apply it.
+    return dictionary
+      .filter((t) => t.pendingDeletion !== true)
+      .map((t) => t.name)
+      .sort();
   },
 });

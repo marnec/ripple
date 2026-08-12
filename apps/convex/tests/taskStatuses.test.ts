@@ -188,6 +188,110 @@ describe("taskStatuses.remove", () => {
   });
 });
 
+/**
+ * Toggling `isCompleted` rewrites the denormalized `completed` flag on every
+ * task in the column. Each of those patches fans out through the aggregate and
+ * the taskTags denormalization trigger, whose own patches re-fire the tags
+ * uniqueness trigger — so the write count is a multiple of the column size, and
+ * Convex is atomic: crossing the per-transaction cap throws and rolls back the
+ * whole thing. The toggle has to leave the mutation the same shape the sibling
+ * `remove` already uses — flip the row, drain the tasks in batches.
+ */
+describe("taskStatuses.update — isCompleted toggle", () => {
+  it("flips the status immediately and converges the tasks through the workpool", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, inProgressId } = await setupProject(t, {
+      workspaceId,
+      userId,
+    });
+
+    const taskIds = await Promise.all(
+      ["a", "b", "c"].map((title) =>
+        insertTask(t, {
+          projectId,
+          workspaceId,
+          statusId: inProgressId,
+          creatorId: userId,
+          completed: false,
+          title,
+        }),
+      ),
+    );
+
+    await asUser.mutation(api.taskStatuses.update, {
+      statusId: inProgressId,
+      isCompleted: true,
+    });
+
+    // The column reads as completed right away — that patch is one row.
+    const status = await t.run((ctx) => ctx.db.get(inProgressId));
+    expect(status?.isCompleted).toBe(true);
+
+    // The bulk rewrite is deferred, not done inline.
+    const before = await t.run((ctx) =>
+      Promise.all(taskIds.map((id) => ctx.db.get(id))),
+    );
+    expect(
+      before.map((task) => task?.completed),
+      "the user-facing mutation must not rewrite the column inline",
+    ).toEqual([false, false, false]);
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const after = await t.run((ctx) =>
+      Promise.all(taskIds.map((id) => ctx.db.get(id))),
+    );
+    expect(after.map((task) => task?.completed)).toEqual([true, true, true]);
+  });
+
+  it("converges a column larger than one batch", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, inProgressId } = await setupProject(t, {
+      workspaceId,
+      userId,
+    });
+
+    // More rows than REASSIGN_BATCH_SIZE, so the drain has to advance. A batch
+    // that re-selected the rows it just patched would spin here rather than
+    // finish.
+    const COLUMN_SIZE = 120;
+    await t.run(async (ctx) => {
+      for (let i = 0; i < COLUMN_SIZE; i++) {
+        await ctx.db.insert("tasks", {
+          projectId,
+          workspaceId,
+          title: `task ${i}`,
+          statusId: inProgressId,
+          priority: "medium" as const,
+          completed: false,
+          creatorId: userId,
+        });
+      }
+    });
+
+    await asUser.mutation(api.taskStatuses.update, {
+      statusId: inProgressId,
+      isCompleted: true,
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const stillStale = await t.run((ctx) =>
+      ctx.db
+        .query("tasks")
+        .withIndex("by_project_status_completed", (q) =>
+          q
+            .eq("projectId", projectId)
+            .eq("statusId", inProgressId)
+            .eq("completed", false),
+        )
+        .collect(),
+    );
+    expect(stillStale).toHaveLength(0);
+  });
+});
+
 describe("taskStatuses.update — externalCloseReason", () => {
   it("admin can set a completed status's externalCloseReason to 'not_planned'", async () => {
     const t = createTestContext();

@@ -9,12 +9,16 @@
  * the paths that used to bypass it, plus a structural guard so a new mutation
  * cannot reintroduce the bypass.
  */
-import { expect, describe, it } from "vitest";
+import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { api } from "../convex/_generated/api";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
+
+// Bulk tag/status rewrites drain on the scheduler; matches taskStatuses.test.ts.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 type Ctx = ReturnType<typeof createTestContext>;
 
@@ -112,6 +116,8 @@ describe("taskStatuses.update maintains denormalized columns", () => {
     expect((await listTaskTags(t, taskId))[0].completed).toBe(false);
 
     await asUser.mutation(api.taskStatuses.update, { statusId: todoId, isCompleted: true });
+    // The column flip is batched behind the mutation; drain it.
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     expect((await listTaskTags(t, taskId))[0].completed).toBe(true);
   });
@@ -134,6 +140,7 @@ describe("tagSync.deleteTag maintains the nodes mirror", () => {
       ctx.db.query("tags").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
     );
     await asUser.mutation(api.tagSync.deleteTag, { tagId: tags[0]._id });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     expect((await nodeFor(t, docId))?.tags ?? []).toEqual([]);
   });
@@ -152,6 +159,7 @@ describe("tagSync.deleteTag maintains the nodes mirror", () => {
       ctx.db.query("tags").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
     );
     await asUser.mutation(api.tagSync.deleteTag, { tagId: tags[0]._id });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     expect((await nodeFor(t, taskId))?.tags ?? []).toEqual([]);
   });

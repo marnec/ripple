@@ -1,4 +1,4 @@
-import { expect, describe, it } from "vitest";
+import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { api } from "../convex/_generated/api";
 import { triggers } from "../convex/dbTriggers";
@@ -9,6 +9,10 @@ import {
 } from "./helpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
+
+// The tag-delete drain runs on the scheduler; matches taskStatuses.test.ts.
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
 
 // ── Tag dictionary + entityTags helpers ──────────────────────────────
 
@@ -255,6 +259,94 @@ describe("createTag", () => {
   });
 });
 
+/**
+ * Deleting a tag rewrites every resource carrying it: a read, a patch and a
+ * join delete per row, and on tasks the patch re-enters the nodes trigger. A
+ * widely-applied tag therefore crosses the per-transaction cap, and because
+ * Convex is atomic that makes it *permanently undeletable* — the operation
+ * fails exactly when it is most needed. Same remedy as `taskStatuses.remove`:
+ * take the tag out of the dictionary immediately, drain the joins behind it.
+ */
+describe("deleteTag — batched drain", () => {
+  it("hides the tag immediately and strips the resources through the workpool", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const documentId = await asUser.mutation(api.documents.create, { workspaceId });
+    await asUser.mutation(api.documents.updateTags, { id: documentId, tags: ["design", "ops"] });
+
+    const designTag = (await listTags(t, workspaceId)).find((tag) => tag.name === "design")!;
+
+    await asUser.mutation(api.tagSync.deleteTag, { tagId: designTag._id });
+
+    // Gone from the dictionary the caller reads, before anything drains.
+    expect(
+      await asUser.query(api.tags.listWorkspaceTags, { workspaceId }),
+    ).toEqual(["ops"]);
+
+    // The per-resource rewrite is deferred, not run inline.
+    const docBefore = await t.run((ctx) => ctx.db.get(documentId));
+    expect(
+      docBefore?.tags,
+      "the user-facing mutation must not rewrite every tagged resource inline",
+    ).toEqual(["design", "ops"]);
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const docAfter = await t.run((ctx) => ctx.db.get(documentId));
+    expect(docAfter?.tags).toEqual(["ops"]);
+    expect((await listEntityTags(t, documentId)).map((j) => j.tagName)).toEqual(["ops"]);
+    expect(await t.run((ctx) => ctx.db.get(designTag._id))).toBeNull();
+  });
+
+  it("refuses to re-apply a tag whose drain is still running", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const docA = await asUser.mutation(api.documents.create, { workspaceId });
+    await asUser.mutation(api.documents.updateTags, { id: docA, tags: ["design"] });
+    const designTag = (await listTags(t, workspaceId)).find((tag) => tag.name === "design")!;
+
+    await asUser.mutation(api.tagSync.deleteTag, { tagId: designTag._id });
+
+    // Mid-drain the dictionary row still exists, so a get-or-create by name
+    // would hand it straight back and hang a fresh join off a row the drain is
+    // about to delete.
+    const docB = await asUser.mutation(api.documents.create, { workspaceId });
+    await expect(
+      asUser.mutation(api.documents.updateTags, { id: docB, tags: ["design"] }),
+    ).rejects.toThrow(/being deleted/);
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const orphans = await t.run((ctx) =>
+      ctx.db
+        .query("entityTags")
+        .withIndex("by_workspace_tag", (q) =>
+          q.eq("workspaceId", workspaceId).eq("tagId", designTag._id),
+        )
+        .collect(),
+    );
+    expect(orphans, "no join may outlive the dictionary row").toHaveLength(0);
+  });
+
+  it("rejects a second delete while one is in progress", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const documentId = await asUser.mutation(api.documents.create, { workspaceId });
+    await asUser.mutation(api.documents.updateTags, { id: documentId, tags: ["design"] });
+    const designTag = (await listTags(t, workspaceId)).find((tag) => tag.name === "design")!;
+
+    await asUser.mutation(api.tagSync.deleteTag, { tagId: designTag._id });
+    await expect(
+      asUser.mutation(api.tagSync.deleteTag, { tagId: designTag._id }),
+    ).rejects.toThrow(/already in progress/);
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+  });
+});
+
 describe("deleteTag", () => {
   it("admin-only — strips the tag from every resource and removes the dictionary row", async () => {
     const t = createTestContext();
@@ -267,6 +359,8 @@ describe("deleteTag", () => {
     const designTag = tags.find((t) => t.name === "design")!;
 
     await asUser.mutation(api.tagSync.deleteTag, { tagId: designTag._id });
+    // The strip is batched behind the mutation now — see the drain suite above.
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     // Dictionary row gone
     const after = await listTags(t, workspaceId);
