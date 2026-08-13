@@ -152,6 +152,30 @@ export const baseTaskFields = {
       }),
     ),
   ),
+  // Frozen snapshot of the external ref, written by the disconnect cascade
+  // (`links.ts` → `drainDisconnectBatch`) before the `taskIntegrationLinks` row
+  // is deleted. Every task in a disconnected project carries it, so it must be
+  // allowed through here: these fields are spread into every enriched
+  // projection, and a column present on the row but absent from the validator
+  // fails the whole query, not just the affected task. Mirror schema.ts.
+  externalRefFrozen: v.optional(
+    v.object({
+      provider: v.string(),
+      externalRepoId: v.string(),
+      repoFullName: v.string(),
+      issueNumber: v.number(),
+      externalIssueId: v.string(),
+      url: v.string(),
+      disconnectedAt: v.number(),
+      externalAuthor: v.optional(
+        v.object({
+          login: v.string(),
+          avatarUrl: v.string(),
+          url: v.string(),
+        }),
+      ),
+    }),
+  ),
   // GitHub assignees that didn't win the single `assigneeId` slot. Denormalized
   // off `taskIntegrationLinks` so the kanban / task-list render them beside the
   // internal assignee. See schema.ts for the churn rationale.

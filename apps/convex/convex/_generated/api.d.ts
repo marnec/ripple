@@ -865,6 +865,16 @@ export declare const api: {
           login: string;
           url: string;
         }>;
+        externalRefFrozen?: {
+          disconnectedAt: number;
+          externalAuthor?: { avatarUrl: string; login: string; url: string };
+          externalIssueId: string;
+          externalRepoId: string;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        };
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2766,6 +2776,16 @@ export declare const api: {
           login: string;
           url: string;
         }>;
+        externalRefFrozen?: {
+          disconnectedAt: number;
+          externalAuthor?: { avatarUrl: string; login: string; url: string };
+          externalIssueId: string;
+          externalRepoId: string;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        };
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2867,6 +2887,16 @@ export declare const api: {
           login: string;
           url: string;
         }>;
+        externalRefFrozen?: {
+          disconnectedAt: number;
+          externalAuthor?: { avatarUrl: string; login: string; url: string };
+          externalIssueId: string;
+          externalRepoId: string;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        };
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -2947,6 +2977,16 @@ export declare const api: {
           login: string;
           url: string;
         }>;
+        externalRefFrozen?: {
+          disconnectedAt: number;
+          externalAuthor?: { avatarUrl: string; login: string; url: string };
+          externalIssueId: string;
+          externalRepoId: string;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        };
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -3032,6 +3072,16 @@ export declare const api: {
           login: string;
           url: string;
         }>;
+        externalRefFrozen?: {
+          disconnectedAt: number;
+          externalAuthor?: { avatarUrl: string; login: string; url: string };
+          externalIssueId: string;
+          externalRepoId: string;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        };
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;
@@ -3123,6 +3173,16 @@ export declare const api: {
             login: string;
             url: string;
           }>;
+          externalRefFrozen?: {
+            disconnectedAt: number;
+            externalAuthor?: { avatarUrl: string; login: string; url: string };
+            externalIssueId: string;
+            externalRepoId: string;
+            issueNumber: number;
+            provider: string;
+            repoFullName: string;
+            url: string;
+          };
           externalRefs?: Array<{
             deleted?: boolean;
             issueNumber: number;
@@ -3196,6 +3256,16 @@ export declare const api: {
           login: string;
           url: string;
         }>;
+        externalRefFrozen?: {
+          disconnectedAt: number;
+          externalAuthor?: { avatarUrl: string; login: string; url: string };
+          externalIssueId: string;
+          externalRepoId: string;
+          issueNumber: number;
+          provider: string;
+          repoFullName: string;
+          url: string;
+        };
         externalRefs?: Array<{
           deleted?: boolean;
           issueNumber: number;

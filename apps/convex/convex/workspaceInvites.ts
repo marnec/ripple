@@ -165,8 +165,20 @@ export const listByEmail = query({
       invites.map(async (invite) => {
         const workspace = await ctx.db.get(invite.workspaceId);
         const inviter = await ctx.db.get(invite.invitedBy);
+        // Projected field by field rather than spread: the row also carries the
+        // Resend delivery columns (`deliveryEmailId`, `deliveryStatus`,
+        // `deliveryError`), and this is the *invitee's* view. Those belong to
+        // the admin's `listByWorkspace` — an internal correlation id and raw
+        // provider error text are not the recipient's business, and spreading
+        // them here also fails the return validator, which takes the whole
+        // pending-invite banner down.
         return {
-          ...invite,
+          _id: invite._id,
+          _creationTime: invite._creationTime,
+          workspaceId: invite.workspaceId,
+          email: invite.email,
+          invitedBy: invite.invitedBy,
+          status: invite.status,
           workspace,
           inviterName: inviter?.name ?? inviter?.email ?? "Someone",
         };
