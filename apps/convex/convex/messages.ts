@@ -287,7 +287,9 @@ async function enrichWithMentionedEvents<T extends { body: string }>(
  * Enrich messages with replyTo info, resolving mention text from parent bodies.
  * Shared by list, search, and getMessageContext queries.
  */
-async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
+async function enrichWithReplyTo<
+  T extends { channelId: Id<"channels">; replyToId?: Id<"messages"> },
+>(
   ctx: { db: DatabaseReader },
   messages: T[],
   userMap: Map<string, Doc<"users"> | null>,
@@ -296,7 +298,28 @@ async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
   const parentIds = [...new Set(
     messages.filter(m => m.replyToId).map(m => m.replyToId!)
   )];
-  const parents = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
+  const fetched = parentIds.length > 0 ? await getAll(ctx.db, parentIds) : [];
+
+  // A reply may only quote a message from its OWN channel. `send` enforces that
+  // on the way in, but the read side has to hold the same line: `replyTo`
+  // re-derives the parent's *current* body, so a cross-channel parent here is a
+  // live feed out of a closed channel or DM into whatever channel the reply sits
+  // in — exactly what the channel rule exists to prevent. The comparison is
+  // against each *replying message's* own channel rather than a query-level
+  // channelId: this helper is handed rows, not a channel, so it stays correct
+  // if a caller ever assembles a page spanning channels.
+  const channelsReferencing = new Map<string, Set<string>>();
+  for (const m of messages) {
+    if (!m.replyToId) continue;
+    const seen = channelsReferencing.get(m.replyToId) ?? new Set<string>();
+    seen.add(m.channelId);
+    channelsReferencing.set(m.replyToId, seen);
+  }
+  // Drop foreign parents before any of their content is read, so the name and
+  // project lookups below never touch a message the reader cannot see.
+  const parents = fetched.map((p, i) =>
+    p && channelsReferencing.get(parentIds[i])?.has(p.channelId) ? p : null,
+  );
   const parentMap = new Map(parents.map((p, i) => [parentIds[i], p]));
 
   // Collect parent author user IDs not already in userMap
@@ -341,7 +364,10 @@ async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
       return { ...msg, replyTo: null };
     }
     const parent = parentMap.get(msg.replyToId);
-    if (!parent) {
+    // Same-channel check repeated per message: one parent id can be referenced
+    // from more than one channel, and only the same-channel references may
+    // resolve it.
+    if (!parent || parent.channelId !== msg.channelId) {
       return { ...msg, replyTo: null };
     }
     const parentUser = userMap.get(parent.userId);
@@ -378,7 +404,7 @@ async function enrichWithReplyTo<T extends { replyToId?: Id<"messages"> }>(
  * one enrichment definition rather than three drifting copies.
  */
 async function enrichMessages<
-  T extends { body: string; replyToId?: Id<"messages"> },
+  T extends { body: string; channelId: Id<"channels">; replyToId?: Id<"messages"> },
 >(
   ctx: { db: DatabaseReader },
   messages: T[],
@@ -516,6 +542,19 @@ export const send = mutation({
 
     const user: Doc<"users"> | null = await ctx.db.get(userId);
     if (!user) throw new ConvexError(`No users found with id=${userId}`);
+
+    // `replyToId` is a read primitive, not just a pointer: the list/search
+    // enrichment resolves it to the parent's author and current body and hands
+    // that to everyone in THIS channel. A parent from another channel would
+    // therefore republish gated content — reactively, since edits keep flowing
+    // — to an audience the channel rule never admitted. Only a message id the
+    // sender could already read here is accepted.
+    if (replyToId) {
+      const parent = await ctx.db.get(replyToId);
+      if (!parent || parent.channelId !== channelId) {
+        throw new ConvexError("Cannot reply to a message from another channel");
+      }
+    }
 
     await ctx.db.insert("messages", {
       body,

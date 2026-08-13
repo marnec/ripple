@@ -132,6 +132,21 @@ export const createLink = mutation({
       role: WorkspaceRole.ADMIN,
     });
 
+    // `projectId` and `workspaceId` are two independent caller-supplied args:
+    // the admin gate above only proves authority over `workspaceId`, so the
+    // project has to be proven to live in that same workspace or an admin of
+    // workspace A could bind a repo to a project in workspace B. Everything
+    // downstream keys off the link row (inbound webhooks insert tasks with
+    // `link.projectId`, import gates only on `link.workspaceId`), so a
+    // mismatched pair here is a cross-tenant write channel. This is the same
+    // check `setTagRoutingRule` and the `canActivate` query already do; the
+    // shared `canActivateIntegration` predicate never loads the project row.
+    // Placed before the reuse/insert branches so BOTH are covered.
+    const project = await ctx.db.get(args.projectId);
+    if (!project || project.workspaceId !== args.workspaceId) {
+      throw new ConvexError("Project not found in this workspace");
+    }
+
     if (!(await canActivateIntegration(ctx, { projectId: args.projectId }))) {
       throw new ConvexError(
         "Cannot link a repository: project has no triage status",

@@ -364,6 +364,164 @@ describe("messages access", () => {
 });
 
 /**
+ * `replyToId` is a read primitive, not just a pointer: the list/search
+ * enrichment resolves it to the parent's author and *current* body and returns
+ * that to everyone in the replying message's channel. A parent from another
+ * channel would therefore republish gated content — reactively — to an audience
+ * the channel rule never admitted, and the message id is all an attacker needs
+ * (an ex-member of a closed channel or DM retains plenty). Both sides are
+ * closed: `send` refuses a foreign parent, and the read path refuses to resolve
+ * one for rows written before that check existed.
+ */
+describe("reply parents stay inside their own channel", () => {
+  /** A closed channel the attacker was in and has since been removed from. */
+  async function setupLeakScenario(t: ReturnType<typeof createTestContext>) {
+    const { userId: insiderId, workspaceId, asUser: asInsider } =
+      await setupWorkspaceWithAdmin(t);
+    const closedId = await setupClosedChannel(t, {
+      workspaceId,
+      userId: insiderId,
+    });
+    const secretId = await insertMessage(t, {
+      channelId: closedId,
+      userId: insiderId,
+      text: "layoffs on friday",
+    });
+    const openId = await setupOpenChannel(t, workspaceId);
+    const { userId: attackerId, asUser: asAttacker } =
+      await setupWorkspaceOutsider(t, workspaceId);
+    return {
+      workspaceId,
+      insiderId,
+      asInsider,
+      closedId,
+      secretId,
+      openId,
+      attackerId,
+      asAttacker,
+    };
+  }
+
+  it("refuses to send a reply whose parent lives in another channel", async () => {
+    const t = createTestContext();
+    const { openId, secretId, asAttacker } = await setupLeakScenario(t);
+
+    await expect(
+      asAttacker.mutation(api.messages.send, {
+        channelId: openId,
+        isomorphicId: "leak-1",
+        body: "thoughts?",
+        plainText: "thoughts?",
+        replyToId: secretId,
+      }),
+    ).rejects.toThrow(/another channel/i);
+
+    const stored = await t.run((ctx) =>
+      ctx.db
+        .query("messages")
+        .withIndex("undeleted_by_channel", (q) =>
+          q.eq("channelId", openId).eq("deleted", false),
+        )
+        .collect(),
+    );
+    expect(stored).toHaveLength(0);
+  });
+
+  it("refuses a cross-channel parent even for someone in both channels", async () => {
+    const t = createTestContext();
+    const { openId, secretId, asInsider } = await setupLeakScenario(t);
+
+    // Membership isn't the point: quoting a closed-channel message into an open
+    // one republishes it to everyone in the open channel.
+    await expect(
+      asInsider.mutation(api.messages.send, {
+        channelId: openId,
+        isomorphicId: "leak-2",
+        body: "fyi",
+        plainText: "fyi",
+        replyToId: secretId,
+      }),
+    ).rejects.toThrow(/another channel/i);
+  });
+
+  it("does not resolve a cross-channel parent already stored on a message", async () => {
+    const t = createTestContext();
+    const { openId, secretId, attackerId, asAttacker } =
+      await setupLeakScenario(t);
+    // Written straight to the DB: the shape of a row from before `send`
+    // checked, which the read path must still refuse to resolve.
+    await t.run((ctx) =>
+      ctx.db.insert("messages", {
+        channelId: openId,
+        userId: attackerId,
+        isomorphicId: "legacy-leak",
+        body: "thoughts?",
+        plainText: "thoughts?",
+        deleted: false,
+        replyToId: secretId,
+      }),
+    );
+
+    const result = await asAttacker.query(api.messages.list, {
+      channelId: openId,
+      paginationOpts: FIRST_PAGE,
+    });
+
+    expect(result.page).toHaveLength(1);
+    expect(result.page[0].replyTo).toBeNull();
+    expect(JSON.stringify(result.page)).not.toContain("layoffs");
+  });
+
+  it("does not resolve a cross-channel parent through getMessageContext", async () => {
+    const t = createTestContext();
+    const { openId, secretId, attackerId, asAttacker } =
+      await setupLeakScenario(t);
+    const messageId = await t.run((ctx) =>
+      ctx.db.insert("messages", {
+        channelId: openId,
+        userId: attackerId,
+        isomorphicId: "legacy-leak-2",
+        body: "thoughts?",
+        plainText: "thoughts?",
+        deleted: false,
+        replyToId: secretId,
+      }),
+    );
+
+    const context = await asAttacker.query(api.messages.getMessageContext, {
+      messageId,
+    });
+
+    expect(JSON.stringify(context)).not.toContain("layoffs");
+  });
+
+  it("still resolves a reply to a message in the same channel", async () => {
+    const t = createTestContext();
+    const { openId, insiderId, asAttacker } = await setupLeakScenario(t);
+    const parentId = await insertMessage(t, {
+      channelId: openId,
+      userId: insiderId,
+      text: "standup at ten",
+    });
+
+    await asAttacker.mutation(api.messages.send, {
+      channelId: openId,
+      isomorphicId: "reply-ok",
+      body: "on my way",
+      plainText: "on my way",
+      replyToId: parentId,
+    });
+
+    const result = await asAttacker.query(api.messages.list, {
+      channelId: openId,
+      paginationOpts: FIRST_PAGE,
+    });
+    const reply = result.page.find((m) => m.replyToId === parentId);
+    expect(reply?.replyTo).toMatchObject({ plainText: "standup at ten" });
+  });
+});
+
+/**
  * A mention is a push of the message's first ~100 characters to a user id the
  * *client* chose. Nothing downstream of `notify` re-checks access —
  * `deliverPush` filters by the recipient's own preferences and sends — so the

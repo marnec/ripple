@@ -37,7 +37,15 @@ export function ChatContainer() {
     <div className="flex h-full w-full flex-col">
       {channelId && (
         <>
-          <Chat channelId={channelId} />
+          {/* Keyed by channel: switching channels changes a route param, not the
+              route, so without this React keeps the same Chat instance and its
+              per-channel state — the pending reply target above all. A reply
+              carried into another channel used to post there silently; the
+              server now refuses a cross-channel parent, so a stale target would
+              surface as "Could not send message". Remounting is the React-native
+              way to reset identity-scoped state (also clears the pending edit,
+              context view and search box, all equally channel-scoped). */}
+          <Chat key={channelId} channelId={channelId} />
         </>
       )}
     </div>

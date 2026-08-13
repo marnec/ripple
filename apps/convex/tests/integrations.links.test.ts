@@ -341,6 +341,127 @@ describe("integrations/core/links.createLink", () => {
       }),
     ).rejects.toThrow();
   });
+
+  // `projectId` and `workspaceId` arrive as two independent args. The admin
+  // gate only proves authority over `workspaceId`; without an explicit
+  // ownership check an admin of workspace A could bind their repo to a
+  // project in workspace B, after which inbound webhooks insert tasks into
+  // B's board (syncIn uses `link.projectId`) and `startGithubImport` — which
+  // gates only on `link.workspaceId` — would let A dump a whole issue
+  // backlog there.
+  it("rejects a projectId belonging to a different workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId: attackerWs, asUser: asAttacker } =
+      await setupActivatableProject(t);
+    // Victim workspace, fully activatable in its own right — the only thing
+    // wrong with the call is that the two ids don't belong together.
+    const { userId: victimId, workspaceId: victimWs } =
+      await setupWorkspaceWithAdmin(t, "Victim Workspace");
+    const victimProjectId = await setupProject(t, {
+      workspaceId: victimWs,
+      creatorId: victimId,
+      name: "Victim Project",
+    });
+    await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId: victimProjectId,
+        name: "Triage",
+        color: "bg-amber-500",
+        order: 0,
+        isDefault: false,
+        isCompleted: false,
+        isTriage: true,
+      }),
+    );
+
+    await expect(
+      asAttacker.mutation(api.integrations.core.links.createLink, {
+        projectId: victimProjectId,
+        workspaceId: attackerWs,
+        externalAccountId: "install-999",
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      }),
+    ).rejects.toThrow(/project not found in this workspace/i);
+
+    const links = await t.run((ctx) =>
+      ctx.db.query("projectIntegrationLinks").collect(),
+    );
+    expect(links).toHaveLength(0);
+  });
+
+  // The reconnect-reuse branch patches an existing row instead of inserting,
+  // so the ownership check has to sit ahead of BOTH branches. A disconnected
+  // row on the victim project is exactly the shape that reaches the patch.
+  it("rejects a cross-workspace projectId even when a reusable disconnected link exists", async () => {
+    const t = createTestContext();
+    const { workspaceId: attackerWs, asUser: asAttacker } =
+      await setupActivatableProject(t);
+    const { userId: victimId, workspaceId: victimWs } =
+      await setupWorkspaceWithAdmin(t, "Victim Workspace");
+    const victimProjectId = await setupProject(t, {
+      workspaceId: victimWs,
+      creatorId: victimId,
+      name: "Victim Project",
+    });
+    const staleLinkId = await t.run(async (ctx) => {
+      await ctx.db.insert("taskStatuses", {
+        projectId: victimProjectId,
+        name: "Triage",
+        color: "bg-amber-500",
+        order: 0,
+        isDefault: false,
+        isCompleted: false,
+        isTriage: true,
+      });
+      const botUserId = await ctx.db.insert("users", { name: "GitHub" });
+      const victimIntegrationId = await ctx.db.insert("workspaceIntegrations", {
+        workspaceId: victimWs,
+        botUserId,
+        provider: "github",
+        externalAccountId: "install-victim",
+      });
+      return ctx.db.insert("projectIntegrationLinks", {
+        projectId: victimProjectId,
+        workspaceId: victimWs,
+        workspaceIntegrationId: victimIntegrationId,
+        status: "disconnected",
+        pausedByBilling: false,
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      });
+    });
+
+    await expect(
+      asAttacker.mutation(api.integrations.core.links.createLink, {
+        projectId: victimProjectId,
+        workspaceId: attackerWs,
+        externalAccountId: "install-999",
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      }),
+    ).rejects.toThrow(/project not found in this workspace/i);
+
+    const stale = await t.run((ctx) => ctx.db.get(staleLinkId));
+    expect(stale?.status).toBe("disconnected");
+    expect(stale?.workspaceId).toBe(victimWs);
+  });
+
+  it("rejects a projectId that no longer exists", async () => {
+    const t = createTestContext();
+    const { workspaceId, projectId, asUser } = await setupActivatableProject(t);
+    await t.run((ctx) => ctx.db.delete(projectId));
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.createLink, {
+        projectId,
+        workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "R_kgDOACME",
+        externalRepoFullName: "acme/web",
+      }),
+    ).rejects.toThrow(/project not found in this workspace/i);
+  });
 });
 
 describe("integrations/core/links.unlinkLink", () => {
