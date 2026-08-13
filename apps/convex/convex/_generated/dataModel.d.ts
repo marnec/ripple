@@ -740,12 +740,48 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  integrationInstallCandidates: {
+    document: {
+      candidates: Array<{
+        accountLogin?: string;
+        accountType?: "organization" | "user";
+        externalAccountId: string;
+      }>;
+      expiresAt: number;
+      externalBotLogin?: string;
+      provider: string;
+      token: string;
+      userId: Id<"users">;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"integrationInstallCandidates">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "candidates"
+      | "expiresAt"
+      | "externalBotLogin"
+      | "provider"
+      | "token"
+      | "userId"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_token: ["token", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   integrationInstallStates: {
     document: {
       codeVerifier?: string;
       expiresAt: number;
       nonce: string;
       provider: string;
+      returnTo?: string;
       userId: Id<"users">;
       workspaceId: Id<"workspaces">;
       _id: Id<"integrationInstallStates">;
@@ -758,6 +794,7 @@ export type DataModel = {
       | "expiresAt"
       | "nonce"
       | "provider"
+      | "returnTo"
       | "userId"
       | "workspaceId";
     indexes: {

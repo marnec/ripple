@@ -180,6 +180,34 @@ function parseTokenBundle(raw: unknown): GitlabTokenBundle {
 }
 
 /**
+ * Revoke an access (or refresh) token — GitLab's closest equivalent to
+ * uninstalling a GitHub App. There is no install-level entity to delete, so
+ * removal means: stop being able to act as that user. Best-effort by design;
+ * the caller completes the local removal regardless of the outcome.
+ *
+ * Returns true when GitLab accepts the revocation. RFC 7009 says a server
+ * should answer 200 even for an already-invalid token, so a false here means
+ * something genuinely went wrong (bad client credentials, instance down).
+ */
+export async function revokeToken(args: {
+  cfg: GitlabOAuthConfig;
+  token: string;
+}): Promise<boolean> {
+  const { cfg, token } = args;
+  const doFetch = cfg.fetchImpl ?? fetch;
+  const res = await doFetch(`${cfg.base ?? GITLAB_BASE}/oauth/revoke`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+      token,
+    }).toString(),
+  });
+  return res.ok;
+}
+
+/**
  * Look up the current user the access token authenticates as. Used at install
  * time to set `accountLogin` + `externalBotLogin` (the inbound echo guard uses
  * the latter to suppress bounce-back of our own outbound writes).

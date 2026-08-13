@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { query, type MutationCtx } from "../../_generated/server";
 import { internalMutation, mutation } from "../../functions";
+import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
 import {
@@ -8,13 +9,38 @@ import {
   requireWorkspaceMember,
 } from "../../authHelpers";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { hasFeature } from "./entitlements";
+
+/**
+ * Providers whose `externalAccountId` is *caller-supplied* rather than derived
+ * from a credential we just verified, and which therefore need an explicit
+ * possession proof before the account can be claimed.
+ *
+ * GitHub qualifies: the App install id arrives on the setup callback's query
+ * string, ids are small sequential integers, and the App JWT mints a working
+ * installation token for *any* installation of our App — so an unproven claim
+ * is a cross-tenant read of someone else's private repos. The proof is
+ * `GET /user/installations` on a user-to-server token (see
+ * `github/setupAction.finalizeInstall`).
+ *
+ * GitLab is deliberately absent: its `externalAccountId` is the numeric user id
+ * read from `/user` on a token it has just exchanged, so possession is
+ * structural — there is no caller-supplied id to forge.
+ */
+const PROVIDERS_REQUIRING_INSTALL_PROOF = new Set(["github"]);
 
 /**
  * Shared install-completion logic. Both the public `completeAppInstallation`
  * (auth from session) and the internal `completeInstallationFromCallback`
  * (auth from a consumed install nonce) funnel through here once the actor's
  * admin role on the workspace has been established by the caller.
+ *
+ * Admin-on-your-own-workspace is NOT sufficient authority to claim an external
+ * account — anyone can create a workspace and be its admin. Hence the
+ * `installationVerified` gate below, which the client-callable mutation has no
+ * way to set. Keep the check here rather than in either caller: this function
+ * is the single write path, and a gate on one door is a gate on none.
  *
  * Idempotent on `(workspaceId, externalAccountId)`; gates on the
  * `<provider>_integration` entitlement; inserts the synthetic bot user and
@@ -33,8 +59,25 @@ async function doCompleteInstall(
     credentialToken?: string;
     oauthRefreshToken?: string;
     oauthExpiresAt?: number;
+    /**
+     * Set only by flows that have proven the actor can see this external
+     * account on the provider. Never plumbed from client-supplied args.
+     */
+    installationVerified?: boolean;
   },
 ): Promise<Id<"workspaceIntegrations">> {
+  // Fail closed, and before any read or write: an unproven claim must not even
+  // reach the idempotent-reclaim branch below, or a second call could refresh
+  // credentials on a row the caller was never entitled to.
+  if (
+    PROVIDERS_REQUIRING_INSTALL_PROOF.has(args.provider) &&
+    !args.installationVerified
+  ) {
+    throw new ConvexError(
+      `A ${args.provider} installation can only be claimed through the install callback, which verifies the installation belongs to you`,
+    );
+  }
+
   const existing = await ctx.db
     .query("workspaceIntegrations")
     .withIndex("by_externalAccount", (q) =>
@@ -178,6 +221,10 @@ export const completeInstallationFromCallback = internalMutation({
     credentialToken: v.optional(v.string()),
     oauthRefreshToken: v.optional(v.string()),
     oauthExpiresAt: v.optional(v.number()),
+    // Set by `github/setupAction.finalizeInstall` once `GET /user/installations`
+    // has confirmed the installing user can see this installation. Internal
+    // mutation, so this cannot be supplied by a client.
+    installationVerified: v.optional(v.boolean()),
   },
   returns: v.id("workspaceIntegrations"),
   handler: async (ctx, args) => {
@@ -202,6 +249,7 @@ export const completeInstallationFromCallback = internalMutation({
       credentialToken: args.credentialToken,
       oauthRefreshToken: args.oauthRefreshToken,
       oauthExpiresAt: args.oauthExpiresAt,
+      installationVerified: args.installationVerified,
     });
   },
 });
@@ -217,6 +265,14 @@ export const assertWizardInstallation = query({
   args: {
     workspaceId: v.id("workspaces"),
     externalAccountId: v.string(),
+    /**
+     * The provider the calling action speaks. Required by every caller that
+     * goes on to mint a provider credential: a workspace can hold a GitHub and
+     * a GitLab account at once, so "belongs to this workspace" does not imply
+     * "is a GitHub install", and this query is the last gate before an id
+     * becomes an App-token request.
+     */
+    provider: v.optional(v.string()),
   },
   returns: v.object({ externalAccountId: v.string() }),
   handler: async (ctx, args) => {
@@ -229,10 +285,300 @@ export const assertWizardInstallation = query({
         q.eq("externalAccountId", args.externalAccountId),
       )
       .unique();
-    if (!integration || integration.workspaceId !== args.workspaceId) {
+    if (
+      !integration ||
+      integration.workspaceId !== args.workspaceId ||
+      (args.provider !== undefined && integration.provider !== args.provider)
+    ) {
       throw new ConvexError("Installation not found in this workspace");
     }
     return { externalAccountId: integration.externalAccountId };
+  },
+});
+
+/** How long a user has to pick from the accounts they just authorized. */
+const INSTALL_CANDIDATE_TTL_MS = 15 * 60 * 1000;
+
+const candidateValidator = v.object({
+  externalAccountId: v.string(),
+  accountLogin: v.optional(v.string()),
+  accountType: v.optional(
+    v.union(v.literal("organization"), v.literal("user")),
+  ),
+});
+
+/**
+ * Park the accounts a user just proved they can reach, so they can pick one.
+ * Internal — the only writer is a flow holding a user-to-server token, which is
+ * what makes this list a possession proof rather than caller input.
+ */
+export const storeInstallCandidates = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    provider: v.string(),
+    candidates: v.array(candidateValidator),
+    externalBotLogin: v.optional(v.string()),
+  },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    const token = crypto.randomUUID();
+    await ctx.db.insert("integrationInstallCandidates", {
+      token,
+      workspaceId: args.workspaceId,
+      userId: args.userId,
+      provider: args.provider,
+      candidates: args.candidates,
+      externalBotLogin: args.externalBotLogin,
+      expiresAt: Date.now() + INSTALL_CANDIDATE_TTL_MS,
+    });
+    return token;
+  },
+});
+
+/**
+ * Read back a parked candidate list for the picker. Scoped to the user who
+ * authorized: the list is derived from *their* provider account, so it is not
+ * another admin's to see, even in the same workspace. Returns null for an
+ * unknown, expired, or someone else's token rather than throwing — the UI just
+ * doesn't open a picker.
+ */
+export const listInstallCandidates = query({
+  args: { token: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      workspaceId: v.id("workspaces"),
+      provider: v.string(),
+      candidates: v.array(candidateValidator),
+      alreadyConnected: v.array(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("integrationInstallCandidates")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique();
+    if (!row || row.expiresAt < Date.now()) return null;
+
+    const membership = await getWorkspaceMembership(
+      ctx,
+      row.workspaceId,
+      row.userId,
+    );
+    if (membership?.role !== WorkspaceRole.ADMIN) return null;
+
+    const viewerId = await getAuthUserId(ctx);
+    if (viewerId !== row.userId) return null;
+
+    // So the picker can mark accounts this workspace already holds instead of
+    // letting the user pick one that will bounce off the uniqueness check.
+    const existing = await ctx.db
+      .query("workspaceIntegrations")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", row.workspaceId))
+      .collect();
+
+    return {
+      workspaceId: row.workspaceId,
+      provider: row.provider,
+      candidates: row.candidates,
+      alreadyConnected: existing.map((e) => e.externalAccountId),
+    };
+  },
+});
+
+/**
+ * Connect one of the accounts from a parked candidate list.
+ *
+ * This is the second door into `doCompleteInstall` that may set
+ * `installationVerified` — and it earns it the same way the setup callback
+ * does, by only accepting an `externalAccountId` that appears in a list built
+ * from the user's own provider token. Caller-supplied ids that are not on the
+ * list are refused, so this cannot be used to claim a stranger's installation.
+ */
+export const claimInstallation = mutation({
+  args: {
+    token: v.string(),
+    externalAccountId: v.string(),
+  },
+  returns: v.id("workspaceIntegrations"),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("integrationInstallCandidates")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique();
+    if (!row) throw new ConvexError("This connection request has expired");
+
+    // One-time use, valid or not.
+    await ctx.db.delete(row._id);
+    if (row.expiresAt < Date.now()) {
+      throw new ConvexError("This connection request has expired");
+    }
+
+    const { userId } = await requireWorkspaceMember(ctx, row.workspaceId, {
+      role: WorkspaceRole.ADMIN,
+    });
+    if (userId !== row.userId) {
+      throw new ConvexError(
+        "This connection request belongs to a different user",
+      );
+    }
+
+    const chosen = row.candidates.find(
+      (c) => c.externalAccountId === args.externalAccountId,
+    );
+    if (!chosen) {
+      throw new ConvexError("That account was not part of this authorization");
+    }
+
+    return doCompleteInstall(ctx, {
+      actorId: userId,
+      workspaceId: row.workspaceId,
+      provider: row.provider,
+      externalAccountId: chosen.externalAccountId,
+      externalAccountType: chosen.accountType,
+      accountLogin: chosen.accountLogin,
+      externalBotLogin: row.externalBotLogin,
+      // Earned above: the account came off a list only the user's own token
+      // could have produced.
+      installationVerified: true,
+    });
+  },
+});
+
+/**
+ * Step 1 of removing an installation: authorize it, and start the disconnect
+ * cascade for every repo linked through it.
+ *
+ * The integration row is deliberately NOT deleted here. `drainDisconnectBatch`
+ * resolves the provider from this row to stamp `tasks.externalRefFrozen`, and
+ * `resolveProvider(null)` falls back to `"github"` — so deleting it while the
+ * cascade is still draining would silently mislabel every frozen ref on a
+ * GitLab removal. `finishRemoveInstallation` deletes it once the drains are
+ * done.
+ *
+ * Returns what the action needs to call the provider, so the action never has
+ * to read the row itself.
+ */
+export const beginRemoveInstallation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    integrationId: v.id("workspaceIntegrations"),
+    actorId: v.id("users"),
+  },
+  returns: v.object({
+    provider: v.string(),
+    externalAccountId: v.string(),
+    credentialToken: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const membership = await getWorkspaceMembership(
+      ctx,
+      args.workspaceId,
+      args.actorId,
+    );
+    if (membership?.role !== WorkspaceRole.ADMIN) {
+      throw new ConvexError("Only workspace admins can remove an installation");
+    }
+
+    const integration = await ctx.db.get(args.integrationId);
+    if (!integration || integration.workspaceId !== args.workspaceId) {
+      throw new ConvexError("Installation not found in this workspace");
+    }
+
+    // Every repo linked through this account, including ones already
+    // disconnected (harmless — the drain is idempotent).
+    const links = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+    const own = links.filter(
+      (l) => l.workspaceIntegrationId === args.integrationId,
+    );
+
+    for (const link of own) {
+      if (link.status !== "disconnected") {
+        await ctx.db.patch(link._id, { status: "disconnected" });
+      }
+      await ctx.scheduler.runAfter(
+        0,
+        internal.integrations.core.links.drainDisconnectBatch,
+        { projectIntegrationLinkId: link._id },
+      );
+    }
+
+    try {
+      await auditLog.log(ctx, {
+        action: "integration.removed",
+        actorId: args.actorId.toString(),
+        resourceType: "workspaces",
+        resourceId: args.workspaceId,
+        severity: "warning",
+        metadata: {
+          provider: integration.provider,
+          externalAccountId: integration.externalAccountId,
+          accountLogin: integration.accountLogin ?? "",
+          linksDisconnected: own.length,
+        },
+        scope: args.workspaceId,
+      });
+    } catch (err) {
+      console.error("[auditLog] failed to log integration.removed", err);
+    }
+
+    return {
+      provider: integration.provider,
+      externalAccountId: integration.externalAccountId,
+      credentialToken: integration.credentialToken,
+    };
+  },
+});
+
+/**
+ * Step 3: delete the integration row, but only once the disconnect cascade has
+ * drained — see `beginRemoveInstallation` for why the ordering matters.
+ * Self-reschedules while any `taskIntegrationLinks` row under this account
+ * survives, mirroring `drainDisconnectBatch`'s own idiom.
+ *
+ * The synthetic bot user is left in place on purpose: it authored comments and
+ * may be `creatorId` on imported tasks, and deleting it would dangle those.
+ */
+export const finishRemoveInstallation = internalMutation({
+  args: { integrationId: v.id("workspaceIntegrations") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const integration = await ctx.db.get(args.integrationId);
+    if (!integration) return null; // already gone — idempotent
+
+    const links = await ctx.db
+      .query("projectIntegrationLinks")
+      .withIndex("by_workspace", (q) =>
+        q.eq("workspaceId", integration.workspaceId),
+      )
+      .collect();
+    const own = links.filter(
+      (l) => l.workspaceIntegrationId === args.integrationId,
+    );
+
+    for (const link of own) {
+      const remaining = await ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_link_externalIssueId", (q) =>
+          q.eq("projectIntegrationLinkId", link._id),
+        )
+        .first();
+      if (remaining) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.integrations.core.install.finishRemoveInstallation,
+          { integrationId: args.integrationId },
+        );
+        return null;
+      }
+    }
+
+    await ctx.db.delete(args.integrationId);
+    return null;
   },
 });
 
@@ -245,7 +591,17 @@ export const assertWizardInstallation = query({
  * the UI can render "installed by …" without a second round-trip.
  */
 export const listInstallations = query({
-  args: { workspaceId: v.id("workspaces") },
+  args: {
+    workspaceId: v.id("workspaces"),
+    /**
+     * Restrict to one provider. Omit for the workspace-settings audit list,
+     * which deliberately shows every account; pass it from any provider's
+     * connect flow, where offering another provider's account is at best a
+     * confusing duplicate (two `marnec (user)` rows) and at worst sends a
+     * GitLab account id to a GitHub-token-minting action.
+     */
+    provider: v.optional(v.string()),
+  },
   returns: v.array(
     v.object({
       _id: v.id("workspaceIntegrations"),
@@ -261,10 +617,13 @@ export const listInstallations = query({
   ),
   handler: async (ctx, args) => {
     await requireWorkspaceMember(ctx, args.workspaceId);
-    const rows = await ctx.db
+    const all = await ctx.db
       .query("workspaceIntegrations")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .collect();
+    const rows = args.provider
+      ? all.filter((r) => r.provider === args.provider)
+      : all;
     return Promise.all(
       rows.map(async (r) => {
         const installer = r.installedBy

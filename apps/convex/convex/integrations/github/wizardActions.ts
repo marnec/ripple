@@ -29,7 +29,11 @@ export const listInstallationRepos = action({
   handler: async (ctx, args) => {
     await ctx.runQuery(
       api.integrations.core.install.assertWizardInstallation,
-      args,
+      {
+        workspaceId: args.workspaceId,
+        externalAccountId: args.externalAccountId,
+        provider: "github",
+      },
     );
 
     const client = githubClientFromEnv();
@@ -67,7 +71,11 @@ export const previewImportCount = action({
   handler: async (ctx, args) => {
     await ctx.runQuery(
       api.integrations.core.install.assertWizardInstallation,
-      { workspaceId: args.workspaceId, externalAccountId: args.externalAccountId },
+      {
+        workspaceId: args.workspaceId,
+        externalAccountId: args.externalAccountId,
+        provider: "github",
+      },
     );
 
     const client = githubClientFromEnv();

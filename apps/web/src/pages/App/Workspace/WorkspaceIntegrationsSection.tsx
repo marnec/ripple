@@ -10,13 +10,13 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@/components/ui/responsive-dialog";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { Pause, Play, RefreshCw, Unplug } from "lucide-react";
+import { Pause, Play, Plus, RefreshCw, Trash2, Unplug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatLastWebhook, isFrozenOver24h } from "@/lib/integration-utils";
 import { IntegrationWarning } from "@/components/IntegrationWarning";
@@ -28,43 +28,205 @@ const GITLAB_FEATURE_KEY = "gitlab_integration";
 type Props = { workspaceId: Id<"workspaces"> };
 
 /**
- * Read-only list of the workspace's provider installations (the accounts the
- * GitHub App or GitLab OAuth is connected to), with installer attribution and
- * a provider chip so two `marnec`-style accounts on different providers can be
- * told apart at a glance. Lets admins audit who connected what. Hidden
- * entirely when there are no installations.
+ * The workspace's provider installations (the accounts the GitHub App or
+ * GitLab OAuth is connected to), with installer attribution and a provider
+ * chip so two `marnec`-style accounts on different providers can be told apart
+ * at a glance. Admins can audit who connected what — and remove it, which is
+ * the only route back out: leaving this read-only meant an installed App could
+ * never be undone from inside the product.
+ *
+ * Hidden entirely when there are no installations.
  */
 function InstallationsList({ workspaceId }: Props) {
+  const viewer = useViewer();
+  const members = useQuery(api.workspaceMembers.membersWithRoles, {
+    workspaceId,
+  });
   const installations = useQuery(
     api.integrations.core.install.listInstallations,
     { workspaceId },
   );
-  if (!installations || installations.length === 0) return null;
+  const removeInstallation = useAction(
+    api.integrations.core.removeInstallation.remove,
+  );
+  const beginInstall = useMutation(
+    api.integrations.core.installFlow.beginAppInstall,
+  );
+  const beginAuthorize = useMutation(
+    api.integrations.core.installFlow.beginAppAuthorize,
+  );
+
+  const [removeTarget, setRemoveTarget] = useState<{
+    integrationId: Id<"workspaceIntegrations">;
+    provider: string;
+    label: string;
+  } | null>(null);
+  const [removingId, setRemovingId] =
+    useState<Id<"workspaceIntegrations"> | null>(null);
+
+  if (!installations) return null;
+
+  const isAdmin =
+    members?.find((m) => m.userId === viewer?._id)?.role === "admin";
+
+  // Still rendered when empty for admins — this is where you come to connect an
+  // account, and hiding it once the last installation is removed leaves no way
+  // back in. Non-admins keep the old behaviour of seeing nothing.
+  if (installations.length === 0 && !isAdmin) return null;
+
+  const confirmRemove = async () => {
+    if (!removeTarget) return;
+    const { integrationId, label } = removeTarget;
+    setRemoveTarget(null);
+    setRemovingId(integrationId);
+    try {
+      await removeInstallation({ workspaceId, integrationId });
+      toast.success(`Removed ${label}`);
+    } catch (err) {
+      toast.error("Could not remove installation", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    } finally {
+      setRemovingId(null);
+    }
+  };
+
+  const startFlow = async (kind: "install" | "authorize") => {
+    try {
+      const { url } =
+        kind === "install"
+          ? await beginInstall({ workspaceId })
+          : await beginAuthorize({
+              workspaceId,
+              returnTo: `/workspaces/${workspaceId}/settings`,
+            });
+      window.location.href = url;
+    } catch (err) {
+      toast.error("Could not start the connection", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    }
+  };
 
   return (
     <div className="mb-4 rounded-md border px-3 py-3">
-      <div className="text-sm font-medium mb-2">Installations</div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-sm font-medium">Installations</div>
+        {isAdmin && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => void startFlow("authorize")}
+            >
+              Connect existing
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => void startFlow("install")}
+            >
+              <Plus className="size-3.5" />
+              Add account
+            </Button>
+          </div>
+        )}
+      </div>
+      {installations.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          No accounts connected. <strong>Add account</strong> installs the app on
+          a new account; <strong>Connect existing</strong> links one it is
+          already installed on.
+        </p>
+      )}
       <ul className="space-y-1">
-        {installations.map((inst) => (
-          <li
-            key={inst._id}
-            className="flex items-center gap-2 text-sm text-muted-foreground"
-          >
-            <ProviderBadge provider={inst.provider} />
-            <span className="truncate text-foreground">
-              {inst.accountLogin ?? inst.externalAccountId}
-            </span>
-            {inst.externalAccountType && (
-              <span className="text-xs">({inst.externalAccountType})</span>
-            )}
-            {inst.installedByName && (
-              <span className="ml-auto text-xs">
-                installed by {inst.installedByName}
+        {installations.map((inst) => {
+          const label = inst.accountLogin ?? inst.externalAccountId;
+          return (
+            <li
+              key={inst._id}
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              <ProviderBadge provider={inst.provider} />
+              <span className="truncate text-foreground">{label}</span>
+              {inst.externalAccountType && (
+                <span className="text-xs">({inst.externalAccountType})</span>
+              )}
+              <span className="ml-auto flex items-center gap-3">
+                {inst.installedByName && (
+                  <span className="text-xs">
+                    installed by {inst.installedByName}
+                  </span>
+                )}
+                {isAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive h-7 px-2"
+                    disabled={removingId === inst._id}
+                    onClick={() =>
+                      setRemoveTarget({
+                        integrationId: inst._id,
+                        provider: inst.provider,
+                        label,
+                      })
+                    }
+                  >
+                    <Trash2 className="size-3.5" />
+                    <span className="sr-only">Remove {label}</span>
+                  </Button>
+                )}
               </span>
-            )}
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
+
+      <ResponsiveDialog
+        open={removeTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setRemoveTarget(null);
+        }}
+      >
+        <ResponsiveDialogContent className="max-w-md">
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Remove installation?</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              {removeTarget && (
+                <>
+                  Every repo connected through{" "}
+                  <span className="font-mono">{removeTarget.label}</span> will be
+                  disconnected. Synced issues stay as tasks, keeping their
+                  history, but new activity will no longer reach this workspace.
+                  {removeTarget.provider === "github" ? (
+                    <>
+                      {" "}
+                      The GitHub App is also uninstalled from that account —
+                      reconnecting means installing it again.
+                    </>
+                  ) : (
+                    <>
+                      {" "}
+                      The stored GitLab access token is also revoked —
+                      reconnecting means authorizing again.
+                    </>
+                  )}
+                </>
+              )}
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogFooter>
+            <Button variant="ghost" onClick={() => setRemoveTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void confirmRemove()}>
+              Remove
+            </Button>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </div>
   );
 }

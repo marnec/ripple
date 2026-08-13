@@ -336,9 +336,11 @@ function ConnectGithubWizard({
   open,
   onOpenChange,
 }: Props & { open: boolean; onOpenChange: (v: boolean) => void }) {
+  // Provider-scoped: a workspace can hold a GitHub and a GitLab account with
+  // the same login, and an unfiltered list showed both as identical rows here.
   const installations = useQuery(
     api.integrations.core.install.listInstallations,
-    open ? { workspaceId } : "skip",
+    open ? { workspaceId, provider: "github" } : "skip",
   );
   const statuses = useQuery(
     api.taskStatuses.listByProject,
@@ -346,6 +348,9 @@ function ConnectGithubWizard({
   );
   const beginInstall = useMutation(
     api.integrations.core.installFlow.beginAppInstall,
+  );
+  const beginAuthorize = useMutation(
+    api.integrations.core.installFlow.beginAppAuthorize,
   );
   const listRepos = useAction(
     api.integrations.github.wizardActions.listInstallationRepos,
@@ -418,6 +423,24 @@ function ConnectGithubWizard({
       window.location.href = url;
     } catch (err) {
       toast.error("Could not start GitHub install", {
+        description: err instanceof Error ? err.message : "Please try again",
+      });
+    }
+  };
+
+  const handleConnectExisting = async () => {
+    try {
+      const { url } = await beginAuthorize({
+        workspaceId,
+        // Come back to this project's settings so the picker opens where the
+        // flow started, rather than dumping the user in workspace settings.
+        // Projects nest under the workspace shell — a bare `/projects/:id`
+        // matches no route.
+        returnTo: `/workspaces/${workspaceId}/projects/${projectId}/settings`,
+      });
+      window.location.href = url;
+    } catch (err) {
+      toast.error("Could not start GitHub authorization", {
         description: err instanceof Error ? err.message : "Please try again",
       });
     }
@@ -532,6 +555,20 @@ function ConnectGithubWizard({
               className="w-full"
             >
               + Install on another account
+            </Button>
+            {/*
+              GitHub only shows an install screen for accounts the app is NOT
+              already on — otherwise it redirects to that installation's own
+              settings page and never comes back. This is the way in for an
+              account it is already installed on.
+            */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleConnectExisting()}
+              className="w-full"
+            >
+              Connect an account it's already installed on
             </Button>
           </div>
         )}

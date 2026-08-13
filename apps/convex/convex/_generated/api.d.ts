@@ -1472,8 +1472,18 @@ export declare const api: {
         assertWizardInstallation: FunctionReference<
           "query",
           "public",
-          { externalAccountId: string; workspaceId: Id<"workspaces"> },
+          {
+            externalAccountId: string;
+            provider?: string;
+            workspaceId: Id<"workspaces">;
+          },
           { externalAccountId: string }
+        >;
+        claimInstallation: FunctionReference<
+          "mutation",
+          "public",
+          { externalAccountId: string; token: string },
+          Id<"workspaceIntegrations">
         >;
         completeAppInstallation: FunctionReference<
           "mutation",
@@ -1492,7 +1502,7 @@ export declare const api: {
         listInstallations: FunctionReference<
           "query",
           "public",
-          { workspaceId: Id<"workspaces"> },
+          { provider?: string; workspaceId: Id<"workspaces"> },
           Array<{
             _id: Id<"workspaceIntegrations">;
             accountLogin?: string;
@@ -1503,8 +1513,29 @@ export declare const api: {
             provider: string;
           }>
         >;
+        listInstallCandidates: FunctionReference<
+          "query",
+          "public",
+          { token: string },
+          null | {
+            alreadyConnected: Array<string>;
+            candidates: Array<{
+              accountLogin?: string;
+              accountType?: "organization" | "user";
+              externalAccountId: string;
+            }>;
+            provider: string;
+            workspaceId: Id<"workspaces">;
+          }
+        >;
       };
       installFlow: {
+        beginAppAuthorize: FunctionReference<
+          "mutation",
+          "public",
+          { returnTo: string; workspaceId: Id<"workspaces"> },
+          { url: string }
+        >;
         beginAppInstall: FunctionReference<
           "mutation",
           "public",
@@ -1652,6 +1683,17 @@ export declare const api: {
             title: string;
             url: string;
           }>
+        >;
+      };
+      removeInstallation: {
+        remove: FunctionReference<
+          "action",
+          "public",
+          {
+            integrationId: Id<"workspaceIntegrations">;
+            workspaceId: Id<"workspaces">;
+          },
+          null
         >;
       };
       taskLinks: {
@@ -4659,6 +4701,20 @@ export declare const internal: {
         >;
       };
       install: {
+        beginRemoveInstallation: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            actorId: Id<"users">;
+            integrationId: Id<"workspaceIntegrations">;
+            workspaceId: Id<"workspaces">;
+          },
+          {
+            credentialToken?: string;
+            externalAccountId: string;
+            provider: string;
+          }
+        >;
         completeInstallationFromCallback: FunctionReference<
           "mutation",
           "internal",
@@ -4668,6 +4724,7 @@ export declare const internal: {
             externalAccountId: string;
             externalAccountType?: "organization" | "user";
             externalBotLogin?: string;
+            installationVerified?: boolean;
             oauthExpiresAt?: number;
             oauthRefreshToken?: string;
             provider: string;
@@ -4675,6 +4732,28 @@ export declare const internal: {
             workspaceId: Id<"workspaces">;
           },
           Id<"workspaceIntegrations">
+        >;
+        finishRemoveInstallation: FunctionReference<
+          "mutation",
+          "internal",
+          { integrationId: Id<"workspaceIntegrations"> },
+          null
+        >;
+        storeInstallCandidates: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            candidates: Array<{
+              accountLogin?: string;
+              accountType?: "organization" | "user";
+              externalAccountId: string;
+            }>;
+            externalBotLogin?: string;
+            provider: string;
+            userId: Id<"users">;
+            workspaceId: Id<"workspaces">;
+          },
+          string
         >;
       };
       installFlow: {
@@ -4685,6 +4764,7 @@ export declare const internal: {
           null | {
             codeVerifier?: string;
             provider: string;
+            returnTo?: string;
             userId: Id<"users">;
             workspaceId: Id<"workspaces">;
           }
@@ -4941,8 +5021,12 @@ export declare const internal: {
         finalizeInstall: FunctionReference<
           "action",
           "internal",
-          { installationId: string; nonce: string },
-          null | { workspaceId: Id<"workspaces"> }
+          { code?: string; installationId?: string; nonce: string },
+          null | {
+            candidateToken?: string;
+            returnTo?: string;
+            workspaceId: Id<"workspaces">;
+          }
         >;
       };
       syncOutAction: {

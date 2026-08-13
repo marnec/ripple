@@ -88,6 +88,36 @@ export class GithubClient {
   }
 
   /**
+   * Uninstall the App from the account (`DELETE /app/installations/{id}`),
+   * App-JWT authenticated. This is what makes "remove installation" mean the
+   * same thing on both sides — dropping only our row would leave the App
+   * sitting installed on the GitHub account with nothing driving it.
+   *
+   * Returns true for 204 (removed) and for 404 (already gone — the user
+   * uninstalled from GitHub first, which is the common race). Any other status
+   * returns false: the caller finishes the local removal regardless, since a
+   * GitHub outage must not strand a workspace with an unremovable integration.
+   */
+  async uninstallApp(externalAccountId: string): Promise<boolean> {
+    const jwt = await signAppJwt({
+      appId: this.cfg.appId,
+      privateKeyPem: this.cfg.privateKeyPem,
+    });
+    const res = await this.doFetch(
+      `${this.apiBase}/app/installations/${encodeURIComponent(externalAccountId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
+    return res.status === 204 || res.status === 404;
+  }
+
+  /**
    * Mint a short-lived installation token. GitHub returns
    *  { token, expires_at } — the token authenticates subsequent REST calls
    *  for that installation. Tokens expire ~1h; callers should cache.

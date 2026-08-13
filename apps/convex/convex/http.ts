@@ -257,17 +257,33 @@ http.route({
     const url = new URL(request.url);
     const installationId = url.searchParams.get("installation_id");
     const nonce = url.searchParams.get("state");
+    // Present only when the App has "Request user authorization (OAuth) during
+    // installation" enabled. `finalizeInstall` refuses the callback without it
+    // — an installation id off the query string proves nothing on its own.
+    const code = url.searchParams.get("code") ?? undefined;
 
     const fail = () =>
       Response.redirect(`${siteUrl}/workspaces?github_install=error`, 302);
 
-    if (!installationId || !nonce) return fail();
+    // `installation_id` is absent when the user only authorized — the "connect
+    // an installation that already exists" path, which ends at a picker rather
+    // than a completed install.
+    if (!nonce) return fail();
 
     const result = await ctx.runAction(
       internal.integrations.github.setupAction.finalizeInstall,
-      { installationId, nonce },
+      { installationId: installationId ?? undefined, nonce, code },
     );
     if (!result) return fail();
+
+    if (result.candidateToken) {
+      const returnTo =
+        result.returnTo ?? `/workspaces/${result.workspaceId}/settings`;
+      return Response.redirect(
+        `${siteUrl}${returnTo}?github_connect=${encodeURIComponent(result.candidateToken)}`,
+        302,
+      );
+    }
 
     return Response.redirect(
       `${siteUrl}/workspaces/${result.workspaceId}/settings?github_install=success`,

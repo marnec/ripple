@@ -1114,9 +1114,54 @@ export default defineSchema({
     // `code_challenge` in the authorize URL. Unused for the GitHub App flow,
     // which doesn't use PKCE (the App installation is the auth).
     codeVerifier: v.optional(v.string()),
+    // Where to send the browser after the round trip, so the install picker can
+    // open on whichever page the flow started from. App-relative; validated at
+    // write time in `beginAppAuthorize`.
+    returnTo: v.optional(v.string()),
   })
     .index("by_nonce", ["nonce"])
     // For workspace cascade-delete (these are short-lived but tidy up anyway).
+    .index("by_workspace", ["workspaceId"]),
+
+  // External accounts a user proved they can reach, captured mid-flow so they
+  // can pick which one to connect. Provider-agnostic like every other table
+  // here: `provider` says which flow produced the list, and the candidate shape
+  // reuses `workspaceIntegrations`' neutral vocabulary (externalAccountId /
+  // accountLogin / accountType) rather than any provider's own nouns.
+  //
+  // Why it exists, in GitHub's case: `installations/new` only shows an install
+  // screen when the App is NOT already on the account — otherwise GitHub
+  // redirects to that installation's settings page and never comes back, which
+  // left a workspace unable to (re)claim an installation it could plainly see.
+  // The way back in is the user-authorization flow: authorize, read
+  // `GET /user/installations`, let the user choose. Any provider whose
+  // authorization can resolve to more than one connectable account lands here
+  // the same way.
+  //
+  // The rows ARE the possession proof — written only from a user-to-server
+  // token — so the claim can trust membership of this list without calling the
+  // provider again. Short-lived and one-time: deleted on claim.
+  integrationInstallCandidates: defineTable({
+    token: v.string(),
+    workspaceId: v.id("workspaces"),
+    userId: v.id("users"),
+    provider: v.string(),
+    candidates: v.array(
+      v.object({
+        externalAccountId: v.string(),
+        accountLogin: v.optional(v.string()),
+        accountType: v.optional(
+          v.union(v.literal("organization"), v.literal("user")),
+        ),
+      }),
+    ),
+    // Carried from the flow that built the list so the claim stays
+    // provider-agnostic — GitHub derives it from the App slug, GitLab from the
+    // authorizing user, and neither belongs in the shared claim path.
+    externalBotLogin: v.optional(v.string()),
+    expiresAt: v.number(),
+  })
+    .index("by_token", ["token"])
     .index("by_workspace", ["workspaceId"]),
 
   // Per-(workspace, member) mapping of internal users to provider-side

@@ -11,6 +11,7 @@ import {
   setLastWorkspaceId,
 } from "./lib/last-workspace";
 import type { Id } from "@convex/_generated/dataModel";
+import { IntegrationAccountPicker } from "@/components/IntegrationAccountPicker";
 
 /**
  * Root index redirect. Drops the user into the workspace they were
@@ -41,7 +42,18 @@ function WorkspaceRouteShell() {
   useEffect(() => {
     if (workspaceId) setLastWorkspaceId(workspaceId as Id<"workspaces">);
   }, [workspaceId]);
-  return <Outlet />;
+  return (
+    <>
+      {/*
+        Mounted on the shell, not on the settings sections that start the flow:
+        both of those live behind a tab, so the provider's redirect landed on
+        the default tab and the picker was never rendered. Here it opens
+        wherever `?github_connect` comes back to.
+      */}
+      <IntegrationAccountPicker />
+      <Outlet />
+    </>
+  );
 }
 
 /**

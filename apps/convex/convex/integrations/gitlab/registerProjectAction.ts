@@ -43,6 +43,7 @@ export const listMyProjects = action({
     // tenant's GitLab token. `assertWizardInstallation` is the same gate
     // GitHub's wizard actions use (install.ts:216).
     await ctx.runQuery(api.integrations.core.install.assertWizardInstallation, {
+      provider: "gitlab",
       workspaceId: args.workspaceId,
       externalAccountId: args.externalAccountId,
     });
@@ -105,6 +106,7 @@ export const registerProject = action({
     // tenant's GitLab token. `assertWizardInstallation` is the same gate
     // GitHub's wizard actions use (install.ts:216).
     await ctx.runQuery(api.integrations.core.install.assertWizardInstallation, {
+      provider: "gitlab",
       workspaceId: args.workspaceId,
       externalAccountId: args.externalAccountId,
     });
