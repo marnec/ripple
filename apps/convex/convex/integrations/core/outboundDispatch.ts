@@ -152,10 +152,11 @@ async function resolveCommentLinkTarget(
  * to the task's project and be sync-active. The action POSTs the issue and (on
  * success) writes the task↔issue link + mirrors the ref onto the task.
  *
- * Like `enqueueIssueClose`, this schedules without an `onComplete` /
- * `integrationOutboundRuns` row: there's no link yet to carry a
- * `lastSyncError`, so a permanent failure is recorded only in the workspace
- * audit log by the action's sink.
+ * Like `enqueueIssueClose`, there is no link row yet to carry a
+ * `lastSyncError`, so this op's only durable trace is a workspace audit entry.
+ * It is still tracked: without an `onComplete` the audit entry was written for
+ * a *classified* permanent failure but not for retry exhaustion, so a task
+ * whose issue never got created left no record at all.
  */
 export async function enqueueIssueCreate(
   ctx: MutationCtx,
@@ -207,13 +208,30 @@ export async function enqueueIssueCreate(
   // for GitHub Apps too.
   const taggedBody = appendRippleTaskMarker(args.body, args.taskId);
 
-  await retrier.run(ctx, adapter.ops.createIssue, {
+  const runId = await retrier.run(
+    ctx,
+    adapter.ops.createIssue,
+    {
+      taskId: args.taskId,
+      projectIntegrationLinkId: args.projectIntegrationLinkId,
+      title: args.title,
+      body: taggedBody,
+      credentialRef: integration.externalAccountId,
+      projectRef: projectLink.externalRepoFullName,
+    },
+    { onComplete: adapter.onComplete },
+  );
+
+  // `taskId` alone would route the exhaustion to the task's link row, which is
+  // precisely the row this op failed to create — the sink names the audit path
+  // instead, and carries the project link the audit entry is scoped through.
+  await ctx.db.insert("integrationOutboundRuns", {
+    runId,
     taskId: args.taskId,
-    projectIntegrationLinkId: args.projectIntegrationLinkId,
-    title: args.title,
-    body: taggedBody,
-    credentialRef: integration.externalAccountId,
-    projectRef: projectLink.externalRepoFullName,
+    sink: {
+      kind: "issueCreate",
+      projectIntegrationLinkId: args.projectIntegrationLinkId,
+    },
   });
 }
 
@@ -344,15 +362,22 @@ export async function maybeEnqueueLabelsPush(
   // Echo guard: no diff, no PATCH.
   if (!changed) return;
 
-  await retrier.run(ctx, target.adapter.ops.labels, {
-    taskId,
-    add,
-    remove,
-    nextLabels,
-    credentialRef: target.credentialRef,
-    projectRef: target.projectRef,
-    issueRef: target.issueRef,
-  });
+  const runId = await retrier.run(
+    ctx,
+    target.adapter.ops.labels,
+    {
+      taskId,
+      add,
+      remove,
+      nextLabels,
+      credentialRef: target.credentialRef,
+      projectRef: target.projectRef,
+      issueRef: target.issueRef,
+    },
+    { onComplete: target.adapter.onComplete },
+  );
+
+  await ctx.db.insert("integrationOutboundRuns", { runId, taskId });
 }
 
 /**
@@ -397,15 +422,22 @@ export async function maybeEnqueueAssigneesPush(
   // Echo guard: no diff, no PATCH.
   if (!changed) return;
 
-  await retrier.run(ctx, target.adapter.ops.assignees, {
-    taskId,
-    add,
-    remove,
-    nextLogins,
-    credentialRef: target.credentialRef,
-    projectRef: target.projectRef,
-    issueRef: target.issueRef,
-  });
+  const runId = await retrier.run(
+    ctx,
+    target.adapter.ops.assignees,
+    {
+      taskId,
+      add,
+      remove,
+      nextLogins,
+      credentialRef: target.credentialRef,
+      projectRef: target.projectRef,
+      issueRef: target.issueRef,
+    },
+    { onComplete: target.adapter.onComplete },
+  );
+
+  await ctx.db.insert("integrationOutboundRuns", { runId, taskId });
 }
 
 /**
@@ -429,13 +461,28 @@ export async function maybeEnqueueCommentCreate(
   const target = await resolveTaskTarget(ctx, comment.taskId);
   if (!target) return;
 
-  await retrier.run(ctx, target.adapter.ops.commentCreate, {
-    commentId,
-    body: bodyMarkdown,
-    taskIntegrationLinkId: target.link._id,
-    credentialRef: target.credentialRef,
-    projectRef: target.projectRef,
-    issueRef: target.issueRef,
+  const runId = await retrier.run(
+    ctx,
+    target.adapter.ops.commentCreate,
+    {
+      commentId,
+      body: bodyMarkdown,
+      taskIntegrationLinkId: target.link._id,
+      credentialRef: target.credentialRef,
+      projectRef: target.projectRef,
+      issueRef: target.issueRef,
+    },
+    { onComplete: target.adapter.onComplete },
+  );
+
+  // Tracked against the comment rather than the task: there is no
+  // `taskCommentIntegrationLinks` row yet (creating it is what the action
+  // does on success), so `taskComments.lastSyncError` is the only row an
+  // exhausted run can mark — and it is what the "⚠ Sync failed" affordance
+  // reads.
+  await ctx.db.insert("integrationOutboundRuns", {
+    runId,
+    sink: { kind: "commentCreate", commentId },
   });
 }
 
@@ -455,13 +502,23 @@ export async function maybeEnqueueCommentUpdate(
   const target = await resolveCommentLinkTarget(ctx, commentId);
   if (!target) return;
 
-  await retrier.run(ctx, target.adapter.ops.commentEdit, {
-    commentLinkId: target.commentLink._id,
-    externalCommentId: target.commentLink.externalCommentId,
-    body: bodyMarkdown,
-    credentialRef: target.credentialRef,
-    projectRef: target.projectRef,
-    issueRef: target.issueRef,
+  const runId = await retrier.run(
+    ctx,
+    target.adapter.ops.commentEdit,
+    {
+      commentLinkId: target.commentLink._id,
+      externalCommentId: target.commentLink.externalCommentId,
+      body: bodyMarkdown,
+      credentialRef: target.credentialRef,
+      projectRef: target.projectRef,
+      issueRef: target.issueRef,
+    },
+    { onComplete: target.adapter.onComplete },
+  );
+
+  await ctx.db.insert("integrationOutboundRuns", {
+    runId,
+    sink: { kind: "commentLink", commentLinkId: target.commentLink._id },
   });
 }
 
@@ -477,11 +534,12 @@ export async function maybeEnqueueCommentUpdate(
  * cascade then removes. Skips silently for an unlinked task or a frozen/paused
  * integration (a frozen link means "don't touch the provider").
  *
- * Unlike the other task pushes this schedules *without* an `onComplete`
- * callback or an `integrationOutboundRuns` row: those resolve the affected task
- * to write `lastSyncError`, but here the task is about to be gone. Retryable
- * failures still retry; a permanent failure is recorded in the workspace audit
- * log by the action's sink.
+ * Unlike the other task pushes this writes no `lastSyncError`: that would need
+ * the task's link row, and here the task is about to be gone. The run is still
+ * tracked, keyed by issue number rather than by task, so retry exhaustion
+ * reaches the same workspace audit entry a permanent failure already does —
+ * otherwise an explicit "close the issue too" could be dropped with no record
+ * anywhere that it was asked for.
  */
 export async function enqueueIssueClose(
   ctx: MutationCtx,
@@ -491,12 +549,27 @@ export async function enqueueIssueClose(
   if (!target) return;
   if (!target.issueRef) return; // no issue number → nothing to close
 
-  await retrier.run(ctx, target.adapter.ops.issueClose, {
-    projectRef: target.projectRef,
-    issueRef: target.issueRef,
-    workspaceId: target.projectLink.workspaceId,
-    provider: target.provider,
-    credentialRef: target.credentialRef,
+  const runId = await retrier.run(
+    ctx,
+    target.adapter.ops.issueClose,
+    {
+      projectRef: target.projectRef,
+      issueRef: target.issueRef,
+      workspaceId: target.projectLink.workspaceId,
+      provider: target.provider,
+      credentialRef: target.credentialRef,
+    },
+    { onComplete: target.adapter.onComplete },
+  );
+
+  await ctx.db.insert("integrationOutboundRuns", {
+    runId,
+    sink: {
+      kind: "issueClose",
+      workspaceId: target.projectLink.workspaceId,
+      issueNumber: target.issueRef,
+      provider: target.provider,
+    },
   });
 }
 
@@ -508,11 +581,21 @@ export async function maybeEnqueueCommentDelete(
   const target = await resolveCommentLinkTarget(ctx, commentId);
   if (!target) return;
 
-  await retrier.run(ctx, target.adapter.ops.commentDelete, {
-    commentLinkId: target.commentLink._id,
-    externalCommentId: target.commentLink.externalCommentId,
-    credentialRef: target.credentialRef,
-    projectRef: target.projectRef,
-    issueRef: target.issueRef,
+  const runId = await retrier.run(
+    ctx,
+    target.adapter.ops.commentDelete,
+    {
+      commentLinkId: target.commentLink._id,
+      externalCommentId: target.commentLink.externalCommentId,
+      credentialRef: target.credentialRef,
+      projectRef: target.projectRef,
+      issueRef: target.issueRef,
+    },
+    { onComplete: target.adapter.onComplete },
+  );
+
+  await ctx.db.insert("integrationOutboundRuns", {
+    runId,
+    sink: { kind: "commentLink", commentLinkId: target.commentLink._id },
   });
 }

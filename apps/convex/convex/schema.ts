@@ -33,6 +33,32 @@ export const emailDeliveryStatus = v.union(
   v.literal("failed"),
 );
 
+/**
+ * Where an exhausted outbound run reports, for the ops whose failure does not
+ * land on the pushed task's `taskIntegrationLinks` row. Set alongside `taskId`
+ * for `issueCreate` (the task exists; the link is what failed to be created).
+ */
+export const outboundRunSink = v.union(
+  v.object({
+    kind: v.literal("issueCreate"),
+    projectIntegrationLinkId: v.id("projectIntegrationLinks"),
+  }),
+  v.object({
+    kind: v.literal("commentCreate"),
+    commentId: v.id("taskComments"),
+  }),
+  v.object({
+    kind: v.literal("commentLink"),
+    commentLinkId: v.id("taskCommentIntegrationLinks"),
+  }),
+  v.object({
+    kind: v.literal("issueClose"),
+    workspaceId: v.id("workspaces"),
+    issueNumber: v.number(),
+    provider: v.string(),
+  }),
+);
+
 // The schema is normally optional, but Convex Auth
 // requires indexes defined on `authTables`.
 // The schema provides more precise TypeScript types.
@@ -1537,15 +1563,23 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("by_pullRequest", ["pullRequestId"]),
 
-  // Maps an in-flight `@convex-dev/action-retrier` runId → the task whose
-  // outbound push it carries. The retrier's `onComplete` callback receives
+  // Maps an in-flight `@convex-dev/action-retrier` runId → whatever an
+  // exhausted run has to mark. The retrier's `onComplete` callback receives
   // only `{ runId, result }`, so this side table is how the callback resolves
-  // which task to mark on retry exhaustion. One row per in-flight run (status
-  // OR description push), inserted at dispatch and deleted on completion — so
-  // concurrent pushes on the same task no longer clobber a single link field.
+  // its target. One row per in-flight run, inserted at dispatch and deleted on
+  // completion — so concurrent pushes on the same task no longer clobber a
+  // single link field.
+  //
+  // `sink` names where the failure lands, because it is not the task's link row
+  // for every op: a comment push marks the comment (or its link row), and the
+  // two ops with no link row to mark at all — issue-create, issue-close — reach
+  // only the workspace audit log. Absent means the original task-keyed case,
+  // which is both the common one and the shape of every row written before the
+  // other ops gained tracking, so a run in flight across a deploy still lands.
   integrationOutboundRuns: defineTable({
     runId: v.string(),
-    taskId: v.id("tasks"),
+    taskId: v.optional(v.id("tasks")),
+    sink: v.optional(outboundRunSink),
   }).index("by_runId", ["runId"]),
 
   // Background work that exhausted its retries and gave up.

@@ -186,6 +186,49 @@ export const recordOutboundFailure = internalMutation({
  * workspace-scoped audit entry, which is also the only place an admin could see
  * that an explicit "close the issue too" request didn't land.
  */
+async function recordIssueCloseFailureImpl(
+  ctx: MutationCtx,
+  args: {
+    workspaceId: Id<"workspaces">;
+    issueNumber: number;
+    provider: string;
+    message: string;
+    httpStatus?: number;
+  },
+): Promise<void> {
+  // The task + its link are gone by the time this runs, so there's no FK to
+  // resolve the integration through — pick the workspace install for THIS
+  // provider (a workspace can hold both GitHub + GitLab, so a workspace-wide
+  // `.unique()` would crash and assuming "github" would mis-attribute a
+  // GitLab failure).
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+    .filter((q) => q.eq(q.field("provider"), args.provider))
+    .first();
+  if (!integration) return;
+  try {
+    await auditLog.log(ctx, {
+      action: "integration.issue_close_failed",
+      actorId: integration.botUserId.toString(),
+      resourceType: "tasks",
+      resourceId: `issue-${args.issueNumber}`,
+      severity: "warning",
+      metadata: {
+        issueNumber: args.issueNumber,
+        message: args.message,
+        httpStatus: args.httpStatus,
+      },
+      scope: args.workspaceId,
+    });
+  } catch (err) {
+    console.error(
+      "[auditLog] failed to log integration.issue_close_failed",
+      err,
+    );
+  }
+}
+
 export const recordIssueCloseFailure = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
@@ -198,37 +241,7 @@ export const recordIssueCloseFailure = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // The task + its link are gone by the time this runs, so there's no FK to
-    // resolve the integration through — pick the workspace install for THIS
-    // provider (a workspace can hold both GitHub + GitLab, so a workspace-wide
-    // `.unique()` would crash and assuming "github" would mis-attribute a
-    // GitLab failure).
-    const integration = await ctx.db
-      .query("workspaceIntegrations")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .filter((q) => q.eq(q.field("provider"), args.provider))
-      .first();
-    if (!integration) return null;
-    try {
-      await auditLog.log(ctx, {
-        action: "integration.issue_close_failed",
-        actorId: integration.botUserId.toString(),
-        resourceType: "tasks",
-        resourceId: `issue-${args.issueNumber}`,
-        severity: "warning",
-        metadata: {
-          issueNumber: args.issueNumber,
-          message: args.message,
-          httpStatus: args.httpStatus,
-        },
-        scope: args.workspaceId,
-      });
-    } catch (err) {
-      console.error(
-        "[auditLog] failed to log integration.issue_close_failed",
-        err,
-      );
-    }
+    await recordIssueCloseFailureImpl(ctx, args);
     return null;
   },
 });
@@ -322,6 +335,37 @@ export const recordIssueCreateSuccess = internalMutation({
  * link row yet (creation is what failed), so — like the issue-close failure —
  * the only durable trace is a workspace-scoped audit entry scoped to the task.
  */
+async function recordIssueCreateFailureImpl(
+  ctx: MutationCtx,
+  args: {
+    taskId: Id<"tasks">;
+    projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+    message: string;
+    httpStatus?: number;
+  },
+): Promise<void> {
+  const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
+  if (!projectLink) return;
+  const integration = await getIntegrationForLink(ctx, projectLink);
+  if (!integration) return;
+  try {
+    await auditLog.log(ctx, {
+      action: "integration.issue_create_failed",
+      actorId: integration.botUserId.toString(),
+      resourceType: "tasks",
+      resourceId: args.taskId,
+      severity: "warning",
+      metadata: { message: args.message, httpStatus: args.httpStatus },
+      scope: projectLink.workspaceId,
+    });
+  } catch (err) {
+    console.error(
+      "[auditLog] failed to log integration.issue_create_failed",
+      err,
+    );
+  }
+}
+
 export const recordIssueCreateFailure = internalMutation({
   args: {
     taskId: v.id("tasks"),
@@ -331,26 +375,7 @@ export const recordIssueCreateFailure = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
-    if (!projectLink) return null;
-    const integration = await getIntegrationForLink(ctx, projectLink);
-    if (!integration) return null;
-    try {
-      await auditLog.log(ctx, {
-        action: "integration.issue_create_failed",
-        actorId: integration.botUserId.toString(),
-        resourceType: "tasks",
-        resourceId: args.taskId,
-        severity: "warning",
-        metadata: { message: args.message, httpStatus: args.httpStatus },
-        scope: projectLink.workspaceId,
-      });
-    } catch (err) {
-      console.error(
-        "[auditLog] failed to log integration.issue_create_failed",
-        err,
-      );
-    }
+    await recordIssueCreateFailureImpl(ctx, args);
     return null;
   },
 });
@@ -429,6 +454,30 @@ export const recordCommentCreateSuccess = internalMutation({
   },
 });
 
+/**
+ * Shared write path for a failed comment-create push. Guarded on the row still
+ * existing: the action records itself immediately, but `onOutboundComplete`
+ * runs after the retry budget — up to ~30s of backoff — by which time the
+ * author may have deleted the comment.
+ */
+async function recordCommentCreateFailureImpl(
+  ctx: MutationCtx,
+  args: {
+    commentId: Id<"taskComments">;
+    message: string;
+    httpStatus?: number;
+  },
+): Promise<void> {
+  if ((await ctx.db.get(args.commentId)) === null) return;
+  await ctx.db.patch(args.commentId, {
+    lastSyncError: {
+      occurredAt: Date.now(),
+      message: args.message,
+      httpStatus: args.httpStatus,
+    },
+  });
+}
+
 export const recordCommentCreateFailure = internalMutation({
   args: {
     commentId: v.id("taskComments"),
@@ -437,13 +486,7 @@ export const recordCommentCreateFailure = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.commentId, {
-      lastSyncError: {
-        occurredAt: Date.now(),
-        message: args.message,
-        httpStatus: args.httpStatus,
-      },
-    });
+    await recordCommentCreateFailureImpl(ctx, args);
     return null;
   },
 });
@@ -474,6 +517,26 @@ export const recordCommentDeleteSuccess = internalMutation({
   },
 });
 
+/** Shared write path for a failed comment edit/delete push. See the note on
+ *  `recordCommentCreateFailureImpl` for why the row may be gone. */
+async function recordCommentLinkFailureImpl(
+  ctx: MutationCtx,
+  args: {
+    commentLinkId: Id<"taskCommentIntegrationLinks">;
+    message: string;
+    httpStatus?: number;
+  },
+): Promise<void> {
+  if ((await ctx.db.get(args.commentLinkId)) === null) return;
+  await ctx.db.patch(args.commentLinkId, {
+    lastSyncError: {
+      occurredAt: Date.now(),
+      message: args.message,
+      httpStatus: args.httpStatus,
+    },
+  });
+}
+
 export const recordCommentLinkFailure = internalMutation({
   args: {
     commentLinkId: v.id("taskCommentIntegrationLinks"),
@@ -482,21 +545,15 @@ export const recordCommentLinkFailure = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.commentLinkId, {
-      lastSyncError: {
-        occurredAt: Date.now(),
-        message: args.message,
-        httpStatus: args.httpStatus,
-      },
-    });
+    await recordCommentLinkFailureImpl(ctx, args);
     return null;
   },
 });
 
 /**
  * Retrier `onComplete` callback. The retrier only hands us `{ runId, result }`,
- * so we resolve the affected task via the `integrationOutboundRuns` side table
- * row that the dispatcher inserts at scheduling time.
+ * so we resolve what to mark via the `integrationOutboundRuns` side table row
+ * that the dispatcher inserts at scheduling time.
  *
  *  - result.type === "success": the action recorded its own outcome already
  *    (success or `permanent_fail`). Just drop the tracking row.
@@ -504,6 +561,18 @@ export const recordCommentLinkFailure = internalMutation({
  *    returned cleanly. Record the failure here so the "⚠ Sync failed"
  *    affordance surfaces.
  *  - result.type === "canceled": same as success — just drop the row.
+ *
+ * This is the ONLY path from retry exhaustion to a durable record. The action
+ * body writes a failure only for a classified `permanent_fail`; a transient one
+ * throws, by design, so the retrier can back off — which means an op enqueued
+ * without an `onComplete` and a run row loses its last attempt in silence.
+ *
+ * The sink varies because the ops do: most mark the task's link row, a comment
+ * push marks the comment or its own link row, and the two ops that have no link
+ * row at all (issue-create, issue-close — one has not built it yet, the other's
+ * task is being deleted) reach only the workspace audit log. That last pair
+ * writes no `lastSyncError`, which is the documented intent; writing *nothing*
+ * on exhaustion while a permanent failure wrote an audit entry was not.
  */
 export const onOutboundComplete = internalMutation({
   args: onCompleteValidator,
@@ -516,12 +585,47 @@ export const onOutboundComplete = internalMutation({
     if (!run) return null;
     await ctx.db.delete(run._id);
 
-    if (args.result.type === "failed") {
-      await recordOutboundFailureImpl(ctx, {
-        taskId: run.taskId,
-        message: `Outbound sync retries exhausted: ${args.result.error}`,
-      });
+    if (args.result.type !== "failed") return null;
+    const message = `Outbound sync retries exhausted: ${args.result.error}`;
+
+    // No sink: the original task-keyed case (state, description, labels,
+    // assignees), and the shape of any row written before the other ops gained
+    // tracking.
+    if (!run.sink) {
+      if (run.taskId) await recordOutboundFailureImpl(ctx, { taskId: run.taskId, message });
+      return null;
     }
-    return null;
+
+    switch (run.sink.kind) {
+      case "issueCreate":
+        if (run.taskId) {
+          await recordIssueCreateFailureImpl(ctx, {
+            taskId: run.taskId,
+            projectIntegrationLinkId: run.sink.projectIntegrationLinkId,
+            message,
+          });
+        }
+        return null;
+      case "commentCreate":
+        await recordCommentCreateFailureImpl(ctx, {
+          commentId: run.sink.commentId,
+          message,
+        });
+        return null;
+      case "commentLink":
+        await recordCommentLinkFailureImpl(ctx, {
+          commentLinkId: run.sink.commentLinkId,
+          message,
+        });
+        return null;
+      case "issueClose":
+        await recordIssueCloseFailureImpl(ctx, {
+          workspaceId: run.sink.workspaceId,
+          issueNumber: run.sink.issueNumber,
+          provider: run.sink.provider,
+          message,
+        });
+        return null;
+    }
   },
 });

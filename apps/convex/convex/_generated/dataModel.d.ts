@@ -850,11 +850,39 @@ export type DataModel = {
   integrationOutboundRuns: {
     document: {
       runId: string;
-      taskId: Id<"tasks">;
+      sink?:
+        | {
+            kind: "issueCreate";
+            projectIntegrationLinkId: Id<"projectIntegrationLinks">;
+          }
+        | { commentId: Id<"taskComments">; kind: "commentCreate" }
+        | {
+            commentLinkId: Id<"taskCommentIntegrationLinks">;
+            kind: "commentLink";
+          }
+        | {
+            issueNumber: number;
+            kind: "issueClose";
+            provider: string;
+            workspaceId: Id<"workspaces">;
+          };
+      taskId?: Id<"tasks">;
       _id: Id<"integrationOutboundRuns">;
       _creationTime: number;
     };
-    fieldPaths: "_creationTime" | "_id" | "runId" | "taskId";
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "runId"
+      | "sink"
+      | "sink.commentId"
+      | "sink.commentLinkId"
+      | "sink.issueNumber"
+      | "sink.kind"
+      | "sink.projectIntegrationLinkId"
+      | "sink.provider"
+      | "sink.workspaceId"
+      | "taskId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
