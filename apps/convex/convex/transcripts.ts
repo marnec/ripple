@@ -4,7 +4,10 @@ import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { markdownToYjsUpdate } from "./lib/headlessEditor";
-import { hintFromUrl, transcriptToMarkdown } from "./transcriptFormat";
+import {
+  transcriptHintValidator,
+  transcriptToMarkdown,
+} from "./transcriptFormat";
 
 /**
  * Ingest a finished call's transcript into a new Ripple document.
@@ -16,6 +19,14 @@ import { hintFromUrl, transcriptToMarkdown } from "./transcriptFormat";
  * the document survives every client leaving the call — including the host
  * leaving early or everyone closing their tab.
  *
+ * **Takes bytes, not a URL.** The webhook route downloads inside the request
+ * and stores the raw transcript, so this action can be run again: the URL is
+ * short-lived and Cloudflare will not redeliver an event it has already been
+ * acked. That is what makes the retry below meaningful — re-running from a dead
+ * URL would only reproduce the failure. The raw blob stays unreferenced and is
+ * collected by `storageGc` an hour after the job ends, however it ended, which
+ * also leaves a window to replay a conversion that gave up.
+ *
  * Seeds via the headless editor (`lib/headlessEditor` → `markdownToYjsUpdate`,
  * shared with task-description and comment seeding): documents are collaborative
  * Yjs docs, so "saving" the transcript means producing the cold-start snapshot
@@ -25,12 +36,13 @@ export const ingestTranscript = internalAction({
   args: {
     cloudflareMeetingId: v.string(),
     cloudflareSessionId: v.optional(v.string()),
-    transcriptDownloadUrl: v.string(),
+    storageId: v.id("_storage"),
+    formatHint: v.optional(transcriptHintValidator),
   },
   returns: v.null(),
   handler: async (
     ctx,
-    { cloudflareMeetingId, cloudflareSessionId, transcriptDownloadUrl },
+    { cloudflareMeetingId, cloudflareSessionId, storageId, formatHint },
   ) => {
     const session = await ctx.runQuery(
       internal.callSessions.getSessionByMeeting,
@@ -42,10 +54,15 @@ export const ingestTranscript = internalAction({
       );
       return null;
     }
-    // Idempotency: a document was already produced for this call. The
-    // documents delete-trigger clears this FK if that doc is later removed, so
-    // a dangling id can't occur — a simple presence check is sufficient.
-    if (session.transcriptDocumentId) return null;
+    // Idempotency: a *finished* document was already produced for this call.
+    // Not merely an attached one — an attempt that died between the attach and
+    // the snapshot save leaves an empty document behind, and this attempt is
+    // the one that fills it in (see `getSessionByMeeting`). The documents
+    // delete-trigger clears the FK when the doc goes, so it never dangles.
+    const attachedDocumentId = session.transcriptDocumentId;
+    if (attachedDocumentId && !session.transcriptDocumentNeedsSnapshot) {
+      return null;
+    }
 
     const channel = await ctx.runQuery(
       internal.callSessions.getChannelForTranscript,
@@ -58,14 +75,17 @@ export const ingestTranscript = internalAction({
       return null;
     }
 
-    const res = await fetch(transcriptDownloadUrl);
-    if (!res.ok) {
-      throw new Error(
-        `ingestTranscript: transcript download failed (${res.status})`,
+    const blob = await ctx.storage.get(storageId);
+    if (!blob) {
+      // The bytes are gone and there is no URL to fetch them from again, so no
+      // attempt can succeed. Throwing would only burn the retries.
+      console.error(
+        `ingestTranscript: stored transcript ${storageId} missing for meeting ${cloudflareMeetingId}.`,
       );
+      return null;
     }
-    const raw = await res.text();
-    const markdown = transcriptToMarkdown(raw, hintFromUrl(transcriptDownloadUrl));
+    const raw = await blob.text();
+    const markdown = transcriptToMarkdown(raw, formatHint);
     if (markdown.trim().length === 0) {
       console.warn(
         `ingestTranscript: empty transcript for meeting ${cloudflareMeetingId}; skipping.`,
@@ -90,34 +110,39 @@ export const ingestTranscript = internalAction({
     // produced no blocks; it's non-empty here, so that's vanishingly unlikely.
     const update = await markdownToYjsUpdate(markdown);
     if (!update) return null;
-    const storageId = await ctx.storage.store(
+    const snapshotStorageId = await ctx.storage.store(
       new Blob([update as BlobPart], { type: "application/octet-stream" }),
     );
 
-    const documentId = await ctx.runMutation(
-      internal.documents.createForTranscript,
-      { workspaceId: channel.workspaceId, name, channelId: session.channelId },
-    );
-
-    const won = await ctx.runMutation(
-      internal.callSessions.attachTranscriptDocument,
-      { sessionId: session._id, documentId, cloudflareSessionId },
-    );
-
-    if (!won) {
-      // A concurrent delivery already attached a document. Drop our snapshot
-      // blob; the orphan doc row is harmless and rare (logged for visibility).
-      await ctx.storage.delete(storageId);
-      console.warn(
-        `ingestTranscript: lost attach race for meeting ${cloudflareMeetingId}; orphan doc ${documentId}.`,
+    // Resuming a half-finished ingest writes into the document that is already
+    // attached; there is nothing to create and nothing to race for.
+    let documentId = attachedDocumentId;
+    if (!documentId) {
+      documentId = await ctx.runMutation(
+        internal.documents.createForTranscript,
+        { workspaceId: channel.workspaceId, name, channelId: session.channelId },
       );
-      return null;
+
+      const won = await ctx.runMutation(
+        internal.callSessions.attachTranscriptDocument,
+        { sessionId: session._id, documentId, cloudflareSessionId },
+      );
+
+      if (!won) {
+        // A concurrent delivery already attached a document. Drop our snapshot
+        // blob; the orphan doc row is harmless and rare (logged for visibility).
+        await ctx.storage.delete(snapshotStorageId);
+        console.warn(
+          `ingestTranscript: lost attach race for meeting ${cloudflareMeetingId}; orphan doc ${documentId}.`,
+        );
+        return null;
+      }
     }
 
     await ctx.runMutation(internal.snapshots.saveSnapshot, {
       resourceType: "doc",
       resourceId: documentId,
-      storageId,
+      storageId: snapshotStorageId,
     });
 
     return null;

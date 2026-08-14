@@ -4014,6 +4014,17 @@ export declare const internal: {
       },
       null | { cloudflareMeetingId: string; transcribe: boolean }
     >;
+    enqueueTranscriptIngest: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        cloudflareMeetingId: string;
+        cloudflareSessionId?: string;
+        formatHint?: "csv" | "json" | "vtt" | "srt";
+        storageId: Id<"_storage">;
+      },
+      null
+    >;
     getActiveSession: FunctionReference<
       "query",
       "internal",
@@ -4048,6 +4059,7 @@ export declare const internal: {
         cloudflareSessionId?: string;
         transcribe?: boolean;
         transcriptDocumentId?: Id<"documents">;
+        transcriptDocumentNeedsSnapshot: boolean;
       } | null
     >;
   };
@@ -6614,7 +6626,8 @@ export declare const internal: {
       {
         cloudflareMeetingId: string;
         cloudflareSessionId?: string;
-        transcriptDownloadUrl: string;
+        formatHint?: "csv" | "json" | "vtt" | "srt";
+        storageId: Id<"_storage">;
       },
       null
     >;
@@ -6653,6 +6666,7 @@ export declare const components: {
   subscriptionPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"subscriptionPool">;
   taskReassignPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskReassignPool">;
   taskImportPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"taskImportPool">;
+  transcriptPool: import("@convex-dev/workpool/_generated/component.js").ComponentApi<"transcriptPool">;
   documentsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"documentsByWorkspace">;
   diagramsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"diagramsByWorkspace">;
   spreadsheetsByWorkspace: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"spreadsheetsByWorkspace">;

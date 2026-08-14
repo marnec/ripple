@@ -8,16 +8,27 @@ import {
 } from "./helpers";
 import { ChannelType } from "@ripple/shared/enums/roles";
 
-const realFetch = global.fetch;
 afterEach(() => {
-  global.fetch = realFetch;
   vi.restoreAllMocks();
 });
 
-function mockTranscriptDownload(payload: string) {
-  global.fetch = vi.fn(
-    async () => new Response(payload, { status: 200 }),
-  ) as typeof global.fetch;
+/**
+ * The action takes stored bytes, not a URL — the webhook route downloads inside
+ * the request so the conversion can be replayed (see
+ * `transcripts.ingestRetry.test.ts`). Tests therefore stage the payload in
+ * storage the way that route does.
+ */
+async function ingest(
+  t: ReturnType<typeof createTestContext>,
+  args: { cloudflareMeetingId: string; cloudflareSessionId?: string },
+  payload: string,
+) {
+  const storageId = await t.run((ctx) => ctx.storage.store(new Blob([payload])));
+  await t.action(internal.transcripts.ingestTranscript, {
+    ...args,
+    storageId,
+    formatHint: "json" as const,
+  });
 }
 
 async function seedChannelWithSession(
@@ -47,18 +58,14 @@ describe("ingestTranscript", () => {
     const { workspaceId } = await setupWorkspaceWithAdmin(t);
     const { sessionId } = await seedChannelWithSession(t, workspaceId, "meet-1");
 
-    mockTranscriptDownload(
+    await ingest(
+      t,
+      { cloudflareMeetingId: "meet-1", cloudflareSessionId: "sess-1" },
       JSON.stringify([
         { name: "Alice", transcript: "Hello team." },
         { name: "Bob", transcript: "Morning." },
       ]),
     );
-
-    await t.action(internal.transcripts.ingestTranscript, {
-      cloudflareMeetingId: "meet-1",
-      cloudflareSessionId: "sess-1",
-      transcriptDownloadUrl: "https://cf.example/transcript",
-    });
 
     const docs = await t.run((ctx) => ctx.db.query("documents").collect());
     expect(docs.length).toBe(1);
@@ -107,13 +114,11 @@ describe("ingestTranscript", () => {
       ctx.db.insert("tags", { workspaceId: workspaceId as never, name: "transcript" }),
     );
 
-    mockTranscriptDownload(
+    await ingest(
+      t,
+      { cloudflareMeetingId: "meet-tag" },
       JSON.stringify([{ name: "Alice", transcript: "Reuse me." }]),
     );
-    await t.action(internal.transcripts.ingestTranscript, {
-      cloudflareMeetingId: "meet-tag",
-      transcriptDownloadUrl: "https://cf.example/transcript",
-    });
 
     const transcriptTags = await t.run((ctx) =>
       ctx.db.query("tags").collect(),
@@ -128,16 +133,10 @@ describe("ingestTranscript", () => {
     const { workspaceId } = await setupWorkspaceWithAdmin(t);
     await seedChannelWithSession(t, workspaceId, "meet-2");
 
-    mockTranscriptDownload(
-      JSON.stringify([{ name: "Alice", transcript: "Once." }]),
-    );
-
-    const args = {
-      cloudflareMeetingId: "meet-2",
-      transcriptDownloadUrl: "https://cf.example/transcript",
-    };
-    await t.action(internal.transcripts.ingestTranscript, args);
-    await t.action(internal.transcripts.ingestTranscript, args);
+    const payload = JSON.stringify([{ name: "Alice", transcript: "Once." }]);
+    const args = { cloudflareMeetingId: "meet-2" };
+    await ingest(t, args, payload);
+    await ingest(t, args, payload);
 
     const docs = await t.run((ctx) => ctx.db.query("documents").collect());
     expect(docs.length).toBe(1);
@@ -148,13 +147,11 @@ describe("ingestTranscript", () => {
     const { workspaceId } = await setupWorkspaceWithAdmin(t);
     const { sessionId } = await seedChannelWithSession(t, workspaceId, "meet-del");
 
-    mockTranscriptDownload(
+    await ingest(
+      t,
+      { cloudflareMeetingId: "meet-del" },
       JSON.stringify([{ name: "Alice", transcript: "First." }]),
     );
-    await t.action(internal.transcripts.ingestTranscript, {
-      cloudflareMeetingId: "meet-del",
-      transcriptDownloadUrl: "https://cf.example/transcript",
-    });
 
     const firstDocId = await t.run(
       async (ctx) => (await ctx.db.get(sessionId))!.transcriptDocumentId!,
@@ -171,10 +168,11 @@ describe("ingestTranscript", () => {
     expect(afterDelete?.transcriptDocumentId).toBeUndefined();
 
     // With the FK cleared, a re-delivery regenerates the document.
-    await t.action(internal.transcripts.ingestTranscript, {
-      cloudflareMeetingId: "meet-del",
-      transcriptDownloadUrl: "https://cf.example/transcript",
-    });
+    await ingest(
+      t,
+      { cloudflareMeetingId: "meet-del" },
+      JSON.stringify([{ name: "Alice", transcript: "Second." }]),
+    );
     const docs = await t.run((ctx) => ctx.db.query("documents").collect());
     expect(docs.length).toBe(1);
     expect(docs[0]._id).not.toBe(firstDocId);
@@ -186,12 +184,11 @@ describe("ingestTranscript", () => {
     const t = createTestContext();
     await setupWorkspaceWithAdmin(t);
 
-    mockTranscriptDownload(JSON.stringify([{ name: "X", transcript: "Y" }]));
-
-    await t.action(internal.transcripts.ingestTranscript, {
-      cloudflareMeetingId: "unknown-meeting",
-      transcriptDownloadUrl: "https://cf.example/transcript",
-    });
+    await ingest(
+      t,
+      { cloudflareMeetingId: "unknown-meeting" },
+      JSON.stringify([{ name: "X", transcript: "Y" }]),
+    );
 
     const docs = await t.run((ctx) => ctx.db.query("documents").collect());
     expect(docs.length).toBe(0);
@@ -202,12 +199,7 @@ describe("ingestTranscript", () => {
     const { workspaceId } = await setupWorkspaceWithAdmin(t);
     const { sessionId } = await seedChannelWithSession(t, workspaceId, "meet-3");
 
-    mockTranscriptDownload("   ");
-
-    await t.action(internal.transcripts.ingestTranscript, {
-      cloudflareMeetingId: "meet-3",
-      transcriptDownloadUrl: "https://cf.example/transcript",
-    });
+    await ingest(t, { cloudflareMeetingId: "meet-3" }, "   ");
 
     const docs = await t.run((ctx) => ctx.db.query("documents").collect());
     expect(docs.length).toBe(0);

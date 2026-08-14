@@ -4,6 +4,7 @@ import { api, internal, components } from "./_generated/api";
 import { auth } from "./auth";
 import { handleResendWebhook } from "./emailDelivery";
 import { parseTranscriptWebhook } from "./transcriptWebhook";
+import { hintFromUrl } from "./transcriptFormat";
 import { COLLAB_RESOURCES, COLLAB_ROOMS } from "./authHelpers";
 import { YJS_SHARE_ROOMS, type YjsShareRoom } from "@ripple/shared/shareTypes";
 import type { Id } from "./_generated/dataModel";
@@ -226,13 +227,32 @@ http.route({
       case "invalid":
         console.error("transcript-webhook: missing required fields");
         return new Response("Bad Request (missing fields)", { status: 400 });
-      case "deliver":
-        await ctx.scheduler.runAfter(0, internal.transcripts.ingestTranscript, {
+      case "deliver": {
+        // Download here, inside the request, so the ack we send is a statement
+        // about bytes we actually hold. Cloudflare's webhook retry is the only
+        // redelivery mechanism that exists — the URL is short-lived and cannot
+        // be re-requested — so a failed download has to be answered with a
+        // status that makes Cloudflare come back.
+        const download = await fetch(result.transcriptDownloadUrl);
+        if (!download.ok) {
+          console.error(
+            `transcript-webhook: download failed (${download.status}) for meeting ${result.meetingId}`,
+          );
+          return new Response("Transcript download failed", { status: 502 });
+        }
+        // Hand off *bytes*, not the URL. Everything downstream of this ack can
+        // therefore be replayed; the blob is unreferenced until the conversion
+        // lands, so `storageGc` collects it an hour after the job is over
+        // whichever way it ended.
+        const storageId = await ctx.storage.store(await download.blob());
+        await ctx.runMutation(internal.callSessions.enqueueTranscriptIngest, {
           cloudflareMeetingId: result.meetingId,
           cloudflareSessionId: result.sessionId,
-          transcriptDownloadUrl: result.transcriptDownloadUrl,
+          storageId,
+          formatHint: hintFromUrl(result.transcriptDownloadUrl),
         });
         return new Response("OK", { status: 200 });
+      }
     }
   }),
 });

@@ -28,6 +28,7 @@ export function createTestContext() {
   workpoolComponent.register(t, "subscriptionPool");
   workpoolComponent.register(t, "taskReassignPool");
   workpoolComponent.register(t, "taskImportPool");
+  workpoolComponent.register(t, "transcriptPool");
   // Register workspace resource count aggregates
   aggregateComponent.register(t, "documentsByWorkspace");
   aggregateComponent.register(t, "diagramsByWorkspace");

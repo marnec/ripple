@@ -4,6 +4,8 @@ import { action, internalQuery, type ActionCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import { transcriptHintValidator } from "./transcriptFormat";
+import { scheduleTranscriptIngest } from "./transcriptPool";
 import { requireChannelAccess, requireUser } from "./authHelpers";
 import {
   realtimeKitFromEnv,
@@ -73,7 +75,7 @@ export async function ensureMeetingForChannel(
   return { meetingId: ourMeetingId, transcribe };
 }
 
-const callSessionValidator = v.object({
+const callSessionFields = {
   _id: v.id("callSessions"),
   _creationTime: v.number(),
   channelId: v.id("channels"),
@@ -82,7 +84,9 @@ const callSessionValidator = v.object({
   transcribe: v.optional(v.boolean()),
   cloudflareSessionId: v.optional(v.string()),
   transcriptDocumentId: v.optional(v.id("documents")),
-});
+};
+
+const callSessionValidator = v.object(callSessionFields);
 
 /**
  * The channel rule, reachable from an action.
@@ -250,21 +254,74 @@ export const joinCall = action({
 });
 
 /**
+ * Hand a downloaded transcript to the retried ingestion pool.
+ *
+ * The webhook route is an http action and cannot enqueue on its own, so this is
+ * the mutation it runs to do it. It stays deliberately dumb — every guard
+ * (session gone, document already attached, unparseable bytes) belongs to the
+ * ingestion itself, which has to re-check them on each attempt anyway.
+ */
+export const enqueueTranscriptIngest = internalMutation({
+  args: {
+    cloudflareMeetingId: v.string(),
+    cloudflareSessionId: v.optional(v.string()),
+    storageId: v.id("_storage"),
+    formatHint: v.optional(transcriptHintValidator),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await scheduleTranscriptIngest(
+      ctx,
+      internal.transcripts.ingestTranscript,
+      { kind: "transcripts:ingestTranscript", key: args.cloudflareMeetingId },
+      args,
+    );
+    return null;
+  },
+});
+
+/**
  * Look up a call session by its Cloudflare meeting id. Used by the transcript
  * webhook ingest to resolve a `meeting.transcript` delivery back to its channel
  * and workspace. The row persists after the call ends (`active: false`), so
  * this resolves even though the call is over by the time the webhook fires.
+ *
+ * `transcriptDocumentNeedsSnapshot` is the ingest's real idempotency question,
+ * answered here in the same read as the session so the two cannot disagree.
+ * Attaching the document and saving its snapshot are two writes, and an attempt
+ * that gives up between them leaves a session pointing at an *empty* document —
+ * which a plain "is a document attached" guard reads as work already done,
+ * retiring every later attempt and leaving the call's transcript blank forever.
  */
 export const getSessionByMeeting = internalQuery({
   args: { cloudflareMeetingId: v.string() },
-  returns: v.union(callSessionValidator, v.null()),
+  returns: v.union(
+    v.object({
+      ...callSessionFields,
+      transcriptDocumentNeedsSnapshot: v.boolean(),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, { cloudflareMeetingId }) => {
-    return await ctx.db
+    const session = await ctx.db
       .query("callSessions")
       .withIndex("by_meeting", (q) =>
         q.eq("cloudflareMeetingId", cloudflareMeetingId),
       )
       .first();
+    if (!session) return null;
+
+    // A missing document cannot be "needing a snapshot": the documents
+    // delete-trigger clears this FK, so the pair is only transiently out of
+    // step and re-creating from scratch is the right answer there.
+    const attached = session.transcriptDocumentId
+      ? await ctx.db.get(session.transcriptDocumentId)
+      : null;
+    return {
+      ...session,
+      transcriptDocumentNeedsSnapshot:
+        attached !== null && attached.yjsSnapshotId === undefined,
+    };
   },
 });
 

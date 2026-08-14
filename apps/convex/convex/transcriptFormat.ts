@@ -9,7 +9,22 @@
  * take a `hint` (derived from the URL extension) and also sniff. Each utterance
  * becomes its own paragraph with the speaker bolded (`**Name:** text`).
  */
+import { v } from "convex/values";
+
 export type TranscriptHint = "csv" | "json" | "vtt" | "srt" | undefined;
+
+/**
+ * The same hint as an argument validator. The download no longer happens where
+ * the conversion does — the webhook route fetches the bytes and the ingestion
+ * reads them back from storage — so the hint has to travel between them as an
+ * argument, and it lives here next to the type it mirrors.
+ */
+export const transcriptHintValidator = v.union(
+  v.literal("csv"),
+  v.literal("json"),
+  v.literal("vtt"),
+  v.literal("srt"),
+);
 
 export function transcriptToMarkdown(raw: string, hint?: TranscriptHint): string {
   const trimmed = raw.trim();

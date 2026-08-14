@@ -23,6 +23,7 @@ app.use(workpool, { name: "notificationPool" });
 app.use(workpool, { name: "subscriptionPool" });
 app.use(workpool, { name: "taskReassignPool" });
 app.use(workpool, { name: "taskImportPool" });
+app.use(workpool, { name: "transcriptPool" });
 
 // Workspace resource count aggregates (O(log n) counts per workspace)
 app.use(aggregate, { name: "documentsByWorkspace" });
