@@ -161,6 +161,54 @@ describe("calendarEventInvitees → `invites` edge trigger", () => {
     expect(targetIds).toEqual([aliceId, bobId].sort());
   });
 
+  it("resolves a multi-workspace invitee to their node in the event's own workspace", async () => {
+    // User nodes are per-membership, so Carol has one node per workspace. A
+    // lookup that omits the workspace returns whichever was created first —
+    // here, deliberately, the one in the workspace the event is NOT in.
+    const a = await setupWorkspaceWithAdmin(t, "Workspace A");
+    const b = await setupWorkspaceWithAdmin(t, "Workspace B");
+    const { userId: carolId } = await setupAuthenticatedUser(t, {
+      name: "Carol",
+      email: "carol@test.com",
+    });
+    await addMember(t, a.workspaceId, carolId, WorkspaceRole.MEMBER);
+    await addMember(t, b.workspaceId, carolId, WorkspaceRole.MEMBER);
+
+    const eventId = await b.asUser.mutation(api.calendarEvents.create, {
+      workspaceId: b.workspaceId as any,
+      title: "B's planning session",
+      startsAt: Date.now() + ONE_HOUR,
+      endsAt: Date.now() + 2 * ONE_HOUR,
+      timezone: "UTC",
+      invitees: { userIds: [], guestEmails: [] },
+    });
+
+    await b.asUser.mutation(api.calendarEvents.addInvitees, {
+      eventId,
+      userIds: [carolId as any],
+      guestEmails: [],
+    });
+
+    // Independent source of truth: Carol's node looked up BY workspace, which
+    // is not how the trigger resolves it.
+    const carolNodeInB = await t.run(async (ctx) =>
+      ctx.db
+        .query("nodes")
+        .withIndex("by_resource_workspace", (q) =>
+          q.eq("resourceId", carolId as string).eq("workspaceId", b.workspaceId),
+        )
+        .first(),
+    );
+
+    const edges = await inviteEdges(t, eventId);
+    expect(edges).toHaveLength(1);
+    expect(edges[0]?.workspaceId).toBe(b.workspaceId);
+    expect(
+      edges[0]?.targetNodeId,
+      "the edge's workspace and its targetNodeId's workspace must agree",
+    ).toBe(carolNodeInB?._id);
+  });
+
   it("removeInvitee tears down the corresponding edge", async () => {
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const { userId: memberId } = await setupAuthenticatedUser(t, {

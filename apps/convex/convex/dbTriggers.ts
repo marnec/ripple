@@ -598,7 +598,12 @@ triggers.register("calendarEventInvitees", async (ctx, change) => {
     if (!inv.userId) return; // guest invitee — no user node to link
     const [sourceNodeId, targetNodeId] = await Promise.all([
       findNodeId(ctx, inv.eventId),
-      findNodeId(ctx, inv.userId),
+      // User nodes are per-membership, so the workspace-blind `findNodeId`
+      // returns whichever workspace's node was created first — for an invitee
+      // who belongs to more than one, that can disagree with the edge's own
+      // `workspaceId`. Same scoping `insertChannelMentionEdge` uses for user
+      // targets, and what the backfill migration special-cases.
+      findUserNodeId(ctx, inv.userId, inv.workspaceId),
     ]);
     await ctx.db.insert("edges", {
       sourceType: "calendarEvent",
