@@ -138,6 +138,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillSpreadsheetTags,
   internal.migrations.backfillTaskTagsSortFields,
   internal.migrations.backfillTaskTagsAssigneeId,
+  internal.migrations.backfillCycleTaskCompleted,
   internal.migrations.cleanupProjectTagsField,
   internal.migrations.cleanupProjectEntityTags,
   internal.migrations.backfillTaskExternalRefs,
@@ -1112,6 +1113,33 @@ export const backfillTaskTagsSortFields = migrations.define({
     }
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(row._id, patch);
+    }
+  },
+});
+
+/**
+ * Backfill `completed` on existing cycleTasks rows that predate the
+ * denormalization. The trigger keeps the column fresh for new writes; this
+ * migration covers rows from before the trigger existed.
+ *
+ * Until it runs, an un-backfilled row reads as incomplete, so a cycle's
+ * progress bar reports low rather than wrong-in-both-directions. `deploy`
+ * chains `migrations:runAll` immediately after `convex deploy`, so the window
+ * is the length of that run.
+ *
+ * Idempotent — only patches rows whose denormalized flag differs from the
+ * source task. Rows already in sync are skipped.
+ */
+export const backfillCycleTaskCompleted = migrations.define({
+  table: "cycleTasks",
+  migrateOne: async (ctx, row) => {
+    const task = await ctx.db.get(row.taskId);
+    if (!task) {
+      // Orphaned join — cleanup is the cascade's job, not this migration's.
+      return;
+    }
+    if (row.completed !== task.completed) {
+      await ctx.db.patch(row._id, { completed: task.completed });
     }
   },
 });

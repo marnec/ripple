@@ -828,9 +828,10 @@ triggers.register("taskTags", async (ctx, change) => {
   }
 });
 
-// Keep denormalized columns on `taskTags` in sync with the source task.
-// Without this sync the indexed completed-tag-sorted queries would return
-// stale partitions or stale orderings.
+// Keep denormalized columns on the task join tables in sync with the source
+// task. Without this sync the indexed completed-tag-sorted `taskTags` queries
+// would return stale partitions or stale orderings, and cycle progress would
+// report a stale completed count.
 triggers.register("tasks", async (ctx, change) => {
   if (change.operation !== "update") return;
   const completedChanged = change.oldDoc.completed !== change.newDoc.completed;
@@ -857,6 +858,20 @@ triggers.register("tasks", async (ctx, change) => {
     if (startDateChanged) patch.plannedStartDate = change.newDoc.plannedStartDate;
     if (assigneeChanged) patch.assigneeId = change.newDoc.assigneeId;
     await ctx.db.patch(join._id, patch);
+  }
+
+  // `cycleTasks` mirrors only `completed`, so it costs one extra indexed scan
+  // per status flip and nothing at all on the far more frequent rename / date /
+  // assignee edits. A task in K cycles costs K writes here — the right trade,
+  // since the three progress queries are subscriptions read by every viewer of
+  // the project overview, cycles tab and calendar.
+  if (!completedChanged) return;
+  const cycleJoins = await ctx.db
+    .query("cycleTasks")
+    .withIndex("by_task", (q) => q.eq("taskId", change.id))
+    .collect();
+  for (const join of cycleJoins) {
+    await ctx.db.patch(join._id, { completed: change.newDoc.completed });
   }
 });
 

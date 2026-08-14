@@ -673,7 +673,7 @@ export const listCompletedByProject = query({
   },
 });
 
-async function enrichTasks(
+export async function enrichTasks(
   ctx: QueryCtx,
   tasks: Doc<"tasks">[],
   projectKey: string | undefined,

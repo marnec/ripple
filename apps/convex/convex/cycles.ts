@@ -1,11 +1,11 @@
 import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { logActivity } from "./auditLog";
 import type { CycleStatus } from "@ripple/shared/types/cycles";
 import { cycleStatusValidator, taskStatusValidator, userValidator } from "./validators";
-import { baseTaskFields, hasBlockingEdge } from "./tasks";
+import { baseTaskFields, enrichTasks } from "./tasks";
 import { requireWorkspaceMember, requireResourceMember, checkResourceMember } from "./authHelpers";
 
 const cycleWithProgressValidator = v.object({
@@ -32,6 +32,25 @@ const enrichedTaskValidator = v.object({
   projectKey: v.optional(v.string()),
   hasBlockers: v.boolean(),
 });
+
+/**
+ * Progress over a cycle's join rows. `completed` is denormalized onto
+ * `cycleTasks` (schema.ts) and kept fresh by the tasks trigger, so this reads
+ * nothing but the join rows the caller already holds — the three queries below
+ * are subscriptions, and dereferencing each `taskId` put every task in every
+ * cycle of the project into their read set, so any task write anywhere re-ran
+ * all of them for every viewer.
+ */
+function progressOf(cts: Doc<"cycleTasks">[]) {
+  const totalTasks = cts.length;
+  const completedTasks = cts.filter((ct) => ct.completed).length;
+  return {
+    totalTasks,
+    completedTasks,
+    progressPercent:
+      totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100),
+  };
+}
 
 /** Compute cycle status from start/due dates relative to today. */
 function computeStatus(
@@ -202,12 +221,7 @@ export const get = query({
       .query("cycleTasks")
       .withIndex("by_cycle", (q) => q.eq("cycleId", cycleId))
       .collect();
-    const total = cts.length;
-    const tasks = await Promise.all(cts.map((ct) => ctx.db.get(ct.taskId)));
-    const completed = tasks.filter((t) => t?.completed).length;
-    const progressPercent = total === 0 ? 0 : Math.round((completed / total) * 100);
-
-    return { ...cycle, totalTasks: total, completedTasks: completed, progressPercent };
+    return { ...cycle, ...progressOf(cts) };
   },
 });
 
@@ -229,11 +243,7 @@ export const listByProject = query({
           .query("cycleTasks")
           .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
           .collect();
-        const total = cts.length;
-        const tasks = await Promise.all(cts.map((ct) => ctx.db.get(ct.taskId)));
-        const completed = tasks.filter((t) => t?.completed).length;
-        const progressPercent = total === 0 ? 0 : Math.round((completed / total) * 100);
-        return { ...cycle, totalTasks: total, completedTasks: completed, progressPercent };
+        return { ...cycle, ...progressOf(cts) };
       })
     );
   },
@@ -269,6 +279,10 @@ export const addTask = mutation({
       cycleId,
       taskId,
       projectId: cycle.projectId,
+      // Seeded here, then maintained by the tasks trigger. The trigger only
+      // fires on update, so a join row created after the task was completed
+      // would otherwise read as incomplete until the task was next touched.
+      completed: task.completed,
       addedBy: userId,
     });
 
@@ -373,18 +387,13 @@ export const listForCalendar = query({
           .query("cycleTasks")
           .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
           .collect();
-        const total = cts.length;
-        const tasks = await Promise.all(cts.map((ct) => ctx.db.get(ct.taskId)));
-        const completed = tasks.filter((t) => t?.completed).length;
-        const progressPercent = total === 0 ? 0 : Math.round((completed / total) * 100);
-
         if (cycle.dueDate) {
           for (const ct of cts) {
             taskCycleDueDatePairs.push({ taskId: ct.taskId, cycleDueDate: cycle.dueDate });
           }
         }
 
-        return { ...cycle, totalTasks: total, completedTasks: completed, progressPercent };
+        return { ...cycle, ...progressOf(cts) };
       })
     );
 
@@ -423,20 +432,11 @@ export const listCycleTasks = query({
     const shouldHideCompleted = hideCompleted ?? false;
     const filtered = shouldHideCompleted ? tasks.filter((t) => !t.completed) : tasks;
 
-    // Enrich identically to tasks.listByProject (status, assignee, projectKey, hasBlockers)
-    const enriched = await Promise.all(
-      filtered.map(async (task) => {
-        const status = await ctx.db.get(task.statusId);
-        const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        return {
-          ...task,
-          status,
-          assignee,
-          projectKey: project?.key,
-          hasBlockers: await hasBlockingEdge(ctx, task._id),
-        };
-      })
-    );
+    // Enrich through the same helper tasks.listByProject uses, rather than a
+    // copy of it: `enrichTasks` dedupes the status and assignee point-reads
+    // across the page, which the hand-rolled per-task `ctx.db.get` here did not
+    // — a cycle's tasks nearly all share a handful of statuses.
+    const enriched = await enrichTasks(ctx, filtered, project?.key);
 
     // Sort by position (fractional-indexing ordinal order)
     enriched.sort((a, b) => {

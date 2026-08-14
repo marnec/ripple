@@ -531,6 +531,7 @@ export type DataModel = {
   cycleTasks: {
     document: {
       addedBy: Id<"users">;
+      completed?: boolean;
       cycleId: Id<"cycles">;
       projectId: Id<"projects">;
       taskId: Id<"tasks">;
@@ -541,6 +542,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "addedBy"
+      | "completed"
       | "cycleId"
       | "projectId"
       | "taskId";

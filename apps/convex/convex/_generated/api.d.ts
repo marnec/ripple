@@ -5516,6 +5516,20 @@ export declare const internal: {
       },
       any
     >;
+    backfillCycleTaskCompleted: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
     backfillDiagramAggregates: FunctionReference<
       "mutation",
       "internal",

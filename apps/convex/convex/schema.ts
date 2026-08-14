@@ -718,10 +718,23 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_project_status", ["projectId", "status"]),
 
+  // Denormalized fields:
+  //   - `projectId` : for efficient filtering
+  //   - `completed` : copied from tasks.completed, kept in sync by the tasks
+  //                   trigger in dbTriggers.ts (same one that maintains
+  //                   taskTags). Cycle progress is `completed / total` over
+  //                   these join rows, read by three subscribed queries; without
+  //                   it each one had to `db.get` the full task document per row
+  //                   just to read one boolean, which put every task in every
+  //                   cycle into the subscription's read set.
+  // No `by_cycle_completed` index: progress needs the total too, so all of a
+  // cycle's join rows are read either way and the completed count is a filter
+  // over rows already in hand. An index would add a second scan and buy nothing.
   cycleTasks: defineTable({
     cycleId: v.id("cycles"),
     taskId: v.id("tasks"),
-    projectId: v.id("projects"), // denormalized for efficient filtering
+    projectId: v.id("projects"),
+    completed: v.optional(v.boolean()),
     addedBy: v.id("users"),
   })
     .index("by_cycle", ["cycleId"])
