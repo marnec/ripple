@@ -423,16 +423,33 @@ export async function filterChannelRecipients(
   return admitted.filter((userId): userId is Id<"users"> => userId !== null);
 }
 
-// ─── Creator-only ────────────────────────────────────────────────────
+// ─── Creator narrowing (NOT an access rule) ──────────────────────────
 
-/** Verify the authenticated user is the creator of a resource. Throws on mismatch. */
-export function requireCreator(
+/**
+ * A *narrowing* applied on top of the workspace rule, never a substitute for
+ * it. Call it only with a `membership` obtained from `requireResourceMember` /
+ * `requireWorkspaceMember` — that call is the gate; this is a product decision
+ * about which member may perform a destructive project-level action.
+ *
+ * There is deliberately no creator-only variant. The predecessor
+ * (`requireCreator(resource, userId)`) took no membership, so the two call
+ * sites paired it with a bare `requireUser` and a creator who had been removed
+ * from the workspace kept the power to rename and cascade-delete their old
+ * project. Taking `membership` makes that mistake unrepresentable.
+ *
+ * Workspace admins are included so a project does not become permanently
+ * un-renameable and un-deletable once its creator is offboarded.
+ */
+export function requireCreatorOrWorkspaceAdmin(
   resource: { creatorId: Id<"users"> },
   userId: Id<"users">,
+  membership: Doc<"workspaceMembers">,
 ): void {
-  if (resource.creatorId !== userId) {
-    throw new ConvexError("Only the creator can perform this action");
-  }
+  if (resource.creatorId === userId) return;
+  if (membership.role === WorkspaceRole.ADMIN) return;
+  throw new ConvexError(
+    "Only the project creator or a workspace admin can perform this action",
+  );
 }
 
 // ─── Collaboration access (unified) ─────────────────────────────────

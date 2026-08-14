@@ -7,7 +7,7 @@ import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { projectValidator } from "./validators";
-import { requireWorkspaceMember, requireUser, requireCreator, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
+import { requireWorkspaceMember, requireCreatorOrWorkspaceAdmin, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { searchResourcesByFavorite } from "./resourceSearch";
 import { notify } from "./utils/notify";
 
@@ -195,12 +195,15 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, name, description, color, key }) => {
-    const userId = await requireUser(ctx);
-
-    const project = await ctx.db.get(id);
-    if (!project) throw new ConvexError("Project not found");
-
-    requireCreator(project, userId);
+    // The workspace rule first, the creator narrowing second — in that order.
+    // Reversed, a creator who has been removed from the workspace still learns
+    // the project exists (and, before this, could still rename it).
+    const { userId, resource: project, membership } = await requireResourceMember(
+      ctx,
+      "projects",
+      id,
+    );
+    requireCreatorOrWorkspaceAdmin(project, userId, membership);
 
     // Build patch object with only provided fields
     const patch: { name?: string; description?: string; color?: string; key?: string } = {};
@@ -245,12 +248,14 @@ export const remove = mutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await requireUser(ctx);
-
-    const project = await ctx.db.get(id);
-    if (!project) throw new ConvexError("Project not found");
-
-    requireCreator(project, userId);
+    // Same order as `update`, and the stakes are higher here: this path
+    // cascade-deletes every task, status, cycle and comment under the project.
+    const { userId, resource: project, membership } = await requireResourceMember(
+      ctx,
+      "projects",
+      id,
+    );
+    requireCreatorOrWorkspaceAdmin(project, userId, membership);
 
     await logActivity(ctx, {
       userId, resourceType: "projects", resourceId: id,

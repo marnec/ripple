@@ -567,6 +567,257 @@ describe("edges.syncEdges — foreign sourceId under an authorized workspaceId",
   });
 });
 
+describe("edges.createEdge / listByTask — foreign dependsOnTaskId", () => {
+  /** A task alice owns, plus a task of bob's she has no way to reach. */
+  async function setupTaskPair(t: TestCtx) {
+    const { alice, bob } = await setupTwoWorkspaces(t);
+    const { projectId: projectA } = await setupProjectWithStatuses(t, {
+      workspaceId: alice.workspaceId,
+      userId: alice.userId,
+      key: "AAA",
+    });
+    const { projectId: projectB, todoId: todoB } = await setupProjectWithStatuses(t, {
+      workspaceId: bob.workspaceId,
+      userId: bob.userId,
+      key: "BBB",
+    });
+
+    const ownTaskId = await alice.asUser.mutation(api.tasks.create, {
+      workspaceId: alice.workspaceId,
+      projectId: projectA,
+      title: "Mine",
+    });
+
+    const secretTaskId = await t.run(async (ctx) =>
+      ctx.db.insert("tasks", {
+        projectId: projectB,
+        workspaceId: bob.workspaceId,
+        title: "Acquisition of Initech",
+        statusId: todoB,
+        priority: "high" as const,
+        completed: false,
+        creatorId: bob.userId,
+        number: 1,
+      }),
+    );
+
+    return { alice, bob, ownTaskId, secretTaskId };
+  }
+
+  it("createEdge refuses a dependency target from another workspace", async () => {
+    const t = createTestContext();
+    const { alice, ownTaskId, secretTaskId } = await setupTaskPair(t);
+
+    await expect(
+      alice.asUser.mutation(api.edges.createEdge, {
+        taskId: ownTaskId,
+        dependsOnTaskId: secretTaskId,
+        type: "blocks",
+      }),
+      // convex/edges.ts:414 — the gate is on the source task only
+    ).rejects.toThrow();
+
+    const edges = await t.run(async (ctx) =>
+      ctx.db
+        .query("edges")
+        .withIndex("by_source_target", (q) =>
+          q.eq("sourceId", ownTaskId).eq("targetId", secretTaskId),
+        )
+        .collect(),
+    );
+    expect(edges.length, "no edge may reference a task the caller cannot read").toBe(0);
+  });
+
+  /**
+   * Seed the edge directly, bypassing `createEdge`. Every read-side assertion
+   * below uses this: the read paths must be defended independently of the write
+   * side having been correct, since rows predating the guard still exist.
+   */
+  async function seedLegacyEdge(
+    t: TestCtx,
+    opts: {
+      alice: { userId: Id<"users">; workspaceId: Id<"workspaces"> };
+      ownTaskId: Id<"tasks">;
+      secretTaskId: Id<"tasks">;
+    },
+  ) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("edges", {
+        sourceType: "task" as const,
+        sourceId: opts.ownTaskId,
+        targetType: "task" as const,
+        targetId: opts.secretTaskId,
+        edgeType: "blocks" as const,
+        workspaceId: opts.alice.workspaceId,
+        createdBy: opts.alice.userId,
+        createdAt: Date.now(),
+      }),
+    );
+  }
+
+  it("listByTask never returns a foreign task even if the edge row exists", async () => {
+    const t = createTestContext();
+    const { alice, ownTaskId, secretTaskId } = await setupTaskPair(t);
+    await seedLegacyEdge(t, { alice, ownTaskId, secretTaskId });
+
+    const deps = await alice.asUser.query(api.edges.listByTask, { taskId: ownTaskId });
+
+    expect(
+      [...deps.blocks, ...deps.blockedBy, ...deps.relatesTo].map((d) => d.task.title),
+      // convex/edges.ts:617 — depItemValidator carries title, number and projectKey
+    ).not.toContain("Acquisition of Initech");
+  });
+
+  it("removeEdge does not copy a foreign title into the task timeline", async () => {
+    const t = createTestContext();
+    const { alice, ownTaskId, secretTaskId } = await setupTaskPair(t);
+    const edgeId = await seedLegacyEdge(t, { alice, ownTaskId, secretTaskId });
+
+    await alice.asUser.mutation(api.edges.removeEdge, { edgeId });
+
+    const timeline = await alice.asUser.query(api.taskActivity.timeline, {
+      taskId: ownTaskId,
+    });
+
+    expect(
+      timeline
+        .map((item) => (item.kind === "activity" ? `${item.oldValue ?? ""} ${item.newValue ?? ""}` : ""))
+        .join(" "),
+      // logTaskActivity writes `${edgeType}:${targetTask.title}` into A's timeline
+    ).not.toContain("Acquisition of Initech");
+  });
+});
+
+describe("favorites — foreign resourceId under an authorized workspaceId", () => {
+  /**
+   * A document in B, created through the real mutation so the `nodes` trigger
+   * fires — `resolveResource` reads the node, not the document, so a raw insert
+   * would make every assertion below vacuously pass.
+   */
+  async function setupForeignDocument(t: TestCtx) {
+    const { alice, bob } = await setupTwoWorkspaces(t);
+    const docB = await bob.asUser.mutation(api.documents.create, {
+      workspaceId: bob.workspaceId,
+      name: "Project Bluebird",
+    });
+    return { alice, bob, docB };
+  }
+
+  /** A pin alice could not have written through `toggle` — a pre-guard row. */
+  async function seedLegacyFavorite(
+    t: TestCtx,
+    opts: { alice: { userId: Id<"users">; workspaceId: Id<"workspaces"> }; docB: Id<"documents"> },
+  ) {
+    await t.run(async (ctx) => {
+      await ctx.db.insert("favorites", {
+        userId: opts.alice.userId,
+        workspaceId: opts.alice.workspaceId,
+        resourceType: "document" as const,
+        resourceId: opts.docB,
+        favoritedAt: Date.now(),
+      });
+    });
+  }
+
+  it("toggle refuses a resourceId owned by another workspace", async () => {
+    const t = createTestContext();
+    const { alice, docB } = await setupForeignDocument(t);
+
+    await expect(
+      alice.asUser.mutation(api.favorites.toggle, {
+        workspaceId: alice.workspaceId,
+        resourceType: "document",
+        resourceId: docB,
+      }),
+      // convex/favorites.ts:57 — resourceId is a v.string(), never resolved
+    ).rejects.toThrow();
+
+    const rows = await t.run(async (ctx) => ctx.db.query("favorites").collect());
+    expect(rows.length, "the pin must not have been stored").toBe(0);
+  });
+
+  it("toggle refuses a resourceId that addresses nothing at all", async () => {
+    const t = createTestContext();
+    const { alice } = await setupTwoWorkspaces(t);
+
+    await expect(
+      alice.asUser.mutation(api.favorites.toggle, {
+        workspaceId: alice.workspaceId,
+        resourceType: "document",
+        resourceId: "not-an-id",
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("listPinned never resolves a foreign name even if the pin row exists", async () => {
+    const t = createTestContext();
+    const { alice, docB } = await setupForeignDocument(t);
+    await seedLegacyFavorite(t, { alice, docB });
+
+    const pinned = await alice.asUser.query(api.favorites.listPinned, {
+      workspaceId: alice.workspaceId,
+    });
+
+    expect(
+      pinned.map((f) => f.name),
+      // convex/favorites.ts:35 — resolved through the workspace-blind by_resource index
+    ).not.toContain("Project Bluebird");
+  });
+
+  it("listByType never resolves a foreign name even if the pin row exists", async () => {
+    const t = createTestContext();
+    const { alice, docB } = await setupForeignDocument(t);
+    await seedLegacyFavorite(t, { alice, docB });
+
+    const page = await alice.asUser.query(api.favorites.listByType, {
+      workspaceId: alice.workspaceId,
+      resourceType: "document",
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+
+    expect(page.page.map((f) => f.name)).not.toContain("Project Bluebird");
+  });
+
+  it("still lets the owner un-pin a legacy foreign row", async () => {
+    const t = createTestContext();
+    const { alice, docB } = await setupForeignDocument(t);
+    await seedLegacyFavorite(t, { alice, docB });
+
+    // The delete branch runs before the new resource check on purpose: a row
+    // that predates the guard must not become impossible to remove.
+    const result = await alice.asUser.mutation(api.favorites.toggle, {
+      workspaceId: alice.workspaceId,
+      resourceType: "document",
+      resourceId: docB,
+    });
+
+    expect(result).toBe(false);
+    expect(await t.run(async (ctx) => ctx.db.query("favorites").collect())).toHaveLength(0);
+  });
+
+  it("still lets a member pin a resource in their own workspace", async () => {
+    const t = createTestContext();
+    const { alice } = await setupTwoWorkspaces(t);
+    const docA = await alice.asUser.mutation(api.documents.create, {
+      workspaceId: alice.workspaceId,
+      name: "A's doc",
+    });
+
+    expect(
+      await alice.asUser.mutation(api.favorites.toggle, {
+        workspaceId: alice.workspaceId,
+        resourceType: "document",
+        resourceId: docA,
+      }),
+    ).toBe(true);
+
+    const pinned = await alice.asUser.query(api.favorites.listPinned, {
+      workspaceId: alice.workspaceId,
+    });
+    expect(pinned.map((f) => f.name)).toContain("A's doc");
+  });
+});
+
 /* ══════════════════════════════════════════════════════════════════════
    Shape 2 — `requireUser` used as if it were an access rule
    ══════════════════════════════════════════════════════════════════════ */

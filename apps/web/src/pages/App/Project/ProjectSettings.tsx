@@ -78,10 +78,18 @@ function ProjectSettingsContent({
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [projectKey, setProjectKey] = useState<string | null>(null);
 
-  // Check if current user is the project creator (admin). The Integrations
-  // section and the danger zone are creator-only; everything else is shared.
+  // Check if current user is the project creator (admin). The Status
+  // automation and Integrations sections are creator-only; everything else is
+  // shared.
   const isCreator =
     !!currentUser && !!project && currentUser._id === project.creatorId;
+
+  // General details + the danger zone mirror `projects.update` / `projects.remove`,
+  // which admit the creator OR a workspace admin. The admin arm is what keeps a
+  // project manageable after its creator has been offboarded — without it the
+  // creator link outlives the membership and nobody can rename or delete it.
+  const myRole = useQuery(api.workspaceMembers.myRole, { workspaceId });
+  const canManageProject = isCreator || myRole === "admin";
 
   const sections: SettingsSection[] = [
     {
@@ -186,7 +194,7 @@ function ProjectSettingsContent({
                 value={displayName}
                 onChange={(e) => setProjectName(e.target.value)}
                 placeholder="Enter project name"
-                disabled={!isCreator}
+                disabled={!canManageProject}
               />
             </div>
             <div className="space-y-2">
@@ -196,7 +204,7 @@ function ProjectSettingsContent({
                 value={displayKey}
                 onChange={(e) => setProjectKey(e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 5))}
                 placeholder="e.g., ENG"
-                disabled={!isCreator || !!projectHasTasks}
+                disabled={!canManageProject || !!projectHasTasks}
                 maxLength={5}
                 className="font-mono uppercase"
               />
@@ -213,25 +221,25 @@ function ProjectSettingsContent({
                   <button
                     key={color.class}
                     type="button"
-                    onClick={() => isCreator && setSelectedColor(color.class)}
-                    disabled={!isCreator}
+                    onClick={() => canManageProject && setSelectedColor(color.class)}
+                    disabled={!canManageProject}
                     className={`w-8 h-8 rounded-full ${color.class} ${
                       displayColor === color.class
                         ? "ring-2 ring-offset-2 ring-primary"
                         : ""
-                    } ${!isCreator ? "opacity-50 cursor-not-allowed" : ""}`}
+                    } ${!canManageProject ? "opacity-50 cursor-not-allowed" : ""}`}
                     title={color.name}
                   />
                 ))}
               </div>
             </div>
-            {hasChanges && isCreator && (
+            {hasChanges && canManageProject && (
               <Button onClick={() => void handleSaveDetails()}>Save Changes</Button>
             )}
           </div>
 
-          {/* Danger zone — creator only */}
-          {isCreator && (
+          {/* Danger zone — creator or workspace admin */}
+          {canManageProject && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
               <h3 className="text-sm font-semibold text-destructive">Delete project</h3>
               <p className="mt-1 text-sm text-muted-foreground">

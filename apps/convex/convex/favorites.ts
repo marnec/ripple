@@ -1,22 +1,47 @@
 import { GenericQueryCtx, paginationOptsValidator } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { query } from "./_generated/server";
 import { mutation } from "./functions";
 import { Id } from "./_generated/dataModel";
 import type { DataModel } from "./_generated/dataModel";
-import { requireWorkspaceMember, getUser } from "./authHelpers";
+import { requireWorkspaceMember, getUser, type WorkspaceResource } from "./authHelpers";
 
 import { favoritableResourceTypeValidator as resourceTypeValidator } from "./validators";
 
 import type { FavoritableResourceType as ResourceType } from "@ripple/shared/types/resources";
 
+/**
+ * The table each favoritable type actually lives in. `satisfies` makes adding a
+ * favoritable type that isn't workspace-scoped a compile error, so `toggle`'s
+ * `workspaceId` comparison below can never be reading a field that isn't there.
+ */
+const FAVORITABLE_TABLE = {
+  document: "documents",
+  diagram: "diagrams",
+  spreadsheet: "spreadsheets",
+  project: "projects",
+} as const satisfies Record<ResourceType, WorkspaceResource>;
+
+/**
+ * Resolve a favorite's display name, scoped to the workspace it was pinned in.
+ *
+ * The workspace predicate is not belt-and-braces for `toggle`'s check — it is
+ * the half that closes rows already stored. `favorites.resourceId` is a
+ * `v.string()` that used to be written unvalidated, and this resolved it
+ * through the workspace-blind `by_resource` index, so a pinned foreign id
+ * rendered that workspace's document title in the sidebar and re-rendered it on
+ * every rename. Same hardening `graph.getNodeLabel` already carries.
+ */
 async function resolveResource(
   ctx: GenericQueryCtx<DataModel>,
+  workspaceId: Id<"workspaces">,
   resourceId: string,
 ): Promise<{ name: string } | null> {
   const node = await ctx.db
     .query("nodes")
-    .withIndex("by_resource", (q) => q.eq("resourceId", resourceId))
+    .withIndex("by_resource_workspace", (q) =>
+      q.eq("resourceId", resourceId).eq("workspaceId", workspaceId),
+    )
     .first();
   if (!node) return null;
   return { name: node.name };
@@ -39,9 +64,22 @@ export const toggle = mutation({
       )
       .first();
 
+    // Un-pinning is deliberately not gated on the checks below: a row written
+    // before them (or pointing at a since-deleted resource) must still be
+    // removable by the person who owns it.
     if (existing) {
       await ctx.db.delete(existing._id);
       return false;
+    }
+
+    // The gate above authorized `workspaceId`, not `resourceId` — which is a
+    // caller-supplied `v.string()`. Resolve it against its own table rather
+    // than the `nodes` index: that refuses a malformed or deleted id too, and
+    // does not depend on `nodes` having been backfilled in this deployment.
+    const normalized = ctx.db.normalizeId(FAVORITABLE_TABLE[resourceType], resourceId);
+    const resource = normalized === null ? null : await ctx.db.get(normalized);
+    if (!resource || resource.workspaceId !== workspaceId) {
+      throw new ConvexError("Resource not found in this workspace");
     }
 
     await ctx.db.insert("favorites", {
@@ -88,7 +126,7 @@ export const listPinned = query({
 
     for (const fav of favorites) {
       if (enriched.length >= 5) break;
-      const resource = await resolveResource(ctx, fav.resourceId);
+      const resource = await resolveResource(ctx, workspaceId, fav.resourceId);
       if (resource) {
         enriched.push({
           _id: fav._id,
@@ -130,7 +168,7 @@ export const listByType = query({
 
     const enrichedPage = await Promise.all(
       result.page.map(async (fav) => {
-        const resource = await resolveResource(ctx, fav.resourceId);
+        const resource = await resolveResource(ctx, workspaceId, fav.resourceId);
         return resource
           ? {
               _id: fav._id,

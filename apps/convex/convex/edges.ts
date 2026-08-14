@@ -413,6 +413,18 @@ export const createEdge = mutation({
     // Auth: check workspace membership via source task
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", args.taskId);
 
+    // The gate above authorized the SOURCE only; `dependsOnTaskId` is an
+    // unrelated id from the caller. The edge row is stamped with the source's
+    // workspace, so without this check a foreign task is linked into a local
+    // one and `listByTask` returns it enriched — title, number, project key and
+    // completion state, streamed reactively. Workspace equality, not project
+    // equality: cross-project dependencies inside one workspace are legitimate.
+    const targetTask = await ctx.db.get(args.dependsOnTaskId);
+    if (!targetTask) throw new ConvexError("Task not found");
+    if (targetTask.workspaceId !== task.workspaceId) {
+      throw new ConvexError("Task does not belong to this workspace");
+    }
+
     // Check for duplicate (same direction)
     const existingEdges = await ctx.db
       .query("edges")
@@ -456,13 +468,12 @@ export const createEdge = mutation({
     });
 
     // Log activity
-    const targetTask = await ctx.db.get(args.dependsOnTaskId);
     await logTaskActivity(ctx, {
       taskId: args.taskId,
       userId,
       workspaceId: task.workspaceId,
       type: "dependency_add",
-      newValue: `${args.type}:${targetTask?.title ?? "Unknown"}`,
+      newValue: `${args.type}:${targetTask.title}`,
       taskTitle: task.title,
     });
 
@@ -483,8 +494,11 @@ export const removeEdge = mutation({
     // Auth via source task's workspace
     const { userId, resource: task } = await requireResourceMember(ctx, "tasks", edge.sourceId as Id<"tasks">);
 
-    // Log activity before deleting
-    const targetTask = await ctx.db.get(edge.targetId as Id<"tasks">);
+    // Log activity before deleting. Same read-side caution as `listByTask`:
+    // a legacy edge may point outside this workspace, and the activity row is
+    // readable by everyone in it — don't copy a foreign title into it.
+    const target = await ctx.db.get(edge.targetId as Id<"tasks">);
+    const targetTask = target?.workspaceId === task.workspaceId ? target : null;
     await logTaskActivity(ctx, {
       taskId: edge.sourceId as Id<"tasks">,
       userId,
@@ -614,9 +628,12 @@ export const listByTask = query({
     const projects = await getAll(ctx.db, "projects", projectIds);
     const projectById = new Map(projectIds.map((id, i) => [id as string, projects[i]]));
 
+    // Belt-and-braces against an edge pointing outside this workspace:
+    // `createEdge` now refuses those, but the read side must not depend on the
+    // write side having been correct — rows predating that guard still exist.
     const enrichTask = (id: string) => {
       const t = taskById.get(id);
-      if (!t) return null;
+      if (!t || t.workspaceId !== task.workspaceId) return null;
       return {
         _id: t._id,
         title: t.title,
