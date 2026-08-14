@@ -1,4 +1,4 @@
-import type { MutationCtx } from "../../_generated/server";
+import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { effectiveLinkStatus } from "./entitlements";
 
@@ -43,7 +43,7 @@ import { effectiveLinkStatus } from "./entitlements";
  * function exists to keep from being rewritten a third time.
  */
 export async function findRepoLinks(
-  ctx: MutationCtx,
+  ctx: QueryCtx,
   externalRepoId: string,
 ): Promise<Doc<"projectIntegrationLinks">[]> {
   return await ctx.db
@@ -52,6 +52,24 @@ export async function findRepoLinks(
       q.eq("externalRepoId", externalRepoId),
     )
     .collect();
+}
+
+/**
+ * The one live link for a provider-side repo id, or `null`.
+ *
+ * Split out of `resolveInboundLink` so the GitLab route's pre-store
+ * authentication can reuse it: that check must not write (it runs before the
+ * delivery is accepted at all), while `resolveInboundLink` records a receipt
+ * and may rename. Both must agree on which row counts as live — a disconnected
+ * link keeps its row *and its stale secret*, so picking differently here would
+ * mean unlinking a project no longer closed the door.
+ */
+export async function findLiveRepoLink(
+  ctx: QueryCtx,
+  externalRepoId: string,
+): Promise<Doc<"projectIntegrationLinks"> | null> {
+  const repoLinks = await findRepoLinks(ctx, externalRepoId);
+  return repoLinks.find((l) => l.status !== "disconnected") ?? null;
 }
 
 export async function resolveInboundLink(
@@ -73,8 +91,7 @@ export async function resolveInboundLink(
   // Resolve link via stable repo id (survives renames). A repo may have
   // several rows here — see `findRepoLinks` — so pick the single
   // non-disconnected link rather than assuming uniqueness.
-  const repoLinks = await findRepoLinks(ctx, args.externalRepoId);
-  const link = repoLinks.find((l) => l.status !== "disconnected") ?? null;
+  const link = await findLiveRepoLink(ctx, args.externalRepoId);
   if (!link) return null; // unknown/disconnected repo — drop silently
 
   if (!(await args.authorize(link))) return null;

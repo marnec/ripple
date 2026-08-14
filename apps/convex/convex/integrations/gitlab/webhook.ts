@@ -16,11 +16,15 @@
  */
 
 import { v } from "convex/values";
-import { internalAction, type MutationCtx } from "../../_generated/server";
+import {
+  internalAction,
+  internalQuery,
+  type MutationCtx,
+} from "../../_generated/server";
 import { internalMutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import type { Doc } from "../../_generated/dataModel";
-import { resolveInboundLink } from "../core/inboundRouting";
+import { findLiveRepoLink, resolveInboundLink } from "../core/inboundRouting";
 import { applyNormalizedEvent } from "../core/syncIn";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
 import type {
@@ -306,6 +310,33 @@ export function verifyGitlabToken(
   }
   return diff === 0;
 }
+
+/**
+ * Does this delivery carry the secret of the link it claims to be for?
+ *
+ * The route's pre-store gate, and the reason it is a *query*: GitLab has no
+ * App-wide secret, so the route cannot verify before it resolves the way
+ * GitHub's does — it has to read the project id out of the body and find the
+ * link first. Doing that through `resolveGitlabInboundLink` would be a write
+ * (it records a receipt and may rename), and the whole point of this check is
+ * that an unauthenticated request leaves nothing behind. So it reuses only the
+ * two pieces that carry a rule: `findLiveRepoLink` (a disconnected link's stale
+ * secret must not authenticate anything) and `verifyGitlabToken` (constant-time
+ * compare, false on either side missing).
+ *
+ * Authentication only. The freeze gate, the receipt and the rename stay in the
+ * mutation path, where a delivery that is genuinely ours gets the full
+ * treatment — this answers just "is this caller allowed to make us store a
+ * kilobyte of their choosing".
+ */
+export const isDeliveryAuthentic = internalQuery({
+  args: { externalRepoId: v.string(), token: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, { externalRepoId, token }) => {
+    const link = await findLiveRepoLink(ctx, externalRepoId);
+    return !!link && verifyGitlabToken(token, link.webhookSecret ?? "");
+  },
+});
 
 /**
  * Resolve the live, sync-active project link a GitLab delivery targets, or

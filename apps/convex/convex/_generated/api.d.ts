@@ -5416,6 +5416,12 @@ export declare const internal: {
           { payload: any; token?: string },
           null
         >;
+        isDeliveryAuthentic: FunctionReference<
+          "query",
+          "internal",
+          { externalRepoId: string; token: string },
+          boolean
+        >;
         receiveGitlabWebhook: FunctionReference<
           "action",
           "internal",

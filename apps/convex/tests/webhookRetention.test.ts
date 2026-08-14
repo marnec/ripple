@@ -16,13 +16,38 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { createTestContext } from "./helpers";
+import { createTestContext, setupWorkspaceWithAdmin, setupProject } from "./helpers";
 import { components, internal } from "../convex/_generated/api";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const START = new Date("2026-08-14T00:00:00Z").getTime();
+const SECRET = "per-hook-secret-value";
+const REPO_ID = "42";
+
+/**
+ * The dead-letter seam. A delivery only reaches the DLQ by failing every
+ * attempt, and since the route now parses the body itself, an unparseable one
+ * is refused before it is ever stored — so the failure has to be injected where
+ * production's actually are: inside the reconciler the handler calls.
+ */
+const injected = vi.hoisted(() => ({ syncInThrows: false }));
+
+vi.mock("../convex/integrations/core/syncIn", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../convex/integrations/core/syncIn")>();
+  return {
+    ...actual,
+    applyNormalizedEvent: async (
+      ...args: Parameters<typeof actual.applyNormalizedEvent>
+    ) => {
+      if (injected.syncInThrows) throw new Error("injected sync failure");
+      return actual.applyNormalizedEvent(...args);
+    },
+  };
+});
 
 beforeEach(() => {
+  injected.syncInThrows = false;
   vi.useFakeTimers();
   vi.setSystemTime(START);
 });
@@ -32,29 +57,55 @@ afterEach(() => {
 });
 
 /**
- * One inbound delivery. GitLab's route is the one with no up-front secret
- * check, so a body is stored without any workspace fixture behind it — which is
- * exactly the row this retention policy is about.
- *
- * `undeliverable` sends a body the handler cannot parse, so the delivery burns
- * its attempts and lands in the component's dead-letter queue.
+ * A live GitLab link. Required since sweep #15 — the route authenticates the
+ * per-hook token against a resolved link before anything is stored, so there is
+ * no longer any way to put a row in these tables without one.
  */
-async function deliver(
-  t: ReturnType<typeof createTestContext>,
-  uuid: string,
-  opts: { undeliverable?: boolean } = {},
-) {
+async function setupLink(t: ReturnType<typeof createTestContext>) {
+  const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
+  const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+  await t.run(async (ctx) => {
+    await ctx.db.insert("projectIntegrationLinks", {
+      workspaceId,
+      projectId,
+      status: "active",
+      pausedByBilling: false,
+      externalRepoFullName: "acme/web",
+      externalRepoId: REPO_ID,
+      webhookSecret: SECRET,
+    });
+  });
+}
+
+/** A genuine, authenticated inbound delivery — the row this policy is about. */
+async function deliver(t: ReturnType<typeof createTestContext>, uuid: string) {
   const res = await t.fetch("/integrations/gitlab/webhook", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       "x-gitlab-event-uuid": uuid,
-      "x-gitlab-token": "a-real-looking-hook-secret",
-      ...(opts.undeliverable ? { "x-gitlab-event": "Issue Hook" } : {}),
+      "x-gitlab-event": "Issue Hook",
+      "x-gitlab-token": SECRET,
     },
-    body: opts.undeliverable
-      ? "definitely not json"
-      : JSON.stringify({ object_kind: "issue", project: { id: 1 } }),
+    body: JSON.stringify({
+      object_kind: "issue",
+      user: { id: 7, username: "octocat" },
+      project: {
+        id: REPO_ID,
+        web_url: "https://gitlab.com/acme/web",
+        path_with_namespace: "acme/web",
+      },
+      object_attributes: {
+        id: 301,
+        iid: 23,
+        title: "Page crashes on dark mode",
+        description: "repro steps",
+        state: "opened",
+        action: "open",
+        url: "https://gitlab.com/acme/web/-/issues/23",
+        updated_at: "2026-05-20 10:00:00 UTC",
+      },
+    }),
   });
   await t.finishAllScheduledFunctions(vi.runAllTimers);
   return res;
@@ -94,6 +145,7 @@ describe("webhook retention", () => {
    */
   it("deletes expired deliveries and keeps live ones", async () => {
     const t = createTestContext();
+    await setupLink(t);
 
     await deliver(t, "delivery-old");
     const [oldId] = await liveEventIds(t);
@@ -118,6 +170,7 @@ describe("webhook retention", () => {
    */
   it("sweeps the dedup row alongside its event", async () => {
     const t = createTestContext();
+    await setupLink(t);
 
     await deliver(t, "delivery-dup");
     // While the dedup row is live, a redelivery of the same id is refused.
@@ -138,6 +191,7 @@ describe("webhook retention", () => {
    */
   it("drains a backlog larger than one batch", async () => {
     const t = createTestContext();
+    await setupLink(t);
 
     for (let i = 0; i < 5; i++) await deliver(t, `delivery-${i}`);
     const ids = await liveEventIds(t);
@@ -158,8 +212,10 @@ describe("webhook retention", () => {
    */
   it("takes the dead-letter entry with the event it points at", async () => {
     const t = createTestContext();
+    await setupLink(t);
 
-    await deliver(t, "delivery-dead", { undeliverable: true });
+    injected.syncInThrows = true;
+    await deliver(t, "delivery-dead");
     const dlq = await t.run((ctx) =>
       ctx.runQuery(components.webhookReceiver.event.queries.listDlq, {}),
     );

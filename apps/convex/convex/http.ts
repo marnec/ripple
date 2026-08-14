@@ -137,24 +137,96 @@ http.route({
 });
 
 /**
+ * The most a webhook body may be, in bytes.
+ *
+ * Not an arbitrary throttle — it is the storage ceiling. The receiver stores
+ * the raw body and every header in one `webhookEvents` document, and a Convex
+ * document tops out at 1 MiB, so a body at that size cannot be persisted at
+ * all. Rejecting it here trades a failed insert somewhere nobody is looking for
+ * a 413 the sender can see, and denies an unauthenticated caller the largest
+ * write they could otherwise attempt. The headroom covers the header map that
+ * shares the document.
+ */
+const MAX_WEBHOOK_BODY_BYTES = 900 * 1024;
+
+/**
  * POST /integrations/gitlab/webhook
  *
  * Inbound GitLab webhook endpoint. Unlike GitHub there's no central App secret
  * to verify up-front: GitLab webhooks are per-project with a per-hook
- * `X-Gitlab-Token`, so verification happens inside the handler against the
- * resolved link's stored `webhookSecret` (resolve-then-verify). We hand off to
- * the same receiver component for dedup (keyed on `X-Gitlab-Event-UUID`) +
- * delivery to `receiveGitlabWebhook`.
+ * `X-Gitlab-Token`, so the link has to be resolved from the body before the
+ * delivery can be authenticated (resolve-then-verify).
  *
- * There's no entitlement-freeze pre-check (no installation id to resolve a
- * workspace from before dedup); the handler's `effectiveLinkStatus` gate drops
- * frozen/paused deliveries instead.
+ * That ordering used to mean the receiver component had already *stored* the
+ * delivery — full raw body, full header map, plus a dedup row — before anything
+ * checked a credential, so an unauthenticated caller could write bytes of their
+ * choosing into the deployment at line rate, no GitLab link needing to exist.
+ * Resolve-then-verify is still the right order; what was wrong was doing the
+ * storing in between. `isDeliveryAuthentic` is a read-only query that does the
+ * resolve and the constant-time token compare with no write of any kind, and
+ * nothing durable happens until it passes.
+ *
+ * Pipeline:
+ *  1. Size cap, from `content-length` where the sender provides one.
+ *  2. Require the two headers a GitLab delivery always carries.
+ *  3. Resolve the link from `project.id` and verify the per-hook token — 401
+ *     for anything that fails, before the component is touched.
+ *  4. Hand off to the receiver for dedup (keyed on `X-Gitlab-Event-UUID`) and
+ *     delivery to `receiveGitlabWebhook`, which re-resolves the link inside the
+ *     mutation to do the freeze gate, the receipt and the silent rename.
+ *
+ * There's still no entitlement-freeze pre-check, and now deliberately so rather
+ * than for want of a resolved link: GitLab does not retry a failed webhook, so
+ * a 503 here would drop the delivery permanently instead of deferring it the
+ * way GitHub's retry window does. Frozen/paused deliveries are stored and
+ * dropped by the handler's `effectiveLinkStatus` gate, as before.
  */
 http.route({
   path: "/integrations/gitlab/webhook",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    // Checked before the body is buffered where the sender declares a length.
+    const declaredLength = Number(request.headers.get("content-length") ?? NaN);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BODY_BYTES) {
+      return new Response("Payload Too Large", { status: 413 });
+    }
+
+    // Both are present on every GitLab delivery, and the handler behind the
+    // receiver drops a token-less one anyway — so storing it is pure cost.
+    const eventName = request.headers.get("x-gitlab-event");
+    const token = request.headers.get("x-gitlab-token");
+    if (!eventName || !token) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     const rawBody = await request.text();
+    // Second cut for a sender that declared nothing (or lied). `TextEncoder`
+    // rather than `.length`, which counts UTF-16 units and so *under*-counts
+    // the bytes of any non-ASCII body.
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_WEBHOOK_BODY_BYTES) {
+      return new Response("Payload Too Large", { status: 413 });
+    }
+
+    // The project id is what the per-hook secret is looked up by. A body we
+    // cannot parse, or one naming no project, cannot be authenticated at all.
+    let externalRepoId = "";
+    try {
+      const parsed = JSON.parse(rawBody) as {
+        project?: { id?: number | string };
+      } | null;
+      const rawId = parsed?.project?.id;
+      if (rawId !== undefined && rawId !== null) externalRepoId = String(rawId);
+    } catch {
+      return new Response("Bad Request", { status: 400 });
+    }
+    if (!externalRepoId) return new Response("Unauthorized", { status: 401 });
+
+    const authentic = await ctx.runQuery(
+      internal.integrations.gitlab.webhook.isDeliveryAuthentic,
+      { externalRepoId, token },
+    );
+    if (!authentic) return new Response("Unauthorized", { status: 401 });
+
     const headers: Record<string, string> = {};
     request.headers.forEach((value, key) => {
       headers[key] = value;
