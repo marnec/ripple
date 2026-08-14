@@ -1,6 +1,6 @@
 import { createFunctionHandle, httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api, internal, components } from "./_generated/api";
+import { internal, components } from "./_generated/api";
 import { auth } from "./auth";
 import { handleResendWebhook } from "./emailDelivery";
 import { parseTranscriptWebhook } from "./transcriptWebhook";
@@ -97,7 +97,7 @@ http.route({
       if (rawId !== undefined && rawId !== null) {
         const installationId = String(rawId);
         const frozen = await ctx.runQuery(
-          api.integrations.core.entitlements.isInstallationFrozen,
+          internal.integrations.core.entitlements.isInstallationFrozen,
           { installationId },
         );
         if (frozen) {

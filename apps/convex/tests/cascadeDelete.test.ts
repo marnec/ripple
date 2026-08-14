@@ -1,5 +1,5 @@
 import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import {
   createTestContext,
   setupWorkspaceWithAdmin,
@@ -477,5 +477,102 @@ describe("cascade delete: onComplete + audit log", () => {
     // taskStatuses, nodes, edges also deleted — just verify they're present
     expect(metadata.taskStatuses).toBeGreaterThanOrEqual(1);
     expect(metadata.nodes).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ── Batched-mode failure alarm ───────────────────────────────────────
+//
+// `reconciliation.ts` names the `severity: "error"` audit entry as THE
+// production alarm for a failed cascade. The batched onComplete used to
+// filter on "how much got deleted" before it looked at `status`, so a cascade
+// that failed before removing any child row wrote nothing at all — the one
+// case the alarm exists for was the one it could not see.
+
+describe("cascade delete: batched onComplete failure alarm", () => {
+  async function runOnComplete(
+    t: ReturnType<typeof createTestContext>,
+    opts: {
+      summary: Record<string, number>;
+      status: string;
+      userId: Id<"users">;
+      projectId: Id<"projects">;
+      workspaceId: Id<"workspaces">;
+    },
+  ) {
+    await t.mutation(internal.cascadeDelete._batchCascadeOnComplete, {
+      summary: JSON.stringify(opts.summary),
+      status: opts.status,
+      context: JSON.stringify({
+        userId: opts.userId,
+        resourceType: "projects",
+        resourceId: opts.projectId,
+        scope: opts.workspaceId,
+      }),
+    });
+
+    const logs = await t.run(async (ctx) => {
+      return await auditLog.queryByResource(ctx, {
+        resourceType: "projects",
+        resourceId: opts.projectId,
+      });
+    });
+    return logs.filter(
+      (entry: { action: string }) => entry.action === "projects.cascade_deleted",
+    );
+  }
+
+  it("logs at severity error when the cascade failed before deleting any child row", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProject(t, { workspaceId, userId });
+
+    // The first batch died: the summary carries the root table only (or, as
+    // here, nothing beyond it), so `cascadedOnly` is empty.
+    const entries = await runOnComplete(t, {
+      summary: { projects: 1 },
+      status: "failed",
+      userId,
+      projectId,
+      workspaceId,
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.severity).toBe("error");
+  });
+
+  it("still logs at severity error when a failed cascade did delete children", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProject(t, { workspaceId, userId });
+
+    const entries = await runOnComplete(t, {
+      summary: { projects: 1, tasks: 3 },
+      status: "failed",
+      userId,
+      projectId,
+      workspaceId,
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.severity).toBe("error");
+    expect(entries[0]!.metadata).toMatchObject({ tasks: 3 });
+  });
+
+  it("stays silent for a successful cascade that removed nothing but the root", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
+    const { projectId } = await setupProject(t, { workspaceId, userId });
+
+    // Noise filter, unchanged: a clean delete with no children is not worth
+    // an audit entry.
+    const entries = await runOnComplete(t, {
+      summary: { projects: 1 },
+      status: "completed",
+      userId,
+      projectId,
+      workspaceId,
+    });
+
+    expect(entries).toHaveLength(0);
   });
 });

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "../../_generated/server";
+import { internalQuery, query } from "../../_generated/server";
 import { mutation } from "../../functions";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
@@ -200,8 +200,12 @@ export const getWorkspaceFeature = query({
  * Unknown installations resolve to `false` (not frozen) — the webhook
  * adapter still drops them later, but there's nothing to gain from
  * suppressing dedup for unknown installs.
+ *
+ * Internal: an httpAction can call `internal.*` directly, and there is no
+ * client caller. Public it would be an unauthenticated oracle for "does this
+ * deployment hold installation N, and is its workspace frozen".
  */
-export const isInstallationFrozen = query({
+export const isInstallationFrozen = internalQuery({
   args: { installationId: v.string() },
   returns: v.boolean(),
   handler: async (ctx, args) => {

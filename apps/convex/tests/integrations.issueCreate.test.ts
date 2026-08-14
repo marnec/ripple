@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ConvexError } from "convex/values";
 import {
   buildGithubGateway,
   type InstallationRequester,
@@ -326,6 +327,38 @@ describe("enqueueIssueCreate guards", () => {
         }),
       ),
     ).rejects.toThrow(/not connected to this task's project/i);
+  });
+
+  /**
+   * These rejections are all caller-fixable and are rendered straight into a
+   * toast by `CreateGithubIssueDialog`. Convex ships only `ConvexError.data`
+   * to clients — a plain `Error` reaches a production browser as
+   * "[Request ID: …] Server Error", collapsing every distinct reason into one
+   * opaque string. `assertNotTriage` / `assertStatusInProject` in tasks.ts set
+   * the convention this follows.
+   */
+  it("raises caller-actionable preflight rejections as ConvexError, not plain Error", async () => {
+    const t = createTestContext();
+    const { projectLinkId, taskId } = await setupOutboundFixtures(t, {
+      withLink: true,
+    });
+
+    const err = await t
+      .run((ctx) =>
+        enqueueIssueCreate(ctx, {
+          taskId,
+          projectIntegrationLinkId: projectLinkId,
+          title: "x",
+          body: "",
+        }),
+      )
+      .then(
+        () => null,
+        (e: unknown) => e,
+      );
+
+    expect(err).toBeInstanceOf(ConvexError);
+    expect((err as ConvexError<string>).data).toMatch(/already linked/i);
   });
 });
 

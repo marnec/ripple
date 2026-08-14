@@ -525,11 +525,16 @@ async function createTaskFromEvent(
   // description is a Yjs doc (not a column), so the conversion runs in a Node
   // action that writes the cold-start snapshot. Fire-and-forget: a freshly
   // created task isn't being viewed yet, and an empty body needs no seed.
-  if (event.body.trim().length > 0) {
+  // Seeds `cleanBody`, not `event.body` — the same value the row persists and
+  // derives `seedStatus` from, so the gate, the stored markdown and the seeded
+  // document agree. Seeding the raw body would write the provenance marker
+  // into the BlockNote doc (and, for a marker-only body, would run a seed the
+  // client gate was told not to expect).
+  if (cleanBody.trim().length > 0) {
     await ctx.scheduler.runAfter(
       0,
       internal.integrations.core.seedDescriptionAction.seedTaskDescription,
-      { taskId, markdown: event.body },
+      { taskId, markdown: cleanBody },
     );
   }
 }

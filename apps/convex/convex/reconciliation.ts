@@ -17,7 +17,11 @@
  *
  * Scans are capped at SCAN_LIMIT rows per relationship to stay within Convex
  * query limits. `truncated: true` means the table has more rows than the cap;
- * in that case run `deleteOrphans` repeatedly until `remaining` is false.
+ * in that case run `deleteOrphans` repeatedly until `remaining` is false,
+ * **feeding each call's returned `cursor` back as `after`**:
+ *   npx convex run reconciliation:deleteOrphans '{"childTable":"messages","parentField":"channelId","after":1737000000000}'
+ * Without the cursor every call rescans the head of the table forever (only
+ * orphans are removed, so a healthy prefix never shrinks).
  *
  * NOTE: polymorphic tables (edges, nodes, favorites, recentActivity) are not
  * covered here yet — they reference parents via `resourceType + resourceId` /
@@ -97,18 +101,33 @@ export const orphanReport = internalQuery({
   },
 });
 
+/**
+ * Deletes the orphans in one page of `childTable` and returns the cursor for
+ * the next page.
+ *
+ * The scan MUST be cursored. Only orphaned rows get deleted, so a healthy row
+ * at the head of the table stays there — an uncursored `.take(cap)` re-reads
+ * the identical prefix on every call and can never reach an orphan past row
+ * `cap`. Pass the returned `cursor` back as `after` until `remaining` is false;
+ * that is the only form of the documented repeat-until-done loop that
+ * terminates. `after` is a `_creationTime`, driving the system
+ * `by_creation_time` index (pagination proper is a query-side API, not
+ * available in a mutation).
+ */
 export const deleteOrphans = internalMutation({
   args: {
     childTable: v.string(),
     parentField: v.string(),
     batchSize: v.optional(v.number()),
+    after: v.optional(v.number()),
   },
   returns: v.object({
     deleted: v.number(),
     scanned: v.number(),
     remaining: v.boolean(),
+    cursor: v.optional(v.number()),
   }),
-  handler: async (ctx, { childTable, parentField, batchSize }) => {
+  handler: async (ctx, { childTable, parentField, batchSize, after }) => {
     const cap = batchSize ?? 200;
 
     const rel = RELATIONSHIPS.find(
@@ -120,9 +139,25 @@ export const deleteOrphans = internalMutation({
       );
     }
 
-    const rows: Array<{ _id: Id<"channelMembers">; [key: string]: unknown }> = await (
-      ctx.db.query as (t: string) => { take: (n: number) => Promise<Array<{ _id: Id<"channelMembers">; [key: string]: unknown }>> }
-    )(childTable).take(cap + 1);
+    // `any`-shaped cast, as in `orphanReport` above: `childTable` is a runtime
+    // string, so ctx.db.query's generic can't narrow it.
+    type ScanRow = {
+      _id: Id<"channelMembers">;
+      _creationTime: number;
+      [key: string]: unknown;
+    };
+    const rows: ScanRow[] = await (
+      ctx.db.query as (t: string) => {
+        withIndex: (
+          name: string,
+          range: (q: { gt: (field: string, value: number) => unknown }) => unknown,
+        ) => { take: (n: number) => Promise<ScanRow[]> };
+      }
+    )(childTable)
+      .withIndex("by_creation_time", (q) =>
+        after === undefined ? q : q.gt("_creationTime", after),
+      )
+      .take(cap + 1);
 
     const remaining = rows.length > cap;
     const toCheck = rows.slice(0, cap);
@@ -138,6 +173,13 @@ export const deleteOrphans = internalMutation({
       }
     }
 
-    return { deleted, scanned: toCheck.length, remaining };
+    return {
+      deleted,
+      scanned: toCheck.length,
+      remaining,
+      // Where the next page starts. Undefined only when this page was empty,
+      // which implies `remaining: false`.
+      cursor: toCheck.at(-1)?._creationTime,
+    };
   },
 });

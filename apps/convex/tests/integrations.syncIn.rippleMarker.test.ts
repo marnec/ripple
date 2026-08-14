@@ -308,4 +308,79 @@ describe("issue.opened — ripple marker claim", () => {
     );
     expect(tasks).toHaveLength(1);
   });
+
+  it("schedules the description seed with the STRIPPED body, not the raw one", async () => {
+    const t = createTestContext();
+    const { link } = await setupFixtures(t, {
+      provider: "gitlab",
+      oauth: true,
+      botLogin: "marnec",
+    });
+
+    const fakeMarker = "<!-- ripple-task: kh79nonexistenttaskxxxxxxxxxx -->";
+    const body = `Real description text.\n\n${fakeMarker}`;
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({ body, externalIssueId: "I_seed_strip" }),
+        link,
+      }),
+    );
+
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.query("_scheduled_functions").collect(),
+    );
+    const seeds = scheduled.filter((r) =>
+      String(r.name ?? "").includes("seedTaskDescription"),
+    );
+    expect(seeds).toHaveLength(1);
+    // The seed writes straight into the task's BlockNote doc — feeding it the
+    // raw body puts the HTML comment in the user's description.
+    expect(seeds[0]?.args[0]).toMatchObject({
+      markdown: "Real description text.",
+    });
+  });
+
+  it("schedules no seed for a marker-only body, matching the seedStatus gate", async () => {
+    const t = createTestContext();
+    const { link } = await setupFixtures(t, {
+      provider: "gitlab",
+      oauth: true,
+      botLogin: "marnec",
+    });
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: makeOpenedEvent({
+          body: "<!-- ripple-task: kh79nonexistenttaskxxxxxxxxxx -->",
+          externalIssueId: "I_marker_only",
+        }),
+        link,
+      }),
+    );
+
+    // `seedStatus` is left undefined for an empty clean body, so the client
+    // gate opens immediately expecting no seed — a seed running anyway would
+    // overwrite the description with the marker after the gate had opened.
+    const linkRow = await t.run((ctx) =>
+      ctx.db
+        .query("taskIntegrationLinks")
+        .withIndex("by_link_externalIssueId", (q) =>
+          q
+            .eq("projectIntegrationLinkId", link._id)
+            .eq("externalIssueId", "I_marker_only"),
+        )
+        .unique(),
+    );
+    expect(linkRow?.seedStatus).toBeUndefined();
+
+    const scheduled = await t.run((ctx) =>
+      ctx.db.system.query("_scheduled_functions").collect(),
+    );
+    expect(
+      scheduled.filter((r) =>
+        String(r.name ?? "").includes("seedTaskDescription"),
+      ),
+    ).toHaveLength(0);
+  });
 });

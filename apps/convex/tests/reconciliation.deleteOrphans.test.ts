@@ -1,0 +1,165 @@
+import { describe, expect, it } from "vitest";
+import { internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
+import { ChannelRole } from "@ripple/shared/enums/roles";
+import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
+
+/**
+ * `deleteOrphans` is the repair half of the cascade-failure runbook: the
+ * operator sees a `severity: "error"` cascade audit entry, runs
+ * `orphanReport`, then loops `deleteOrphans` "until `remaining` is false".
+ *
+ * The loop only terminates if the scan advances. Deletion alone can't advance
+ * it — healthy rows are left in place by design, so an uncursored
+ * `.take(cap)` re-reads the identical prefix forever and every orphan past
+ * row `cap` is unreachable. These tests pin the cursor.
+ */
+async function seedChannelMembers(
+  t: ReturnType<typeof createTestContext>,
+  opts: {
+    workspaceId: Id<"workspaces">;
+    userId: Id<"users">;
+    healthy: number;
+    orphans: number;
+  },
+) {
+  return await t.run(async (ctx) => {
+    const liveChannelId = await ctx.db.insert("channels", {
+      name: "general",
+      workspaceId: opts.workspaceId,
+      type: "open" as const,
+    });
+    // A channel we delete immediately — its members become the orphans.
+    const deadChannelId = await ctx.db.insert("channels", {
+      name: "gone",
+      workspaceId: opts.workspaceId,
+      type: "open" as const,
+    });
+
+    // Healthy rows FIRST so they occupy the head of the table: this is the
+    // prefix an uncursored scan would re-read on every invocation.
+    for (let i = 0; i < opts.healthy; i++) {
+      await ctx.db.insert("channelMembers", {
+        channelId: liveChannelId,
+        workspaceId: opts.workspaceId,
+        userId: opts.userId,
+        role: ChannelRole.MEMBER,
+      });
+    }
+    const orphanIds: Id<"channelMembers">[] = [];
+    for (let i = 0; i < opts.orphans; i++) {
+      orphanIds.push(
+        await ctx.db.insert("channelMembers", {
+          channelId: deadChannelId,
+          workspaceId: opts.workspaceId,
+          userId: opts.userId,
+          role: ChannelRole.MEMBER,
+        }),
+      );
+    }
+
+    // Raw delete, no cascade — exactly the state a half-failed cascade leaves.
+    await ctx.db.delete(deadChannelId);
+
+    return { orphanIds };
+  });
+}
+
+describe("reconciliation.deleteOrphans", () => {
+  it("reaches orphans that sit past the first page when the cursor is threaded", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
+    const { orphanIds } = await seedChannelMembers(t, {
+      workspaceId,
+      userId,
+      healthy: 5,
+      orphans: 3,
+    });
+
+    let after: number | undefined = undefined;
+    let totalDeleted = 0;
+    let passes = 0;
+    for (;;) {
+      const res: {
+        deleted: number;
+        scanned: number;
+        remaining: boolean;
+        cursor?: number;
+      } = await t.mutation(internal.reconciliation.deleteOrphans, {
+        childTable: "channelMembers",
+        parentField: "channelId",
+        batchSize: 2,
+        after,
+      });
+      totalDeleted += res.deleted;
+      after = res.cursor;
+      passes++;
+      expect(passes).toBeLessThan(20); // the loop must terminate
+      if (!res.remaining) break;
+    }
+
+    expect(totalDeleted).toBe(3);
+
+    const survivors = await t.run(async (ctx) =>
+      Promise.all(orphanIds.map((id) => ctx.db.get(id))),
+    );
+    expect(survivors.every((row) => row === null)).toBe(true);
+
+    // The healthy rows are untouched.
+    const left = await t.run((ctx) => ctx.db.query("channelMembers").collect());
+    expect(left).toHaveLength(5);
+  });
+
+  it("advances the cursor past a page that deleted nothing", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId } = await setupWorkspaceWithAdmin(t);
+    await seedChannelMembers(t, {
+      workspaceId,
+      userId,
+      healthy: 4,
+      orphans: 1,
+    });
+
+    // First page is all-healthy: zero deletes, but it must still hand back a
+    // cursor and report more rows behind it. Without that the operator's loop
+    // is infinite and the single orphan is unreachable.
+    const first = await t.mutation(internal.reconciliation.deleteOrphans, {
+      childTable: "channelMembers",
+      parentField: "channelId",
+      batchSize: 2,
+    });
+    expect(first.deleted).toBe(0);
+    expect(first.remaining).toBe(true);
+    expect(first.cursor).toBeTypeOf("number");
+
+    const second = await t.mutation(internal.reconciliation.deleteOrphans, {
+      childTable: "channelMembers",
+      parentField: "channelId",
+      batchSize: 2,
+      after: first.cursor,
+    });
+    // Page 2 is rows 3-4 (still healthy) — different rows, so the scan moved.
+    expect(second.cursor).toBeGreaterThan(first.cursor!);
+
+    const third = await t.mutation(internal.reconciliation.deleteOrphans, {
+      childTable: "channelMembers",
+      parentField: "channelId",
+      batchSize: 2,
+      after: second.cursor,
+    });
+    expect(third.deleted).toBe(1);
+    expect(third.remaining).toBe(false);
+  });
+
+  it("rejects a relationship it doesn't know about", async () => {
+    const t = createTestContext();
+    await setupWorkspaceWithAdmin(t);
+
+    await expect(
+      t.mutation(internal.reconciliation.deleteOrphans, {
+        childTable: "channelMembers",
+        parentField: "notAField",
+      }),
+    ).rejects.toThrow(/Unknown relationship/);
+  });
+});

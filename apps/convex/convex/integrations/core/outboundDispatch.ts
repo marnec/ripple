@@ -1,4 +1,5 @@
 import { ActionRetrier } from "@convex-dev/action-retrier";
+import { ConvexError } from "convex/values";
 import { components } from "../../_generated/api";
 import type { MutationCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
@@ -170,25 +171,27 @@ export async function enqueueIssueCreate(
   const task = await ctx.db.get(args.taskId);
   if (!task) throw new Error("Task not found");
   if (task.completed) {
-    throw new Error("Cannot create a GitHub issue for a completed task");
+    throw new ConvexError("Cannot create a GitHub issue for a completed task");
   }
 
   const existing = await ctx.db
     .query("taskIntegrationLinks")
     .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
     .unique();
-  if (existing) throw new Error("Task is already linked to a GitHub issue");
+  if (existing) {
+    throw new ConvexError("Task is already linked to a GitHub issue");
+  }
 
   const projectLink = await ctx.db.get(args.projectIntegrationLinkId);
-  if (!projectLink) throw new Error("Repository link not found");
+  if (!projectLink) throw new ConvexError("Repository link not found");
   if (projectLink.projectId !== task.projectId) {
-    throw new Error("Repository is not connected to this task's project");
+    throw new ConvexError("Repository is not connected to this task's project");
   }
   if (projectLink.status !== "active") {
-    throw new Error("Repository sync is not active");
+    throw new ConvexError("Repository sync is not active");
   }
   if (shouldSkipForFreeze(projectLink)) {
-    throw new Error("GitHub integration is frozen for this workspace");
+    throw new ConvexError("GitHub integration is frozen for this workspace");
   }
 
   const integration = await getIntegrationForLink(ctx, projectLink);
@@ -302,7 +305,7 @@ export async function enqueueDescriptionPush(
     .query("taskIntegrationLinks")
     .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
     .unique();
-  if (!link) throw new Error("Task is not linked to a GitHub issue");
+  if (!link) throw new ConvexError("Task is not linked to a GitHub issue");
   if (link.externalDeletedAt !== undefined) return; // issue gone upstream — no-op
 
   const projectLink = await ctx.db.get(link.projectIntegrationLinkId);
@@ -319,7 +322,7 @@ export async function enqueueDescriptionPush(
   }
 
   const issueRef = task.externalRefs?.[0]?.issueNumber ?? 0;
-  if (!issueRef) throw new Error("Task has no GitHub issue number");
+  if (!issueRef) throw new ConvexError("Task has no GitHub issue number");
 
   const runId = await retrier.run(
     ctx,

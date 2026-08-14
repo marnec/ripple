@@ -1450,12 +1450,6 @@ export declare const api: {
           { featureKey: string; workspaceId: Id<"workspaces"> },
           { enabled: boolean }
         >;
-        isInstallationFrozen: FunctionReference<
-          "query",
-          "public",
-          { installationId: string },
-          boolean
-        >;
         setWorkspaceFeature: FunctionReference<
           "mutation",
           "public",
@@ -4694,6 +4688,14 @@ export declare const internal: {
           null
         >;
       };
+      entitlements: {
+        isInstallationFrozen: FunctionReference<
+          "query",
+          "internal",
+          { installationId: string },
+          boolean
+        >;
+      };
       forceResync: {
         applyOneIssueReconciliation: FunctionReference<
           "mutation",
@@ -6386,8 +6388,13 @@ export declare const internal: {
     deleteOrphans: FunctionReference<
       "mutation",
       "internal",
-      { batchSize?: number; childTable: string; parentField: string },
-      { deleted: number; remaining: boolean; scanned: number }
+      {
+        after?: number;
+        batchSize?: number;
+        childTable: string;
+        parentField: string;
+      },
+      { cursor?: number; deleted: number; remaining: boolean; scanned: number }
     >;
     orphanReport: FunctionReference<
       "query",

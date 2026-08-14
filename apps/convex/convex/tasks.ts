@@ -1058,18 +1058,33 @@ export const update = mutation({
     // Status change notification (notify assignee if they didn't make the change)
     const effectiveAssignee = assigneeId === null ? undefined : (assigneeId ?? task.assigneeId);
     if (statusId !== undefined && statusId !== task.statusId && effectiveAssignee && effectiveAssignee !== userId) {
-      if (!currentUser) currentUser = await ctx.db.get(userId);
-      const newStatus = await ctx.db.get(statusId);
-      await notify(ctx, {
-        category: "taskStatusChange",
-        userId,
-        userName: getUserDisplayName(currentUser),
-        recipientIds: [effectiveAssignee],
-        resourceId: task.projectId,
-        title: `${getUserDisplayName(currentUser)} changed task status to ${newStatus?.name ?? "Unknown"}`,
-        body: title ?? task.title,
-        url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
-      });
+      // A *new* assignee is already proven in-workspace by
+      // `assertAssigneeInWorkspace` above, but `effectiveAssignee` falls back to
+      // whatever is on the row — and nothing clears `tasks.assigneeId` when a
+      // member is removed from the workspace. Without this filter, every
+      // subsequent status change web-pushes the task title to someone who has
+      // lost all access to it. `notify` forwards recipients verbatim and
+      // `deliverPush` filters only by per-user preferences, so this is the
+      // access decision for the push body — same as the mention path below.
+      const recipientIds = await filterWorkspaceRecipients(
+        ctx,
+        task.workspaceId,
+        [effectiveAssignee],
+      );
+      if (recipientIds.length > 0) {
+        if (!currentUser) currentUser = await ctx.db.get(userId);
+        const newStatus = await ctx.db.get(statusId);
+        await notify(ctx, {
+          category: "taskStatusChange",
+          userId,
+          userName: getUserDisplayName(currentUser),
+          recipientIds,
+          resourceId: task.projectId,
+          title: `${getUserDisplayName(currentUser)} changed task status to ${newStatus?.name ?? "Unknown"}`,
+          body: title ?? task.title,
+          url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${taskId}`,
+        });
+      }
     }
 
     // Outbound integration push — fires only when the task is linked to an
@@ -1374,7 +1389,7 @@ export const createGithubIssue = mutation({
   handler: async (ctx, args) => {
     await requireResourceMember(ctx, "tasks", args.taskId);
     const title = args.title.trim();
-    if (title.length === 0) throw new Error("Issue title is required");
+    if (title.length === 0) throw new ConvexError("Issue title is required");
     await enqueueIssueCreate(ctx, {
       taskId: args.taskId,
       projectIntegrationLinkId: args.projectIntegrationLinkId,

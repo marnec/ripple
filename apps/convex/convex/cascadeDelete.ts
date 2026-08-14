@@ -284,7 +284,17 @@ export const _batchCascadeOnComplete = internalMutation({
     };
 
     const { [resourceType]: _, ...cascadedOnly } = JSON.parse(summary) as Record<string, number>;
-    if (Object.keys(cascadedOnly).length === 0) return null;
+
+    // The emptiness check is a noise filter for the *success* case — a cascade
+    // that removed nothing but the root is not worth an audit entry. A failed
+    // cascade is, however small its summary: `reconciliation.ts` documents this
+    // entry (`severity: "error"`) as the production alarm that tells the
+    // operator to run `reconciliation:orphanReport`, and the case where the
+    // very first batch fails before deleting anything is exactly the one that
+    // alarm exists for. So only the completed path may be filtered out.
+    if (status === "completed" && Object.keys(cascadedOnly).length === 0) {
+      return null;
+    }
 
     await auditLog.log(ctx, {
       action: `${resourceType}.cascade_deleted`,

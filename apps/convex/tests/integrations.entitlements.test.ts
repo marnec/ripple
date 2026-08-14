@@ -5,7 +5,7 @@ import {
   hasFeature,
   type EffectiveLinkStatus,
 } from "../convex/integrations/core/entitlements";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import { auditLog } from "../convex/auditLog";
 import type { Id } from "../convex/_generated/dataModel";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
@@ -746,7 +746,7 @@ describe("integrations/core/entitlements.isInstallationFrozen", () => {
     });
 
     const frozen = await t.query(
-      api.integrations.core.entitlements.isInstallationFrozen,
+      internal.integrations.core.entitlements.isInstallationFrozen,
       { installationId },
     );
 
@@ -760,7 +760,7 @@ describe("integrations/core/entitlements.isInstallationFrozen", () => {
     });
 
     const frozen = await t.query(
-      api.integrations.core.entitlements.isInstallationFrozen,
+      internal.integrations.core.entitlements.isInstallationFrozen,
       { installationId },
     );
 
@@ -772,7 +772,7 @@ describe("integrations/core/entitlements.isInstallationFrozen", () => {
     await setupWorkspaceWithAdmin(t);
 
     const frozen = await t.query(
-      api.integrations.core.entitlements.isInstallationFrozen,
+      internal.integrations.core.entitlements.isInstallationFrozen,
       { installationId: "install-unknown" },
     );
 
