@@ -6643,6 +6643,14 @@ export declare const internal: {
   version: {
     set: FunctionReference<"mutation", "internal", {}, null>;
   };
+  webhookMaintenance: {
+    pruneWebhookEvents: FunctionReference<
+      "mutation",
+      "internal",
+      { batchSize?: number },
+      null
+    >;
+  };
   workspaceMembers: {
     listUserIds: FunctionReference<
       "query",

@@ -1,0 +1,187 @@
+diff --git a/dist/event/mutations.js b/dist/event/mutations.js
+index 221f783d71a569712d8bd5468773fa494f8bfce0..638e2891d933a787ffeeca655bcbd71bbfc16d0c 100644
+--- a/dist/event/mutations.js
++++ b/dist/event/mutations.js
+@@ -12,6 +12,7 @@ import {
+   internalQueryGeneric
+ } from "convex/server";
+ var internalMutation = internalMutationGeneric;
++var mutation = mutationGeneric;
+ 
+ // src/component/_generated/api.ts
+ import { anyApi, componentsGeneric } from "convex/server";
+@@ -130,17 +131,25 @@ async function recordResultHelper(ctx, args) {
+   });
+   return null;
+ }
+-async function sweepExpiredHelper(ctx) {
++var DEFAULT_SWEEP_LIMIT = 200;
++async function sweepExpiredHelper(ctx, args) {
+   const now = Date.now();
+-  const expiredEvents = await ctx.db.query("webhookEvents").withIndex("by_expires_at", (q) => q.lt("expiresAt", now)).collect();
++  const limit = args?.limit ?? DEFAULT_SWEEP_LIMIT;
++  const expiredEvents = await ctx.db.query("webhookEvents").withIndex("by_expires_at", (q) => q.lt("expiresAt", now)).take(limit);
+   for (const event of expiredEvents) {
++    const dlqEntry = await ctx.db.query("webhookDlq").withIndex("by_event_id", (q) => q.eq("eventId", event._id)).first();
++    if (dlqEntry) await ctx.db.delete(dlqEntry._id);
+     await ctx.db.delete(event._id);
+   }
+-  const expiredDedup = await ctx.db.query("webhookDedup").withIndex("by_expires_at", (q) => q.lt("expiresAt", now)).collect();
++  const expiredDedup = await ctx.db.query("webhookDedup").withIndex("by_expires_at", (q) => q.lt("expiresAt", now)).take(limit);
+   for (const dedup of expiredDedup) {
+     await ctx.db.delete(dedup._id);
+   }
+-  return null;
++  return {
++    events: expiredEvents.length,
++    dedup: expiredDedup.length,
++    isDone: expiredEvents.length < limit && expiredDedup.length < limit
++  };
+ }
+ async function resetForReplayHelper(ctx, args) {
+   const id = args.eventId;
+@@ -197,10 +206,14 @@ var recordResult = internalMutation({
+   returns: v2.null(),
+   handler: async (ctx, args) => recordResultHelper(ctx, args)
+ });
+-var sweepExpired = internalMutation({
+-  args: {},
+-  returns: v2.null(),
+-  handler: async (ctx) => sweepExpiredHelper(ctx)
++var sweepExpired = mutation({
++  args: { limit: v2.optional(v2.number()) },
++  returns: v2.object({
++    events: v2.number(),
++    dedup: v2.number(),
++    isDone: v2.boolean()
++  }),
++  handler: async (ctx, args) => sweepExpiredHelper(ctx, args)
+ });
+ var resetForReplay = internalMutation({
+   args: { eventId: v2.string() },
+@@ -211,6 +224,7 @@ var resetForReplay = internalMutation({
+   handler: async (ctx, args) => resetForReplayHelper(ctx, args)
+ });
+ export {
++  DEFAULT_SWEEP_LIMIT,
+   fetchAndLock,
+   fetchAndLockHelper,
+   recordResult,
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 07ad8b338a22085fd596c1c5be9993c1714aaa87..a9883a0719e79a11fdfdb61a400ea6c63af5c6bc 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -50,6 +50,15 @@ type ComponentApi<Name extends string | undefined = string | undefined> = {
+                 replayed: false;
+             }, Name>;
+         };
++        mutations: {
++            sweepExpired: FunctionReference<"mutation", "internal", {
++                limit?: number;
++            }, {
++                dedup: number;
++                events: number;
++                isDone: boolean;
++            }, Name>;
++        };
+         queries: {
+             getEvent: FunctionReference<"query", "internal", {
+                 eventId: string;
+diff --git a/src/component/_generated/component.ts b/src/component/_generated/component.ts
+index ac6d8c774168d08fce064dcbe693cccdb8248bbe..859a62d278c79e891d56a63a50b7e5a2b597eba9 100644
+--- a/src/component/_generated/component.ts
++++ b/src/component/_generated/component.ts
+@@ -49,6 +49,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
+           Name
+         >;
+       };
++      mutations: {
++        sweepExpired: FunctionReference<
++          "mutation",
++          "internal",
++          { limit?: number },
++          { dedup: number; events: number; isDone: boolean },
++          Name
++        >;
++      };
+       queries: {
+         getEvent: FunctionReference<
+           "query",
+diff --git a/src/component/event/mutations.ts b/src/component/event/mutations.ts
+index ba375b9a74a6d6b61f2e179c8e63f053a3137f63..cc837c79f1646465815ad3e54035e0b8105dee7f 100644
+--- a/src/component/event/mutations.ts
++++ b/src/component/event/mutations.ts
+@@ -1,5 +1,5 @@
+ import { v } from 'convex/values'
+-import { internalMutation, MutationCtx } from '../_generated/server'
++import { internalMutation, mutation, MutationCtx } from '../_generated/server'
+ import { internal } from '../_generated/api.js'
+ import type { Doc, Id } from '../_generated/dataModel'
+ import schema from '../schema.js'
+@@ -128,26 +128,43 @@ export async function recordResultHelper(
+   return null
+ }
+ 
+-export async function sweepExpiredHelper(ctx: MutationCtx): Promise<null> {
++export const DEFAULT_SWEEP_LIMIT = 200
++
++export async function sweepExpiredHelper(
++  ctx: MutationCtx,
++  args?: { limit?: number },
++): Promise<{ events: number; dedup: number; isDone: boolean }> {
+   const now = Date.now()
++  const limit = args?.limit ?? DEFAULT_SWEEP_LIMIT
+ 
+   const expiredEvents = await ctx.db
+     .query('webhookEvents')
+     .withIndex('by_expires_at', (q) => q.lt('expiresAt', now))
+-    .collect()
++    .take(limit)
+   for (const event of expiredEvents) {
++    // The DLQ has no `expiresAt` of its own, so an entry outlives the event it
++    // names unless it goes with it — trading one unbounded table for another.
++    const dlqEntry = await ctx.db
++      .query('webhookDlq')
++      .withIndex('by_event_id', (q) => q.eq('eventId', event._id))
++      .first()
++    if (dlqEntry) await ctx.db.delete(dlqEntry._id)
+     await ctx.db.delete(event._id)
+   }
+ 
+   const expiredDedup = await ctx.db
+     .query('webhookDedup')
+     .withIndex('by_expires_at', (q) => q.lt('expiresAt', now))
+-    .collect()
++    .take(limit)
+   for (const dedup of expiredDedup) {
+     await ctx.db.delete(dedup._id)
+   }
+ 
+-  return null
++  return {
++    events: expiredEvents.length,
++    dedup: expiredDedup.length,
++    isDone: expiredEvents.length < limit && expiredDedup.length < limit,
++  }
+ }
+ 
+ export async function resetForReplayHelper(
+@@ -222,10 +239,14 @@ export const recordResult = internalMutation({
+   handler: async (ctx, args) => recordResultHelper(ctx, args),
+ })
+ 
+-export const sweepExpired = internalMutation({
+-  args: {},
+-  returns: v.null(),
+-  handler: async (ctx) => sweepExpiredHelper(ctx),
++export const sweepExpired = mutation({
++  args: { limit: v.optional(v.number()) },
++  returns: v.object({
++    events: v.number(),
++    dedup: v.number(),
++    isDone: v.boolean(),
++  }),
++  handler: async (ctx, args) => sweepExpiredHelper(ctx, args),
+ })
+ 
+ export const resetForReplay = internalMutation({

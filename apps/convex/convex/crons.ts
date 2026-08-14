@@ -21,6 +21,17 @@ crons.cron(
   {},
 );
 
+// Enforce the 30-day webhook retention the routes declare, daily at 5:00 AM
+// UTC — after storage GC and email retention, so the three heavy sweeps do not
+// overlap. Like the resend component, the webhook receiver ships the cleanup
+// and schedules none of it; see `webhookMaintenance.ts`.
+crons.cron(
+  "webhook event retention",
+  "0 5 * * *",
+  internal.webhookMaintenance.pruneWebhookEvents,
+  {},
+);
+
 // Retire import jobs that stopped making progress. Hourly rather than daily:
 // the row this cleans up is one the project's Import button reads, and the
 // readers already skip a stale job, so this is only tidying the status a job

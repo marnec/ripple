@@ -1,33 +1,19 @@
 packages:
-  - "apps/*"
-  - "packages/*"
-
-patchedDependencies:
-  y-excalidraw@2.0.12: patches/y-excalidraw@2.0.12.patch
+  - apps/*
+  - packages/*
 
 overrides:
-  # Convex components (@convex-dev/*, plus the vendored convex-audit-log and
-  # convex-cascading-delete) declare `convex` as a peer with a caret range, so
-  # each could otherwise resolve its own copy. Component `_generated` types cross
-  # package boundaries, and two convex instances produce mismatched types and a
-  # split client — pin one version for the whole graph.
+  '@excalidraw/excalidraw': 0.18.1
+  '@types/react': 19.2.18
+  '@types/react-dom': 19.2.4
   convex: 1.43.0
-  vite: 7.3.1
-  vitest: 4.1.10
-  typescript: 6.0.3
-  "@excalidraw/excalidraw": 0.18.1
   react: 19.2.8
   react-dom: 19.2.8
-  # Two @types/react copies (19.2.14 via the vendored components, 19.2.17 via
-  # apps/web) made React's own element types structurally incompatible, which is
-  # what broke `tsc` in apps/web/src/wdyr.ts. Pin one copy for the whole graph.
-  "@types/react": 19.2.18
-  "@types/react-dom": 19.2.4
-  # `@hookform/resolvers` v5 does NOT declare `zod` as a peer dependency, so pnpm
-  # never builds a zod-specific instance of it — its internal `from "zod"` type
-  # imports resolve to whichever copy lands in the hoisted `.pnpm/node_modules`.
-  # `@modelcontextprotocol/sdk` drags in zod 3.25.76, and when that one wins the
-  # hoist, `zodResolver(schema)` stops type-checking against the app's zod 4
-  # schemas ("Property 'typeName' is missing", "_zod.version.minor 4 vs 0").
-  # Pin one zod for the whole graph so the hoist is unambiguous.
+  typescript: 6.0.3
+  vite: 7.3.1
+  vitest: 4.1.10
   zod: 4.4.3
+
+patchedDependencies:
+  convex-webhook-receiver@1.0.6: patches/convex-webhook-receiver@1.0.6.patch
+  y-excalidraw@2.0.12: patches/y-excalidraw@2.0.12.patch

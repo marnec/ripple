@@ -5,18 +5,21 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  convex: 1.43.0
-  vite: 7.3.1
-  vitest: 4.1.10
-  typescript: 6.0.3
   '@excalidraw/excalidraw': 0.18.1
-  react: 19.2.8
-  react-dom: 19.2.8
   '@types/react': 19.2.18
   '@types/react-dom': 19.2.4
+  convex: 1.43.0
+  react: 19.2.8
+  react-dom: 19.2.8
+  typescript: 6.0.3
+  vite: 7.3.1
+  vitest: 4.1.10
   zod: 4.4.3
 
 patchedDependencies:
+  convex-webhook-receiver@1.0.6:
+    hash: e2d1660c645007ed611d500d4a86c1dc096c1a38996a543ec85410ad12dec3b0
+    path: patches/convex-webhook-receiver@1.0.6.patch
   y-excalidraw@2.0.12:
     hash: 305016d407c02b4b8b86659e9c4775b9ee64c5f609e77dc742a0228ef98d835c
     path: patches/y-excalidraw@2.0.12.patch
@@ -278,7 +281,7 @@ importers:
         version: 0.1.122(@standard-schema/spec@1.1.0)(convex@1.43.0(react@19.2.8))(hono@4.12.16)(react@19.2.8)(typescript@6.0.3)(zod@4.4.3)
       convex-webhook-receiver:
         specifier: ^1.0.6
-        version: 1.0.6(convex@1.43.0(react@19.2.8))
+        version: 1.0.6(patch_hash=e2d1660c645007ed611d500d4a86c1dc096c1a38996a543ec85410ad12dec3b0)(convex@1.43.0(react@19.2.8))
       fractional-indexing:
         specifier: 3.2.0
         version: 3.2.0
@@ -14032,7 +14035,7 @@ snapshots:
     dependencies:
       convex: 1.43.0(react@19.2.8)
 
-  convex-webhook-receiver@1.0.6(convex@1.43.0(react@19.2.8)):
+  convex-webhook-receiver@1.0.6(patch_hash=e2d1660c645007ed611d500d4a86c1dc096c1a38996a543ec85410ad12dec3b0)(convex@1.43.0(react@19.2.8)):
     dependencies:
       convex: 1.43.0(react@19.2.8)
 
