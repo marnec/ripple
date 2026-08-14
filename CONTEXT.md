@@ -46,6 +46,45 @@ Constructed from env via `realtimeKitFromEnv()`, or from explicit credentials
 share links, the voice agent — goes through it rather than calling `fetch`.
 _Avoid_: CF client, meeting API, RTK fetch helper
 
+**Workspace graph**:
+The node-link view on the workspace landing page, and the `getWorkspaceGraph`
+query behind it (`convex/graph.ts`). Its nodes come from the `nodes` table, one
+row per resource; its links come from `edges` plus **tag synthesis** — `tags` /
+`entityTags` / `taskTags` are read at query time and emitted as virtual tag
+nodes and `tagged_with` links, so tags never became a `resourceType`.
+Distinct from the **local graph** (not yet built): the whole-workspace view is
+unbounded in both directions — it reads five whole workspace-scoped tables, and
+its read set is those five index ranges, so any write in the workspace re-runs
+it for every subscribed client. Chat is no longer one of those writes (see
+**mention counter**), and the query is only subscribed while its own tab is open
+on desktop, but the read itself is still uncapped. Treat "add it to the graph"
+as a question about which of those two surfaces you mean.
+_Avoid_: knowledge graph, node graph, graph view, force graph
+
+**Mention edge**:
+An `edges` row with `edgeType: "mentions"` and `sourceType: "channel"` — one per
+(channel, target) pair, **not** one per message. The `messages` trigger
+(`dbTriggers.ts`) writes it on the first mention and deletes it when the last
+one goes; in between, every repeat mention only bumps the pair's
+**mention counter**. The row is therefore a statement that the link exists, and
+carries no multiplicity of its own.
+_Avoid_: mention link, channel edge, backlink row
+
+**Mention counter**:
+A `channelMentionCounts` row: the multiplicity behind one **mention edge**, with
+`count` (live messages mentioning that target in that channel), `lastAt` (newest
+mention, so the link can later be weighted or windowed by recency), and `edgeId`
+(the edge it keeps alive — which makes the decrement a point delete instead of a
+scan of the pair's bucket, and makes `collapseChannelMentionEdges` safe to
+re-run).
+This table exists to keep chat volume out of `edges`. Channel mentions were the
+only writer to `edges` whose row count grew with messages sent rather than with
+resource count, and `edges.by_workspace` is the range the **workspace graph**
+subscribes to — so a mention of an already-mentioned target used to re-ship the
+whole graph to every client on the page. Nothing that reads the graph reads this
+table; that is the point, so keep it that way.
+_Avoid_: mention count table, edge weight, mention index
+
 **Route adapter**:
 The preamble every machine-to-machine HTTP route shares, as one module
 (`convex/httpAdapter.ts`): `requireSharedSecret` (the `Bearer` gate),

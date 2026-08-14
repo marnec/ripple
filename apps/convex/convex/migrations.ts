@@ -115,6 +115,7 @@ export const runAll = migrations.runner([
   internal.migrations.backfillEventAggregates,
   internal.migrations.backfillTagAggregates,
   internal.migrations.stripTaskStartDate,
+  internal.migrations.collapseChannelMentionEdges,
   internal.migrations.backfillDocumentNodes,
   internal.migrations.backfillDiagramNodes,
   internal.migrations.backfillSpreadsheetNodes,
@@ -521,6 +522,61 @@ export const backfillTagAggregates = migrations.define({
   table: "tags",
   migrateOne: async (ctx, doc) => {
     await tagsByWorkspace.insertIfDoesNotExist(ctx, doc);
+  },
+});
+
+/**
+ * Collapse the accumulated duplicate **mention edges** into one edge per
+ * (channel, target) pair, backed by a `channelMentionCounts` row.
+ *
+ * Before `channelMentionCounts` existed, every mention in every message
+ * inserted its own `edges` row, so a doc mentioned in 4,000 messages carries
+ * 4,000 identical rows. This keeps the first row it meets for a pair, counts
+ * the rest into that pair's counter, and deletes them.
+ *
+ * Idempotent, which matters because `runAll` executes on every deploy: the
+ * counter records the `edgeId` it keeps, so a re-run recognises the surviving
+ * edge as already accounted for and skips it. Without that marker a second run
+ * would delete the kept edges and double every count.
+ *
+ * The resulting `count` is the number of duplicate rows, i.e. exactly the
+ * number of live messages that produced them — the same value the trigger
+ * would have arrived at had it always been counting.
+ */
+export const collapseChannelMentionEdges = migrations.define({
+  table: "edges",
+  migrateOne: async (ctx, edge) => {
+    if (edge.edgeType !== "mentions" || edge.sourceType !== "channel") return;
+
+    const channelId = edge.sourceId as Id<"channels">;
+    const existing = await ctx.db
+      .query("channelMentionCounts")
+      .withIndex("by_channel_target", (q) =>
+        q.eq("channelId", channelId).eq("targetId", edge.targetId),
+      )
+      .unique();
+
+    if (!existing) {
+      await ctx.db.insert("channelMentionCounts", {
+        workspaceId: edge.workspaceId,
+        channelId,
+        targetType: edge.targetType,
+        targetId: edge.targetId,
+        edgeId: edge._id,
+        count: 1,
+        lastAt: edge.createdAt,
+      });
+      return;
+    }
+
+    // Already the counted survivor — a re-run of this migration, not a duplicate.
+    if (existing.edgeId === edge._id) return;
+
+    await ctx.db.patch(existing._id, {
+      count: existing.count + 1,
+      lastAt: Math.max(existing.lastAt, edge.createdAt),
+    });
+    await ctx.db.delete(edge._id);
   },
 });
 

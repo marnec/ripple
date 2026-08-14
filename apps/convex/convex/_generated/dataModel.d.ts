@@ -406,6 +406,46 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  channelMentionCounts: {
+    document: {
+      channelId: Id<"channels">;
+      count: number;
+      edgeId: Id<"edges">;
+      lastAt: number;
+      targetId: string;
+      targetType:
+        | "document"
+        | "task"
+        | "diagram"
+        | "spreadsheet"
+        | "user"
+        | "project"
+        | "channel"
+        | "calendarEvent";
+      workspaceId: Id<"workspaces">;
+      _id: Id<"channelMentionCounts">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "channelId"
+      | "count"
+      | "edgeId"
+      | "lastAt"
+      | "targetId"
+      | "targetType"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_channel_target: ["channelId", "targetId", "_creationTime"];
+      by_target: ["targetId", "_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   channelNotificationPreferences: {
     document: {
       channelId: Id<"channels">;
@@ -663,6 +703,7 @@ export type DataModel = {
       by_target: ["targetId", "_creationTime"];
       by_target_edgetype: ["targetId", "edgeType", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_edgetype: ["workspaceId", "edgeType", "_creationTime"];
       by_workspace_target: ["workspaceId", "targetId", "_creationTime"];
     };
     searchIndexes: {};

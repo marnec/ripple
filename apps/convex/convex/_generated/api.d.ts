@@ -1402,7 +1402,7 @@ export declare const api: {
     getWorkspaceGraph: FunctionReference<
       "query",
       "public",
-      { workspaceId: Id<"workspaces"> },
+      { includeTags?: boolean; workspaceId: Id<"workspaces"> },
       {
         links: Array<{ edgeType: string; source: string; target: string }>;
         nodes: Array<{
@@ -3743,13 +3743,16 @@ export declare const api: {
       "public",
       { workspaceId: Id<"workspaces"> },
       {
+        calendarEvents: number;
         channels: number;
         diagrams: number;
         documents: number;
         members: number;
         projects: number;
         spreadsheets: number;
-      }
+        tags: number;
+        tasks: number;
+      } | null
     >;
     update: FunctionReference<
       "mutation",
@@ -5836,6 +5839,20 @@ export declare const internal: {
       any
     >;
     cleanupProjectTagsField: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
+    collapseChannelMentionEdges: FunctionReference<
       "mutation",
       "internal",
       {

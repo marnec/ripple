@@ -54,6 +54,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "notificationSubscriptions", via: "by_scope_category", field: "scope" },
     { to: "nodes", via: "by_workspace", field: "workspaceId" },
     { to: "edges", via: "by_workspace", field: "workspaceId" },
+    { to: "channelMentionCounts", via: "by_workspace", field: "workspaceId" },
   ],
 
   // ── projects ────────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "projectNotificationPreferences", via: "by_project", field: "projectId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
@@ -78,6 +80,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "taskPullRequestLinks", via: "by_task", field: "taskId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "entityTags", via: "by_resource_id", field: "resourceId" },
     { to: "taskTags", via: "by_task", field: "taskId" },
@@ -122,6 +125,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "resourceShares", via: "by_resource_id", field: "resourceId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "entityTags", via: "by_resource_id", field: "resourceId" },
   ],
@@ -137,6 +141,11 @@ export const cascadeRules = defineCascadeRules({
     { to: "callSessions", via: "by_channel_active", field: "channelId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
+    // A channel is the SOURCE of every mention edge, so it needs both sides.
+    // `by_channel_target` is a composite; the cascade eq's only its first
+    // field, which is exactly the channelId lookup this rule wants.
+    { to: "channelMentionCounts", via: "by_channel_target", field: "channelId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
@@ -152,6 +161,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "documentBlockRefs", via: "by_document", field: "documentId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
@@ -163,6 +173,7 @@ export const cascadeRules = defineCascadeRules({
   diagrams: [
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
@@ -175,6 +186,7 @@ export const cascadeRules = defineCascadeRules({
     { to: "spreadsheetCellRefs", via: "by_spreadsheet", field: "spreadsheetId" },
     { to: "edges", via: "by_source", field: "sourceId" },
     { to: "edges", via: "by_target", field: "targetId" },
+    { to: "channelMentionCounts", via: "by_target", field: "targetId" },
     { to: "nodes", via: "by_resource", field: "resourceId" },
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },

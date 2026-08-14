@@ -29,37 +29,75 @@ const graphLinkValidator = v.object({
  * a schema migration. If tag volume gets heavy we can promote them to the
  * nodes table behind a trigger.
  */
+/**
+ * Edge kinds the graph actually draws. `belongs_to` is deliberately absent: it
+ * is structural (task -> project containment), never rendered as a link, and it
+ * is one row per task — the largest single term in this query's read. Its
+ * information reaches the client as `groupId` instead, taken from the task
+ * node's own `metadata`, and the client re-synthesises the containment line.
+ */
+const DISPLAYED_EDGE_TYPES = [
+  "embeds",
+  "blocks",
+  "relates_to",
+  "mentions",
+  "hosted_in",
+  "invites",
+  "transcript_of",
+] as const;
+
 export const getWorkspaceGraph = query({
-  args: { workspaceId: v.id("workspaces") },
+  args: {
+    workspaceId: v.id("workspaces"),
+    // Tag nodes are hidden by default in the UI, and building them costs three
+    // more whole-table scans (`tags`, `entityTags`, `taskTags`). Only pay for
+    // them once the user actually turns the Tags card on.
+    includeTags: v.optional(v.boolean()),
+  },
   returns: v.object({
     nodes: v.array(graphNodeValidator),
     links: v.array(graphLinkValidator),
   }),
-  handler: async (ctx, { workspaceId }) => {
+  handler: async (ctx, { workspaceId, includeTags }) => {
     const auth = await checkWorkspaceMember(ctx, workspaceId);
     if (!auth) return { nodes: [], links: [] };
 
-    const [nodeRows, edgeRows, tagRows, entityTagRows, taskTagRows] = await Promise.all([
-      ctx.db.query("nodes").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
-      ctx.db.query("edges").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
-      ctx.db.query("tags").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
-      ctx.db.query("entityTags").withIndex("by_workspace_tag", (q) => q.eq("workspaceId", workspaceId)).collect(),
-      ctx.db.query("taskTags").withIndex("by_workspace_tag", (q) => q.eq("workspaceId", workspaceId)).collect(),
-    ]);
+    const withTags = includeTags ?? false;
 
-    // Build task groupIds from belongs_to edges (task → project containment)
-    const nodeGroupIds = new Map<string, string>();
-    for (const edge of edgeRows) {
-      if (edge.edgeType === "belongs_to") {
-        nodeGroupIds.set(edge.sourceId, edge.targetId);
-      }
-    }
+    // One indexed range per drawn edge kind rather than one scan of the whole
+    // workspace: seven index ranges out of a 4,096 budget, and `belongs_to` is
+    // never read at all.
+    const [nodeRows, edgeGroups, tagRows, entityTagRows, taskTagRows] = await Promise.all([
+      ctx.db.query("nodes").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect(),
+      Promise.all(
+        DISPLAYED_EDGE_TYPES.map((edgeType) =>
+          ctx.db
+            .query("edges")
+            .withIndex("by_workspace_edgetype", (q) =>
+              q.eq("workspaceId", workspaceId).eq("edgeType", edgeType),
+            )
+            .collect(),
+        ),
+      ),
+      withTags
+        ? ctx.db.query("tags").withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId)).collect()
+        : [],
+      withTags
+        ? ctx.db.query("entityTags").withIndex("by_workspace_tag", (q) => q.eq("workspaceId", workspaceId)).collect()
+        : [],
+      withTags
+        ? ctx.db.query("taskTags").withIndex("by_workspace_tag", (q) => q.eq("workspaceId", workspaceId)).collect()
+        : [],
+    ]);
+    const edgeRows = edgeGroups.flat();
 
     const nodes: Array<{ id: string; type: string; name?: string; groupId?: string }> = nodeRows.map((n) => ({
       id: n.resourceId,
       type: n.resourceType,
       name: n.name,
-      groupId: nodeGroupIds.get(n.resourceId),
+      // Task -> project containment, straight off the node row. Maintained by
+      // the tasks node trigger, including across a project move.
+      groupId: n.metadata?.type === "task" ? n.metadata.projectId : undefined,
     }));
 
     // Synthesize tag nodes (one per tag row).
@@ -69,13 +107,12 @@ export const getWorkspaceGraph = query({
 
     const validNodeIds = new Set(nodes.map((n) => n.id));
 
-    // belongs_to edges are structural (task→project grouping), not semantic links to display.
-    // Deduplicate by (sourceId, targetId) since multiple messages in the same channel can
-    // each insert their own edge row for the same channel→target pair.
+    // Deduplicate by (sourceId, targetId): a diagram embedded via several frames
+    // emits one `embeds` row per frame, and mention edges predating
+    // `collapseChannelMentionEdges` may still be a pile of identical rows.
     const seenLinks = new Set<string>();
     const links: Array<{ source: string; target: string; edgeType: string }> = [];
     for (const e of edgeRows) {
-      if (e.edgeType === "belongs_to") continue;
       if (!validNodeIds.has(e.sourceId) || !validNodeIds.has(e.targetId)) continue;
       const key = `${e.sourceId}:${e.targetId}`;
       if (seenLinks.has(key)) continue;

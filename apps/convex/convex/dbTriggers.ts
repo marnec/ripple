@@ -301,11 +301,20 @@ triggers.register("tasks", async (ctx, change) => {
     });
   } else if (change.operation === "update") {
     // Tasks are updated frequently (status, assignee, dates…) — only sync when
-    // title or labels change to avoid unnecessary writes to the nodes table.
+    // something the node actually mirrors changes, to avoid unnecessary writes
+    // to the nodes table.
     const titleChanged = change.newDoc.title !== change.oldDoc.title;
     const labelsChanged =
       JSON.stringify(change.newDoc.labels ?? []) !== JSON.stringify(change.oldDoc.labels ?? []);
-    if (!titleChanged && !labelsChanged) return;
+    // No mutation currently moves a task between projects — `tasks.update` does
+    // not accept `projectId` and nothing else patches it — so this is dead
+    // today, exactly like the `belongs_to` move branch below. It is here so the
+    // invariant is enforced rather than merely true: `metadata.projectId` is
+    // read by `getEnrichedBacklinks` (edges.ts) and is the cheap source of the
+    // workspace graph's task→project grouping, and both would silently show the
+    // old project the day a "move task" feature lands.
+    const projectChanged = change.newDoc.projectId !== change.oldDoc.projectId;
+    if (!titleChanged && !labelsChanged && !projectChanged) return;
     const node = await ctx.db
       .query("nodes")
       .withIndex("by_resource", (q) => q.eq("resourceId", change.id))
@@ -314,6 +323,9 @@ triggers.register("tasks", async (ctx, change) => {
       await ctx.db.patch(node._id, {
         name: change.newDoc.title,
         tags: change.newDoc.labels ?? [],
+        ...(projectChanged
+          ? { metadata: { type: "task" as const, projectId: change.newDoc.projectId } }
+          : {}),
       });
     }
   }
@@ -622,20 +634,58 @@ triggers.register("calendarEventInvitees", async (ctx, change) => {
 });
 
 // ── Channel mention edge helpers ────────────────────────────────────
+//
+// A **mention edge** (CONTEXT.md) is written once per (channel, target) pair
+// and kept alive by a `channelMentionCounts` row. Repeat mentions only bump the
+// counter, so they never write into `edges.by_workspace` — the range the
+// workspace graph subscribes to. Before this split, every mention-bearing
+// message inserted an edge row and therefore re-ran the graph query, and every
+// reader deduplicated the pile at query time.
 
-async function insertChannelMentionEdge(
+type MentionTarget = {
+  targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent";
+  targetId: string;
+};
+
+function findMentionCount(
+  ctx: TriggerCtx,
+  channelId: Id<"channels">,
+  targetId: string,
+) {
+  return ctx.db
+    .query("channelMentionCounts")
+    .withIndex("by_channel_target", (q) =>
+      q.eq("channelId", channelId).eq("targetId", targetId),
+    )
+    .unique();
+}
+
+/** Record one more mention of `target` in `channelId`. */
+async function addChannelMention(
   ctx: TriggerCtx,
   channelId: Id<"channels">,
   workspaceId: Id<"workspaces">,
-  target: { targetType: "user" | "task" | "project" | "document" | "diagram" | "spreadsheet" | "calendarEvent"; targetId: string },
+  target: MentionTarget,
 ) {
+  const existing = await findMentionCount(ctx, channelId, target.targetId);
+  if (existing) {
+    // The common path: the link already exists, so `edges` is untouched and the
+    // graph subscription does not fire.
+    await ctx.db.patch(existing._id, {
+      count: existing.count + 1,
+      lastAt: Date.now(),
+    });
+    return;
+  }
+
+  // 0 -> 1: a genuinely new link. This is the only case that writes an edge.
   const [sourceNodeId, targetNodeId] = await Promise.all([
     findNodeId(ctx, channelId),
     target.targetType === "user"
       ? findUserNodeId(ctx, target.targetId, workspaceId)
       : findNodeId(ctx, target.targetId),
   ]);
-  await ctx.db.insert("edges", {
+  const edgeId = await ctx.db.insert("edges", {
     sourceType: "channel",
     sourceId: channelId,
     targetType: target.targetType,
@@ -646,25 +696,55 @@ async function insertChannelMentionEdge(
     targetNodeId,
     createdAt: Date.now(),
   } as never);
+  await ctx.db.insert("channelMentionCounts", {
+    workspaceId,
+    channelId,
+    targetType: target.targetType,
+    targetId: target.targetId,
+    edgeId,
+    count: 1,
+    lastAt: Date.now(),
+  });
 }
 
-async function deleteOneChannelMentionEdge(
+/** Drop one mention of `targetId` in `channelId`, removing the edge at zero. */
+async function removeChannelMention(
   ctx: TriggerCtx,
   channelId: Id<"channels">,
   targetId: string,
 ) {
-  const edges = await ctx.db
-    .query("edges")
-    .withIndex("by_source_target", (q) => q.eq("sourceId", channelId).eq("targetId", targetId))
-    .collect();
-  const edge = edges.find((e) => e.edgeType === "mentions");
+  const existing = await findMentionCount(ctx, channelId, targetId);
+  if (!existing) {
+    // Rows that predate `channelMentionCounts` and have not been collapsed by
+    // `collapseChannelMentionEdges` yet. Falls back to the old behaviour:
+    // remove one row from the duplicate pile.
+    const edges = await ctx.db
+      .query("edges")
+      .withIndex("by_source_target", (q) =>
+        q.eq("sourceId", channelId).eq("targetId", targetId),
+      )
+      .collect();
+    const edge = edges.find((e) => e.edgeType === "mentions");
+    if (edge) await ctx.db.delete(edge._id);
+    return;
+  }
+
+  if (existing.count > 1) {
+    await ctx.db.patch(existing._id, { count: existing.count - 1 });
+    return;
+  }
+
+  // 1 -> 0: the last mention went away, so the link genuinely disappears.
+  // A point delete via `edgeId` — no scan of the pair's bucket. The edge may
+  // already be gone if a cascade removed it, hence the get.
+  const edge = await ctx.db.get(existing.edgeId);
   if (edge) await ctx.db.delete(edge._id);
+  await ctx.db.delete(existing._id);
 }
 
 // ── Messages trigger ─────────────────────────────────────────────────
-// Maintains channel→target mention edges as messages are created, edited, or soft-deleted.
-// Each message mention inserts one edge row; deletion removes one row. The graph
-// deduplicates by (sourceId, targetId) at query time.
+// Maintains channel→target mention edges as messages are created, edited, or
+// soft-deleted, via the counter above.
 
 triggers.register("messages", async (ctx, change) => {
   const channelId = (change.newDoc ?? change.oldDoc).channelId;
@@ -672,19 +752,31 @@ triggers.register("messages", async (ctx, change) => {
   if (!channel) return;
   const { workspaceId } = channel;
 
+  // `extractMessageTargets` dedupes within a single message body, so no two
+  // entries below ever address the same counter row, and the added/removed sets
+  // on an edit are disjoint by construction. That is what makes the concurrent
+  // read-modify-writes safe.
   if (change.operation === "insert") {
     if (change.newDoc.deleted) return;
     const targets = extractMessageTargets(change.newDoc.body);
-    await Promise.all(targets.map((t) => insertChannelMentionEdge(ctx, channelId, workspaceId, t)));
+    await Promise.all(targets.map((t) => addChannelMention(ctx, channelId, workspaceId, t)));
   } else if (change.operation === "update") {
     const oldTargets = change.oldDoc.deleted ? [] : extractMessageTargets(change.oldDoc.body);
     const newTargets = change.newDoc.deleted ? [] : extractMessageTargets(change.newDoc.body);
     const oldIds = new Set(oldTargets.map((t) => t.targetId));
     const newIds = new Set(newTargets.map((t) => t.targetId));
     await Promise.all([
-      ...newTargets.filter((t) => !oldIds.has(t.targetId)).map((t) => insertChannelMentionEdge(ctx, channelId, workspaceId, t)),
-      ...oldTargets.filter((t) => !newIds.has(t.targetId)).map((t) => deleteOneChannelMentionEdge(ctx, channelId, t.targetId)),
+      ...newTargets.filter((t) => !oldIds.has(t.targetId)).map((t) => addChannelMention(ctx, channelId, workspaceId, t)),
+      ...oldTargets.filter((t) => !newIds.has(t.targetId)).map((t) => removeChannelMention(ctx, channelId, t.targetId)),
     ]);
+  } else {
+    // Hard delete. Soft delete already decremented via the update branch above,
+    // so a row that was already `deleted` owes nothing. Without this branch the
+    // counter only ever climbs, and a `db.delete` of a message would strand its
+    // mentions at a count no future edit can bring back to zero.
+    if (change.oldDoc.deleted) return;
+    const targets = extractMessageTargets(change.oldDoc.body);
+    await Promise.all(targets.map((t) => removeChannelMention(ctx, channelId, t.targetId)));
   }
 });
 

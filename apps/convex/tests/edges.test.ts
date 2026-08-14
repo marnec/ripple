@@ -1075,7 +1075,10 @@ describe("channel mention edges (via messages trigger)", () => {
     expect(mentionEdges[0].targetId).toBe(mentionedUserId);
   });
 
-  it("second message with same mention in same channel creates a second edge row", async () => {
+  it("second message with same mention reuses the edge and bumps the counter", async () => {
+    // This asserted two edge rows until `channelMentionCounts` landed. Writing
+    // an edge per message is what re-ran the workspace graph subscription on
+    // every chatty message, so the edge must now stay put.
     const t = createTestContext();
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
     const channelId = await setupChannel(t, { workspaceId });
@@ -1085,11 +1088,29 @@ describe("channel mention edges (via messages trigger)", () => {
     const body = bodyWithUserMention(mentionedUserId);
 
     await asUser.mutation(api.messages.send, { isomorphicId: "test-2a", body, plainText: "@Bob", channelId });
-    await asUser.mutation(api.messages.send, { isomorphicId: "test-2b", body, plainText: "@Bob", channelId });
+    const afterFirst = await t.run(async (ctx) =>
+      (await ctx.db.query("edges").collect()).filter((e) => e.edgeType === "mentions"),
+    );
+    expect(afterFirst).toHaveLength(1);
 
-    const edges = await t.run(async (ctx) => ctx.db.query("edges").collect());
-    const mentionEdges = edges.filter((e) => e.edgeType === "mentions");
-    expect(mentionEdges).toHaveLength(2);
+    await asUser.mutation(api.messages.send, { isomorphicId: "test-2b", body, plainText: "@Bob", channelId });
+    await asUser.mutation(api.messages.send, { isomorphicId: "test-2c", body, plainText: "@Bob", channelId });
+
+    const mentionEdges = await t.run(async (ctx) =>
+      (await ctx.db.query("edges").collect()).filter((e) => e.edgeType === "mentions"),
+    );
+    expect(mentionEdges).toHaveLength(1);
+    // Same physical row throughout — not a delete-and-reinsert.
+    expect(mentionEdges[0]._id).toBe(afterFirst[0]._id);
+
+    const counts = await t.run(async (ctx) =>
+      ctx.db.query("channelMentionCounts").collect(),
+    );
+    expect(counts).toHaveLength(1);
+    expect(counts[0].count).toBe(3);
+    expect(counts[0].edgeId).toBe(mentionEdges[0]._id);
+    expect(counts[0].targetId).toBe(mentionedUserId);
+    expect(counts[0].channelId).toBe(channelId);
   });
 
   it("updating a message to remove a mention deletes one edge row", async () => {

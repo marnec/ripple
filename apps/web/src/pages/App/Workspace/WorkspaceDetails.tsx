@@ -2,6 +2,11 @@ import { Button } from "@ripple/ui/components/button";
 import { HeaderSlot } from "@/contexts/HeaderSlotContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useQuery } from "convex-helpers/react/cache";
+// Deliberately NOT the cached variant: `ConvexQueryCacheProvider` keeps a
+// subscription open for 5 minutes after unmount, and this query reads every
+// node and drawn edge in the workspace. Cached, navigating away kept re-running
+// it on every workspace write for a page nobody was looking at.
+import { useQuery as useLiveQuery } from "convex/react";
 import {
   CalendarDays,
   Clock,
@@ -35,13 +40,25 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTheme } from "next-themes";
 
+/** Keys of `api.workspaces.overview`'s return — the cards index it by these. */
+type CountKey =
+  | "members"
+  | "channels"
+  | "tasks"
+  | "projects"
+  | "documents"
+  | "diagrams"
+  | "spreadsheets"
+  | "calendarEvents"
+  | "tags";
+
 type OverviewCard = {
-  key: string;
+  key: CountKey;
   filterType: string;        // singular type for graph filtering
   label: string;
   icon: LucideIcon;
   to: string;
-  subCount?: { key: string; label: string; icon: LucideIcon; filterType?: string };
+  subCount?: { key: CountKey; label: string; icon: LucideIcon; filterType?: string };
 };
 
 const overviewCards: OverviewCard[] = [
@@ -71,18 +88,11 @@ export function WorkspaceDetails() {
   const isDark = resolvedTheme === "dark";
 
   const workspace = useQuery(api.workspaces.get, { id });
-  const graph = useQuery(api.graph.getWorkspaceGraph, { workspaceId: id });
 
-  // Derive counts from graph nodes (replaces aggregate count queries)
-  const overview = (() => {
-    if (!graph) return undefined;
-    const c: Record<string, number> = {};
-    for (const n of graph.nodes) {
-      const key = n.type === "user" ? "members" : `${n.type}s`;
-      c[key] = (c[key] ?? 0) + 1;
-    }
-    return c;
-  })();
+  // Counts come from the per-workspace aggregates (O(log n)), NOT from the
+  // graph payload. Deriving them from `graph.nodes` is what forced the graph
+  // subscription to be unconditional — see the comment on `workspaces.overview`.
+  const overview = useQuery(api.workspaces.overview, { workspaceId: id });
 
   // Node type visibility for graph/activity filtering. Tags are off by
   // default — they're dense metadata; the Tags card's eye toggle is the
@@ -97,6 +107,22 @@ export function WorkspaceDetails() {
       return next;
     });
   };
+
+  // Subscribed only while its own tab is showing on desktop: it reads every
+  // node and drawn edge in the workspace, so any write in there re-runs it and
+  // re-ships the payload to every open client. The canvas is never rendered on
+  // mobile or on the Activity tab, so neither should pay.
+  //
+  // `includeTags` follows the Tags card, because tag nodes and their
+  // `tagged_with` links cost three more whole-table scans to build and the card
+  // starts hidden. Flipping it changes the query args, so the server does the
+  // extra work only from that point on.
+  const graph = useLiveQuery(
+    api.graph.getWorkspaceGraph,
+    effectiveTab === "graph" && !isMobile
+      ? { workspaceId: id, includeTags: !hiddenTypes.has("tag") }
+      : "skip",
+  );
 
   // Measure the top section height so the graph can fill the remainder
   const topRef = useRef<HTMLDivElement>(null);

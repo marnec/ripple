@@ -924,6 +924,55 @@ export default defineSchema({
     .index("by_target_edgetype", ["targetId", "edgeType"])
     .index("by_source_target", ["sourceId", "targetId"])
     .index("by_workspace_target", ["workspaceId", "targetId"])
+    .index("by_workspace", ["workspaceId"])
+    // Lets the workspace graph read only the edge kinds it draws. `by_workspace`
+    // scans `belongs_to` too — one row per task, the single largest edge term —
+    // and filtering those out in JS does not un-read them.
+    .index("by_workspace_edgetype", ["workspaceId", "edgeType"]),
+
+  // Multiplicity for **mention edges** (CONTEXT.md). One row per
+  // (channel, target) pair that is currently mentioned at least once.
+  //
+  // The `edges` row for that pair is written once — on the first mention — and
+  // deleted when the last one goes; every mention in between only touches this
+  // table. That split is the point: the workspace graph subscribes to the whole
+  // `edges.by_workspace` range, and Convex re-runs a query when a write lands in
+  // a range it read, so writing an edge row per message re-shipped the entire
+  // graph to every client on the page on every chatty message. Nothing that
+  // reads the graph reads this table, so repeat mentions are now invisible to it.
+  //
+  // Before this table, a doc mentioned in 4,000 messages had 4,000 identical
+  // edge rows: the backlinks panel read all 4,000 to render one chip, and a
+  // message edit collected the whole bucket to delete a single row.
+  channelMentionCounts: defineTable({
+    workspaceId: v.id("workspaces"),
+    channelId: v.id("channels"),
+    targetType: v.union(
+      v.literal("document"),
+      v.literal("task"),
+      v.literal("diagram"),
+      v.literal("spreadsheet"),
+      v.literal("user"),
+      v.literal("project"),
+      v.literal("channel"),
+      v.literal("calendarEvent"),
+    ),
+    targetId: v.string(),
+    // The single `edges` row this counter keeps alive. Holding the id makes the
+    // decrement path a point delete instead of a scan of the duplicate bucket,
+    // and lets the collapse migration be re-run safely (a row whose `edgeId` is
+    // the edge being visited is already accounted for).
+    edgeId: v.id("edges"),
+    // Live messages in `channelId` mentioning `targetId`. Invariant: >= 1 while
+    // this row exists — the row and its edge are created and dropped together.
+    count: v.number(),
+    // Newest mention. Kept so the edge can later be weighted or windowed by
+    // recency; a raw all-time count would leave last year's busiest channel as
+    // the heaviest edge in the graph forever.
+    lastAt: v.number(),
+  })
+    .index("by_channel_target", ["channelId", "targetId"])
+    .index("by_target", ["targetId"])
     .index("by_workspace", ["workspaceId"]),
 
   nodes: defineTable({
@@ -941,11 +990,17 @@ export default defineSchema({
     resourceId: v.string(), // typed Convex ID cast to string (polymorphic)
     name: v.string(),       // tasks map title→name
     tags: v.array(v.string()), // tasks map labels→tags; channels always []
+    // Set at node creation and maintained by the tasks node trigger if the
+    // task ever changes project. Was documented as "immutable, set once" —
+    // which was true only because no write path moves a task between projects,
+    // not because anything enforced it. `getEnrichedBacklinks` (edges.ts) reads
+    // it, so a future "move task" feature would otherwise silently report the
+    // old project.
     metadata: v.optional(
       v.union(
         v.object({ type: v.literal("task"), projectId: v.id("projects") }),
       ),
-    ), // immutable, set once at node creation
+    ),
     // Whether this node should appear in `nodes.search` (Ctrl+K). Defaults
     // to `true` when undefined, so existing rows are unchanged. Calendar
     // events explicitly set `false`: they participate in the graph and

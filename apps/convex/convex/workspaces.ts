@@ -5,6 +5,17 @@ import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { getAll } from "convex-helpers/server/relationships";
 import { logActivity } from "./auditLog";
 import {
+  channelsByWorkspace,
+  diagramsByWorkspace,
+  documentsByWorkspace,
+  eventsByWorkspace,
+  membersByWorkspace,
+  projectsByWorkspace,
+  spreadsheetsByWorkspace,
+  tagsByWorkspace,
+  tasksByWorkspace,
+} from "./dbTriggers";
+import {
   requireUser,
   getUser,
   requireWorkspaceMember,
@@ -88,57 +99,80 @@ export const get = query({
   },
 });
 
-/** Lightweight counts for the workspace overview page. */
+/**
+ * Counts for the workspace overview cards, served from the nine per-workspace
+ * aggregates (`dbTriggers.ts`) as O(log n) B-tree lookups.
+ *
+ * These aggregates exist for exactly this query. They were registered on the
+ * nine tables and backfilled (`migrations:runAll`), but the cards were at some
+ * point rewired to count `getWorkspaceGraph`'s nodes instead — which made that
+ * unbounded five-table subscription mandatory on the workspace landing page,
+ * on mobile and on the Activity tab where the canvas never renders. Counting
+ * here is what lets the graph query be gated behind its own tab.
+ *
+ * Do NOT reintroduce the `.collect().then(r => r.length)` form: it read ~1,000
+ * full rows to return six integers the aggregates already hold.
+ *
+ * Returns null rather than throwing for a non-member, matching `get` and
+ * `graph.getWorkspaceGraph`, so an unauthorized URL hit renders ResourceDeleted
+ * instead of tripping the error boundary.
+ */
 export const overview = query({
   args: { workspaceId: v.id("workspaces") },
-  returns: v.object({
-    members: v.number(),
-    channels: v.number(),
-    projects: v.number(),
-    documents: v.number(),
-    diagrams: v.number(),
-    spreadsheets: v.number(),
-  }),
+  returns: v.union(
+    v.object({
+      members: v.number(),
+      channels: v.number(),
+      tasks: v.number(),
+      projects: v.number(),
+      documents: v.number(),
+      diagrams: v.number(),
+      spreadsheets: v.number(),
+      calendarEvents: v.number(),
+      tags: v.number(),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, { workspaceId }) => {
     // `workspaceId` is caller-chosen, so "is logged in" is not the rule here —
-    // these are six full-table scans over another tenant's data.
-    await requireWorkspaceMember(ctx, workspaceId);
+    // these are counts over another tenant's data.
+    const access = await checkWorkspaceMember(ctx, workspaceId);
+    if (!access) return null;
 
-    const [members, channels, projects, documents, diagrams, spreadsheets] =
-      await Promise.all([
-        ctx.db
-          .query("workspaceMembers")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect()
-          .then((r) => r.length),
-        ctx.db
-          .query("channels")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect()
-          .then((r) => r.length),
-        ctx.db
-          .query("projects")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect()
-          .then((r) => r.length),
-        ctx.db
-          .query("documents")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect()
-          .then((r) => r.length),
-        ctx.db
-          .query("diagrams")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect()
-          .then((r) => r.length),
-        ctx.db
-          .query("spreadsheets")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-          .collect()
-          .then((r) => r.length),
-      ]);
+    const namespace = workspaceId as string;
+    const [
+      members,
+      channels,
+      tasks,
+      projects,
+      documents,
+      diagrams,
+      spreadsheets,
+      calendarEvents,
+      tags,
+    ] = await Promise.all([
+      membersByWorkspace.count(ctx, { namespace, bounds: {} }),
+      channelsByWorkspace.count(ctx, { namespace, bounds: {} }),
+      tasksByWorkspace.count(ctx, { namespace, bounds: {} }),
+      projectsByWorkspace.count(ctx, { namespace, bounds: {} }),
+      documentsByWorkspace.count(ctx, { namespace, bounds: {} }),
+      diagramsByWorkspace.count(ctx, { namespace, bounds: {} }),
+      spreadsheetsByWorkspace.count(ctx, { namespace, bounds: {} }),
+      eventsByWorkspace.count(ctx, { namespace, bounds: {} }),
+      tagsByWorkspace.count(ctx, { namespace, bounds: {} }),
+    ]);
 
-    return { members, channels, projects, documents, diagrams, spreadsheets };
+    return {
+      members,
+      channels,
+      tasks,
+      projects,
+      documents,
+      diagrams,
+      spreadsheets,
+      calendarEvents,
+      tags,
+    };
   },
 });
 

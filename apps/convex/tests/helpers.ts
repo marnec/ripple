@@ -6,6 +6,7 @@ import actionRetrierComponent from "@convex-dev/action-retrier/test";
 import auditLogComponent from "convex-audit-log/test";
 import aggregateComponent from "@convex-dev/aggregate/test";
 import cascadingDeleteComponent from "convex-cascading-delete/test";
+import migrationsComponent from "@convex-dev/migrations/test";
 import rateLimiterComponent from "@convex-dev/rate-limiter/test";
 import resendComponent from "@convex-dev/resend/test";
 import webhookReceiverComponent from "convex-webhook-receiver/test";
@@ -18,6 +19,7 @@ export function createTestContext() {
   actionRetrierComponent.register(t as any);
   auditLogComponent.register(t as any);
   cascadingDeleteComponent.register(t as any);
+  migrationsComponent.register(t as any);
   rateLimiterComponent.register(t);
   resendComponent.register(t as any);
   webhookReceiverComponent.register(t as any);

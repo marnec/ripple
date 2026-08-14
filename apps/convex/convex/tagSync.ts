@@ -335,6 +335,20 @@ export const stripTagEverywhere = internalAction({
   },
 });
 
+/**
+ * Remove one tag name from a resource's denormalized `tags` array.
+ *
+ * The patch is deliberately NOT guarded on "did the array actually change".
+ * Skipping the write when `next` has the same length looks like a free
+ * no-op-write saving, but it is the one case that must stay loud: a join row
+ * whose `resourceType` does not match the table its `resourceId` lives in
+ * resolves to a foreign row, reads no `tags`, and fails schema validation on
+ * the patch — which is how a corrupt join surfaces as a
+ * `tagSync:stripTagEverywhere` background job failure instead of being silently
+ * deleted by the drain. See `tests/backgroundDrainRetry.test.ts`, which plants
+ * exactly that row. The redundant-write case is drift-only and cold; the
+ * corruption case is the one worth paying for.
+ */
 async function stripTagFromResource(
   ctx: MutationCtx,
   resourceType: TaggableResourceType,
@@ -383,6 +397,7 @@ async function stripTagFromResource(
   }
 }
 
+/** As `stripTagFromResource`, over a task's `labels` — unguarded for the same reason. */
 async function stripTagFromTask(
   ctx: MutationCtx,
   taskId: Id<"tasks">,
