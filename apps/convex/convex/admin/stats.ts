@@ -7,6 +7,15 @@ import { requirePlatformAdmin } from "../authHelpers";
  * public query is safe. Counts use full-table `.collect()` — fine at this app's
  * scale (a single operator's deployment); revisit with @convex-dev/aggregate if
  * any table grows into the hundreds of thousands.
+ *
+ * `messages` is deliberately NOT among them. This is a subscribed query, so a
+ * message count re-runs all of these scans on every message sent anywhere in
+ * the deployment while the tab is open — and `messages` is both the fastest
+ * growing table and the widest row (`body` + `plainText`), so it would be the
+ * leg that pushes this query past the transaction limits and hard-fails the
+ * whole page. A total message count is not worth that; per-workspace activity
+ * is what an operator actually acts on. Do not add it back without an
+ * aggregate or a counter — never a `.collect()`.
  */
 export const overview = query({
   args: {},
@@ -16,7 +25,6 @@ export const overview = query({
     bots: v.number(),
     workspaces: v.number(),
     channels: v.number(),
-    messages: v.number(),
     documents: v.number(),
     projects: v.number(),
     tasks: v.number(),
@@ -39,7 +47,6 @@ export const overview = query({
       users,
       workspaces,
       channels,
-      messages,
       documents,
       projects,
       tasks,
@@ -49,7 +56,6 @@ export const overview = query({
       ctx.db.query("users").collect(),
       ctx.db.query("workspaces").collect(),
       ctx.db.query("channels").collect(),
-      ctx.db.query("messages").collect(),
       ctx.db.query("documents").collect(),
       ctx.db.query("projects").collect(),
       ctx.db.query("tasks").collect(),
@@ -74,7 +80,6 @@ export const overview = query({
       bots: users.filter((u) => u.isBot).length,
       workspaces: workspaces.length,
       channels: channels.length,
-      messages: messages.length,
       documents: documents.length,
       projects: projects.length,
       tasks: tasks.length,

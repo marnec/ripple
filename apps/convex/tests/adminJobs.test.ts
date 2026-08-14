@@ -187,6 +187,22 @@ describe("admin.stats.overview", () => {
     const stats = await asAdmin.query(api.admin.stats.overview, {});
     expect(stats.failedJobs).toBe(2);
   });
+
+  /**
+   * Guard, not a behaviour test. This query is subscribed by the Overview page,
+   * so a platform-wide message count would re-run every scan in it on each
+   * message sent anywhere in the deployment — and `messages` is the fastest
+   * growing table with the widest rows, so it is the leg that would push the
+   * query past the transaction limits and hard-fail the whole page. If this
+   * fails, someone counted messages again; use an aggregate or a counter.
+   */
+  it("does not report a platform-wide message count", async () => {
+    const t = createTestContext();
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    const stats = await asAdmin.query(api.admin.stats.overview, {});
+    expect(stats).not.toHaveProperty("messages");
+  });
 });
 
 /** Type-level guard: the page keys rows by id, so the id must be returned. */

@@ -103,7 +103,6 @@ export declare const api: {
           channels: number;
           documents: number;
           failedJobs: number;
-          messages: number;
           pendingInvites: number;
           projects: number;
           recentSignups: Array<{

@@ -21,7 +21,6 @@ export function OverviewPage() {
     { label: "Users", value: fmtNum(stats.users), sub: `${stats.admins} admin · ${stats.bots} bot`, accent: true },
     { label: "Workspaces", value: fmtNum(stats.workspaces) },
     { label: "Channels", value: fmtNum(stats.channels) },
-    { label: "Messages", value: fmtNum(stats.messages) },
     { label: "Projects", value: fmtNum(stats.projects) },
     { label: "Tasks", value: fmtNum(stats.tasks) },
     { label: "Documents", value: fmtNum(stats.documents) },

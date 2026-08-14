@@ -184,6 +184,15 @@ export function useWorkspacePresence() {
                 next.delete(left.userId);
                 return next;
               });
+            } else if (msg.type === "permission_revoked") {
+              // Removed from the workspace while connected. Spending the retry
+              // budget is pointless (the token action would reject us anyway),
+              // so burn it and drop the colleagues' locations we are holding —
+              // otherwise the last snapshot stays on screen indefinitely.
+              invalidateCollaborationToken(roomKey);
+              recreationCountRef.current = MAX_RECREATIONS;
+              setPresenceMap(new Map());
+              socket.close();
             } else if (msg.type === "auth_error") {
               // Rejected — the backoff retry needs a freshly checked token.
               invalidateCollaborationToken(roomKey);
