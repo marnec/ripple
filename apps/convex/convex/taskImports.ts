@@ -23,6 +23,7 @@ import { requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags } from "./tagSync";
 import { enrichedTaskValidator, hasBlockingEdge } from "./tasks";
 import { scheduleTaskImport } from "./taskImportPool";
+import { isImportJobStale } from "./taskImportStaleness";
 import {
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
   taskImportRowsSchema,
@@ -50,6 +51,10 @@ const importJobValidator = v.object({
   numberRangeStart: v.number(),
   errorMessage: v.optional(v.string()),
   completedAt: v.optional(v.number()),
+  // `projectActiveJob` strips only the heavy `rows` blob, so every other
+  // column on the row reaches this validator and has to be declared here —
+  // omitting one makes the *query* throw, not just drop the field.
+  lastProgressAt: v.optional(v.number()),
   // Integration-import metadata. Absent on CSV jobs; present once a GitHub
   // import writes them. `projectActiveJob` only strips the heavy `rows` blob,
   // so these pass through and must be allowed by the projection validator.
@@ -62,11 +67,17 @@ const importJobValidator = v.object({
 // ── Queries ─────────────────────────────────────────────────────────────
 
 /**
- * Latest queued-or-running import for the project, or null.
+ * Latest queued-or-running import for the project that is actually still
+ * moving, or null.
  *
  * Drives both the Import button's disabled state and the active-import
  * banner. Returns a minimal projection — the full row payload is never sent
  * to the client (it's only meaningful to the workpool action).
+ *
+ * A stale row is treated as absent rather than patched away, because this is a
+ * query and cannot write. The row is tidied up separately by
+ * `expireStaleImportJobs` on a cron; reading past it here is what makes the
+ * banner clear immediately instead of on the cron's schedule.
  */
 export const getActiveJobForProject = query({
   args: { projectId: v.id("projects") },
@@ -84,7 +95,7 @@ export const getActiveJobForProject = query({
       )
       .order("desc")
       .first();
-    if (queued) return projectActiveJob(queued);
+    if (queued && !isImportJobStale(queued)) return projectActiveJob(queued);
 
     const running = await ctx.db
       .query("taskImportJobs")
@@ -93,7 +104,7 @@ export const getActiveJobForProject = query({
       )
       .order("desc")
       .first();
-    if (running) return projectActiveJob(running);
+    if (running && !isImportJobStale(running)) return projectActiveJob(running);
 
     return null;
   },
@@ -199,14 +210,18 @@ export const createImportJob = mutation({
       throw new ConvexError("CSV contains no rows.");
     }
 
-    // Concurrency guard: at most one queued/running job per project.
-    const activeQueued = await ctx.db
+    // Concurrency guard: at most one *live* queued/running job per project. A
+    // job that has gone quiet is presumed dead and does not hold the lock —
+    // without that, one dead drain took the project's import feature with it
+    // permanently, since nothing else could move the row off `queued`.
+    const queuedJob = await ctx.db
       .query("taskImportJobs")
       .withIndex("by_project_status", (q) =>
         q.eq("projectId", projectId).eq("status", "queued"),
       )
       .first();
-    const activeRunning = activeQueued
+    const activeQueued = queuedJob && !isImportJobStale(queuedJob) ? queuedJob : null;
+    const runningJob = activeQueued
       ? null
       : await ctx.db
           .query("taskImportJobs")
@@ -214,6 +229,8 @@ export const createImportJob = mutation({
             q.eq("projectId", projectId).eq("status", "running"),
           )
           .first();
+    const activeRunning =
+      runningJob && !isImportJobStale(runningJob) ? runningJob : null;
     if (activeQueued || activeRunning) {
       throw new ConvexError({
         code: "IMPORT_ALREADY_RUNNING",
@@ -301,7 +318,81 @@ export const runImport = internalAction({
   },
 });
 
+/**
+ * Retire an import the caller knows is not coming back.
+ *
+ * Staleness clears a wedge on its own, but only after the liveness window, and
+ * the person watching a stuck banner is the one who already knows the import
+ * died. Scoped to project members rather than admins: this destroys no data —
+ * the tasks a partial import created stay — it only moves a job off a status
+ * that is lying about it.
+ *
+ * Terminal jobs are refused rather than ignored, so "cancel" can never reopen
+ * a completed import or overwrite the reason a failed one gives.
+ */
+export const cancelImportJob = mutation({
+  args: { jobId: v.id("taskImportJobs") },
+  returns: v.null(),
+  handler: async (ctx, { jobId }) => {
+    const job = await ctx.db.get(jobId);
+    if (!job) throw new ConvexError("Import job not found");
+
+    const auth = await checkResourceMember(ctx, "projects", job.projectId);
+    if (!auth) throw new ConvexError("Not authorized to cancel this import");
+
+    if (job.status !== "queued" && job.status !== "running") {
+      throw new ConvexError("This import has already finished");
+    }
+
+    await ctx.db.patch(jobId, {
+      status: "failed",
+      errorMessage: "Import cancelled",
+      completedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
 // ── Internal mutations ─────────────────────────────────────────────────
+
+/**
+ * Retire import jobs that stopped making progress, so the row stops claiming
+ * to be busy.
+ *
+ * The readers already treat a stale job as absent, which is what unblocks the
+ * project immediately; this is the other half — without it a dead job sits at
+ * `queued` forever, indistinguishable in the data from one still waiting its
+ * turn, and every list of "imports for this project" misreports it.
+ *
+ * Bounded per run rather than paginated to completion: the population is jobs
+ * that died, which is small, and a sweep that falls behind catches up on the
+ * next tick.
+ */
+export const expireStaleImportJobs = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    for (const status of ["queued", "running"] as const) {
+      const candidates = await ctx.db
+        .query("taskImportJobs")
+        .withIndex("by_status", (q) => q.eq("status", status))
+        .take(EXPIRY_SWEEP_LIMIT);
+
+      for (const job of candidates) {
+        if (!isImportJobStale(job)) continue;
+        await ctx.db.patch(job._id, {
+          status: "failed",
+          errorMessage:
+            "Import stopped making progress and was presumed abandoned",
+          completedAt: Date.now(),
+        });
+      }
+    }
+    return null;
+  },
+});
+
+const EXPIRY_SWEEP_LIMIT = 100;
 
 export const startJob = internalMutation({
   args: { jobId: v.id("taskImportJobs") },
@@ -310,7 +401,7 @@ export const startJob = internalMutation({
     const job = await ctx.db.get(jobId);
     if (!job) return null;
     if (job.status !== "queued") return { totalRows: job.totalRows };
-    await ctx.db.patch(jobId, { status: "running" });
+    await ctx.db.patch(jobId, { status: "running", lastProgressAt: Date.now() });
     return { totalRows: job.totalRows };
   },
 });
@@ -337,6 +428,7 @@ export const recordRowFailure = internalMutation({
     if (!job) return null;
     await ctx.db.patch(jobId, {
       processedRows: job.processedRows + 1,
+      lastProgressAt: Date.now(),
       failedRows: job.failedRows + 1,
     });
     return null;
@@ -373,6 +465,7 @@ export const createImportedTask = internalMutation({
     if (!parsed.success) {
       await ctx.db.patch(jobId, {
         processedRows: job.processedRows + 1,
+        lastProgressAt: Date.now(),
         failedRows: job.failedRows + 1,
       });
       return null;
@@ -383,6 +476,7 @@ export const createImportedTask = internalMutation({
     if (!project) {
       await ctx.db.patch(jobId, {
         processedRows: job.processedRows + 1,
+        lastProgressAt: Date.now(),
         failedRows: job.failedRows + 1,
       });
       return null;
@@ -464,6 +558,7 @@ export const createImportedTask = internalMutation({
 
     await ctx.db.patch(jobId, {
       processedRows: job.processedRows + 1,
+      lastProgressAt: Date.now(),
     });
     return null;
   },

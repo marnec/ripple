@@ -585,6 +585,13 @@ export default defineSchema({
     failedRows: v.number(),
     errorMessage: v.optional(v.string()), // top-level failure (e.g. all rows rejected)
     completedAt: v.optional(v.number()),
+    // Liveness heartbeat: stamped by every unit of work an import does (a
+    // GitHub page applied, a CSV row created or failed). A queued/running job
+    // that has not moved this in a while is presumed dead and stops holding
+    // the project's import lock — see `taskImportStaleness.ts`. Absent on rows
+    // predating it, which fall back to `_creationTime` and therefore clear
+    // themselves rather than staying wedged.
+    lastProgressAt: v.optional(v.number()),
     // What kind of import drives this job. Absent on existing rows (= CSV);
     // integration imports set this explicitly so workspace-settings UIs can
     // distinguish them. The `rows` field stays as `[]` for non-CSV sources.
@@ -594,7 +601,10 @@ export default defineSchema({
     projectIntegrationLinkId: v.optional(v.id("projectIntegrationLinks")),
   })
     .index("by_project_status", ["projectId", "status"])
-    .index("by_project", ["projectId"]),
+    .index("by_project", ["projectId"])
+    // Cross-project, for the stale-job sweep — the only reader that does not
+    // already know which project it is asking about.
+    .index("by_status", ["status"]),
 
   taskComments: defineTable({
     taskId: v.id("tasks"),

@@ -79,6 +79,18 @@ export function normalizeImportBatch(
  * issues, normalizes + filters, hands the batch to
  * `core/importJob.applyImportBatch` via a single mutation, then schedules
  * the next page if more remain.
+ *
+ * Scheduled bare, so at-most-once: nothing retries this and nothing observes
+ * it dying. The handler is therefore the only thing standing between a throw
+ * and a job wedged at `queued` — which is worse than a failed import, because
+ * `queued` is the status the concurrency guard and the active-import banner
+ * both read, and until this fix nothing in the backend could move it.
+ *
+ * The two failure modes below (missing credentials, non-200 fetch) were the
+ * only ones that ever reached `markFailed`. Everything else — GitHub's token
+ * endpoint answering 401 from inside `mintInstallationToken`, a transaction
+ * cap while `applyBatch` inserts 50 tasks through ~31 triggers each — threw
+ * past them, which is what the outer catch is for.
  */
 export const drainImportBatch = internalAction({
   args: {
@@ -106,67 +118,83 @@ export const drainImportBatch = internalAction({
       );
       return null;
     }
-    const gh = client.forInstallation(args.externalAccountId);
 
-    // Paginated list — sorted ascending by updated_at so `since` cursor
-    // monotonically advances.
-    const params = new URLSearchParams({
-      state: "all",
-      per_page: "50",
-      sort: "updated",
-      direction: "asc",
-    });
-    if (args.sinceCursor) params.set("since", args.sinceCursor);
-    if (args.labels && args.labels.length > 0) {
-      params.set("labels", args.labels.join(","));
-    }
+    try {
+      const gh = client.forInstallation(args.externalAccountId);
 
-    const res = await gh.request<RawGithubIssue[]>({
-      method: "GET",
-      path: `/repos/${args.repoFullName}/issues?${params.toString()}`,
-    });
+      // Paginated list — sorted ascending by updated_at so `since` cursor
+      // monotonically advances.
+      const params = new URLSearchParams({
+        state: "all",
+        per_page: "50",
+        sort: "updated",
+        direction: "asc",
+      });
+      if (args.sinceCursor) params.set("since", args.sinceCursor);
+      if (args.labels && args.labels.length > 0) {
+        params.set("labels", args.labels.join(","));
+      }
 
-    if (res.status !== 200 || !res.body) {
-      console.error(`[importDrain] fetch failed: ${res.status}`);
+      const res = await gh.request<RawGithubIssue[]>({
+        method: "GET",
+        path: `/repos/${args.repoFullName}/issues?${params.toString()}`,
+      });
+
+      if (res.status !== 200 || !res.body) {
+        console.error(`[importDrain] fetch failed: ${res.status}`);
+        await ctx.runMutation(
+          internal.integrations.github.importDrainMutations.markFailed,
+          {
+            jobId: args.jobId,
+            message: `GitHub fetch failed: ${res.status}`,
+          },
+        );
+        return null;
+      }
+
+      const config: ImportFilterConfig = { includeClosed: args.includeClosed };
+      const events = filterImportEvents(normalizeImportBatch(res.body), config);
+
+      await ctx.runMutation(
+        internal.integrations.github.importDrainMutations.applyBatch,
+        {
+          jobId: args.jobId,
+          events,
+          batchStartIndex: args.batchStartIndex,
+        },
+      );
+
+      // GitHub returns a full page when more remain. Advance the cursor to
+      // the last issue's updated_at and schedule the next batch.
+      if (res.body.length === 50) {
+        const last = res.body[res.body.length - 1];
+        await ctx.scheduler.runAfter(
+          0,
+          internal.integrations.github.importDrain.drainImportBatch,
+          {
+            ...args,
+            sinceCursor: last.updated_at,
+            batchStartIndex: args.batchStartIndex + events.length,
+          },
+        );
+      } else {
+        await ctx.runMutation(
+          internal.integrations.github.importDrainMutations.markCompleted,
+          { jobId: args.jobId },
+        );
+      }
+    } catch (error) {
+      // Last line of defence for an at-most-once action: whatever went wrong,
+      // the job must not be left looking like it is still going.
+      console.error("[importDrain] drain failed", { jobId: args.jobId, error });
       await ctx.runMutation(
         internal.integrations.github.importDrainMutations.markFailed,
         {
           jobId: args.jobId,
-          message: `GitHub fetch failed: ${res.status}`,
+          message: `Import failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
         },
-      );
-      return null;
-    }
-
-    const config: ImportFilterConfig = { includeClosed: args.includeClosed };
-    const events = filterImportEvents(normalizeImportBatch(res.body), config);
-
-    await ctx.runMutation(
-      internal.integrations.github.importDrainMutations.applyBatch,
-      {
-        jobId: args.jobId,
-        events,
-        batchStartIndex: args.batchStartIndex,
-      },
-    );
-
-    // GitHub returns a full page when more remain. Advance the cursor to
-    // the last issue's updated_at and schedule the next batch.
-    if (res.body.length === 50) {
-      const last = res.body[res.body.length - 1];
-      await ctx.scheduler.runAfter(
-        0,
-        internal.integrations.github.importDrain.drainImportBatch,
-        {
-          ...args,
-          sinceCursor: last.updated_at,
-          batchStartIndex: args.batchStartIndex + events.length,
-        },
-      );
-    } else {
-      await ctx.runMutation(
-        internal.integrations.github.importDrainMutations.markCompleted,
-        { jobId: args.jobId },
       );
     }
     return null;

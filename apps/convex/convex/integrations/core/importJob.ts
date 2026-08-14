@@ -113,6 +113,9 @@ export async function applyImportBatch(
 
   await ctx.db.patch(jobId, {
     processedRows: job.processedRows + events.length,
+    // Liveness heartbeat — one page applied. A drain that stops turning pages
+    // stops holding the project's import lock; see `taskImportStaleness.ts`.
+    lastProgressAt: Date.now(),
   });
 }
 

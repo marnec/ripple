@@ -1613,6 +1613,7 @@ export type DataModel = {
       creatorId: Id<"users">;
       errorMessage?: string;
       failedRows: number;
+      lastProgressAt?: number;
       numberRangeStart: number;
       processedRows: number;
       projectId: Id<"projects">;
@@ -1632,6 +1633,7 @@ export type DataModel = {
       | "creatorId"
       | "errorMessage"
       | "failedRows"
+      | "lastProgressAt"
       | "numberRangeStart"
       | "processedRows"
       | "projectId"
@@ -1646,6 +1648,7 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_project: ["projectId", "_creationTime"];
       by_project_status: ["projectId", "status", "_creationTime"];
+      by_status: ["status", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

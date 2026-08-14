@@ -2734,6 +2734,12 @@ export declare const api: {
     >;
   };
   taskImports: {
+    cancelImportJob: FunctionReference<
+      "mutation",
+      "public",
+      { jobId: Id<"taskImportJobs"> },
+      null
+    >;
     createImportJob: FunctionReference<
       "mutation",
       "public",
@@ -2755,6 +2761,7 @@ export declare const api: {
         creatorId: Id<"users">;
         errorMessage?: string;
         failedRows: number;
+        lastProgressAt?: number;
         numberRangeStart: number;
         processedRows: number;
         projectId: Id<"projects">;
@@ -2776,6 +2783,7 @@ export declare const api: {
         creatorId: Id<"users">;
         errorMessage?: string;
         failedRows: number;
+        lastProgressAt?: number;
         numberRangeStart: number;
         processedRows: number;
         projectId: Id<"projects">;
@@ -6524,6 +6532,7 @@ export declare const internal: {
       { jobId: Id<"taskImportJobs">; rowIndex: number },
       null
     >;
+    expireStaleImportJobs: FunctionReference<"mutation", "internal", {}, null>;
     finalizeJob: FunctionReference<
       "mutation",
       "internal",

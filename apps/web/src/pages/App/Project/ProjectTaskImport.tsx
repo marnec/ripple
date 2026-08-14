@@ -11,6 +11,14 @@
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@ripple/ui/components/button";
 import { Progress } from "@/components/ui/progress";
+import {
+  ResponsiveDialog,
+  ResponsiveDialogContent,
+  ResponsiveDialogDescription,
+  ResponsiveDialogFooter,
+  ResponsiveDialogHeader,
+  ResponsiveDialogTitle,
+} from "@/components/ui/responsive-dialog";
 import SomethingWentWrong from "@/pages/SomethingWentWrong";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { api } from "@convex/_generated/api";
@@ -24,6 +32,8 @@ import {
   Loader2,
   XCircle,
 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
 import type { QueryParams } from "@convex/types/routes";
 import { TaskRow } from "./TaskRow";
@@ -61,6 +71,8 @@ function ProjectTaskImportContent({
   const tasks = useQuery(api.taskImports.listJobTasks, { jobId });
   const statuses = useQuery(api.taskStatuses.listByProject, { projectId });
   const updateTask = useMutation(api.tasks.update);
+  const cancelImport = useMutation(api.taskImports.cancelImportJob);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   if (job === undefined) {
     return (
@@ -98,7 +110,7 @@ function ProjectTaskImportContent({
               </p>
             </div>
           </div>
-          {isTerminal && (
+          {isTerminal ? (
             <Button
               variant="outline"
               size="sm"
@@ -110,6 +122,18 @@ function ProjectTaskImportContent({
             >
               <ArrowLeft className="h-4 w-4 mr-1.5" />
               Back to tasks
+            </Button>
+          ) : (
+            // An import that has died leaves this page showing "Queued"
+            // forever while the project's Import button stays disabled. The
+            // job expires on its own eventually; this is for the person who
+            // already knows it is not coming back.
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingCancel(true)}
+            >
+              Cancel import
             </Button>
           )}
         </div>
@@ -154,6 +178,41 @@ function ProjectTaskImportContent({
           </div>
         )}
       </div>
+
+      <ResponsiveDialog
+        open={confirmingCancel}
+        onOpenChange={setConfirmingCancel}
+      >
+        <ResponsiveDialogContent>
+          <ResponsiveDialogHeader>
+            <ResponsiveDialogTitle>Cancel this import?</ResponsiveDialogTitle>
+            <ResponsiveDialogDescription>
+              Tasks already imported are kept. Any rows still to come are not
+              imported, and the project can start a new import straight away.
+            </ResponsiveDialogDescription>
+          </ResponsiveDialogHeader>
+          <ResponsiveDialogFooter>
+            <Button variant="outline" onClick={() => setConfirmingCancel(false)}>
+              Keep importing
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                void cancelImport({ jobId })
+                  .then(() => setConfirmingCancel(false))
+                  .catch((error: unknown) => {
+                    toast.error("Could not cancel the import", {
+                      description:
+                        error instanceof Error ? error.message : "Please try again",
+                    });
+                  });
+              }}
+            >
+              Cancel import
+            </Button>
+          </ResponsiveDialogFooter>
+        </ResponsiveDialogContent>
+      </ResponsiveDialog>
     </div>
   );
 }

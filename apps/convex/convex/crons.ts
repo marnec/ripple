@@ -21,4 +21,15 @@ crons.cron(
   {},
 );
 
+// Retire import jobs that stopped making progress. Hourly rather than daily:
+// the row this cleans up is one the project's Import button reads, and the
+// readers already skip a stale job, so this is only tidying the status a job
+// list would otherwise misreport for up to a day.
+crons.interval(
+  "expire stale import jobs",
+  { hours: 1 },
+  internal.taskImports.expireStaleImportJobs,
+  {},
+);
+
 export default crons;
