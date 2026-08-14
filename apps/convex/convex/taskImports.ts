@@ -4,13 +4,13 @@
 //   client parses CSV with papaparse → validates with @shared/taskImportSchema
 //   → calls createImportJob → mutation reserves a task-number range, persists
 //   the job doc, enqueues runImport on the taskImportPool
-//   → workpool action calls createImportedTask once per row
+//   → workpool action calls createImportedTasks once per batch of rows
 //
 // Validation lives at two layers that share one zod schema:
 //   1. Loose convex args (`rows: v.array(v.any())`) — keeps old job docs
 //      readable as the CSV format evolves; no schema migrations on column add.
 //   2. Strict zod (`taskImportRowSchema`) — applied client-side, again in
-//      createImportJob defensively, and once more in createImportedTask
+//      createImportJob defensively, and once more in createImportedTasks
 //      before each insert so a single bad row doesn't abort the job.
 
 import { ConvexError, v } from "convex/values";
@@ -285,9 +285,30 @@ export const createImportJob = mutation({
 // ── Workpool action ────────────────────────────────────────────────────
 
 /**
- * Sequential per-row task creation. The action is the orchestrator; each
- * row becomes one internal mutation call so a single failure can't roll
- * back the whole job's writes.
+ * Rows applied per mutation. The same size the GitHub import drain pages at,
+ * and for the same reason: it is the largest batch whose per-row work (task
+ * insert + tag sync + audit entry, each with its triggers) comfortably fits one
+ * transaction.
+ *
+ * The batch is what makes the import affordable. The CSV payload lives inline
+ * on the job row (`rows`, up to Convex's 1MB document limit), so a mutation
+ * that opens with `ctx.db.get(jobId)` reads the whole blob and one that patches
+ * the job rewrites it — one mutation per row therefore moved O(rows x payload)
+ * bytes in each direction to create O(rows) small tasks. Bytes read and written
+ * are the billed and rate-limited resources, so a single mid-size import used
+ * to dominate the deployment's budget. Batching divides both by BATCH_SIZE.
+ */
+const IMPORT_BATCH_SIZE = 50;
+
+/**
+ * Batched task creation. The action is the orchestrator; each batch is one
+ * internal mutation so a failure can't roll back the whole job's writes.
+ *
+ * Row-level isolation is preserved where it actually applies: an unparseable
+ * row is detected before any write and counted, so bad data never costs its
+ * neighbours. A batch that throws is the rare rest — infra, or a project
+ * missing its statuses — and rolls back cleanly rather than leaving
+ * half-written tasks behind, with the action booking the whole batch as failed.
  */
 export const runImport = internalAction({
   args: { jobId: v.id("taskImportJobs") },
@@ -297,19 +318,21 @@ export const runImport = internalAction({
     if (!startResult) return null;
     const { totalRows } = startResult;
 
-    for (let i = 0; i < totalRows; i++) {
+    for (let startIndex = 0; startIndex < totalRows; startIndex += IMPORT_BATCH_SIZE) {
+      const count = Math.min(IMPORT_BATCH_SIZE, totalRows - startIndex);
       try {
-        await ctx.runMutation(internal.taskImports.createImportedTask, {
+        await ctx.runMutation(internal.taskImports.createImportedTasks, {
           jobId,
-          rowIndex: i,
+          startIndex,
+          count,
         });
       } catch (err) {
-        // createImportedTask is built to swallow per-row failures into the
-        // job's failedRows counter, so reaching here means the mutation
-        // itself threw uncaught (e.g. transient infra). Treat as a row
-        // failure rather than aborting the whole job.
-        console.error("taskImports.runImport row failure", { jobId, rowIndex: i, err });
-        await ctx.runMutation(internal.taskImports.recordRowFailure, { jobId });
+        // createImportedTasks swallows per-row data failures into the job's
+        // failedRows counter, so reaching here means the mutation itself threw
+        // uncaught and none of its writes landed. Book the batch as failed
+        // rather than aborting the whole job.
+        console.error("taskImports.runImport batch failure", { jobId, startIndex, count, err });
+        await ctx.runMutation(internal.taskImports.recordRowFailures, { jobId, count });
       }
     }
 
@@ -420,65 +443,58 @@ export const finalizeJob = internalMutation({
   },
 });
 
-export const recordRowFailure = internalMutation({
-  args: { jobId: v.id("taskImportJobs") },
+/** Book a batch the mutation never committed as processed-and-failed. */
+export const recordRowFailures = internalMutation({
+  args: { jobId: v.id("taskImportJobs"), count: v.number() },
   returns: v.null(),
-  handler: async (ctx, { jobId }) => {
+  handler: async (ctx, { jobId, count }) => {
     const job = await ctx.db.get(jobId);
     if (!job) return null;
     await ctx.db.patch(jobId, {
-      processedRows: job.processedRows + 1,
+      processedRows: job.processedRows + count,
       lastProgressAt: Date.now(),
-      failedRows: job.failedRows + 1,
+      failedRows: job.failedRows + count,
     });
     return null;
   },
 });
 
 /**
- * Create one task from one stored row. Mirrors `tasks.create` but:
+ * Create tasks from a contiguous slice of the job's stored rows. Mirrors
+ * `tasks.create` but:
  *   - uses the pre-reserved task number (numberRangeStart + rowIndex)
  *     instead of incrementing project.taskCounter,
  *   - records per-row parse failures in the job rather than throwing,
- *   - tags the new task with `importJobId` so the status page can list it,
+ *   - tags each new task with `importJobId` so the status page can list it,
  *   - skips assignment notifications (no assignee in v1).
+ *
+ * Everything the rows share — the job document, the project, the default
+ * status, the tail of the status column — is read ONCE for the batch. That is
+ * the whole point: the job read carries the entire CSV payload with it, so
+ * hoisting it out of the row loop is what removes the amplification, and the
+ * single closing patch is what stops the payload being rewritten per row.
  */
-export const createImportedTask = internalMutation({
+export const createImportedTasks = internalMutation({
   args: {
     jobId: v.id("taskImportJobs"),
-    rowIndex: v.number(),
+    startIndex: v.number(),
+    count: v.number(),
   },
   returns: v.null(),
-  handler: async (ctx, { jobId, rowIndex }) => {
+  handler: async (ctx, { jobId, startIndex, count }) => {
     const job = await ctx.db.get(jobId);
     if (!job) return null;
 
-    const rawRow = job.rows[rowIndex];
-
-    // Third validation pass — structural check on the already-parsed row
-    // we persisted. Uses the output schema (typed values, no coercion) so
-    // it doesn't re-reject a `labels: string[]` that the input schema
-    // would only accept as a raw `string`. Catches storage corruption and
-    // the case where the running version's schema is tighter than the one
-    // that originally accepted the row.
-    const parsed = taskImportRowOutputSchema.safeParse(rawRow);
-    if (!parsed.success) {
-      await ctx.db.patch(jobId, {
-        processedRows: job.processedRows + 1,
+    const finish = (failedRows: number) =>
+      ctx.db.patch(jobId, {
+        processedRows: job.processedRows + count,
+        failedRows: job.failedRows + failedRows,
         lastProgressAt: Date.now(),
-        failedRows: job.failedRows + 1,
       });
-      return null;
-    }
-    const row = parsed.data;
 
     const project = await ctx.db.get(job.projectId);
     if (!project) {
-      await ctx.db.patch(jobId, {
-        processedRows: job.processedRows + 1,
-        lastProgressAt: Date.now(),
-        failedRows: job.failedRows + 1,
-      });
+      await finish(count);
       return null;
     }
 
@@ -493,11 +509,11 @@ export const createImportedTask = internalMutation({
     }
 
     // Position: append after the last task in the default status column.
-    // Each new task computes off the live state so concurrent imports
-    // across different projects don't interfere.
     // Index order is position order, so the column maximum is its last row.
     // Collecting the column instead made the import O(N**2) and put a hard
-    // read-cap failure at ~10k tasks in one column.
+    // read-cap failure at ~10k tasks in one column. Read once per batch and
+    // chained forward from there — re-reading the tail per row would return
+    // this batch's own previous insert anyway.
     const lastTask = await ctx.db
       .query("tasks")
       .withIndex("by_project_status_position", (q) =>
@@ -505,61 +521,79 @@ export const createImportedTask = internalMutation({
       )
       .order("desc")
       .first();
-    const position = generateKeyBetween(lastTask?.position ?? null, null);
+    let previousPosition = lastTask?.position ?? null;
 
-    const taskNumber = job.numberRangeStart + rowIndex;
+    let failedRows = 0;
 
-    // The CSV column is "tags" (user-facing), but the underlying task field
-    // is still `labels` (denormalized storage that syncs into `tags` /
-    // `taskTags`). syncTaskTags is the source of truth for tag membership.
-    const taskId = await ctx.db.insert("tasks", {
-      projectId: job.projectId,
-      workspaceId: job.workspaceId,
-      title: row.title,
-      statusId: defaultStatus._id,
-      priority: row.priority ?? "medium",
-      labels: row.tags ?? undefined,
-      completed: defaultStatus.isCompleted,
-      creatorId: job.creatorId,
-      position,
-      number: taskNumber,
-      dueDate: row.dueDate ?? undefined,
-      plannedStartDate: row.plannedStartDate ?? undefined,
-      estimate: row.estimate ?? undefined,
-      importJobId: jobId,
-    });
+    for (let offset = 0; offset < count; offset++) {
+      const rowIndex = startIndex + offset;
 
-    if (row.tags && row.tags.length > 0) {
-      const normalized = await syncTaskTags(ctx, {
-        workspaceId: job.workspaceId,
+      // Third validation pass — structural check on the already-parsed row
+      // we persisted. Uses the output schema (typed values, no coercion) so
+      // it doesn't re-reject a `labels: string[]` that the input schema
+      // would only accept as a raw `string`. Catches storage corruption and
+      // the case where the running version's schema is tighter than the one
+      // that originally accepted the row. Runs before any write, which is what
+      // keeps a bad row from costing the rest of its batch.
+      const parsed = taskImportRowOutputSchema.safeParse(job.rows[rowIndex]);
+      if (!parsed.success) {
+        failedRows++;
+        continue;
+      }
+      const row = parsed.data;
+
+      const position = generateKeyBetween(previousPosition, null);
+      previousPosition = position;
+
+      // The CSV column is "tags" (user-facing), but the underlying task field
+      // is still `labels` (denormalized storage that syncs into `tags` /
+      // `taskTags`). syncTaskTags is the source of truth for tag membership.
+      const taskId = await ctx.db.insert("tasks", {
         projectId: job.projectId,
-        taskId,
+        workspaceId: job.workspaceId,
+        title: row.title,
+        statusId: defaultStatus._id,
+        priority: row.priority ?? "medium",
+        labels: row.tags ?? undefined,
         completed: defaultStatus.isCompleted,
+        creatorId: job.creatorId,
+        position,
+        number: job.numberRangeStart + rowIndex,
         dueDate: row.dueDate ?? undefined,
         plannedStartDate: row.plannedStartDate ?? undefined,
-        assigneeId: undefined,
-        nextTagNames: row.tags,
+        estimate: row.estimate ?? undefined,
+        importJobId: jobId,
       });
-      if (
-        normalized.length !== row.tags.length ||
-        normalized.some((t: string, i: number) => t !== row.tags![i])
-      ) {
-        await ctx.db.patch(taskId, { labels: normalized });
+
+      if (row.tags && row.tags.length > 0) {
+        const normalized = await syncTaskTags(ctx, {
+          workspaceId: job.workspaceId,
+          projectId: job.projectId,
+          taskId,
+          completed: defaultStatus.isCompleted,
+          dueDate: row.dueDate ?? undefined,
+          plannedStartDate: row.plannedStartDate ?? undefined,
+          assigneeId: undefined,
+          nextTagNames: row.tags,
+        });
+        if (
+          normalized.length !== row.tags.length ||
+          normalized.some((t: string, i: number) => t !== row.tags![i])
+        ) {
+          await ctx.db.patch(taskId, { labels: normalized });
+        }
       }
+
+      await logTaskActivity(ctx, {
+        taskId,
+        userId: job.creatorId,
+        workspaceId: job.workspaceId,
+        type: "created",
+        taskTitle: row.title,
+      });
     }
 
-    await logTaskActivity(ctx, {
-      taskId,
-      userId: job.creatorId,
-      workspaceId: job.workspaceId,
-      type: "created",
-      taskTitle: row.title,
-    });
-
-    await ctx.db.patch(jobId, {
-      processedRows: job.processedRows + 1,
-      lastProgressAt: Date.now(),
-    });
+    await finish(failedRows);
     return null;
   },
 });

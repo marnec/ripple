@@ -6557,10 +6557,10 @@ export declare const internal: {
     >;
   };
   taskImports: {
-    createImportedTask: FunctionReference<
+    createImportedTasks: FunctionReference<
       "mutation",
       "internal",
-      { jobId: Id<"taskImportJobs">; rowIndex: number },
+      { count: number; jobId: Id<"taskImportJobs">; startIndex: number },
       null
     >;
     expireStaleImportJobs: FunctionReference<"mutation", "internal", {}, null>;
@@ -6570,10 +6570,10 @@ export declare const internal: {
       { jobId: Id<"taskImportJobs"> },
       null
     >;
-    recordRowFailure: FunctionReference<
+    recordRowFailures: FunctionReference<
       "mutation",
       "internal",
-      { jobId: Id<"taskImportJobs"> },
+      { count: number; jobId: Id<"taskImportJobs"> },
       null
     >;
     runImport: FunctionReference<

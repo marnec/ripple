@@ -170,8 +170,9 @@ describe("taskImports.runImport (end-to-end)", () => {
     });
 
     // Drain the scheduler: createImportJob enqueues runImport, runImport
-    // calls createImportedTask per row. Running everything synchronously
-    // is the test-env fallback inside scheduleTaskImport (VITEST guard).
+    // calls createImportedTasks per batch of rows. Running everything
+    // synchronously is the test-env fallback inside scheduleTaskImport
+    // (VITEST guard).
     await t.finishAllScheduledFunctions(vi.runAllTimers);
 
     const job = await t.run(async (ctx) => ctx.db.get(jobId));
@@ -200,7 +201,7 @@ describe("taskImports.runImport (end-to-end)", () => {
 
   it("increments failedRows when the inner mutation cannot persist a row", async () => {
     // Simulate the unusual case where a row passes phase-1 (mutation arg
-    // validation + zod re-parse) but createImportedTask hits a problem.
+    // validation + zod re-parse) but createImportedTasks hits a problem.
     // We can force this by directly seeding a job doc with a row that
     // the inner safeParse will reject (e.g. priority missing entirely is
     // OK; here we use an invalid object shape that survived v.any() but
