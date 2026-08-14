@@ -1,11 +1,12 @@
 import { ConvexError, v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { mutation } from "./functions";
 import { WorkspaceRole } from "@ripple/shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
-import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
+import { cascadeDelete } from "./cascadeDelete";
 import { projectValidator } from "./validators";
 import { requireWorkspaceMember, requireCreatorOrWorkspaceAdmin, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { searchResourcesByFavorite } from "./resourceSearch";
@@ -273,10 +274,19 @@ export const remove = mutation({
       url: `/workspaces/${project.workspaceId}`,
     });
 
-    await cascadeDelete.deleteWithCascade(ctx, "projects", id, {
-      onComplete: logCascadeSummary({
+    // Batched, like every other unbounded parent (channels, workspaces). A
+    // project's task fanout has no ceiling — task imports accept a ~900KB CSV
+    // per job — and each task recurses into ten more tables, so the inline
+    // single-transaction cascade put a large project past the write cap: the
+    // mutation aborted and the same abort recurred on every retry, leaving the
+    // project permanently undeletable. Note the collection pass still walks the
+    // whole subtree read-only in this transaction; only the writes are batched.
+    await cascadeDelete.deleteWithCascadeBatched(ctx, "projects", id, {
+      batchHandlerRef: internal.cascadeDelete._cascadeBatchHandler,
+      onComplete: internal.cascadeDelete._batchCascadeOnComplete,
+      onCompleteContext: {
         userId, resourceType: "projects", resourceId: id, scope: project.workspaceId,
-      }),
+      },
     });
 
     return null;

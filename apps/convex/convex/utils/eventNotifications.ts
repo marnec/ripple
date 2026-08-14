@@ -184,8 +184,14 @@ export async function dispatchEventNotifications(
     // Guests use the share landing CTA; members use the in-app calendar CTA.
     for (const row of guestRows) {
       if (!row.guestEmail || !row.shareId) continue;
-      await scheduleEmail(ctx, internal.emails.sendEventInvite, {
-        inviteeId: invitees.byGuestEmail.get(row.guestEmail.toLowerCase()),
+      const inviteeId = invitees.byGuestEmail.get(row.guestEmail.toLowerCase());
+      const job = {
+        kind: "emails:sendEventInvite",
+        eventId: event._id,
+        inviteeId,
+      };
+      await scheduleEmail(ctx, internal.emails.sendEventInvite, job, {
+        inviteeId,
         eventId: event._id,
         targetUrl: shareDeepLink(row.shareId),
         recipientEmail: row.guestEmail,
@@ -199,8 +205,14 @@ export async function dispatchEventNotifications(
       });
     }
     for (const { userId, email } of memberEmails) {
-      await scheduleEmail(ctx, internal.emails.sendEventInvite, {
-        inviteeId: invitees.byUserId.get(userId),
+      const inviteeId = invitees.byUserId.get(userId);
+      const job = {
+        kind: "emails:sendEventInvite",
+        eventId: event._id,
+        inviteeId,
+      };
+      await scheduleEmail(ctx, internal.emails.sendEventInvite, job, {
+        inviteeId,
         eventId: event._id,
         targetUrl: calendarDeepLink(event.workspaceId, event._id),
         recipientEmail: email,
@@ -219,8 +231,14 @@ export async function dispatchEventNotifications(
   if (action.kind === "updated-time") {
     for (const row of guestRows) {
       if (!row.guestEmail) continue;
-      await scheduleEmail(ctx, internal.emails.sendEventReschedule, {
-        inviteeId: invitees.byGuestEmail.get(row.guestEmail.toLowerCase()),
+      const inviteeId = invitees.byGuestEmail.get(row.guestEmail.toLowerCase());
+      const job = {
+        kind: "emails:sendEventReschedule",
+        eventId: event._id,
+        inviteeId,
+      };
+      await scheduleEmail(ctx, internal.emails.sendEventReschedule, job, {
+        inviteeId,
         eventId: event._id,
         eventTitle,
         recipientEmail: row.guestEmail,
@@ -232,8 +250,14 @@ export async function dispatchEventNotifications(
       });
     }
     for (const { userId, email } of memberEmails) {
-      await scheduleEmail(ctx, internal.emails.sendEventReschedule, {
-        inviteeId: invitees.byUserId.get(userId),
+      const inviteeId = invitees.byUserId.get(userId);
+      const job = {
+        kind: "emails:sendEventReschedule",
+        eventId: event._id,
+        inviteeId,
+      };
+      await scheduleEmail(ctx, internal.emails.sendEventReschedule, job, {
+        inviteeId,
         eventId: event._id,
         eventTitle,
         recipientEmail: email,
@@ -250,8 +274,14 @@ export async function dispatchEventNotifications(
   // cancelled
   for (const row of guestRows) {
     if (!row.guestEmail) continue;
-    await scheduleEmail(ctx, internal.emails.sendEventCancellation, {
-      inviteeId: invitees.byGuestEmail.get(row.guestEmail.toLowerCase()),
+    const inviteeId = invitees.byGuestEmail.get(row.guestEmail.toLowerCase());
+    const job = {
+      kind: "emails:sendEventCancellation",
+      eventId: event._id,
+      inviteeId,
+    };
+    await scheduleEmail(ctx, internal.emails.sendEventCancellation, job, {
+      inviteeId,
       eventId: event._id,
       eventTitle,
       recipientEmail: row.guestEmail,
@@ -262,8 +292,14 @@ export async function dispatchEventNotifications(
     });
   }
   for (const { userId, email } of memberEmails) {
-    await scheduleEmail(ctx, internal.emails.sendEventCancellation, {
-      inviteeId: invitees.byUserId.get(userId),
+    const inviteeId = invitees.byUserId.get(userId);
+    const job = {
+      kind: "emails:sendEventCancellation",
+      eventId: event._id,
+      inviteeId,
+    };
+    await scheduleEmail(ctx, internal.emails.sendEventCancellation, job, {
+      inviteeId,
       eventId: event._id,
       eventTitle,
       recipientEmail: email,

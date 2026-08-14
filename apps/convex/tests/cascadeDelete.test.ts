@@ -190,6 +190,57 @@ describe("cascade delete: projects.remove", () => {
     expect(await countByIndex(t, "edges", "by_source", "sourceId", taskId1)).toBe(0);
     expect(await countByIndex(t, "edges", "by_source", "sourceId", taskId2)).toBe(0);
   });
+
+  /**
+   * A project's task fanout is unbounded (task imports accept a ~900KB CSV per
+   * job with no per-project ceiling), and each task recurses into ten more
+   * tables. Doing that in the calling transaction is what makes a large project
+   * permanently undeletable: the write cap aborts the mutation and the same
+   * abort recurs on every retry.
+   *
+   * convex-test does not enforce Convex's read/write caps, so no test can fail
+   * for that reason directly. What this specifies instead is the mechanism that
+   * raises the ceiling — the deletion must not all happen in the caller's
+   * transaction — plus the invariant that deferring it still finishes the job.
+   */
+  it("defers a large project's cascade instead of doing it all in the caller's transaction", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
+
+    // Past the batch size, so a batched cascade cannot finish inline. Seeded
+    // raw (no triggers) purely for speed — the cascade reads rows, not nodes.
+    const TASK_COUNT = 2200;
+    await t.run(async (ctx) => {
+      for (let i = 0; i < TASK_COUNT; i++) {
+        await ctx.db.insert("tasks", {
+          projectId,
+          workspaceId,
+          title: `Bulk task ${i}`,
+          statusId: todoId,
+          priority: "medium" as const,
+          completed: false,
+          creatorId: userId,
+          number: i + 1,
+        });
+      }
+    });
+
+    await asUser.mutation(api.projects.remove, { id: projectId });
+
+    // The single-transaction cascade has already deleted every row by now.
+    expect(
+      await countByIndex(t, "tasks", "by_project", "projectId", projectId),
+      "the cascade must not delete a whole large project inside the calling mutation",
+    ).toBeGreaterThan(0);
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    // …and deferring it must still finish the job.
+    expect(await countByIndex(t, "tasks", "by_project", "projectId", projectId)).toBe(0);
+    expect(await countByIndex(t, "taskStatuses", "by_project", "projectId", projectId)).toBe(0);
+    expect(await t.run(async (ctx) => ctx.db.get(projectId))).toBeNull();
+  }, 60000);
 });
 
 // ── Channel cascade ──────────────────────────────────────────────────

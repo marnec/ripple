@@ -20,10 +20,11 @@ import {
   type EmailId,
   type ResendOptions,
 } from "@convex-dev/resend";
-import { NonRetryableError } from "@convex-dev/workpool";
+import { NonRetryableError, vOnCompleteArgs } from "@convex-dev/workpool";
 import { APP_NAME, EMAIL_FROM_DOMAIN } from "@ripple/shared/constants";
 import { v } from "convex/values";
 import { classifyResendError } from "./utils/emailErrors";
+import { insertJobFailure } from "./backgroundJobFailures";
 import { components, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx, MutationCtx } from "./_generated/server";
@@ -268,6 +269,61 @@ export const recordCalendarAttempt = internalMutation({
       ...(args.resendId === undefined ? {} : { deliveryResendId: args.resendId }),
       deliveryStatus: args.status,
       deliveryError: args.error,
+    });
+    return null;
+  },
+});
+
+/** What `emailPool` hands its `onComplete` so a give-up can name itself. */
+export const vEmailJobContext = v.object({
+  kind: v.string(),
+  key: v.string(),
+  /** The row to correct, when the recipient has one. */
+  inviteeId: v.optional(v.id("calendarEventInvitees")),
+});
+
+/**
+ * `onComplete` for `emailPool` — the calendar-mail counterpart of
+ * `backgroundJobFailures.recordTerminalFailure`, which it cannot simply reuse
+ * because a give-up here has a *second* thing to correct.
+ *
+ * `sendTrackedEmail` deliberately leaves the row untouched on a transient
+ * failure ("an attempt still in flight must not read as a failure"), so after
+ * the last attempt the row still reads `waiting` — which the guest list
+ * renders as "going out" for mail that will never be attempted again. Only the
+ * pool can tell the fourth attempt from the fifth, so only here can that be
+ * corrected.
+ *
+ * The patch is confined to rows still reading as in-flight. A send can hand
+ * the message to Resend and then throw on the bookkeeping behind it: the pool
+ * retries what it sees as a failed attempt while the mail that did go out gets
+ * delivered, and the webhook lands `delivered` on the row. Restating that as
+ * `failed` would tell the organizer mail was never sent that their guest is
+ * looking at. The operator record is written either way — the job gave up,
+ * whatever became of the message.
+ */
+export const recordEmailTerminalFailure = internalMutation({
+  args: vOnCompleteArgs(vEmailJobContext),
+  returns: v.null(),
+  handler: async (ctx, { context, result }) => {
+    if (result.kind !== "failed") return null;
+
+    await insertJobFailure(ctx, {
+      kind: context.kind,
+      key: context.key,
+      error: result.error,
+    });
+
+    if (!context.inviteeId) return null;
+    // The organizer may have edited the guest list while the pool backed off.
+    const invitee = await ctx.db.get(context.inviteeId);
+    if (invitee === null) return null;
+    const status = invitee.deliveryStatus;
+    if (status !== undefined && status !== "waiting") return null;
+
+    await ctx.db.patch(context.inviteeId, {
+      deliveryStatus: "failed",
+      deliveryError: result.error,
     });
     return null;
   },

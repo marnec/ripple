@@ -21,7 +21,8 @@
  */
 
 import { Workpool } from "@convex-dev/workpool";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import type {
   FunctionReference,
@@ -41,17 +42,51 @@ const pool = new Workpool(components.emailPool, {
   defaultRetryBehavior: { maxAttempts: 5, initialBackoffMs: 2_000, base: 2 },
 });
 
+/** Names one queued message: the failure record, and the row it belongs to. */
+export type EmailJob = {
+  /** The sending action, as `module:function`. */
+  kind: string;
+  /** Names the mail when the recipient has no invitee row of their own. */
+  eventId: Id<"calendarEvents">;
+  /**
+   * The delivery-tracking row, when there is one. A member notified by
+   * preference rather than by invitation has none, and their mail is untracked
+   * on the way out for the same reason it goes unrecorded on the way down.
+   */
+  inviteeId?: Id<"calendarEventInvitees">;
+};
+
 /**
  * Enqueue one calendar email. The action classifies its own failures
  * (`utils/emailErrors.ts`): a transient one throws and lands back here for
  * another attempt, a permanent one throws `NonRetryableError` and stops.
+ *
+ * The `onComplete` is what makes the last transient attempt distinguishable
+ * from the four before it. Without one the exhausted case wrote nothing
+ * anywhere: the send path leaves the row alone on every transient failure by
+ * design, so the row kept `waiting` — "still going out" — and the give-up
+ * reached neither the organizer nor `admin/jobs`.
+ *
+ * Unlike its two sibling pools this one does not point at
+ * `backgroundJobFailures.recordTerminalFailure` directly, because the invitee
+ * row has to be corrected in the same transaction as the operator record.
  */
 export async function scheduleEmail<
   Fn extends FunctionReference<"action", "internal"> & SchedulableFunctionReference,
 >(
   ctx: MutationCtx,
   fn: Fn,
+  job: EmailJob,
   ...args: OptionalRestArgs<Fn>
 ): Promise<void> {
-  await pool.enqueueAction(ctx, fn, ...(args as [any]));
+  await pool.enqueueAction(ctx, fn, ...(args as [any]), {
+    onComplete: internal.emailDelivery.recordEmailTerminalFailure,
+    context: {
+      kind: job.kind,
+      // The invitee row is the better handle where it exists: it names the
+      // recipient as well as the event. Untracked mail falls back to the event.
+      key: job.inviteeId ?? job.eventId,
+      inviteeId: job.inviteeId,
+    },
+  });
 }

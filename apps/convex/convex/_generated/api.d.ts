@@ -4197,6 +4197,23 @@ export declare const internal: {
       },
       null
     >;
+    recordEmailTerminalFailure: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        context: {
+          inviteeId?: Id<"calendarEventInvitees">;
+          key: string;
+          kind: string;
+        };
+        result:
+          | { kind: "success"; returnValue: any }
+          | { error: string; kind: "failed" }
+          | { kind: "canceled" };
+        workId: string;
+      },
+      null
+    >;
   };
   emailEvents: {
     recordEmailEvent: FunctionReference<

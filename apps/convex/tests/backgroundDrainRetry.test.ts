@@ -17,9 +17,24 @@ import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "../convex/dbTriggers";
 import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
+
+/**
+ * Calendar mail's failure seam. `emails.ts` sends through the raw `resend`
+ * client (the component's batch endpoint cannot carry the ICS), so this is the
+ * one place a Resend outage is injectable without mocking anything of ours.
+ */
+const sendEmail = vi.fn();
+
+vi.mock("resend", () => ({
+  Resend: class {
+    emails = {
+      send: (payload: unknown, options?: unknown) => sendEmail(payload, options),
+    };
+  },
+}));
 
 /**
  * Page control for the open-channel fanout.
@@ -96,9 +111,16 @@ beforeEach(() => {
   injected.pageIndex = 0;
   injected.pushThrows = false;
   injected.pushFailures = 0;
+  sendEmail.mockReset();
+  sendEmail.mockResolvedValue({ data: { id: "resend-1" }, error: null });
+  vi.stubEnv("AUTH_RESEND_KEY", "re_test_key");
+  vi.stubEnv("RESEND_TEST_MODE", "false");
   vi.useFakeTimers();
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
 
 async function drain(t: ReturnType<typeof createTestContext>) {
   await t.finishAllScheduledFunctions(vi.runAllTimers);
@@ -329,5 +351,159 @@ describe("tag-delete drain", () => {
     expect(failures).toHaveLength(1);
     expect(failures[0].kind).toBe("tagSync:stripTagEverywhere");
     expect(failures[0].key).toBe(tagId);
+  });
+});
+
+/**
+ * The third family — `emailPool`. It is the one drain whose give-up is visible
+ * to a *user* and not only to an operator: `deliveryStatus` is what the guest
+ * list renders, and `waiting` there means "still going out", which is exactly
+ * the wrong thing to say about mail that will never be attempted again.
+ *
+ * `sendTrackedEmail` deliberately leaves the row alone on a transient failure —
+ * an attempt still in flight must not read as a failure — so the only place the
+ * row can learn that the last attempt was also the final one is the pool's
+ * `onComplete`. Both halves are asserted, because either alone is a half-fix:
+ * the `backgroundJobFailures` row is what an operator reads, the `failed`
+ * status is what the organizer reads.
+ */
+describe("calendar mail", () => {
+  /** Invite one guest with Resend failing transiently for good. */
+  async function inviteGuestThroughOutage(
+    t: ReturnType<typeof createTestContext>,
+  ) {
+    // Retryable per `classifyResendError`, so every attempt rethrows plain and
+    // the pool spends all five — the ~30s Resend blip the pool exists for.
+    sendEmail.mockResolvedValue({
+      data: null,
+      error: { name: "rate_limit_exceeded", message: "Too many requests" },
+    });
+    return await inviteOneGuest(t);
+  }
+
+  async function inviteOneGuest(t: ReturnType<typeof createTestContext>) {
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const eventId = await asUser.mutation(api.calendarEvents.create, {
+      workspaceId,
+      title: "Q3 planning",
+      startsAt: Date.UTC(2026, 7, 20, 9, 0),
+      endsAt: Date.UTC(2026, 7, 20, 10, 0),
+      timezone: "UTC",
+      invitees: { userIds: [], guestEmails: ["guest@example.com"] },
+    });
+    await drain(t);
+
+    const invitee = await t.run(async (ctx) =>
+      ctx.db
+        .query("calendarEventInvitees")
+        .withIndex("by_event", (q) => q.eq("eventId", eventId))
+        .unique(),
+    );
+    return invitee!;
+  }
+
+  async function jobFailures(t: ReturnType<typeof createTestContext>) {
+    return await t.run(async (ctx) =>
+      ctx.db.query("backgroundJobFailures").collect(),
+    );
+  }
+
+  it("records a background job failure once retries are exhausted", async () => {
+    const t = createTestContext();
+    const invitee = await inviteGuestThroughOutage(t);
+
+    const failures = await jobFailures(t);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].kind).toBe("emails:sendEventInvite");
+    expect(failures[0].key).toBe(invitee._id);
+    expect(failures[0].error).toContain("Too many requests");
+    expect(failures[0].failedAt).toEqual(expect.any(Number));
+  });
+
+  it("moves the invitee row off `waiting` once retries are exhausted", async () => {
+    const t = createTestContext();
+    const invitee = await inviteGuestThroughOutage(t);
+
+    expect(invitee.deliveryStatus).toBe("failed");
+    expect(invitee.deliveryError).toContain("Too many requests");
+  });
+
+  /**
+   * The other way a send gives up. A permanent failure stops on the first
+   * attempt and writes its own classified reason on the way out — quota reads
+   * as quota — but it too reached no operator surface before this change: the
+   * organizer saw `failed`, `admin/jobs` saw nothing. Both are asserted, and
+   * the reason has to survive the `onComplete` that now runs behind it.
+   */
+  it("records the give-up for a permanent failure without rewording it", async () => {
+    const t = createTestContext();
+    sendEmail.mockResolvedValue({
+      data: null,
+      error: { name: "daily_quota_exceeded", message: "Daily quota reached" },
+    });
+
+    const invitee = await inviteOneGuest(t);
+
+    expect(invitee.deliveryStatus).toBe("failed");
+    // Exactly, not merely containing "quota": what the pool hands `onComplete`
+    // is the serialized `NonRetryableError` and it contains the word too.
+    expect(invitee.deliveryError).toBe(
+      "Email quota exhausted: Daily quota reached",
+    );
+    expect(await jobFailures(t)).toHaveLength(1);
+  });
+
+  /**
+   * Misconfiguration, which is the same silent drop reached without any Resend
+   * involvement at all: `resolveTestMode` throws before the send is entered, so
+   * there is no classified failure, the rethrow reads as transient, and all
+   * five attempts are spent on an error no attempt could have fixed. The row
+   * never even reaches `waiting` here — nothing stamped it — which is the other
+   * state the give-up has to be willing to correct.
+   */
+  it("records the give-up when a deployment is missing its mail config", async () => {
+    const t = createTestContext();
+    vi.stubEnv("RESEND_TEST_MODE", "");
+
+    const invitee = await inviteOneGuest(t);
+
+    expect(invitee.deliveryStatus).toBe("failed");
+    expect(invitee.deliveryError).toContain("RESEND_TEST_MODE");
+    expect(await jobFailures(t)).toHaveLength(1);
+  });
+
+  /**
+   * The bound on what the give-up may overwrite, driven at the seam the pool
+   * itself calls because the race is not reachable from a mutation: the send
+   * hands the message to Resend and then throws on the bookkeeping behind it.
+   * The pool retries what it sees as a failed attempt while the mail that did
+   * go out is delivered, and the webhook lands `delivered` on the row. Were the
+   * give-up to restate that as `failed`, the organizer would be told mail was
+   * never sent that their guest is looking at.
+   *
+   * The operator record is written either way — the job did give up, whatever
+   * became of the message.
+   */
+  it("does not overwrite a delivery the webhook already resolved", async () => {
+    const t = createTestContext();
+    const invitee = await inviteOneGuest(t);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(invitee._id, { deliveryStatus: "delivered" });
+    });
+
+    await t.mutation(internal.emailDelivery.recordEmailTerminalFailure, {
+      workId: "work-1" as never,
+      context: {
+        kind: "emails:sendEventInvite",
+        key: invitee._id,
+        inviteeId: invitee._id,
+      },
+      result: { kind: "failed", error: "Bookkeeping write failed" },
+    });
+
+    const after = await t.run(async (ctx) => await ctx.db.get(invitee._id));
+    expect(after?.deliveryStatus).toBe("delivered");
+    expect(after?.deliveryError).toBeUndefined();
+    expect(await jobFailures(t)).toHaveLength(1);
   });
 });

@@ -14,6 +14,22 @@
 import { v } from "convex/values";
 import { vOnCompleteArgs } from "@convex-dev/workpool";
 import { internalMutation } from "./functions";
+import type { MutationCtx } from "./_generated/server";
+
+/**
+ * The one write into this table. Mutations cannot call mutations, so the
+ * handlers below and `emailDelivery.recordEmailTerminalFailure` — which has a
+ * row of its own to correct on top of this — all land here instead.
+ */
+export async function insertJobFailure(
+  ctx: MutationCtx,
+  failure: { kind: string; key: string; error: string },
+): Promise<void> {
+  await ctx.db.insert("backgroundJobFailures", {
+    ...failure,
+    failedAt: Date.now(),
+  });
+}
 
 /** Names the drain (`module:function`) and the thing it was draining. */
 export const vJobContext = v.object({ kind: v.string(), key: v.string() });
@@ -33,11 +49,10 @@ export const recordTerminalFailure = internalMutation({
   handler: async (ctx, { context, result }) => {
     if (result.kind !== "failed") return null;
 
-    await ctx.db.insert("backgroundJobFailures", {
+    await insertJobFailure(ctx, {
       kind: context.kind,
       key: context.key,
       error: result.error,
-      failedAt: Date.now(),
     });
     return null;
   },
@@ -57,12 +72,7 @@ export const recordOutboundAbandoned = internalMutation({
   args: { kind: v.string(), key: v.string(), error: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.insert("backgroundJobFailures", {
-      kind: args.kind,
-      key: args.key,
-      error: args.error,
-      failedAt: Date.now(),
-    });
+    await insertJobFailure(ctx, args);
     return null;
   },
 });

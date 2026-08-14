@@ -117,9 +117,15 @@ export const startProcessing = mutation({
       throw new Error(`Job ${jobId} is not in pending state`);
     }
 
+    // `internal.lib.deletionWorkflow`, not the local `deletionWorkflow` object:
+    // `workflow.start` resolves a function REFERENCE, and the module-local
+    // export cast to one is not a reference — it fails with "is not a
+    // functionReference" the moment a job is actually scheduled. Unreachable
+    // while every target fits in the first inline batch, which is why it
+    // survived: only deletions past `batchSize` create a job at all.
     const workflowId = await workflow.start(
       ctx,
-      deletionWorkflow as unknown as FunctionReference<"mutation", "internal">,
+      internal.lib.deletionWorkflow as unknown as FunctionReference<"mutation", "internal">,
       { jobId },
     );
 

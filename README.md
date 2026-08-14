@@ -5,6 +5,8 @@ NEXT STEPS:
 
 - add a (workpool) background job backoffice center (of the workspace, admin only)
 
+- cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
+
 - recurrent events in calendar
 
 - add a dependency view to tasks
