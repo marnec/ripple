@@ -140,21 +140,31 @@ export const finalizeOAuth = internalAction({
     // numeric user id (stable across renames), `accountLogin` is the username.
     // `externalBotLogin` is the same username: events authored by this user
     // are our own outbound echo (the inbound echo guard suppresses them).
-    await ctx.runMutation(
-      internal.integrations.core.install.completeInstallationFromCallback,
-      {
-        workspaceId: resolved.workspaceId,
-        userId: resolved.userId,
-        provider: "gitlab",
-        externalAccountId: String(user.id),
-        externalAccountType: "user",
-        accountLogin: user.username,
-        externalBotLogin: user.username,
-        credentialToken: bundle.accessToken,
-        oauthRefreshToken: bundle.refreshToken,
-        oauthExpiresAt: bundle.expiresAt,
-      },
-    );
+    // Guarded like the two calls above it: `doCompleteInstall` throws on
+    // ordinary conditions (entitlement off, account claimed by another
+    // workspace, actor no longer an admin), and this runs on a browser
+    // navigation where a throw is a raw 500 instead of the documented
+    // `?gitlab_oauth=error` redirect.
+    try {
+      await ctx.runMutation(
+        internal.integrations.core.install.completeInstallationFromCallback,
+        {
+          workspaceId: resolved.workspaceId,
+          userId: resolved.userId,
+          provider: "gitlab",
+          externalAccountId: String(user.id),
+          externalAccountType: "user",
+          accountLogin: user.username,
+          externalBotLogin: user.username,
+          credentialToken: bundle.accessToken,
+          oauthRefreshToken: bundle.refreshToken,
+          oauthExpiresAt: bundle.expiresAt,
+        },
+      );
+    } catch (err) {
+      console.error("[gitlab/oauth] could not complete the installation", err);
+      return null;
+    }
 
     return { workspaceId: resolved.workspaceId };
   },

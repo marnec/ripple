@@ -330,6 +330,27 @@ http.route({
 });
 
 /**
+ * The absolute app origin the two provider callbacks redirect back into, or
+ * `null` when the deployment has no `SITE_URL`.
+ *
+ * `Response.redirect` rejects a relative URL with a `TypeError`, so treating a
+ * missing var as `""` crashes *every* exit from those routes — the success
+ * redirect and the error redirect alike. A misconfigured deployment cannot be
+ * made to land the browser anywhere useful, but it can fail in a way that
+ * names the cause instead of throwing an opaque 500.
+ */
+function appSiteUrl(): string | null {
+  const siteUrl = process.env.SITE_URL;
+  return siteUrl ? siteUrl : null;
+}
+
+const siteUrlMisconfigured = () =>
+  new Response(
+    "SITE_URL is not configured on this Convex deployment, so the integration callback cannot redirect back into the app.",
+    { status: 500, headers: { "Content-Type": "text/plain" } },
+  );
+
+/**
  * GET /integrations/github/setup
  *
  * GitHub App "Setup URL" callback. After an admin installs the App, GitHub
@@ -339,13 +360,19 @@ http.route({
  * and redirect the browser back into the app's workspace settings.
  *
  * Always redirects (never returns raw JSON) — this is a user-facing browser
- * navigation. Failures land on `/workspaces` with `?github_install=error`.
+ * navigation. Failures land on `/workspaces` with `?github_install=error`,
+ * including the ones `doCompleteInstall` raises as a `ConvexError` (entitlement
+ * off, account claimed elsewhere, actor no longer an admin), which would
+ * otherwise strand the user on a raw 500 outside the app. The single
+ * non-redirect exit is a deployment with no `SITE_URL`, which has no app origin
+ * to redirect to.
  */
 http.route({
   path: "/integrations/github/setup",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
-    const siteUrl = process.env.SITE_URL ?? "";
+    const siteUrl = appSiteUrl();
+    if (!siteUrl) return siteUrlMisconfigured();
     const url = new URL(request.url);
     const installationId = url.searchParams.get("installation_id");
     const nonce = url.searchParams.get("state");
@@ -362,10 +389,20 @@ http.route({
     // than a completed install.
     if (!nonce) return fail();
 
-    const result = await ctx.runAction(
-      internal.integrations.github.setupAction.finalizeInstall,
-      { installationId: installationId ?? undefined, nonce, code },
-    );
+    // Backstop. `finalizeInstall` returns null on every failure it knows
+    // about; this keeps the "always redirects" contract even for one it
+    // doesn't, which would otherwise strand the user on a raw 500 outside the
+    // app with the App already installed on their GitHub account.
+    let result;
+    try {
+      result = await ctx.runAction(
+        internal.integrations.github.setupAction.finalizeInstall,
+        { installationId: installationId ?? undefined, nonce, code },
+      );
+    } catch (err) {
+      console.error("[setup] install callback threw", err);
+      return fail();
+    }
     if (!result) return fail();
 
     if (result.candidateToken) {
@@ -393,13 +430,17 @@ http.route({
  * stores the bundle, and returns the workspace to redirect into.
  *
  * Always redirects — failure lands on `/workspaces` with
- * `?gitlab_oauth=error`. Success lands on the originating workspace's settings.
+ * `?gitlab_oauth=error`, including a `ConvexError` out of the install write
+ * (see the GitHub setup route above). Success lands on the originating
+ * workspace's settings. The single non-redirect exit is a deployment with no
+ * `SITE_URL`.
  */
 http.route({
   path: "/integrations/gitlab/oauth/callback",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
-    const siteUrl = process.env.SITE_URL ?? "";
+    const siteUrl = appSiteUrl();
+    if (!siteUrl) return siteUrlMisconfigured();
     const url = new URL(request.url);
     const code = url.searchParams.get("code");
     const nonce = url.searchParams.get("state");
@@ -409,10 +450,19 @@ http.route({
 
     if (!code || !nonce) return fail();
 
-    const result = await ctx.runAction(
-      internal.integrations.gitlab.oauthAction.finalizeOAuth,
-      { code, nonce },
-    );
+    // Backstop, as on the GitHub setup route above — and here the user has
+    // already granted a live `api`-scope token, so stranding them on a 500
+    // wastes a real credential.
+    let result;
+    try {
+      result = await ctx.runAction(
+        internal.integrations.gitlab.oauthAction.finalizeOAuth,
+        { code, nonce },
+      );
+    } catch (err) {
+      console.error("[gitlab/oauth] callback threw", err);
+      return fail();
+    }
     if (!result) return fail();
 
     return Response.redirect(

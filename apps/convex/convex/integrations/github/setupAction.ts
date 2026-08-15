@@ -158,20 +158,31 @@ export const finalizeInstall = internalAction({
     const slug = process.env.GITHUB_APP_SLUG;
     const externalBotLogin = slug ? `${slug}[bot]` : undefined;
 
-    await ctx.runMutation(
-      internal.integrations.core.install.completeInstallationFromCallback,
-      {
-        workspaceId: resolved.workspaceId,
-        userId: resolved.userId,
-        provider: "github",
-        externalAccountId: args.installationId,
-        externalAccountType: accountType,
-        accountLogin,
-        externalBotLogin,
-        // Set only here, only after the check above.
-        installationVerified: true,
-      },
-    );
+    // `doCompleteInstall` throws on three ordinary conditions — entitlement
+    // off, the account already claimed by another workspace, the actor no
+    // longer an admin. This is a browser navigation, so a throw here is a raw
+    // 500 in the user's face; every other failure mode in this action is
+    // `console.error` + `return null` (which the route turns into the
+    // documented `?github_install=error` redirect), and so is this one.
+    try {
+      await ctx.runMutation(
+        internal.integrations.core.install.completeInstallationFromCallback,
+        {
+          workspaceId: resolved.workspaceId,
+          userId: resolved.userId,
+          provider: "github",
+          externalAccountId: args.installationId,
+          externalAccountType: accountType,
+          accountLogin,
+          externalBotLogin,
+          // Set only here, only after the check above.
+          installationVerified: true,
+        },
+      );
+    } catch (err) {
+      console.error("[setup] could not complete the installation", err);
+      return null;
+    }
 
     return { workspaceId: resolved.workspaceId };
   },
