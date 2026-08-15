@@ -71,6 +71,34 @@ export const cascadeRules = defineCascadeRules({
     { to: "favorites", via: "by_resource_id", field: "resourceId" },
     { to: "recentActivity", via: "by_resource_id", field: "resourceId" },
     { to: "entityTags", via: "by_resource_id", field: "resourceId" },
+    // Without this the link row outlives the project with its status still
+    // `active`, and an active link is a live binding: `findLiveRepoLink`
+    // resolves it, so every later `issues.*` delivery for that repo passes the
+    // gates and then throws in `resolveTriageStatus` (the project's
+    // `taskStatuses` are gone) — a permanent per-delivery failure loop. It also
+    // makes the repo unlinkable forever, since `createLink` refuses a second
+    // binding while any non-disconnected row exists, naming a project id that
+    // no longer resolves. The table was already listed under `workspaces`; only
+    // the project-level parent was missing.
+    { to: "projectIntegrationLinks", via: "by_project", field: "projectId" },
+  ],
+
+  // ── integration links ───────────────────────────────────────────────
+  // Reached from `projects` (above) and from `workspaces`. Both composite
+  // indexes below lead with the FK, which is the only field the cascade eq's —
+  // the same trick the `taskIntegrationLinks` rule already relies on.
+  //
+  // This is deliberately a plain cascade, not `unlinkLink`'s drain: the drain
+  // exists to snapshot `externalRefFrozen` onto each task so a disconnected
+  // repo's issue history survives on the Ripple side, and here those tasks are
+  // being deleted in the same cascade. There is nothing left to freeze it onto.
+  projectIntegrationLinks: [
+    { to: "pullRequests", via: "by_link_externalPrId", field: "projectIntegrationLinkId" },
+    { to: "taskIntegrationLinks", via: "by_link_externalIssueId", field: "projectIntegrationLinkId" },
+  ],
+
+  pullRequests: [
+    { to: "taskPullRequestLinks", via: "by_pullRequest", field: "pullRequestId" },
   ],
 
   // ── tasks ───────────────────────────────────────────────────────────

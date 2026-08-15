@@ -241,6 +241,116 @@ describe("cascade delete: projects.remove", () => {
     expect(await countByIndex(t, "taskStatuses", "by_project", "projectId", projectId)).toBe(0);
     expect(await t.run(async (ctx) => ctx.db.get(projectId))).toBeNull();
   }, 60000);
+
+  /**
+   * `projectIntegrationLinks` was listed under the `workspaces` rule but not
+   * under `projects`, so deleting a project left the link row behind with its
+   * status still `active` — and an active link is a live binding, not an inert
+   * record. Two things follow from that, and the second one is why this is not
+   * merely untidy:
+   *
+   *   - `createLink` refuses a new binding while any non-`disconnected` row
+   *     exists for the repo, naming a project id that no longer resolves. The
+   *     repo becomes permanently unlinkable through the UI.
+   *   - `findLiveRepoLink` still resolves the orphan, so every later `issues.*`
+   *     delivery for that repo passes the gates, patches `lastWebhookAt`, and
+   *     then throws in `resolveTriageStatus` — the project's `taskStatuses`
+   *     went with the cascade. A permanent per-delivery failure loop.
+   */
+  it("cascades into the repo link, its PRs and its task links, freeing the repo to be relinked", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
+    const taskId = await createTask(t, { projectId, workspaceId, statusId: todoId, userId });
+
+    // `createLink` needs a triage status and an installed integration account.
+    await t.run(async (ctx) => {
+      await ctx.db.insert("taskStatuses", {
+        projectId,
+        name: "Triage",
+        color: "bg-amber-500",
+        order: 1,
+        isDefault: false,
+        isCompleted: false,
+        isTriage: true,
+      });
+      const botUserId = await ctx.db.insert("users", { name: "GitHub" });
+      await ctx.db.insert("workspaceIntegrations", {
+        workspaceId,
+        botUserId,
+        provider: "github",
+        externalAccountId: "install-999",
+      });
+    });
+
+    const linkId = await asUser.mutation(api.integrations.core.links.createLink, {
+      projectId,
+      workspaceId,
+      externalAccountId: "install-999",
+      externalRepoId: "repo-node-1",
+      externalRepoFullName: "acme/web",
+    });
+
+    // One of everything hanging off the link.
+    const { prId, taskLinkId } = await t.run(async (ctx) => {
+      const prId = await ctx.db.insert("pullRequests", {
+        workspaceId,
+        projectIntegrationLinkId: linkId,
+        provider: "github",
+        externalPrId: "pr-node-1",
+        number: 7,
+        title: "Add the thing",
+        url: "https://github.com/acme/web/pull/7",
+        state: "open" as const,
+        headRef: "feature",
+        baseRef: "main",
+        externalAuthor: { login: "octocat", avatarUrl: "", url: "" },
+        externalUpdatedAt: Date.now(),
+      });
+      await ctx.db.insert("taskPullRequestLinks", { taskId, pullRequestId: prId });
+      const taskLinkId = await ctx.db.insert("taskIntegrationLinks", {
+        taskId,
+        projectIntegrationLinkId: linkId,
+        externalIssueId: "issue-node-1",
+        externalUpdatedAt: Date.now(),
+        externalAuthor: { login: "octocat", avatarUrl: "", url: "" },
+      });
+      return { prId, taskLinkId };
+    });
+
+    await asUser.mutation(api.projects.remove, { id: projectId });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    expect(await t.run((ctx) => ctx.db.get(linkId)), "the repo link must not outlive its project").toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(prId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(taskLinkId))).toBeNull();
+    expect(await countByIndex(t, "taskPullRequestLinks", "by_pullRequest", "pullRequestId", prId)).toBe(0);
+
+    // The observable that actually bit users: the repository is bindable again.
+    const { projectId: nextProjectId } = await setupProject(t, { workspaceId, userId });
+    await t.run((ctx) =>
+      ctx.db.insert("taskStatuses", {
+        projectId: nextProjectId,
+        name: "Triage",
+        color: "bg-amber-500",
+        order: 0,
+        isDefault: false,
+        isCompleted: false,
+        isTriage: true,
+      }),
+    );
+
+    await expect(
+      asUser.mutation(api.integrations.core.links.createLink, {
+        projectId: nextProjectId,
+        workspaceId,
+        externalAccountId: "install-999",
+        externalRepoId: "repo-node-1",
+        externalRepoFullName: "acme/web",
+      }),
+      // Pre-fix this threw `Repository is already linked to project <deleted-id>`.
+    ).resolves.toBeDefined();
+  });
 });
 
 // ── Channel cascade ──────────────────────────────────────────────────

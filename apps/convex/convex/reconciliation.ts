@@ -51,6 +51,12 @@ const RELATIONSHIPS = [
   { child: "messageReactions", field: "messageId", parent: "messages" },
   { child: "documentBlockRefs", field: "documentId", parent: "documents" },
   { child: "spreadsheetCellRefs", field: "spreadsheetId", parent: "spreadsheets" },
+  // Orphans predating the `projects → projectIntegrationLinks` cascade rule.
+  // These are the expensive kind: an orphaned link still reads as live, so it
+  // blocks relinking the repo and hard-errors every inbound delivery until
+  // someone disconnects it by hand.
+  { child: "projectIntegrationLinks", field: "projectId", parent: "projects" },
+  { child: "pullRequests", field: "projectIntegrationLinkId", parent: "projectIntegrationLinks" },
 ] as const;
 
 export const orphanReport = internalQuery({
