@@ -1,6 +1,7 @@
 "use node";
 
 import * as webpush from "web-push";
+import { endpointHost, isAllowedPushEndpoint } from "./pushEndpoints";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { NotificationCategory } from "@ripple/shared/notificationCategories";
@@ -76,6 +77,20 @@ async function deliverToEndpoints(
   notification: string,
   label?: string,
 ): Promise<void> {
+  // `registerSubscription` is the gate, but rows predate it: anything already
+  // stored pointing somewhere that is not a push service is not dialled, and
+  // says which host it was so the allowlist can be extended if a real vendor
+  // was missed. Deliberately not deleted — an endpoint refused here is either
+  // hostile (and the row is evidence) or a vendor we should be supporting.
+  const dialable = subscriptions.filter((s) => {
+    if (isAllowedPushEndpoint(s.endpoint)) return true;
+    console.warn(
+      `Skipping push to an endpoint that is not a known push service: host=${endpointHost(s.endpoint)}`,
+    );
+    return false;
+  });
+  if (dialable.length === 0) return;
+
   const subject = process.env.VAPID_SUBJECT;
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
@@ -96,7 +111,7 @@ async function deliverToEndpoints(
   const staleEndpoints: string[] = [];
 
   await Promise.allSettled(
-    subscriptions.map(async (subscription) => {
+    dialable.map(async (subscription) => {
       const { endpoint, expirationTime, keys } = subscription;
       const id = endpoint.split("/").at(-1);
 

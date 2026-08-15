@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 import { internalQuery } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import { requireUser } from "./authHelpers";
+import { isAllowedPushEndpoint } from "./utils/pushEndpoints";
 
 export const registerSubscription = mutation({
   args: {
@@ -16,6 +17,13 @@ export const registerSubscription = mutation({
   returns: v.null(),
   handler: async (ctx, { endpoint, expirationTime, keys, device }) => {
     const userId = await requireUser(ctx);
+
+    // The endpoint is a URL this deployment will POST to under its own VAPID
+    // keys — so "a user sent it" is not enough to dial it. See
+    // `utils/pushEndpoints`.
+    if (!isAllowedPushEndpoint(endpoint)) {
+      throw new ConvexError("Invalid push endpoint");
+    }
 
     // Check if this exact endpoint is already registered
     const byEndpoint = await ctx.db

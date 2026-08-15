@@ -95,8 +95,6 @@ async function doSubscribeUser(
       pushSubscription = await createSubscription();
     }
 
-    setIsSubscribed(true);
-
     const subscription = pushSubscription.toJSON();
 
     if (!subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
@@ -104,6 +102,13 @@ async function doSubscribeUser(
     }
 
     await registerSubscription({ ...(subscription as PushSubscriptionJSON), device: deviceId });
+
+    // Only after the server accepted it. The browser having minted a
+    // subscription is not the same as this deployment being willing to deliver
+    // to it — `registerSubscription` refuses an endpoint that is not a known
+    // push service — and claiming "subscribed" for a registration that was
+    // rejected is the one failure the user would never find out about.
+    setIsSubscribed(true);
   } catch (err) {
     console.error("Failed to subscribe the user:", err);
     setError(err);

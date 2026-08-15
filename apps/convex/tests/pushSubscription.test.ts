@@ -57,6 +57,35 @@ describe("pushSubscription", () => {
       });
       expect(subs).toHaveLength(1);
     });
+
+    /**
+     * Sweep #10 — the endpoint is a URL this deployment later POSTs to, under
+     * its own VAPID keys, once per notification, forever. Storing whatever an
+     * authenticated caller sends turned signup into an outbound-request
+     * primitive aimed at a host of their choosing: nothing downstream
+     * re-validates, and a host that simply refuses the connection never
+     * returns the 410/404/403 that `removeStaleEndpoints` sweeps on, so the row
+     * is permanent. A real Push API endpoint always comes from one of a handful
+     * of vendors, so anything else is by definition not a browser subscription.
+     */
+    it("refuses an endpoint that is not a known push service", async () => {
+      const t = createTestContext();
+      const { asUser } = await setupAuthenticatedUser(t);
+
+      await expect(
+        asUser.mutation(api.pushSubscription.registerSubscription, {
+          device: "chrome",
+          endpoint: "https://attacker.example.com/push/abc",
+          expirationTime: null,
+          keys: { p256dh: "key1", auth: "auth1" },
+        }),
+      ).rejects.toThrow("Invalid push endpoint");
+
+      const subs = await t.run(async (ctx) =>
+        ctx.db.query("pushSubscriptions").collect(),
+      );
+      expect(subs).toHaveLength(0);
+    });
   });
 
   describe("unregisterSubscription", () => {
