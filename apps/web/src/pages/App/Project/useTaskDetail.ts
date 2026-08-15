@@ -29,23 +29,22 @@ export function useTaskDetail({
   workspaceId,
   projectId,
   collaborationEnabled = true,
-  suggestionDataEnabled = true,
 }: {
   taskId: Id<"tasks"> | null;
   workspaceId: Id<"workspaces">;
   projectId: Id<"projects">;
   /** Defer Yjs/PartyKit connection until true (e.g. when sheet is visible). */
   collaborationEnabled?: boolean;
-  /** Defer diagrams/documents list queries until true (only needed for # suggestion menu). */
-  suggestionDataEnabled?: boolean;
 }) {
   const task = useQuery(api.tasks.get, taskId ? { taskId } : "skip");
   const statuses = useQuery(api.taskStatuses.listByProject, projectId ? { projectId } : "skip");
   const rawMembers = useWorkspaceMembers();
   const members = rawMembers?.map((m) => ({ ...m, userId: m._id }));
-  const diagrams = useQuery(api.diagrams.list, suggestionDataEnabled ? { workspaceId } : "skip");
-  const documents = useQuery(api.documents.list, suggestionDataEnabled ? { workspaceId } : "skip");
-  const spreadsheets = useQuery(api.spreadsheets.list, suggestionDataEnabled ? { workspaceId } : "skip");
+  // No diagrams/documents/spreadsheets lists here. They existed only to feed
+  // the description editor's `#` picker, which now asks `nodes.suggest` per
+  // keystroke; a `suggestionDataEnabled` flag had to gate them because three
+  // whole-workspace subscriptions were too expensive to mount eagerly. Nothing
+  // to gate any more — see TaskDescriptionEditor.
   const currentUser = useViewer();
 
   const updateTask = useMutation(api.tasks.update).withOptimisticUpdate(
@@ -148,9 +147,6 @@ export function useTaskDetail({
     task,
     statuses,
     members,
-    diagrams,
-    documents,
-    spreadsheets,
     currentUser,
     editor,
     descriptionReady,

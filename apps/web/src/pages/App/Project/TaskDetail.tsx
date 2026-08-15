@@ -57,7 +57,6 @@ export function TaskDetailProvider({
   workspaceId,
   projectId,
   collaborationEnabled,
-  suggestionDataEnabled,
   children,
 }: {
   taskId: Id<"tasks"> | null;
@@ -65,8 +64,6 @@ export function TaskDetailProvider({
   projectId: Id<"projects">;
   /** Defer the Yjs/PartyKit connection until true (e.g. once the sheet is visible). */
   collaborationEnabled?: boolean;
-  /** Defer the diagrams/documents/spreadsheets queries that only the `#` menu needs. */
-  suggestionDataEnabled?: boolean;
   children: ReactNode;
 }) {
   const detail = useTaskDetail({
@@ -74,7 +71,6 @@ export function TaskDetailProvider({
     workspaceId,
     projectId,
     collaborationEnabled,
-    suggestionDataEnabled,
   });
 
   return (
@@ -212,9 +208,6 @@ export function TaskDescriptionSection({
   const editor = (
     <TaskDescriptionEditor
       editor={detail.editor}
-      documents={detail.documents}
-      diagrams={detail.diagrams}
-      spreadsheets={detail.spreadsheets}
       members={detail.members}
       workspaceId={detail.workspaceId}
       className={editorClassName}

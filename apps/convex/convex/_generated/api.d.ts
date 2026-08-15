@@ -1008,19 +1008,6 @@ export declare const api: {
         yjsSnapshotId?: Id<"_storage">;
       } | null
     >;
-    list: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"diagrams">;
-        name: string;
-        tags?: Array<string>;
-        workspaceId: Id<"workspaces">;
-        yjsSnapshotId?: Id<"_storage">;
-      }>
-    >;
     remove: FunctionReference<
       "mutation",
       "public",
@@ -1137,19 +1124,6 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       } | null
-    >;
-    list: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"documents">;
-        name: string;
-        tags?: Array<string>;
-        workspaceId: Id<"workspaces">;
-        yjsSnapshotId?: Id<"_storage">;
-      }>
     >;
     remove: FunctionReference<
       "mutation",
@@ -2573,19 +2547,6 @@ export declare const api: {
         workspaceId: Id<"workspaces">;
         yjsSnapshotId?: Id<"_storage">;
       } | null
-    >;
-    list: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"spreadsheets">;
-        name: string;
-        tags?: Array<string>;
-        workspaceId: Id<"workspaces">;
-        yjsSnapshotId?: Id<"_storage">;
-      }>
     >;
     remove: FunctionReference<
       "mutation",

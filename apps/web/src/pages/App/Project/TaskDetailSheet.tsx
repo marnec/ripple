@@ -72,7 +72,6 @@ export function TaskDetailSheet({
       workspaceId={workspaceId}
       projectId={projectId}
       collaborationEnabled={editorDeferred}
-      suggestionDataEnabled={open}
     >
       <SheetShell
         taskId={taskId}

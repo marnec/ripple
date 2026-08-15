@@ -6,7 +6,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/shadcn/style.css";
 import { FileText, PenTool, Table } from "lucide-react";
 import { RippleSpinner } from "@/components/RippleSpinner";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useConvex, useMutation } from "convex/react";
 import { useState } from "react";
 import { useTheme } from "next-themes";
 import { useMemberSuggestions } from "../../../hooks/use-member-suggestions";
@@ -18,11 +18,12 @@ import type { Id } from "@convex/_generated/dataModel";
 
 type TaskDescriptionEditorProps = {
   editor: any;
-  documents?: Array<{ _id: string; name: string }>;
-  diagrams?: Array<{ _id: string; name: string }>;
-  spreadsheets?: Array<{ _id: string; name: string }>;
   members?: Array<{ userId: string; name?: string | null; image?: string }>;
-  /** Required for `@event` autocomplete; omit only in static previews. */
+  /**
+   * Required for the `#` resource picker and `@event` autocomplete — both are
+   * server-side queries scoped to the workspace. Omit only in static previews,
+   * where both menus come back empty.
+   */
   workspaceId?: Id<"workspaces">;
   className?: string;
   hideLabel?: boolean;
@@ -36,9 +37,6 @@ type TaskDescriptionEditorProps = {
 
 export function TaskDescriptionEditor({
   editor,
-  documents,
-  diagrams,
-  spreadsheets,
   members,
   workspaceId,
   className,
@@ -46,6 +44,7 @@ export function TaskDescriptionEditor({
   loading,
 }: TaskDescriptionEditorProps) {
   const { resolvedTheme } = useTheme();
+  const convex = useConvex();
   const ensureBlockRef = useMutation(api.documentBlockRefs.ensureBlockRef);
   const ensureCellRef = useMutation(api.spreadsheetCellRefs.ensureCellRef);
   const prepareStableRef = useAction(api.spreadsheetCellRefsNode.prepareStableRef);
@@ -69,6 +68,82 @@ export function TaskDescriptionEditor({
   });
 
   const getEventItems = useEventSuggestions({ workspaceId, editor });
+
+  /**
+   * `#` trigger. Asks the server per keystroke — a point-in-time
+   * `convex.query` against the bounded `nodes.suggest` feed — instead of
+   * client-filtering three whole workspace tables. Those were `documents.list`
+   * / `diagrams.list` / `spreadsheets.list`, three subscriptions mounted for as
+   * long as a task sheet was open (and ~5 minutes past its close, via the
+   * caching `useQuery`), so any rename or creation anywhere in the workspace
+   * re-shipped every row to every client with a task open.
+   *
+   * Deliberately NOT `useResourceSuggestions`, which backs the chat and
+   * document pickers off the same query: this menu does something different
+   * with every type it offers — a document opens the block picker, a diagram
+   * inserts a block inline, a spreadsheet opens the cell-ref dialog — and it
+   * offers no projects. Only the data source was shared, and that is what
+   * `nodes.suggest` now is.
+   */
+  const getResourceItems = async (query: string) => {
+    if (!workspaceId) return [];
+    const trimmed = query.trim();
+    const results = await convex.query(api.nodes.suggest, {
+      workspaceId,
+      types: ["document", "diagram", "spreadsheet"],
+      query: trimmed.length > 0 ? trimmed : undefined,
+      perType: 5,
+    });
+
+    return results.flatMap((r) => {
+      if (r.resourceType === "document") {
+        return [
+          {
+            title: r.name,
+            onItemClick: () =>
+              setBlockPickerDialog({
+                open: true,
+                documentId: r.resourceId as Id<"documents">,
+                documentName: r.name,
+              }),
+            icon: <FileText className="h-4 w-4" />,
+            group: "Documents",
+          },
+        ];
+      }
+      if (r.resourceType === "diagram") {
+        return [
+          {
+            title: r.name,
+            onItemClick: () =>
+              editor.insertBlocks(
+                [{ type: "diagram", props: { diagramId: r.resourceId } }],
+                editor.getTextCursorPosition().block,
+                "after",
+              ),
+            icon: <PenTool className="h-4 w-4" />,
+            group: "Diagrams",
+          },
+        ];
+      }
+      if (r.resourceType === "spreadsheet") {
+        return [
+          {
+            title: r.name,
+            onItemClick: () =>
+              setCellRefDialog({
+                open: true,
+                spreadsheetId: r.resourceId as Id<"spreadsheets">,
+                spreadsheetName: r.name,
+              }),
+            icon: <Table className="h-4 w-4" />,
+            group: "Spreadsheets",
+          },
+        ];
+      }
+      return [];
+    });
+  };
 
   // `@` trigger: members first, then events grouped by Upcoming / Recent.
   const getAtMentionItems = async (query: string) => {
@@ -192,90 +267,7 @@ export function TaskDescriptionEditor({
           theme={resolvedTheme === "dark" ? "dark" : "light"}
           sideMenu={false}
         >
-          <SuggestionMenuController
-            triggerCharacter={"#"}
-            getItems={async (query) => {
-              const items: Array<{
-                title: string;
-                onItemClick: () => void;
-                icon: React.JSX.Element;
-                group: string;
-              }> = [];
-
-              if (documents) {
-                documents
-                  .filter((doc) =>
-                    doc.name.toLowerCase().includes(query.toLowerCase())
-                  )
-                  .slice(0, 5)
-                  .forEach((doc) => {
-                    items.push({
-                      title: doc.name,
-                      onItemClick: () => {
-                        setBlockPickerDialog({
-                          open: true,
-                          documentId: doc._id as Id<"documents">,
-                          documentName: doc.name,
-                        });
-                      },
-                      icon: <FileText className="h-4 w-4" />,
-                      group: "Documents",
-                    });
-                  });
-              }
-
-              if (diagrams) {
-                diagrams
-                  .filter((d) =>
-                    d.name.toLowerCase().includes(query.toLowerCase())
-                  )
-                  .slice(0, 5)
-                  .forEach((d) => {
-                    items.push({
-                      title: d.name,
-                      onItemClick: () => {
-                        editor.insertBlocks(
-                          [
-                            {
-                              type: "diagram",
-                              props: { diagramId: d._id },
-                            },
-                          ],
-                          editor.getTextCursorPosition().block,
-                          "after"
-                        );
-                      },
-                      icon: <PenTool className="h-4 w-4" />,
-                      group: "Diagrams",
-                    });
-                  });
-              }
-
-              if (spreadsheets) {
-                spreadsheets
-                  .filter((s) =>
-                    s.name.toLowerCase().includes(query.toLowerCase())
-                  )
-                  .slice(0, 5)
-                  .forEach((s) => {
-                    items.push({
-                      title: s.name,
-                      onItemClick: () => {
-                        setCellRefDialog({
-                          open: true,
-                          spreadsheetId: s._id as Id<"spreadsheets">,
-                          spreadsheetName: s.name,
-                        });
-                      },
-                      icon: <Table className="h-4 w-4" />,
-                      group: "Spreadsheets",
-                    });
-                  });
-              }
-
-              return items;
-            }}
-          />
+          <SuggestionMenuController triggerCharacter={"#"} getItems={getResourceItems} />
           <SuggestionMenuController
             triggerCharacter={"@"}
             getItems={getAtMentionItems}

@@ -77,6 +77,43 @@ describe("nodes.suggest", () => {
     expect(results.map((r) => r.name)).toEqual(["Newest", "Middle"]);
   });
 
+  /**
+   * The task description's `#` picker asks for these three types in one call
+   * and renders each into its own group with its own action — a document opens
+   * the block picker, a diagram inserts a block, a spreadsheet opens the
+   * cell-ref dialog. It used to get them from `documents.list` / `diagrams.list`
+   * / `spreadsheets.list`, three unbounded whole-workspace subscriptions held
+   * open for the life of the task sheet; those queries are gone, so this call
+   * is the only thing standing behind that menu.
+   */
+  it("serves the task picker's three types in one call, each bounded by perType", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    // Through the real mutations, not `ctx.db.insert`: `nodes` is a
+    // trigger-maintained index, so a raw insert is invisible to `suggest`.
+    await asUser.mutation(api.documents.create, { workspaceId, name: "Spec" });
+    // A second document, so `perType` has something to cut.
+    await asUser.mutation(api.documents.create, { workspaceId, name: "Notes" });
+    await asUser.mutation(api.diagrams.create, { workspaceId, name: "Architecture" });
+    await asUser.mutation(api.spreadsheets.create, { workspaceId, name: "Forecast" });
+
+    const results = await asUser.query(api.nodes.suggest, {
+      workspaceId,
+      types: ["document", "diagram", "spreadsheet"],
+      perType: 1,
+    });
+
+    // One per type, grouped in the order the picker requested them — that
+    // ordering is what puts Documents above Diagrams above Spreadsheets.
+    expect(results.map((r) => r.resourceType)).toEqual([
+      "document",
+      "diagram",
+      "spreadsheet",
+    ]);
+    expect(results.every((r) => typeof r.name === "string" && r.name.length > 0)).toBe(true);
+  });
+
   it("never suggests another workspace's resources, even to its admin", async () => {
     const t = createTestContext();
     const a = await setupWorkspaceWithAdmin(t, "Workspace A");

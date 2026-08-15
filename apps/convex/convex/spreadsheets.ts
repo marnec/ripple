@@ -22,19 +22,21 @@ const spreadsheetValidator = v.object({
   yjsSnapshotId: v.optional(v.id("_storage")),
 });
 
-export const list = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(spreadsheetValidator),
-  handler: async (ctx, { workspaceId }) => {
-    await requireWorkspaceMember(ctx, workspaceId);
-
-    return ctx.db
-      .query("spreadsheets")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .order("desc")
-      .collect();
-  },
-});
+/*
+ * There is deliberately no `list` here.
+ *
+ * It was `requireWorkspaceMember` + an unbounded `by_workspace` `.collect()`,
+ * and its only caller was the task description's `#` picker, which mounted it
+ * (plus the sibling lists in diagrams.ts / spreadsheets.ts) as a live
+ * subscription for as long as a task sheet was open. Every rename or creation
+ * anywhere in the workspace then re-shipped every row of all three tables to
+ * every client with a task open, to render at most five entries.
+ *
+ * The bounded replacements already exist and cover both surfaces: `nodes.suggest`
+ * for pickers and autocomplete, and the paginated `search` below for browsing.
+ * Same rule as `workspaceSidebarData.get` — don't reintroduce a whole-table
+ * resource list; add the case to `nodes.suggest`.
+ */
 
 export const search = query({
   args: {
