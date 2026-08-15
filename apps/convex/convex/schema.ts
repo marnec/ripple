@@ -1623,4 +1623,23 @@ export default defineSchema({
   })
     .index("by_kind", ["kind"])
     .index("by_kind_key", ["kind", "key"]),
+
+  // How far a periodic job has already read through an append-only source.
+  //
+  // The problem it exists for: a cron that sweeps a window someone else owns
+  // sees the same rows on every run. The webhook receiver's dead-letter queue
+  // holds an entry for 30 days, so a daily mirror would re-report the same
+  // dead delivery thirty times — and would undo `admin.jobs.dismiss`, since a
+  // dismissed row would simply reappear tomorrow.
+  //
+  // Deliberately *not* a column on any of those sources: they are component
+  // tables this app cannot alter, and the point of the shape is that the next
+  // such job adds a `job` string and nothing else — no new table, no new
+  // index, no edit to `jobWatermarks.ts`. `cursor` is whatever monotonic
+  // ordinal that source exposes (a `movedAt`, a `_creationTime`, a sequence
+  // number); the job that writes it is the only thing that has to know which.
+  jobWatermarks: defineTable({
+    job: v.string(),
+    cursor: v.number(),
+  }).index("by_job", ["job"]),
 });

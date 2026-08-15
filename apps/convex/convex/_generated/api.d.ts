@@ -6686,6 +6686,14 @@ export declare const internal: {
   version: {
     set: FunctionReference<"mutation", "internal", {}, null>;
   };
+  webhookDlqMirror: {
+    mirrorDeadDeliveries: FunctionReference<
+      "mutation",
+      "internal",
+      { batchSize?: number },
+      null
+    >;
+  };
   webhookMaintenance: {
     pruneWebhookEvents: FunctionReference<
       "mutation",

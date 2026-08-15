@@ -893,6 +893,22 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  jobWatermarks: {
+    document: {
+      cursor: number;
+      job: string;
+      _id: Id<"jobWatermarks">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "cursor" | "job";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_job: ["job", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   medias: {
     document: {
       fileName: string;

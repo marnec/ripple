@@ -21,6 +21,19 @@ crons.cron(
   {},
 );
 
+// Report inbound deliveries that exhausted their attempts, daily at 4:50 AM
+// UTC. Ahead of the retention sweep below, which takes the dead-letter entry
+// with the event it names — but the ordering is not what makes that safe: an
+// entry is written the moment a delivery dies, a full 30 days before its event
+// can expire, so every dead delivery is mirrored long before the sweep reaches
+// it. See `webhookDlqMirror.ts`.
+crons.cron(
+  "webhook dead-letter mirror",
+  "50 4 * * *",
+  internal.webhookDlqMirror.mirrorDeadDeliveries,
+  {},
+);
+
 // Enforce the 30-day webhook retention the routes declare, daily at 5:00 AM
 // UTC — after storage GC and email retention, so the three heavy sweeps do not
 // overlap. Like the resend component, the webhook receiver ships the cleanup
