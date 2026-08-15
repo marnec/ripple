@@ -4727,6 +4727,7 @@ export declare const internal: {
           },
           {
             credentialToken?: string;
+            drainJobIds: Array<Id<"_scheduled_functions">>;
             externalAccountId: string;
             provider: string;
           }
@@ -4753,6 +4754,7 @@ export declare const internal: {
           "mutation",
           "internal",
           {
+            drainJobIds?: Array<Id<"_scheduled_functions">>;
             frontier?: string;
             integrationId: Id<"workspaceIntegrations">;
             stalledPolls?: number;

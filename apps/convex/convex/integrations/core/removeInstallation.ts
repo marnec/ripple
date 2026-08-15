@@ -40,7 +40,7 @@ export const remove = action({
     const actorId = await getAuthUserId(ctx);
     if (!actorId) throw new ConvexError("Not authenticated");
 
-    const { provider, externalAccountId, credentialToken } =
+    const { provider, externalAccountId, credentialToken, drainJobIds } =
       await ctx.runMutation(
         internal.integrations.core.install.beginRemoveInstallation,
         {
@@ -86,9 +86,12 @@ export const remove = action({
       console.error("[removeInstallation] provider call threw", err);
     }
 
+    // `drainJobIds` rides along so the waiter can tell a cascade that has
+    // stopped from one the scheduler simply hasn't started — see
+    // `finishRemoveInstallation`.
     await ctx.runMutation(
       internal.integrations.core.install.finishRemoveInstallation,
-      { integrationId: args.integrationId },
+      { integrationId: args.integrationId, drainJobIds },
     );
 
     return null;

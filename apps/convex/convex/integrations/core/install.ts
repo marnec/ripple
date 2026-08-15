@@ -471,6 +471,12 @@ export const beginRemoveInstallation = internalMutation({
     provider: v.string(),
     externalAccountId: v.string(),
     credentialToken: v.optional(v.string()),
+    /**
+     * The drain jobs this call queued. `finishRemoveInstallation` needs them to
+     * tell "the cascade has stopped" apart from "the cascade has not started" —
+     * see its own doc comment.
+     */
+    drainJobIds: v.array(v.id("_scheduled_functions")),
   }),
   handler: async (ctx, args) => {
     const membership = await getWorkspaceMembership(
@@ -497,14 +503,17 @@ export const beginRemoveInstallation = internalMutation({
       (l) => l.workspaceIntegrationId === args.integrationId,
     );
 
+    const drainJobIds: Id<"_scheduled_functions">[] = [];
     for (const link of own) {
       if (link.status !== "disconnected") {
         await ctx.db.patch(link._id, { status: "disconnected" });
       }
-      await ctx.scheduler.runAfter(
-        0,
-        internal.integrations.core.links.drainDisconnectBatch,
-        { projectIntegrationLinkId: link._id },
+      drainJobIds.push(
+        await ctx.scheduler.runAfter(
+          0,
+          internal.integrations.core.links.drainDisconnectBatch,
+          { projectIntegrationLinkId: link._id },
+        ),
       );
     }
 
@@ -531,6 +540,7 @@ export const beginRemoveInstallation = internalMutation({
       provider: integration.provider,
       externalAccountId: integration.externalAccountId,
       credentialToken: integration.credentialToken,
+      drainJobIds,
     };
   },
 });
@@ -555,6 +565,34 @@ function pollDelayMs(stalledPolls: number): number {
 }
 
 /**
+ * Has any drain job queued by `beginRemoveInstallation` not run yet?
+ *
+ * This is the difference between "the cascade has stopped" and "the cascade has
+ * not started", which an unmoved frontier alone cannot tell apart. A poll that
+ * fires before the scheduler has got to `drainDisconnectBatch` sees exactly
+ * what a dead cascade looks like, and counting it as a stall spends the budget
+ * on a drain that was never given a turn.
+ *
+ * Only the *first* job per link is tracked, which is all that is needed: once
+ * that one has run, either the frontier is moving (so stalls don't accumulate)
+ * or the cascade really has stopped. A self-rescheduled successor is not
+ * followed.
+ */
+async function anyDrainStillQueued(
+  ctx: MutationCtx,
+  drainJobIds: Id<"_scheduled_functions">[] | undefined,
+): Promise<boolean> {
+  if (!drainJobIds?.length) return false;
+  for (const jobId of drainJobIds) {
+    const job = await ctx.db.system.get(jobId);
+    if (job?.state.kind === "pending" || job?.state.kind === "inProgress") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Step 3: delete the integration row, but only once the disconnect cascade has
  * drained — see `beginRemoveInstallation` for why the ordering matters.
  * Re-schedules itself while any `taskIntegrationLinks` row under this account
@@ -567,7 +605,17 @@ function pollDelayMs(stalledPolls: number): number {
  * which an unbounded waiter is an endless chain of scheduled mutations for the
  * life of the deployment. `frontier` is the first surviving task-link row seen
  * last time; the cascade deletes in index order, so a frontier that has not
- * moved means the drain has not run. Only those polls count toward the cap.
+ * moved means the drain made no progress. Only those polls count toward the cap.
+ *
+ * "Made no progress" is not the same as "has not started", and `drainJobIds`
+ * is what separates them: while a queued drain job is still `pending` or
+ * `inProgress` the frontier is *expected* to sit still, and counting that as a
+ * stall spends the whole budget on a scheduler that hasn't got there yet. That
+ * window is normally short, but nothing bounds it — the drain's first poll can
+ * lose the race to the scheduler under load, and then the cascade is declared
+ * dead having never run once. This surfaced as a test that failed roughly half
+ * the time under full-suite load, where the drain's module load consistently
+ * lost to the already-warm poll chain.
  *
  * On giving up the integration row is deliberately left in place, and the
  * stall is reported to `backgroundJobFailures` instead. Deleting it would be
@@ -585,6 +633,12 @@ export const finishRemoveInstallation = internalMutation({
     stalledPolls: v.optional(v.number()),
     /** The first surviving task-link row at the previous poll. */
     frontier: v.optional(v.string()),
+    /**
+     * The drain jobs `beginRemoveInstallation` queued. Absent when the wait is
+     * entered some other way, in which case a poll has no way to know the drain
+     * has not started and every unmoved frontier counts as a stall.
+     */
+    drainJobIds: v.optional(v.array(v.id("_scheduled_functions"))),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -620,8 +674,14 @@ export const finishRemoveInstallation = internalMutation({
       return null;
     }
 
+    // A frontier that hasn't moved is only evidence of a stall once the drain
+    // has actually had its turn — otherwise the budget is spent waiting for a
+    // scheduler that simply hasn't got there yet.
+    const notStartedYet = await anyDrainStillQueued(ctx, args.drainJobIds);
     const stalledPolls =
-      frontier === args.frontier ? (args.stalledPolls ?? 0) + 1 : 0;
+      notStartedYet || frontier !== args.frontier
+        ? 0
+        : (args.stalledPolls ?? 0) + 1;
 
     if (stalledPolls >= MAX_STALLED_POLLS) {
       await insertJobFailure(ctx, {
@@ -639,7 +699,12 @@ export const finishRemoveInstallation = internalMutation({
     await ctx.scheduler.runAfter(
       pollDelayMs(stalledPolls),
       internal.integrations.core.install.finishRemoveInstallation,
-      { integrationId: args.integrationId, stalledPolls, frontier },
+      {
+        integrationId: args.integrationId,
+        stalledPolls,
+        frontier,
+        drainJobIds: args.drainJobIds,
+      },
     );
     return null;
   },

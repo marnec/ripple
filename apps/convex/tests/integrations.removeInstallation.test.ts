@@ -372,6 +372,63 @@ describe("removing a provider installation", () => {
     expect(await t.run((ctx) => ctx.db.get(integrationId))).toBeNull();
   });
 
+  /**
+   * The third state, between "draining" and "dead": queued but not yet run.
+   * An unmoved frontier looks identical in all three, so without the drain
+   * job's own status the waiter spends its entire budget on a scheduler that
+   * simply hasn't got there yet and declares a cascade dead that never ran.
+   *
+   * Not hypothetical — this is what made the suite flaky. `convex-test` invokes
+   * each scheduled function through a dynamic `import()` of its module, so
+   * under full-suite CPU load the drain's cold module (`links.ts`) lost to the
+   * poll chain running out of already-warm `install.ts`, and all of
+   * MAX_STALLED_POLLS burned down before the drain's first turn.
+   */
+  it("does not count a stall while the drain job is still queued", async () => {
+    const t = createTestContext();
+    const { integrationId, linkId } = await setupInstalled(t);
+    const asAdmin = await makePlatformAdmin(t);
+
+    // Queued far enough out that nothing below runs it — the cascade has not
+    // started, and the task-link row `setupInstalled` seeded still stands.
+    const drainJobId = await t.run((ctx) =>
+      ctx.scheduler.runAfter(
+        60 * 60_000,
+        internal.integrations.core.links.drainDisconnectBatch,
+        { projectIntegrationLinkId: linkId },
+      ),
+    );
+
+    // Comfortably past MAX_STALLED_POLLS (8), always on the same frontier.
+    let args: unknown = { integrationId, drainJobIds: [drainJobId] };
+    for (let i = 0; i < 12; i++) {
+      await t.mutation(
+        internal.integrations.core.install.finishRemoveInstallation,
+        args as never,
+      );
+      const queued = await t.run(async (ctx) => {
+        const rows = await ctx.db.system.query("_scheduled_functions").collect();
+        const polls = rows.filter(
+          (r) =>
+            r.name.endsWith("finishRemoveInstallation") &&
+            r.state.kind === "pending",
+        );
+        return polls.length ? (polls[polls.length - 1].args[0] as unknown) : null;
+      });
+      expect(queued, `gave up on poll ${i} before the drain had run`).not.toBeNull();
+      args = queued;
+    }
+
+    // No stall reported, and the installation is still there to be removed
+    // once the drain finally runs.
+    expect((await asAdmin.query(api.admin.jobs.list, {})).failures).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.get(integrationId))).not.toBeNull();
+
+    // And letting the drain run ends the wait the way it should.
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await t.run((ctx) => ctx.db.get(integrationId))).toBeNull();
+  });
+
   it("refuses a non-admin member", async () => {
     const t = createTestContext();
     const { workspaceId, integrationId } = await setupInstalled(t);
