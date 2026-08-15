@@ -1,6 +1,7 @@
 import {
   ConfirmDialog,
   EmptyState,
+  LoadMore,
   LoadingPane,
   PageHeader,
   SearchInput,
@@ -25,40 +26,47 @@ import { fmtNum, fmtRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { LinkIcon, SendIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-type Invite = FunctionReturnType<typeof api.admin.invites.list>["invites"][number];
+type Invite = FunctionReturnType<typeof api.admin.invites.list>["page"][number];
 
 const FILTERS = ["pending", "accepted", "declined", "all"] as const;
 type Filter = (typeof FILTERS)[number];
 
-export function InvitesPage() {
-  const data = useQuery(api.admin.invites.list);
-  const resend = useMutation(api.admin.invites.resend);
-  const revoke = useMutation(api.admin.invites.revoke);
+const PAGE_SIZE = 50;
 
+export function InvitesPage() {
   const [filter, setFilter] = useState<Filter>("pending");
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<Id<"workspaceInvites"> | null>(null);
   const [revoking, setRevoking] = useState<Invite | null>(null);
 
-  if (data === undefined) return <LoadingPane />;
+  // The status filter is an argument, not a client-side predicate: it selects
+  // the `by_status` index server-side. Changing tabs restarts pagination, which
+  // is the point — filtering a loaded page would have hidden older pending
+  // invites behind newer accepted ones, and a stuck pending invite is the whole
+  // reason an operator opens this page.
+  const {
+    results: invites,
+    status,
+    loadMore,
+  } = usePaginatedQuery(
+    api.admin.invites.list,
+    filter === "all" ? {} : { status: filter },
+    { initialNumItems: PAGE_SIZE },
+  );
+  const siteUrl = useQuery(api.admin.invites.siteUrl);
+  const resend = useMutation(api.admin.invites.resend);
+  const revoke = useMutation(api.admin.invites.revoke);
 
-  const { invites, siteUrl } = data;
-  const counts: Record<Filter, number> = {
-    pending: invites.filter((i) => i.status === "pending").length,
-    accepted: invites.filter((i) => i.status === "accepted").length,
-    declined: invites.filter((i) => i.status === "declined").length,
-    all: invites.length,
-  };
+  if (status === "LoadingFirstPage") return <LoadingPane />;
 
   const needle = q.trim().toLowerCase();
   const visible = invites.filter((i) => {
-    if (filter !== "all" && i.status !== filter) return false;
     if (!needle) return true;
     return (
       i.email.toLowerCase().includes(needle) ||
@@ -102,7 +110,9 @@ export function InvitesPage() {
     <div className="space-y-6">
       <PageHeader
         title="Invites"
-        subtitle={`${fmtNum(counts.pending)} pending of ${fmtNum(counts.all)} workspace invites`}
+        subtitle={`${fmtNum(invites.length)} ${filter === "all" ? "" : filter + " "}loaded${
+          status === "Exhausted" ? "" : " of more"
+        }${needle ? " · search covers loaded invites only" : ""}`}
       >
         <SearchInput
           value={q}
@@ -118,10 +128,12 @@ export function InvitesPage() {
         style={{ animationDelay: "40ms" }}
       >
         <TabsList>
+          {/* No per-tab counts any more: each would be a deployment-wide count
+              of a table with no aggregate behind it. The tab selects an index
+              range instead. */}
           {FILTERS.map((f) => (
             <TabsTrigger key={f} value={f} className="font-mono text-xs uppercase">
               {f}
-              <span className="tabular-nums opacity-60">{counts[f]}</span>
             </TabsTrigger>
           ))}
         </TabsList>
@@ -129,12 +141,12 @@ export function InvitesPage() {
 
       <Card className="animate-rise gap-0 py-0" style={{ animationDelay: "80ms" }}>
         {visible.length === 0 ? (
-          <EmptyState title={counts.all === 0 ? "No invites yet" : "Nothing to show"}>
-            {counts.all === 0
-              ? "No workspace invites have been sent yet."
-              : needle
-                ? `No ${filter === "all" ? "" : filter + " "}invites match “${q}”.`
-                : `No ${filter === "all" ? "" : filter} invites.`}
+          <EmptyState title={needle ? "Nothing to show" : "No invites"}>
+            {needle
+              ? `No loaded ${filter === "all" ? "" : filter + " "}invites match “${q}”. Load more to widen the search.`
+              : filter === "all"
+                ? "No workspace invites have been sent yet."
+                : `No ${filter} invites.`}
           </EmptyState>
         ) : (
           <Table>
@@ -163,6 +175,7 @@ export function InvitesPage() {
             </TableBody>
           </Table>
         )}
+        <LoadMore status={status} onLoadMore={loadMore} pageSize={PAGE_SIZE} />
       </Card>
 
       <ConfirmDialog

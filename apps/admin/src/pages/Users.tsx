@@ -1,6 +1,7 @@
 import {
   ConfirmDialog,
   EmptyState,
+  LoadMore,
   LoadingPane,
   PageHeader,
   SearchInput,
@@ -24,7 +25,7 @@ import { errorMessage } from "@/lib/errors";
 import { fmtDate, fmtNum, shortId } from "@/lib/format";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import {
   ArrowLeftIcon,
   BotIcon,
@@ -54,14 +55,24 @@ function ProviderBadges({ providers }: { providers: string[] }) {
   );
 }
 
+const PAGE_SIZE = 50;
+
 // ── List ─────────────────────────────────────────────────────────────────
 export function UsersPage() {
-  const users = useQuery(api.admin.users.list);
+  const {
+    results: users,
+    status,
+    loadMore,
+  } = usePaginatedQuery(api.admin.users.list, {}, { initialNumItems: PAGE_SIZE });
   const [q, setQ] = useState("");
 
-  const filtered = users?.filter((u) => {
-    if (!q.trim()) return true;
-    const needle = q.toLowerCase();
+  const needle = q.trim().toLowerCase();
+  // Client-side, so it only reaches the pages already loaded — `users` carries
+  // no search index, and the alternative was reading every account on every
+  // keystroke's worth of invalidation. The subtitle says so rather than letting
+  // an empty result read as "no such user".
+  const filtered = users.filter((u) => {
+    if (!needle) return true;
     return (
       u.name?.toLowerCase().includes(needle) ||
       u.email?.toLowerCase().includes(needle) ||
@@ -69,17 +80,32 @@ export function UsersPage() {
     );
   });
 
+  const loading = status === "LoadingFirstPage";
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Users" subtitle={users ? `${fmtNum(users.length)} accounts` : ""}>
+      <PageHeader
+        title="Users"
+        subtitle={
+          loading
+            ? ""
+            : `${fmtNum(users.length)} loaded${status === "Exhausted" ? "" : " of more"}${
+                needle ? " · search covers loaded accounts only" : ""
+              }`
+        }
+      >
         <SearchInput value={q} onValueChange={setQ} placeholder="Search name, email, id…" />
       </PageHeader>
 
       <Card className="animate-rise gap-0 py-0" style={{ animationDelay: "60ms" }}>
-        {filtered === undefined ? (
+        {loading ? (
           <LoadingPane className="min-h-50" />
         ) : filtered.length === 0 ? (
-          <EmptyState title="No matches">No users match “{q}”.</EmptyState>
+          <EmptyState title={needle ? "No matches" : "No users"}>
+            {needle
+              ? `No loaded users match “${q}”. Load more to widen the search.`
+              : "No accounts yet."}
+          </EmptyState>
         ) : (
           <Table>
             <TableHeader>
@@ -146,6 +172,7 @@ export function UsersPage() {
             </TableBody>
           </Table>
         )}
+        <LoadMore status={status} onLoadMore={loadMore} pageSize={PAGE_SIZE} />
       </Card>
     </div>
   );

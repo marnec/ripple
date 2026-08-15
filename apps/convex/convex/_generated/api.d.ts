@@ -28,9 +28,21 @@ export declare const api: {
       list: FunctionReference<
         "query",
         "public",
-        {},
         {
-          invites: Array<{
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          status?: "pending" | "accepted" | "declined";
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
             _id: Id<"workspaceInvites">;
             createdAt: number;
             deliveryError?: string;
@@ -53,7 +65,6 @@ export declare const api: {
             workspaceId: Id<"workspaces">;
             workspaceName: string | null;
           }>;
-          siteUrl: string | null;
         }
       >;
       resend: FunctionReference<
@@ -68,6 +79,7 @@ export declare const api: {
         { inviteId: Id<"workspaceInvites"> },
         null
       >;
+      siteUrl: FunctionReference<"query", "public", {}, string | null>;
     };
     jobs: {
       dismiss: FunctionReference<
@@ -98,22 +110,14 @@ export declare const api: {
         "public",
         {},
         {
-          admins: number;
-          bots: number;
-          channels: number;
-          documents: number;
           failedJobs: number;
-          pendingInvites: number;
-          projects: number;
+          failedJobsCapped: boolean;
           recentSignups: Array<{
             _id: Id<"users">;
             createdAt: number;
             email?: string;
             name?: string;
           }>;
-          tasks: number;
-          users: number;
-          workspaces: number;
         }
       >;
     };
@@ -153,21 +157,34 @@ export declare const api: {
       list: FunctionReference<
         "query",
         "public",
-        {},
-        Array<{
-          _id: Id<"users">;
-          createdAt: number;
-          disabled: boolean;
-          email?: string;
-          emailVerified: boolean;
-          image?: string;
-          isAnonymous: boolean;
-          isBot: boolean;
-          isPlatformAdmin: boolean;
-          name?: string;
-          providers: Array<string>;
-          workspaceCount: number;
-        }>
+        {
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            _id: Id<"users">;
+            createdAt: number;
+            disabled: boolean;
+            email?: string;
+            emailVerified: boolean;
+            image?: string;
+            isAnonymous: boolean;
+            isBot: boolean;
+            isPlatformAdmin: boolean;
+            name?: string;
+            providers: Array<string>;
+            workspaceCount: number;
+          }>;
+        }
       >;
       setDisabled: FunctionReference<
         "mutation",

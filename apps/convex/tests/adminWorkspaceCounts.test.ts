@@ -1,3 +1,4 @@
+import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api";
@@ -133,5 +134,82 @@ describe("admin/workspaces.get counts", () => {
     await expect(
       asUser.query(api.admin.workspaces.get, { workspaceId }),
     ).rejects.toThrow();
+  });
+});
+
+/**
+ * The list page's counts moved off three deployment-wide `.collect()`s and onto
+ * the same per-workspace aggregates, so the cost now scales with the number of
+ * workspaces rather than with what is inside them. Tenant attribution is the
+ * thing worth pinning: the old shape tallied a map keyed by `workspaceId`, the
+ * new one reads a namespace, and a mix-up would show one tenant another's
+ * numbers.
+ */
+describe("admin/workspaces.list counts", () => {
+  it("attributes members, channels and projects to the right workspace", async () => {
+    const t = createTestContext();
+    const { adminId, asAdmin } = await makePlatformAdmin(t);
+
+    // Seeded here rather than via `setupWorkspaceWithAdmin`, which inserts the
+    // owner's membership raw: no trigger fires, so the aggregate never counts
+    // that row and `memberCount` reads one short. Production writes all go
+    // through `functions.ts`'s mutation builder, so this is a fixture concern
+    // and not a live one — but it is exactly the drift the aggregates can show.
+    const { acmeId, globexId } = await t.run(async (ctx) => {
+      const db = writerWithTriggers(ctx, ctx.db, triggers);
+      const owner = await ctx.db.insert("users", { name: "Owner", email: "o@example.com" });
+      const extra = await ctx.db.insert("users", { name: "Extra", email: "x@example.com" });
+
+      // Acme: 2 members, 2 channels, 1 project.
+      const acme = await ctx.db.insert("workspaces", { name: "Acme", ownerId: owner });
+      for (const userId of [owner, extra]) {
+        await db.insert("workspaceMembers", {
+          userId,
+          workspaceId: acme,
+          role: WorkspaceRole.MEMBER,
+        });
+      }
+      await db.insert("channels", { name: "a", workspaceId: acme, type: "open" });
+      await db.insert("channels", { name: "b", workspaceId: acme, type: "open" });
+      await db.insert("projects", {
+        name: "P",
+        color: "bg-blue-500",
+        workspaceId: acme,
+        creatorId: owner,
+      });
+
+      // Globex: 1 member, 1 channel, no projects.
+      const globex = await ctx.db.insert("workspaces", { name: "Globex", ownerId: adminId });
+      await db.insert("workspaceMembers", {
+        userId: adminId,
+        workspaceId: globex,
+        role: WorkspaceRole.ADMIN,
+      });
+      await db.insert("channels", { name: "theirs", workspaceId: globex, type: "open" });
+
+      return { acmeId: acme, globexId: globex };
+    });
+
+    const rows = await asAdmin.query(api.admin.workspaces.list, {});
+    const acme = rows.find((w) => w._id === acmeId);
+    const globex = rows.find((w) => w._id === globexId);
+
+    expect(acme).toMatchObject({
+      memberCount: 2,
+      channelCount: 2,
+      projectCount: 1,
+      ownerName: "Owner",
+    });
+    expect(globex).toMatchObject({ memberCount: 1, channelCount: 1, projectCount: 0 });
+  });
+
+  it("returns workspaces newest-first", async () => {
+    const t = createTestContext();
+    await setupWorkspaceWithAdmin(t, "First");
+    await setupWorkspaceWithAdmin(t, "Second");
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    const rows = await asAdmin.query(api.admin.workspaces.list, {});
+    expect(rows.map((w) => w.name)).toEqual(["Second", "First"]);
   });
 });

@@ -2,35 +2,44 @@ import { v } from "convex/values";
 import { query } from "../_generated/server";
 import { requirePlatformAdmin } from "../authHelpers";
 
+/** Read at most this many failure rows; the tile shows "N+" once saturated. */
+const FAILED_JOBS_CEILING = 50;
+/** Over-read signups so bot rows can be dropped without a second query. */
+const SIGNUP_SCAN = 24;
+const SIGNUPS_SHOWN = 6;
+
 /**
- * Platform-wide counts for the admin Overview page. Guard runs first, so this
- * public query is safe. Counts use full-table `.collect()` — fine at this app's
- * scale (a single operator's deployment); revisit with @convex-dev/aggregate if
- * any table grows into the hundreds of thousands.
+ * The admin Overview page. Guard runs first, so this public query is safe.
  *
- * `messages` is deliberately NOT among them. This is a subscribed query, so a
- * message count re-runs all of these scans on every message sent anywhere in
- * the deployment while the tab is open — and `messages` is both the fastest
- * growing table and the widest row (`body` + `plainText`), so it would be the
- * leg that pushes this query past the transaction limits and hard-fails the
- * whole page. A total message count is not worth that; per-workspace activity
- * is what an operator actually acts on. Do not add it back without an
- * aggregate or a counter — never a `.collect()`.
+ * This used to return platform-wide totals — users, workspaces, channels,
+ * documents, projects, tasks, pending invites — and every one of them was a
+ * full-table `.collect()`. That is not a shape that can be fixed in place: the
+ * per-workspace aggregates in `dbTriggers.ts` are namespaced by `workspaceId`,
+ * so `.count()` requires a namespace and there is no cross-namespace total to
+ * read. The counts are gone rather than made slow-but-careful, because this is
+ * a *subscribed* query: every one of those scans re-ran on every write anywhere
+ * in the deployment while an operator had the tab open, and the widest of them
+ * would eventually trip the transaction read limits and blank the whole page.
+ * Re-introducing them means adding un-namespaced aggregates first.
+ *
+ * What is left is what can be read under a hard bound:
+ *
+ * - `recentSignups` — a bounded `.take()` off the creation-time index, not a
+ *   sort over every user.
+ * - `failedJobs` — the console's only passive health signal, and the one table
+ *   whose healthy size is zero. Capped at {@link FAILED_JOBS_CEILING}: past that
+ *   the exact number tells an operator nothing the "+" doesn't.
+ *
+ * Do not add a count back here without an aggregate or a counter behind it —
+ * never a `.collect()`.
  */
 export const overview = query({
   args: {},
   returns: v.object({
-    users: v.number(),
-    admins: v.number(),
-    bots: v.number(),
-    workspaces: v.number(),
-    channels: v.number(),
-    documents: v.number(),
-    projects: v.number(),
-    tasks: v.number(),
-    pendingInvites: v.number(),
     /** Background work that gave up — see `admin/jobs.ts`. Zero is the healthy case. */
     failedJobs: v.number(),
+    /** `failedJobs` hit the read ceiling; render it as "N+". */
+    failedJobsCapped: v.boolean(),
     recentSignups: v.array(
       v.object({
         _id: v.id("users"),
@@ -43,49 +52,26 @@ export const overview = query({
   handler: async (ctx) => {
     await requirePlatformAdmin(ctx);
 
-    const [
-      users,
-      workspaces,
-      channels,
-      documents,
-      projects,
-      tasks,
-      invites,
-      failedJobs,
-    ] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db.query("workspaces").collect(),
-      ctx.db.query("channels").collect(),
-      ctx.db.query("documents").collect(),
-      ctx.db.query("projects").collect(),
-      ctx.db.query("tasks").collect(),
-      ctx.db.query("workspaceInvites").collect(),
-      ctx.db.query("backgroundJobFailures").collect(),
+    const [newestUsers, failures] = await Promise.all([
+      ctx.db.query("users").order("desc").take(SIGNUP_SCAN),
+      ctx.db.query("backgroundJobFailures").take(FAILED_JOBS_CEILING + 1),
     ]);
 
-    const recentSignups = [...users]
-      .filter((u) => !u.isBot)
-      .sort((a, b) => b._creationTime - a._creationTime)
-      .slice(0, 6)
-      .map((u) => ({
-        _id: u._id,
-        name: u.name,
-        email: u.email,
-        createdAt: u._creationTime,
-      }));
-
     return {
-      users: users.filter((u) => !u.isBot).length,
-      admins: users.filter((u) => u.isPlatformAdmin).length,
-      bots: users.filter((u) => u.isBot).length,
-      workspaces: workspaces.length,
-      channels: channels.length,
-      documents: documents.length,
-      projects: projects.length,
-      tasks: tasks.length,
-      pendingInvites: invites.filter((i) => i.status === "pending").length,
-      failedJobs: failedJobs.length,
-      recentSignups,
+      failedJobs: Math.min(failures.length, FAILED_JOBS_CEILING),
+      failedJobsCapped: failures.length > FAILED_JOBS_CEILING,
+      // Bots are created alongside integrations, so they can crowd the window;
+      // over-reading absorbs that. A deployment whose newest SIGNUP_SCAN users
+      // are all bots shows fewer than SIGNUPS_SHOWN rows, which is honest.
+      recentSignups: newestUsers
+        .filter((u) => !u.isBot)
+        .slice(0, SIGNUPS_SHOWN)
+        .map((u) => ({
+          _id: u._id,
+          name: u.name,
+          email: u.email,
+          createdAt: u._creationTime,
+        })),
     };
   },
 });

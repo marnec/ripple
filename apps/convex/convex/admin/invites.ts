@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { InviteStatus } from "@ripple/shared/enums/inviteStatus";
-import { internal } from "../_generated/api";
 import { query } from "../_generated/server";
 import { mutation } from "../functions";
 import { logActivity } from "../auditLog";
@@ -9,24 +9,54 @@ import { emailDeliveryStatus } from "../schema";
 import { requirePlatformAdmin } from "../authHelpers";
 
 /**
- * Admin-only: every workspace invite ever issued, enriched with the workspace
- * it targets, who sent it, and whether the invited address already has an
- * account / is already a member (the two signals that explain a "stuck"
- * pending invite). Workspaces, users and memberships are each read once and
- * joined in memory — no per-invite N+1 — matching `admin/workspaces.list`.
+ * Mirrors the `status` column's own union in `schema.ts`. Declared as literals
+ * rather than `v.string()` so `withIndex("by_status", …)` type-checks against
+ * the index's key type — a plain string arg would not.
+ */
+const inviteStatusValidator = v.union(
+  ...Object.values(InviteStatus).map((status) => v.literal(status)),
+);
+
+/**
+ * The invite id doubles as the token in `/invite/:id`, so handing an operator
+ * that link is the usual fix when the invite email never lands. This used to
+ * ride along on `list`, which can no longer carry it: a paginated query has to
+ * return the `PaginationResult` shape and nothing else. Null when SITE_URL
+ * isn't configured on the deployment.
+ */
+export const siteUrl = query({
+  args: {},
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx) => {
+    await requirePlatformAdmin(ctx);
+    return process.env.SITE_URL ?? null;
+  },
+});
+
+/**
+ * Admin-only: workspace invites newest-first, enriched with the workspace they
+ * target, who sent them, and whether the invited address already has an account
+ * / is already a member (the two signals that explain a "stuck" pending
+ * invite). Guard-first, so safe as a public query.
  *
- * `siteUrl` rides along so the UI can offer copy-invite-link: the invite id
- * doubles as the token in `/invite/:id`, and handing an operator that link is
- * the usual fix when the invite email never lands. Null when SITE_URL isn't
- * configured on the deployment.
+ * Paginated, and `status` filters on the server via the `by_status` index
+ * rather than in the client. Both halves of that matter: the previous shape
+ * read `workspaceInvites`, `workspaces`, `users` and `workspaceMembers` whole
+ * on every invalidation, and paginating alone would have left the console's
+ * status tabs filtering one loaded page — so an operator hunting a stuck
+ * pending invite would have had to page through accepted ones to reach it.
  *
- * Guard-first, so safe as a public query.
+ * The per-invite enrichment below is a deliberate N+1: every leg is a point
+ * read or an index lookup, and the page bounds how many of them run.
  */
 export const list = query({
-  args: {},
+  args: {
+    paginationOpts: paginationOptsValidator,
+    /** Omit for "all statuses". */
+    status: v.optional(inviteStatusValidator),
+  },
   returns: v.object({
-    siteUrl: v.union(v.string(), v.null()),
-    invites: v.array(
+    page: v.array(
       v.object({
         _id: v.id("workspaceInvites"),
         createdAt: v.number(),
@@ -49,50 +79,65 @@ export const list = query({
         deliveryError: v.optional(v.string()),
       }),
     ),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, { paginationOpts, status }) => {
     await requirePlatformAdmin(ctx);
 
-    const [invites, workspaces, users, members] = await Promise.all([
-      ctx.db.query("workspaceInvites").collect(),
-      ctx.db.query("workspaces").collect(),
-      ctx.db.query("users").collect(),
-      ctx.db.query("workspaceMembers").collect(),
-    ]);
+    const result = await (status === undefined
+      ? ctx.db.query("workspaceInvites").order("desc")
+      : ctx.db
+          .query("workspaceInvites")
+          .withIndex("by_status", (q) => q.eq("status", status))
+          .order("desc")
+    ).paginate(paginationOpts);
 
-    const workspaceById = new Map(workspaces.map((w) => [w._id as string, w]));
-    const userById = new Map(users.map((u) => [u._id as string, u]));
-    const userByEmail = new Map(
-      users.filter((u) => u.email).map((u) => [u.email!.toLowerCase(), u]),
+    const page = await Promise.all(
+      result.page.map(async (invite) => {
+        const [workspace, inviter, recipient] = await Promise.all([
+          ctx.db.get(invite.workspaceId),
+          ctx.db.get(invite.invitedBy),
+          // `.first()`, not `.unique()`: account-linking has historically left
+          // duplicate rows for one address, and a throw here would blank the
+          // whole page over a cosmetic column. Same shape as the lookup in
+          // `workspaceInvites.create`.
+          ctx.db
+            .query("users")
+            .withIndex("email", (q) => q.eq("email", invite.email.toLowerCase()))
+            .first(),
+        ]);
+
+        // Only worth asking once we know who the recipient is; `by_workspace_user`
+        // makes it a point lookup rather than a scan of the workspace's roster.
+        const membership = recipient
+          ? await ctx.db
+              .query("workspaceMembers")
+              .withIndex("by_workspace_user", (q) =>
+                q.eq("workspaceId", invite.workspaceId).eq("userId", recipient._id),
+              )
+              .first()
+          : null;
+
+        return {
+          _id: invite._id,
+          createdAt: invite._creationTime,
+          email: invite.email,
+          status: invite.status,
+          workspaceId: invite.workspaceId,
+          workspaceName: workspace?.name ?? null,
+          invitedBy: invite.invitedBy,
+          inviterName: inviter?.name,
+          inviterEmail: inviter?.email,
+          recipientUserId: recipient?._id ?? null,
+          recipientIsMember: membership !== null,
+          deliveryStatus: invite.deliveryStatus,
+          deliveryError: invite.deliveryError,
+        };
+      }),
     );
-    const membershipKeys = new Set(members.map((m) => `${m.workspaceId}:${m.userId}`));
 
-    return {
-      siteUrl: process.env.SITE_URL ?? null,
-      invites: [...invites]
-        .sort((a, b) => b._creationTime - a._creationTime)
-        .map((invite) => {
-          const inviter = userById.get(invite.invitedBy);
-          const recipient = userByEmail.get(invite.email.toLowerCase());
-          return {
-            _id: invite._id,
-            createdAt: invite._creationTime,
-            email: invite.email,
-            status: invite.status,
-            workspaceId: invite.workspaceId,
-            workspaceName: workspaceById.get(invite.workspaceId)?.name ?? null,
-            invitedBy: invite.invitedBy,
-            inviterName: inviter?.name,
-            inviterEmail: inviter?.email,
-            recipientUserId: recipient?._id ?? null,
-            recipientIsMember: recipient
-              ? membershipKeys.has(`${invite.workspaceId}:${recipient._id}`)
-              : false,
-            deliveryStatus: invite.deliveryStatus,
-            deliveryError: invite.deliveryError,
-          };
-        }),
-    };
+    return { page, isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });
 

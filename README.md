@@ -59,6 +59,7 @@ keyboard accessiblity
 - identity model refactor
     - [ ] split `users` (auth-only) from a new `profiles` table that can host synthetic / bot identities (integration bots, system actors); `creatorId`/`assigneeId`/`userId` refs point at `profiles`. Lets integrations create non-auth identities without polluting the auth surface.
 
+- evaluate cross-workspace aggregates to re-introduce admin overview
 
 - external ticketing system??: 
     - connected to project

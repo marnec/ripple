@@ -2223,6 +2223,7 @@ export type DataModel = {
       by_creation_time: ["_creationTime"];
       by_delivery_email: ["deliveryEmailId", "_creationTime"];
       by_email_and_status: ["email", "status", "_creationTime"];
+      by_status: ["status", "_creationTime"];
       by_workspace: ["workspaceId", "_creationTime"];
       by_workspace_by_email_by_status: [
         "workspaceId",
@@ -2308,6 +2309,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_owner: ["ownerId", "_creationTime"];
     };
     searchIndexes: {};
     vectorIndexes: {};

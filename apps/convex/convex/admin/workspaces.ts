@@ -9,14 +9,23 @@ import {
   channelsByWorkspace,
   diagramsByWorkspace,
   documentsByWorkspace,
+  membersByWorkspace,
   projectsByWorkspace,
   tasksByWorkspace,
 } from "../dbTriggers";
 
 /**
- * Admin-only: every workspace with owner identity and member count. Members,
- * channels and projects are each read once and aggregated in memory (no
- * per-workspace N+1). Guard-first, so safe as a public query.
+ * Admin-only: every workspace with owner identity and its headline counts.
+ * Guard-first, so safe as a public query.
+ *
+ * The one query in this console that still reads a whole table, deliberately:
+ * `workspaces` *is* the listing, and it holds one row per tenant. Everything
+ * hanging off it is bounded — the counts come from the per-workspace aggregates
+ * (`dbTriggers.ts`) and the owner is a point read, so the cost scales with the
+ * number of workspaces rather than with the number of channels, projects or
+ * members inside them. Reading those three tables deployment-wide to tally them
+ * in memory, which is what this did before, made the operator's list page the
+ * single most expensive subscription in the app.
  */
 export const list = query({
   args: {},
@@ -37,42 +46,30 @@ export const list = query({
   handler: async (ctx) => {
     await requirePlatformAdmin(ctx);
 
-    const [workspaces, members, channels, projects] = await Promise.all([
-      ctx.db.query("workspaces").collect(),
-      ctx.db.query("workspaceMembers").collect(),
-      ctx.db.query("channels").collect(),
-      ctx.db.query("projects").collect(),
-    ]);
+    const workspaces = await ctx.db.query("workspaces").order("desc").collect();
 
-    const tally = <T extends { workspaceId: string }>(rows: T[]) => {
-      const m = new Map<string, number>();
-      for (const r of rows) m.set(r.workspaceId, (m.get(r.workspaceId) ?? 0) + 1);
-      return m;
-    };
-    const memberCounts = tally(members);
-    const channelCounts = tally(channels);
-    const projectCounts = tally(projects);
-
-    return (
-      await Promise.all(
-        [...workspaces]
-          .sort((a, b) => b._creationTime - a._creationTime)
-          .map(async (ws) => {
-            const owner = await ctx.db.get(ws.ownerId);
-            return {
-              _id: ws._id,
-              createdAt: ws._creationTime,
-              name: ws.name,
-              description: ws.description,
-              ownerId: ws.ownerId,
-              ownerName: owner?.name,
-              ownerEmail: owner?.email,
-              memberCount: memberCounts.get(ws._id) ?? 0,
-              channelCount: channelCounts.get(ws._id) ?? 0,
-              projectCount: projectCounts.get(ws._id) ?? 0,
-            };
-          }),
-      )
+    return await Promise.all(
+      workspaces.map(async (ws) => {
+        const namespace = ws._id as string;
+        const [owner, memberCount, channelCount, projectCount] = await Promise.all([
+          ctx.db.get(ws.ownerId),
+          membersByWorkspace.count(ctx, { namespace, bounds: {} }),
+          channelsByWorkspace.count(ctx, { namespace, bounds: {} }),
+          projectsByWorkspace.count(ctx, { namespace, bounds: {} }),
+        ]);
+        return {
+          _id: ws._id,
+          createdAt: ws._creationTime,
+          name: ws.name,
+          description: ws.description,
+          ownerId: ws.ownerId,
+          ownerName: owner?.name,
+          ownerEmail: owner?.email,
+          memberCount,
+          channelCount,
+          projectCount,
+        };
+      }),
     );
   },
 });

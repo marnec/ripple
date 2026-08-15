@@ -13,6 +13,9 @@ import {
 
 type T = ReturnType<typeof createTestContext>;
 
+/** One page big enough to hold every fixture in this file. */
+const PAGE = { numItems: 50, cursor: null };
+
 async function makePlatformAdmin(t: T, email = "ops@example.com") {
   const { userId, asUser } = await setupAuthenticatedUser(t, {
     name: "Platform Admin",
@@ -79,7 +82,9 @@ describe("admin.invites.list", () => {
     });
 
     const { asAdmin } = await makePlatformAdmin(t);
-    const { invites } = await asAdmin.query(api.admin.invites.list, {});
+    const { page: invites } = await asAdmin.query(api.admin.invites.list, {
+      paginationOpts: PAGE,
+    });
 
     expect(invites[0]).toMatchObject({
       email: "typo@example.com",
@@ -96,7 +101,9 @@ describe("admin.invites.list", () => {
     await insertInvite(t, { workspaceId, invitedBy: ownerId, email: "new@example.com" });
 
     const { asAdmin } = await makePlatformAdmin(t);
-    const { invites } = await asAdmin.query(api.admin.invites.list, {});
+    const { page: invites } = await asAdmin.query(api.admin.invites.list, {
+      paginationOpts: PAGE,
+    });
 
     expect(invites.map((i) => i.email)).toEqual(["new@example.com", "old@example.com"]);
     expect(invites[0]).toMatchObject({
@@ -126,7 +133,9 @@ describe("admin.invites.list", () => {
     await insertInvite(t, { workspaceId: otherWorkspaceId, invitedBy: ownerId, email: "mia@example.com" });
 
     const { asAdmin } = await makePlatformAdmin(t);
-    const { invites } = await asAdmin.query(api.admin.invites.list, {});
+    const { page: invites } = await asAdmin.query(api.admin.invites.list, {
+      paginationOpts: PAGE,
+    });
 
     const inAcme = invites.find((i) => i.workspaceId === workspaceId);
     const inOther = invites.find((i) => i.workspaceId === otherWorkspaceId);
@@ -134,11 +143,98 @@ describe("admin.invites.list", () => {
     expect(inOther).toMatchObject({ recipientUserId: memberId, recipientIsMember: false });
   });
 
+  /**
+   * The status tabs are an index range, not a client-side predicate over one
+   * loaded page. That distinction is the whole point: an operator opens this
+   * page to find a *stuck pending* invite, and filtering after pagination would
+   * bury it behind whatever accepted invites happen to be newer.
+   */
+  it("filters by status on the server, so a pending invite older than a page of accepted ones is still reachable", async () => {
+    const t = createTestContext();
+    const { userId: ownerId, workspaceId } = await setupWorkspaceWithAdmin(t, "Acme");
+
+    await insertInvite(t, {
+      workspaceId,
+      invitedBy: ownerId,
+      email: "stuck@example.com",
+    });
+    // Newer, and enough of them to fill the page asked for below.
+    for (let i = 0; i < 5; i++) {
+      await insertInvite(t, {
+        workspaceId,
+        invitedBy: ownerId,
+        email: `accepted${i}@example.com`,
+        status: InviteStatus.ACCEPTED,
+      });
+    }
+
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    const pending = await asAdmin.query(api.admin.invites.list, {
+      paginationOpts: { numItems: 3, cursor: null },
+      status: InviteStatus.PENDING,
+    });
+    expect(pending.page.map((i) => i.email)).toEqual(["stuck@example.com"]);
+
+    // Without the filter the same page is all accepted — the case that made
+    // client-side filtering wrong.
+    const unfiltered = await asAdmin.query(api.admin.invites.list, {
+      paginationOpts: { numItems: 3, cursor: null },
+    });
+    expect(unfiltered.page.every((i) => i.status === InviteStatus.ACCEPTED)).toBe(true);
+    expect(unfiltered.isDone).toBe(false);
+  });
+
+  it("pages through the full list with the returned cursor", async () => {
+    const t = createTestContext();
+    const { userId: ownerId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    for (let i = 0; i < 5; i++) {
+      await insertInvite(t, { workspaceId, invitedBy: ownerId, email: `u${i}@example.com` });
+    }
+
+    const { asAdmin } = await makePlatformAdmin(t);
+    const first = await asAdmin.query(api.admin.invites.list, {
+      paginationOpts: { numItems: 3, cursor: null },
+    });
+    expect(first.page).toHaveLength(3);
+    expect(first.isDone).toBe(false);
+
+    const second = await asAdmin.query(api.admin.invites.list, {
+      paginationOpts: { numItems: 3, cursor: first.continueCursor },
+    });
+    expect(second.page).toHaveLength(2);
+    expect(second.isDone).toBe(true);
+
+    const seen = [...first.page, ...second.page].map((i) => i.email);
+    expect(new Set(seen).size).toBe(5);
+  });
+
   it("rejects a signed-in user who isn't a platform admin", async () => {
     const t = createTestContext();
     const { asUser } = await setupWorkspaceWithAdmin(t);
 
-    await expect(asUser.query(api.admin.invites.list, {})).rejects.toThrow(/Not authorized/);
+    await expect(
+      asUser.query(api.admin.invites.list, { paginationOpts: PAGE }),
+    ).rejects.toThrow(/Not authorized/);
+  });
+});
+
+describe("admin.invites.siteUrl", () => {
+  /**
+   * Split out of `list` because a paginated query must return the
+   * `PaginationResult` shape and nothing else — it can no longer carry a
+   * sidecar field. Still guarded: it reports deployment configuration.
+   */
+  it("is guarded like the list it was split out of", async () => {
+    const t = createTestContext();
+    const { asUser } = await setupWorkspaceWithAdmin(t);
+
+    await expect(asUser.query(api.admin.invites.siteUrl, {})).rejects.toThrow(
+      /Not authorized/,
+    );
+
+    const { asAdmin } = await makePlatformAdmin(t);
+    await expect(asAdmin.query(api.admin.invites.siteUrl, {})).resolves.not.toThrow();
   });
 });
 

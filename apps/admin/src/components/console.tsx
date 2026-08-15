@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
+import { Button } from "@ripple/ui/components/button";
 import { Card } from "@ripple/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@ripple/ui/components/input";
@@ -105,6 +106,39 @@ export function EmptyState({ title, children }: { title?: string; children?: Rea
         {children && <EmptyDescription>{children}</EmptyDescription>}
       </EmptyHeader>
     </Empty>
+  );
+}
+
+/**
+ * Footer for a `usePaginatedQuery` list. Takes the hook's `status` verbatim so
+ * the two paginated pages can't drift in how they render the tail of a list.
+ *
+ * `LoadingFirstPage` renders nothing — the caller is showing a LoadingPane and
+ * has no rows yet. `Exhausted` also renders nothing rather than an "end of
+ * list" marker: on a console where most lists fit one page, a permanent footer
+ * reads as a control that stopped working.
+ */
+export function LoadMore({
+  status,
+  onLoadMore,
+  pageSize,
+}: {
+  status: "LoadingFirstPage" | "CanLoadMore" | "LoadingMore" | "Exhausted";
+  onLoadMore: (numItems: number) => void;
+  pageSize: number;
+}) {
+  if (status === "LoadingFirstPage" || status === "Exhausted") return null;
+  return (
+    <div className="flex justify-center border-t border-border px-4 py-3">
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={status === "LoadingMore"}
+        onClick={() => onLoadMore(pageSize)}
+      >
+        {status === "LoadingMore" ? <Spinner className="size-4" /> : "Load more"}
+      </Button>
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import type { Id } from "../_generated/dataModel";
 import { query, type MutationCtx } from "../_generated/server";
 import { mutation } from "../functions";
@@ -7,69 +8,79 @@ import { requirePlatformAdmin } from "../authHelpers";
 import { removeMembershipCascade } from "../workspaceMembers";
 
 /**
- * Admin-only: every user with denormalized identity + reach (auth providers,
- * how many workspaces they're in). The guard is the first line, so this is safe
- * as a public `query` reachable from any origin. authAccounts and
- * workspaceMembers are each read once and aggregated in memory rather than
- * per-user (avoids N+1); fine at this app's scale.
+ * Admin-only: users newest-first with denormalized identity + reach (auth
+ * providers, how many workspaces they're in). The guard is the first line, so
+ * this is safe as a public `query` reachable from any origin.
+ *
+ * Paginated off the creation-time index, so the read set is one page. The
+ * previous shape read `users`, `authAccounts` and `workspaceMembers` whole and
+ * joined them in memory — cheaper *per user* than the N+1 it replaced, but
+ * unbounded in the deployment, and held open as a live subscription by the
+ * console's user list. The per-row lookups below are the N+1 again, on purpose:
+ * bounded to a page and index-driven, that is the trade pagination buys.
+ *
+ * There is no server-side search behind this. The console's search box filters
+ * the pages already loaded, which is a real limitation — `users` carries no
+ * search index, and adding one is the prerequisite for making that box
+ * authoritative.
  */
 export const list = query({
-  args: {},
-  returns: v.array(
-    v.object({
-      _id: v.id("users"),
-      createdAt: v.number(),
-      name: v.optional(v.string()),
-      email: v.optional(v.string()),
-      image: v.optional(v.string()),
-      emailVerified: v.boolean(),
-      isPlatformAdmin: v.boolean(),
-      isBot: v.boolean(),
-      isAnonymous: v.boolean(),
-      disabled: v.boolean(),
-      providers: v.array(v.string()),
-      workspaceCount: v.number(),
-    }),
-  ),
-  handler: async (ctx) => {
+  args: { paginationOpts: paginationOptsValidator },
+  returns: v.object({
+    page: v.array(
+      v.object({
+        _id: v.id("users"),
+        createdAt: v.number(),
+        name: v.optional(v.string()),
+        email: v.optional(v.string()),
+        image: v.optional(v.string()),
+        emailVerified: v.boolean(),
+        isPlatformAdmin: v.boolean(),
+        isBot: v.boolean(),
+        isAnonymous: v.boolean(),
+        disabled: v.boolean(),
+        providers: v.array(v.string()),
+        workspaceCount: v.number(),
+      }),
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, { paginationOpts }) => {
     await requirePlatformAdmin(ctx);
 
-    const [users, accounts, members] = await Promise.all([
-      ctx.db.query("users").collect(),
-      ctx.db.query("authAccounts").collect(),
-      ctx.db.query("workspaceMembers").collect(),
-    ]);
+    const result = await ctx.db.query("users").order("desc").paginate(paginationOpts);
 
-    const providersByUser = new Map<string, string[]>();
-    for (const a of accounts) {
-      const list = providersByUser.get(a.userId) ?? [];
-      list.push(a.provider);
-      providersByUser.set(a.userId, list);
-    }
-    const workspaceCountByUser = new Map<string, number>();
-    for (const m of members) {
-      workspaceCountByUser.set(
-        m.userId,
-        (workspaceCountByUser.get(m.userId) ?? 0) + 1,
-      );
-    }
+    const page = await Promise.all(
+      result.page.map(async (u) => {
+        const [accounts, memberships] = await Promise.all([
+          ctx.db
+            .query("authAccounts")
+            .withIndex("userIdAndProvider", (q) => q.eq("userId", u._id))
+            .collect(),
+          ctx.db
+            .query("workspaceMembers")
+            .withIndex("by_user", (q) => q.eq("userId", u._id))
+            .collect(),
+        ]);
+        return {
+          _id: u._id,
+          createdAt: u._creationTime,
+          name: u.name,
+          email: u.email,
+          image: u.image,
+          emailVerified: u.emailVerificationTime !== undefined,
+          isPlatformAdmin: Boolean(u.isPlatformAdmin),
+          isBot: Boolean(u.isBot),
+          isAnonymous: Boolean(u.isAnonymous),
+          disabled: Boolean(u.disabled),
+          providers: accounts.map((a) => a.provider),
+          workspaceCount: memberships.length,
+        };
+      }),
+    );
 
-    return [...users]
-      .sort((a, b) => b._creationTime - a._creationTime)
-      .map((u) => ({
-        _id: u._id,
-        createdAt: u._creationTime,
-        name: u.name,
-        email: u.email,
-        image: u.image,
-        emailVerified: u.emailVerificationTime !== undefined,
-        isPlatformAdmin: Boolean(u.isPlatformAdmin),
-        isBot: Boolean(u.isBot),
-        isAnonymous: Boolean(u.isAnonymous),
-        disabled: Boolean(u.disabled),
-        providers: providersByUser.get(u._id) ?? [],
-        workspaceCount: workspaceCountByUser.get(u._id) ?? 0,
-      }));
+    return { page, isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });
 
@@ -237,9 +248,10 @@ export const deleteAccount = mutation({
     if (!user) throw new ConvexError("User not found");
 
     // Block if the user owns any workspace — deleting them would dangle ownerId.
-    const ownedWorkspaces = (await ctx.db.query("workspaces").collect()).filter(
-      (w) => w.ownerId === userId,
-    );
+    const ownedWorkspaces = await ctx.db
+      .query("workspaces")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .collect();
     if (ownedWorkspaces.length > 0) {
       const names = ownedWorkspaces.map((w) => w.name).join(", ");
       throw new ConvexError(

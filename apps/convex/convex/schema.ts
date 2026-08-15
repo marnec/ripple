@@ -136,7 +136,11 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     ownerId: v.id("users"),
-  }),
+  })
+    // "which workspaces does this user own" — the guard that stops
+    // `admin/users.deleteAccount` from dangling an `ownerId`. Without it that
+    // guard was a full-table scan on every account deletion.
+    .index("by_owner", ["ownerId"]),
 
   workspaceMembers: defineTable({
     userId: v.id("users"),
@@ -170,6 +174,12 @@ export default defineSchema({
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_by_email_by_status", ["workspaceId", "email", "status"])
     .index("by_email_and_status", ["email", "status"])
+    // Deployment-wide "show me the pending invites", which is the admin
+    // console's whole reason to open this table. `by_email_and_status` can't
+    // answer it — its prefix is the address — so without this the console
+    // paginated the raw table and filtered in the client, meaning the operator
+    // had to page through accepted invites to find a stuck one.
+    .index("by_status", ["status"])
     // The webhook arrives keyed by the component's email id and nothing else.
     .index("by_delivery_email", ["deliveryEmailId"]),
 

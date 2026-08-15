@@ -188,20 +188,66 @@ describe("admin.stats.overview", () => {
     expect(stats.failedJobs).toBe(2);
   });
 
+  /** The tile reads "N+" past the ceiling, so the count must saturate, not scan on. */
+  it("caps the failure count instead of counting every row", async () => {
+    const t = createTestContext();
+    const { asAdmin } = await makePlatformAdmin(t);
+    for (let i = 0; i < 55; i++) {
+      await insertFailure(t, { kind: "tagSync:stripTagEverywhere", key: `tag${i}` });
+    }
+
+    const stats = await asAdmin.query(api.admin.stats.overview, {});
+    expect(stats.failedJobs).toBe(50);
+    expect(stats.failedJobsCapped).toBe(true);
+  });
+
   /**
    * Guard, not a behaviour test. This query is subscribed by the Overview page,
-   * so a platform-wide message count would re-run every scan in it on each
-   * message sent anywhere in the deployment — and `messages` is the fastest
-   * growing table with the widest rows, so it is the leg that would push the
-   * query past the transaction limits and hard-fail the whole page. If this
-   * fails, someone counted messages again; use an aggregate or a counter.
+   * so every platform-wide count in it re-ran on each write anywhere in the
+   * deployment, and the widest of them would eventually push the query past the
+   * transaction limits and hard-fail the whole page. They were removed rather
+   * than tuned: the aggregates in `dbTriggers.ts` are namespaced by
+   * `workspaceId`, so none of them can answer a cross-namespace question.
+   *
+   * If this fails, someone added a total back. It needs an un-namespaced
+   * aggregate or a counter behind it — never a `.collect()`.
    */
-  it("does not report a platform-wide message count", async () => {
+  it("reports no platform-wide totals", async () => {
     const t = createTestContext();
     const { asAdmin } = await makePlatformAdmin(t);
 
     const stats = await asAdmin.query(api.admin.stats.overview, {});
-    expect(stats).not.toHaveProperty("messages");
+    for (const key of [
+      "messages",
+      "users",
+      "admins",
+      "bots",
+      "workspaces",
+      "channels",
+      "documents",
+      "projects",
+      "tasks",
+      "pendingInvites",
+    ]) {
+      expect(stats).not.toHaveProperty(key);
+    }
+  });
+
+  /** Bounded read, so it must not degrade into "sort every user". */
+  it("serves recent signups off the creation-time index, newest first, without bots", async () => {
+    const t = createTestContext();
+    const { asAdmin } = await makePlatformAdmin(t);
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", { name: "Oldest", email: "old@example.com" });
+      await ctx.db.insert("users", { name: "Bot", email: "bot@example.com", isBot: true });
+      await ctx.db.insert("users", { name: "Newest", email: "new@example.com" });
+    });
+
+    const stats = await asAdmin.query(api.admin.stats.overview, {});
+    const names = stats.recentSignups.map((u) => u.name);
+    expect(names).not.toContain("Bot");
+    expect(names.indexOf("Newest")).toBeLessThan(names.indexOf("Oldest"));
   });
 });
 
