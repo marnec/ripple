@@ -680,4 +680,63 @@ describe("message mention notifications", () => {
 
     expect(await mentionRecipients(t)).toHaveLength(0);
   });
+
+  /**
+   * The push body is built by resolving the ids in `body` to names — so it is
+   * the same read the `list` enrichment performs, except its output leaves the
+   * app entirely and lands on a lock screen. A reference the sender pasted from
+   * another workspace must render as the bare mention, not as that tenant's
+   * project name. Cross-workspace read coverage for the query side lives in
+   * `crossWorkspace.access.test.ts`.
+   */
+  it("does not put another workspace's project name on a lock screen", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupClosedChannel(t, { workspaceId, userId });
+    const { userId: insiderId } = await setupChannelMember(t, {
+      workspaceId,
+      channelId,
+      name: "Insider",
+      email: "insider@example.com",
+    });
+
+    const { userId: bobId } = await setupAuthenticatedUser(t, {
+      name: "Bob",
+      email: "bob@b.test",
+    });
+    const foreignProjectId = await t.run(async (ctx) => {
+      const otherWorkspaceId = await ctx.db.insert("workspaces", {
+        name: "Workspace B",
+        ownerId: bobId,
+      });
+      return ctx.db.insert("projects", {
+        name: "Project Bluebird",
+        color: "bg-blue-500",
+        workspaceId: otherWorkspaceId,
+        creatorId: bobId,
+        key: "BBB",
+        taskCounter: 0,
+      });
+    });
+
+    await asUser.mutation(api.messages.send, {
+      channelId,
+      isomorphicId: "foreign-project-1",
+      body: JSON.stringify([
+        {
+          type: "paragraph",
+          content: [
+            { type: "userMention", props: { userId: insiderId } },
+            { type: "text", text: " see ", styles: {} },
+            { type: "projectReference", props: { projectId: foreignProjectId } },
+          ],
+        },
+      ]),
+      plainText: "@Insider see #Project Bluebird",
+    });
+
+    for (const push of await scheduledPushes(t)) {
+      expect(push.body).not.toContain("Project Bluebird");
+    }
+  });
 });

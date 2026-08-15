@@ -18,7 +18,7 @@ NEXT STEPS:
 - [ ] link previews in chat
 
 keyboard accessiblity
-    - focus traps
+    - when pressing tab in a chat, it must focus the message composer
 
 - [ ] internationalization (i18n and localization)
 

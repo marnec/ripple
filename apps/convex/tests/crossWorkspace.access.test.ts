@@ -818,6 +818,236 @@ describe("favorites — foreign resourceId under an authorized workspaceId", () 
   });
 });
 
+/**
+ * A message `body` is an opaque `v.string()` the sender composes, and the read
+ * path resolves every id it finds in there to a display name. That makes chat a
+ * shape-1 site with an unusual container: the channel rule authorizes the
+ * *channel*, and then the enrichment dereferences ids that were never
+ * authorized by anything. A DM alice owns is enough of a stage — she is the
+ * only member, so she can paste ids all day — and because `list` is a live
+ * subscription, a resolved foreign name keeps re-shipping on every rename.
+ *
+ * Every assertion below is on `messages.list`, but `search` and
+ * `getMessageContext` run the same `enrichMessages` pipeline.
+ */
+describe("messages enrichment — foreign ids pasted into a body", () => {
+  const FIRST_PAGE = { numItems: 10, cursor: null };
+
+  /**
+   * Alice's own DM in A (she is its only member), plus one of everything the
+   * enrichment can resolve, all of it owned by bob in B.
+   */
+  async function setupForeignMentionTargets(t: TestCtx) {
+    const { alice, bob } = await setupTwoWorkspaces(t);
+
+    const channelA = await t.run(async (ctx) => {
+      const channelId = await ctx.db.insert("channels", {
+        name: "alice-dm",
+        workspaceId: alice.workspaceId,
+        type: "dm" as const,
+      });
+      await ctx.db.insert("channelMembers", {
+        channelId,
+        workspaceId: alice.workspaceId,
+        userId: alice.userId,
+        role: ChannelRole.ADMIN,
+      });
+      return channelId;
+    });
+
+    const { projectId: projectB, todoId: todoB } = await setupProjectWithStatuses(t, {
+      workspaceId: bob.workspaceId,
+      userId: bob.userId,
+      name: "Project Bluebird",
+      key: "BBB",
+    });
+
+    const foreign = await t.run(async (ctx) => ({
+      taskId: await ctx.db.insert("tasks", {
+        projectId: projectB,
+        workspaceId: bob.workspaceId,
+        title: "Acquisition of Initech",
+        statusId: todoB,
+        priority: "high" as const,
+        completed: false,
+        creatorId: bob.userId,
+        number: 1,
+      }),
+      documentId: await ctx.db.insert("documents", {
+        workspaceId: bob.workspaceId,
+        name: "Severance Terms",
+      }),
+      diagramId: await ctx.db.insert("diagrams", {
+        workspaceId: bob.workspaceId,
+        name: "Reorg Chart",
+      }),
+      spreadsheetId: await ctx.db.insert("spreadsheets", {
+        workspaceId: bob.workspaceId,
+        name: "Q3 Payroll",
+      }),
+      eventId: await ctx.db.insert("calendarEvents", {
+        workspaceId: bob.workspaceId,
+        title: "Board: layoffs",
+        startsAt: 1_800_000_000_000,
+        endsAt: 1_800_003_600_000,
+        timezone: "UTC",
+        createdBy: bob.userId,
+      }),
+    }));
+
+    return { alice, bob, channelA, projectB, foreign };
+  }
+
+  /** One paragraph naming every reference type the enrichment resolves. */
+  function bodyReferencing(refs: {
+    taskId?: string;
+    projectId?: string;
+    documentId?: string;
+    diagramId?: string;
+    spreadsheetId?: string;
+    eventId?: string;
+  }): string {
+    const content: unknown[] = [{ type: "text", text: "look: ", styles: {} }];
+    if (refs.taskId) content.push({ type: "taskMention", props: { taskId: refs.taskId } });
+    if (refs.projectId) content.push({ type: "projectReference", props: { projectId: refs.projectId } });
+    if (refs.documentId)
+      content.push({ type: "resourceReference", props: { resourceId: refs.documentId, resourceType: "document" } });
+    if (refs.diagramId)
+      content.push({ type: "resourceReference", props: { resourceId: refs.diagramId, resourceType: "diagram" } });
+    if (refs.spreadsheetId)
+      content.push({
+        type: "resourceReference",
+        props: { resourceId: refs.spreadsheetId, resourceType: "spreadsheet" },
+      });
+    if (refs.eventId) content.push({ type: "eventMention", props: { eventId: refs.eventId } });
+    return JSON.stringify([{ type: "paragraph", content }]);
+  }
+
+  type Alice = Awaited<ReturnType<typeof setupTwoWorkspaces>>["alice"];
+
+  /** Post the body into alice's own DM and read it back through `list`. */
+  async function postAndRead(alice: Alice, channelA: Id<"channels">, body: string) {
+    await alice.asUser.mutation(api.messages.send, {
+      channelId: channelA,
+      isomorphicId: "paste-1",
+      body,
+      plainText: "look: ",
+    });
+    const result = await alice.asUser.query(api.messages.list, {
+      channelId: channelA,
+      paginationOpts: FIRST_PAGE,
+    });
+    return result.page[0];
+  }
+
+  it("resolves no name for a task, project or resource owned by another workspace", async () => {
+    const t = createTestContext();
+    const { alice, channelA, projectB, foreign } = await setupForeignMentionTargets(t);
+
+    const message = await postAndRead(
+      alice,
+      channelA,
+      bodyReferencing({
+        taskId: foreign.taskId,
+        projectId: projectB,
+        documentId: foreign.documentId,
+        diagramId: foreign.diagramId,
+        spreadsheetId: foreign.spreadsheetId,
+      }),
+    );
+
+    // convex/messages.ts:103/:151/:188 — the three helpers took no workspaceId
+    expect(message.mentionedTasks, "a foreign task must not resolve").toEqual({});
+    expect(message.mentionedProjects, "a foreign project must not resolve").toEqual({});
+    expect(message.mentionedResources, "foreign docs/diagrams/sheets must not resolve").toEqual({});
+
+    // Nothing about B may ride along in the enrichment — not a title, not the
+    // projectId a task belongs to, not the status colour that travels with it.
+    // Asserted on the enrichment alone: `body` is the sender's own text, so it
+    // echoes back the ids she pasted, and that is not the leak.
+    const enrichment = JSON.stringify({
+      mentionedTasks: message.mentionedTasks,
+      mentionedProjects: message.mentionedProjects,
+      mentionedResources: message.mentionedResources,
+      mentionedEvents: message.mentionedEvents,
+    });
+    expect(enrichment).not.toContain("Acquisition of Initech");
+    expect(enrichment).not.toContain("Project Bluebird");
+    expect(enrichment).not.toContain("Severance Terms");
+    expect(enrichment).not.toContain("Reorg Chart");
+    expect(enrichment).not.toContain("Q3 Payroll");
+    expect(enrichment).not.toContain(projectB);
+  });
+
+  it("marks a foreign event deleted rather than resolving its title", async () => {
+    const t = createTestContext();
+    const { alice, channelA, foreign } = await setupForeignMentionTargets(t);
+
+    const message = await postAndRead(alice, channelA, bodyReferencing({ eventId: foreign.eventId }));
+
+    expect(message.mentionedEvents[foreign.eventId]).toEqual({ deleted: true });
+    expect(JSON.stringify(message)).not.toContain("Board: layoffs");
+  });
+
+  it("does not throw on an id that addresses nothing at all", async () => {
+    const t = createTestContext();
+    const { alice, channelA } = await setupForeignMentionTargets(t);
+
+    // Every id here is a client-authored string that addresses nothing. The
+    // real backend throws from `db.get`/`getAll` on one (see `normalizeIds` in
+    // utils/ids.ts) — and since only the author can delete a message, that
+    // would let one hand-edited body take the channel's list down for every
+    // member. convex-test tolerates the malformed id rather than throwing, so
+    // what this pins is the observable either way: a bogus reference resolves
+    // to nothing, in every record.
+    const message = await postAndRead(
+      alice,
+      channelA,
+      bodyReferencing({
+        taskId: "not-an-id",
+        projectId: "not-an-id",
+        documentId: "not-an-id",
+        eventId: "not-an-id",
+      }),
+    );
+
+    expect(message.mentionedTasks).toEqual({});
+    expect(message.mentionedProjects).toEqual({});
+    expect(message.mentionedResources).toEqual({});
+    expect(message.mentionedEvents).toEqual({});
+  });
+
+  it("still resolves the caller's own workspace's mentions", async () => {
+    const t = createTestContext();
+    const { alice, channelA } = await setupForeignMentionTargets(t);
+    const { projectId: projectA } = await setupProjectWithStatuses(t, {
+      workspaceId: alice.workspaceId,
+      userId: alice.userId,
+      name: "Roadmap",
+      key: "AAA",
+    });
+    const taskA = await alice.asUser.mutation(api.tasks.create, {
+      workspaceId: alice.workspaceId,
+      projectId: projectA,
+      title: "Ship the thing",
+    });
+    const docA = await alice.asUser.mutation(api.documents.create, {
+      workspaceId: alice.workspaceId,
+      name: "Spec",
+    });
+
+    const message = await postAndRead(
+      alice,
+      channelA,
+      bodyReferencing({ taskId: taskA, projectId: projectA, documentId: docA }),
+    );
+
+    expect(message.mentionedTasks[taskA]).toMatchObject({ title: "Ship the thing", projectId: projectA });
+    expect(message.mentionedProjects[projectA]).toMatchObject({ name: "Roadmap" });
+    expect(message.mentionedResources[docA]).toEqual({ name: "Spec", type: "document" });
+  });
+});
+
 /* ══════════════════════════════════════════════════════════════════════
    Shape 2 — `requireUser` used as if it were an access rule
    ══════════════════════════════════════════════════════════════════════ */

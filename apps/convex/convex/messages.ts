@@ -58,8 +58,31 @@ const enrichedMessageValidator = v.object({
 });
 
 /**
+ * Every id these helpers dereference is lifted out of a message `body`, which
+ * `send` takes as an opaque `v.string()`. That makes them client-authored
+ * strings twice over: they need not address a live row, and they need not
+ * belong to this channel's workspace. So each one goes through `normalizeIds`
+ * before it reaches `getAll` — a hand-edited mention naming nothing at all
+ * would otherwise throw and take the whole channel's message list down for
+ * everyone — and then through a `workspaceId` comparison before its name
+ * reaches the reader. Without the second check, posting a foreign id into a DM
+ * you control turns chat into a live subscription on another tenant's resource
+ * titles, re-shipping on every rename. Same hardening `favorites.toggle`,
+ * `favorites.resolveResource` and `graph.getNodeLabel` already carry.
+ *
+ * A row that fails either check is simply omitted from the record, which is
+ * what a deleted row already did — the reader cannot tell "not yours" from
+ * "gone", so the check leaks nothing itself. `enrichWithMentionedEvents` is the
+ * exception only in shape: it reports `deleted: true` because its client
+ * renders a tombstone.
+ */
+
+/**
  * Enrich messages with mentionedUsers record, batch-resolving all @mentions
  * found in message bodies so the client can render them instantly.
+ *
+ * `users` rows are not workspace-scoped, so there is no workspace comparison to
+ * make here — the recipient-side gate is `filterChannelRecipients`.
  */
 async function enrichWithMentionedUsers<T extends { body: string }>(
   ctx: { db: DatabaseReader },
@@ -75,9 +98,13 @@ async function enrichWithMentionedUsers<T extends { body: string }>(
   }
 
   // Batch-fetch any not already in userMap
-  const missingIds = [...allMentionedIds].filter(id => !userMap.has(id));
+  const missingIds = normalizeIds(
+    ctx.db,
+    "users",
+    [...allMentionedIds].filter(id => !userMap.has(id)),
+  );
   if (missingIds.length > 0) {
-    const fetched = await getAll(ctx.db, missingIds as Id<"users">[]);
+    const fetched = await getAll(ctx.db, missingIds);
     fetched.forEach((u, i) => {
       userMap.set(missingIds[i], u);
     });
@@ -103,6 +130,7 @@ async function enrichWithMentionedUsers<T extends { body: string }>(
 async function enrichWithMentionedTasks<T extends { body: string }>(
   ctx: { db: DatabaseReader },
   messages: T[],
+  workspaceId: Id<"workspaces">,
 ): Promise<(T & { mentionedTasks: Record<string, { title: string; projectId: string; statusColor?: string }> })[]> {
   const allTaskIds = new Set<string>();
   for (const msg of messages) {
@@ -111,22 +139,28 @@ async function enrichWithMentionedTasks<T extends { body: string }>(
     }
   }
 
-  const taskIds = [...allTaskIds];
-  const taskMap = new Map<string, { title: string; projectId: string; statusId: string } | null>();
+  const taskIds = normalizeIds(ctx.db, "tasks", [...allTaskIds]);
+  const taskMap = new Map<string, { title: string; projectId: string; statusId: Id<"taskStatuses"> } | null>();
   if (taskIds.length > 0) {
-    const tasks = await getAll(ctx.db, taskIds as Id<"tasks">[]);
+    const tasks = await getAll(ctx.db, taskIds);
     tasks.forEach((t, i) => {
-      taskMap.set(taskIds[i], t ? { title: t.title, projectId: t.projectId, statusId: t.statusId } : null);
+      taskMap.set(
+        taskIds[i],
+        t && t.workspaceId === workspaceId
+          ? { title: t.title, projectId: t.projectId, statusId: t.statusId }
+          : null,
+      );
     });
   }
 
-  // Batch-fetch statuses for all tasks
+  // Batch-fetch statuses for all tasks. Every id here came off a task already
+  // proven to be in this workspace, so it needs no comparison of its own.
   const statusIds = [...new Set(
     [...taskMap.values()].filter(t => t).map(t => t!.statusId)
   )];
   const statusMap = new Map<string, string>();
   if (statusIds.length > 0) {
-    const statuses = await getAll(ctx.db, statusIds as Id<"taskStatuses">[]);
+    const statuses = await getAll(ctx.db, statusIds);
     statuses.forEach((s, i) => {
       if (s) statusMap.set(statusIds[i], s.color);
     });
@@ -151,6 +185,7 @@ async function enrichWithMentionedTasks<T extends { body: string }>(
 async function enrichWithMentionedProjects<T extends { body: string }>(
   ctx: { db: DatabaseReader },
   messages: T[],
+  workspaceId: Id<"workspaces">,
 ): Promise<(T & { mentionedProjects: Record<string, { name: string; color: string }> })[]> {
   const allProjectIds = new Set<string>();
   for (const msg of messages) {
@@ -159,12 +194,15 @@ async function enrichWithMentionedProjects<T extends { body: string }>(
     }
   }
 
-  const projectIds = [...allProjectIds];
+  const projectIds = normalizeIds(ctx.db, "projects", [...allProjectIds]);
   const projectMap = new Map<string, { name: string; color: string } | null>();
   if (projectIds.length > 0) {
-    const projects = await getAll(ctx.db, projectIds as Id<"projects">[]);
+    const projects = await getAll(ctx.db, projectIds);
     projects.forEach((p, i) => {
-      projectMap.set(projectIds[i], p ? { name: p.name, color: p.color } : null);
+      projectMap.set(
+        projectIds[i],
+        p && p.workspaceId === workspaceId ? { name: p.name, color: p.color } : null,
+      );
     });
   }
 
@@ -188,6 +226,7 @@ async function enrichWithMentionedProjects<T extends { body: string }>(
 async function enrichWithMentionedResources<T extends { body: string }>(
   ctx: { db: DatabaseReader },
   messages: T[],
+  workspaceId: Id<"workspaces">,
 ): Promise<(T & { mentionedResources: Record<string, { name: string; type: "document" | "diagram" | "spreadsheet" }> })[]> {
   // Collect all resource refs across all messages
   const allRefs = new Map<string, string>(); // id → type
@@ -197,35 +236,40 @@ async function enrichWithMentionedResources<T extends { body: string }>(
     }
   }
 
-  // Group IDs by table for batch fetching
-  const docIds: string[] = [];
-  const diagramIds: string[] = [];
-  const sheetIds: string[] = [];
+  // Group IDs by table for batch fetching. `resourceType` is client-authored
+  // too, so an id is only ever normalized against the table its ref names —
+  // a "document" ref addressing a diagram row is dropped, not cross-read.
+  const rawDocIds: string[] = [];
+  const rawDiagramIds: string[] = [];
+  const rawSheetIds: string[] = [];
   for (const [id, type] of allRefs) {
-    if (type === "document") docIds.push(id);
-    else if (type === "diagram") diagramIds.push(id);
-    else if (type === "spreadsheet") sheetIds.push(id);
+    if (type === "document") rawDocIds.push(id);
+    else if (type === "diagram") rawDiagramIds.push(id);
+    else if (type === "spreadsheet") rawSheetIds.push(id);
   }
+  const docIds = normalizeIds(ctx.db, "documents", rawDocIds);
+  const diagramIds = normalizeIds(ctx.db, "diagrams", rawDiagramIds);
+  const sheetIds = normalizeIds(ctx.db, "spreadsheets", rawSheetIds);
 
   // Batch-fetch from each table
   const resourceMap = new Map<string, { name: string; type: "document" | "diagram" | "spreadsheet" }>();
 
   if (docIds.length > 0) {
-    const docs = await getAll(ctx.db, docIds as Id<"documents">[]);
+    const docs = await getAll(ctx.db, docIds);
     docs.forEach((d, i) => {
-      if (d) resourceMap.set(docIds[i], { name: d.name, type: "document" });
+      if (d && d.workspaceId === workspaceId) resourceMap.set(docIds[i], { name: d.name, type: "document" });
     });
   }
   if (diagramIds.length > 0) {
-    const diagrams = await getAll(ctx.db, diagramIds as Id<"diagrams">[]);
+    const diagrams = await getAll(ctx.db, diagramIds);
     diagrams.forEach((d, i) => {
-      if (d) resourceMap.set(diagramIds[i], { name: d.name, type: "diagram" });
+      if (d && d.workspaceId === workspaceId) resourceMap.set(diagramIds[i], { name: d.name, type: "diagram" });
     });
   }
   if (sheetIds.length > 0) {
-    const sheets = await getAll(ctx.db, sheetIds as Id<"spreadsheets">[]);
+    const sheets = await getAll(ctx.db, sheetIds);
     sheets.forEach((s, i) => {
-      if (s) resourceMap.set(sheetIds[i], { name: s.name, type: "spreadsheet" });
+      if (s && s.workspaceId === workspaceId) resourceMap.set(sheetIds[i], { name: s.name, type: "spreadsheet" });
     });
   }
 
@@ -258,10 +302,10 @@ async function enrichWithMentionedEvents<T extends { body: string }>(
     }
   }
 
-  const eventIds = [...allEventIds];
+  const eventIds = normalizeIds(ctx.db, "calendarEvents", [...allEventIds]);
   const eventMap = new Map<string, { title?: string; startsAt?: number; endsAt?: number; deleted: boolean }>();
   if (eventIds.length > 0) {
-    const events = await getAll(ctx.db, eventIds as Id<"calendarEvents">[]);
+    const events = await getAll(ctx.db, eventIds);
     events.forEach((e, i) => {
       const id = eventIds[i];
       if (!e || e.workspaceId !== workspaceId) {
@@ -414,9 +458,9 @@ async function enrichMessages<
   const withReplyTo = await enrichWithReplyTo(ctx, messages, userMap);
   const withUsers = await enrichWithMentionedUsers(ctx, withReplyTo, userMap);
   const [tasks, projects, resources, events] = await Promise.all([
-    enrichWithMentionedTasks(ctx, withUsers),
-    enrichWithMentionedProjects(ctx, withUsers),
-    enrichWithMentionedResources(ctx, withUsers),
+    enrichWithMentionedTasks(ctx, withUsers, workspaceId),
+    enrichWithMentionedProjects(ctx, withUsers, workspaceId),
+    enrichWithMentionedResources(ctx, withUsers, workspaceId),
     enrichWithMentionedEvents(ctx, withUsers, workspaceId),
   ]);
   return withUsers.map((m, i) => ({
@@ -480,10 +524,16 @@ export const list = query({
  * A snapshot-only message has no text at all; its label is the diagram name the
  * composer wrote onto the image block, which is part of `body` too — so the
  * empty case doesn't have to fall back to the untrusted arg.
+ *
+ * The `workspaceId` comparisons are the same guard the read path carries: this
+ * is the one place a foreign name escapes the app entirely, onto a lock screen,
+ * so a project or event the sender pasted from another tenant renders as the
+ * raw mention rather than its title.
  */
 async function pushTextFromBody(
   ctx: { db: DatabaseReader },
   body: string,
+  workspaceId: Id<"workspaces">,
 ): Promise<string> {
   const userIds = normalizeIds(ctx.db, "users", extractMentionedUserIds(body));
   const projectIds = normalizeIds(ctx.db, "projects", extractProjectIds(body));
@@ -501,7 +551,7 @@ async function pushTextFromBody(
   if (projectIds.length > 0) {
     const projects = await getAll(ctx.db, projectIds);
     projects.forEach((p, i) => {
-      if (p) projectNames.set(projectIds[i], p.name);
+      if (p && p.workspaceId === workspaceId) projectNames.set(projectIds[i], p.name);
     });
   }
 
@@ -509,7 +559,7 @@ async function pushTextFromBody(
   if (eventIds.length > 0) {
     const events = await getAll(ctx.db, eventIds);
     events.forEach((e, i) => {
-      if (e) eventTitles.set(eventIds[i], e.title);
+      if (e && e.workspaceId === workspaceId) eventTitles.set(eventIds[i], e.title);
     });
   }
 
@@ -568,7 +618,7 @@ export const send = mutation({
 
     // What every push below says, read out of the stored body — never out of
     // the `plainText` arg, which travels beside `body` and need not agree with it.
-    const pushText = await pushTextFromBody(ctx, body);
+    const pushText = await pushTextFromBody(ctx, body, channel.workspaceId);
 
     // Extract @mentions and schedule chat mention notifications. The mention
     // list decides who receives the message's opening lines, so it goes through
