@@ -142,9 +142,14 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
     [],
   );
 
-  // Image state: local blob preview + uploaded URLs (thumbnail + full)
+  // Image state: local blob preview + uploaded URLs (thumbnail + full).
+  // Dimensions are optional here only because editing a pre-dimensions message
+  // rehydrates this state from a body that has none; fresh uploads always carry them.
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageUrls, setImageUrls] = useState<ImageUploadResult | null>(null);
+  const [imageUrls, setImageUrls] = useState<
+    | (Omit<ImageUploadResult, "width" | "height"> & { width?: number; height?: number })
+    | null
+  >(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
   // When the attached image is a diagram snapshot, carry the source so the
@@ -180,7 +185,14 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
           const url = imageBlock.props.url as string;
           const fullUrl = (imageBlock.props.fullUrl as string) || url;
           setImagePreview(url);
-          setImageUrls({ url, fullUrl });
+          // Messages sent before image dimensions were recorded have no
+          // width/height — re-sending keeps them absent rather than guessing.
+          setImageUrls({
+            url,
+            fullUrl,
+            width: imageBlock.props.width as number | undefined,
+            height: imageBlock.props.height as number | undefined,
+          });
           if (imageBlock.props.diagramId) {
             setImageDiagram({
               id: imageBlock.props.diagramId as Id<"diagrams">,
@@ -245,9 +257,12 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
   const attachImageFile = async (file: File) => {
     if (!fileUpload) return;
     try {
-      const { thumbnail, previewUrl, isOriginal } = await generateThumbnail(file);
+      const { thumbnail, previewUrl, isOriginal, width, height } = await generateThumbnail(file);
       handleImagePreview(previewUrl);
-      const urls = await fileUpload.uploadImageWithThumbnail(file, thumbnail, isOriginal);
+      const urls = await fileUpload.uploadImageWithThumbnail(file, thumbnail, isOriginal, {
+        width,
+        height,
+      });
       handleImageReady(urls);
     } catch (err) {
       console.error("Image upload failed:", err);
@@ -299,12 +314,15 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
       const file = new globalThis.File([blob], `${diagram.name || "diagram"}.png`, {
         type: "image/png",
       });
-      const { thumbnail, previewUrl, isOriginal } = await generateThumbnail(file);
+      const { thumbnail, previewUrl, isOriginal, width, height } = await generateThumbnail(file);
       // Switch from the "capturing" indicator to the normal image preview.
       setIsCapturingSnapshot(false);
       handleImagePreview(previewUrl);
       setImageDiagram(diagram);
-      const urls = await fileUpload.uploadImageWithThumbnail(file, thumbnail, isOriginal);
+      const urls = await fileUpload.uploadImageWithThumbnail(file, thumbnail, isOriginal, {
+        width,
+        height,
+      });
       handleImageReady(urls);
     } catch (err) {
       if (err instanceof EmptyDiagramSnapshotError) {
@@ -367,6 +385,10 @@ export const MessageComposer: React.FunctionComponent<MessageComposerProps> = ({
         props: {
           url: imageUrls.url,
           fullUrl: imageUrls.fullUrl,
+          // Intrinsic thumbnail size: the renderer reserves the box from these
+          // so the chat wall doesn't reflow as blobs stream in.
+          width: imageUrls.width,
+          height: imageUrls.height,
           ...(imageDiagram ? { diagramId: imageDiagram.id, diagramName: imageDiagram.name } : {}),
         },
       });

@@ -1,9 +1,6 @@
 NEXT STEPS:
 
-- tighten reconciliation logic with local-first content. for example what happens if I'm offline and I open a doc that I han't opened before? does it show empty? does it prevents me from editing? what happens if I write? what wins? research and add tests to cover all possible cases
-
-
-- add a (workpool) background job backoffice center (of the workspace, admin only)
+- tighten reconciliation logic with local-first content. for example what happens if I'm offline and I open a doc that I hadn't opened before? does it show empty? does it prevents me from editing? what happens to existing content on reconnection if I wrote on that doc? what wins? research and add tests to cover all possible cases
 
 - cascade delete collection phase is bounded even for batched deletes and will hit a ceiling for extremely large cascaded entities.
 
@@ -28,7 +25,6 @@ keyboard accessiblity
 - [ ] AI integrations
     - [ ] AI bot in chat (called on mention)
     - [ ] AI dictate content
-    - [ ] AI transcription in videocalls
     - [ ] AI agent in videocall (unclear how to handle diarization)
     - [ ] AI document agent
     - [ ] AI tasks agent
@@ -42,13 +38,12 @@ keyboard accessiblity
     - [ ] cycle-scoped tag filter — `taskTags` already has room for a `[cycleId, tagId]` index when needed
 
 - task query scaling
-    - [ ] cross-workspace overflow on `listByAssignee` for heavy users with assignments across many workspaces
+    - [ ] `listByAssignee` is workspace-scoped now, but still an unpaginated `.collect()` of every task assigned to the caller in that workspace (both the tag and no-tag branches) — needs a cap or pagination for heavy users
     - [ ] kanban active-backlog overflow strategy when a project's uncompleted set grows past the read cap
     - [ ] `AddTasksToCycleDialog` "show completed too" toggle if users request it
 
 - deferred refactors
-    - [ ] don't denormalize author name/image onto `messages` (profile edit → rewrites every message); if chat read-cache coupling ever bites, fix read-side (one-row-per-user digest joined at query time)
-    - [ ] sidebar digest table for `workspaceSidebarData.get` (currently 4-table `.collect()` feeding the always-mounted sidebar — largest standing cache-invalidation surface)
+    - [ ] `workspaceSidebarData.get` is channels-only now (the projects/documents/diagrams/spreadsheets `.collect()` moved to `nodes.suggest` / `breadcrumb.getResourceNames`). Residual cost on the always-mounted query: `channels` + `channelMembers` + `userChannelState` still join the invalidation set of every connected member, plus a per-hidden-DM latest-message read and a per-unnamed-DM `channelMembers.collect()` for the display name. Denormalize the DM name before considering a digest table.
     - [ ] extract `IntegrationCardShell` + shared stepper from `ConnectGithubWizard`/`ConnectGitlabCard` twins (keep provider wizards as explicit variants)
 
 
@@ -59,6 +54,9 @@ keyboard accessiblity
             - [ ] priority sync via configurable label template (e.g. `priority/high`)
             - [ ] internal-only task comments (`taskComments.internal` flag; not pushed to GitHub, never set on inbound)
             - [ ] comment/description @mention fidelity on outbound markdown: `userMention`/`eventMention` inline content has no markdown serialization, so `blocksToMarkdownLossy` drops them to empty when pushing to GitHub. To render `@login` we'd need a userId→GitHub-login map at render time (same lossiness affects description sync)
+    - [ ] gitlab (end-to-end built: OAuth + project picker + webhooks + outbound gateway; remaining gaps)
+        - [ ] self-hosted GitLab — `gitlab.com` is hardcoded across `integrations/gitlab/*` (tokenClient, oauthClient, outboundGateway, branchesAction, forceResyncAction); needs a per-integration base URL
+    - [ ] `workspaceMemberExternalIdentity` has no write path — no mutation, no UI. Identity resolution falls back to OAuth-captured columns only, so a member who signed in with a different account can never be an assignee-push target. Needs a per-workspace "you are @x on <provider>" mapping screen
     - [ ] add sentry
 
 - I don't really know how to handle unread messages, they kind of work right now but god save me

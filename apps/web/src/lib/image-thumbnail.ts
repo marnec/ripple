@@ -4,6 +4,10 @@ interface ThumbnailResult {
   thumbnail: File;
   previewUrl: string;
   isOriginal: boolean;
+  /** Intrinsic pixel size of `thumbnail` — persisted so the chat can reserve
+   * layout space before the blob arrives. */
+  width: number;
+  height: number;
 }
 
 /**
@@ -15,13 +19,15 @@ export async function generateThumbnail(
   maxSize = MAX_THUMBNAIL_SIZE,
 ): Promise<ThumbnailResult> {
   const img = await loadImage(file);
-  const { width, height } = img;
+  const { naturalWidth: width, naturalHeight: height } = img;
 
   if (width <= maxSize && height <= maxSize) {
     return {
       thumbnail: file,
       previewUrl: URL.createObjectURL(file),
       isOriginal: true,
+      width,
+      height,
     };
   }
 
@@ -55,6 +61,8 @@ export async function generateThumbnail(
     thumbnail: thumbnailFile,
     previewUrl: URL.createObjectURL(thumbnailFile),
     isOriginal: false,
+    width: targetW,
+    height: targetH,
   };
 }
 

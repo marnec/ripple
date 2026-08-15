@@ -8,6 +8,10 @@ export interface ImageUploadResult {
   url: string;
   /** Full-resolution URL */
   fullUrl: string;
+  /** Intrinsic size of the thumbnail — lets the chat reserve layout space
+   * before the blob loads (see MessageRenderer). */
+  width: number;
+  height: number;
 }
 
 /**
@@ -56,10 +60,15 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
     return url;
   };
 
-  const uploadImageWithThumbnail = async (original: File, thumbnail: File, isOriginal: boolean): Promise<ImageUploadResult> => {
+  const uploadImageWithThumbnail = async (
+    original: File,
+    thumbnail: File,
+    isOriginal: boolean,
+    size: { width: number; height: number },
+  ): Promise<ImageUploadResult> => {
     if (isOriginal) {
       const url = await uploadSingleFile(original);
-      return { url, fullUrl: url };
+      return { url, fullUrl: url, ...size };
     }
 
     const [thumbnailUrl, fullUrl] = await Promise.all([
@@ -67,7 +76,7 @@ export function useUploadFile(workspaceId: Id<"workspaces"> | undefined) {
       uploadSingleFile(original),
     ]);
 
-    return { url: thumbnailUrl, fullUrl };
+    return { url: thumbnailUrl, fullUrl, ...size };
   };
 
   return workspaceId

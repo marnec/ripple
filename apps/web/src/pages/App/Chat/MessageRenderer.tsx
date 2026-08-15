@@ -6,10 +6,16 @@ export type { Block };
 interface ImageProps {
   url?: string;
   fullUrl?: string;
+  /** Intrinsic size of the thumbnail, recorded at upload time. */
+  width?: number;
+  height?: number;
   /** Set when the image is a diagram snapshot — enables click-to-open. */
   diagramId?: string;
   diagramName?: string;
 }
+
+/** Tallest an inline chat image is allowed to render (matches `max-h-80`). */
+const MAX_IMAGE_HEIGHT = 320;
 
 interface MessageRendererProps {
   blocks: Block[];
@@ -36,6 +42,20 @@ export function MessageRenderer({ blocks, onImageClick, onDiagramOpen }: Message
   const fullUrl = imageProps?.fullUrl || thumbnailUrl;
   const diagramId = imageProps?.diagramId;
 
+  // With the intrinsic size known, the box is sized before the bytes arrive:
+  // `aspect-ratio` + an explicit width reserve the exact final geometry, so the
+  // wall lays out once instead of reflowing message-by-message as blobs land.
+  // Capping the width at the height limit's equivalent keeps tall images from
+  // being squashed by `max-h-80` (which would clamp height without width).
+  const { width, height } = imageProps ?? {};
+  const hasSize = !!width && !!height;
+  const sizedStyle = hasSize
+    ? {
+        aspectRatio: `${width} / ${height}`,
+        width: Math.min(width, Math.round((MAX_IMAGE_HEIGHT * width) / height)),
+      }
+    : undefined;
+
   return (
     <>
       {thumbnailUrl && (
@@ -49,7 +69,14 @@ export function MessageRenderer({ blocks, onImageClick, onDiagramOpen }: Message
             <img
               src={thumbnailUrl}
               alt={imageProps?.diagramName ?? ""}
-              className="max-w-xs sm:max-w-sm max-h-80 hover:brightness-90 transition-[filter]"
+              width={width}
+              height={height}
+              style={sizedStyle}
+              className={
+                hasSize
+                  ? "max-w-xs sm:max-w-sm h-auto bg-muted/40 hover:brightness-90 transition-[filter]"
+                  : "max-w-xs sm:max-w-sm max-h-80 hover:brightness-90 transition-[filter]"
+              }
               loading="lazy"
             />
           </button>

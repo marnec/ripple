@@ -24,6 +24,7 @@ export function MessageList({ children, messages, userSentMessageRef, messagesRe
   const isNearBottomRef = useRef(true);
   const lastScrollTop = useRef(0);
   const lastScrollHeight = useRef(0);
+  const initialScrollDone = useRef(false);
 
   // Scroll-to-bottom button visibility + unread indicator
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -36,9 +37,10 @@ export function MessageList({ children, messages, userSentMessageRef, messagesRe
   // Attach scroll listener to the viewport
   useEffect(() => {
     const viewport = getViewport();
-    if (!viewport) return;
+    const content = messageListRef.current;
+    if (!viewport || !content) return;
 
-    const handleScroll = () => {
+    const syncScrollState = () => {
       const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
       const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
       isNearBottomRef.current = nearBottom;
@@ -51,15 +53,34 @@ export function MessageList({ children, messages, userSentMessageRef, messagesRe
       lastScrollHeight.current = viewport.scrollHeight;
     };
 
-    handleScroll();
-    viewport.addEventListener("scroll", handleScroll, { passive: true });
-    return () => viewport.removeEventListener("scroll", handleScroll);
+    // The list keeps growing after the initial scroll-to-bottom — images
+    // decoding are the usual cause. Growth does not move `scrollTop`, so the
+    // browser fires no scroll event: without this observer the view is left
+    // stranded mid-list while `isNearBottomRef` still says "at bottom", which
+    // is why the scroll-to-bottom button only appeared after a manual nudge.
+    // While the user is pinned to the bottom, re-pin; either way re-derive the
+    // button state from the new geometry.
+    const observer = new ResizeObserver(() => {
+      if (!initialScrollDone.current) return;
+      if (isNearBottomRef.current) {
+        viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight;
+      }
+      syncScrollState();
+    });
+    observer.observe(content);
+    observer.observe(viewport);
+
+    syncScrollState();
+    viewport.addEventListener("scroll", syncScrollState, { passive: true });
+    return () => {
+      viewport.removeEventListener("scroll", syncScrollState);
+      observer.disconnect();
+    };
   }, []);
 
   // Initial scroll to bottom — fires once when children are actually in the DOM.
   // messagesReady becomes true only after reactions loaded + messages exist,
   // meaning children have been committed to the DOM in this same render.
-  const initialScrollDone = useRef(false);
   useLayoutEffect(() => {
     if (!messagesReady || initialScrollDone.current) return;
     const viewport = getViewport();

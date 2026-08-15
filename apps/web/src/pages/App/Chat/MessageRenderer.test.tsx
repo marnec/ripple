@@ -46,3 +46,33 @@ describe("MessageRenderer diagram snapshots", () => {
     expect(onDiagramOpen).not.toHaveBeenCalled();
   });
 });
+
+describe("MessageRenderer layout reservation", () => {
+  // The image is decorative (`alt=""`), so it has no `img` role to query by.
+  const renderImage = (props: Record<string, unknown>) =>
+    render(<MessageRenderer blocks={[imageBlock(props)]} />).container.querySelector("img")!;
+
+  it("reserves the image box from the stored dimensions, capped at the height limit", () => {
+    const img = renderImage({ url: "thumb.png", width: 600, height: 400 });
+
+    expect(img.style.aspectRatio).toBe("600 / 400");
+    // At its natural 600px width the image would be 400 tall — over the 320px
+    // cap — so the width is pulled back to the 320-tall equivalent.
+    expect(img.style.width).toBe("480px");
+    expect(img).not.toHaveClass("max-h-80");
+  });
+
+  it("narrows a tall image so the height cap never squashes it", () => {
+    const img = renderImage({ url: "thumb.png", width: 300, height: 600 });
+
+    // 320px tall at a 1:2 ratio = 160px wide.
+    expect(img.style.width).toBe("160px");
+  });
+
+  it("falls back to the CSS clamp for messages sent before dimensions were recorded", () => {
+    const img = renderImage({ url: "thumb.png" });
+
+    expect(img.style.aspectRatio).toBe("");
+    expect(img).toHaveClass("max-h-80");
+  });
+});
