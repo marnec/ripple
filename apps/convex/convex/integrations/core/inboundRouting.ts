@@ -154,16 +154,60 @@ export async function resolveActiveInboundLink(
   return resolveInboundLink(ctx, {
     externalRepoId: args.externalRepoId,
     repoFullName: args.repoFullName,
-    authorize: async (link) => {
-      const integration = await ctx.db
-        .query("workspaceIntegrations")
-        .withIndex("by_externalAccount", (q) =>
-          q.eq("externalAccountId", args.externalAccountId),
-        )
-        .unique();
-      // Unknown installation, or it belongs to a different workspace than the
-      // link resolved from the repo id — drop.
-      return !!integration && link.workspaceId === integration.workspaceId;
-    },
+    authorize: (link) =>
+      githubInstallationOwnsLink(ctx, link, args.externalAccountId),
   });
+}
+
+/**
+ * GitHub's authorization rule, as one predicate: does the App installation the
+ * delivery names own the workspace this link belongs to? Split out so the
+ * read-only pre-check below cannot drift from the transactional gate above —
+ * the same reason `findLiveRepoLink` is split out for GitLab.
+ */
+async function githubInstallationOwnsLink(
+  ctx: QueryCtx,
+  link: Doc<"projectIntegrationLinks">,
+  externalAccountId: string,
+): Promise<boolean> {
+  const integration = await ctx.db
+    .query("workspaceIntegrations")
+    .withIndex("by_externalAccount", (q) =>
+      q.eq("externalAccountId", externalAccountId),
+    )
+    .unique();
+  // Unknown installation, or it belongs to a different workspace than the
+  // link resolved from the repo id — drop.
+  return !!integration && link.workspaceId === integration.workspaceId;
+}
+
+/**
+ * Would `resolveActiveInboundLink` accept this delivery? Read-only, and the
+ * same three questions in the same order — live link, installation owns it,
+ * sync-active — minus the receipt and the rename, which belong to the delivery
+ * that is actually being applied.
+ *
+ * Exists because GitHub's PR path has work to do *before* it can call the
+ * resolver: the closing-issue graph only comes over GraphQL, which needs an
+ * action, an App JWT and an installation token minted for whatever id the body
+ * names. Doing that first meant an installation nobody connected — the App's
+ * secret is App-wide, so anyone's install passes the HMAC gate — could make
+ * this deployment spend a token mint and a query per PR event, and meant a
+ * *deleted* installation's deliveries threw (mint returns non-2xx) into the
+ * receiver's retry/DLQ path instead of dropping. So the route asks this first
+ * and spends nothing on a delivery the mutation would discard anyway.
+ *
+ * A pre-filter, not a second access rule: `handlePullRequestWebhook` still
+ * calls `resolveActiveInboundLink` itself, and that call remains the gate.
+ */
+export async function isGithubDeliveryRoutable(
+  ctx: QueryCtx,
+  args: { externalAccountId: string; externalRepoId: string },
+): Promise<boolean> {
+  const link = await findLiveRepoLink(ctx, args.externalRepoId);
+  if (!link) return false;
+  if (!(await githubInstallationOwnsLink(ctx, link, args.externalAccountId))) {
+    return false;
+  }
+  return effectiveLinkStatus(link) === "active";
 }

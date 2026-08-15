@@ -1,8 +1,16 @@
 import { v } from "convex/values";
-import { internalAction, type ActionCtx, type MutationCtx } from "../../_generated/server";
+import {
+  internalAction,
+  internalQuery,
+  type ActionCtx,
+  type MutationCtx,
+} from "../../_generated/server";
 import { internalMutation } from "../../functions";
 import { internal } from "../../_generated/api";
-import { resolveActiveInboundLink } from "../core/inboundRouting";
+import {
+  isGithubDeliveryRoutable,
+  resolveActiveInboundLink,
+} from "../core/inboundRouting";
 import {
   applyInstallationEvent,
   applyNormalizedEvent,
@@ -376,6 +384,18 @@ export const receiveGithubWebhook = internalAction({
   },
 });
 
+/**
+ * The PR route's pre-flight, and the reason it is a *query*: it runs from an
+ * action, before the mutation exists, purely to decide whether this delivery is
+ * worth a network call. The rule itself lives in `core/inboundRouting` next to
+ * the transactional gate it mirrors — see `isGithubDeliveryRoutable`.
+ */
+export const isPullRequestDeliveryRoutable = internalQuery({
+  args: { externalAccountId: v.string(), externalRepoId: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => await isGithubDeliveryRoutable(ctx, args),
+});
+
 interface GithubPrDeliveryShape {
   action: string;
   pull_request?: { number: number };
@@ -406,12 +426,42 @@ async function routePullRequestDelivery(
   const prNumber = p.pull_request?.number;
   if (!installationId || !owner || !repo || prNumber === undefined) return;
 
+  // Authorize before spending anything. The GraphQL hop below needs an
+  // installation token minted for the id the *body* names, so without this the
+  // route paid for an App-JWT round trip and a query on behalf of any
+  // installation of the App — connected to a workspace or not — and threw into
+  // the retry/DLQ path when the mint failed for one that no longer exists.
+  const routable: boolean = await ctx.runQuery(
+    internal.integrations.github.webhook.isPullRequestDeliveryRoutable,
+    {
+      externalAccountId: installationId,
+      externalRepoId: p.repository?.node_id ?? "",
+    },
+  );
+  if (!routable) return; // unknown installation/repo, mismatch, or frozen — drop
+
   const client = githubClientFromEnv();
   if (!client) return; // credentials missing — drop
 
-  const closesExternalIssueIds = await client
-    .forInstallation(installationId)
-    .fetchClosingIssueNodeIds({ owner, repo, prNumber });
+  // A lost closing graph is a degraded signal, not a failed delivery. The mint
+  // throws on any non-2xx — which is what an installation deleted moments ago
+  // returns, before its `installation.deleted` event has landed — and letting
+  // that escape parks the delivery in the DLQ after three retries that cannot
+  // succeed. The other two linking signals (`Closes #N` in the PR text, the
+  // leading number of a conventional source branch) are parsed from the payload
+  // and need no network, so the reconcile still runs on what it has.
+  let closesExternalIssueIds: string[] = [];
+  try {
+    closesExternalIssueIds = await client
+      .forInstallation(installationId)
+      .fetchClosingIssueNodeIds({ owner, repo, prNumber });
+  } catch (error) {
+    console.warn(
+      `github pull_request: closing-issue lookup failed for ${owner}/${repo}#${prNumber} ` +
+        `(installation ${installationId}) — applying without the closing graph:`,
+      error,
+    );
+  }
 
   const event = normalizePullRequestPayload(
     "pull_request",

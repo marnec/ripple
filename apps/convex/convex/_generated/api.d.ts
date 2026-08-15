@@ -5202,6 +5202,12 @@ export declare const internal: {
           { eventName: string; payload: any },
           null
         >;
+        isPullRequestDeliveryRoutable: FunctionReference<
+          "query",
+          "internal",
+          { externalAccountId: string; externalRepoId: string },
+          boolean
+        >;
         receiveGithubWebhook: FunctionReference<
           "action",
           "internal",
