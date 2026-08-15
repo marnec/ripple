@@ -138,6 +138,49 @@ export async function markTaskExternalLinkDeleted(
 }
 
 /**
+ * Move one task's external refs from an old repo path to a new one, mirroring
+ * the change into the lookup.
+ *
+ * The repo path is denormalized twice (`tasks.externalRefs[].repoFullName` and
+ * the `taskExternalRefs` projection that indexes it) but only written at link
+ * time, while every reader keys on the *link's* current name. A provider-side
+ * rename therefore stranded both mirrors on a name nothing looks up again —
+ * `Closes #N` linking and "Create branch" silently stopped resolving. This is
+ * the repair, driven per-task by `drainRepoRenameBatch`.
+ *
+ * Unconditional: it rewrites and reconciles even when nothing matches `from`,
+ * because the drain relies on the lookup afterwards agreeing with the refs to
+ * make progress. That also makes it self-healing for a task whose lookup rows
+ * had drifted from its refs, and for the lookup rows of a task that is gone.
+ */
+export async function renameTaskExternalRepo(
+  ctx: MutationCtx,
+  args: { taskId: Id<"tasks">; from: string; to: string },
+): Promise<void> {
+  const task = await ctx.db.get(args.taskId);
+  if (!task) {
+    // Orphaned lookup rows (cascade should have taken them; a botched one must
+    // not leave the drain re-reading the same rows forever). Refs of a task
+    // that doesn't exist are none.
+    await reconcileTaskExternalRefs(ctx, args.taskId, undefined, undefined);
+    return;
+  }
+
+  const externalRefs = (task.externalRefs ?? []).map((ref) =>
+    ref.repoFullName === args.from ? { ...ref, repoFullName: args.to } : ref,
+  );
+  await ctx.db.patch(args.taskId, {
+    externalRefs: externalRefs.length > 0 ? externalRefs : undefined,
+  });
+  await reconcileTaskExternalRefs(
+    ctx,
+    args.taskId,
+    task.projectId,
+    externalRefs,
+  );
+}
+
+/**
  * Reconcile the `taskExternalRefs` lookup for a task to exactly match `refs`.
  * Idempotent: deletes rows no longer present, inserts the missing ones. Private
  * to this module by design — see the file header.

@@ -4837,6 +4837,12 @@ export declare const internal: {
           },
           null
         >;
+        drainRepoRenameBatch: FunctionReference<
+          "mutation",
+          "internal",
+          { from: string; projectId: Id<"projects">; to: string },
+          null
+        >;
       };
       seedDescriptionAction: {
         seedTaskDescription: FunctionReference<

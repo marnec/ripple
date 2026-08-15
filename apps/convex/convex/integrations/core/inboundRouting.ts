@@ -1,5 +1,6 @@
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
+import { internal } from "../../_generated/api";
 import { effectiveLinkStatus } from "./entitlements";
 
 /**
@@ -109,6 +110,25 @@ export async function resolveInboundLink(
     lastWebhookAt: Date.now(),
     ...(renamed ? { externalRepoFullName: args.repoFullName } : {}),
   });
+
+  // The link is not the only place the repo path lives: it is denormalized onto
+  // every linked task (`tasks.externalRefs[].repoFullName` + the
+  // `taskExternalRefs` lookup), written once at link time, and read back by
+  // matching against the link's CURRENT name. Patching only the link above
+  // therefore used to strand every pre-rename task outside `Closes #N` linking
+  // and "Create branch". Batched because a project can carry any number of
+  // linked tasks and this runs inside a webhook delivery.
+  if (renamed) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.integrations.core.links.drainRepoRenameBatch,
+      {
+        projectId: link.projectId,
+        from: link.externalRepoFullName,
+        to: args.repoFullName!,
+      },
+    );
+  }
 
   return renamed
     ? { ...link, externalRepoFullName: args.repoFullName! }

@@ -10,6 +10,7 @@ import { getAll } from "convex-helpers/server/relationships";
 import { canActivateIntegration } from "./activationGate";
 import {
   clearTaskExternalLink,
+  renameTaskExternalRepo,
   setTaskExternalLink,
 } from "./taskExternalLink";
 import { getIntegrationForLink, resolveProvider } from "./integrationLookups";
@@ -31,6 +32,13 @@ export const DISCONNECT_BATCH_SIZE = 50;
  * `taskIntegrationLinks` row. Same sizing rationale as disconnect.
  */
 export const RECONNECT_BATCH_SIZE = 50;
+
+/**
+ * Per-batch size for the repo-rename drain. Each step rewrites the repo path
+ * on up to this many `taskExternalRefs` rows and their owning tasks. Same
+ * sizing rationale as the two drains above.
+ */
+export const REPO_RENAME_BATCH_SIZE = 50;
 
 /**
  * Bind a repository to a project — the activation step of the integration
@@ -872,6 +880,68 @@ export const drainReconnectBatch = internalMutation({
           projectIntegrationLinkId: args.projectIntegrationLinkId,
           cursor: page.continueCursor,
         },
+      );
+    }
+    return null;
+  },
+});
+
+/**
+ * One drain step of the repo-rename repair. Internal — only callers are
+ * `resolveInboundLink`'s rename branch (`integrations/core/inboundRouting.ts`)
+ * and self-reschedule.
+ *
+ * A provider-side rename refreshes the link's `externalRepoFullName` in place,
+ * but the path is also denormalized onto every linked task — and the readers
+ * (`resolveTaskIds`' number path, `branchCreateContext`) key on the link's
+ * current name, so without this the pre-rename tasks fall out of both.
+ *
+ * Drains by re-taking the head of `by_project_repo_issue` under the OLD name
+ * rather than paginating with a cursor: each task processed leaves the old-name
+ * range (`renameTaskExternalRepo` reconciles the lookup to the rewritten refs),
+ * so the range shrinks every step and a cursor over a mutating index would skip
+ * rows. Same shape as `drainDisconnectBatch`. Termination rests on that
+ * shrinking, which is why the per-task rewrite is unconditional — see
+ * `renameTaskExternalRepo`.
+ */
+export const drainRepoRenameBatch = internalMutation({
+  args: {
+    projectId: v.id("projects"),
+    /** The path the refs were written with. */
+    from: v.string(),
+    /** The path the link now carries. */
+    to: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    if (args.from === args.to) return null;
+
+    const batch = await ctx.db
+      .query("taskExternalRefs")
+      .withIndex("by_project_repo_issue", (q) =>
+        q.eq("projectId", args.projectId).eq("repoFullName", args.from),
+      )
+      .take(REPO_RENAME_BATCH_SIZE);
+    if (batch.length === 0) return null;
+
+    // A task with several refs for the same repo contributes several rows; the
+    // rewrite handles all of a task's refs at once, so visit each task once.
+    const visited = new Set<Id<"tasks">>();
+    for (const row of batch) {
+      if (visited.has(row.taskId)) continue;
+      visited.add(row.taskId);
+      await renameTaskExternalRepo(ctx, {
+        taskId: row.taskId,
+        from: args.from,
+        to: args.to,
+      });
+    }
+
+    if (batch.length === REPO_RENAME_BATCH_SIZE) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.integrations.core.links.drainRepoRenameBatch,
+        args,
       );
     }
     return null;
