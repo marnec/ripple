@@ -5,6 +5,13 @@ import { mutation } from "../functions";
 import { auditLog } from "../auditLog";
 import { requirePlatformAdmin } from "../authHelpers";
 import { cascadeDelete } from "../cascadeDelete";
+import {
+  channelsByWorkspace,
+  diagramsByWorkspace,
+  documentsByWorkspace,
+  projectsByWorkspace,
+  tasksByWorkspace,
+} from "../dbTriggers";
 
 /**
  * Admin-only: every workspace with owner identity and member count. Members,
@@ -70,7 +77,18 @@ export const list = query({
   },
 });
 
-/** Admin-only: one workspace with its member list (name + role) and counts. */
+/**
+ * Admin-only: one workspace with its member list (name + role) and counts.
+ *
+ * Counts come from the per-workspace aggregates (`dbTriggers.ts`), namespaced by
+ * this same `workspaceId` — the same source `workspaces.overview` serves to
+ * users, so the console can never disagree with the product. Do NOT go back to
+ * `.collect().then(r => r.length)` here: this query is held open as a live
+ * subscription by the console's workspace-detail page, so that form re-read the
+ * workspace's entire channels/documents/diagrams/projects/tasks ranges on every
+ * write anywhere in the workspace. `workspaceIntegrations` has no aggregate and
+ * is bounded by the number of connected providers, so it stays a collect.
+ */
 export const get = query({
   args: { workspaceId: v.id("workspaces") },
   returns: v.union(
@@ -106,24 +124,23 @@ export const get = query({
     const ws = await ctx.db.get(workspaceId);
     if (!ws) return null;
 
-    const byWorkspace = (table: "channels" | "documents" | "diagrams" | "projects" | "tasks" | "workspaceIntegrations") =>
-      ctx.db
-        .query(table)
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-        .collect();
-
+    const namespace = workspaceId as string;
     const [memberRows, channels, documents, diagrams, projects, tasks, integrations] =
       await Promise.all([
+        // The only range genuinely read for its rows — it backs the member list.
         ctx.db
           .query("workspaceMembers")
           .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
           .collect(),
-        byWorkspace("channels"),
-        byWorkspace("documents"),
-        byWorkspace("diagrams"),
-        byWorkspace("projects"),
-        byWorkspace("tasks"),
-        byWorkspace("workspaceIntegrations"),
+        channelsByWorkspace.count(ctx, { namespace, bounds: {} }),
+        documentsByWorkspace.count(ctx, { namespace, bounds: {} }),
+        diagramsByWorkspace.count(ctx, { namespace, bounds: {} }),
+        projectsByWorkspace.count(ctx, { namespace, bounds: {} }),
+        tasksByWorkspace.count(ctx, { namespace, bounds: {} }),
+        ctx.db
+          .query("workspaceIntegrations")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+          .collect(),
       ]);
 
     const members = (
@@ -148,11 +165,11 @@ export const get = query({
       description: ws.description,
       ownerId: ws.ownerId,
       counts: {
-        channels: channels.length,
-        documents: documents.length,
-        diagrams: diagrams.length,
-        projects: projects.length,
-        tasks: tasks.length,
+        channels,
+        documents,
+        diagrams,
+        projects,
+        tasks,
         integrations: integrations.length,
       },
       members,
