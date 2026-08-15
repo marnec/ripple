@@ -10,11 +10,6 @@ NEXT STEPS:
 
 - explore pdf reading, annotation and embedding
 
-- external ticketing system??: 
-    - connected to project
-    - connected somehow to tasks
-    - external ticketer can be given access to specific resources in workspaces through links (attach to ticket??)
-
 - [ ] link previews in chat
 
 keyboard accessiblity
@@ -63,3 +58,9 @@ keyboard accessiblity
 
 - identity model refactor
     - [ ] split `users` (auth-only) from a new `profiles` table that can host synthetic / bot identities (integration bots, system actors); `creatorId`/`assigneeId`/`userId` refs point at `profiles`. Lets integrations create non-auth identities without polluting the auth surface.
+
+
+- external ticketing system??: 
+    - connected to project
+    - connected somehow to tasks
+    - external ticketer can be given access to specific resources in workspaces through links (attach to ticket??)

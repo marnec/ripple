@@ -990,8 +990,6 @@ triggers.register("channelNotificationPreferences", async (ctx, change) => {
     const doc = change.newDoc;
     const channel = await ctx.db.get(doc.channelId);
     if (!channel) return;
-    await onChannelPreferencesChange(
-      ctx, doc.userId, doc.channelId, channel.workspaceId, doc,
-    );
+    await onChannelPreferencesChange(ctx, doc.userId, channel, doc);
   }
 });

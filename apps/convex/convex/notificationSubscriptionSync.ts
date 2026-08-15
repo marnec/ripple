@@ -12,7 +12,7 @@
  */
 
 import type { DatabaseWriter } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   BROADCAST_WORKSPACE_CATEGORIES,
   BROADCAST_CHANNEL_CATEGORIES,
@@ -61,6 +61,20 @@ async function deleteSubscription(
     )
     .first();
   if (existing) await ctx.db.delete(existing._id);
+}
+
+async function isChannelMember(
+  ctx: Ctx,
+  channelId: Id<"channels">,
+  userId: Id<"users">,
+): Promise<boolean> {
+  const row = await ctx.db
+    .query("channelMembers")
+    .withIndex("by_channel_user", (q) =>
+      q.eq("channelId", channelId).eq("userId", userId),
+    )
+    .first();
+  return row !== null;
 }
 
 async function getGlobalPrefs(ctx: Ctx, userId: Id<"users">) {
@@ -352,18 +366,37 @@ export async function unsubscribeNonChannelMembersPage(
 
 // ── Channel Preference Sync ─────────────────────────────────────────
 
+/**
+ * Every other path into this file derives channel reachability from membership
+ * data — `onWorkspaceMemberInsert` takes open channels only, `onChannelMemberInsert`
+ * needs the `channelMembers` row to exist, `onGlobalPreferencesChange` unions
+ * open channels with explicit memberships. This one used to trust the
+ * preference row by itself, which made a `channelNotificationPreferences` write
+ * the one way to mint a subscription to a channel you cannot read.
+ *
+ * The public writer (`channelNotificationPreferences.save`) now applies the
+ * channel rule, so this is the second line: it keeps a row written *before* that
+ * gate existed from re-materializing a subscription, and — because the
+ * unreachable case falls through to `deleteSubscription` rather than merely
+ * skipping the insert — any later preference write actively tears down a stale
+ * one.
+ */
 export async function onChannelPreferencesChange(
   ctx: Ctx,
   userId: Id<"users">,
-  channelId: Id<"channels">,
-  workspaceId: Id<"workspaces">,
+  channel: Doc<"channels">,
   newPrefs: Record<string, unknown>,
 ): Promise<void> {
+  const channelId = channel._id;
+  const mayReceive =
+    channel.type === "open" || (await isChannelMember(ctx, channelId, userId));
+
   await Promise.all(
     BROADCAST_CHANNEL_CATEGORIES.map((cat) => {
-      const enabled = isEnabled(newPrefs, cat, DEFAULT_CHANNEL_CHAT_PREFERENCES);
+      const enabled =
+        mayReceive && isEnabled(newPrefs, cat, DEFAULT_CHANNEL_CHAT_PREFERENCES);
       if (enabled) {
-        return insertSubscription(ctx, workspaceId, userId, cat, channelId);
+        return insertSubscription(ctx, channel.workspaceId, userId, cat, channelId);
       } else {
         return deleteSubscription(ctx, userId, channelId, cat);
       }

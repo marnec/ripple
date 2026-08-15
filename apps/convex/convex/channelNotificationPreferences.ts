@@ -1,7 +1,7 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { internalQuery, query } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
-import { requireUser, getWorkspaceMembership } from "./authHelpers";
+import { requireChannelAccess, checkChannelAccess } from "./authHelpers";
 
 const preferencesValidator = v.object({
   _id: v.id("channelNotificationPreferences"),
@@ -12,17 +12,31 @@ const preferencesValidator = v.object({
   chatChannelMessage: v.boolean(),
 });
 
+/**
+ * A row in this table is not a private setting — it is a standing grant. Saving
+ * `chatChannelMessage: true` materializes a `notificationSubscriptions` row that
+ * the broadcast path in `notificationDelivery.getSubscribedUserIds` reads
+ * blind, so from then on every message posted in the channel pushes its sender
+ * and its plaintext opening lines to that user. That makes these two functions
+ * a read path on channel content, and they take the **channel** rule
+ * accordingly — the workspace rule they used to apply let any colleague
+ * subscribe themselves to a closed channel or someone else's DM.
+ *
+ * `messages.send` already narrows its *mention* recipients with
+ * `filterChannelRecipients`; the broadcast recipients are narrowed here and at
+ * the sink (`onChannelPreferencesChange`), because by delivery time the
+ * subscription row is all that is left.
+ */
 export const get = query({
   args: { channelId: v.id("channels") },
   returns: v.union(preferencesValidator, v.null()),
   handler: async (ctx, { channelId }) => {
-    const userId = await requireUser(ctx);
-
-    const channel = await ctx.db.get(channelId);
-    if (!channel) return null;
-
-    const membership = await getWorkspaceMembership(ctx, channel.workspaceId, userId);
-    if (!membership) throw new ConvexError("Not a workspace member");
+    // Soft variant: the settings panel unmounts asynchronously, so a channel
+    // the caller has just left (or that was deleted under them) should read as
+    // "no preferences" rather than throw.
+    const access = await checkChannelAccess(ctx, channelId);
+    if (!access) return null;
+    const { userId } = access;
 
     return await ctx.db
       .query("channelNotificationPreferences")
@@ -39,13 +53,7 @@ export const save = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { channelId, ...prefs }) => {
-    const userId = await requireUser(ctx);
-
-    const channel = await ctx.db.get(channelId);
-    if (!channel) throw new ConvexError("Channel not found");
-
-    const membership = await getWorkspaceMembership(ctx, channel.workspaceId, userId);
-    if (!membership) throw new ConvexError("Not a workspace member");
+    const { userId } = await requireChannelAccess(ctx, channelId);
 
     const existing = await ctx.db
       .query("channelNotificationPreferences")

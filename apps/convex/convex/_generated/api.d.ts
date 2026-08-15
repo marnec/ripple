@@ -6159,6 +6159,20 @@ export declare const internal: {
       },
       any
     >;
+    unsubscribeNonMembersFromPrivateChannels: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        batchSize?: number;
+        cursor?: string | null;
+        dryRun?: boolean;
+        fn?: string;
+        next?: Array<string>;
+        oneBatchOnly?: boolean;
+        reset?: boolean;
+      },
+      any
+    >;
   };
   notificationDelivery: {
     getFilteredSubscriptions: FunctionReference<

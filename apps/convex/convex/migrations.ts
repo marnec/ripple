@@ -143,6 +143,7 @@ export const runAll = migrations.runner([
   internal.migrations.cleanupProjectEntityTags,
   internal.migrations.backfillTaskExternalRefs,
   internal.migrations.backfillLinkWorkspaceIntegration,
+  internal.migrations.unsubscribeNonMembersFromPrivateChannels,
 ]);
 
 /**
@@ -1258,5 +1259,47 @@ export const backfillEdgeNodeIds = migrations.define({
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(edge._id, patch as never);
     }
+  },
+});
+
+/**
+ * Drop channel-scoped subscriptions held by users who are not members of the
+ * channel.
+ *
+ * `channelNotificationPreferences.save` used to gate on workspace membership
+ * rather than the channel rule, so any workspace member could subscribe
+ * themselves to a closed channel or someone else's DM and receive the plaintext
+ * opening lines of every message posted there. Both the writer and the sink
+ * (`onChannelPreferencesChange`) now apply the channel rule, but neither
+ * removes a row that was already written — the delivery path reads this table
+ * blind, so until a repair runs the pre-fix subscriptions keep delivering.
+ *
+ * Open channels are left alone: every workspace member is legitimately
+ * subscribed to those, and that is exactly what `subscribeChannelMembersPage`
+ * and `onWorkspaceMemberInsert` put here. Rows whose scope is a workspace
+ * (`BROADCAST_WORKSPACE_CATEGORIES`) are not channel grants at all.
+ */
+export const unsubscribeNonMembersFromPrivateChannels = migrations.define({
+  table: "notificationSubscriptions",
+  migrateOne: async (ctx, sub) => {
+    if (!(BROADCAST_CHANNEL_CATEGORIES as readonly string[]).includes(sub.category)) return;
+
+    // `scope` is a bare string — a channel id for these categories, but the
+    // column is shared with workspace-scoped rows, so normalize rather than cast.
+    const channelId = ctx.db.normalizeId("channels", sub.scope);
+    if (!channelId) return;
+
+    const channel = await ctx.db.get(channelId);
+    if (!channel || channel.type === "open") return;
+
+    const membership = await ctx.db
+      .query("channelMembers")
+      .withIndex("by_channel_user", (q) =>
+        q.eq("channelId", channelId).eq("userId", sub.userId),
+      )
+      .first();
+    if (membership) return;
+
+    await ctx.db.delete(sub._id);
   },
 });
