@@ -55,7 +55,10 @@ export async function scheduleTaskReassign<
   ...args: OptionalRestArgs<Fn>
 ): Promise<void> {
   await pool.enqueueAction(ctx, fn, ...(args as [any]), {
-    onComplete: internal.backgroundJobFailures.recordTerminalFailure,
+    // Not the shared `backgroundJobFailures.recordTerminalFailure`: a give-up
+    // here has a retired row to un-retire on top of the record it writes. See
+    // `taskReassignRecovery`.
+    onComplete: internal.taskReassignRecovery.recordDrainGiveUp,
     context: job,
   });
 }

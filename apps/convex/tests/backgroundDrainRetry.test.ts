@@ -16,7 +16,7 @@
 import { expect, describe, it, vi, beforeEach, afterEach } from "vitest";
 import { writerWithTriggers } from "convex-helpers/server/triggers";
 import { triggers } from "../convex/dbTriggers";
-import { createTestContext, setupWorkspaceWithAdmin } from "./helpers";
+import { createTestContext, setupProject, setupWorkspaceWithAdmin } from "./helpers";
 import { api, internal } from "../convex/_generated/api";
 import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
@@ -305,19 +305,14 @@ describe("push delivery", () => {
 
 describe("tag-delete drain", () => {
   /**
-   * The second family of drains — the ones already on `taskReassignPool`,
-   * which until now had the pool but not the retry. `deleteTag` retires the
-   * dictionary row immediately and leaves the strip to the drain, so a drain
-   * that dies takes the tag off every picker while leaving it on every
-   * resource: the worst of both states, and previously invisible.
+   * A workspace holding one tag the drain can never finish.
    *
    * The failure is driven by data rather than a mock, because that is what the
    * batch can actually hit: a join row pointing at a row of another table makes
    * the strip's patch fail schema validation, on every attempt, exactly as a
    * genuinely undrainable batch would.
    */
-  it("records a background job failure when a batch keeps throwing", async () => {
-    const t = createTestContext();
+  async function seedUndrainableTag(t: ReturnType<typeof createTestContext>) {
     const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
 
     const documentId = await asUser.mutation(api.documents.create, { workspaceId });
@@ -342,6 +337,20 @@ describe("tag-delete drain", () => {
       return tag!._id;
     });
 
+    return { workspaceId, asUser, tagId };
+  }
+
+  /**
+   * The second family of drains — the ones already on `taskReassignPool`,
+   * which until now had the pool but not the retry. `deleteTag` retires the
+   * dictionary row immediately and leaves the strip to the drain, so a drain
+   * that dies takes the tag off every picker while leaving it on every
+   * resource: the worst of both states, and previously invisible.
+   */
+  it("records a background job failure when a batch keeps throwing", async () => {
+    const t = createTestContext();
+    const { asUser, tagId } = await seedUndrainableTag(t);
+
     await asUser.mutation(api.tagSync.deleteTag, { tagId });
     await drain(t);
 
@@ -351,6 +360,152 @@ describe("tag-delete drain", () => {
     expect(failures).toHaveLength(1);
     expect(failures[0].kind).toBe("tagSync:stripTagEverywhere");
     expect(failures[0].key).toBe(tagId);
+  });
+
+  /**
+   * Recording the give-up is only half of it. `pendingDeletion` is what took
+   * the tag off every picker, and nothing else in the codebase ever clears it,
+   * so an exhausted drain used to leave that state permanent: the tag stays on
+   * every resource, is gone from every picker, and `getOrCreateTag` refuses the
+   * name forever. Giving up has to put the workspace back where it started.
+   */
+  it("returns the tag to the picker when the drain gives up", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser, tagId } = await seedUndrainableTag(t);
+
+    await asUser.mutation(api.tagSync.deleteTag, { tagId });
+    await drain(t);
+
+    expect(
+      await asUser.query(api.tags.listWorkspaceTags, { workspaceId }),
+    ).toContain("ops");
+  });
+});
+
+/**
+ * The status half of the same give-up, driven at the seam the pool itself calls
+ * rather than end to end: `fetchTasksForStatusBatch` patches one indexed field
+ * and touches no trigger that can be made to fail on data, so the only way to
+ * exhaust the drain from outside would be to mock the batch — which means
+ * copying the production batch into the test to keep the success path working.
+ * `recordEmailTerminalFailure` is exercised the same way below, for the same
+ * reason: what is under test is the pool's terminal contract, not the route to
+ * it, and the tag suite above already proves the pool calls this handler.
+ */
+describe("status-delete drain", () => {
+  /** A project with a column being deleted into another, drain not yet run. */
+  async function startStatusDelete(t: ReturnType<typeof createTestContext>) {
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const projectId = await setupProject(t, { workspaceId, creatorId: userId });
+
+    const statusId = await asUser.mutation(api.taskStatuses.create, {
+      projectId,
+      name: "In Review",
+      color: "bg-amber-500",
+      isCompleted: false,
+    });
+    const targetId = await asUser.mutation(api.taskStatuses.create, {
+      projectId,
+      name: "Done",
+      color: "bg-green-500",
+      isCompleted: true,
+    });
+    await asUser.mutation(api.tasks.create, {
+      projectId,
+      workspaceId,
+      title: "Ship it",
+      statusId,
+    });
+
+    await asUser.mutation(api.taskStatuses.remove, {
+      statusId,
+      reassignToStatusId: targetId,
+    });
+
+    return { projectId, asUser, statusId, targetId };
+  }
+
+  /** The pool's terminal callback for a drain that spent every attempt. */
+  async function giveUp(
+    t: ReturnType<typeof createTestContext>,
+    context: { kind: string; key: string },
+  ) {
+    await t.mutation(internal.taskReassignRecovery.recordDrainGiveUp, {
+      workId: "work-1" as never,
+      context,
+      result: { kind: "failed", error: "Too many write conflicts" },
+    });
+  }
+
+  async function statusNames(
+    t: ReturnType<typeof createTestContext>,
+    asUser: Awaited<ReturnType<typeof setupWorkspaceWithAdmin>>["asUser"],
+    projectId: Id<"projects">,
+  ) {
+    const statuses = await asUser.query(api.taskStatuses.listByProject, {
+      projectId,
+    });
+    return statuses.map((s) => s.name);
+  }
+
+  /**
+   * The wedge itself. `pendingDeletion` is what takes the column off the board,
+   * and the board is grouped by `statusId`, so a column hidden while its tasks
+   * still point at it does not merely disappear — it takes those tasks with it,
+   * for every member, with no error anywhere in the product.
+   */
+  it("returns the column to the board when the drain gives up", async () => {
+    const t = createTestContext();
+    const { projectId, asUser, statusId } = await startStatusDelete(t);
+
+    expect(await statusNames(t, asUser, projectId)).not.toContain("In Review");
+
+    await giveUp(t, {
+      kind: "taskStatuses:reassignTasksAndDelete",
+      key: statusId,
+    });
+
+    expect(await statusNames(t, asUser, projectId)).toContain("In Review");
+  });
+
+  /**
+   * And the second half: the delete has to be re-pressable. Before this, the
+   * guard in `remove` read a flag nothing could clear, so the one recovery
+   * available to a user was refused for the lifetime of the project.
+   */
+  it("lets the delete be retried after the drain gives up", async () => {
+    const t = createTestContext();
+    const { projectId, asUser, statusId, targetId } = await startStatusDelete(t);
+
+    await giveUp(t, {
+      kind: "taskStatuses:reassignTasksAndDelete",
+      key: statusId,
+    });
+    await asUser.mutation(api.taskStatuses.remove, {
+      statusId,
+      reassignToStatusId: targetId,
+    });
+    await drain(t);
+
+    expect(await statusNames(t, asUser, projectId)).toEqual(["Done"]);
+    const tasks = await t.run(async (ctx) => ctx.db.query("tasks").collect());
+    expect(tasks.map((task) => task.statusId)).toEqual([targetId]);
+  });
+
+  /**
+   * The dispatch is on `kind`, not on "does this key name a status". Both
+   * drains keyed by a status id come through here, and only the delete retired
+   * the row: a failed `isCompleted` sync clearing `pendingDeletion` would
+   * un-retire a column whose delete drain is still running, putting it back on
+   * the board minutes before it is deleted for real.
+   */
+  it("leaves the flag alone when a different drain on the same status gives up", async () => {
+    const t = createTestContext();
+    const { projectId, asUser, statusId } = await startStatusDelete(t);
+
+    await giveUp(t, { kind: "taskStatuses:syncTasksCompleted", key: statusId });
+
+    expect(await statusNames(t, asUser, projectId)).not.toContain("In Review");
   });
 });
 

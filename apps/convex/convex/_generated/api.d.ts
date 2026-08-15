@@ -6617,6 +6617,21 @@ export declare const internal: {
       { totalRows: number } | null
     >;
   };
+  taskReassignRecovery: {
+    recordDrainGiveUp: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        context: { key: string; kind: string };
+        result:
+          | { kind: "success"; returnValue: any }
+          | { error: string; kind: "failed" }
+          | { kind: "canceled" };
+        workId: string;
+      },
+      null
+    >;
+  };
   tasks: {
     getInternal: FunctionReference<
       "query",
