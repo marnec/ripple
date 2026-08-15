@@ -4,6 +4,7 @@ import { internalMutation, mutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
 import { auditLog } from "../../auditLog";
+import { insertJobFailure } from "../../backgroundJobFailures";
 import {
   getWorkspaceMembership,
   requireWorkspaceMember,
@@ -535,16 +536,56 @@ export const beginRemoveInstallation = internalMutation({
 });
 
 /**
+ * Consecutive polls that may see the cascade in the same place before the wait
+ * gives up. Counted on *stalls*, not on elapsed time: a healthy cascade of any
+ * size moves its frontier every batch, so this can only be reached by a drain
+ * that has genuinely stopped — which is the point, because a wall-clock cap
+ * would abandon a legitimately huge disconnect and strand its installation.
+ */
+const MAX_STALLED_POLLS = 8;
+
+/**
+ * Backoff between polls, indexed by how long the cascade has been stalled: a
+ * moving cascade is re-checked in a second, a stuck one backs off to a minute.
+ * Reaching the cap therefore means roughly three minutes of complete standstill,
+ * not three minutes of work.
+ */
+function pollDelayMs(stalledPolls: number): number {
+  return Math.min(1000 * 2 ** stalledPolls, 60_000);
+}
+
+/**
  * Step 3: delete the integration row, but only once the disconnect cascade has
  * drained — see `beginRemoveInstallation` for why the ordering matters.
- * Self-reschedules while any `taskIntegrationLinks` row under this account
- * survives, mirroring `drainDisconnectBatch`'s own idiom.
+ * Re-schedules itself while any `taskIntegrationLinks` row under this account
+ * survives.
+ *
+ * The wait is bounded, and bounded on *progress* rather than on attempts.
+ * `drainDisconnectBatch` is a scheduled mutation, so a deterministic failure
+ * inside it (a transaction cap while freezing a task with many comment links,
+ * a validation throw) is terminal and those rows never disappear — against
+ * which an unbounded waiter is an endless chain of scheduled mutations for the
+ * life of the deployment. `frontier` is the first surviving task-link row seen
+ * last time; the cascade deletes in index order, so a frontier that has not
+ * moved means the drain has not run. Only those polls count toward the cap.
+ *
+ * On giving up the integration row is deliberately left in place, and the
+ * stall is reported to `backgroundJobFailures` instead. Deleting it would be
+ * worse than the strand it looks like: the cascade never froze those tasks,
+ * and `resolveProvider(null)` mislabels every one of them once the row it
+ * resolves through is gone.
  *
  * The synthetic bot user is left in place on purpose: it authored comments and
  * may be `creatorId` on imported tasks, and deleting it would dangle those.
  */
 export const finishRemoveInstallation = internalMutation({
-  args: { integrationId: v.id("workspaceIntegrations") },
+  args: {
+    integrationId: v.id("workspaceIntegrations"),
+    /** Consecutive polls that found the cascade exactly where they left it. */
+    stalledPolls: v.optional(v.number()),
+    /** The first surviving task-link row at the previous poll. */
+    frontier: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const integration = await ctx.db.get(args.integrationId);
@@ -560,6 +601,7 @@ export const finishRemoveInstallation = internalMutation({
       (l) => l.workspaceIntegrationId === args.integrationId,
     );
 
+    let frontier: string | null = null;
     for (const link of own) {
       const remaining = await ctx.db
         .query("taskIntegrationLinks")
@@ -568,16 +610,37 @@ export const finishRemoveInstallation = internalMutation({
         )
         .first();
       if (remaining) {
-        await ctx.scheduler.runAfter(
-          0,
-          internal.integrations.core.install.finishRemoveInstallation,
-          { integrationId: args.integrationId },
-        );
-        return null;
+        frontier = remaining._id;
+        break;
       }
     }
 
-    await ctx.db.delete(args.integrationId);
+    if (frontier === null) {
+      await ctx.db.delete(args.integrationId);
+      return null;
+    }
+
+    const stalledPolls =
+      frontier === args.frontier ? (args.stalledPolls ?? 0) + 1 : 0;
+
+    if (stalledPolls >= MAX_STALLED_POLLS) {
+      await insertJobFailure(ctx, {
+        kind: "integrations.install:finishRemoveInstallation",
+        key: args.integrationId,
+        error:
+          `Disconnect cascade stalled for workspace ${integration.workspaceId}: ` +
+          `taskIntegrationLinks rows under this installation stopped draining. ` +
+          `The installation row is left in place so the frozen refs it resolves ` +
+          `are not mislabelled; re-run the disconnect once the cause is fixed.`,
+      });
+      return null;
+    }
+
+    await ctx.scheduler.runAfter(
+      pollDelayMs(stalledPolls),
+      internal.integrations.core.install.finishRemoveInstallation,
+      { integrationId: args.integrationId, stalledPolls, frontier },
+    );
     return null;
   },
 });

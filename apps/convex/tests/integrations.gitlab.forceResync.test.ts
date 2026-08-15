@@ -1,8 +1,9 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { internal } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import {
   createTestContext,
+  setupAuthenticatedUser,
   setupProject,
   setupWorkspaceWithAdmin,
 } from "./helpers";
@@ -27,6 +28,16 @@ afterEach(() => {
  * `labels` is a plain string array, and assignees carry the numeric `id` the
  * GitLab identity path matches on.
  */
+
+/** The operator surface `backgroundJobFailures` is read through. */
+async function makePlatformAdmin(t: ReturnType<typeof createTestContext>) {
+  const { userId, asUser } = await setupAuthenticatedUser(t, {
+    name: "Platform Admin",
+    email: "ops-gl-resync@test.com",
+  });
+  await t.run((ctx) => ctx.db.patch(userId, { isPlatformAdmin: true }));
+  return asUser;
+}
 
 /** A GitLab REST issue as `GET /projects/:id/issues/:iid` returns it. */
 function gitlabIssue(
@@ -203,9 +214,44 @@ describe("integrations/gitlab/forceResyncAction.runForceResync", () => {
     expect(task?.assigneeId).toBe(memberId);
   });
 
-  it("does nothing when the integration has no stored credential", async () => {
+  /**
+   * The GitLab half of the same at-most-once problem. `makeGitlabRequester`
+   * does not swallow a transport failure, so a dropped connection mid-drain
+   * throws straight out of the action: the resync dies at that offset, nothing
+   * reschedules, and the `integration.force_resync` audit entry written before
+   * the drain even started still says it happened.
+   */
+  it("records the give-up when the drain throws mid-resync", async () => {
+    const t = createTestContext();
+    const { linkId } = await setupGitlabLinkedTask(t);
+    const asAdmin = await makePlatformAdmin(t);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+
+    await expect(
+      t.action(internal.integrations.gitlab.forceResyncAction.runForceResync, {
+        projectIntegrationLinkId: linkId,
+      }),
+    ).rejects.toThrow();
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const { failures } = await asAdmin.query(api.admin.jobs.list, {});
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      kind: "integrations.forceResync",
+      key: linkId,
+    });
+  });
+
+  it("does nothing when the integration has no stored credential — and says so", async () => {
     const t = createTestContext();
     const { linkId, taskId } = await setupGitlabLinkedTask(t);
+    const asAdmin = await makePlatformAdmin(t);
     await t.run(async (ctx) => {
       const integration = await ctx.db
         .query("workspaceIntegrations")
@@ -226,5 +272,14 @@ describe("integrations/gitlab/forceResyncAction.runForceResync", () => {
     expect(urls).toEqual([]);
     const task = await t.run((ctx) => ctx.db.get(taskId as Id<"tasks">));
     expect(task?.completed).toBe(false);
+
+    // Doing nothing is the right behaviour; doing it silently is not. The
+    // admin was already told the resync ran.
+    const { failures } = await asAdmin.query(api.admin.jobs.list, {});
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      kind: "integrations.forceResync",
+      key: linkId,
+    });
   });
 });

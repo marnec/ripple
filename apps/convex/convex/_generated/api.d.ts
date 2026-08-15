@@ -4774,7 +4774,11 @@ export declare const internal: {
         finishRemoveInstallation: FunctionReference<
           "mutation",
           "internal",
-          { integrationId: Id<"workspaceIntegrations"> },
+          {
+            frontier?: string;
+            integrationId: Id<"workspaceIntegrations">;
+            stalledPolls?: number;
+          },
           null
         >;
         storeInstallCandidates: FunctionReference<

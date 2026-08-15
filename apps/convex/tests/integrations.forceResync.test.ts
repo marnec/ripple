@@ -1,10 +1,11 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { synthesizeReconciliationEvents } from "../convex/integrations/core/forceResync";
 import { applyNormalizedEvent } from "../convex/integrations/core/syncIn";
-import { internal } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import {
   createTestContext,
+  setupAuthenticatedUser,
   setupProject,
   setupWorkspaceWithAdmin,
 } from "./helpers";
@@ -34,6 +35,16 @@ async function generateTestKeyPem(): Promise<string> {
   const lines: string[] = [];
   for (let i = 0; i < b64.length; i += 64) lines.push(b64.slice(i, i + 64));
   return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
+}
+
+/** The operator surface `backgroundJobFailures` is read through. */
+async function makePlatformAdmin(t: ReturnType<typeof createTestContext>) {
+  const { userId, asUser } = await setupAuthenticatedUser(t, {
+    name: "Platform Admin",
+    email: "ops-resync@test.com",
+  });
+  await t.run((ctx) => ctx.db.patch(userId, { isPlatformAdmin: true }));
+  return asUser;
 }
 
 const externalAuthor = {
@@ -542,6 +553,70 @@ describe("integrations/github/forceResyncAction.runForceResync (batching + rate 
     expect(fetched.sort((a, b) => a - b)).toEqual(
       Array.from({ length: 30 }, (_, i) => i + 1),
     );
+  });
+
+  /**
+   * The worst of the two throw paths, because the user is actively told it
+   * worked. `forceResync` writes the `integration.force_resync` audit entry and
+   * returns success the moment the action is scheduled; the installation token
+   * is then minted lazily on the first request, and `mintInstallationToken`
+   * throws on any non-2xx. A revoked or suspended installation therefore makes
+   * the whole resync die at offset 0 — nothing converged, nothing rescheduled,
+   * and (until this) nothing recorded anywhere an operator looks.
+   */
+  it("records the give-up when the installation token cannot be minted", async () => {
+    const t = createTestContext();
+    const { linkId } = await setupLinkedIssues(t, 3);
+    const asAdmin = await makePlatformAdmin(t);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL) =>
+        String(url).includes("/access_tokens")
+          ? new Response("installation suspended", { status: 403 })
+          : new Response("nope", { status: 404 }),
+      ),
+    );
+
+    await expect(
+      t.action(internal.integrations.github.forceResyncAction.runForceResync, {
+        projectIntegrationLinkId: linkId,
+      }),
+    ).rejects.toThrow();
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const { failures } = await asAdmin.query(api.admin.jobs.list, {});
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      kind: "integrations.forceResync",
+      key: linkId,
+    });
+  });
+
+  /**
+   * The deployment-level version of the same silence: with no App credentials
+   * configured the drain returned `null` on its first line, having already let
+   * the mutation write an audit entry claiming the resync happened.
+   */
+  it("records the give-up when the deployment has no GitHub App credentials", async () => {
+    const t = createTestContext();
+    const { linkId } = await setupLinkedIssues(t, 1);
+    const asAdmin = await makePlatformAdmin(t);
+    delete process.env.GITHUB_APP_ID;
+    delete process.env.GITHUB_APP_PRIVATE_KEY;
+
+    await t.action(
+      internal.integrations.github.forceResyncAction.runForceResync,
+      { projectIntegrationLinkId: linkId },
+    );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const { failures } = await asAdmin.query(api.admin.jobs.list, {});
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      kind: "integrations.forceResync",
+      key: linkId,
+    });
   });
 
   it("a 429 stops the batch and resumes from the rate-limited issue (no skips, no full restart)", async () => {

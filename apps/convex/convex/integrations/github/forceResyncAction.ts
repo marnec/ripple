@@ -4,6 +4,10 @@ import { v } from "convex/values";
 import { internalAction } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { githubClientFromEnv } from "./client";
+import {
+  describeError,
+  recordForceResyncGaveUp,
+} from "../core/forceResyncFailure";
 
 interface GithubIssueResponse {
   node_id: string;
@@ -46,6 +50,16 @@ const DEFAULT_RATE_LIMIT_PAUSE_MS = 60_000;
  * resync can't hammer the App's hourly budget. Other per-issue fetch
  * failures are logged and skipped — Force resync is a best-effort recovery
  * path, not a transaction.
+ *
+ * Best-effort is not the same as silent, though, and this is an at-most-once
+ * scheduled action: nothing retries it and nothing else notices it stopped.
+ * Two failures escape the skip-and-continue handling above — the installation
+ * token is minted lazily, so a revoked or suspended App throws on the very
+ * first request and kills the run at offset 0, and a throw out of
+ * `applyOneIssueReconciliation` abandons it mid-batch. Both are recorded
+ * through `core/forceResyncFailure` before the throw propagates, so a resync
+ * that gave up is visible on `admin/jobs` rather than only in the audit entry
+ * that already told the admin it succeeded.
  */
 export const runForceResync = internalAction({
   args: {
@@ -60,90 +74,108 @@ export const runForceResync = internalAction({
 
     const client = githubClientFromEnv();
     if (!client) {
-      console.error("[forceResync] GitHub App credentials not configured");
+      await recordForceResyncGaveUp(ctx, {
+        provider: "github",
+        projectIntegrationLinkId: args.projectIntegrationLinkId,
+        offset,
+        reason: "GitHub App credentials are not configured on this deployment",
+      });
       return null;
     }
 
-    const context = await ctx.runQuery(
-      internal.integrations.core.forceResyncQueries.getResyncContext,
-      { projectIntegrationLinkId: args.projectIntegrationLinkId },
-    );
-    if (!context) return null;
+    try {
+      const context = await ctx.runQuery(
+        internal.integrations.core.forceResyncQueries.getResyncContext,
+        { projectIntegrationLinkId: args.projectIntegrationLinkId },
+      );
+      if (!context) return null;
 
-    const gh = client.forInstallation(context.installationId);
+      const gh = client.forInstallation(context.installationId);
 
-    const slice = context.items.slice(offset, offset + RESYNC_BATCH_SIZE);
-    for (let i = 0; i < slice.length; i++) {
-      const item = slice[i];
-      const res = await gh.request<GithubIssueResponse>({
-        method: "GET",
-        path: `/repos/${context.repoFullName}/issues/${item.issueNumber}`,
-      });
+      const slice = context.items.slice(offset, offset + RESYNC_BATCH_SIZE);
+      for (let i = 0; i < slice.length; i++) {
+        const item = slice[i];
+        const res = await gh.request<GithubIssueResponse>({
+          method: "GET",
+          path: `/repos/${context.repoFullName}/issues/${item.issueNumber}`,
+        });
 
-      // Rate-limited: stop the batch and resume this same item on a fresh
-      // invocation after GitHub's cool-off. Items earlier in this slice were
-      // already applied (the apply step is idempotent), so resuming from the
-      // failing absolute index neither double-applies nor skips.
-      if (res.status === 429) {
+        // Rate-limited: stop the batch and resume this same item on a fresh
+        // invocation after GitHub's cool-off. Items earlier in this slice were
+        // already applied (the apply step is idempotent), so resuming from the
+        // failing absolute index neither double-applies nor skips.
+        if (res.status === 429) {
+          await ctx.scheduler.runAfter(
+            res.retryAfterMs ?? DEFAULT_RATE_LIMIT_PAUSE_MS,
+            internal.integrations.github.forceResyncAction.runForceResync,
+            {
+              projectIntegrationLinkId: args.projectIntegrationLinkId,
+              offset: offset + i,
+            },
+          );
+          return null;
+        }
+
+        if (res.status !== 200 || !res.body) {
+          console.warn(
+            `[forceResync] issue fetch failed (status=${res.status}) for #${item.issueNumber}`,
+          );
+          continue;
+        }
+
+        const issue = res.body;
+        await ctx.runMutation(
+          internal.integrations.core.forceResync.applyOneIssueReconciliation,
+          {
+            projectIntegrationLinkId: args.projectIntegrationLinkId,
+            rippleCompleted: item.completed,
+            issue: {
+              externalIssueId: issue.node_id,
+              issueNumber: issue.number,
+              state: issue.state,
+              stateReason: issue.state_reason ?? null,
+              title: issue.title,
+              body: issue.body ?? "",
+              url: issue.html_url,
+              externalAuthor: {
+                login: issue.user.login,
+                avatarUrl: issue.user.avatar_url,
+                url: issue.user.html_url,
+              },
+              labels: (issue.labels ?? []).map((l) => l.name),
+              assignees: (issue.assignees ?? []).map((u) => ({
+                login: u.login,
+                avatarUrl: u.avatar_url,
+                url: u.html_url,
+              })),
+            },
+          },
+        );
+      }
+
+      // More items remain → schedule the next batch from the new offset.
+      if (offset + slice.length < context.items.length) {
         await ctx.scheduler.runAfter(
-          res.retryAfterMs ?? DEFAULT_RATE_LIMIT_PAUSE_MS,
+          0,
           internal.integrations.github.forceResyncAction.runForceResync,
           {
             projectIntegrationLinkId: args.projectIntegrationLinkId,
-            offset: offset + i,
+            offset: offset + slice.length,
           },
         );
-        return null;
       }
-
-      if (res.status !== 200 || !res.body) {
-        console.warn(
-          `[forceResync] issue fetch failed (status=${res.status}) for #${item.issueNumber}`,
-        );
-        continue;
-      }
-
-      const issue = res.body;
-      await ctx.runMutation(
-        internal.integrations.core.forceResync.applyOneIssueReconciliation,
-        {
-          projectIntegrationLinkId: args.projectIntegrationLinkId,
-          rippleCompleted: item.completed,
-          issue: {
-            externalIssueId: issue.node_id,
-            issueNumber: issue.number,
-            state: issue.state,
-            stateReason: issue.state_reason ?? null,
-            title: issue.title,
-            body: issue.body ?? "",
-            url: issue.html_url,
-            externalAuthor: {
-              login: issue.user.login,
-              avatarUrl: issue.user.avatar_url,
-              url: issue.user.html_url,
-            },
-            labels: (issue.labels ?? []).map((l) => l.name),
-            assignees: (issue.assignees ?? []).map((u) => ({
-              login: u.login,
-              avatarUrl: u.avatar_url,
-              url: u.html_url,
-            })),
-          },
-        },
-      );
+      return null;
+    } catch (error) {
+      // Last line of defence for an at-most-once action. Recorded, then
+      // rethrown: the throw is what marks the scheduled run failed, and the
+      // operator row is what makes it findable afterwards.
+      await recordForceResyncGaveUp(ctx, {
+        provider: "github",
+        projectIntegrationLinkId: args.projectIntegrationLinkId,
+        offset,
+        reason: describeError(error),
+      });
+      throw error;
     }
-
-    // More items remain → schedule the next batch from the new offset.
-    if (offset + slice.length < context.items.length) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.integrations.github.forceResyncAction.runForceResync,
-        {
-          projectIntegrationLinkId: args.projectIntegrationLinkId,
-          offset: offset + slice.length,
-        },
-      );
-    }
-    return null;
   },
 });

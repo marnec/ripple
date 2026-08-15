@@ -3,6 +3,10 @@ import { internalAction } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { getValidGitlabAccessToken } from "./tokenClient";
 import { makeGitlabRequester } from "./outboundGateway";
+import {
+  describeError,
+  recordForceResyncGaveUp,
+} from "../core/forceResyncFailure";
 
 /**
  * GitLab force-resync adapter — the mirror of `github/forceResyncAction`, and
@@ -20,6 +24,15 @@ import { makeGitlabRequester } from "./outboundGateway";
  *  - `state` is `opened`/`closed` and there is no completed/not_planned reason;
  *  - `labels` is a plain string array;
  *  - assignees carry the numeric `id` GitLab's identity path matches members on.
+ *
+ * Failure handling is shared, not mirrored: this is an at-most-once scheduled
+ * action with no retrier behind it, and `makeGitlabRequester` does not swallow
+ * a transport failure, so a dropped connection mid-drain throws straight out
+ * and abandons the resync at that offset. Both that and the "no usable
+ * credential" case are recorded through `core/forceResyncFailure`, so a GitHub
+ * and a GitLab give-up read identically on `admin/jobs` — and neither is left
+ * contradicted by the `integration.force_resync` audit entry that was written
+ * before the drain started.
  */
 
 interface GitlabIssueResponse {
@@ -83,83 +96,101 @@ export const runForceResync = internalAction({
     // externalAccountId); the token client refreshes an expiring OAuth bundle.
     const token = await getValidGitlabAccessToken(ctx, context.installationId);
     if (!token) {
-      console.error("[gitlab/forceResync] no usable GitLab credential");
+      await recordForceResyncGaveUp(ctx, {
+        provider: "gitlab",
+        projectIntegrationLinkId: args.projectIntegrationLinkId,
+        offset,
+        reason: "no usable GitLab credential for this integration",
+      });
       return null;
     }
     const gl = makeGitlabRequester(token);
     const project = encodeURIComponent(context.externalRepoId);
 
-    const slice = context.items.slice(offset, offset + RESYNC_BATCH_SIZE);
-    for (let i = 0; i < slice.length; i++) {
-      const item = slice[i];
-      const res = await gl.request<GitlabIssueResponse>({
-        method: "GET",
-        path: `/projects/${project}/issues/${item.issueNumber}`,
-      });
+    try {
+      const slice = context.items.slice(offset, offset + RESYNC_BATCH_SIZE);
+      for (let i = 0; i < slice.length; i++) {
+        const item = slice[i];
+        const res = await gl.request<GitlabIssueResponse>({
+          method: "GET",
+          path: `/projects/${project}/issues/${item.issueNumber}`,
+        });
 
-      // Rate-limited: stop the batch and resume this same item after GitLab's
-      // cool-off. Earlier items in the slice were already applied (the apply
-      // step is idempotent), so resuming from the failing absolute index
-      // neither double-applies nor skips.
-      if (res.status === 429) {
+        // Rate-limited: stop the batch and resume this same item after GitLab's
+        // cool-off. Earlier items in the slice were already applied (the apply
+        // step is idempotent), so resuming from the failing absolute index
+        // neither double-applies nor skips.
+        if (res.status === 429) {
+          await ctx.scheduler.runAfter(
+            res.retryAfterMs ?? DEFAULT_RATE_LIMIT_PAUSE_MS,
+            internal.integrations.gitlab.forceResyncAction.runForceResync,
+            {
+              projectIntegrationLinkId: args.projectIntegrationLinkId,
+              offset: offset + i,
+            },
+          );
+          return null;
+        }
+
+        if (res.status !== 200 || !res.body) {
+          console.warn(
+            `[gitlab/forceResync] issue fetch failed (status=${res.status}) for !${item.issueNumber}`,
+          );
+          continue;
+        }
+
+        const issue = res.body;
+        await ctx.runMutation(
+          internal.integrations.core.forceResync.applyOneIssueReconciliation,
+          {
+            projectIntegrationLinkId: args.projectIntegrationLinkId,
+            rippleCompleted: item.completed,
+            issue: {
+              externalIssueId: String(issue.id),
+              issueNumber: issue.iid,
+              // GitLab's open state is spelled `opened`; anything else that isn't
+              // `closed` (e.g. `locked`) is still an open issue.
+              state: issue.state === "closed" ? "closed" : "open",
+              // GitLab has no completed/not_planned distinction.
+              stateReason: "completed",
+              title: issue.title,
+              body: issue.description ?? "",
+              url: issue.web_url,
+              externalAuthor: author(issue.author),
+              labels: issue.labels ?? [],
+              assignees: (issue.assignees ?? []).map((u) => ({
+                ...author(u),
+                // GitLab resolves the Ripple member by numeric id, not login.
+                id: String(u.id),
+              })),
+            },
+          },
+        );
+      }
+
+      // More items remain → schedule the next batch from the new offset.
+      if (offset + slice.length < context.items.length) {
         await ctx.scheduler.runAfter(
-          res.retryAfterMs ?? DEFAULT_RATE_LIMIT_PAUSE_MS,
+          0,
           internal.integrations.gitlab.forceResyncAction.runForceResync,
           {
             projectIntegrationLinkId: args.projectIntegrationLinkId,
-            offset: offset + i,
+            offset: offset + slice.length,
           },
         );
-        return null;
       }
-
-      if (res.status !== 200 || !res.body) {
-        console.warn(
-          `[gitlab/forceResync] issue fetch failed (status=${res.status}) for !${item.issueNumber}`,
-        );
-        continue;
-      }
-
-      const issue = res.body;
-      await ctx.runMutation(
-        internal.integrations.core.forceResync.applyOneIssueReconciliation,
-        {
-          projectIntegrationLinkId: args.projectIntegrationLinkId,
-          rippleCompleted: item.completed,
-          issue: {
-            externalIssueId: String(issue.id),
-            issueNumber: issue.iid,
-            // GitLab's open state is spelled `opened`; anything else that isn't
-            // `closed` (e.g. `locked`) is still an open issue.
-            state: issue.state === "closed" ? "closed" : "open",
-            // GitLab has no completed/not_planned distinction.
-            stateReason: "completed",
-            title: issue.title,
-            body: issue.description ?? "",
-            url: issue.web_url,
-            externalAuthor: author(issue.author),
-            labels: issue.labels ?? [],
-            assignees: (issue.assignees ?? []).map((u) => ({
-              ...author(u),
-              // GitLab resolves the Ripple member by numeric id, not login.
-              id: String(u.id),
-            })),
-          },
-        },
-      );
+      return null;
+    } catch (error) {
+      // Last line of defence for an at-most-once action. Recorded, then
+      // rethrown: the throw is what marks the scheduled run failed, and the
+      // operator row is what makes it findable afterwards.
+      await recordForceResyncGaveUp(ctx, {
+        provider: "gitlab",
+        projectIntegrationLinkId: args.projectIntegrationLinkId,
+        offset,
+        reason: describeError(error),
+      });
+      throw error;
     }
-
-    // More items remain → schedule the next batch from the new offset.
-    if (offset + slice.length < context.items.length) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal.integrations.gitlab.forceResyncAction.runForceResync,
-        {
-          projectIntegrationLinkId: args.projectIntegrationLinkId,
-          offset: offset + slice.length,
-        },
-      );
-    }
-    return null;
   },
 });

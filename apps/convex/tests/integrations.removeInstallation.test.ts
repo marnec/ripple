@@ -35,6 +35,16 @@ async function generateTestKeyPem(): Promise<string> {
   return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----\n`;
 }
 
+/** The operator surface `backgroundJobFailures` is read through. */
+async function makePlatformAdmin(t: ReturnType<typeof createTestContext>) {
+  const { userId, asUser } = await setupAuthenticatedUser(t, {
+    name: "Platform Admin",
+    email: "ops-rm@test.com",
+  });
+  await t.run((ctx) => ctx.db.patch(userId, { isPlatformAdmin: true }));
+  return asUser;
+}
+
 /**
  * A workspace with a connected provider account, one linked repo, and one task
  * carrying an external ref — i.e. everything removal has to unwind.
@@ -247,6 +257,119 @@ describe("removing a provider installation", () => {
     // frozen ref on a GitLab disconnect.
     const task = await t.run((ctx) => ctx.db.get(taskId));
     expect(task!.externalRefFrozen?.provider).toBe("gitlab");
+  });
+
+  /**
+   * The runaway branch. `finishRemoveInstallation` waits for the disconnect
+   * cascade by re-reading it and re-scheduling itself, and the cascade is a
+   * scheduled mutation — so a deterministic failure inside it (a transaction
+   * cap while freezing a task with many comment links, a validation throw) is
+   * terminal, and the `taskIntegrationLinks` rows it was clearing never
+   * disappear. The waiter then had no terminator at all: an endless chain of
+   * scheduled mutations, at 0 ms, for the life of the deployment.
+   *
+   * A dead cascade is exactly the state below — the rows survive because
+   * nothing is draining them.
+   */
+  it("stops waiting on a dead cascade, and reports the stranded installation", async () => {
+    const t = createTestContext();
+    const { integrationId } = await setupInstalled(t);
+    const asAdmin = await makePlatformAdmin(t);
+
+    await t.mutation(
+      internal.integrations.core.install.finishRemoveInstallation,
+      { integrationId },
+    );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const { failures } = await asAdmin.query(api.admin.jobs.list, {});
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toMatchObject({
+      kind: "integrations.install:finishRemoveInstallation",
+      key: integrationId,
+    });
+
+    // The row is deliberately left behind rather than deleted: the cascade
+    // never froze those tasks, and `resolveProvider(null)` would mislabel
+    // every one of them if the integration went first.
+    expect(await t.run((ctx) => ctx.db.get(integrationId))).not.toBeNull();
+  });
+
+  /**
+   * The other half of the bound, and the reason it counts stalls rather than
+   * attempts. Giving up is not free: the installation row is left behind and
+   * an operator is told the disconnect is stuck. A wall-clock cap would do
+   * that to a workspace whose only crime is a large repo — the cascade clears
+   * 50 task links per transaction, so a six-figure disconnect legitimately
+   * outlasts any fixed number of polls. A cascade that is still moving must
+   * therefore never be abandoned, however many polls it takes.
+   */
+  it("keeps waiting while the cascade is still moving, however long that takes", async () => {
+    const t = createTestContext();
+    const { integrationId, linkId, taskId } = await setupInstalled(t);
+    const asAdmin = await makePlatformAdmin(t);
+
+    // Far more polls than any stall budget would allow.
+    const POLLS = 20;
+    await t.run(async (ctx) => {
+      for (let i = 0; i < POLLS; i++) {
+        await ctx.db.insert("taskIntegrationLinks", {
+          taskId,
+          projectIntegrationLinkId: linkId,
+          externalIssueId: `I_extra_${String(i).padStart(3, "0")}`,
+          externalUpdatedAt: 1_700_000_000_000,
+          externalAuthor: {
+            login: "octocat",
+            avatarUrl: "https://example.com/octocat.png",
+            url: "https://example.com/octocat",
+          },
+        });
+      }
+    });
+
+    /** Whatever the last poll queued for itself, or null if it gave up. */
+    async function nextPollArgs() {
+      const rows = await t.run((ctx) =>
+        ctx.db.system.query("_scheduled_functions").collect(),
+      );
+      const polls = rows.filter((r) =>
+        r.name.endsWith("finishRemoveInstallation"),
+      );
+      return polls.length ? (polls[polls.length - 1].args[0] as never) : null;
+    }
+
+    /** One batch of the cascade landing: the frontier row goes. */
+    async function cascadeMakesProgress() {
+      await t.run(async (ctx) => {
+        const first = await ctx.db
+          .query("taskIntegrationLinks")
+          .withIndex("by_link_externalIssueId", (q) =>
+            q.eq("projectIntegrationLinkId", linkId),
+          )
+          .first();
+        if (first) await ctx.db.delete(first._id);
+      });
+    }
+
+    let args: unknown = { integrationId };
+    for (let i = 0; i < POLLS; i++) {
+      await t.mutation(
+        internal.integrations.core.install.finishRemoveInstallation,
+        args as never,
+      );
+      const queued = await nextPollArgs();
+      expect(queued, `gave up on poll ${i} while the cascade was moving`).not.
+        toBeNull();
+      args = queued;
+      await cascadeMakesProgress();
+    }
+
+    expect((await asAdmin.query(api.admin.jobs.list, {})).failures).toEqual([]);
+
+    // And once the cascade finally drains, the wait ends the way it should.
+    await cascadeMakesProgress(); // the row `setupInstalled` seeded
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await t.run((ctx) => ctx.db.get(integrationId))).toBeNull();
   });
 
   it("refuses a non-admin member", async () => {
