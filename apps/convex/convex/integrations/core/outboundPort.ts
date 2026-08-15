@@ -151,6 +151,22 @@ export interface OutboundGateway {
     remove: string[];
   }): Promise<OutboundOutcome>;
 
+  /**
+   * Looks for a comment this Ripple comment already posted on the host,
+   * identified by the `<!-- ripple-comment: … -->` marker every Ripple-originated
+   * comment-create appends to its body. The comment sibling of
+   * `findIssueByRippleTask`, and required for the same reason: `createComment`
+   * is the other non-idempotent POST here, and the duplicate a retry would
+   * leave is on the customer's issue tracker and beyond Ripple's reach — only
+   * the last attempt's id reaches `taskCommentIntegrationLinks`, so earlier
+   * duplicates have no link row and no edit or delete push can find them.
+   */
+  findCommentByRippleComment(a: {
+    projectRef: string;
+    issueRef: number;
+    commentId: string;
+  }): Promise<OutboundLookup>;
+
   createComment(a: {
     projectRef: string;
     issueRef: number;

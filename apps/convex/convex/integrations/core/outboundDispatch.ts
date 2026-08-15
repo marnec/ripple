@@ -13,7 +13,10 @@ import {
   shouldSkipForEcho,
   shouldSkipForFreeze,
 } from "./syncOut";
-import { appendRippleTaskMarker } from "./rippleMarker";
+import {
+  appendRippleCommentMarker,
+  appendRippleTaskMarker,
+} from "./rippleMarker";
 
 /**
  * Outbound dispatchers. Called by `tasks.update`, `tasks.updatePosition`, and
@@ -464,12 +467,24 @@ export async function maybeEnqueueCommentCreate(
   const target = await resolveTaskTarget(ctx, comment.taskId);
   if (!target) return;
 
+  // Tag the body with the originating comment id (invisible HTML comment), the
+  // comment sibling of the issue-create marker above. `createComment` is the
+  // other non-idempotent POST in this surface and it runs under the retrier, so
+  // an attempt that commits and loses its response is re-POSTed; the marker is
+  // what lets that retry find its predecessor's comment instead of adding a
+  // second one to the customer's issue tracker. Create only — the update push
+  // deliberately sends the body untagged, because the window the marker guards
+  // is closed by then and the marker is provider-side metadata we would rather
+  // not leave behind. `syncIn` strips either marker before storing an inbound
+  // body, so a human editing this comment upstream never round-trips it back.
+  const taggedBody = appendRippleCommentMarker(bodyMarkdown, commentId);
+
   const runId = await retrier.run(
     ctx,
     target.adapter.ops.commentCreate,
     {
       commentId,
-      body: bodyMarkdown,
+      body: taggedBody,
       taskIntegrationLinkId: target.link._id,
       credentialRef: target.credentialRef,
       projectRef: target.projectRef,

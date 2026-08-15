@@ -206,6 +206,16 @@ export const pushCommentCreate = internalAction({
         commentId: args.commentId,
         taskIntegrationLinkId: args.taskIntegrationLinkId,
       }),
+      // The comment sibling of `pushCreateIssue`'s guard. Without it the
+      // retrier's re-run of a POST that already committed posts a second
+      // comment on the customer's issue tracker — one Ripple can never clean
+      // up, since only the last attempt's id reaches the link row.
+      precheck: (gateway) =>
+        gateway.findCommentByRippleComment({
+          projectRef: args.projectRef,
+          issueRef: args.issueRef,
+          commentId: args.commentId,
+        }),
       call: (gateway) =>
         gateway.createComment({
           projectRef: args.projectRef,

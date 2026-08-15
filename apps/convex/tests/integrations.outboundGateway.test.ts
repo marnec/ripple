@@ -188,6 +188,125 @@ describe("buildGithubGateway.createComment", () => {
   });
 });
 
+/**
+ * The comment-create convergence guard. `createComment` is the second
+ * non-idempotent POST in the outbound surface, and the retrier re-runs it
+ * whenever an attempt fails after the POST committed — a dropped response, a
+ * timeout past the write. This is what lets the retry find the comment its
+ * predecessor already posted instead of posting a second one on the customer's
+ * issue tracker.
+ */
+describe("buildGithubGateway.findCommentByRippleComment", () => {
+  const COMMENT_ID = "js71commentsample01234567890abcd";
+
+  function commentJson(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 9001,
+      node_id: "IC_kw1",
+      body: `Looks good.\n\n<!-- ripple-comment: ${COMMENT_ID} -->`,
+      updated_at: "2026-05-22T10:00:00Z",
+      issue_url: "https://api.github.com/repos/acme/web/issues/42",
+      user: {
+        login: "ripple[bot]",
+        avatar_url: "https://avatars/bot.png",
+        html_url: "https://github.com/apps/ripple",
+      },
+      ...overrides,
+    };
+  }
+
+  it("finds the comment the lost attempt posted, and returns the meta the sink needs", async () => {
+    const { client, calls } = fakeClient(() => ({
+      status: 200,
+      body: [commentJson({ id: 1, body: "unrelated", issue_url: "https://api.github.com/repos/acme/web/issues/42" }), commentJson()],
+    }));
+
+    const lookup = await gw(client).findCommentByRippleComment({
+      projectRef: "acme/web",
+      issueRef: 42,
+      commentId: COMMENT_ID,
+    });
+
+    expect(lookup).toEqual({
+      kind: "found",
+      meta: {
+        externalCommentId: "9001",
+        externalUpdatedAt: Date.parse("2026-05-22T10:00:00Z"),
+        externalAuthor: {
+          login: "ripple[bot]",
+          avatarUrl: "https://avatars/bot.png",
+          url: "https://github.com/apps/ripple",
+        },
+      },
+    });
+    // Newest-first across the repo: the per-issue endpoint returns comments
+    // oldest-first with no sort parameter, so the comment just posted would sit
+    // on the last page of a busy issue and never be seen.
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].path).toContain("/repos/acme/web/issues/comments");
+    expect(calls[0].path).toContain("direction=desc");
+  });
+
+  it("is absent when no recent comment carries the marker", async () => {
+    const { client } = fakeClient(() => ({
+      status: 200,
+      body: [commentJson({ body: "someone else entirely" })],
+    }));
+
+    expect(
+      await gw(client).findCommentByRippleComment({
+        projectRef: "acme/web",
+        issueRef: 42,
+        commentId: COMMENT_ID,
+      }),
+    ).toEqual({ kind: "absent" });
+  });
+
+  /**
+   * A marker is unique per Ripple comment, so this is belt-and-braces — but a
+   * hit under a different issue would write a link row pointing at the wrong
+   * task link, which is worse than the duplicate the lookup exists to prevent.
+   */
+  it("ignores a marker hit that belongs to a different issue", async () => {
+    const { client } = fakeClient(() => ({
+      status: 200,
+      body: [
+        commentJson({
+          issue_url: "https://api.github.com/repos/acme/web/issues/999",
+        }),
+      ],
+    }));
+
+    expect(
+      await gw(client).findCommentByRippleComment({
+        projectRef: "acme/web",
+        issueRef: 42,
+        commentId: COMMENT_ID,
+      }),
+    ).toEqual({ kind: "absent" });
+  });
+
+  /**
+   * A degraded lookup must not block the create: refusing to post a comment
+   * because the *search* is rate-limited is a worse failure than the duplicate
+   * it would prevent. The runner only short-circuits on a definite "found".
+   */
+  it("reports unavailable rather than absent when the scan itself fails", async () => {
+    const { client } = fakeClient(() => ({
+      status: 403,
+      errorMessage: "rate limited",
+    }));
+
+    expect(
+      await gw(client).findCommentByRippleComment({
+        projectRef: "acme/web",
+        issueRef: 42,
+        commentId: COMMENT_ID,
+      }),
+    ).toMatchObject({ kind: "unavailable" });
+  });
+});
+
 describe("buildGithubGateway.deleteComment", () => {
   it("treats a 404 as success (comment already gone)", async () => {
     const { client } = fakeClient(() => ({ status: 404 }));

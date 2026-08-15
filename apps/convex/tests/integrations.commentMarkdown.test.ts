@@ -213,6 +213,61 @@ describe("inbound comment markdown → BlockNote JSON", () => {
   });
 });
 
+/**
+ * The marker is provider-side metadata for the comment-create convergence
+ * guard, never human content. A person editing Ripple's mirrored comment on
+ * GitHub sends the whole raw body back, marker included — so both inbound
+ * comment paths must strip it before storing or seeding, exactly as the
+ * description path already does for `ripple-task:`.
+ */
+describe("inbound comment bodies never keep the ripple-comment marker", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const MARKER = "<!-- ripple-comment: js71commentsample01234567890abcd -->";
+
+  it("strips it from a created comment", async () => {
+    const t = createTestContext();
+    const { taskId, link } = await setup(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, {
+        event: { ...commentCreatedEvent(), body: `Hello there\n\n${MARKER}` },
+        link,
+      }),
+    );
+
+    const stored = await commentFor(t, taskId);
+    expect(stored.body).toBe("Hello there");
+  });
+
+  it("strips it from an edited comment, and from what the seed re-renders", async () => {
+    const t = createTestContext();
+    const { taskId, link } = await setup(t);
+
+    await t.run((ctx) =>
+      applyNormalizedEvent(ctx, { event: commentCreatedEvent(), link }),
+    );
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const edited: NormalizedCommentEditedEvent = {
+      kind: "comment.edited",
+      externalCommentId: "IC_inbound_1",
+      externalIssueId: "I_kwDOABC123",
+      externalUpdatedAt: 1_700_000_020_000,
+      body: `# edited heading\n\n${MARKER}`,
+      externalAuthor: commentCreatedEvent().externalAuthor,
+    };
+    await t.run((ctx) => applyNormalizedEvent(ctx, { event: edited, link }));
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    // The seed has re-rendered to BlockNote JSON by now; the marker must not
+    // survive into it either.
+    const after = await commentFor(t, taskId);
+    expect(after.body).not.toContain("ripple-comment");
+  });
+});
+
 describe("setBodyFromMarkdown guard", () => {
   it("replaces the body only when it still equals the source markdown", async () => {
     const t = createTestContext();

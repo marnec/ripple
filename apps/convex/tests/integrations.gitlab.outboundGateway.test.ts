@@ -327,3 +327,86 @@ describe("integrations/gitlab/outboundGateway.findIssueByRippleTask", () => {
     ).toBe("unavailable");
   });
 });
+
+/**
+ * The GitLab half of the comment-create convergence guard. Unlike GitHub,
+ * GitLab's per-issue notes endpoint takes `order_by`/`sort`, so the lookup can
+ * stay scoped to the issue the comment belongs to — no cross-issue filter is
+ * needed, because the query itself cannot return another issue's notes.
+ */
+describe("integrations/gitlab/outboundGateway.findCommentByRippleComment", () => {
+  const COMMENT_ID = "js71commentsample01234567890abcd";
+
+  function note(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 555,
+      body: `Looks good.\n\n<!-- ripple-comment: ${COMMENT_ID} -->`,
+      updated_at: "2026-05-22T10:00:00Z",
+      author: {
+        username: "ripple-bot",
+        avatar_url: "https://gitlab.com/bot.png",
+        web_url: "https://gitlab.com/ripple-bot",
+      },
+      ...overrides,
+    };
+  }
+
+  it("finds the note the lost attempt posted, newest-first under that issue", async () => {
+    const { client, calls } = fakeClient(() => ({
+      status: 200,
+      body: [note({ id: 1, body: "system note" }), note()],
+    }));
+
+    const lookup = await gw(client).findCommentByRippleComment({
+      projectRef: "acme/web",
+      issueRef: 7,
+      commentId: COMMENT_ID,
+    });
+
+    expect(lookup).toEqual({
+      kind: "found",
+      meta: {
+        externalCommentId: "555",
+        externalUpdatedAt: Date.parse("2026-05-22T10:00:00Z"),
+        externalAuthor: {
+          login: "ripple-bot",
+          avatarUrl: "https://gitlab.com/bot.png",
+          url: "https://gitlab.com/ripple-bot",
+        },
+      },
+    });
+    expect(calls[0].method).toBe("GET");
+    expect(calls[0].path).toContain("/projects/acme%2Fweb/issues/7/notes");
+    expect(calls[0].path).toContain("sort=desc");
+  });
+
+  it("is absent when no recent note carries the marker", async () => {
+    const { client } = fakeClient(() => ({
+      status: 200,
+      body: [note({ body: "someone else entirely" })],
+    }));
+
+    expect(
+      await gw(client).findCommentByRippleComment({
+        projectRef: "acme/web",
+        issueRef: 7,
+        commentId: COMMENT_ID,
+      }),
+    ).toEqual({ kind: "absent" });
+  });
+
+  it("reports unavailable rather than absent when the scan itself fails", async () => {
+    const { client } = fakeClient(() => ({
+      status: 429,
+      errorMessage: "rate limited",
+    }));
+
+    expect(
+      await gw(client).findCommentByRippleComment({
+        projectRef: "acme/web",
+        issueRef: 7,
+        commentId: COMMENT_ID,
+      }),
+    ).toMatchObject({ kind: "unavailable" });
+  });
+});

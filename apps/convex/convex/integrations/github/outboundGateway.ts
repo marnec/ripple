@@ -4,7 +4,10 @@ import type {
   OutboundOutcome,
   OutboundSuccessMeta,
 } from "../core/outboundPort";
-import { extractRippleTaskId } from "../core/rippleMarker";
+import {
+  extractRippleCommentId,
+  extractRippleTaskId,
+} from "../core/rippleMarker";
 import { githubClientFromEnv, type GithubResponse } from "./client";
 
 /**
@@ -232,6 +235,58 @@ export function buildGithubGateway(gh: InstallationRequester): OutboundGateway {
         if (outcome.kind !== "success") return outcome;
       }
       return { kind: "success", meta: {} };
+    },
+
+    async findCommentByRippleComment({ projectRef, issueRef, commentId }) {
+      // The REPO-level comment list, not `/issues/{n}/comments`: the per-issue
+      // endpoint takes no `sort`/`direction` and returns comments oldest-first,
+      // so the one just posted sits on the last page of a busy issue. The
+      // repo-level list sorts, and the comment we are looking for was created
+      // seconds ago — it is at the top by construction.
+      const res = await gh.request<
+        {
+          id: number;
+          body: string | null;
+          updated_at: string;
+          issue_url: string;
+          user: { login: string; avatar_url: string; html_url: string };
+        }[]
+      >({
+        method: "GET",
+        path:
+          `/repos/${projectRef}/issues/comments?sort=created&direction=desc` +
+          `&per_page=${MARKER_SCAN_PER_PAGE}`,
+      });
+
+      if (classifyResponse(toResponse(res)) !== "success" || !res.body) {
+        return {
+          kind: "unavailable",
+          message: res.errorMessage ?? `HTTP ${res.status}`,
+        };
+      }
+
+      const hit = res.body.find(
+        (comment) =>
+          extractRippleCommentId(comment.body) === commentId &&
+          // Belt-and-braces: a marker is unique per Ripple comment, but a hit
+          // under another issue would write a link row against the wrong task
+          // link — worse than the duplicate this lookup prevents.
+          comment.issue_url.endsWith(`/issues/${issueRef}`),
+      );
+      if (!hit) return { kind: "absent" };
+
+      return {
+        kind: "found",
+        meta: {
+          externalCommentId: String(hit.id),
+          externalUpdatedAt: Date.parse(hit.updated_at),
+          externalAuthor: {
+            login: hit.user.login,
+            avatarUrl: hit.user.avatar_url,
+            url: hit.user.html_url,
+          },
+        },
+      };
     },
 
     async createComment({ projectRef, issueRef, body }) {

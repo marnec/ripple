@@ -4,7 +4,10 @@ import type {
   OutboundOutcome,
   OutboundSuccessMeta,
 } from "../core/outboundPort";
-import { extractRippleTaskId } from "../core/rippleMarker";
+import {
+  extractRippleCommentId,
+  extractRippleTaskId,
+} from "../core/rippleMarker";
 
 /**
  * GitLab implementation of the outbound `OutboundGateway` port — the mirror of
@@ -212,6 +215,46 @@ export function buildGitlabGateway(gl: GitlabRequester): OutboundGateway {
         body: { assignee_ids: add.map((id) => Number(id)) },
       });
       return foldResponse(res);
+    },
+
+    async findCommentByRippleComment({ projectRef, issueRef, commentId }) {
+      // GitLab's per-issue notes endpoint takes `order_by`/`sort`, so unlike
+      // GitHub this can stay scoped to the issue — the query cannot return
+      // another issue's notes, so no cross-issue filter is needed.
+      const res = await gl.request<
+        {
+          id: number;
+          body: string | null;
+          updated_at: string;
+          author: GitlabAuthor;
+        }[]
+      >({
+        method: "GET",
+        path:
+          `/projects/${proj(projectRef)}/issues/${issueRef}/notes` +
+          `?order_by=created_at&sort=desc&per_page=${MARKER_SCAN_PER_PAGE}`,
+      });
+
+      if (classifyResponse(toResponse(res)) !== "success" || !res.body) {
+        return {
+          kind: "unavailable",
+          message: res.errorMessage ?? `HTTP ${res.status}`,
+        };
+      }
+
+      const hit = res.body.find(
+        (n) => extractRippleCommentId(n.body) === commentId,
+      );
+      if (!hit) return { kind: "absent" };
+
+      return {
+        kind: "found",
+        meta: {
+          externalCommentId: String(hit.id),
+          externalUpdatedAt: Date.parse(hit.updated_at),
+          externalAuthor: author(hit.author),
+        },
+      };
     },
 
     async createComment({ projectRef, issueRef, body }) {

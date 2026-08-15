@@ -12,7 +12,11 @@ import {
   markTaskExternalLinkDeleted,
   setTaskExternalLink,
 } from "./taskExternalLink";
-import { extractRippleTaskId, stripRippleMarker } from "./rippleMarker";
+import {
+  extractRippleTaskId,
+  stripRippleMarker,
+  stripRippleMarkers,
+} from "./rippleMarker";
 import {
   reconcileTaskStatus,
   resolveCompletedStatus,
@@ -339,7 +343,12 @@ async function applyCommentEdited(
     return;
   }
 
-  await ctx.db.patch(commentLink.taskCommentId, { body: event.body });
+  // Strip either marker before it reaches what the user reads: the
+  // `ripple-comment:` one is our own create-convergence metadata, and a person
+  // editing this comment upstream sends the whole raw body back with it.
+  const cleanBody = stripRippleMarkers(event.body);
+
+  await ctx.db.patch(commentLink.taskCommentId, { body: cleanBody });
   await ctx.db.patch(commentLink._id, {
     externalUpdatedAt: event.externalUpdatedAt,
   });
@@ -349,7 +358,7 @@ async function applyCommentEdited(
     await ctx.scheduler.runAfter(
       0,
       internal.integrations.core.commentSeedAction.seedCommentBody,
-      { commentId: commentLink.taskCommentId, markdown: event.body },
+      { commentId: commentLink.taskCommentId, markdown: cleanBody },
     );
   }
 }
@@ -384,10 +393,13 @@ async function applyCommentCreated(
     );
   }
 
+  // Same stripping as the edit path — see `applyCommentEdited`.
+  const cleanBody = stripRippleMarkers(event.body);
+
   const commentId = await ctx.db.insert("taskComments", {
     taskId: existingLink.taskId,
     userId: integration.botUserId,
-    body: event.body,
+    body: cleanBody,
     deleted: false,
   });
 
@@ -403,11 +415,11 @@ async function applyCommentCreated(
   // Re-render it in a Node action (the same headless-editor strategy as the
   // description seed). The raw markdown above renders as plain text via the
   // client fallback until the conversion lands. Empty bodies need no seed.
-  if (event.body.trim().length > 0) {
+  if (cleanBody.trim().length > 0) {
     await ctx.scheduler.runAfter(
       0,
       internal.integrations.core.commentSeedAction.seedCommentBody,
-      { commentId, markdown: event.body },
+      { commentId, markdown: cleanBody },
     );
   }
 }

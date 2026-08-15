@@ -42,6 +42,8 @@ function fakeGateway(outcome: OutboundOutcome): OutboundGateway {
   return {
     findIssueByRippleTask: () =>
       Promise.resolve<OutboundLookup>({ kind: "absent" }),
+    findCommentByRippleComment: () =>
+      Promise.resolve<OutboundLookup>({ kind: "absent" }),
     createIssue: respond,
     setIssueState: respond,
     setDescription: respond,
