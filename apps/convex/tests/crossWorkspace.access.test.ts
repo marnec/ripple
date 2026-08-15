@@ -900,6 +900,7 @@ describe("messages enrichment — foreign ids pasted into a body", () => {
 
   /** One paragraph naming every reference type the enrichment resolves. */
   function bodyReferencing(refs: {
+    userId?: string;
     taskId?: string;
     projectId?: string;
     documentId?: string;
@@ -908,6 +909,7 @@ describe("messages enrichment — foreign ids pasted into a body", () => {
     eventId?: string;
   }): string {
     const content: unknown[] = [{ type: "text", text: "look: ", styles: {} }];
+    if (refs.userId) content.push({ type: "userMention", props: { userId: refs.userId } });
     if (refs.taskId) content.push({ type: "taskMention", props: { taskId: refs.taskId } });
     if (refs.projectId) content.push({ type: "projectReference", props: { projectId: refs.projectId } });
     if (refs.documentId)
@@ -1046,6 +1048,79 @@ describe("messages enrichment — foreign ids pasted into a body", () => {
     expect(message.mentionedProjects[projectA]).toMatchObject({ name: "Roadmap" });
     expect(message.mentionedResources[docA]).toEqual({ name: "Spec", type: "document" });
   });
+
+  /**
+   * `users` rows are not workspace-scoped, so — unlike every case above — the
+   * defence here is the projection rather than a workspaceId comparison. It is
+   * the same projection `users.get` documents at length: holding an opaque user
+   * id may yield a display name and an avatar, and nothing more. The enrichment
+   * used to emit `email` alongside them, which turned a body alice writes
+   * herself into a userId→e-mail oracle over every account in the deployment.
+   *
+   * The name resolving is not the finding and is not a bug: `api.users.get`
+   * returns it to any id-holder already, including unauthenticated guests on a
+   * shared document, so the client renders it either way.
+   */
+  it("resolves a mentioned stranger's name but never their e-mail", async () => {
+    const t = createTestContext();
+    const { alice, bob, channelA } = await setupForeignMentionTargets(t);
+
+    const message = await postAndRead(alice, channelA, bodyReferencing({ userId: bob.userId }));
+
+    // bob shares no workspace, no channel and nothing else with alice.
+    expect(message.mentionedUsers[bob.userId]).toEqual({ name: "Bob" });
+    expect(JSON.stringify(message)).not.toContain("bob@b.test");
+  });
+
+  it("withholds the e-mail on every read path, not just `list`", async () => {
+    const t = createTestContext();
+    const { alice, bob, channelA } = await setupForeignMentionTargets(t);
+
+    const message = await postAndRead(alice, channelA, bodyReferencing({ userId: bob.userId }));
+
+    // `search` and `getMessageContext` run the same enrichment through the same
+    // return validator, so a re-added `email` would surface on all three.
+    const found = await alice.asUser.query(api.messages.search, {
+      channelId: channelA,
+      searchTerm: "look",
+    });
+    const context = await alice.asUser.query(api.messages.getMessageContext, {
+      messageId: message._id,
+    });
+
+    expect(found[0].mentionedUsers[bob.userId]).toEqual({ name: "Bob" });
+    expect(JSON.stringify(found)).not.toContain("bob@b.test");
+    expect(context.messages[0].mentionedUsers[bob.userId]).toEqual({ name: "Bob" });
+    expect(JSON.stringify(context)).not.toContain("bob@b.test");
+  });
+
+  it("withholds the e-mail of a mentioned member of the caller's own workspace", async () => {
+    const t = createTestContext();
+    const { alice, channelA } = await setupForeignMentionTargets(t);
+    const colleagueId = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        name: "Colleague",
+        email: "colleague@a.test",
+        image: "https://cdn.test/colleague.png",
+      });
+      await ctx.db.insert("workspaceMembers", {
+        userId,
+        workspaceId: alice.workspaceId,
+        role: WorkspaceRole.MEMBER,
+      });
+      return userId;
+    });
+
+    const message = await postAndRead(alice, channelA, bodyReferencing({ userId: colleagueId }));
+
+    // Sharing a workspace does not earn the address either — the mention chip
+    // renders a name and an avatar, which is the whole shape it needs.
+    expect(message.mentionedUsers[colleagueId]).toEqual({
+      name: "Colleague",
+      image: "https://cdn.test/colleague.png",
+    });
+    expect(JSON.stringify(message)).not.toContain("colleague@a.test");
+  });
 });
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -1074,6 +1149,107 @@ async function setupClosedChannelInB(
     return channelId;
   });
 }
+
+/**
+ * The same defect as `messages.update` / `messages.remove` (covered in
+ * `messages.access.test.ts`), one rule over: a task comment follows the
+ * *workspace* rule, and authorship was standing in for it. What makes this half
+ * worse than the chat half is the outbound leg — both handlers dispatch
+ * `maybeEnqueueCommentUpdate` / `maybeEnqueueCommentDelete`, so an ex-member
+ * could make Ripple push the edit or the delete to the linked GitHub/GitLab
+ * issue under the installation's own credentials.
+ */
+describe("taskComments.update / remove — authorship in place of the workspace rule", () => {
+  /** Alice comments on a task in her own workspace, then loses her membership. */
+  async function setupEjectedCommenter(t: TestCtx) {
+    const { alice } = await setupTwoWorkspaces(t);
+    const { projectId, todoId } = await setupProjectWithStatuses(t, {
+      workspaceId: alice.workspaceId,
+      userId: alice.userId,
+      name: "Roadmap",
+      key: "AAA",
+    });
+    const taskId = await t.run((ctx) =>
+      ctx.db.insert("tasks", {
+        projectId,
+        workspaceId: alice.workspaceId,
+        title: "Ship the thing",
+        statusId: todoId,
+        priority: "medium" as const,
+        completed: false,
+        creatorId: alice.userId,
+        number: 1,
+      }),
+    );
+    const commentId = await alice.asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "the original comment",
+      bodyMarkdown: "the original comment",
+    });
+
+    return { alice, taskId, commentId };
+  }
+
+  async function ejectFromWorkspace(
+    t: TestCtx,
+    opts: { workspaceId: Id<"workspaces">; userId: Id<"users"> },
+  ) {
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", opts.workspaceId).eq("userId", opts.userId),
+        )
+        .first();
+      if (row) await ctx.db.delete(row._id);
+    });
+  }
+
+  it("refuses an update from an author removed from the workspace", async () => {
+    const t = createTestContext();
+    const { alice, commentId } = await setupEjectedCommenter(t);
+    await ejectFromWorkspace(t, { workspaceId: alice.workspaceId, userId: alice.userId });
+
+    await expect(
+      alice.asUser.mutation(api.taskComments.update, {
+        id: commentId,
+        body: "TAMPERED",
+        bodyMarkdown: "TAMPERED",
+      }),
+      // convex/taskComments.ts — `requireUser` plus an author check, with the
+      // task's workspace never loaded.
+    ).rejects.toThrow();
+
+    const stored = await t.run((ctx) => ctx.db.get(commentId));
+    expect(stored?.body).toBe("the original comment");
+  });
+
+  it("refuses a delete from an author removed from the workspace", async () => {
+    const t = createTestContext();
+    const { alice, commentId } = await setupEjectedCommenter(t);
+    await ejectFromWorkspace(t, { workspaceId: alice.workspaceId, userId: alice.userId });
+
+    await expect(alice.asUser.mutation(api.taskComments.remove, { id: commentId })).rejects.toThrow();
+
+    const stored = await t.run((ctx) => ctx.db.get(commentId));
+    expect(stored?.deleted).toBe(false);
+  });
+
+  it("still lets the author edit and delete while they are a member", async () => {
+    const t = createTestContext();
+    const { alice, commentId } = await setupEjectedCommenter(t);
+
+    await alice.asUser.mutation(api.taskComments.update, {
+      id: commentId,
+      body: "second thoughts",
+      bodyMarkdown: "second thoughts",
+    });
+    expect((await t.run((ctx) => ctx.db.get(commentId)))?.body).toBe("second thoughts");
+
+    await alice.asUser.mutation(api.taskComments.remove, { id: commentId });
+    expect((await t.run((ctx) => ctx.db.get(commentId)))?.deleted).toBe(true);
+  });
+});
 
 describe("channelMembers.membersByChannel — private roster", () => {
   it("refuses a caller with no membership of the owning workspace", async () => {

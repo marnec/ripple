@@ -8,13 +8,16 @@ import { extractEventMentionIds, extractMentionedUserIds, extractPlainTextFromBo
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { isMessageEditable } from "@ripple/shared/constants";
 import { DatabaseReader } from "./_generated/server";
-import { requireUser, requireChannelAccess, filterChannelRecipients } from "./authHelpers";
+import { requireChannelAccess, filterChannelRecipients } from "./authHelpers";
 import { notify } from "./utils/notify";
 import { normalizeIds } from "./utils/ids";
 
+/**
+ * Name + image and nothing else — the same projection `users.get` returns, for
+ * the same reason. See `enrichWithMentionedUsers`.
+ */
 const mentionedUsersValidator = v.record(v.string(), v.object({
   name: v.union(v.string(), v.null()),
-  email: v.optional(v.union(v.string(), v.null())),
   image: v.optional(v.string()),
 }));
 const mentionedTasksValidator = v.record(v.string(), v.object({
@@ -82,13 +85,27 @@ const enrichedMessageValidator = v.object({
  * found in message bodies so the client can render them instantly.
  *
  * `users` rows are not workspace-scoped, so there is no workspace comparison to
- * make here — the recipient-side gate is `filterChannelRecipients`.
+ * make here — the recipient-side gate is `filterChannelRecipients`. What carries
+ * the security value on *this* path is the projection, exactly as in `users.get`
+ * (see its doc-comment): the ids come out of a `v.string()` body, so any
+ * signed-in caller can name any account in the deployment and read back whatever
+ * this record carries. `name` and `image` are what `users.get` already hands to
+ * anyone holding an id — including unauthenticated guests on a shared document —
+ * so resolving them here adds no reach. `email` did: it turned a chat message
+ * into a userId→e-mail oracle for accounts sharing no workspace, no channel and
+ * nothing else with the reader, which is the input to phishing and
+ * credential-stuffing. It is not emitted, and must not come back.
+ *
+ * Deliberately NOT narrowed to channel members: it would not close anything (the
+ * client falls back to `api.users.get` for an unresolved id and renders the same
+ * name and avatar) and it would break a legitimate case — mentioning someone
+ * before they are added, or after they leave, still has to render as a person.
  */
 async function enrichWithMentionedUsers<T extends { body: string }>(
   ctx: { db: DatabaseReader },
   messages: T[],
   userMap: Map<string, Doc<"users"> | null>,
-): Promise<(T & { mentionedUsers: Record<string, { name: string | null; email?: string | null; image?: string }> })[]> {
+): Promise<(T & { mentionedUsers: Record<string, { name: string | null; image?: string }> })[]> {
   // Collect all mentioned user IDs across all message bodies
   const allMentionedIds = new Set<string>();
   for (const msg of messages) {
@@ -113,11 +130,11 @@ async function enrichWithMentionedUsers<T extends { body: string }>(
   // Build per-message mentionedUsers record
   return messages.map(msg => {
     const mentionedIds = extractMentionedUserIds(msg.body);
-    const mentionedUsers: Record<string, { name: string | null; email?: string | null; image?: string }> = {};
+    const mentionedUsers: Record<string, { name: string | null; image?: string }> = {};
     for (const id of mentionedIds) {
       const u = userMap.get(id);
       if (u) {
-        mentionedUsers[id] = { name: u.name ?? null, email: u.email ?? null, image: u.image };
+        mentionedUsers[id] = { name: u.name ?? null, image: u.image };
       }
     }
     return { ...msg, mentionedUsers };
@@ -653,14 +670,28 @@ export const send = mutation({
   },
 });
 
+/**
+ * Editing and deleting take the channel rule first and authorship second, the
+ * same order `messageReactions.toggle` uses on the same table: a message is
+ * channel data, and authoring it once is not a standing grant over it. Gating on
+ * authorship alone made removal from a channel not revoke write access — an
+ * ejected member could still rewrite the body current members are subscribed to
+ * (for the 48h `isMessageEditable` window) and soft-delete it (no window at
+ * all), silently rewriting the `plainText` that `search` indexes.
+ *
+ * The rule runs before the authorship comparison so a non-member gets "not a
+ * member of this channel" rather than "not authorized to update this message",
+ * which would confirm the id addresses a real message in a channel they cannot
+ * see.
+ */
 export const update = mutation({
   args: { id: v.id("messages"), body: v.string(), plainText: v.string() },
   returns: v.null(),
   handler: async (ctx, { id, body, plainText }) => {
-    const userId = await requireUser(ctx);
-
     const message = await ctx.db.get(id);
     if (!message) throw new ConvexError("Message not found");
+    const { userId } = await requireChannelAccess(ctx, message.channelId);
+
     if (message.userId !== userId) throw new ConvexError("Not authorized to update this message");
     if (!isMessageEditable(message._creationTime)) throw new ConvexError("Edit window has expired");
 
@@ -674,10 +705,10 @@ export const remove = mutation({
   args: { id: v.id("messages") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await requireUser(ctx);
-
     const message = await ctx.db.get(id);
     if (!message) throw new ConvexError("Message not found");
+    const { userId } = await requireChannelAccess(ctx, message.channelId);
+
     if (message.userId !== userId) throw new ConvexError("Not authorized to delete this message");
 
     await ctx.db.patch(id, { deleted: true });

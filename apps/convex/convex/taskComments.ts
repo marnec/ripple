@@ -5,7 +5,7 @@ import { getAll } from "convex-helpers/server/relationships";
 import { extractMentionedUserIds } from "./utils/blocknote";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { logTaskActivity } from "./auditLog";
-import { requireResourceMember, requireUser, filterWorkspaceRecipients } from "./authHelpers";
+import { requireResourceMember, filterWorkspaceRecipients } from "./authHelpers";
 import { notify } from "./utils/notify";
 import {
   maybeEnqueueCommentCreate,
@@ -171,6 +171,18 @@ export const create = mutation({
   },
 });
 
+/**
+ * Editing and deleting take the task's workspace rule first and authorship
+ * second, matching `create` above. Authorship alone is not an access rule (see
+ * CLAUDE.md — there are exactly two), and here it was standing in for one: a
+ * user removed from the workspace could still rewrite and delete their comments
+ * on tasks they can no longer read, and — because both handlers dispatch
+ * outbound — make Ripple push that edit or delete to the linked GitHub/GitLab
+ * issue under the installation's credentials.
+ *
+ * `requireResourceMember` returns the task, so the activity log and the mention
+ * fan-out read it from there rather than re-fetching it with a `!`.
+ */
 export const update = mutation({
   args: {
     id: v.id("taskComments"),
@@ -181,13 +193,13 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, body, bodyMarkdown }) => {
-    const userId = await requireUser(ctx);
-
     // Get comment
     const comment = await ctx.db.get(id);
     if (!comment) throw new ConvexError("Comment not found");
 
-    // Author-only check
+    const { userId, resource: task } = await requireResourceMember(ctx, "tasks", comment.taskId);
+
+    // Author-only check, narrowing the workspace rule rather than replacing it
     if (comment.userId !== userId) {
       throw new ConvexError("Not authorized");
     }
@@ -198,29 +210,27 @@ export const update = mutation({
     await maybeEnqueueCommentUpdate(ctx, id, bodyMarkdown);
 
     // Log comment edit activity
-    const taskDoc = await ctx.db.get(comment.taskId);
-    await logTaskActivity(ctx, { taskId: comment.taskId, userId, workspaceId: taskDoc!.workspaceId, type: "comment_edit", taskTitle: taskDoc!.title });
+    await logTaskActivity(ctx, { taskId: comment.taskId, userId, workspaceId: task.workspaceId, type: "comment_edit", taskTitle: task.title });
 
     // Schedule mention notifications for newly added mentions after database write
     const oldMentions = new Set(comment.body ? extractMentionedUserIds(comment.body) : []);
     const newMentions = extractMentionedUserIds(body);
     const addedMentions = await filterWorkspaceRecipients(
       ctx,
-      taskDoc!.workspaceId,
+      task.workspaceId,
       newMentions.filter(id => !oldMentions.has(id) && id !== userId),
     );
     if (addedMentions.length > 0) {
-      const task = await ctx.db.get(comment.taskId);
       const user = await ctx.db.get(userId);
       await notify(ctx, {
         category: "taskCommentMention",
         userId,
         userName: getUserDisplayName(user),
         recipientIds: addedMentions,
-        resourceId: task?.projectId,
+        resourceId: task.projectId,
         title: `${getUserDisplayName(user)} mentioned you`,
-        body: `In comment for: ${task?.title ?? "a task"}`,
-        url: `/workspaces/${task?.workspaceId}/projects/${task?.projectId}?task=${comment.taskId}`,
+        body: `In comment for: ${task.title}`,
+        url: `/workspaces/${task.workspaceId}/projects/${task.projectId}?task=${comment.taskId}`,
       });
     }
 
@@ -232,13 +242,13 @@ export const remove = mutation({
   args: { id: v.id("taskComments") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    const userId = await requireUser(ctx);
-
     // Get comment
     const comment = await ctx.db.get(id);
     if (!comment) throw new ConvexError("Comment not found");
 
-    // Author-only check
+    const { userId, resource: task } = await requireResourceMember(ctx, "tasks", comment.taskId);
+
+    // Author-only check, narrowing the workspace rule rather than replacing it
     if (comment.userId !== userId) {
       throw new ConvexError("Not authorized");
     }
@@ -249,8 +259,7 @@ export const remove = mutation({
     await maybeEnqueueCommentDelete(ctx, id);
 
     // Log comment delete activity
-    const taskForScope = await ctx.db.get(comment.taskId);
-    await logTaskActivity(ctx, { taskId: comment.taskId, userId, workspaceId: taskForScope!.workspaceId, type: "comment_delete", taskTitle: taskForScope!.title });
+    await logTaskActivity(ctx, { taskId: comment.taskId, userId, workspaceId: task.workspaceId, type: "comment_delete", taskTitle: task.title });
 
     return null;
   },

@@ -7,7 +7,6 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import {
   getWorkspaceMembership,
   requireChannelAccess,
-  requireUser,
   requireWorkspaceMember,
 } from "./authHelpers";
 import { logActivity } from "./auditLog";
@@ -822,10 +821,11 @@ export const update = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const userId = await requireUser(ctx);
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new ConvexError("Event not found");
-    assertOrganizer(event, userId, "edit this event");
+    // The workspace rule first, the organizer narrowing second — in that order.
+    const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
+    assertOrganizer(event, userId, membership, "edit this event");
 
     const patch: Partial<Doc<"calendarEvents">> = {};
     if (args.title !== undefined) patch.title = validateTitle(args.title);
@@ -932,10 +932,11 @@ export const updateEventTags = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { eventId, tags }) => {
-    const userId = await requireUser(ctx);
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
-    assertOrganizer(event, userId, "edit this event");
+    // The workspace rule first, the organizer narrowing second — in that order.
+    const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
+    assertOrganizer(event, userId, membership, "edit this event");
 
     const normalized = await syncTagsForResource(ctx, {
       workspaceId: event.workspaceId,
@@ -994,10 +995,11 @@ export const cancel = mutation({
   args: { eventId: v.id("calendarEvents") },
   returns: v.null(),
   handler: async (ctx, { eventId }) => {
-    const userId = await requireUser(ctx);
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
-    assertOrganizer(event, userId, "cancel this event");
+    // The workspace rule first, the organizer narrowing second — in that order.
+    const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
+    assertOrganizer(event, userId, membership, "cancel this event");
 
     // Snapshot invitees + bump sequence so ICS recipients accept the CANCEL.
     const invitees = await loadInviteeRows(ctx, event._id);
@@ -1049,9 +1051,11 @@ export const respond = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { eventId, status }) => {
-    const userId = await requireUser(ctx);
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
+    // The workspace rule first, the invitee row second. Nothing deletes those
+    // rows on offboarding, so on their own they outlive the membership.
+    const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
 
     const invitee = await ctx.db
       .query("calendarEventInvitees")
@@ -1146,10 +1150,11 @@ export const addInvitees = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const userId = await requireUser(ctx);
     const event = await ctx.db.get(args.eventId);
     if (!event) throw new ConvexError("Event not found");
-    assertOrganizer(event, userId, "add invitees");
+    // The workspace rule first, the organizer narrowing second — in that order.
+    const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
+    assertOrganizer(event, userId, membership, "add invitees");
 
     // Existing invitees — used to filter duplicates.
     const existing = await loadInviteeRows(ctx, event._id);
@@ -1247,10 +1252,14 @@ export const selfInvite = mutation({
   args: { eventId: v.id("calendarEvents") },
   returns: v.null(),
   handler: async (ctx, { eventId }) => {
-    const userId = await requireUser(ctx);
     const event = await ctx.db.get(eventId);
     if (!event) throw new ConvexError("Event not found");
-    assertOrganizer(event, userId, "self-invite");
+    // The workspace rule first, the organizer narrowing second — in that order.
+    // This site always had the membership lookup, but ran it *after*
+    // `assertOrganizer` and the invitee scan, so an ex-organizer still learned
+    // the event existed and how full its guest list was.
+    const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
+    assertOrganizer(event, userId, membership, "self-invite");
 
     // Idempotent: organiser already invited → no-op.
     const existing = await ctx.db
@@ -1267,12 +1276,6 @@ export const selfInvite = mutation({
     if (rows.length + 1 > MAX_INVITEES) {
       throw new ConvexError(`Cannot invite more than ${MAX_INVITEES} people`);
     }
-
-    // Defensive — the organiser is normally still a workspace member,
-    // but cascade edge cases (member removed without owning cleanup)
-    // shouldn't insert a dangling row.
-    const m = await getWorkspaceMembership(ctx, event.workspaceId, userId);
-    if (!m) throw new ConvexError("You are no longer a member of this workspace");
 
     // The `calendarEventInvitees` trigger creates the matching `invites`
     // edge for this organiser in the workspace graph. Same write path as
@@ -1294,12 +1297,14 @@ export const removeInvitee = mutation({
   args: { inviteeId: v.id("calendarEventInvitees") },
   returns: v.null(),
   handler: async (ctx, { inviteeId }) => {
-    const userId = await requireUser(ctx);
     const invitee = await ctx.db.get(inviteeId);
     if (!invitee) return null;
     const event = await ctx.db.get(invitee.eventId);
     if (!event) throw new ConvexError("Event not found");
-    assertOrganizer(event, userId, "remove invitees");
+    // The workspace rule first, the organizer narrowing second — in that order.
+    // The gate comes off the loaded event, since the arg is an invitee row.
+    const { userId, membership } = await requireWorkspaceMember(ctx, event.workspaceId);
+    assertOrganizer(event, userId, membership, "remove invitees");
 
     // Revoke share if any.
     if (invitee.shareId) {
@@ -1347,6 +1352,14 @@ export const _getEventForJoin = internalQuery({
   handler: async (ctx, { eventId, userId }) => {
     const event = await ctx.db.get(eventId);
     if (!event) return null;
+    // The workspace rule first. Its absence here was the widest hole on the
+    // event surface: `joinEventCall` hands this result to
+    // `ensureMeetingForChannel`, which performs no authorization of its own, so
+    // an invitee row — which offboarding does not delete — was a standing key
+    // to the channel's persistent meeting room. `callSessions.joinCall` guards
+    // that same room with the channel rule.
+    const membership = await getWorkspaceMembership(ctx, event.workspaceId, userId);
+    if (!membership) return null;
     if (event.createdBy !== userId) {
       const inv = await ctx.db
         .query("calendarEventInvitees")

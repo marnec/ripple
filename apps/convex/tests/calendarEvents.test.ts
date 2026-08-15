@@ -256,10 +256,13 @@ describe("calendarEvents", () => {
         email: "outsider@test.com",
       });
       await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
-      const { asUser: asOther } = await setupAuthenticatedUser(t, {
+      const { userId: otherId, asUser: asOther } = await setupAuthenticatedUser(t, {
         email: "other@test.com",
       });
-      await addMember(t, workspaceId, memberId, WorkspaceRole.MEMBER);
+      // `respond` takes the workspace rule before the invitee lookup, so the
+      // non-invitee has to be a real member for the "not invited" branch to be
+      // the one under test. (This line used to re-add `memberId`.)
+      await addMember(t, workspaceId, otherId, WorkspaceRole.MEMBER);
 
       const eventId = await asUser.mutation(api.calendarEvents.create, {
         workspaceId: workspaceId as any,

@@ -1941,7 +1941,7 @@ export declare const api: {
           >;
           mentionedUsers: Record<
             string,
-            { email?: string | null; image?: string; name: string | null }
+            { image?: string; name: string | null }
           >;
           plainText: string;
           replyTo: null | {
@@ -2003,7 +2003,7 @@ export declare const api: {
           >;
           mentionedUsers: Record<
             string,
-            { email?: string | null; image?: string; name: string | null }
+            { image?: string; name: string | null }
           >;
           plainText: string;
           replyTo: null | {
@@ -2056,10 +2056,7 @@ export declare const api: {
           string,
           { projectId: string; statusColor?: string; title: string }
         >;
-        mentionedUsers: Record<
-          string,
-          { email?: string | null; image?: string; name: string | null }
-        >;
+        mentionedUsers: Record<string, { image?: string; name: string | null }>;
         plainText: string;
         replyTo: null | {
           author: string;

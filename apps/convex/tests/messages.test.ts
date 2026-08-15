@@ -5,7 +5,7 @@ import {
   setupAuthenticatedUser,
   setupWorkspaceWithAdmin,
 } from "./helpers";
-import { ChannelRole } from "@ripple/shared/enums/roles";
+import { ChannelRole, WorkspaceRole } from "@ripple/shared/enums/roles";
 import type { Id } from "../convex/_generated/dataModel";
 
 beforeEach(() => vi.useFakeTimers());
@@ -36,6 +36,29 @@ async function setupChannel(
     });
     return channelId;
   });
+}
+
+/**
+ * A second signed-in user who belongs to the workspace but authored nothing.
+ * The channels here are `open`, so workspace membership is the whole channel
+ * rule for them — which is what lets the author-only checks be reached.
+ */
+async function setupOtherMember(
+  t: ReturnType<typeof createTestContext>,
+  workspaceId: Id<"workspaces">,
+) {
+  const { userId, asUser } = await setupAuthenticatedUser(t, {
+    name: "Other",
+    email: "other@test.com",
+  });
+  await t.run((ctx) =>
+    ctx.db.insert("workspaceMembers", {
+      userId,
+      workspaceId,
+      role: WorkspaceRole.MEMBER,
+    }),
+  );
+  return asUser;
 }
 
 /** Send a message via the mutation and return its ID. */
@@ -136,10 +159,11 @@ describe("messages.update", () => {
       ctx.db.query("messages").withIndex("by_channel", (q) => q.eq("channelId", channelId)).first(),
     );
 
-    const { asUser: asOther } = await setupAuthenticatedUser(t, {
-      name: "Other",
-      email: "other@test.com",
-    });
+    // A real member of the workspace: `update` takes the channel rule first and
+    // authorship second, so a caller with no membership at all is refused by the
+    // rule and never reaches the check this test is about. See the ordering note
+    // on `update` in convex/messages.ts.
+    const asOther = await setupOtherMember(t, workspaceId);
 
     await expect(
       asOther.mutation(api.messages.update, {
@@ -180,10 +204,8 @@ describe("messages.remove", () => {
       ctx.db.query("messages").withIndex("by_channel", (q) => q.eq("channelId", channelId)).first(),
     );
 
-    const { asUser: asOther } = await setupAuthenticatedUser(t, {
-      name: "Other",
-      email: "other@test.com",
-    });
+    // Same as `update` above — the channel rule runs before authorship.
+    const asOther = await setupOtherMember(t, workspaceId);
 
     await expect(
       asOther.mutation(api.messages.remove, { id: msg!._id }),

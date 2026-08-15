@@ -364,6 +364,151 @@ describe("messages access", () => {
 });
 
 /**
+ * A message is channel data, so editing and deleting it follow the channel rule
+ * — authorship narrows that rule, it does not replace it. Gating on authorship
+ * alone meant removal from a channel never revoked write access: the ejected
+ * author kept rewriting the body live members are subscribed to for the whole
+ * 48h `isMessageEditable` window, and kept the soft-delete forever, on a
+ * conversation they can no longer read. `messageReactions.toggle` already has
+ * the right shape on this table.
+ */
+describe("message edits and deletes follow the channel rule", () => {
+  /** Author posts in a closed channel, then loses their membership row. */
+  async function setupEjectedAuthor(t: ReturnType<typeof createTestContext>) {
+    const { userId: adminId, workspaceId } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupClosedChannel(t, { workspaceId, userId: adminId });
+    const author = await setupChannelMember(t, {
+      workspaceId,
+      channelId,
+      name: "Ex Member",
+      email: "ex@example.com",
+    });
+    const messageId = await insertMessage(t, {
+      channelId,
+      userId: author.userId,
+      text: "the original text",
+    });
+
+    return { workspaceId, channelId, messageId, author };
+  }
+
+  async function ejectFromChannel(
+    t: ReturnType<typeof createTestContext>,
+    opts: { channelId: Id<"channels">; userId: Id<"users"> },
+  ) {
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("channelMembers")
+        .withIndex("by_channel_user", (q) =>
+          q.eq("channelId", opts.channelId).eq("userId", opts.userId),
+        )
+        .first();
+      if (row) await ctx.db.delete(row._id);
+    });
+  }
+
+  it("refuses an update from an author removed from the channel", async () => {
+    const t = createTestContext();
+    const { channelId, messageId, author } = await setupEjectedAuthor(t);
+    await ejectFromChannel(t, { channelId, userId: author.userId });
+
+    await expect(
+      author.asUser.mutation(api.messages.update, {
+        id: messageId,
+        body: "TAMPERED",
+        plainText: "TAMPERED",
+      }),
+      // The channel rule must be reached before the authorship comparison —
+      // "Not authorized to update this message" would confirm the id addresses
+      // a real message in a channel the caller can no longer see.
+    ).rejects.toThrow("Not a member of this channel");
+
+    const stored = await t.run((ctx) => ctx.db.get(messageId));
+    expect(stored?.body, "the body live members read must be untouched").toBe("the original text");
+    // `plainText` is what `messages.search` indexes, so a silent rewrite here
+    // moves the message in every current member's search results too.
+    expect(stored?.plainText).toBe("the original text");
+  });
+
+  it("refuses a delete from an author removed from the channel", async () => {
+    const t = createTestContext();
+    const { channelId, messageId, author } = await setupEjectedAuthor(t);
+    await ejectFromChannel(t, { channelId, userId: author.userId });
+
+    await expect(
+      author.asUser.mutation(api.messages.remove, { id: messageId }),
+      // `remove` has no time bound at all, so this one never expires on its own.
+    ).rejects.toThrow("Not a member of this channel");
+
+    const stored = await t.run((ctx) => ctx.db.get(messageId));
+    expect(stored?.deleted).toBe(false);
+  });
+
+  it("refuses both from an author removed from the workspace entirely", async () => {
+    const t = createTestContext();
+    const { workspaceId, messageId, author } = await setupEjectedAuthor(t);
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", workspaceId).eq("userId", author.userId),
+        )
+        .first();
+      if (row) await ctx.db.delete(row._id);
+    });
+
+    await expect(
+      author.asUser.mutation(api.messages.update, {
+        id: messageId,
+        body: "TAMPERED",
+        plainText: "TAMPERED",
+      }),
+    ).rejects.toThrow("Not a member of this workspace");
+    await expect(
+      author.asUser.mutation(api.messages.remove, { id: messageId }),
+    ).rejects.toThrow("Not a member of this workspace");
+  });
+
+  it("still refuses a current channel member who is not the author", async () => {
+    const t = createTestContext();
+    const { workspaceId, channelId, messageId } = await setupEjectedAuthor(t);
+    const bystander = await setupChannelMember(t, {
+      workspaceId,
+      channelId,
+      name: "Bystander",
+      email: "bystander@example.com",
+    });
+
+    // The channel rule is added on top of authorship, not in place of it.
+    await expect(
+      bystander.asUser.mutation(api.messages.update, {
+        id: messageId,
+        body: "not mine to edit",
+        plainText: "not mine to edit",
+      }),
+    ).rejects.toThrow("Not authorized to update this message");
+    await expect(
+      bystander.asUser.mutation(api.messages.remove, { id: messageId }),
+    ).rejects.toThrow("Not authorized to delete this message");
+  });
+
+  it("still lets the author edit and delete while they are a member", async () => {
+    const t = createTestContext();
+    const { messageId, author } = await setupEjectedAuthor(t);
+
+    await author.asUser.mutation(api.messages.update, {
+      id: messageId,
+      body: "second thoughts",
+      plainText: "second thoughts",
+    });
+    expect((await t.run((ctx) => ctx.db.get(messageId)))?.body).toBe("second thoughts");
+
+    await author.asUser.mutation(api.messages.remove, { id: messageId });
+    expect((await t.run((ctx) => ctx.db.get(messageId)))?.deleted).toBe(true);
+  });
+});
+
+/**
  * `replyToId` is a read primitive, not just a pointer: the list/search
  * enrichment resolves it to the parent's author and *current* body and returns
  * that to everyone in the replying message's channel. A parent from another

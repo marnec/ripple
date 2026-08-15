@@ -11,7 +11,9 @@ export type ReplyToInfo = {
   imageUrl?: string;
 } | null;
 
-export type MentionedUser = { name: string | null; email?: string | null; image?: string };
+// No `email` — see `enrichWithMentionedUsers`. Mention ids are client-authored,
+// so this record must not carry more than `users.get` gives to any id-holder.
+export type MentionedUser = { name: string | null; image?: string };
 export type MentionedTask = { title: string; projectId: string; statusColor?: string };
 export type MentionedProject = { name: string; color: string };
 export type MentionedResource = { name: string; type: "document" | "diagram" | "spreadsheet" };
