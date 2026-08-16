@@ -10,7 +10,10 @@ export const LoginPage = () => {
         <Navigate to="/" replace />
       </Authenticated>
       <AuthLayout>
-        <SignInForm />
+        {/* Self-signup is closed: accounts come from invitations only, so the
+            public login screen offers sign-in and points would-be users at the
+            contact address. InviteAcceptPage still allows sign-up. */}
+        <SignInForm allowSignUp={false} />
       </AuthLayout>
     </>
   );

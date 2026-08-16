@@ -1,3 +1,4 @@
+import { APP_NAME } from "@ripple/shared/constants";
 import { Button } from "@ripple/ui/components/button";
 import { Input } from "@ripple/ui/components/input";
 import { toast } from "sonner";
@@ -25,7 +26,18 @@ type SignInFormProps = {
    * match; OAuth can still be linked later by signing in with the same email.
    */
   hideOAuth?: boolean;
+  /**
+   * When false, the "Create an account" switch shows a closed-signup notice
+   * instead of the sign-up form. Self-signup is currently reserved; accounts
+   * are created by invitation only, so the public login screen sets this.
+   * The invite page leaves it on — arriving with a valid invite *is* the
+   * authorization to create an account.
+   */
+  allowSignUp?: boolean;
 };
+
+/** Where prospective users are told to write while self-signup is closed. */
+const SIGNUP_CONTACT_EMAIL = "dependencyinversion@gmail.com";
 
 // Persist a pending email-verification step so a page reload returns the user
 // to the code-entry screen instead of dropping them back on sign-up. Without
@@ -66,6 +78,7 @@ export function SignInForm({
   lockedEmail,
   defaultFlow = "signIn",
   hideOAuth = false,
+  allowSignUp = true,
 }: SignInFormProps = {}) {
   const [step, setStepState] = useState<Step>(() => loadPersistedStep(lockedEmail) ?? "auth");
 
@@ -92,6 +105,7 @@ export function SignInForm({
       lockedEmail={lockedEmail}
       defaultFlow={defaultFlow}
       hideOAuth={hideOAuth}
+      allowSignUp={allowSignUp}
     />
   );
 }
@@ -101,14 +115,17 @@ function AuthCard({
   lockedEmail,
   defaultFlow,
   hideOAuth,
+  allowSignUp,
 }: {
   setStep: (s: Step) => void;
   lockedEmail?: string;
   defaultFlow: Flow;
   hideOAuth: boolean;
+  allowSignUp: boolean;
 }) {
   const { signIn } = useAuthActions();
-  const [flow, setFlow] = useState<Flow>(defaultFlow);
+  const [flow, setFlow] = useState<Flow>(allowSignUp ? defaultFlow : "signIn");
+  const [signUpNotice, setSignUpNotice] = useState(false);
   const [email, setEmail] = useState(lockedEmail ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -360,10 +377,46 @@ function AuthCard({
         <button
           type="button"
           className="font-medium text-white underline underline-offset-4 cursor-pointer"
-          onClick={() => switchFlow(isSignUp ? "signIn" : "signUp")}
+          onClick={() =>
+            allowSignUp
+              ? switchFlow(isSignUp ? "signIn" : "signUp")
+              : setSignUpNotice(true)
+          }
         >
           {isSignUp ? "Sign in" : "Create an account"}
         </button>
+      </p>
+
+      {signUpNotice && <SignUpClosedNotice />}
+    </div>
+  );
+}
+
+/**
+ * Shown in place of the sign-up form while self-signup is closed. Rendered
+ * inline (rather than as a separate step) so the sign-in form stays filled in
+ * and usable behind it.
+ */
+function SignUpClosedNotice() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-lg border border-white/15 bg-white/5 p-4 text-center text-sm text-white/70"
+    >
+      <p className="font-medium text-white">Sign-up is invitation only</p>
+      <p className="mt-1.5">
+        Creating an account is reserved at this time. To request access, write
+        to{" "}
+        <a
+          href={`mailto:${SIGNUP_CONTACT_EMAIL}?subject=${encodeURIComponent(
+            `${APP_NAME} access request`,
+          )}`}
+          className="font-medium text-white underline underline-offset-4 break-all"
+        >
+          {SIGNUP_CONTACT_EMAIL}
+        </a>
+        .
       </p>
     </div>
   );
