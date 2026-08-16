@@ -59,8 +59,7 @@ async function setupLinkedWorkspace(t: ReturnType<typeof createTestContext>) {
       priority: "medium",
       completed: false,
       creatorId: userId,
-      // Assigned so `listByAssignee` (workspace-wide My Tasks) reaches it, and
-      // left without a `plannedStartDate` so `listUnscheduled` does too.
+      // Assigned so `listByAssignee` (workspace-wide My Tasks) reaches it.
       assigneeId: userId,
       externalRefs: [
         {
@@ -135,16 +134,6 @@ describe("task queries survive a disconnected integration", () => {
       workspaceId,
       completed: false,
     });
-    expect(tasks.map((task) => task._id)).toContain(taskId);
-  });
-
-  it("tasks.listUnscheduled returns the project's undated tasks", async () => {
-    const t = createTestContext();
-    const { asUser, linkId, projectId, taskId } = await setupLinkedWorkspace(t);
-
-    await unlink(t, asUser, linkId);
-
-    const tasks = await asUser.query(api.tasks.listUnscheduled, { projectId });
     expect(tasks.map((task) => task._id)).toContain(taskId);
   });
 

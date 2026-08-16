@@ -8,7 +8,7 @@ afterEach(() => vi.useRealTimers());
 
 /**
  * `hasBlockers` is computed at five separate call sites — `tasks.get`,
- * `tasks.listByProject` (via `enrichTasks`), `tasks.listUnscheduled`,
+ * `tasks.listByProject` (via `enrichTasks`),
  * `cycles.listCycleTasks` and `taskImports.listJobTasks`. Every one of them
  * had the same hand-rolled scan and none of them had a test. This file is the
  * net: the discriminating case is an inbound edge that is NOT a blocker, since
@@ -107,18 +107,6 @@ describe("hasBlockers", () => {
       completed: false,
     });
     const flags = blockerFlags(page);
-
-    expect(flags.get(blocked)).toBe(true);
-    expect(flags.get(mentioned)).toBe(false);
-  });
-
-  it("tasks.listUnscheduled reports a blocker only for the blocked task", async () => {
-    const t = createTestContext();
-    const { asUser, projectId, blocked, mentioned } = await setupBlockerFixture(t);
-
-    const flags = blockerFlags(
-      await asUser.query(api.tasks.listUnscheduled, { projectId }),
-    );
 
     expect(flags.get(blocked)).toBe(true);
     expect(flags.get(mentioned)).toBe(false);

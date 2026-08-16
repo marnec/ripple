@@ -1247,57 +1247,21 @@ export const updatePosition = mutation({
   },
 });
 
-const PRIORITY_ORDER: Record<string, number> = {
-  urgent: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
-
-export const listUnscheduled = query({
-  args: { projectId: v.id("projects") },
-  returns: v.array(enrichedTaskValidator),
-  handler: async (ctx, { projectId }) => {
-    const result = await checkResourceMember(ctx, "projects", projectId);
-    if (!result) return [];
-    const project = result.resource;
-
-    // Fetch all non-completed tasks in this project
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_project_completed", (q) =>
-        q.eq("projectId", projectId).eq("completed", false)
-      )
-      .collect();
-
-    // Keep only tasks with no plannedStartDate
-    const unscheduled = tasks.filter((t) => t.plannedStartDate === undefined);
-
-    // Enrich: status, assignee, projectKey, hasBlockers
-    const enriched = await Promise.all(
-      unscheduled.map(async (task) => {
-        const status = await ctx.db.get(task.statusId);
-        const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        return {
-          ...pickTaskFields(task),
-          status,
-          assignee,
-          projectKey: project.key,
-          hasBlockers: await hasBlockingEdge(ctx, task._id),
-        };
-      })
-    );
-
-    // Sort by priority: urgent → high → medium → low
-    enriched.sort((a, b) => {
-      const pa = PRIORITY_ORDER[a.priority] ?? 99;
-      const pb = PRIORITY_ORDER[b.priority] ?? 99;
-      return pa - pb;
-    });
-
-    return enriched;
-  },
-});
+// `listUnscheduled` was removed: no page in the product called it — the only
+// references were three test files, and a test is not a caller. (`PRIORITY_ORDER`
+// went with it; it had no other reader.)
+//
+// It escaped the dead-query sweep because that pass looked for functions with
+// NO reference at all, and this one had tests. It also carried two defects that
+// made it a bad thing to leave lying around for the next person who wanted
+// undated tasks: it did a status/assignee point read per task instead of going
+// through `enrichTasks`, and it `.collect()`ed every incomplete task in the
+// project and then dropped the scheduled ones in JS — so its read set was wider
+// than its result, and any write to any incomplete task re-ran it.
+//
+// If a surface ever needs this list: read `by_project_completed_plannedStartDate`
+// with `.eq("plannedStartDate", undefined)` (an absent optional field is a valid
+// index key), then hand the rows to `enrichTasks`. Do not restore this shape.
 
 export const remove = mutation({
   args: {
