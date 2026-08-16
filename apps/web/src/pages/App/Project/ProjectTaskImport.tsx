@@ -7,6 +7,10 @@
 //
 // We deliberately filter by importJobId on the server so previous imports
 // in the same project are invisible here.
+//
+// The list is capped at TASK_IMPORT_TASK_LIST_LIMIT (newest first) so the
+// subscription's read set does not grow with the import. When the job produced
+// more than that, we say so and point at the project task list.
 
 import { RippleSpinner } from "@/components/RippleSpinner";
 import { Button } from "@ripple/ui/components/button";
@@ -36,6 +40,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
 import type { QueryParams } from "@convex/types/routes";
+import { TASK_IMPORT_TASK_LIST_LIMIT } from "@ripple/shared/taskImportSchema";
 import { TaskRow } from "./TaskRow";
 
 export function ProjectTaskImport() {
@@ -155,6 +160,22 @@ function ProjectTaskImportContent({
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
+            {tasks.length === TASK_IMPORT_TASK_LIST_LIMIT && (
+              <p className="pb-1 text-xs text-muted-foreground">
+                Showing the {TASK_IMPORT_TASK_LIST_LIMIT} most recent imported
+                tasks.{" "}
+                <button
+                  className="underline underline-offset-2 hover:text-foreground"
+                  onClick={() =>
+                    void navigate(
+                      `/workspaces/${workspaceId}/projects/${projectId}/tasks`,
+                    )
+                  }
+                >
+                  See all in the project
+                </button>
+              </p>
+            )}
             {tasks.map((task) => (
               <TaskRow
                 key={task._id}

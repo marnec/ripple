@@ -21,11 +21,12 @@ import { generateKeyBetween } from "fractional-indexing";
 import { logTaskActivity } from "./auditLog";
 import { requireWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { syncTaskTags } from "./tagSync";
-import { enrichedTaskValidator, hasBlockingEdge } from "./tasks";
+import { enrichedTaskValidator, enrichTasks } from "./tasks";
 import { scheduleTaskImport } from "./taskImportPool";
 import { isImportJobStale } from "./taskImportStaleness";
 import {
   TASK_IMPORT_MAX_PAYLOAD_BYTES,
+  TASK_IMPORT_TASK_LIST_LIMIT,
   taskImportRowsSchema,
   taskImportRowOutputSchema,
   type TaskImportRow,
@@ -124,10 +125,23 @@ export const getJob = query({
 });
 
 /**
- * Tasks created by a single import job, newest first.
+ * The most recent `TASK_IMPORT_TASK_LIST_LIMIT` tasks created by a single
+ * import job, newest first.
  *
  * Reuses the same `enrichedTaskValidator` shape that the project task list
  * consumes so the status page can render `<TaskRow>` directly.
+ *
+ * Bounded on purpose. This is a live subscription over `tasks.by_importJob` —
+ * the exact range `createImportedTasks` writes into — so an unbounded
+ * `.collect()` made every batch of 50 inserts re-read every task the job had
+ * produced so far, plus a blocker probe each. `.take()` keeps the re-read flat
+ * at the cap no matter how long the import runs. Truncation is newest-first,
+ * which is the direction the page reads, and the full set is one click away in
+ * the project task list.
+ *
+ * `.paginate()` is deliberately NOT used here: the order is descending and the
+ * import prepends, so every new row sorts *before* the first page's end cursor
+ * and lands in page one — the read set would grow exactly as it does today.
  */
 export const listJobTasks = query({
   args: { jobId: v.id("taskImportJobs") },
@@ -143,21 +157,11 @@ export const listJobTasks = query({
       .query("tasks")
       .withIndex("by_importJob", (q) => q.eq("importJobId", jobId))
       .order("desc") // newest creationTime first
-      .collect();
+      .take(TASK_IMPORT_TASK_LIST_LIMIT);
 
-    return Promise.all(
-      tasks.map(async (task) => {
-        const status = await ctx.db.get(task.statusId);
-        const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
-        return {
-          ...task,
-          status,
-          assignee,
-          projectKey: project.key,
-          hasBlockers: await hasBlockingEdge(ctx, task._id),
-        };
-      }),
-    );
+    // `enrichTasks` dedupes the status and assignee point reads via `getAll`
+    // instead of re-fetching the same handful of status rows once per card.
+    return enrichTasks(ctx, tasks, project.key);
   },
 });
 

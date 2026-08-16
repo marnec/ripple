@@ -6,6 +6,7 @@ import {
   setupAuthenticatedUser,
 } from "./helpers";
 import type { Id } from "../convex/_generated/dataModel";
+import { TASK_IMPORT_TASK_LIST_LIMIT } from "@ripple/shared/taskImportSchema";
 
 // Mirror tasks.test.ts: convex-test's scheduler runs scheduled jobs against
 // fake timers, so the workpool / audit log effects don't bleed across tests.
@@ -285,5 +286,149 @@ describe("getActiveJobForProject", () => {
       { projectId },
     );
     expect(afterCompletion).toBeNull();
+  });
+});
+
+describe("listJobTasks", () => {
+  /** Seed `count` tasks against one job, oldest first, titled "Row <i>". */
+  async function seedJobTasks(
+    t: ReturnType<typeof createTestContext>,
+    opts: {
+      workspaceId: Id<"workspaces">;
+      projectId: Id<"projects">;
+      statusId: Id<"taskStatuses">;
+      userId: Id<"users">;
+      count: number;
+    },
+  ) {
+    return await t.run(async (ctx) => {
+      const jobId = await ctx.db.insert("taskImportJobs", {
+        projectId: opts.projectId,
+        workspaceId: opts.workspaceId,
+        creatorId: opts.userId,
+        status: "completed",
+        rows: [],
+        numberRangeStart: 1,
+        totalRows: opts.count,
+        processedRows: opts.count,
+        failedRows: 0,
+      });
+      for (let i = 0; i < opts.count; i++) {
+        await ctx.db.insert("tasks", {
+          projectId: opts.projectId,
+          workspaceId: opts.workspaceId,
+          title: `Row ${i}`,
+          statusId: opts.statusId,
+          priority: "medium",
+          completed: false,
+          creatorId: opts.userId,
+          importJobId: jobId,
+        });
+      }
+      return jobId;
+    });
+  }
+
+  // The read set is a range the import is actively writing into, so it has to
+  // stay flat as the job grows — this is the assertion that stops someone
+  // restoring the `.collect()`.
+  it("caps the list at the shared limit and keeps the newest rows", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, todoId } = await setupProjectWithStatuses(t, {
+      workspaceId,
+      userId,
+    });
+
+    const overflow = 5;
+    const jobId = await seedJobTasks(t, {
+      workspaceId,
+      projectId,
+      statusId: todoId,
+      userId,
+      count: TASK_IMPORT_TASK_LIST_LIMIT + overflow,
+    });
+
+    const tasks = await asUser.query(api.taskImports.listJobTasks, { jobId });
+
+    expect(tasks).toHaveLength(TASK_IMPORT_TASK_LIST_LIMIT);
+    // Newest first: the last row seeded is at the top, and the `overflow`
+    // oldest rows are the ones dropped.
+    expect(tasks[0].title).toBe(`Row ${TASK_IMPORT_TASK_LIST_LIMIT + overflow - 1}`);
+    const titles = new Set(tasks.map((task) => task.title));
+    expect(titles.has(`Row ${overflow}`)).toBe(true);
+    expect(titles.has(`Row ${overflow - 1}`)).toBe(false);
+    expect(titles.has("Row 0")).toBe(false);
+  });
+
+  // `enrichTasks` resolves status and assignee out of `getAll`-built maps
+  // rather than a point read per task; a mis-keyed map would silently null
+  // these out and the page would render blank chips.
+  it("enriches each task with its own status and assignee", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const { projectId, todoId } = await setupProjectWithStatuses(t, {
+      workspaceId,
+      userId,
+    });
+    const { userId: otherUserId } = await setupAuthenticatedUser(t, {
+      email: "assignee@example.com",
+    });
+
+    const { jobId, doneId, assignedTaskId } = await t.run(async (ctx) => {
+      const doneId = (
+        await ctx.db
+          .query("taskStatuses")
+          .withIndex("by_project", (q) => q.eq("projectId", projectId))
+          .collect()
+      ).find((status) => status.name === "Done")!._id;
+
+      const jobId = await ctx.db.insert("taskImportJobs", {
+        projectId,
+        workspaceId,
+        creatorId: userId,
+        status: "completed",
+        rows: [],
+        numberRangeStart: 1,
+        totalRows: 2,
+        processedRows: 2,
+        failedRows: 0,
+      });
+      await ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "Unassigned",
+        statusId: todoId,
+        priority: "medium",
+        completed: false,
+        creatorId: userId,
+        importJobId: jobId,
+      });
+      const assignedTaskId = await ctx.db.insert("tasks", {
+        projectId,
+        workspaceId,
+        title: "Assigned",
+        statusId: doneId,
+        priority: "medium",
+        completed: true,
+        creatorId: userId,
+        assigneeId: otherUserId,
+        importJobId: jobId,
+      });
+      return { jobId, doneId, assignedTaskId };
+    });
+
+    const tasks = await asUser.query(api.taskImports.listJobTasks, { jobId });
+    const byTitle = new Map(tasks.map((task) => [task.title, task]));
+
+    const assigned = byTitle.get("Assigned")!;
+    expect(assigned._id).toBe(assignedTaskId);
+    expect(assigned.status?._id).toBe(doneId);
+    expect(assigned.assignee?._id).toBe(otherUserId);
+    expect(assigned.projectKey).toBe("IMP");
+
+    const unassigned = byTitle.get("Unassigned")!;
+    expect(unassigned.status?._id).toBe(todoId);
+    expect(unassigned.assignee).toBeNull();
   });
 });

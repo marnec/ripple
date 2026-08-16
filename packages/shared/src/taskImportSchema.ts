@@ -114,3 +114,16 @@ export const taskImportRowOutputSchema = z.object({
  * other job fields and JSON escape inflation.
  */
 export const TASK_IMPORT_MAX_PAYLOAD_BYTES = 900_000;
+
+/**
+ * How many of a job's tasks the import status page lists.
+ *
+ * The list is a live subscription over a range the import is actively writing
+ * into, so an unbounded read set grows with the job and is re-read on every
+ * batch. A hard cap keeps that cost flat; the page is a progress feed, and the
+ * project task list is where the full set is meant to be read.
+ *
+ * Shared so the client can tell "there are exactly this many" from "this is
+ * the most recent slice" without a second round trip.
+ */
+export const TASK_IMPORT_TASK_LIST_LIMIT = 100;
