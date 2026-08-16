@@ -705,32 +705,30 @@ export const listTaskDependenciesByProject = query({
       .collect();
     const taskIds = new Set(tasks.map((t) => t._id as string));
 
-    // One indexed lookup per task for its outgoing blocks edges.
-    const perTask = await Promise.all(
-      [...taskIds].map((id) =>
-        ctx.db
-          .query("edges")
-          .withIndex("by_source_edgetype", (q) =>
-            q.eq("sourceId", id).eq("edgeType", "blocks"),
-          )
-          .collect(),
-      ),
-    );
+    // One index range for the whole workspace's `blocks` edges rather than one
+    // range per task: the per-task fan-out made a live Gantt subscription cost
+    // O(tasks) database queries, and both shapes end up filtering on `taskIds`
+    // anyway (a `blocks` edge is only drawn when both endpoints are in this
+    // project). Same trade graph.ts:67 already takes with this index.
+    const workspaceBlocks = await ctx.db
+      .query("edges")
+      .withIndex("by_workspace_edgetype", (q) =>
+        q.eq("workspaceId", project.workspaceId).eq("edgeType", "blocks"),
+      )
+      .collect();
 
     const pairs: {
       edgeId: Id<"edges">;
       sourceId: Id<"tasks">;
       targetId: Id<"tasks">;
     }[] = [];
-    for (const edges of perTask) {
-      for (const e of edges) {
-        if (taskIds.has(e.targetId)) {
-          pairs.push({
-            edgeId: e._id,
-            sourceId: e.sourceId as Id<"tasks">,
-            targetId: e.targetId as Id<"tasks">,
-          });
-        }
+    for (const e of workspaceBlocks) {
+      if (taskIds.has(e.sourceId) && taskIds.has(e.targetId)) {
+        pairs.push({
+          edgeId: e._id,
+          sourceId: e.sourceId as Id<"tasks">,
+          targetId: e.targetId as Id<"tasks">,
+        });
       }
     }
     return pairs;

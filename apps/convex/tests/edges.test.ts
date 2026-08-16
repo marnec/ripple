@@ -1378,6 +1378,42 @@ describe("listTaskDependenciesByProject", () => {
     expect(pairs.every((p) => typeof p.edgeId === "string")).toBe(true);
   });
 
+  // The handler reads one workspace-wide `blocks` range instead of one range
+  // per task, so the "source is outside this project" case is no longer
+  // excluded structurally — it has to be filtered, and stay filtered.
+  it("excludes a blocks edge whose source task lives in another project", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const { projectId, todoId } = await setupProject(t, { workspaceId, userId });
+    const other = await setupProject(t, { workspaceId, userId });
+
+    const inProject = await createTask(t, {
+      projectId,
+      workspaceId,
+      statusId: todoId,
+      userId,
+      title: "in",
+    });
+    const outside = await createTask(t, {
+      projectId: other.projectId,
+      workspaceId,
+      statusId: other.todoId,
+      userId,
+      title: "out",
+    });
+
+    // sourceId = outside (other project), targetId = inProject.
+    await asUser.mutation(api.edges.createEdge, {
+      taskId: outside,
+      dependsOnTaskId: inProject,
+      type: "blocks",
+    });
+
+    const pairs = await asUser.query(api.edges.listTaskDependenciesByProject, { projectId });
+    expect(pairs).toEqual([]);
+  });
+
   it("returns [] for a non-member", async () => {
     const t = createTestContext();
     const { userId, workspaceId } = await setupWorkspaceWithAdmin(t);
