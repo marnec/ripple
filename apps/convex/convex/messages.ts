@@ -13,6 +13,16 @@ import { notify } from "./utils/notify";
 import { normalizeIds } from "./utils/ids";
 
 /**
+ * Ceiling on the caller-supplied row counts of `search` and
+ * `getMessageContext`. `messages.body` is BlockNote JSON — the largest hot
+ * column in the schema — and every returned row then goes through six
+ * enrichment passes, so an unclamped arg turned a deep-link query into a
+ * whole-channel read. Deep-links ask for 10 and search for 20; 50 leaves room
+ * without leaving the arg open.
+ */
+const MESSAGE_READ_MAX = 50;
+
+/**
  * Name + image and nothing else — the same projection `users.get` returns, for
  * the same reason. See `enrichWithMentionedUsers`.
  */
@@ -727,13 +737,19 @@ export const search = query({
   handler: async (ctx, { channelId, searchTerm, limit = 20 }) => {
     const { channel } = await requireChannelAccess(ctx, channelId);
 
+    // Clamped like every other bounded read in this backend (workspaceTimeline,
+    // nodes.suggest, tasks.suggest, calendarEvents' mention autocomplete): the
+    // arg is caller-controlled and each row costs the full enrichment pass
+    // below, so the default is the contract and the ceiling is the defence.
+    const take = Math.max(1, Math.min(limit, MESSAGE_READ_MAX));
+
     // Search for messages
     const searchResults = await ctx.db
       .query("messages")
       .withSearchIndex("by_text", (q) =>
         q.search("plainText", searchTerm).eq("channelId", channelId)
       )
-      .take(limit);
+      .take(take);
 
     // Batch fetch all users for the search results
     const userIds = [...new Set(searchResults.map((m) => m.userId))];
@@ -766,6 +782,10 @@ export const getMessageContext = query({
 
     const { channel } = await requireChannelAccess(ctx, targetMessage.channelId);
 
+    // See `search` above. This one takes `size` TWICE (before and after), so an
+    // unclamped arg bought 2x its value in rows plus enrichment on each.
+    const size = Math.max(1, Math.min(contextSize, MESSAGE_READ_MAX));
+
     // Get messages before and after the target message
     const messagesBefore = await ctx.db
       .query("messages")
@@ -773,7 +793,7 @@ export const getMessageContext = query({
         q.eq("channelId", targetMessage.channelId).eq("deleted", false).lt("_creationTime", targetMessage._creationTime)
       )
       .order("desc")
-      .take(contextSize);
+      .take(size);
 
     const messagesAfter = await ctx.db
       .query("messages")
@@ -781,7 +801,7 @@ export const getMessageContext = query({
         q.eq("channelId", targetMessage.channelId).eq("deleted", false).gt("_creationTime", targetMessage._creationTime)
       )
       .order("asc")
-      .take(contextSize);
+      .take(size);
 
     // Combine and sort all messages
     const allMessages = [...messagesBefore.reverse(), targetMessage, ...messagesAfter];

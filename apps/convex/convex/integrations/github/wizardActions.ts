@@ -1,8 +1,8 @@
 "use node";
 
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { action } from "../../_generated/server";
-import { api } from "../../_generated/api";
+import { internal } from "../../_generated/api";
 import { githubClientFromEnv } from "./client";
 import { buildIssueSearchQuery, shapeRepos } from "./wizardHelpers";
 
@@ -28,7 +28,7 @@ export const listInstallationRepos = action({
   ),
   handler: async (ctx, args) => {
     await ctx.runQuery(
-      api.integrations.core.install.assertWizardInstallation,
+      internal.integrations.core.install.assertWizardInstallation,
       {
         workspaceId: args.workspaceId,
         externalAccountId: args.externalAccountId,
@@ -36,9 +36,12 @@ export const listInstallationRepos = action({
       },
     );
 
+    // ConvexError, not Error: Convex redacts a plain throw to "Server Error"
+    // in production, and these are the two things a wizard admin can actually
+    // act on — set the App credentials, or reconnect a revoked installation.
     const client = githubClientFromEnv();
     if (!client) {
-      throw new Error("GitHub App credentials not configured");
+      throw new ConvexError("GitHub App credentials are not configured");
     }
 
     const res = await client
@@ -48,7 +51,12 @@ export const listInstallationRepos = action({
         path: "/installation/repositories?per_page=100",
       });
     if (res.status !== 200 || !res.body) {
-      throw new Error(`GitHub repo list failed (status=${res.status})`);
+      // The upstream status goes to the log, not to the toast — a raw GitHub
+      // response detail is not something to render into the UI.
+      console.error("GitHub repo list failed", { status: res.status });
+      throw new ConvexError(
+        "Could not list repositories from GitHub. Check the installation is still authorized and try again.",
+      );
     }
     return shapeRepos(res.body.repositories ?? []);
   },
@@ -70,7 +78,7 @@ export const previewImportCount = action({
   returns: v.object({ count: v.number() }),
   handler: async (ctx, args) => {
     await ctx.runQuery(
-      api.integrations.core.install.assertWizardInstallation,
+      internal.integrations.core.install.assertWizardInstallation,
       {
         workspaceId: args.workspaceId,
         externalAccountId: args.externalAccountId,
@@ -80,7 +88,7 @@ export const previewImportCount = action({
 
     const client = githubClientFromEnv();
     if (!client) {
-      throw new Error("GitHub App credentials not configured");
+      throw new ConvexError("GitHub App credentials are not configured");
     }
 
     const q = buildIssueSearchQuery({
@@ -95,7 +103,10 @@ export const previewImportCount = action({
         path: `/search/issues?per_page=1&q=${encodeURIComponent(q)}`,
       });
     if (res.status !== 200 || !res.body) {
-      throw new Error(`GitHub issue count failed (status=${res.status})`);
+      console.error("GitHub issue count failed", { status: res.status });
+      throw new ConvexError(
+        "Could not count issues on GitHub. Check the installation is still authorized and try again.",
+      );
     }
     return { count: res.body.total_count ?? 0 };
   },

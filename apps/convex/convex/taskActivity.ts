@@ -5,6 +5,7 @@ import { getUserDisplayName } from "@ripple/shared/displayName";
 import type { Id } from "./_generated/dataModel";
 import { auditLog } from "./auditLog";
 import { checkResourceMember } from "./authHelpers";
+import { externalAuthorsByComment } from "./utils/commentExternalAuthors";
 
 type AuditEntry = {
   _id: string;
@@ -121,14 +122,13 @@ export const timeline = query({
       }];
     });
 
-    // Per-comment integration link lookup for the external author chip/avatar.
-    // The link table is small per-task; a query-per-comment is fine.
-    const commentItems = await Promise.all(comments.map(async (c) => {
+    // Same helper `taskComments.list` uses — one shape, not two.
+    const externalAuthorByComment = await externalAuthorsByComment(
+      ctx,
+      comments.map((c) => c._id),
+    );
+    const commentItems = comments.map((c) => {
       const user = userMap.get(String(c.userId));
-      const link = await ctx.db
-        .query("taskCommentIntegrationLinks")
-        .withIndex("by_taskComment", (q) => q.eq("taskCommentId", c._id))
-        .unique();
       return {
         kind: "comment" as const,
         _id: c._id,
@@ -138,9 +138,9 @@ export const timeline = query({
         userImage: user?.image,
         commentId: c._id,
         body: c.body,
-        externalAuthor: link?.externalAuthor,
+        externalAuthor: externalAuthorByComment.get(c._id),
       };
-    }));
+    });
 
     // Merge and sort by creation time
     const timeline = [...activityItems, ...commentItems].sort(

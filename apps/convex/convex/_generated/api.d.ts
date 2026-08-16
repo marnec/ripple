@@ -646,12 +646,6 @@ export declare const api: {
       { requestId: Id<"channelJoinRequests"> },
       null
     >;
-    findDm: FunctionReference<
-      "query",
-      "public",
-      { otherUserId: Id<"users">; workspaceId: Id<"workspaces"> },
-      Id<"channels"> | null
-    >;
     get: FunctionReference<
       "query",
       "public",
@@ -908,7 +902,6 @@ export declare const api: {
         projectId: Id<"projects">;
         projectKey?: string;
         pullRequestState?: "draft" | "open" | "merged" | "closed";
-        startDate?: string;
         status: {
           _creationTime: number;
           _id: Id<"taskStatuses">;
@@ -955,12 +948,6 @@ export declare const api: {
           taskId: Id<"tasks">;
         }>;
       }
-    >;
-    listTaskCycleDueDates: FunctionReference<
-      "query",
-      "public",
-      { projectId: Id<"projects"> },
-      Array<{ cycleDueDate: string; taskId: Id<"tasks"> }>
     >;
     remove: FunctionReference<
       "mutation",
@@ -1310,17 +1297,6 @@ export declare const api: {
       { resourceId: string },
       boolean
     >;
-    listAllIdsForWorkspace: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      {
-        diagram: Array<string>;
-        document: Array<string>;
-        project: Array<string>;
-        spreadsheet: Array<string>;
-      }
-    >;
     listByType: FunctionReference<
       "query",
       "public",
@@ -1349,15 +1325,6 @@ export declare const api: {
         pageStatus?: "SplitRecommended" | "SplitRequired" | null;
         splitCursor?: string | null;
       }
-    >;
-    listIdsForType: FunctionReference<
-      "query",
-      "public",
-      {
-        resourceType: "document" | "diagram" | "spreadsheet" | "project";
-        workspaceId: Id<"workspaces">;
-      },
-      Array<string>
     >;
     listPinned: FunctionReference<
       "query",
@@ -1453,16 +1420,6 @@ export declare const api: {
         >;
       };
       install: {
-        assertWizardInstallation: FunctionReference<
-          "query",
-          "public",
-          {
-            externalAccountId: string;
-            provider?: string;
-            workspaceId: Id<"workspaces">;
-          },
-          { externalAccountId: string }
-        >;
         claimInstallation: FunctionReference<
           "mutation",
           "public",
@@ -2079,17 +2036,6 @@ export declare const api: {
     >;
   };
   nodes: {
-    listByWorkspace: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<{
-        name: string;
-        resourceId: string;
-        resourceType: string;
-        tags: Array<string>;
-      }>
-    >;
     search: FunctionReference<
       "query",
       "public",
@@ -3608,18 +3554,6 @@ export declare const api: {
     >;
   };
   workspaceMembers: {
-    byWorkspace: FunctionReference<
-      "query",
-      "public",
-      { workspaceId: Id<"workspaces"> },
-      Array<{
-        _creationTime: number;
-        _id: Id<"workspaceMembers">;
-        role: "admin" | "member";
-        userId: Id<"users">;
-        workspaceId: Id<"workspaces">;
-      }>
-    >;
     changeRole: FunctionReference<
       "mutation",
       "public",
@@ -4717,6 +4651,16 @@ export declare const internal: {
         >;
       };
       install: {
+        assertWizardInstallation: FunctionReference<
+          "query",
+          "internal",
+          {
+            externalAccountId: string;
+            provider?: string;
+            workspaceId: Id<"workspaces">;
+          },
+          { externalAccountId: string }
+        >;
         beginRemoveInstallation: FunctionReference<
           "mutation",
           "internal",

@@ -307,3 +307,70 @@ describe("transcript conversion — retry", () => {
     expect(second[0].yjsSnapshotId).toBe(first[0].yjsSnapshotId);
   });
 });
+
+/**
+ * Sweep #21 — how the route authenticates, independent of what it then does
+ * with the payload.
+ */
+describe("transcript webhook — secret handling", () => {
+  const body = JSON.stringify({
+    event: "meeting.transcript",
+    meeting: { id: "meet-auth", sessionId: "sess-1" },
+    transcriptDownloadUrl: DOWNLOAD_URL,
+  });
+
+  it("accepts the secret in the x-webhook-secret header", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    await seedChannelWithSession(t, workspaceId, "meet-auth");
+    mockDownloads(ok(CSV_TRANSCRIPT));
+
+    // The header is now read FIRST, so a hook registered this way never puts
+    // the secret in a URL. The `?secret=` form stays supported below.
+    const res = await t.fetch("/realtime/transcript-webhook", {
+      method: "POST",
+      headers: { "x-webhook-secret": WEBHOOK_SECRET },
+      body,
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it("still accepts the secret in the query string", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    await seedChannelWithSession(t, workspaceId, "meet-auth");
+    mockDownloads(ok(CSV_TRANSCRIPT));
+
+    const res = await t.fetch(
+      `/realtime/transcript-webhook?secret=${WEBHOOK_SECRET}`,
+      { method: "POST", body },
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a wrong secret from either channel", async () => {
+    const t = createTestContext();
+    const { workspaceId } = await setupWorkspaceWithAdmin(t);
+    await seedChannelWithSession(t, workspaceId, "meet-auth");
+
+    const viaHeader = await t.fetch("/realtime/transcript-webhook", {
+      method: "POST",
+      headers: { "x-webhook-secret": `${WEBHOOK_SECRET}x` },
+      body,
+    });
+    const viaQuery = await t.fetch(
+      `/realtime/transcript-webhook?secret=${WEBHOOK_SECRET}x`,
+      { method: "POST", body },
+    );
+    const missing = await t.fetch("/realtime/transcript-webhook", {
+      method: "POST",
+      body,
+    });
+
+    expect(viaHeader.status).toBe(401);
+    expect(viaQuery.status).toBe(401);
+    expect(missing.status).toBe(401);
+  });
+});

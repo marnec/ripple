@@ -32,6 +32,31 @@ export function parseRoomId<T extends string>(
 
 const BEARER_PREFIX = "Bearer ";
 
+/**
+ * Constant-time string equality for secret comparison.
+ *
+ * `===` on strings short-circuits on length and then on the first differing
+ * byte, which makes the comparison's duration a function of how much of the
+ * secret the caller guessed. This never early-exits within an equal-length
+ * pair. The length check itself is not hidden — length is not the secret.
+ *
+ * This is the deployment's one implementation: `gitlab/webhook.verifyGitlabToken`
+ * delegates here rather than keeping the copy it used to own, so a fix or a
+ * mistake lands in exactly one place.
+ */
+export function timingSafeEqual(
+  received: string | null | undefined,
+  expected: string | null | undefined,
+): boolean {
+  if (!received || !expected) return false;
+  if (received.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= received.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 export type SharedSecretResult =
   | { kind: "ok" }
   | { kind: "unconfigured" }
@@ -43,7 +68,10 @@ export function checkSharedSecret(
 ): SharedSecretResult {
   if (!expectedSecret) return { kind: "unconfigured" };
   if (!authHeader?.startsWith(BEARER_PREFIX)) return { kind: "unauthorized" };
-  if (authHeader.substring(BEARER_PREFIX.length) !== expectedSecret) {
+  // PARTYKIT_SECRET guards `/collaboration/snapshot` (full Yjs read/write for
+  // any resource) and is the HMAC key for every collaboration token, so this
+  // one gets the constant-time compare the GitLab path already had.
+  if (!timingSafeEqual(authHeader.substring(BEARER_PREFIX.length), expectedSecret)) {
     return { kind: "unauthorized" };
   }
   return { kind: "ok" };

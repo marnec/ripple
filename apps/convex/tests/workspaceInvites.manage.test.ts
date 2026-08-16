@@ -222,3 +222,84 @@ describe("workspaceInvites.resend", () => {
     ).rejects.toThrow();
   });
 });
+
+/**
+ * Sweep #26 — `create`/`resend` sent Resend mail to a caller-chosen address
+ * with no format check and no ceiling. Signup is open and `workspaces.create`
+ * makes the caller an admin, so "workspace admin" is not a scarce credential:
+ * any account could mint a workspace, invite a third party, and loop `resend`
+ * from the same sending domain the auth OTP mail uses.
+ */
+describe("workspaceInvites — abuse controls", () => {
+  it("refuses an address that is not shaped like one", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    for (const email of ["not-an-email", "no@tld", "spaces here@example.com", ""]) {
+      await expect(
+        asUser.mutation(api.workspaceInvites.create, { workspaceId, email }),
+      ).rejects.toThrow("Invalid email address");
+    }
+
+    // Nothing was written, so nothing was queued for delivery either.
+    const invites = await t.run((ctx) => ctx.db.query("workspaceInvites").collect());
+    expect(invites).toEqual([]);
+  });
+
+  it("normalizes the stored address", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const inviteId = await asUser.mutation(api.workspaceInvites.create, {
+      workspaceId,
+      email: "  Someone@Example.COM  ",
+    });
+
+    const invite = await t.run((ctx) => ctx.db.get(inviteId));
+    // The stored value is what the duplicate-invite index and the mail queue
+    // both key on, so it has to be the normalized one.
+    expect(invite?.email).toBe("someone@example.com");
+  });
+
+  it("caps resends of a single invite", async () => {
+    const t = createTestContext();
+    const { userId, workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    const inviteId = await t.run(async (ctx) =>
+      ctx.db.insert("workspaceInvites", {
+        workspaceId,
+        email: "loop@example.com",
+        invitedBy: userId,
+        status: InviteStatus.PENDING,
+      }),
+    );
+
+    // 3 per hour, then the bucket is empty.
+    for (let i = 0; i < 3; i++) {
+      await asUser.mutation(api.workspaceInvites.resend, { inviteId });
+    }
+    await expect(
+      asUser.mutation(api.workspaceInvites.resend, { inviteId }),
+    ).rejects.toThrow();
+  });
+
+  it("caps new invites per workspace", async () => {
+    const t = createTestContext();
+    const { workspaceId, asUser } = await setupWorkspaceWithAdmin(t);
+
+    // The per-invite bucket is keyed by inviteId, so rotating addresses
+    // rotates the key — this is the second layer that catches that.
+    for (let i = 0; i < 20; i++) {
+      await asUser.mutation(api.workspaceInvites.create, {
+        workspaceId,
+        email: `person${i}@example.com`,
+      });
+    }
+    await expect(
+      asUser.mutation(api.workspaceInvites.create, {
+        workspaceId,
+        email: "one-too-many@example.com",
+      }),
+    ).rejects.toThrow();
+  });
+});

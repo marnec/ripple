@@ -717,43 +717,10 @@ export const denyJoinRequest = mutation({
   },
 });
 
-export const findDm = query({
-  args: {
-    workspaceId: v.id("workspaces"),
-    otherUserId: v.id("users"),
-  },
-  returns: v.union(v.id("channels"), v.null()),
-  handler: async (ctx, { workspaceId, otherUserId }) => {
-    const auth = await checkWorkspaceMember(ctx, workspaceId);
-    if (!auth) return null;
-
-    const otherUser = await ctx.db.get(otherUserId);
-    const otherEmail = otherUser?.email;
-
-    const myChannelMemberships = await ctx.db
-      .query("channelMembers")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", auth.userId),
-      )
-      .collect();
-
-    for (const cm of myChannelMemberships) {
-      const channel = await ctx.db.get(cm.channelId);
-      if (channel?.type !== "dm") continue;
-
-      const allMembers = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel", (q) => q.eq("channelId", cm.channelId))
-        .collect();
-
-      for (const m of allMembers) {
-        if (m.userId === auth.userId) continue;
-        if (m.userId === otherUserId) return cm.channelId;
-        if (otherEmail && m.email === otherEmail) return cm.channelId;
-      }
-    }
-
-    return null;
-  },
-});
+// `findDm` was removed: no callers anywhere in the monorepo. The DM the UI
+// actually opens is resolved inside `createDm`, which does the same
+// userId-then-denormalized-email dedup scan and creates the channel when there
+// is none — this query was a second, unexercised copy of that scan (one
+// `ctx.db.get` per membership row plus a full member list per DM) sitting on
+// the public API.
 

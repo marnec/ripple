@@ -376,7 +376,6 @@ export type DataModel = {
     document: {
       channelId: Id<"channels">;
       email?: string;
-      lastReadAt?: number;
       name?: string;
       role: "admin" | "member";
       userId: Id<"users">;
@@ -389,7 +388,6 @@ export type DataModel = {
       | "_id"
       | "channelId"
       | "email"
-      | "lastReadAt"
       | "name"
       | "role"
       | "userId"
@@ -1234,7 +1232,6 @@ export type DataModel = {
       description?: string;
       key?: string;
       name: string;
-      tags?: Array<string>;
       taskCounter?: number;
       workspaceId: Id<"workspaces">;
       _id: Id<"projects">;
@@ -1248,7 +1245,6 @@ export type DataModel = {
       | "description"
       | "key"
       | "name"
-      | "tags"
       | "taskCounter"
       | "workspaceId";
     indexes: {
@@ -1801,7 +1797,6 @@ export type DataModel = {
       priority: "urgent" | "high" | "medium" | "low";
       projectId: Id<"projects">;
       pullRequestState?: "draft" | "open" | "merged" | "closed";
-      startDate?: string;
       statusId: Id<"taskStatuses">;
       title: string;
       workPeriods?: Array<{ completedAt?: number; startedAt: number }>;
@@ -1840,7 +1835,6 @@ export type DataModel = {
       | "priority"
       | "projectId"
       | "pullRequestState"
-      | "startDate"
       | "statusId"
       | "title"
       | "workPeriods"

@@ -313,6 +313,34 @@ describe("messages.getMessageContext", () => {
     expect(result.messages[4].plainText).toBe("Message 5");
   });
 
+  // Sweep #23 — `contextSize` was an unclamped `v.number()` fed to TWO
+  // `.take()` calls, so any channel member could turn a deep-link query into a
+  // whole-channel read plus six enrichment passes per row.
+  it("clamps an oversized contextSize", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+
+    for (let i = 1; i <= 60; i++) {
+      await sendMessage(asUser, channelId, `Message ${i}`);
+    }
+
+    const allMsgs = await t.run(async (ctx) =>
+      ctx.db
+        .query("messages")
+        .withIndex("by_channel", (q) => q.eq("channelId", channelId))
+        .collect(),
+    );
+
+    const result = await asUser.query(api.messages.getMessageContext, {
+      messageId: allMsgs[0]._id,
+      contextSize: 1_000_000,
+    });
+
+    // 0 before (target is the oldest) + target + 50 after.
+    expect(result.messages).toHaveLength(51);
+  });
+
   it("respects contextSize limit", async () => {
     const t = createTestContext();
     const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
@@ -398,5 +426,43 @@ describe("messages.getMessageContext", () => {
         messageId: msg!._id,
       }),
     ).rejects.toThrow("Not a member of this workspace");
+  });
+});
+
+describe("messages.search", () => {
+  it("clamps an oversized limit", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+
+    for (let i = 1; i <= 60; i++) {
+      await sendMessage(asUser, channelId, `needle ${i}`);
+    }
+
+    const results = await asUser.query(api.messages.search, {
+      channelId,
+      searchTerm: "needle",
+      limit: 1_000_000,
+    });
+
+    expect(results).toHaveLength(50);
+  });
+
+  it("still honours a limit below the ceiling", async () => {
+    const t = createTestContext();
+    const { workspaceId, userId, asUser } = await setupWorkspaceWithAdmin(t);
+    const channelId = await setupChannel(t, { workspaceId, userId });
+
+    for (let i = 1; i <= 10; i++) {
+      await sendMessage(asUser, channelId, `needle ${i}`);
+    }
+
+    const results = await asUser.query(api.messages.search, {
+      channelId,
+      searchTerm: "needle",
+      limit: 3,
+    });
+
+    expect(results).toHaveLength(3);
   });
 });

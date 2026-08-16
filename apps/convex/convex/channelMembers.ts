@@ -37,9 +37,20 @@ export const membersByChannel = query({
       .withIndex("by_channel", (q) => q.eq("channelId", channelId))
       .collect();
 
+    // Projected field-by-field, not `...member`. A spread ships whatever the
+    // row happens to carry, and a column the return validator does not declare
+    // fails the WHOLE query — every member of the channel loses the roster,
+    // not just the stale row. TypeScript cannot catch that: excess-property
+    // checking does not apply to spreads.
     return members.map((member) => ({
-      ...member,
+      _id: member._id,
+      _creationTime: member._creationTime,
+      channelId: member.channelId,
+      workspaceId: member.workspaceId,
+      userId: member.userId,
+      role: member.role,
       name: member.name ?? member.email ?? "Unknown",
+      email: member.email,
     } satisfies ChannelMember));
   },
 });

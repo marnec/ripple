@@ -198,6 +198,25 @@ export const enrichedTaskValidator = v.object({
   hasBlockers: v.boolean(),
 });
 
+/**
+ * Project a task row onto exactly the columns `baseTaskFields` declares.
+ *
+ * Derived from the validator rather than hand-listed, so the projection and
+ * the return validator cannot drift: a `...task` spread ships whatever the row
+ * carries, and one undeclared column fails the WHOLE query (every card in the
+ * board, not the one stale row). TypeScript does not catch it — excess-property
+ * checking does not apply to spreads — so this is the only guard.
+ */
+const BASE_TASK_KEYS = Object.keys(baseTaskFields) as (keyof Doc<"tasks">)[];
+
+export function pickTaskFields(task: Doc<"tasks">): Doc<"tasks"> {
+  const picked: Record<string, unknown> = {};
+  for (const key of BASE_TASK_KEYS) {
+    if (task[key] !== undefined) picked[key] = task[key];
+  }
+  return picked as Doc<"tasks">;
+}
+
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
@@ -364,7 +383,7 @@ export const get = query({
     const hasBlockers = await hasBlockingEdge(ctx, taskId);
 
     return {
-      ...task,
+      ...pickTaskFields(task),
       status,
       assignee,
       projectKey: project?.key,
@@ -698,7 +717,7 @@ export async function enrichTasks(
   // run concurrently.
   return Promise.all(
     tasks.map(async (task) => ({
-      ...task,
+      ...pickTaskFields(task),
       status: statusMap.get(task.statusId) ?? null,
       assignee: task.assigneeId ? assigneeMap.get(task.assigneeId) ?? null : null,
       projectKey,
@@ -883,7 +902,7 @@ export const listByAssignee = query({
     return workspaceTasks.map((task) => {
       const project = projectMap.get(task.projectId) ?? null;
       return {
-        ...task,
+        ...pickTaskFields(task),
         status: statusMap.get(task.statusId) ?? null,
         assignee: task.assigneeId ? assignee : null,
         project,
@@ -1260,7 +1279,7 @@ export const listUnscheduled = query({
         const status = await ctx.db.get(task.statusId);
         const assignee = task.assigneeId ? await ctx.db.get(task.assigneeId) : null;
         return {
-          ...task,
+          ...pickTaskFields(task),
           status,
           assignee,
           projectKey: project.key,

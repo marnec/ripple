@@ -24,6 +24,7 @@ import {
 import { internalMutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import type { Doc } from "../../_generated/dataModel";
+import { timingSafeEqual } from "../../httpAdapter";
 import { findLiveRepoLink, resolveInboundLink } from "../core/inboundRouting";
 import { applyNormalizedEvent } from "../core/syncIn";
 import { applyPullRequestEvent } from "../core/syncInPullRequests";
@@ -300,15 +301,7 @@ export function verifyGitlabToken(
   received: string | null | undefined,
   expected: string,
 ): boolean {
-  if (!received || !expected) return false;
-  if (received.length !== expected.length) return false;
-  // Constant-time compare over equal-length strings: never early-exit on the
-  // first differing char.
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) {
-    diff |= received.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return diff === 0;
+  return timingSafeEqual(received, expected);
 }
 
 /**

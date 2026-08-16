@@ -7,6 +7,7 @@ import { getUserDisplayName } from "@ripple/shared/displayName";
 import { logTaskActivity } from "./auditLog";
 import { requireResourceMember, filterWorkspaceRecipients } from "./authHelpers";
 import { notify } from "./utils/notify";
+import { externalAuthorsByComment } from "./utils/commentExternalAuthors";
 import {
   maybeEnqueueCommentCreate,
   maybeEnqueueCommentDelete,
@@ -51,23 +52,13 @@ export const list = query({
     const users = await getAll(ctx.db, userIds);
     const userMap = new Map(users.map((u, i) => [userIds[i], u]));
 
-    // Per-comment integration link lookup for the external author chip.
-    // The link table is small per-task; a query-per-comment is fine.
-    const externalAuthorByComment = new Map<
-      typeof comments[number]["_id"],
-      { login: string; avatarUrl: string; url: string }
-    >();
-    for (const c of comments) {
-      const link = await ctx.db
-        .query("taskCommentIntegrationLinks")
-        .withIndex("by_taskComment", (q) => q.eq("taskCommentId", c._id))
-        .unique();
-      // Only inbound (external-authored) comments carry an `externalAuthor`.
-      // Ripple-originated comments have a link row but no external author, so
-      // they keep their real author's avatar instead of the bot chip.
-      if (link?.externalAuthor)
-        externalAuthorByComment.set(c._id, link.externalAuthor);
-    }
+    // Shared with `taskActivity.timeline`, which renders the same chips on the
+    // same screen. Pipelined rather than one `await` per comment in a `for`
+    // loop — see the helper for why the query count itself is fine.
+    const externalAuthorByComment = await externalAuthorsByComment(
+      ctx,
+      comments.map((c) => c._id),
+    );
 
     // Enrich comments with author info. Pick fields explicitly rather than
     // spreading `comment` so internal columns (e.g. `lastSyncError`, which the

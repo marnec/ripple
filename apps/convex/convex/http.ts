@@ -14,6 +14,7 @@ import {
   parseRoomId,
   requireSharedSecret,
   roomIdError,
+  timingSafeEqual,
 } from "./httpAdapter";
 
 const http = httpRouter();
@@ -277,11 +278,17 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const secret = process.env.CLOUDFLARE_RTK_WEBHOOK_SECRET ?? "";
     const url = new URL(request.url);
+    // Header first, query string only as the fallback. A URL query parameter is
+    // the part of a request most likely to be copied verbatim into proxy logs,
+    // browser history and error reports, so the secret should not travel there
+    // by default — but Cloudflare's webhook registration UI has no header
+    // field, so the `?secret=` form stays supported for hooks already
+    // registered that way.
     const provided =
-      url.searchParams.get("secret") ??
       request.headers.get("x-webhook-secret") ??
+      url.searchParams.get("secret") ??
       "";
-    if (!secret || provided !== secret) {
+    if (!secret || !timingSafeEqual(provided, secret)) {
       console.error("transcript-webhook: secret mismatch", {
         hasEnvSecret: !!secret,
         providedPresent: !!provided,

@@ -139,6 +139,46 @@ describe("taskComments.list with external author", () => {
     expect(comments[0]?.externalAuthor).toEqual(externalAuthor);
   });
 
+  // Sweep #28 — `taskActivity.timeline` renders the same chips on the same
+  // screen and used to run its own copy of the per-comment link lookup. Both
+  // now go through `externalAuthorsByComment`; this is the half that was never
+  // covered, so the shared helper cannot regress on one caller only.
+  it("surfaces the same externalAuthor on taskActivity.timeline", async () => {
+    const t = createTestContext();
+    const { asUser, link, taskId } = await setupTaskWithLink(t);
+
+    const externalAuthor = {
+      login: "external-contributor",
+      avatarUrl: "https://github.com/external-contributor.png",
+      url: "https://github.com/external-contributor",
+    };
+
+    const event: NormalizedCommentCreatedEvent = {
+      kind: "comment.created",
+      externalCommentId: "IC_kwDOABC123_2",
+      externalIssueId: "I_kwDOABC123",
+      externalUpdatedAt: 1_700_000_010_000,
+      body: "From GitHub",
+      externalAuthor,
+    };
+    await t.run((ctx) => applyNormalizedEvent(ctx, { event, link }));
+    await asUser.mutation(api.taskComments.create, {
+      taskId,
+      body: "From Ripple",
+      bodyMarkdown: "From Ripple",
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    const timeline = await asUser.query(api.taskActivity.timeline, { taskId });
+    const comments = timeline.filter((i) => i.kind === "comment");
+    expect(comments).toHaveLength(2);
+
+    const external = comments.find((c) => c.body.includes("From GitHub"));
+    const native = comments.find((c) => c.body.includes("From Ripple"));
+    expect(external?.externalAuthor).toEqual(externalAuthor);
+    expect(native?.externalAuthor).toBeUndefined();
+  });
+
   it("returns undefined externalAuthor for a native Ripple comment", async () => {
     const t = createTestContext();
     const { asUser, taskId } = await setupTaskWithLink(t);

@@ -7,6 +7,7 @@ import { logActivity } from "../auditLog";
 import { sendWorkspaceInviteEmail } from "../emailDelivery";
 import { emailDeliveryStatus } from "../schema";
 import { requirePlatformAdmin } from "../authHelpers";
+import { rateLimiter } from "../rateLimits";
 
 /**
  * Mirrors the `status` column's own union in `schema.ts`. Declared as literals
@@ -195,6 +196,17 @@ export const resend = mutation({
     if (invite.status !== InviteStatus.PENDING) {
       throw new ConvexError("Only pending invites can be resent");
     }
+
+    // Same per-invite bucket the workspace-facing `resend` takes, and
+    // deliberately the SAME key: the limit protects the recipient's inbox and
+    // the sending domain's reputation, and neither cares which of the two
+    // surfaces pressed the button. A platform admin who genuinely needs to
+    // exceed it is one hour away, which is the right amount of friction for a
+    // mail send to a third party.
+    await rateLimiter.limit(ctx, "workspaceInviteResend", {
+      key: inviteId,
+      throws: true,
+    });
 
     const workspace = await ctx.db.get(invite.workspaceId);
     if (!workspace) throw new ConvexError("Workspace no longer exists");

@@ -5,6 +5,7 @@
  * They are NOT schema validators — they mirror the schema plus any joined fields.
  */
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 
 export const cycleStatusValidator = v.union(
   v.literal("draft"),
@@ -125,3 +126,24 @@ export const projectValidator = v.object({
   key: v.optional(v.string()),
   taskCounter: v.optional(v.number()),
 });
+
+/**
+ * Project a project row onto exactly the columns `projectValidator` declares.
+ *
+ * `projects.get` / `list` / `search` return raw documents, so any column the
+ * validator does not declare fails the WHOLE query rather than the one row —
+ * and a spread is not excess-property-checked, so `tsc` never sees it.
+ */
+export function pickProjectFields(project: Doc<"projects">) {
+  return {
+    _id: project._id,
+    _creationTime: project._creationTime,
+    name: project.name,
+    description: project.description,
+    color: project.color,
+    workspaceId: project.workspaceId,
+    creatorId: project.creatorId,
+    key: project.key,
+    taskCounter: project.taskCounter,
+  };
+}

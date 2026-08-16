@@ -25,6 +25,7 @@ import {
 import { GUEST_SUB_PREFIX } from "@ripple/shared/shareTypes";
 import { cascadeDelete, logCascadeSummary } from "./cascadeDelete";
 import { syncTagsForResource } from "./tagSync";
+import { normalizeEmail } from "./utils/email";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -40,9 +41,6 @@ const JOIN_WINDOW_LEAD_MS = 5 * 60 * 1000; // join allowed from start − 5 min
 const JOIN_WINDOW_TAIL_MS = 15 * 60 * 1000; // until end + 15 min
 const SHARE_BUFFER_MS = 24 * 60 * 60 * 1000; // share expires endsAt + 24h
 const GUEST_SUB_MAX = 64;
-// Simple practical email regex — server-side validation only filters obvious
-// junk; real deliverability is verified by the email provider.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const RSVP_STATUSES = ["pending", "accepted", "declined", "tentative"] as const;
 
@@ -144,14 +142,6 @@ function sanitizeGuestSubInput(raw: string): string {
     throw new ConvexError("Invalid guest session id");
   }
   return trimmed;
-}
-
-function normalizeEmail(raw: string): string {
-  const t = raw.trim().toLowerCase();
-  if (!EMAIL_RE.test(t)) {
-    throw new ConvexError(`Invalid email address: ${raw}`);
-  }
-  return t;
 }
 
 function validateTimes(startsAt: number, endsAt: number): void {
@@ -1483,7 +1473,7 @@ async function ensureMeetingForEvent(
     }));
   } catch (e) {
     console.error("Cloudflare create-meeting failed:", e);
-    throw new Error("Could not start the call");
+    throw new ConvexError("Could not start the call");
   }
 
   const winner = await ctx.runMutation(internal.calendarEvents._setEventMeetingId, {

@@ -6,7 +6,9 @@ import {
   guarded,
   requireSharedSecret,
   roomIdError,
+  timingSafeEqual,
 } from "../convex/httpAdapter";
+import { verifyGitlabToken } from "../convex/integrations/gitlab/webhook";
 
 /**
  * Direct unit tests for the PartyKit route adapter — the shared-secret check,
@@ -53,6 +55,36 @@ describe("parseRoomId", () => {
       resourceType: "spreadsheet",
       resourceId: "k1-7a-b",
     });
+  });
+});
+
+describe("timingSafeEqual", () => {
+  it("accepts an exact match and rejects every near miss", () => {
+    expect(timingSafeEqual("s3cret", "s3cret")).toBe(true);
+    // Differs in the last byte only — the case a short-circuiting `===` leaks
+    // the most information about.
+    expect(timingSafeEqual("s3creT", "s3cret")).toBe(false);
+    expect(timingSafeEqual("s3cre", "s3cret")).toBe(false);
+    expect(timingSafeEqual("s3crett", "s3cret")).toBe(false);
+  });
+
+  it("never accepts when either side is missing or empty", () => {
+    // An unconfigured secret must not authenticate a caller who also sends
+    // nothing — `"" === ""` would.
+    expect(timingSafeEqual("", "")).toBe(false);
+    expect(timingSafeEqual(null, "s3cret")).toBe(false);
+    expect(timingSafeEqual(undefined, "s3cret")).toBe(false);
+    expect(timingSafeEqual("s3cret", "")).toBe(false);
+    expect(timingSafeEqual("s3cret", undefined)).toBe(false);
+  });
+
+  it("is the same implementation the GitLab webhook verifies with", () => {
+    // verifyGitlabToken now delegates here; this pins that there is one
+    // comparator rather than two that can drift.
+    expect(verifyGitlabToken("tok", "tok")).toBe(true);
+    expect(verifyGitlabToken("toK", "tok")).toBe(false);
+    expect(verifyGitlabToken(null, "tok")).toBe(false);
+    expect(verifyGitlabToken("tok", "")).toBe(false);
   });
 });
 

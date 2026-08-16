@@ -7,7 +7,7 @@ import { WorkspaceRole } from "@ripple/shared/enums";
 import { logActivity } from "./auditLog";
 import { getUserDisplayName } from "@ripple/shared/displayName";
 import { cascadeDelete } from "./cascadeDelete";
-import { projectValidator } from "./validators";
+import { pickProjectFields, projectValidator } from "./validators";
 import { requireWorkspaceMember, requireCreatorOrWorkspaceAdmin, requireResourceMember, checkWorkspaceMember, checkResourceMember } from "./authHelpers";
 import { searchResourcesByFavorite } from "./resourceSearch";
 import { notify } from "./utils/notify";
@@ -136,28 +136,34 @@ export const search = query({
   handler: async (ctx, { workspaceId, searchText, isFavorite, paginationOpts }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId);
 
+    // Every branch projects through `pickProjectFields` rather than returning
+    // raw documents — see its docstring for why a raw row is a whole-query
+    // failure waiting for one undeclared column.
     if (searchText?.trim()) {
-      return await ctx.db
+      const page = await ctx.db
         .query("projects")
         .withSearchIndex("by_name", (q) =>
           q.search("name", searchText).eq("workspaceId", workspaceId),
         )
         .paginate(paginationOpts);
+      return { ...page, page: page.page.map(pickProjectFields) };
     }
 
     if (isFavorite === true) {
-      return await searchResourcesByFavorite(ctx, {
+      const page = await searchResourcesByFavorite(ctx, {
         workspaceId,
         userId,
         resourceType: "project",
         paginationOpts,
       });
+      return { ...page, page: page.page.map(pickProjectFields) };
     }
 
-    return await ctx.db
+    const page = await ctx.db
       .query("projects")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .paginate(paginationOpts);
+    return { ...page, page: page.page.map(pickProjectFields) };
   },
 });
 
@@ -167,7 +173,7 @@ export const get = query({
   handler: async (ctx, { id }) => {
     const result = await checkResourceMember(ctx, "projects", id);
     if (!result) return null;
-    return result.resource;
+    return pickProjectFields(result.resource);
   },
 });
 
@@ -179,10 +185,11 @@ export const list = query({
     if (!auth) return [];
 
     // Return all projects in workspace (for admin views)
-    return await ctx.db
+    const projects = await ctx.db
       .query("projects")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
       .collect();
+    return projects.map(pickProjectFields);
   },
 });
 

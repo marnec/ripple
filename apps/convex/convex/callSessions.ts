@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { action, internalQuery, type ActionCtx } from "./_generated/server";
 import { internalMutation, mutation } from "./functions";
 import type { Id } from "./_generated/dataModel";
@@ -56,7 +56,9 @@ export async function ensureMeetingForChannel(
     }));
   } catch (e) {
     console.error("Cloudflare create-meeting failed:", e);
-    throw new Error("Could not start the call");
+    // ConvexError: this sentence was written for the user, and a plain throw
+    // reaches them as "Server Error" in production.
+    throw new ConvexError("Could not start the call");
   }
 
   const winner = await ctx.runMutation(internal.callSessions.createSession, {
@@ -221,7 +223,7 @@ export const joinCall = action({
     { channelId, userName, userImage, transcribe, transcriptionLanguage },
   ) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Authorize BEFORE touching Cloudflare — `ensureMeetingForChannel` creates
     // the meeting when none is active, so an unauthorized caller must not get

@@ -136,33 +136,11 @@ export const suggest = query({
   },
 });
 
-/**
- * List all nodes in a workspace (used by getWorkspaceGraph).
- */
-export const listByWorkspace = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(
-    v.object({
-      resourceId: v.string(),
-      resourceType: v.string(),
-      name: v.string(),
-      tags: v.array(v.string()),
-    }),
-  ),
-  handler: async (ctx, { workspaceId }) => {
-    const auth = await checkWorkspaceMember(ctx, workspaceId);
-    if (!auth) return [];
-
-    const nodes = await ctx.db
-      .query("nodes")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
-
-    return nodes.map((n) => ({
-      resourceId: n.resourceId,
-      resourceType: n.resourceType,
-      name: n.name,
-      tags: n.tags,
-    }));
-  },
-});
+// `listByWorkspace` was removed: it had no callers anywhere in the monorepo,
+// and its docstring named a caller that never used it — `getWorkspaceGraph`
+// reads the `nodes` table directly (graph.ts). It was an uncapped
+// workspace-wide `.collect()` behind a public endpoint, so every resource
+// create/rename/tag-change in the workspace re-shipped the whole set to any
+// subscriber. The bounded readers in this file (`search`, `suggest`) cover
+// every real consumer; a whole-workspace node list belongs behind the same
+// gating `graph.getWorkspaceGraph` has, not as a standalone query.

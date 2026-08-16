@@ -1,5 +1,5 @@
 import { ConvexError, v } from "convex/values";
-import { query, type MutationCtx } from "../../_generated/server";
+import { internalQuery, query, type MutationCtx } from "../../_generated/server";
 import { internalMutation, mutation } from "../../functions";
 import { internal } from "../../_generated/api";
 import type { Id } from "../../_generated/dataModel";
@@ -259,10 +259,15 @@ export const completeInstallationFromCallback = internalMutation({
  * Admin-gated access check for the wizard's GitHub-facing actions. Verifies
  * the caller is a workspace admin and that the installation belongs to the
  * workspace, returning the `externalAccountId` the action needs to mint a
- * token. Internal — invoked via `ctx.runQuery` from the wizard actions,
- * which propagate the caller's identity.
+ * token.
+ *
+ * `internalQuery`, not `query`: its only callers are `ctx.runQuery` from the
+ * wizard actions, and `runQuery` propagates the caller's identity to an
+ * `internal.*` reference exactly as it does to an `api.*` one — so being
+ * publicly addressable bought nothing and left one more gate to re-audit on
+ * every permissions change. Same shape as `isInstallationFrozen`.
  */
-export const assertWizardInstallation = query({
+export const assertWizardInstallation = internalQuery({
   args: {
     workspaceId: v.id("workspaces"),
     externalAccountId: v.string(),

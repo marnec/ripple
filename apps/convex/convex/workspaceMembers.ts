@@ -18,18 +18,11 @@ const workspaceMemberValidator = v.object({
   role: v.union(v.literal("admin"), v.literal("member")),
 });
 
-export const byWorkspace = query({
-  args: { workspaceId: v.id("workspaces") },
-  returns: v.array(workspaceMemberValidator),
-  handler: async (ctx, { workspaceId }) => {
-    await requireWorkspaceMember(ctx, workspaceId);
-
-    return ctx.db
-      .query("workspaceMembers")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
-  },
-});
+// `byWorkspace` was removed: no callers anywhere in the monorepo. Raw
+// membership rows are not what any surface wants — `membersByWorkspace`
+// (user docs, bots filtered out) and `membersWithRoles` below are, and both
+// are exercised. A bare-rows endpoint that nothing calls still has to be
+// re-audited on every permissions change.
 
 export const membersByWorkspace = query({
   args: { workspaceId: v.id("workspaces") },

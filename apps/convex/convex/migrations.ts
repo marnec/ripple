@@ -291,16 +291,20 @@ export const runBackfillChannelMemberDenormalized = migrations.runner(
  * visit by anyone — pure invalidation amplification. `userChannelState` is
  * user-private, so writes only invalidate the writer's own subscriptions.
  *
- * Widen-migrate-narrow: this is the migrate step. After this migration
- * reports `isDone: true` on all deployments, drop `lastReadAt` from the
- * `channelMembers` validator in schema.ts.
+ * Widen-migrate-narrow: this is the migrate step, and the narrow step has now
+ * happened — `lastReadAt` is no longer declared on `channelMembers` in
+ * schema.ts. The migration is kept (and stays in `runAll`) because it is the
+ * repair path for a row a restored backup reintroduces; it therefore reads the
+ * legacy column through an untyped view, the same way `stripTaskStartDate` and
+ * `cleanupProjectTagsField` read theirs.
  *
  * Run: npx convex run migrations:run '{"fn":"migrations:migrateChannelLastReadAtToUserChannelState"}'
  */
 export const migrateChannelLastReadAtToUserChannelState = migrations.define({
   table: "channelMembers",
   migrateOne: async (ctx, member) => {
-    if (member.lastReadAt === undefined) return;
+    const legacyLastReadAt = (member as Record<string, unknown>).lastReadAt;
+    if (typeof legacyLastReadAt !== "number") return;
 
     // Upsert into userChannelState. If a row already exists, keep the larger
     // timestamp — covers the case where markRead has already written to the
@@ -313,15 +317,15 @@ export const migrateChannelLastReadAtToUserChannelState = migrations.define({
       .unique();
 
     if (existing) {
-      if ((existing.lastReadAt ?? 0) < member.lastReadAt) {
-        await ctx.db.patch(existing._id, { lastReadAt: member.lastReadAt });
+      if ((existing.lastReadAt ?? 0) < legacyLastReadAt) {
+        await ctx.db.patch(existing._id, { lastReadAt: legacyLastReadAt });
       }
     } else {
       await ctx.db.insert("userChannelState", {
         userId: member.userId,
         channelId: member.channelId,
         workspaceId: member.workspaceId,
-        lastReadAt: member.lastReadAt,
+        lastReadAt: legacyLastReadAt,
       });
     }
 
@@ -587,7 +591,7 @@ export const stripTaskStartDate = migrations.define({
   migrateOne: async (ctx, task) => {
     const legacy = task as Record<string, unknown>;
     if (legacy.startDate !== undefined) {
-      await ctx.db.patch(task._id, { startDate: undefined });
+      await ctx.db.patch(task._id, { startDate: undefined } as never);
     }
   },
 });

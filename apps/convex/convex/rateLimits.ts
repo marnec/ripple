@@ -1,4 +1,4 @@
-import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
+import { HOUR, MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { components } from "./_generated/api";
 
 /**
@@ -55,5 +55,34 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
     period: MINUTE,
     capacity: 20,
     shards: 4,
+  },
+
+  // ── Workspace invites ───────────────────────────────────────────────
+  // Signup is open and `workspaces.create` makes the caller an admin, so
+  // "admin of a workspace" is not a scarce credential: any account can mint a
+  // workspace, invite a third party, and loop. Every send is real Resend mail
+  // from the same domain the auth OTP/password-reset mail uses, so the cost of
+  // abuse is not quota — it is the deliverability of sign-in email.
+  //
+  // Fixed window rather than token bucket: there is no legitimate burst here.
+  // A human inviting a team types addresses one at a time.
+
+  // Per-invite: the resend button on ONE pending invite. Covers the actual
+  // amplifier — `create` already refuses a duplicate PENDING invite for the
+  // same (workspace, email), so the unbounded loop was always `resend`.
+  // 3/hour is well above "they didn't get it, try again" and far below spam.
+  workspaceInviteResend: {
+    kind: "fixed window",
+    rate: 3,
+    period: HOUR,
+  },
+
+  // Per-workspace: new invites. Second layer, because rotating addresses
+  // rotates the per-invite key. 20/hour covers onboarding a team in one
+  // sitting; a workspace that legitimately needs more can send again next hour.
+  workspaceInviteCreate: {
+    kind: "fixed window",
+    rate: 20,
+    period: HOUR,
   },
 });

@@ -26,7 +26,6 @@ const cycleWithProgressValidator = v.object({
 
 const enrichedTaskValidator = v.object({
   ...baseTaskFields,
-  startDate: v.optional(v.string()),
   status: v.union(taskStatusValidator, v.null()),
   assignee: v.union(userValidator, v.null()),
   projectKey: v.optional(v.string()),
@@ -324,38 +323,11 @@ export const removeTask = mutation({
   },
 });
 
-/**
- * Returns { taskId, cycleDueDate } pairs for all tasks in cycles that have a
- * due date, scoped to a project. Used by the calendar for soft deadline inheritance:
- * tasks with no own dueDate inherit their cycle's dueDate for conflict detection.
- */
-export const listTaskCycleDueDates = query({
-  args: { projectId: v.id("projects") },
-  returns: v.array(v.object({ taskId: v.id("tasks"), cycleDueDate: v.string() })),
-  handler: async (ctx, { projectId }) => {
-    const result = await checkResourceMember(ctx, "projects", projectId);
-    if (!result) return [];
-
-    const cycles = await ctx.db
-      .query("cycles")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
-      .collect();
-
-    const pairs: { taskId: Id<"tasks">; cycleDueDate: string }[] = [];
-    for (const cycle of cycles) {
-      if (!cycle.dueDate) continue;
-      const cts = await ctx.db
-        .query("cycleTasks")
-        .withIndex("by_cycle", (q) => q.eq("cycleId", cycle._id))
-        .collect();
-      for (const ct of cts) {
-        pairs.push({ taskId: ct.taskId, cycleDueDate: cycle.dueDate });
-      }
-    }
-
-    return pairs;
-  },
-});
+// `listTaskCycleDueDates` was removed: no callers anywhere in the monorepo.
+// The calendar gets the same { taskId, cycleDueDate } pairs from
+// `listForCalendar` below, which returns them alongside the cycles in one
+// round-trip — that is the query that superseded this one, and this copy was
+// left behind on the public API with nothing exercising its gate.
 
 /**
  * Combined query for the calendar view: returns cycles with progress AND

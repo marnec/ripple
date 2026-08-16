@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { action, query } from "../../_generated/server";
-import { api } from "../../_generated/api";
+import { api, internal } from "../../_generated/api";
 import {
   createProjectHook,
   gitlabOAuthFromEnv,
@@ -42,7 +42,7 @@ export const listMyProjects = action({
     // a global index. Any workspace admin could therefore spend another
     // tenant's GitLab token. `assertWizardInstallation` is the same gate
     // GitHub's wizard actions use (install.ts:216).
-    await ctx.runQuery(api.integrations.core.install.assertWizardInstallation, {
+    await ctx.runQuery(internal.integrations.core.install.assertWizardInstallation, {
       provider: "gitlab",
       workspaceId: args.workspaceId,
       externalAccountId: args.externalAccountId,
@@ -105,7 +105,7 @@ export const registerProject = action({
     // a global index. Any workspace admin could therefore spend another
     // tenant's GitLab token. `assertWizardInstallation` is the same gate
     // GitHub's wizard actions use (install.ts:216).
-    await ctx.runQuery(api.integrations.core.install.assertWizardInstallation, {
+    await ctx.runQuery(internal.integrations.core.install.assertWizardInstallation, {
       provider: "gitlab",
       workspaceId: args.workspaceId,
       externalAccountId: args.externalAccountId,

@@ -190,60 +190,11 @@ export const listByType = query({
   },
 });
 
-export const listIdsForType = query({
-  args: {
-    workspaceId: v.id("workspaces"),
-    resourceType: resourceTypeValidator,
-  },
-  returns: v.array(v.string()),
-  handler: async (ctx, { workspaceId, resourceType }) => {
-    const userId = await getUser(ctx);
-    if (!userId) return [];
-
-    const favorites = await ctx.db
-      .query("favorites")
-      .withIndex("by_workspace_user_type", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId).eq("resourceType", resourceType),
-      )
-      .collect();
-
-    return favorites.map((fav) => fav.resourceId);
-  },
-});
-
-export const listAllIdsForWorkspace = query({
-  args: {
-    workspaceId: v.id("workspaces"),
-  },
-  returns: v.object({
-    document: v.array(v.string()),
-    diagram: v.array(v.string()),
-    spreadsheet: v.array(v.string()),
-    project: v.array(v.string()),
-  }),
-  handler: async (ctx, { workspaceId }) => {
-    const userId = await getUser(ctx);
-    if (!userId) return { document: [], diagram: [], spreadsheet: [], project: [] };
-
-    const favorites = await ctx.db
-      .query("favorites")
-      .withIndex("by_workspace_user", (q) =>
-        q.eq("workspaceId", workspaceId).eq("userId", userId),
-      )
-      .collect();
-
-    const result: Record<ResourceType, string[]> = {
-      document: [],
-      diagram: [],
-      spreadsheet: [],
-      project: [],
-    };
-    for (const fav of favorites) {
-      result[fav.resourceType].push(fav.resourceId);
-    }
-    return result;
-  },
-});
+// `listIdsForType` and `listAllIdsForWorkspace` were removed: neither had a
+// caller anywhere in the monorepo. What the UI actually uses is `isFavorited`
+// (per-resource) and `listPinned` / the `isFavorite` filter on each
+// resource's own search query, which return the rows already joined to their
+// names rather than bare id lists a caller would have to re-resolve.
 
 export const isFavorited = query({
   args: { resourceId: v.string() },

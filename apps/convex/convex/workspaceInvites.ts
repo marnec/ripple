@@ -9,6 +9,8 @@ import { sendWorkspaceInviteEmail } from "./emailDelivery";
 import { emailDeliveryStatus } from "./schema";
 import { requireWorkspaceMember, requireUser, getUser } from "./authHelpers";
 import type { Doc } from "./_generated/dataModel";
+import { rateLimiter } from "./rateLimits";
+import { normalizeEmail } from "./utils/email";
 
 /**
  * An invite is single-use. Every transition out of PENDING is terminal, so
@@ -29,8 +31,23 @@ export const create = mutation({
   // Under static codegen a missing validator yields literal `any` on the
   // client; every other function in this file declares one.
   returns: v.id("workspaceInvites"),
-  handler: async (ctx, { workspaceId, email }) => {
+  // `email: rawEmail` so the handler cannot reach the unnormalized value by
+  // accident — `email` below is the validated one, and it is what gets stored,
+  // indexed and mailed.
+  handler: async (ctx, { workspaceId, email: rawEmail }) => {
     const { userId } = await requireWorkspaceMember(ctx, workspaceId, { role: WorkspaceRole.ADMIN });
+
+    // Validate the address before anything is written or queued — this is the
+    // one surface that handed a bare `v.string()` to Resend.
+    const email = normalizeEmail(rawEmail);
+
+    // Per-workspace ceiling. Runs after the admin gate so an unauthorized
+    // caller cannot spend the workspace's budget, and before any write so a
+    // busted limit sends nothing. Throws on bust.
+    await rateLimiter.limit(ctx, "workspaceInviteCreate", {
+      key: workspaceId,
+      throws: true,
+    });
 
     // Check if invite already exists
     const existingInvite = await ctx.db
@@ -282,6 +299,13 @@ export const resend = mutation({
     if (invite.status !== InviteStatus.PENDING) {
       throw new ConvexError("Only pending invites can be resent");
     }
+
+    // Keyed by the invite, not the workspace or the caller: this row can be
+    // resent indefinitely and each press is a real send to a third party.
+    await rateLimiter.limit(ctx, "workspaceInviteResend", {
+      key: inviteId,
+      throws: true,
+    });
 
     const workspace = await ctx.db.get(invite.workspaceId);
     const inviter = await ctx.db.get(userId);

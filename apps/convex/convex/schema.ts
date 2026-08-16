@@ -200,10 +200,12 @@ export default defineSchema({
     role: channelRoleSchema,
     email: v.optional(v.string()), // denormalized from users.email — used for DM dedup when a user row is replaced
     name: v.optional(v.string()),  // denormalized from users displayName — avoids N+1 when rendering member lists; synced via the users trigger
-    // DEPRECATED: moved to userChannelState. Kept as v.optional so deploys
-    // accept production rows that still carry it. Drop after
-    // migrateChannelLastReadAtToUserChannelState (in runAll) has run on prod.
-    lastReadAt: v.optional(v.number()),
+    // `lastReadAt` lived here and now lives on userChannelState. The column is
+    // gone rather than deprecated-but-declared: while it was declared, every
+    // query returning a raw channelMembers row could carry a field its return
+    // validator did not list, which fails the WHOLE query. Removing it makes
+    // that unrepresentable. migrateChannelLastReadAtToUserChannelState still
+    // exists (via runAll) to move any row a restored backup brings back.
   })
     .index("by_user", ["userId"])
     .index("by_channel", ["channelId"])
@@ -293,7 +295,7 @@ export default defineSchema({
     creatorId: v.id("users"), // the user who created the project (the admin)
     key: v.optional(v.string()), // 2-5 char uppercase identifier (e.g., "ENG")
     taskCounter: v.optional(v.number()), // auto-increment counter for task numbers
-    tags: v.optional(v.array(v.string())), // TEMP: remove after running cleanupProjectTagsField migration
+    // `tags` was dropped here — cleanupProjectTagsField (runAll) clears it.
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_key", ["workspaceId", "key"])
@@ -425,7 +427,7 @@ export default defineSchema({
     yjsSnapshotId: v.optional(v.id("_storage")),
     number: v.optional(v.number()), // sequential task number within project (e.g., 42 for ENG-42)
     dueDate: v.optional(v.string()), // ISO date string "2026-03-15"
-    startDate: v.optional(v.string()), // deprecated — migration strips this field
+    // `startDate` was dropped here — stripTaskStartDate (runAll) clears it.
     plannedStartDate: v.optional(v.string()), // ISO date string, set by PM via calendar
     workPeriods: v.optional(v.array(v.object({
       startedAt: v.number(), // ms timestamp, auto-set by setsStartDate status transition
