@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MessageRenderer, type Block } from "./MessageRenderer";
 
@@ -74,5 +74,27 @@ describe("MessageRenderer layout reservation", () => {
 
     expect(img.style.aspectRatio).toBe("");
     expect(img).toHaveClass("max-h-80");
+  });
+
+  it("holds the image hidden inside the reserved box until it loads, then fades it in", () => {
+    const img = renderImage({ url: "thumb.png", width: 600, height: 400 });
+
+    expect(img).toHaveClass("opacity-0");
+    expect(img).not.toHaveClass("animate-fade-in");
+    // The reserved box itself stays visible while the bytes are in flight.
+    expect(img.closest("div")).toHaveClass("bg-muted/40");
+
+    fireEvent.load(img);
+
+    expect(img).toHaveClass("animate-fade-in");
+    expect(img).not.toHaveClass("opacity-0");
+  });
+
+  it("still reveals an image whose fetch failed, rather than leaving a blank box", () => {
+    const img = renderImage({ url: "thumb.png", width: 600, height: 400 });
+
+    fireEvent.error(img);
+
+    expect(img).toHaveClass("animate-fade-in");
   });
 });

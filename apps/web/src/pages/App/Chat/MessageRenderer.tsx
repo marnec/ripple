@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { PenTool } from "lucide-react";
 import { renderBlockGroups, type Block } from "@/components/BlockNoteRenderer";
+import { cn } from "@/lib/utils";
 
 export type { Block };
 
@@ -16,6 +18,52 @@ interface ImageProps {
 
 /** Tallest an inline chat image is allowed to render (matches `max-h-80`). */
 const MAX_IMAGE_HEIGHT = 320;
+
+interface ChatImageProps {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  style?: React.CSSProperties;
+  /** False for pre-dimensions messages, which fall back to the CSS clamp. */
+  hasSize: boolean;
+}
+
+/**
+ * The reserved box is painted as a tinted placeholder and the bytes fade in on
+ * top of it, instead of the image snapping in the instant it decodes.
+ */
+function ChatImage({ src, alt, width, height, style, hasSize }: ChatImageProps) {
+  // Keyed by `src` rather than a bare boolean so swapping the source (e.g. a
+  // re-uploaded diagram snapshot) fades the new bytes in instead of showing
+  // them instantly on the stale `true`.
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const isLoaded = loadedSrc === src;
+
+  return (
+    <img
+      // Declared before `src` so the listener exists by the time the browser
+      // starts fetching; the `complete` check covers an already-cached blob
+      // that finished before this element mounted.
+      onLoad={() => setLoadedSrc(src)}
+      onError={() => setLoadedSrc(src)}
+      ref={(node) => {
+        if (node?.complete) setLoadedSrc(src);
+      }}
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      style={style}
+      className={cn(
+        "max-w-xs sm:max-w-sm hover:brightness-90 transition-[filter]",
+        hasSize ? "h-auto" : "max-h-80",
+        isLoaded ? "animate-fade-in" : "opacity-0",
+      )}
+      loading="lazy"
+    />
+  );
+}
 
 interface MessageRendererProps {
   blocks: Block[];
@@ -59,25 +107,22 @@ export function MessageRenderer({ blocks, onImageClick, onDiagramOpen }: Message
   return (
     <>
       {thumbnailUrl && (
-        <div className="group relative block w-fit">
+        // The tint sits on the wrapper, not the image, so the reserved box
+        // stays visible while the image itself is still faded out.
+        <div className={cn("group relative block w-fit", hasSize && "bg-muted/40")}>
           <button
             type="button"
             aria-label="Open image"
             className="block cursor-pointer"
             onClick={() => onImageClick?.(thumbnailUrl, fullUrl!)}
           >
-            <img
+            <ChatImage
               src={thumbnailUrl}
               alt={imageProps?.diagramName ?? ""}
               width={width}
               height={height}
               style={sizedStyle}
-              className={
-                hasSize
-                  ? "max-w-xs sm:max-w-sm h-auto bg-muted/40 hover:brightness-90 transition-[filter]"
-                  : "max-w-xs sm:max-w-sm max-h-80 hover:brightness-90 transition-[filter]"
-              }
-              loading="lazy"
+              hasSize={hasSize}
             />
           </button>
           {diagramId && (
