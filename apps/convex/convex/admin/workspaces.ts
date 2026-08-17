@@ -1,10 +1,12 @@
 import { ConvexError, v } from "convex/values";
+import { WorkspaceRole } from "@ripple/shared/enums/roles";
 import { internal } from "../_generated/api";
 import { query } from "../_generated/server";
 import { mutation } from "../functions";
-import { auditLog } from "../auditLog";
+import { auditLog, logActivity } from "../auditLog";
 import { requirePlatformAdmin } from "../authHelpers";
 import { cascadeDelete } from "../cascadeDelete";
+import { normalizeEmail } from "../utils/email";
 import {
   channelsByWorkspace,
   diagramsByWorkspace,
@@ -71,6 +73,82 @@ export const list = query({
         };
       }),
     );
+  },
+});
+
+/**
+ * Provision a workspace from the console. Same two writes as the product's
+ * `workspaces.create` (the row, plus an ADMIN membership for the owner) — it
+ * differs only in *who* the owner is, since the operator is generally not the
+ * tenant.
+ *
+ * The owner must already have an account: `workspaces.ownerId` is a real FK and
+ * there is no way to mint a user without an auth flow. With self-signup closed,
+ * the order for a brand-new customer is therefore create-then-invite — the
+ * workspace starts owned by the operator, the customer accepts an invite (which
+ * is what creates their account), and ownership/role moves after that.
+ */
+export const create = mutation({
+  args: {
+    name: v.string(),
+    description: v.optional(v.string()),
+    /** Owner's email. Omit (or leave blank) to own the workspace yourself. */
+    ownerEmail: v.optional(v.string()),
+  },
+  returns: v.id("workspaces"),
+  handler: async (ctx, { name: rawName, description: rawDescription, ownerEmail }) => {
+    const adminId = await requirePlatformAdmin(ctx);
+
+    const name = rawName.trim();
+    if (!name) throw new ConvexError("Workspace name is required");
+    const description = rawDescription?.trim() || undefined;
+
+    let ownerId = adminId;
+    if (ownerEmail !== undefined && ownerEmail.trim() !== "") {
+      const email = normalizeEmail(ownerEmail);
+      // `.first()`, not `.unique()`: account linking has historically left
+      // duplicate rows for one address, and throwing here would block the
+      // creation over an ambiguity that doesn't change the outcome — same
+      // reasoning as the recipient lookup in `admin/invites.list`.
+      const owner = await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", email))
+        .first();
+      if (!owner) {
+        throw new ConvexError(
+          `No account for ${email}. Leave the owner blank and invite them to the workspace instead — accepting the invite is what creates their account.`,
+        );
+      }
+      ownerId = owner._id;
+    }
+
+    const workspaceId = await ctx.db.insert("workspaces", {
+      name,
+      description,
+      ownerId,
+    });
+
+    await ctx.db.insert("workspaceMembers", {
+      workspaceId,
+      userId: ownerId,
+      role: WorkspaceRole.ADMIN,
+    });
+
+    // Actor is the operator, not the owner — the workspace timeline should say
+    // who actually pressed the button. `logActivity` (rather than a bespoke
+    // `auditLog.log`) so the entry lands next to member-initiated events, the
+    // same choice `admin/invites.revoke` makes.
+    await logActivity(ctx, {
+      userId: adminId,
+      resourceType: "workspaces",
+      resourceId: workspaceId,
+      action: "created",
+      newValue: name,
+      resourceName: name,
+      scope: workspaceId,
+    });
+
+    return workspaceId;
   },
 });
 

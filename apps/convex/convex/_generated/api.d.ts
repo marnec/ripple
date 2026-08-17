@@ -25,6 +25,12 @@ export declare const api: {
       amIAdmin: FunctionReference<"query", "public", {}, boolean>;
     };
     invites: {
+      create: FunctionReference<
+        "mutation",
+        "public",
+        { email: string; workspaceId: Id<"workspaces"> },
+        Id<"workspaceInvites">
+      >;
       list: FunctionReference<
         "query",
         "public",
@@ -200,6 +206,12 @@ export declare const api: {
       >;
     };
     workspaces: {
+      create: FunctionReference<
+        "mutation",
+        "public",
+        { description?: string; name: string; ownerEmail?: string },
+        Id<"workspaces">
+      >;
       get: FunctionReference<
         "query",
         "public",

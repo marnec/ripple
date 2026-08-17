@@ -8,6 +8,7 @@ import { sendWorkspaceInviteEmail } from "../emailDelivery";
 import { emailDeliveryStatus } from "../schema";
 import { requirePlatformAdmin } from "../authHelpers";
 import { rateLimiter } from "../rateLimits";
+import { normalizeEmail } from "../utils/email";
 
 /**
  * Mirrors the `status` column's own union in `schema.ts`. Declared as literals
@@ -139,6 +140,96 @@ export const list = query({
     );
 
     return { page, isDone: result.isDone, continueCursor: result.continueCursor };
+  },
+});
+
+/**
+ * Invite an address to any workspace. The platform-admin twin of
+ * `workspaceInvites.create`: identical body, authorized on platform-admin
+ * instead of workspace-admin, because the operator is usually not a member of
+ * the workspace they are onboarding someone into.
+ *
+ * `invitedBy` is the operator — unlike `resend`, this really is a new invite
+ * from them, and the recipient's mail says so.
+ *
+ * Kept as its own mutation rather than calling the workspace-facing one:
+ * mutations can't call mutations, and the alternative (widening
+ * `requireWorkspaceMember` to accept platform admins) would quietly grant the
+ * console's identity workspace-admin rights on every gate in the app.
+ */
+export const create = mutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    email: v.string(),
+  },
+  returns: v.id("workspaceInvites"),
+  handler: async (ctx, { workspaceId, email: rawEmail }) => {
+    const adminId = await requirePlatformAdmin(ctx);
+
+    const email = normalizeEmail(rawEmail);
+
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) throw new ConvexError("Workspace not found");
+
+    // Deliberately the same per-workspace bucket the product surface takes, for
+    // the same reason `resend` shares its key: the limit protects the recipient
+    // inbox and the sending domain's reputation, and neither cares which
+    // surface pressed the button.
+    await rateLimiter.limit(ctx, "workspaceInviteCreate", {
+      key: workspaceId,
+      throws: true,
+    });
+
+    const existingInvite = await ctx.db
+      .query("workspaceInvites")
+      .withIndex("by_workspace_by_email_by_status", (q) =>
+        q.eq("workspaceId", workspaceId).eq("email", email).eq("status", InviteStatus.PENDING),
+      )
+      .first();
+    if (existingInvite) throw new ConvexError("Invite already sent");
+
+    const account = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .first();
+
+    if (account) {
+      const membership = await ctx.db
+        .query("workspaceMembers")
+        .withIndex("by_workspace_user", (q) =>
+          q.eq("workspaceId", workspaceId).eq("userId", account._id),
+        )
+        .first();
+      if (membership) throw new ConvexError("User is already a member");
+    }
+
+    const inviter = await ctx.db.get(adminId);
+
+    const inviteId = await ctx.db.insert("workspaceInvites", {
+      workspaceId,
+      email,
+      invitedBy: adminId,
+      status: InviteStatus.PENDING,
+    });
+
+    await logActivity(ctx, {
+      userId: adminId,
+      resourceType: "workspaceInvites",
+      resourceId: inviteId,
+      action: "invited",
+      newValue: email,
+      resourceName: email,
+      scope: workspaceId,
+    });
+
+    await sendWorkspaceInviteEmail(ctx, {
+      inviteId,
+      workspaceName: workspace.name,
+      inviterName: inviter?.name ?? inviter?.email ?? "Someone",
+      recipientEmail: email,
+    });
+
+    return inviteId;
   },
 });
 

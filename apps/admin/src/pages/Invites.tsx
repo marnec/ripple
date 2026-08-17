@@ -6,6 +6,7 @@ import {
   PageHeader,
   SearchInput,
 } from "@/components/console";
+import { InviteMemberDialog } from "@/components/InviteMemberDialog";
 import { inviteDeliveryNotice } from "@ripple/shared/inviteDelivery";
 import { Badge } from "@ripple/ui/components/badge";
 import { Button } from "@ripple/ui/components/button";
@@ -28,7 +29,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { LinkIcon, SendIcon, XIcon } from "lucide-react";
+import { LinkIcon, SendIcon, UserPlusIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -44,6 +45,7 @@ export function InvitesPage() {
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState<Id<"workspaceInvites"> | null>(null);
   const [revoking, setRevoking] = useState<Invite | null>(null);
+  const [inviting, setInviting] = useState(false);
 
   // The status filter is an argument, not a client-side predicate: it selects
   // the `by_status` index server-side. Changing tabs restarts pagination, which
@@ -114,11 +116,16 @@ export function InvitesPage() {
           status === "Exhausted" ? "" : " of more"
         }${needle ? " · search covers loaded invites only" : ""}`}
       >
-        <SearchInput
-          value={q}
-          onValueChange={setQ}
-          placeholder="Search email, workspace, inviter…"
-        />
+        <div className="flex items-center gap-2">
+          <SearchInput
+            value={q}
+            onValueChange={setQ}
+            placeholder="Search email, workspace, inviter…"
+          />
+          <Button onClick={() => setInviting(true)}>
+            <UserPlusIcon /> Invite someone
+          </Button>
+        </div>
       </PageHeader>
 
       <Tabs
@@ -177,6 +184,8 @@ export function InvitesPage() {
         )}
         <LoadMore status={status} onLoadMore={loadMore} pageSize={PAGE_SIZE} />
       </Card>
+
+      <InviteMemberDialog open={inviting} onClose={() => setInviting(false)} />
 
       <ConfirmDialog
         open={revoking !== null}

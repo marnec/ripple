@@ -13,6 +13,14 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@ripple/ui/components/avatar";
 import { Button } from "@ripple/ui/components/button";
 import { Card } from "@ripple/ui/components/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@ripple/ui/components/dialog";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@ripple/ui/components/input";
 import {
@@ -193,6 +201,123 @@ export function StatCard({
       </div>
       {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
     </Card>
+  );
+}
+
+// ── Creation dialogs ─────────────────────────────────────────────────────
+/**
+ * A modal wrapping a real `<form>`, so Enter submits and the browser runs
+ * `required` / `type="email"` validation before anything reaches Convex. The
+ * destructive dialogs below use AlertDialog instead — that primitive is for
+ * confirming, not for collecting.
+ */
+export function FormDialog({
+  open,
+  title,
+  description,
+  submitLabel,
+  loading,
+  canSubmit = true,
+  onSubmit,
+  onCancel,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  description?: ReactNode;
+  submitLabel: string;
+  loading?: boolean;
+  canSubmit?: boolean;
+  onSubmit: () => void;
+  onCancel: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!loading) onSubmit();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            {description && <DialogDescription>{description}</DialogDescription>}
+          </DialogHeader>
+
+          <div className="grid gap-3">{children}</div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={loading} onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading || !canSubmit}>
+              {loading ? <Spinner className="size-4" /> : submitLabel}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Labelled form row for `FormDialog`. */
+export function Field({
+  label,
+  htmlFor,
+  hint,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">
+        {label}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground/70">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * Native `<select>` themed to match the console's inputs. There is no Select
+ * primitive in `@ripple/ui`, and the pickers here are short, single-choice and
+ * keyboard-driven — which is exactly what the platform control already is.
+ */
+export function SelectInput({
+  id,
+  value,
+  onValueChange,
+  disabled,
+  children,
+}: {
+  id: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onValueChange(e.target.value)}
+      className={cn(
+        "h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow]",
+        "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+      )}
+    >
+      {children}
+    </select>
   );
 }
 

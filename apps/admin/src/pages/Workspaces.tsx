@@ -1,5 +1,7 @@
 import {
   EmptyState,
+  Field,
+  FormDialog,
   LoadingPane,
   PageHeader,
   SearchInput,
@@ -7,9 +9,12 @@ import {
   TypeToConfirmDialog,
   UserAvatar,
 } from "@/components/console";
+import { InviteMemberDialog } from "@/components/InviteMemberDialog";
 import { Badge } from "@ripple/ui/components/badge";
 import { Button } from "@ripple/ui/components/button";
 import { Card } from "@ripple/ui/components/card";
+import { Input } from "@ripple/ui/components/input";
+import { Textarea } from "@ripple/ui/components/textarea";
 import {
   Table,
   TableBody,
@@ -24,7 +29,7 @@ import { fmtDate, fmtNum } from "@/lib/format";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeftIcon, ChevronRightIcon, CrownIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronRightIcon, CrownIcon, PlusIcon, UserPlusIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -32,6 +37,7 @@ import { toast } from "sonner";
 export function WorkspacesPage() {
   const workspaces = useQuery(api.admin.workspaces.list);
   const [q, setQ] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const filtered = workspaces?.filter((w) => {
     if (!q.trim()) return true;
@@ -49,14 +55,25 @@ export function WorkspacesPage() {
         title="Workspaces"
         subtitle={workspaces ? `${fmtNum(workspaces.length)} workspaces` : ""}
       >
-        <SearchInput value={q} onValueChange={setQ} placeholder="Search name or owner…" />
+        <div className="flex items-center gap-2">
+          <SearchInput value={q} onValueChange={setQ} placeholder="Search name or owner…" />
+          <Button onClick={() => setCreating(true)}>
+            <PlusIcon /> New workspace
+          </Button>
+        </div>
       </PageHeader>
 
       <Card className="animate-rise gap-0 py-0" style={{ animationDelay: "60ms" }}>
         {filtered === undefined ? (
           <LoadingPane className="min-h-50" />
         ) : filtered.length === 0 ? (
-          <EmptyState title="No matches">No workspaces match “{q}”.</EmptyState>
+          q.trim() ? (
+            <EmptyState title="No matches">No workspaces match “{q}”.</EmptyState>
+          ) : (
+            <EmptyState title="No workspaces">
+              Create one with “New workspace”, then invite people into it.
+            </EmptyState>
+          )
         ) : (
           <Table>
             <TableHeader>
@@ -107,7 +124,90 @@ export function WorkspacesPage() {
           </Table>
         )}
       </Card>
+
+      <CreateWorkspaceDialog open={creating} onClose={() => setCreating(false)} />
     </div>
+  );
+}
+
+function CreateWorkspaceDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const createWorkspace = useMutation(api.admin.workspaces.create);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setName("");
+      setDescription("");
+      setOwnerEmail("");
+    }
+  }
+
+  const submit = () => {
+    setBusy(true);
+    void createWorkspace({
+      name,
+      description: description.trim() || undefined,
+      ownerEmail: ownerEmail.trim() || undefined,
+    })
+      .then((workspaceId) => {
+        toast.success(`Created “${name.trim()}”.`);
+        onClose();
+        navigate(`/workspaces/${workspaceId}`);
+      })
+      .catch((err: unknown) => toast.error(errorMessage(err)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <FormDialog
+      open={open}
+      title="New workspace"
+      description="Creates the workspace and makes the owner its first admin."
+      submitLabel="Create workspace"
+      loading={busy}
+      canSubmit={name.trim() !== ""}
+      onSubmit={submit}
+      onCancel={onClose}
+    >
+      <Field label="Name" htmlFor="ws-name">
+        <Input
+          id="ws-name"
+          required
+          autoFocus
+          placeholder="Acme"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Field>
+
+      <Field label="Description" htmlFor="ws-description" hint="Optional.">
+        <Textarea
+          id="ws-description"
+          rows={2}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </Field>
+
+      <Field
+        label="Owner email"
+        htmlFor="ws-owner"
+        hint="Must already have an account. Leave blank to own it yourself, then invite the real owner — accepting an invite is what creates their account."
+      >
+        <Input
+          id="ws-owner"
+          type="email"
+          placeholder="you (leave blank)"
+          value={ownerEmail}
+          onChange={(e) => setOwnerEmail(e.target.value)}
+        />
+      </Field>
+    </FormDialog>
   );
 }
 
@@ -116,6 +216,7 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
   const ws = useQuery(api.admin.workspaces.get, { workspaceId });
   const removeWorkspace = useMutation(api.admin.workspaces.remove);
   const [deleting, setDeleting] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const confirmDelete = () => {
@@ -161,9 +262,14 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
           )}
           <div className="mt-1 font-mono text-[11px] text-muted-foreground/70">{ws._id}</div>
         </div>
-        <Button variant="destructive" disabled={busy} onClick={() => setDeleting(true)}>
-          Delete workspace
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setInviting(true)}>
+            <UserPlusIcon /> Invite member
+          </Button>
+          <Button variant="destructive" disabled={busy} onClick={() => setDeleting(true)}>
+            Delete workspace
+          </Button>
+        </div>
       </header>
 
       <section className="animate-rise" style={{ animationDelay: "60ms" }}>
@@ -208,6 +314,13 @@ export function WorkspaceDetailPage({ workspaceId }: { workspaceId: Id<"workspac
           </ul>
         </Card>
       </section>
+
+      <InviteMemberDialog
+        open={inviting}
+        workspaceId={ws._id}
+        workspaceName={ws.name}
+        onClose={() => setInviting(false)}
+      />
 
       <TypeToConfirmDialog
         open={deleting}
