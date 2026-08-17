@@ -5,8 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-# Development (runs frontend + backend in parallel)
+# Development — every dev server (see "Dev startup order")
 npm run dev
+
+# Admin console + Convex only
+npm run dev:admin
 
 # Lint with TypeScript and ESLint (0 warnings allowed)
 npm run lint
@@ -20,6 +23,35 @@ npm run deploy:convex
 # Deploy via git push to main
 npm run deploy
 ```
+
+### Dev startup order
+
+`npm run dev` is **ordered**, not `--parallel` (that flag is deprecated and
+discards the task graph):
+
+1. `@ripple/convex#dev:setup` — `convex dev --once`, pushes functions and writes
+   `convex/_generated/`. Nothing else starts until it finishes (~6s).
+2. Then, together: `vite` for web (`:5173`, `--open`) and admin (`:5273`),
+   `convex dev` (watch), and `wrangler dev` for the collaboration server
+   (`:1999`) and the RSVP email worker (`:1998`).
+
+The gate exists because Vite boots in ~200ms: without it the browser opened onto
+a deployment that was still mid-push, so the first load hit missing functions and
+a dead `localhost:1999` and had to be reloaded. `dev:setup` ends in `|| true` on
+purpose — a schema or TS error should not stop the frontend from coming up; the
+persistent `convex dev` reprints it and keeps retrying. Typecheck is disabled in
+the gate for the same reason (the watcher does it, ~9s later, off the critical
+path).
+
+`dev` runs the whole fleet. `dev:admin` is the one subset worth having — admin +
+Convex, via `with` on `@ripple/admin#dev`, since a persistent task can't be
+depended on but can be co-scheduled. Only `@ripple/web` opens a browser tab; the
+admin console is one you open when you need it, not a second tab on every start.
+
+Ports are `--strictPort` on purpose: the dev deployment's `SITE_URL` is
+`https://localhost:5173`, so silently sliding to `:5174` would break invite and
+auth links. The flip side is that another project holding `:5173` fails the whole
+`turbo run` — free the port rather than dropping the flag.
 
 ## Architecture
 
